@@ -28,6 +28,7 @@ from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE
 _KNOBS = (
     "AUTHORED_INFOGRAPHIC_PLAN_ENABLED",
     "AUTHORED_COMPOSITION_ENVELOPE_ENABLED",
+    "AUTHORED_VISUAL_STORY_PLAN_ENABLED",
 )
 _ORDINARY = CompositionProfile("ordinary", "authored", True, True, 1)
 _VERBATIM = CompositionProfile("source-verbatim", "verbatim", False, True, 2)
@@ -56,6 +57,18 @@ def test_infographic_plan_is_off_unless_asked(monkeypatch) -> None:
     assert _infographic_plan_applies(SimpleNamespace(), _style(EXACT_RECONSTRUCTION)) is False
     reflow = SimpleNamespace(_source_content_authored_reflow=True)
     assert _infographic_plan_applies(reflow, _style()) is False
+
+
+def test_visual_story_plan_is_off_unless_asked(monkeypatch) -> None:
+    applies = author_deck_module._visual_story_plan_applies
+
+    assert applies(STYLE_REFERENCE, structured=False) is False
+
+    monkeypatch.setenv("AUTHORED_VISUAL_STORY_PLAN_ENABLED", "true")
+    assert applies(STYLE_REFERENCE, structured=False) is True
+    # The pre-existing exclusions still hold once the plan is on.
+    assert applies(EXACT_RECONSTRUCTION, structured=False) is False
+    assert applies(STYLE_REFERENCE, structured=True) is False
 
 
 def test_ordinary_envelope_is_relaxed_by_default() -> None:

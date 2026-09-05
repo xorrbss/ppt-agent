@@ -14,6 +14,7 @@ Three defaults for the ordinary authored deck (`CompositionProfile` id
 | deck-wide infographic plan + archetype component library (`7c95334e1`) | always on | off | `AUTHORED_INFOGRAPHIC_PLAN_ENABLED=true` |
 | server-frozen composition envelope (text <= 460 chars, qids <= 40, 15px floor, `PRE-AUTHOR TEXT PLAN`) | always on | off; 12px floor (`AUTHORED_FONT_FLOOR_PX`) | `AUTHORED_COMPOSITION_ENVELOPE_ENABLED=true` |
 | slides per authoring call, token profile | 3 | 1 | `AUTHORED_BATCH_SLIDES_PER_CALL=3` |
+| deck-wide visual story plan: story kind + silhouette per slide (`cc785a34d`, 2026-08-22) | always on | off | `AUTHORED_VISUAL_STORY_PLAN_ENABLED=true` |
 
 Seams, one each:
 
@@ -32,6 +33,13 @@ Seams, one each:
 - `utils/llm_calls/author_deck.py` — no text plan and no capacity brief when
   the plan is relaxed (`_capacity_brief`).
 - `services/authored_provider_rate_profile.py` — `_TOKEN_SLIDES_PER_CALL = 1`.
+- `utils/llm_calls/author_deck.py:_visual_story_plan_applies` — the story plan.
+  Off means no `VISUAL STORY PLAN` brief; the data-qid rule the brief repeated
+  is stated in the author prompt's closing line regardless. The user's run-5
+  review traced three rejected pages to it: `process-stepped-path` (stair-stepped
+  roadmap, detached arrows), `editorial-diagonal-balance` (cascading cards), and
+  the `metric` story fired by `_DATA_FACT_PATTERN` on "8단계 / 8개 / 0건"
+  (counts drawn as segmented pill bars).
 
 The DOM safety gate (`strict_dom_gate`, off-canvas / overlap inspection) and
 D7 remake-then-flag stay on: they protect the free-composition path and do

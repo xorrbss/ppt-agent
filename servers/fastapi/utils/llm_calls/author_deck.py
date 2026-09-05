@@ -72,6 +72,7 @@ from services.authored_batch_policy import (
     plan_authored_recovery_batches,
 )
 from utils.authored_styles import reference_images_for_role
+from utils.get_env import is_authored_visual_story_plan_enabled
 from utils.renderer_worker_policy import RendererPolicyError
 
 logger = logging.getLogger(__name__)
@@ -1424,14 +1425,14 @@ def prepare_authored_deck(
         else ()
     )
     visual_plan = (
-        None
-        if reference_mode == EXACT_RECONSTRUCTION or structured
-        else plan_authored_visual_story(
+        plan_authored_visual_story(
             contents,
             roles,
             illustration_slots=illustration_slots,
             infographic_briefs=infographic_briefs,
         )
+        if _visual_story_plan_applies(reference_mode, structured=structured)
+        else None
     )
     return AuthoredDeckPlan(
         contents=contents,
@@ -1473,6 +1474,22 @@ def _planned_slide_capacity_inputs(
         return None, None
     capacity = capacity_plan.at(index).with_source_images(len(source_images))
     return capacity, _capacity_brief(plan, index, capacity)
+
+
+def _visual_story_plan_applies(reference_mode: str, *, structured: bool) -> bool:
+    """Whether the deck freezes a story kind and silhouette per slide.
+
+    Off unless ``AUTHORED_VISUAL_STORY_PLAN_ENABLED`` is set (2026-09-05). The
+    plan's silhouettes (``process-stepped-path``, ``editorial-diagonal-balance``)
+    and its metric-dominance rule, fired by any count in the content, drew
+    stair-stepped roadmaps with detached arrows, diagonally cascading cards and
+    counts rendered as segmented pill bars; the user rejected all three against
+    the August decks, which predate the plan. Exact reconstruction and
+    structured authoring never carried one.
+    """
+    if reference_mode == EXACT_RECONSTRUCTION or structured:
+        return False
+    return is_authored_visual_story_plan_enabled()
 
 
 def _envelope_enforced(capacity_plan: AuthoredCapacityPlan) -> bool:
