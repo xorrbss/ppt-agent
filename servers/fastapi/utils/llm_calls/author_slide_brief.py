@@ -121,10 +121,14 @@ def type_scale_text(verbosity: str | None) -> str:
   style-reference mode set: slide title {ramp.display - 4}-{ramp.display + 4}px, \
 section lead {ramp.lead - 2}-{ramp.lead + 2}px,
   claim or sub-heading {ramp.claim - 1}-{ramp.claim + 1}px, body copy and bullets \
-{ramp.body}px, table cell {ramp.cell}px,
-  label or caption {ramp.label}px, footnote {ramp.footnote}px. A content slide must show at
-  least one tier BETWEEN its title and its body copy; a page of title-plus-body has no
-  hierarchy to read. Keep no visible content text (headings, body, bullets, tables, chart
+{ramp.body}px OR LARGER (never below {ramp.body}px),
+  table cell {ramp.cell}px or larger, label or caption {ramp.label}px, footnote \
+{ramp.footnote}px. The label size is for
+  eyebrows, axis and legend labels, units and captions ONLY: any sentence, bullet, card
+  text or description a reader must actually read is body copy and takes the body size,
+  so most of the slide's characters sit at {ramp.body}px or above. A content slide must
+  show at least one tier BETWEEN its title and its body copy; a page of title-plus-body
+  has no hierarchy to read. Keep no visible content text (headings, body, bullets, tables, chart
   labels, metrics, callouts, captions, footnotes) below {CONTENT_FONT_FLOOR_PX}px \
 ({CONTENT_FONT_FLOOR_PT}pt equivalent):
   that is a floor, not the size to write at. Express text sizes with `font-size` in px;
