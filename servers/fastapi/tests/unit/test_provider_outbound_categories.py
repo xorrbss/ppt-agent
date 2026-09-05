@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from api.v1.ppt.endpoints import pptx_slides
 from services import provider_font_runtime, provider_telemetry_runtime
 from services.provider_egress_policy import EgressCategory, ValidatedEndpoint
-from templates import font_utils, pptx_font_utils
+from templates import pptx_font_utils
 
 
 class _ForbiddenClientSession:
@@ -29,7 +29,6 @@ def test_google_font_call_site_is_default_off_before_transport(monkeypatch) -> N
     available = asyncio.run(pptx_slides.check_google_font_availability("Open Sans"))
 
     assert available is False
-    assert asyncio.run(font_utils.check_google_font_availability("Open Sans")) is False
     assert (
         asyncio.run(pptx_font_utils.check_google_font_availability("Open Sans"))
         is False

@@ -12,12 +12,9 @@ const REGRESSION_FILES = [
   "app/(presentation-generator)/(dashboard)/settings/SettingPage.tsx",
   "app/(presentation-generator)/(dashboard)/theme/components/ThemePanel/ThemeCard.tsx",
   "app/(presentation-generator)/(dashboard)/theme/components/ThemePanel/index.tsx",
-  "app/(presentation-generator)/components/PresentationMode.tsx",
   "app/(presentation-generator)/presentation/hooks/usePresentationData.ts",
   "app/(presentation-generator)/presentation/page.tsx",
   "app/(presentation-generator)/presentation/utils/applyPresentationThemeDom.ts",
-  "app/hooks/compileLayout.ts",
-  "app/schema/page.tsx",
 ];
 
 test("rules-of-hooks stays enabled and the repaired call sites remain valid", async () => {

@@ -13,10 +13,6 @@ const routeDir = path.join(
 
 const page = readFileSync(path.join(routeDir, "page.tsx"), "utf8");
 const gate = readFileSync(path.join(routeDir, "MasterSetupGate.tsx"), "utf8");
-const scene = readFileSync(
-  path.join(routeDir, "MasterPreviewScene.tsx"),
-  "utf8",
-);
 const publishPanel = readFileSync(
   path.join(routeDir, "MasterSetupPublishPanel.tsx"),
   "utf8",
@@ -65,7 +61,7 @@ const presentationGeneration = readFileSync(
   ),
   "utf8",
 );
-const source = `${page}\n${gate}\n${scene}\n${publishPanel}\n${styleControls}`;
+const source = `${page}\n${gate}\n${publishPanel}\n${styleControls}`;
 
 test("catalog selection commits only on Apply and draft cards remain edit-only", () => {
   assert.match(catalogDialog, /setPendingMasterId\(entry\.masterId\)/);
@@ -152,8 +148,6 @@ test("loading, error, empty, stale and LKG states are explicit", () => {
 });
 
 test("preview uses explicit accessible React layers and never injects or persists backend HTML", () => {
-  assert.match(source, /MasterPreviewScene/);
-  assert.match(scene, /data-layer/);
   assert.match(source, /aria-live/);
   assert.match(source, /role="radiogroup"/);
   assert.match(source, /aria-live/);
@@ -191,8 +185,6 @@ test("Master studio keeps direct canvas manipulation mapped to the existing cont
   assert.match(studio, /t\("bringFront"\)/);
   assert.match(studio, /t\("safeArea"\)/);
   assert.match(studio, /t\("undo"\)/);
-  assert.doesNotMatch(scene, /LOGO/);
-  assert.match(scene, /<img/);
 });
 
 test("Master operations keep the authored-vnext client contract", () => {

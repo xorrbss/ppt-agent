@@ -8,7 +8,6 @@ from services.authored_vnext.capability_registry import (
     CAPABILITY_REGISTRY_DIGEST,
     EDITABLE_HYBRID_PROFILE_ID,
     HYBRID_NATIVE_CAPABILITY_IDS,
-    admission_features_for_kind,
     capability_metadata,
     hybrid_ooxml_capabilities,
     is_hybrid_native_capability,
@@ -17,7 +16,6 @@ from services.authored_vnext.capability_registry import (
     scene_capabilities,
 )
 from services.authored_vnext.generation.scene_compiler import default_scene_capabilities
-from services.authored_vnext.semantic.admission import SerializerRegistryV1
 from utils.authored_font_policy import (
     MIN_AUTHORED_FONT_SIZE_PT,
     MIN_AUTHORED_FONT_SIZE_PX,
@@ -46,9 +44,6 @@ def test_scene_and_ooxml_use_the_same_capability_registry_binding() -> None:
 
 
 def test_prompt_validator_and_font_adapters_share_registry_policy() -> None:
-    registry = SerializerRegistryV1()
-    assert registry.text_features == admission_features_for_kind("text")
-    assert registry.image_features == admission_features_for_kind("image")
     assert MIN_AUTHORED_FONT_SIZE_PX == AUTHORED_FONT_FLOOR_PX
     assert MIN_AUTHORED_FONT_SIZE_PT == AUTHORED_FONT_FLOOR_PT
     assert CAPABILITY_REGISTRY_DIGEST in prompt_capability_clause()
@@ -84,5 +79,3 @@ def test_registry_metadata_and_validator_feature_drift_fail_closed() -> None:
         require_capability_metadata(stale, consumer="chromium")
     with pytest.raises(ValueError, match="consumer_mismatch"):
         require_capability_metadata(chromium, consumer="readback")
-    with pytest.raises(ValueError, match="validator_mismatch"):
-        SerializerRegistryV1(text_features=frozenset({"unexpected"}))

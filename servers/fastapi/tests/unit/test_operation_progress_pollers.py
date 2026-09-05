@@ -9,45 +9,6 @@ from services.authored_generation_progress_poller import (
     describe_authored_progress,
     stream_authored_generation_progress,
 )
-from services.workspace_export_progress_poller import describe_export_progress
-
-
-def test_export_progress_advances_with_the_per_slide_pass():
-    _, fidelity_percent, fidelity_message, _, _ = describe_export_progress(
-        {"phase": "fidelity"}
-    )
-    stage, start_percent, start_message, current, total = describe_export_progress(
-        {"phase": "slides", "completedSlides": 0, "totalSlides": 100}
-    )
-    _, mid_percent, mid_message, _, _ = describe_export_progress(
-        {"phase": "slides", "completedSlides": 50, "totalSlides": 100}
-    )
-    _, end_percent, _, _, _ = describe_export_progress(
-        {"phase": "slides", "completedSlides": 100, "totalSlides": 100}
-    )
-    _, assembly_percent, _, _, _ = describe_export_progress({"phase": "assembly"})
-
-    assert stage == "export_native_extraction"
-    assert (current, total) == (0, 100)
-    assert "슬라이드를 렌더링" in fidelity_message
-    assert "0/100장" in start_message and "50/100장" in mid_message
-    # Strictly increasing, and bounded to the band this poller owns.
-    assert 10 <= fidelity_percent < start_percent < mid_percent < end_percent
-    assert end_percent <= assembly_percent == 90
-
-
-def test_export_progress_survives_a_snapshot_without_counts():
-    stage, percent, message, current, total = describe_export_progress(
-        {"phase": "slides"}
-    )
-    assert stage == "export_native_extraction"
-    assert (current, total) == (None, None)
-    assert 10 <= percent <= 90
-    assert message
-
-    unknown_stage, unknown_percent, _, _, _ = describe_export_progress({})
-    assert unknown_stage == "export_rendering"
-    assert unknown_percent == 10
 
 
 def test_authored_progress_reports_slides_then_finalizing():

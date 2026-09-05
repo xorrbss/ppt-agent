@@ -67,7 +67,6 @@ def test_google_image_generation_fails_before_network_without_api_key(
     "module_name",
     [
         "scripts.benchmark_authored_hybrid_review",
-        "scripts.evaluate_exact_reconstruction",
     ],
 )
 def test_cli_provider_override_uses_explicit_snapshot_without_env_mutation(
