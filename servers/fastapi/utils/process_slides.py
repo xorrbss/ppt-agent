@@ -18,17 +18,16 @@ async def process_slide_and_fetch_assets(
     slide: SlideModel,
     outline_image_urls: Optional[List[str]] = None,
     icon_weight: str = DEFAULT_ICON_WEIGHT,
-    *,
-    template_v2: bool = False,
 ) -> List[ImageAsset]:
 
     async_tasks = []
     async_task_meta = []
     resolved_icon_weight = normalize_icon_weight(icon_weight)
-    image_prompt_key = "image_prompt" if template_v2 else "__image_prompt__"
-    image_url_key = "image_url" if template_v2 else "__image_url__"
-    icon_query_key = "icon_query" if template_v2 else "__icon_query__"
-    icon_url_key = "icon_url" if template_v2 else "__icon_url__"
+    # Marker keys slide content carries for assets the pipeline still has to fetch.
+    image_prompt_key = "__image_prompt__"
+    image_url_key = "__image_url__"
+    icon_query_key = "__icon_query__"
+    icon_url_key = "__icon_url__"
 
     image_paths = get_dict_paths_with_key(slide.content, image_prompt_key)
     icon_paths = get_dict_paths_with_key(slide.content, icon_query_key)
