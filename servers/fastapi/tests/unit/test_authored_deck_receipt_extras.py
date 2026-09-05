@@ -175,17 +175,28 @@ def test_missing_metrics_do_not_stop_the_instruments(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_sealed_ledger_metrics_are_used_whole_including_their_gaps():
+def test_sealed_ledger_metrics_are_used_per_slide_and_gaps_are_recollected(monkeypatch):
     htmls = ["<a>", "<b>"]
     retained = ({"source_digest": _digest("<a>")}, None)
+    gathered: list[str] = []
+
+    async def fake_ensure(html, *args, **kwargs):
+        gathered.append(html)
+        return None
+
+    from utils import slide_capture
+
+    monkeypatch.setattr(slide_capture, "ensure_browser_metrics", fake_ensure)
 
     resolved = _run(
         metrics_mod.resolve_final_browser_metrics(htmls, retained=retained)
     )
 
-    # The ledger deliberately retains a missing entry instead of re-rendering an
-    # unchanged slide; the gate is meant to block on that, so it is passed on.
+    # A ledger gap is not evidence about the published bytes. It is re-collected
+    # -- and still blocks the gate when Chromium cannot measure the slide, which
+    # is what ``ensure_browser_metrics`` returning ``None`` means here.
     assert resolved == [retained[0], None]
+    assert gathered == ["<b>"]
 
 
 def test_a_ledger_of_the_wrong_length_is_not_the_decks_evidence():

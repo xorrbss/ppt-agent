@@ -137,6 +137,10 @@ from services.authored_generation_preflight import (
 )
 from services.authored_deck_instruments_stage import attach_deck_receipt_extras
 from services.authored_final_metrics import resolve_final_browser_metrics
+from services.authored_quality_gate_diagnostics import (
+    log_quality_receipt_gate_failure,
+    quality_receipt_gate_failure,
+)
 from services.authored_repair_round_order import remake_first_flagged_slides
 from services.authored_terminal_slide_fallback import (
     MAX_REMAKES_PER_SLIDE,
@@ -2802,6 +2806,17 @@ async def _generate_authored_presentation(
             pipeline, htmls, pngs, metrics_override=revised_metrics_by_slide
         )
     )
+    # F4: the metrics of the HTML that is about to be published, and of nothing
+    # else. The sealed ledger and the repair rounds are both readbacks here --
+    # each is accepted per slide only while it still carries that slide's source
+    # digest, so a remade slide can never be gated on its pre-remake capture.
+    final_browser_metrics = tuple(
+        await resolve_final_browser_metrics(
+            htmls,
+            retained=(retained_final_metrics if evidence_ledger is not None else None),
+            overrides=revised_metrics_by_slide,
+        )
+    )
 
     # VQA is allowed to rewrite CSS after the pipeline's first source-image
     # visibility seal. Re-run the strict occurrence visibility contract over
@@ -2821,15 +2836,8 @@ async def _generate_authored_presentation(
                 # nothing to check; treating it as a failure ended a 35-slide
                 # deck that had already passed every gate before it.
                 final_source_images = [{} for _ in htmls]
-            # F4: the sealed ledger first, then the repair rounds' own metrics
-            # for a slide whose digest still matches, and only then a render.
-            final_metrics = await resolve_final_browser_metrics(
-                htmls,
-                retained=(retained_final_metrics if evidence_ledger is not None else None),
-                overrides=revised_metrics_by_slide,
-            )
             for index, (html, offered, metrics) in enumerate(
-                zip(htmls, final_source_images, final_metrics, strict=True)
+                zip(htmls, final_source_images, final_browser_metrics, strict=True)
             ):
                 try:
                     validate_visible_source_images(html, offered, metrics)
@@ -2861,11 +2869,7 @@ async def _generate_authored_presentation(
             capacity_plan=capacity_plan,
             profile=composition_profile,
             reference_mode=reference_mode,
-            browser_metrics_by_slide=await resolve_final_browser_metrics(
-                htmls,
-                retained=(retained_final_metrics if evidence_ledger is not None else None),
-                overrides=revised_metrics_by_slide,
-            ),
+            browser_metrics_by_slide=list(final_browser_metrics),
             flagged_slide_indices=[int(entry["index"]) for entry in flagged_slides],
             fit_summaries=gate_fit_summaries,
         )
@@ -2912,7 +2916,7 @@ async def _generate_authored_presentation(
                 browser_source_receipt = verify_browser_source_readback(
                     manifest=request._source_content_manifest,
                     outline=request._source_document_outline,
-                    browser_metrics=retained_final_metrics,
+                    browser_metrics=final_browser_metrics,
                     htmls=htmls,
                 )
                 if not browser_source_receipt.passed:
@@ -2953,7 +2957,7 @@ async def _generate_authored_presentation(
     # are receipt-only and knob-gated; neither can change what is published.
     await attach_deck_receipt_extras(
         quality_gate_receipt, htmls=htmls, pngs=pngs,
-        metrics=list(retained_final_metrics or ()), style=style, brand=brand,
+        metrics=list(final_browser_metrics), style=style, brand=brand,
     )
 
     quality_receipt_v2 = None
@@ -2961,10 +2965,13 @@ async def _generate_authored_presentation(
         # A D7-flagged slide is published with its defects on record (see the
         # safety evidence below), so its capacity checks never block the deck.
         flagged_indices = {int(entry["index"]) for entry in flagged_slides}
-        capacity_checks: list[dict[str, object]] = [
-            _evaluate_capacity_role_evidence(metrics, capacity_plan.at(index) if capacity_plan is not None else {})
-            for index, metrics in enumerate(retained_final_metrics or ()) if index not in flagged_indices
-        ]
+        # Keyed by slide index, not positional: the gate-failure diagnostic must
+        # be able to name WHICH slide carries a capacity violation.
+        capacity_by_slide: dict[int, dict[str, object]] = {
+            index: _evaluate_capacity_role_evidence(metrics, capacity_plan.at(index) if capacity_plan is not None else {})
+            for index, metrics in enumerate(final_browser_metrics) if index not in flagged_indices
+        }
+        capacity_checks: list[dict[str, object]] = list(capacity_by_slide.values())
         if capacity_checks:
             names = ("text", "title", "body", "font", "qid", "image")
             capacity_evidence = {
@@ -2973,7 +2980,7 @@ async def _generate_authored_presentation(
                 "violations": [v for item in capacity_checks for v in item.get("violations", [])],
                 "flaggedSlideIndices": sorted(flagged_indices),
                 # QUAL-06: receipt-only typographic density signal, never a check.
-                "bodyFontMedianPx": body_font_median_signal(retained_final_metrics or ()),
+                "bodyFontMedianPx": body_font_median_signal(final_browser_metrics),
             }
         else:
             capacity_evidence = {"browserObserved": False, "checks": {name: False for name in ("text", "title", "body", "font", "qid", "image")}}
@@ -3053,7 +3060,7 @@ async def _generate_authored_presentation(
             repaired_slide_indices=repaired_gate_indices,
             capacity_evidence=capacity_evidence,
             safety_evidence=safety_evidence,
-            browser_metrics=tuple(retained_final_metrics or ()),
+            browser_metrics=final_browser_metrics,
             visual_review=visual_review_evidence,
             source_manifest=(request._source_content_manifest if source_reflow else None),
             source_readback=(
@@ -3105,14 +3112,26 @@ async def _generate_authored_presentation(
             ),
         }
         if not quality_receipt_v2.gate_passed:
+            # One structured line naming the failing check ids and the slides
+            # they were measured on: bench run 24 ended here with the code and
+            # nothing else, so the cause had to be re-derived from the deck.
+            gate_failure = quality_receipt_gate_failure(
+                quality_receipt_v2,
+                capacity_checks=capacity_by_slide,
+                violations=capacity_evidence.get("violations") or (),
+            )
             raise AuthoredStageError(
-                slide_index=0,
+                slide_index=(
+                    gate_failure["blockedSlides"][0]
+                    if gate_failure["blockedSlides"]
+                    else 0
+                ),
                 stage="render",
                 code="authored_quality_receipt_gate_failed",
                 # QualityReceipt v2 evaluates the sealed final evidence after
                 # the one bounded slide repair. A whole-deck retry is wasteful.
                 retryable=False,
-                message="QualityReceipt v2 unified gate blocked publication",
+                message=log_quality_receipt_gate_failure(gate_failure),
             )
 
     # Observability: one structured summary (counts/timing/model only ??no secrets).
@@ -3202,7 +3221,7 @@ async def _generate_authored_presentation(
             semantic_components=semantic_components,
             scene_envelope=scene_envelope,
             revision=(existing.revision if existing is not None else 0) + 1,
-            browser_metrics_by_slide=retained_final_metrics,
+            browser_metrics_by_slide=final_browser_metrics,
         )
     published_path, persist_elapsed = await publish_authored_presentation(
         request=request,

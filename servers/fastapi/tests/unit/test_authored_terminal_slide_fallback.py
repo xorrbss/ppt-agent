@@ -7,6 +7,7 @@ flag versus failed with ``authored_composition_safety_gate_failed``.
 """
 
 import asyncio
+import hashlib
 import uuid
 from types import SimpleNamespace
 
@@ -1411,7 +1412,15 @@ def _install_receipt_evidence(monkeypatch):
 
     def tagged_metrics(html):
         blocked = TERMINAL_MARKER in str(html) or _CAPACITY_MARKER in str(html)
-        return {"telemetry": "ok", "capacity": "blocked" if blocked else "ok"}
+        return {
+            "telemetry": "ok",
+            "capacity": "blocked" if blocked else "ok",
+            # Every real capture carries the digest of the HTML it was measured
+            # from (``utils/slide_capture._cache_browser_metrics``), and the
+            # final readback now accepts a readback only on that identity.
+            "source_digest": "sha256:"
+            + hashlib.sha256(str(html).encode("utf-8")).hexdigest(),
+        }
 
     def capacity_role_evidence(metrics, _capacity):
         blocked = dict(metrics or {}).get("capacity") == "blocked"
@@ -1486,6 +1495,91 @@ def test_a_capacity_failure_on_an_unflagged_slide_still_blocks(monkeypatch, tmp_
         reset_current_owner_id(owner_token)
 
     assert getattr(caught.value, "code", None) == "authored_quality_receipt_gate_failed"
+    # The refusal now names the failing checks and the slide they were measured
+    # on, instead of only its error code (bench run 24).
+    assert "capacity" in str(caught.value)
+    assert "[0]" in str(caught.value)
+
+
+def _install_metrics_gap(monkeypatch, gap_marker):
+    """One slide's telemetry is gone from the process-local LRU at seal time.
+
+    That is what bench run 24 hit: ``_author_illustrate_render_pipeline`` writes
+    ``browser_metrics=None`` into the ledger for a slide whose DOM payload the
+    metrics cache no longer holds, the attempt is sealed with that gap, and the
+    receipt then read the gap as "this slide was never browser-observed".
+    """
+
+    from utils import slide_capture
+
+    def measured(html):
+        return {
+            "telemetry": "ok",
+            "capacity": "blocked" if TERMINAL_MARKER in str(html) else "ok",
+            "source_digest": "sha256:"
+            + hashlib.sha256(str(html).encode("utf-8")).hexdigest(),
+        }
+
+    def cached(html):
+        return None if gap_marker in str(html) else measured(html)
+
+    async def recollect(html, *_args, **_kwargs):
+        return measured(html)
+
+    def capacity_role_evidence(metrics, _capacity):
+        # Faithful to the real evaluator: no telemetry is no observation.
+        observed = metrics is not None
+        blocked = dict(metrics or {}).get("capacity") == "blocked"
+        return {
+            "browserObserved": observed,
+            "checks": {name: observed and not blocked for name in _CAPACITY_ROLES},
+            "violations": [] if observed and not blocked else ["capacity:unobserved"],
+        }
+
+    monkeypatch.setattr(authored_generation_mod, "get_cached_browser_metrics", cached)
+    monkeypatch.setattr(
+        authored_generation_mod,
+        "_evaluate_capacity_role_evidence",
+        capacity_role_evidence,
+    )
+    monkeypatch.setattr(slide_capture, "ensure_browser_metrics", recollect)
+
+
+@pytest.mark.parametrize(
+    "legacy_lane",
+    [False, True],
+    ids=["streaming_tail", "legacy_barrier_non_streaming"],
+)
+def test_a_sealed_ledger_gap_is_recollected_instead_of_blocking(
+    monkeypatch, tmp_path, legacy_lane
+):
+    """Bench run 24 (P0 knobs) versus run 25 (P1): same sha, same fixture.
+
+    The legacy barrier / non-streaming lane holds a slide's telemetry longer
+    before it is sealed, so its ledger entry can be a gap where the streaming
+    lane's is not. Whichever lane produced it, the gap is not evidence about
+    the published bytes: it is re-collected before the deck is judged.
+    """
+
+    if legacy_lane:
+        monkeypatch.setenv("AUTHORED_WAVE_BARRIER_DISABLED", "false")
+        monkeypatch.setenv("AUTHORED_TAIL_STREAMING_ENABLED", "false")
+
+    _receipt_deck(monkeypatch, tmp_path, [_REMADE_HTML, _TERMINAL_HTML])
+    _install_metrics_gap(monkeypatch, "REMADE")
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(tmp_path, _request(), _outline(2))
+        )
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert result.path == "deck.pptx"
+    gate = presentation.theme["authoredQualityGate"]
+    assert gate["capacityStatus"] == "passed"
+    assert gate["status"] == "passed"
 
 
 # ---------------------------------------------------------------------------
