@@ -280,7 +280,169 @@ services:
       <<: *presenton-env
       TEMPLATE_V2_DEPLOYMENT_TIER: development
 
+  # ---------------------------------------------------------------------------
+  # `multi` profile: PostgreSQL + one-shot migration/role provisioning + API +
+  # N generation workers, each in its own container.  Additive: the services
+  # above are untouched.  Runbook: docs/multi-process-compose-runbook-20260906.md
+  #
+  #   docker compose --profile multi up --build --scale worker=2
+  #
+  # Start order, enforced by the depends_on conditions below:
+  #   postgres (healthy) -> migrate (exit 0) -> api (healthy) -> worker
+  #
+  # Only `migrate` runs Alembic.  It connects as the database owner, holds the
+  # PostgreSQL advisory lock in servers/fastapi/migrations.py, then creates or
+  # normalises the two NOLOGIN groups the migrations grant to
+  # (presenton_public_api, presenton_public_controller) and the two logins the
+  # runtime uses (presenton_public_api_login, presenton_public_controller_login),
+  # re-granting DML on every table so tables added by new migrations are
+  # covered.  `api` and `worker` run with MIGRATE_DATABASE_ON_STARTUP=false and
+  # ENVIRONMENT=production, so utils/db_utils.py refuses a generic DATABASE_URL
+  # and services/database.py verifies at startup that the API login is a
+  # member of presenton_public_api (never controller, never superuser or
+  # BYPASSRLS) and that every worker login is a member of
+  # presenton_public_controller.  Passwords go into a URL: use [A-Za-z0-9_-].
+  # ---------------------------------------------------------------------------
+  postgres:
+    profiles: ["multi"]
+    image: ${PRESENTON_MULTI_POSTGRES_IMAGE:-postgres:16-alpine}
+    environment:
+      POSTGRES_DB: ${PRESENTON_MULTI_POSTGRES_DB:-presenton}
+      # The owner is the migration authority; the image makes it a superuser
+      # and refuses to initialise the cluster while the password is empty.
+      POSTGRES_USER: ${PRESENTON_MULTI_POSTGRES_USER:-presenton_owner}
+      POSTGRES_PASSWORD: ${PRESENTON_MULTI_POSTGRES_PASSWORD:-}
+    volumes:
+      - presenton_multi_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  migrate:
+    profiles: ["multi"]
+    # The build lives here because this is the first service compose creates;
+    # `api` and `worker` reuse the same image tag.
+    image: ${PRESENTON_MULTI_IMAGE:-presenton-multi:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: ${NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED:-false}
+        NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI: ${NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI:-true}
+        NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES: ${NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    working_dir: /app/servers/fastapi
+    # Upgrades to the Alembic head as the owner, then provisions the roles.
+    # Idempotent: every boot re-runs it, a database already at head is a no-op.
+    command: ["python", "-m", "scripts.provision_public_v2_local_db_roles"]
+    environment:
+      # No process role here: without one, db_utils honours DATABASE_URL, and
+      # this is the only service that may hold the owner credential.
+      DATABASE_URL: postgresql+asyncpg://${PRESENTON_MULTI_POSTGRES_USER:-presenton_owner}:${PRESENTON_MULTI_POSTGRES_PASSWORD:-}@postgres:5432/${PRESENTON_MULTI_POSTGRES_DB:-presenton}
+      PUBLIC_V2_LOCAL_API_DB_PASSWORD: ${PRESENTON_MULTI_API_DB_PASSWORD:-}
+      PUBLIC_V2_LOCAL_CONTROLLER_DB_PASSWORD: ${PRESENTON_MULTI_CONTROLLER_DB_PASSWORD:-}
+      MIGRATE_DATABASE_ON_STARTUP: "true"
+      PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE: ${PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE:-}
+
+  api:
+    profiles: ["multi"]
+    image: ${PRESENTON_MULTI_IMAGE:-presenton-multi:local}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    # See the production healthcheck comment above: this reaches Next.js's
+    # own /api/health route, which reflects a bounded FastAPI /health call.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    ports:
+      - "${PRESENTON_MULTI_PORT:-5000}:80"
+      # Required for Codex OAuth callback (OpenAI redirects browser directly to localhost:1455)
+      - "1455:1455"
+    volumes:
+      - ./app_data:/app_data
+      - presenton_template_v2_private_sources:/app_data-private
+      - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
+    environment:
+      <<: *presenton-env
+      # `production` here needs a scanner-equipped image (see the canary
+      # overlay); the stock image only supports the local tiers.  Durable
+      # provider admission is therefore switched on explicitly below.
+      TEMPLATE_V2_DEPLOYMENT_TIER: ${PRESENTON_MULTI_DEPLOYMENT_TIER:-development}
+      MEM0_ENABLED: "false"
+      # Not overridable: a local tier would make db_utils fall back to
+      # DATABASE_URL (empty here) and silently start on SQLite.
+      ENVIRONMENT: production
+      PUBLIC_DATABASE_PROCESS_ROLE: api
+      DATABASE_URL: ""
+      PUBLIC_API_DATABASE_URL: postgresql+asyncpg://presenton_public_api_login:${PRESENTON_MULTI_API_DB_PASSWORD:-}@postgres:5432/${PRESENTON_MULTI_POSTGRES_DB:-presenton}
+      MIGRATE_DATABASE_ON_STARTUP: "false"
+      CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE: postgresql-cluster
+      # The API only admits commands; every worker container owns the claims.
+      WORKSPACE_OPERATION_WORKER_MODE: external
+      WORKSPACE_OPERATION_WORKER_LAUNCH: service
+      PROVIDER_DURABLE_RUNTIME_REQUIRED: "true"
+
+  worker:
+    profiles: ["multi"]
+    image: ${PRESENTON_MULTI_IMAGE:-presenton-multi:local}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # A healthy API proves `migrate` completed and userConfig.json exists.
+      api:
+        condition: service_healthy
+    deploy:
+      replicas: ${PRESENTON_MULTI_WORKER_REPLICAS:-1}
+    working_dir: /app/servers/fastapi
+    command: ["python", "-m", "services.workspace_operation_worker"]
+    # The worker's loopback metrics listener doubles as its liveness probe.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9464/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    volumes:
+      - ./app_data:/app_data
+      - presenton_template_v2_private_sources:/app_data-private
+      - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
+    environment:
+      <<: *presenton-env
+      TEMPLATE_V2_DEPLOYMENT_TIER: ${PRESENTON_MULTI_DEPLOYMENT_TIER:-development}
+      MEM0_ENABLED: "false"
+      ENVIRONMENT: production
+      PUBLIC_DATABASE_PROCESS_ROLE: controller
+      DATABASE_URL: ""
+      PUBLIC_CONTROLLER_DATABASE_URL: postgresql+asyncpg://presenton_public_controller_login:${PRESENTON_MULTI_CONTROLLER_DB_PASSWORD:-}@postgres:5432/${PRESENTON_MULTI_POSTGRES_DB:-presenton}
+      MIGRATE_DATABASE_ON_STARTUP: "false"
+      CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE: postgresql-cluster
+      WORKSPACE_OPERATION_WORKER_MODE: external
+      # Generation controller profile (services/public_worker_profiles.py):
+      # claims presentation.generate and quality.review.
+      PPT_PROCESS_PROFILE: generation
+      WORKSPACE_OPERATION_EXTERNAL_CONTROLLER: generation
+      PROVIDER_DURABLE_RUNTIME_REQUIRED: "true"
+      # start.js is not involved here, so the paths it would derive are set
+      # explicitly: provider settings seed from the shared app_data volume and
+      # slide rendering/export reach Next.js through the api container's nginx.
+      USER_CONFIG_PATH: /app_data/userConfig.json
+      NEXT_INTERNAL_URL: http://api
+      WORKSPACE_OPERATION_METRICS_HOST: 127.0.0.1
+      WORKSPACE_OPERATION_METRICS_PORT: "9464"
+
 volumes:
   presenton_root_node_modules:
   presenton_document_extraction_liteparse:
   presenton_template_v2_private_sources:
+  presenton_multi_postgres_data:

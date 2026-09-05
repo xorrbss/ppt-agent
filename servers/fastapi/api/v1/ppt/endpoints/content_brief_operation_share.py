@@ -1,8 +1,8 @@
 """Clamp the content brief's stage budget to a share of the operation deadline.
 
-The brief's own wall ceiling (``CONTENT_BRIEF_TOTAL_BUDGET_SECONDS``, 900 s)
-was chosen against the brief alone.  It happened to equal the whole deck's
-former base budget, so on a small deck a slow brief could legally spend
+The brief's own wall ceiling (``CONTENT_BRIEF_TOTAL_BUDGET_SECONDS``, 1500 s)
+was chosen against the brief alone.  Its former value happened to equal the
+whole deck's base budget, so on a small deck a slow brief could legally spend
 everything the operation had been granted and leave nothing for the outline,
 the authoring waves, the repair rounds or the review.
 
@@ -16,10 +16,12 @@ The share
 ``CONTENT_BRIEF_OPERATION_DEADLINE_SHARE`` defaults to **0.25**: at most a
 quarter of what is left may go to the brief, so three quarters always survive
 for the six stages behind it.  A quarter is deliberately above the brief's
-modelled share of a full deck budget (900 s of a 6,022 s 24-slide budget, i.e.
-15%), so on a normal deck the clamp never binds and the brief keeps its full
-900 s; it binds only where it must, on decks small enough that the brief would
-otherwise eat the deck.  Nothing here can *raise* the brief's budget.
+modelled share of a full deck budget (1500 s of a 6,622 s 24-slide budget, i.e.
+23%), so on a normal deck the clamp never binds and the brief keeps its full
+1500 s; it binds only where it must, on decks small enough that the brief would
+otherwise eat the deck.  Where the clamp leaves the retry less than its floor
+(``content_brief_policy``), the stage falls back at once rather than spending
+it.  Nothing here can *raise* the brief's budget.
 """
 
 from __future__ import annotations

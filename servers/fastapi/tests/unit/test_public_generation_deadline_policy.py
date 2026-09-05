@@ -89,7 +89,7 @@ THREE_SLIDE_WAVE_SECONDS = 300
 
 # The concurrency-independent part of every budget below: the residual base
 # (600 s) plus the preamble (brief 900 + outline 420 + header 90).
-FIXED_TERMS_SECONDS = 2010
+FIXED_TERMS_SECONDS = 2610
 
 _PROFILE_KNOBS = (
     "AUTHORED_BATCH_SLIDES_PER_CALL",
@@ -156,8 +156,8 @@ def test_preamble_term_is_derived_from_the_content_brief_stage_budget(
     deck's preamble term with it.
     """
 
-    # 900 (content brief total budget) + 420 (outline) + 90 (header contract).
-    assert public_generation_preamble_seconds() == 1410
+    # 1500 (content brief total budget) + 420 (outline) + 90 (header contract).
+    assert public_generation_preamble_seconds() == 2010
     assert FIXED_TERMS_SECONDS == (
         PUBLIC_GENERATION_DEADLINE_BASE_SECONDS + public_generation_preamble_seconds()
     )
@@ -191,13 +191,13 @@ def test_remediation_and_review_terms_follow_the_remake_cap() -> None:
 @pytest.mark.parametrize(
     ("slide_count", "expected_waves", "expected_seconds"),
     [
-        (1, 1, 2658),
-        (6, 4, 4618),
-        (20, 11, 5710),
-        (24, 13, 6022),
-        (35, 18, 6810),
-        (90, 46, 11170),
-        (100, 51, 11950),
+        (1, 1, 3258),
+        (6, 4, 5218),
+        (20, 11, 6310),
+        (24, 13, 6622),
+        (35, 18, 7410),
+        (90, 46, 11770),
+        (100, 51, 12550),
     ],
 )
 def test_token_profile_budget_pins_the_measured_terms(
@@ -219,13 +219,13 @@ def test_token_profile_budget_pins_the_measured_terms(
 @pytest.mark.parametrize(
     ("slide_count", "expected_seconds"),
     [
-        (1, 2658),
-        (6, 4478),
-        (20, 5570),
-        (24, 5882),
-        (35, 6810),
-        (90, 11030),
-        (100, 11810),
+        (1, 3258),
+        (6, 5078),
+        (20, 6170),
+        (24, 6482),
+        (35, 7410),
+        (90, 11630),
+        (100, 12410),
     ],
 )
 def test_api_profile_budget_pins_the_measured_terms(
@@ -287,9 +287,9 @@ def test_widening_the_wave_never_reduces_the_budget(
 def test_narrowing_the_wave_widens_the_budget(monkeypatch) -> None:
     """Fewer calls in flight really do take longer, and the budget follows."""
 
-    assert public_generation_deadline_seconds(20) == 5710
+    assert public_generation_deadline_seconds(20) == 6310
     monkeypatch.setenv("AUTHORED_BATCH_WAVE_CONCURRENCY", "1")
-    assert public_generation_deadline_seconds(20) == 8090
+    assert public_generation_deadline_seconds(20) == 8690
 
 
 def test_healthy_measured_wall_fits_with_real_margin() -> None:
@@ -303,8 +303,8 @@ def test_healthy_measured_wall_fits_with_real_margin() -> None:
 
     healthy_measured_wall_seconds = 2577
     budget = public_generation_deadline_seconds(24)
-    assert budget == 6022
-    assert budget - healthy_measured_wall_seconds == 3445
+    assert budget == 6622
+    assert budget - healthy_measured_wall_seconds == 4045
     assert budget > healthy_measured_wall_seconds * 2
 
 
@@ -317,8 +317,8 @@ def test_resume_that_repeats_the_preamble_fits_at_its_measured_walls() -> None:
     to spare.
 
     OUT OF SCOPE, deliberately: the *worst-case* repeated preamble, i.e. two
-    preambles each spending their full 1410 s allowance.  That is 2820 s of a
-    5710 s budget and does not fit alongside the worst-case authoring,
+    preambles each spending their full 2010 s allowance.  That is 4020 s of a
+    6310 s budget and does not fit alongside the worst-case authoring,
     remediation and review terms.  Budgeting for it would make every healthy
     deck carry a spare preamble it never uses, and the deadline is pinned at
     admission so a resume is never re-granted one.  The right fix is to persist
@@ -338,7 +338,7 @@ def test_resume_that_repeats_the_preamble_fits_at_its_measured_walls() -> None:
         + review_seconds
     )
     assert measured_wall == 3724
-    assert public_generation_deadline_seconds(20) == 5710
+    assert public_generation_deadline_seconds(20) == 6310
     assert measured_wall < public_generation_deadline_seconds(20)
 
 
@@ -346,14 +346,14 @@ def test_resume_that_repeats_the_preamble_fits_at_its_measured_walls() -> None:
 @pytest.mark.parametrize(
     ("slide_count", "expected_seconds"),
     [
-        (1, 2818),
-        (3, 3834),
-        (4, 4642),
-        (9, 4682),
-        (10, 4990),
-        (15, 5030),
-        (35, 6390),
-        (100, 10210),
+        (1, 3418),
+        (3, 4434),
+        (4, 5242),
+        (9, 5282),
+        (10, 5590),
+        (15, 5630),
+        (35, 6990),
+        (100, 10810),
     ],
 )
 def test_generation_deadline_scales_with_explicit_three_slide_batch_waves(
@@ -395,7 +395,7 @@ def test_stuck_job_ceiling_is_a_knob_that_no_realistic_deck_reaches(
     monkeypatch.setenv("PUBLIC_GENERATION_DEADLINE_MAX_SECONDS", "5000")
     assert public_generation_deadline_max_seconds() == 5000
     assert public_generation_deadline_seconds(100) == 5000
-    assert public_generation_deadline_seconds(1) == 2658
+    assert public_generation_deadline_seconds(1) == 3258
 
     # The ceiling is applied last, so it also wins over the floor; admission
     # rejects a budget this small rather than starting the operation.
@@ -414,12 +414,12 @@ def test_v4_policy_row_ceiling_lets_the_formula_decide_for_large_decks() -> None
     production really does generate.
     """
 
-    assert public_generation_deadline_seconds(39) == 7122
+    assert public_generation_deadline_seconds(39) == 7722
     assert min(V3_POLICY_ROW_CEILING_SECONDS, public_generation_deadline_seconds(40)) == (
         V3_POLICY_ROW_CEILING_SECONDS
     )
 
-    for slide_count, expected in ((40, 7270), (90, 11170), (100, 11950)):
+    for slide_count, expected in ((40, 7870), (90, 11770), (100, 12550)):
         formula = public_generation_deadline_seconds(slide_count)
         assert formula == expected
         assert min(V4_POLICY_ROW_CEILING_SECONDS, formula) == formula
@@ -428,22 +428,22 @@ def test_v4_policy_row_ceiling_lets_the_formula_decide_for_large_decks() -> None
 def test_every_term_is_overridable_at_runtime(monkeypatch) -> None:
     monkeypatch.setenv("PUBLIC_GENERATION_DEADLINE_PER_SLIDE_SECONDS", "100")
     assert public_generation_wave_seconds() == 160
-    assert public_generation_deadline_seconds(20) == 5930
+    assert public_generation_deadline_seconds(20) == 6530
 
     monkeypatch.setenv("PUBLIC_GENERATION_DEADLINE_CALL_OVERHEAD_SECONDS", "40")
     assert public_generation_wave_seconds() == 140
-    assert public_generation_deadline_seconds(20) == 5710
+    assert public_generation_deadline_seconds(20) == 6310
 
     monkeypatch.setenv("PUBLIC_GENERATION_DEADLINE_BASE_SECONDS", "900")
     monkeypatch.setenv("PUBLIC_GENERATION_DEADLINE_OUTLINE_SECONDS", "500")
     monkeypatch.setenv("PUBLIC_GENERATION_DEADLINE_HEADER_SECONDS", "100")
-    assert public_generation_preamble_seconds() == 1500
+    assert public_generation_preamble_seconds() == 2100
     monkeypatch.setenv("PUBLIC_GENERATION_DEADLINE_REMEDIATION_WAVE_SECONDS", "300")
     monkeypatch.setenv("PUBLIC_GENERATION_DEADLINE_REVIEW_PER_SLIDE_SECONDS", "10")
     monkeypatch.setenv("PUBLIC_GENERATION_DEADLINE_REVIEW_PER_REMAKE_SECONDS", "120")
     assert public_generation_remediation_seconds(20) == 1200
     assert public_generation_review_seconds(20) == 1160
-    assert public_generation_deadline_seconds(20) == 900 + 1500 + 1540 + 1200 + 1160
+    assert public_generation_deadline_seconds(20) == 900 + 2100 + 1540 + 1200 + 1160
 
     # A non-positive override falls back to the code default.  (A non-integer
     # value is rejected earlier, when the runtime settings snapshot coerces
@@ -566,8 +566,8 @@ def test_v4_admission_pins_scaled_deadline_and_retry_never_regrants_it(
     """A 35-slide job gets its budget once; requeue and replay keep that instant.
 
     Under the shipped token profile 35 one-slide calls are 18 budgeted waves:
-    600 base + 1410 preamble + 140 * 18 + 1120 remediation + 1160 review =
-    6810 s, below the ceiling this fixture grants, so the formula decides.
+    600 base + 2010 preamble + 140 * 18 + 1120 remediation + 1160 review =
+    7410 s, below the ceiling this fixture grants, so the formula decides.
     """
 
     # SQLite is used only as a deterministic contract fixture; PostgreSQL
@@ -617,7 +617,7 @@ def test_v4_admission_pins_scaled_deadline_and_retry_never_regrants_it(
                 granted = (
                     _naive_utc(admitted.deadline_at) - _naive_utc(admitted.queued_at)
                 ).total_seconds()
-                assert granted == 6810
+                assert granted == 7410
                 assert granted == public_generation_deadline_seconds(35)
                 assert granted < PUBLIC_GENERATION_DEADLINE_MAX_SECONDS
                 assert admitted.policy_version == "public-default/v4"

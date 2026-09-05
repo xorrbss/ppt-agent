@@ -12,6 +12,7 @@ from utils.llm_provider import get_model
 from utils.llm_utils import generate_structured_with_schema_retries
 from utils.prompt_safety import format_untrusted_source_documents
 from utils.schema_utils import prepare_schema_for_validation
+from utils.structured_call_budget import StructuredProviderCallBudget
 
 
 def _resolve_prompt_language(language: Optional[str]) -> str:
@@ -102,12 +103,18 @@ async def generate_content_brief(
     verbosity: Optional[str] = None,
     instructions: Optional[str] = None,
     is_retry: bool = False,
+    call_budget: Optional[StructuredProviderCallBudget] = None,
+    call_timeout_seconds: Optional[float] = None,
 ) -> ContentBrief:
     """Stage A — generate a rich, grounded knowledge brief before slides exist.
 
     Uses the validated structured-output path (no streaming). Web search grounding
     remains at the outline stage; this brief draws on source context and the model's
     own domain knowledge.
+
+    ``call_budget`` and ``call_timeout_seconds`` come from ``content_brief_policy``:
+    the first attempt and the retry share one physical-call budget, and each
+    attempt's deadline also bounds its HTTP request at the transport.
     """
     client = get_client(config=get_llm_config())
     model = get_model()
@@ -136,6 +143,8 @@ async def generate_content_brief(
             # it needs its own semantic slot or it would reopen the terminal
             # provider row the timed-out first attempt left behind.
             semantic_slot_suffix=".brief-retry" if is_retry else "",
+            call_budget=call_budget,
+            call_timeout_seconds=call_timeout_seconds,
         )
         return ContentBrief(**content_obj)
     except Exception as e:

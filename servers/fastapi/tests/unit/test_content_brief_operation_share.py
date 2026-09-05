@@ -58,29 +58,35 @@ def test_the_share_defaults_to_a_quarter_and_rejects_unusable_values(monkeypatch
 
 
 def test_a_full_size_deck_keeps_the_whole_brief_budget():
-    """A 24-slide deck is budgeted 6022 s; a quarter of that is above 900 s."""
+    """A 24-slide deck is budgeted 6622 s; a quarter of that is above 1500 s."""
 
     policy = content_brief_timeout_policy()
-    assert policy.total_budget_seconds == 900.0
+    assert policy.total_budget_seconds == 1500.0
 
-    unchanged = clamp_brief_policy_to_operation(policy, 6022)
+    unchanged = clamp_brief_policy_to_operation(policy, 6622)
     assert unchanged is policy
     assert unchanged.timeout_for(0) == 600.0
     assert unchanged.timeout_for(500_000) == 900.0
+    # Under the whole budget the retry gets its full base term.
+    assert unchanged.retry_timeout_for(0, 600.0) == 600.0
 
 
 def test_a_small_deck_clamps_the_brief_to_its_share():
-    """A 2658 s one-slide budget gives the brief 664.5 s, not the whole deck."""
+    """A 3258 s one-slide budget gives the brief 814.5 s, not the whole deck."""
 
     policy = content_brief_timeout_policy()
-    clamped = clamp_brief_policy_to_operation(policy, 2658)
+    clamped = clamp_brief_policy_to_operation(policy, 3258)
 
-    assert clamped.total_budget_seconds == pytest.approx(664.5)
-    assert clamped.max_seconds == pytest.approx(664.5)
+    assert clamped.total_budget_seconds == pytest.approx(814.5)
+    assert clamped.max_seconds == pytest.approx(814.5)
     # The scaled deadline can no longer exceed the share, however large the input.
-    assert clamped.timeout_for(500_000) == pytest.approx(664.5)
-    # The retry still has to fit inside the same stage budget.
-    assert clamped.retry_timeout_for(0, 664.5) == 0.0
+    assert clamped.timeout_for(500_000) == pytest.approx(814.5)
+    # The retry still has to fit inside the same stage budget, and what a
+    # 600 s first attempt leaves (214.5 s) is below the 480 s retry floor:
+    # the stage falls back at once instead of spending it on a doomed call.
+    assert clamped.retry_floor == pytest.approx(480.0)
+    assert clamped.retry_timeout_for(0, 600.0) == 0.0
+    assert clamped.retry_timeout_for(0, 814.5) == 0.0
 
 
 def test_no_operation_deadline_leaves_the_policy_untouched():

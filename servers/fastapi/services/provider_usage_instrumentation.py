@@ -336,6 +336,38 @@ def _positive_int(value: Any) -> int | None:
     return value if 0 <= value <= 2_000_000_000 else None
 
 
+async def _settle_provider_call(
+    *,
+    public_lease: Any,
+    public_outcome: str,
+    public_started_at: float,
+    durable_lease: Any,
+    durable_outcome: str,
+    lease: ProviderCallLease,
+) -> None:
+    """Make every reservation behind one SDK call terminal, in order."""
+
+    if public_lease is not None:
+        from services.public_operation_admission import (
+            reconcile_public_provider_call_detached,
+        )
+
+        await reconcile_public_provider_call_detached(
+            public_lease,
+            outcome=public_outcome,
+            latency_ms=max(0, round((monotonic() - public_started_at) * 1000)),
+            actual_cost_microunits=None,
+        )
+    if durable_lease is not None:
+        await reconcile_provider_call_detached(
+            durable_lease, actual_cost=None, outcome=durable_outcome
+        )
+    await lease.finish(
+        actual_cost_microunits=None,
+        outcome="success" if public_outcome == "succeeded" else durable_outcome,
+    )
+
+
 @asynccontextmanager
 async def provider_call_admission(
     *,
@@ -467,57 +499,45 @@ async def provider_call_admission(
         sdk_started_at = monotonic()
         yield lease
     except BaseException as error:
-        if public_lease is not None:
-            from services.public_operation_admission import (
-                reconcile_public_provider_call_detached,
+        # Shielded: the settlement must reach the database even when the
+        # request that owns this task is cancelled again while it runs (a user
+        # closing the outline stream).  Unshielded, that second cancellation
+        # aborted the reconcile and left the reservation ``reserved`` until
+        # the orphan sweeper found it.
+        await asyncio.shield(
+            _settle_provider_call(
+                public_lease=public_lease,
+                public_outcome=(
+                    "cancelled" if isinstance(error, asyncio.CancelledError) else "failed"
+                ),
+                public_started_at=public_started_at,
+                durable_lease=durable_lease,
+                durable_outcome="retryable_failure" if is_retry else "failure",
+                lease=lease,
             )
-
-            await reconcile_public_provider_call_detached(
-                public_lease,
-                outcome=("cancelled" if isinstance(error, asyncio.CancelledError) else "failed"),
-                latency_ms=max(0, round((monotonic() - public_started_at) * 1000)),
-                actual_cost_microunits=None,
-            )
-        if durable_lease is not None:
-            await reconcile_provider_call_detached(
-                durable_lease,
-                actual_cost=None,
-                outcome="retryable_failure" if is_retry else "failure",
-            )
-        await lease.finish(
-            actual_cost_microunits=None,
-            outcome="retryable_failure" if is_retry else "failure",
         )
         raise
     else:
+        # A successful SDK boundary is terminal even when the caller omits
+        # receipt instrumentation.  Keeping a durable reservation open
+        # until a later best-effort telemetry hook strands quota forever.
+        await asyncio.shield(
+            _settle_provider_call(
+                public_lease=public_lease,
+                public_outcome="succeeded",
+                public_started_at=public_started_at,
+                durable_lease=durable_lease,
+                durable_outcome="success",
+                lease=lease,
+            )
+        )
         if public_lease is not None:
-            from services.public_operation_admission import (
-                reconcile_public_provider_call_detached,
-            )
-
-            # A successful SDK boundary is terminal even when the caller omits
-            # receipt instrumentation.  Keeping a durable reservation open
-            # until a later best-effort telemetry hook strands quota forever.
-            await reconcile_public_provider_call_detached(
-                public_lease,
-                outcome="succeeded",
-                latency_ms=max(
-                    0, round((monotonic() - public_started_at) * 1000)
-                ),
-                actual_cost_microunits=None,
-            )
             scope._public_leases.append(
                 _PublicCallAccounting(lease=public_lease, pricing=pricing)
             )
         if durable_lease is not None:
-            await reconcile_provider_call_detached(
-                durable_lease,
-                actual_cost=None,
-                outcome="success",
-            )
             scope._durable_leases.append(durable_lease)
         scope._receipt_request_ids.append(request_id)
-        await lease.finish(actual_cost_microunits=None, outcome="success")
     finally:
         if operation_usage is not None and sdk_started_at is not None:
             operation_usage.record_latency(

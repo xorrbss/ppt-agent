@@ -324,6 +324,10 @@ The Electron app backend can read the same names when run outside Docker.
 
 Other optional variables exist in code (for example advanced Mem0 paths, LiteParse runners, or `FAST_API_INTERNAL_URL` when Next.js and FastAPI are not same-origin); they are **not** wired in `docker-compose.yml`. Supported names are discoverable from `servers/fastapi/utils/get_env.py` and the Next.js server utilities under `servers/nextjs/`.
 
+#### Multi-process profile (PostgreSQL + external workers)
+
+`docker compose --profile multi up --build --scale worker=2` runs PostgreSQL, a one-shot migration/role-provisioning step, the API, and N generation workers as separate containers, so an API restart no longer kills an in-flight deck. It is additive to the services above; see [`docs/multi-process-compose-runbook-20260906.md`](docs/multi-process-compose-runbook-20260906.md) for the required `PRESENTON_MULTI_*` variables, the role model, and the verification steps.
+
 #### LLM and API keys
 
 - **CAN_CHANGE_KEYS**=[true/false]: Set to **false** if you want to keep API keys hidden and make them unmodifiable.
@@ -404,7 +408,7 @@ Docker images install the default spaCy model (`en_core_web_sm`) during build so
 #### Database
 
 - **DATABASE_URL**: SQLAlchemy URL; if unset, the app falls back to SQLite under app data.
-- **MIGRATE_DATABASE_ON_STARTUP**: Compose sets **`true`** for all services so migrations run on startup.
+- **MIGRATE_DATABASE_ON_STARTUP**: Compose sets **`true`** for the four stock services so migrations run on startup. The `multi` profile sets it only on its one-shot `migrate` service; `api` and `worker` run with `false` and least-privilege database logins.
 - **PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE**: Required when migration `e7a9c2d4f6b8` upgrades a populated PostgreSQL task table. Set the single PostgreSQL timezone name used by the legacy app process (for example `UTC` or `Asia/Seoul`); an unset, invalid, or conflicting value fails closed rather than reinterpreting local wall-clock timestamps. Mixed writer timezones and DST-ambiguous/nonexistent wall-clock rows require an audited row-level backfill instead of automatic conversion.
 
 #### Image generation

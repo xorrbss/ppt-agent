@@ -33,8 +33,8 @@ for (const port of ["CHAT_FIRST_CANARY_PORT:-5050", "CHAT_FIRST_POSTGRES_CANARY_
 }
 assert.equal(
   (compose.match(/NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: \$\{NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED:-false\}/g) ?? []).length,
-  3,
-  "both production builds and the runtime environment must receive the explicit false default",
+  4,
+  "both production builds, the multi-profile build, and the runtime environment must receive the explicit false default",
 );
 
 for (const required of [

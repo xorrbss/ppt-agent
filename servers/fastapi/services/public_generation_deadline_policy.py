@@ -119,7 +119,7 @@ PUBLIC_GENERATION_DEADLINE_MIN_SECONDS = 1200
 # progress: kill an operation that has published no new checkpoint for N
 # minutes, whatever its size.  THAT DOES NOT EXIST YET.  Until it does, this
 # default is set well above the formula for the largest deck the policy admits
-# (100 slides budget to 11,950 s under the shipped token profile) so the
+# (100 slides budget to 12,550 s under the shipped token profile) so the
 # formula, not the ceiling, decides for every realistic deck.
 PUBLIC_GENERATION_DEADLINE_MAX_SECONDS = 14400
 

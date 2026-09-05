@@ -180,7 +180,7 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                 vqa_budget=1,
             )
             assert plan.initial_request_limit == 9
-            assert plan.retry_request_limit == 2
+            assert plan.retry_request_limit == 3
             five_slide_plan = plan_provider_requests(
                 slide_count=5,
                 image_budget=5,
@@ -188,7 +188,7 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                 vqa_budget=0,
             )
             assert five_slide_plan.initial_request_limit == 19
-            assert five_slide_plan.retry_request_limit == 5
+            assert five_slide_plan.retry_request_limit == 6
 
             async with maker() as session, session.begin():
                 with pytest.raises(
@@ -215,7 +215,7 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                     request_plan=plan,
                 )
                 assert first.planned_request_limit == 9
-                assert first.retry_request_limit == 3
+                assert first.retry_request_limit == 4
                 assert first.policy_version == "public-default/v4"
                 with pytest.raises(PublicAdmissionRejected) as rejected:
                     await admit_public_operation(
@@ -475,7 +475,7 @@ def test_phase2_sqlite_lifecycle_is_contract_only(monkeypatch, tmp_path: Path) -
                 assert replay.id == admitted.id
                 assert replay.deadline_at == admitted.deadline_at == fixed_deadline
                 assert admitted.fence == 1
-                assert admitted.retry_request_limit == 2
+                assert admitted.retry_request_limit == 3
 
             lease_hash = "c" * 64
             async with maker() as session, session.begin():

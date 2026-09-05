@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import copy
 import logging
+import threading
 from types import MethodType
 from typing import Any, Callable, Mapping
 
@@ -20,8 +21,40 @@ _AUTHORED_OUTCOME_SCOPE = "authored"
 # on a call that is genuinely stuck.  The whole-job budgets are enforced
 # elsewhere and carry their own codes -- ``public_deadline_exceeded`` from
 # admission and ``public_worker_job_expired`` from the isolated worker -- so a
-# call that trips this limit is never confused with either.
+# call that trips this limit is never confused with either.  A caller with a
+# stage deadline of its own (the content brief, whose measured wall is 325-455
+# s) passes it as ``timeout_seconds`` and it replaces this generic guard.
 PROVIDER_CALL_TIMEOUT_SECONDS = 360.0
+
+
+class ProviderCallAborted(RuntimeError):
+    """The caller abandoned this call at its deadline and its stream was closed."""
+
+
+class BoundedProviderCall:
+    """One bounded provider call.  ``abort()`` stops a streaming transport at its next event.
+
+    The SDK request timeout bounds a non-streaming call outright, but on a
+    streaming transport it only bounds the gap between events, so a stream
+    that keeps producing would otherwise run to completion behind a cancelled
+    await.  ``abort()`` flips the flag the guarded stream checks per event.
+    """
+
+    __slots__ = ("_run", "_abort_event")
+
+    def __init__(self, run: Callable[[], Any], abort_event: threading.Event) -> None:
+        self._run = run
+        self._abort_event = abort_event
+
+    def __call__(self) -> Any:
+        return self._run()
+
+    def abort(self) -> None:
+        self._abort_event.set()
+
+    @property
+    def abort_requested(self) -> bool:
+        return self._abort_event.is_set()
 
 _TIMEOUT_UNENFORCEABLE_PROVIDERS: set[str] = set()
 
@@ -41,14 +74,21 @@ def _warn_timeout_unenforceable(provider_id: str, reason: str) -> None:
 
 
 def _clone_raw_client(
-    raw_client: Any, options: Mapping[str, Any], *, provider_id: str
+    raw_client: Any,
+    options: Mapping[str, Any],
+    *,
+    provider_id: str,
+    timeout_seconds: float | None = None,
 ) -> Any:
     """Clone the transport with a request timeout, degrading loudly if refused."""
 
+    timeout = (
+        PROVIDER_CALL_TIMEOUT_SECONDS
+        if timeout_seconds is None
+        else max(1.0, float(timeout_seconds))
+    )
     try:
-        return raw_client.with_options(
-            **options, timeout=PROVIDER_CALL_TIMEOUT_SECONDS
-        )
+        return raw_client.with_options(**options, timeout=timeout)
     except TypeError:
         # This transport takes no request timeout.  Keep the existing
         # retry/idempotency contract rather than failing the call, and say so.
@@ -134,41 +174,76 @@ def _content_has_text(value: Any) -> bool:
 
 
 class _GuardedResponsesResource:
-    def __init__(self, resource: Any) -> None:
+    """Wrap ``responses.create`` so a streamed call can be aborted and, for the
+    authored scope, so terminal stream events become durable outcomes."""
+
+    def __init__(
+        self, resource: Any, *, abort_event: threading.Event, guard_outcomes: bool
+    ) -> None:
         self._resource = resource
+        self._abort_event = abort_event
+        self._guard_outcomes = guard_outcomes
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._resource, name)
 
     def create(self, *args: Any, **kwargs: Any) -> Any:
         stream = self._resource.create(*args, **kwargs)
+        if not hasattr(stream, "__next__"):
+            # A non-streaming response is complete on return: nothing to abort,
+            # and the SDK request timeout has already bounded it.
+            return stream
 
         def guarded_events():
-            for event in stream:
-                event_type = getattr(event, "type", None)
-                if event_type == "response.failed":
-                    raise ProviderOutcomeError(
-                        "public_provider_response_failed",
-                        recovery_allowed=True,
-                    )
-                if event_type == "response.incomplete":
-                    raise ProviderOutcomeError(
-                        "public_provider_response_incomplete",
-                        # The Responses API reports incomplete only after it has
-                        # accepted and bounded the request (for example at its
-                        # output limit). Replaying the unchanged call is not a
-                        # transport recovery.
-                        recovery_allowed=False,
-                    )
-                yield event
+            try:
+                for event in stream:
+                    if self._abort_event.is_set():
+                        raise ProviderCallAborted("provider_call_aborted")
+                    if self._guard_outcomes:
+                        _raise_for_terminal_event(event)
+                    yield event
+            finally:
+                if self._abort_event.is_set():
+                    _close_quietly(stream)
 
         return guarded_events()
 
 
+def _raise_for_terminal_event(event: Any) -> None:
+    event_type = getattr(event, "type", None)
+    if event_type == "response.failed":
+        raise ProviderOutcomeError(
+            "public_provider_response_failed",
+            recovery_allowed=True,
+        )
+    if event_type == "response.incomplete":
+        raise ProviderOutcomeError(
+            "public_provider_response_incomplete",
+            # The Responses API reports incomplete only after it has
+            # accepted and bounded the request (for example at its
+            # output limit). Replaying the unchanged call is not a
+            # transport recovery.
+            recovery_allowed=False,
+        )
+
+
+def _close_quietly(stream: Any) -> None:
+    close = getattr(stream, "close", None)
+    if callable(close):
+        try:
+            close()
+        except Exception:
+            LOGGER.debug("Failed to close an aborted provider stream", exc_info=True)
+
+
 class _GuardedResponsesClient:
-    def __init__(self, client: Any) -> None:
+    def __init__(
+        self, client: Any, *, abort_event: threading.Event, guard_outcomes: bool
+    ) -> None:
         self._client = client
-        self.responses = _GuardedResponsesResource(client.responses)
+        self.responses = _GuardedResponsesResource(
+            client.responses, abort_event=abort_event, guard_outcomes=guard_outcomes
+        )
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._client, name)
@@ -192,11 +267,18 @@ def provider_generate_call(
     kwargs: Mapping[str, Any],
     idempotency_key: str | None,
     outcome_scope: str | None = None,
-) -> Callable[[], Any]:
+    timeout_seconds: float | None = None,
+) -> BoundedProviderCall:
     """Return one bounded provider call with optional authored outcome guards.
 
     The shared llmai client is never mutated, which keeps parallel slide calls
     from leaking one operation's key into another request.
+
+    ``timeout_seconds`` is the caller's own deadline for this one request.  It
+    replaces the generic ``PROVIDER_CALL_TIMEOUT_SECONDS`` guard on the cloned
+    transport and also pins ``max_retries`` to zero: a bounded call that the
+    SDK silently replayed after a timeout would run past its deadline and make
+    a second physical request under one admission.
     """
 
     if outcome_scope not in {None, _AUTHORED_OUTCOME_SCOPE}:
@@ -212,25 +294,39 @@ def provider_generate_call(
         and can_clone_raw_client
     )
     adapted_client = client
+    abort_event = threading.Event()
     options: dict[str, Any] = {}
-    if should_adapt:
+    if should_adapt or timeout_seconds is not None:
         options["max_retries"] = 0
-        if idempotency_key and supports_provider_idempotency(
-            client, provider_id=provider_id
-        ):
-            options["extra_headers"] = {"Idempotency-Key": idempotency_key}
+    if should_adapt and idempotency_key and supports_provider_idempotency(
+        client, provider_id=provider_id
+    ):
+        options["extra_headers"] = {"Idempotency-Key": idempotency_key}
     if can_clone_raw_client:
         # Clone for the request timeout even when nothing else needs adapting.
         # A stuck call otherwise holds one of the bounded authoring executor
         # threads for the whole job: that executor runs the provider SDK
         # synchronously, so cancelling the awaiting task frees nothing.
         raw_client = _clone_raw_client(
-            client._client, options, provider_id=provider_id
+            client._client,
+            options,
+            provider_id=provider_id,
+            timeout_seconds=timeout_seconds,
         )
         adapted_client = copy(client)
+        # Every transport that exposes a Responses resource gets the abortable
+        # stream wrapper: the chatgpt client streams even a "non-streaming"
+        # generate() and would otherwise run to completion behind a cancelled
+        # await.  The terminal-event outcome guards stay authored-only.
         adapted_client._client = (
-            _GuardedResponsesClient(raw_client)
-            if outcome_scope == _AUTHORED_OUTCOME_SCOPE and is_chatgpt
+            _GuardedResponsesClient(
+                raw_client,
+                abort_event=abort_event,
+                guard_outcomes=(
+                    outcome_scope == _AUTHORED_OUTCOME_SCOPE and is_chatgpt
+                ),
+            )
+            if getattr(raw_client, "responses", None) is not None
             else raw_client
         )
     else:
@@ -294,11 +390,13 @@ def provider_generate_call(
             )
         return response
 
-    return generate_once
+    return BoundedProviderCall(generate_once, abort_event)
 
 
 __all__ = [
     "PROVIDER_CALL_TIMEOUT_SECONDS",
+    "BoundedProviderCall",
+    "ProviderCallAborted",
     "ProviderOutcomeError",
     "provider_generate_call",
     "supports_provider_idempotency",

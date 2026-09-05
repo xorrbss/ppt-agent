@@ -601,3 +601,92 @@ def test_a_provider_without_a_cache_counter_reports_zero_cached_tokens(
 
     assert snapshot["totals"]["cachedTokens"] == 0
     assert snapshot["totals"]["inputTokens"] == 10
+
+
+def test_outer_cancellation_during_the_reconcile_still_makes_the_row_terminal(
+    monkeypatch,
+) -> None:
+    """The settlement after a cancelled SDK call is shielded.
+
+    A user closing the outline stream cancels the request task while the
+    brief's own timeout is already being reconciled.  Unshielded, that second
+    cancellation aborted the reconcile itself and the reservation stayed
+    ``reserved`` until the orphan sweeper ran.
+    """
+
+    async def scenario() -> None:
+        reconciliations = []
+        reconcile_started = asyncio.Event()
+        release_reconcile = asyncio.Event()
+        inside_call = asyncio.Event()
+
+        async def reserve(**kwargs):
+            await asyncio.sleep(0)
+            return SimpleNamespace(
+                id=kwargs["logical_call_key"],
+                provider_idempotency_key="stable-provider-key",
+                state="reserved",
+                is_terminal_reuse=False,
+            )
+
+        async def reconcile(lease, **kwargs):
+            reconcile_started.set()
+            await release_reconcile.wait()
+            reconciliations.append((lease.id, kwargs["outcome"]))
+
+        monkeypatch.setattr(
+            "services.provider_usage_instrumentation.durable_provider_runtime_required",
+            lambda: False,
+        )
+        monkeypatch.setattr(
+            "services.provider_pricing_registry.resolve_public_provider_pricing",
+            lambda **_kwargs: _unavailable_pricing(),
+        )
+
+        async def current_fence(_fence):
+            return None
+
+        monkeypatch.setattr(
+            "services.provider_usage_instrumentation._assert_current_public_operation_fence",
+            current_fence,
+        )
+        monkeypatch.setattr(
+            "services.public_operation_admission.reserve_public_provider_call_detached",
+            reserve,
+        )
+        monkeypatch.setattr(
+            "services.public_operation_admission.reconcile_public_provider_call_detached",
+            reconcile,
+        )
+
+        async def request() -> None:
+            with public_operation_scope(
+                uuid.uuid4(), attempt_token="attempt-1", fencing_token=1
+            ), provider_usage_scope(
+                job_id=uuid.uuid4(),
+                operation="generate",
+                stage="content_brief",
+                attempt_number=1,
+            ):
+                async with provider_call_admission(semantic_slot="structured.initial"):
+                    inside_call.set()
+                    await asyncio.Event().wait()  # the SDK call, never finishing
+
+        task = asyncio.create_task(request())
+        await inside_call.wait()
+        task.cancel()  # the stage deadline
+        await reconcile_started.wait()
+        task.cancel()  # the outer request goes away while the reconcile runs
+        await asyncio.sleep(0)
+        release_reconcile.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        # Let the shielded settlement finish if the task already unwound.
+        for _ in range(10):
+            if reconciliations:
+                break
+            await asyncio.sleep(0)
+
+        assert reconciliations == [("structured.initial", "cancelled")]
+
+    asyncio.run(scenario())

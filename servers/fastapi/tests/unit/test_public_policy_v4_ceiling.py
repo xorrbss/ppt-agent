@@ -64,8 +64,8 @@ V3_ROW_CEILING_SECONDS = 7200
 # The formula values for the deck sizes production actually generates, under
 # the shipped token rate profile.  They are pinned literals so a change to the
 # formula has to be acknowledged here too.
-NINETY_SLIDE_BUDGET_SECONDS = 11170
-HUNDRED_SLIDE_BUDGET_SECONDS = 11950
+NINETY_SLIDE_BUDGET_SECONDS = 11770
+HUNDRED_SLIDE_BUDGET_SECONDS = 12550
 
 # Every column the two rows must agree on.  ``generation_deadline_seconds`` is
 # the single deliberate difference and ``created_at`` is a migration timestamp.

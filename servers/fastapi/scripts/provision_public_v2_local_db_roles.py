@@ -1,8 +1,11 @@
 """Provision isolated, least-privilege logins for an owned local PostgreSQL RC.
 
-This script is intentionally limited to the disposable PostgreSQL cluster
-created by ``scripts/start-public-v2-rc.ps1 -UseOwnedPostgres``.  Secrets are
-read from the child process environment and are never printed.
+This script is intentionally limited to a PostgreSQL cluster the deployment
+itself owns: the disposable one created by
+``scripts/start-public-v2-rc.ps1 -UseOwnedPostgres`` and the ``postgres``
+service of the docker-compose ``multi`` profile, whose one-shot ``migrate``
+service runs it on every boot.  Secrets are read from the child process
+environment and are never printed.
 """
 
 from __future__ import annotations

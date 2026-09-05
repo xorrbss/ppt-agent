@@ -49,6 +49,12 @@ const hasDevArg = args.includes("--dev") || args.includes("-d");
 const isDev = hasDevArg;
 const canChangeKeys = process.env.CAN_CHANGE_KEYS !== "false";
 const shouldStartMcpServer = process.env.ENABLE_MCP_SERVER === "true";
+// "service": a separate deployment unit runs the workspace worker (compose
+// profile `multi`), so start.js must not bundle one beside the API.
+const workspaceWorkerLaunch = (process.env.WORKSPACE_OPERATION_WORKER_LAUNCH ?? "bundled").trim().toLowerCase();
+if (!["bundled", "service"].includes(workspaceWorkerLaunch)) {
+  throw new Error("WORKSPACE_OPERATION_WORKER_LAUNCH must be 'bundled' or 'service'");
+}
 
 const fastapiPort = 8000;
 const nextjsPort = 3000;
@@ -57,9 +63,7 @@ const appmcpPort = 8001;
 const nginxListenPort = 80;
 
 const appDataDirectory = process.env.APP_DATA_DIRECTORY;
-if (!appDataDirectory) {
-  throw new Error("APP_DATA_DIRECTORY is required");
-}
+if (!appDataDirectory) throw new Error("APP_DATA_DIRECTORY is required");
 
 const appDataDirectoryMode = 0o755;
 const userConfigPath = join(appDataDirectory, "userConfig.json");
@@ -111,9 +115,7 @@ const readJsonConfig = (filePath) => {
       return {};
     }
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed
-      : undefined;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : undefined;
   } catch {
     return undefined;
   }
@@ -211,21 +213,12 @@ const runCommand = (command, commandArgs, options = {}) => {
   });
 };
 
-const runNodeScript = (scriptPath, scriptArgs) => {
-  return runCommand(process.execPath, [scriptPath, ...scriptArgs], {
-    cwd: __dirname,
-  });
-};
+const runNodeScript = (scriptPath, scriptArgs) =>
+  runCommand(process.execPath, [scriptPath, ...scriptArgs], { cwd: __dirname });
 
-const isTruthyEnv = (value) => {
-  if (value == null) {
-    return false;
-  }
-
-  return !["", "0", "false", "no", "off"].includes(
-    String(value).trim().toLowerCase()
-  );
-};
+const isTruthyEnv = (value) =>
+  value != null &&
+  !["", "0", "false", "no", "off"].includes(String(value).trim().toLowerCase());
 
 const isOllamaInstalled = () =>
   existsSync("/usr/bin/ollama") || existsSync("/usr/local/bin/ollama");
@@ -389,9 +382,7 @@ const startServers = async (nginxReadyPromise) => {
   );
   managedProcesses.push(fastApiProcess);
 
-  fastApiProcess.on("error", (err) => {
-    console.error("FastAPI process failed to start:", err);
-  });
+  fastApiProcess.on("error", (err) => console.error("FastAPI process failed to start:", err));
 
   if (shouldStartMcpServer) {
     const appmcpProcess = spawn(
@@ -411,9 +402,7 @@ const startServers = async (nginxReadyPromise) => {
     );
     managedProcesses.push(appmcpProcess);
 
-    appmcpProcess.on("error", (err) => {
-      console.error("App MCP process failed to start:", err);
-    });
+    appmcpProcess.on("error", (err) => console.error("App MCP process failed to start:", err));
   } else {
     console.log(
       "MCP server disabled; set ENABLE_MCP_SERVER=true to start it."
@@ -450,9 +439,7 @@ const startServers = async (nginxReadyPromise) => {
   );
   managedProcesses.push(nextjsProcess);
 
-  nextjsProcess.on("error", (err) => {
-    console.error("Next.js process failed to start:", err);
-  });
+  nextjsProcess.on("error", (err) => console.error("Next.js process failed to start:", err));
 
   const shouldStartOllamaRuntime = shouldStartOllama();
   const ollamaInstalled = isOllamaInstalled();
@@ -477,9 +464,7 @@ const startServers = async (nginxReadyPromise) => {
       env: process.env,
     });
     managedProcesses.push(ollamaProcess);
-    ollamaProcess.on("error", (err) => {
-      console.error("Ollama process failed to start:", err);
-    });
+    ollamaProcess.on("error", (err) => console.error("Ollama process failed to start:", err));
     exitPromises.push(new Promise((resolve) => ollamaProcess.on("exit", (code) => resolve({ name: "Ollama", code }))));
   } else if (shouldStartOllamaRuntime) {
     console.log(
@@ -493,14 +478,24 @@ const startServers = async (nginxReadyPromise) => {
 
   try {
     await Promise.all([fastApiReadyPromise, nextjsReadyPromise, nginxReadyPromise]);
-    if (fastApiEnvironment.WORKSPACE_OPERATION_WORKER_MODE.trim().toLowerCase() === "external") {
+    if (
+      fastApiEnvironment.WORKSPACE_OPERATION_WORKER_MODE.trim().toLowerCase() === "external" &&
+      workspaceWorkerLaunch === "bundled"
+    ) {
       const workspaceWorkerProcess = spawn(
         "python",
         ["-m", "services.workspace_operation_worker"],
         {
           cwd: fastapiDir,
           stdio: ["ignore", "pipe", "pipe"],
-          env: { ...fastApiEnvironment, MIGRATE_DATABASE_ON_STARTUP: "false" },
+          env: {
+            // The bundled worker is the generation controller
+            // (services/public_worker_profiles.py); an explicit env wins.
+            PPT_PROCESS_PROFILE: "generation",
+            WORKSPACE_OPERATION_EXTERNAL_CONTROLLER: "generation",
+            ...fastApiEnvironment,
+            MIGRATE_DATABASE_ON_STARTUP: "false",
+          },
         }
       );
       managedProcesses.push(workspaceWorkerProcess);

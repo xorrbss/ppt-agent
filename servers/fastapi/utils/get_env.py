@@ -447,3 +447,42 @@ def get_mem0_timeout_seconds(settings: RuntimeSettings | None = None) -> float:
     caller, the same as any other Mem0 runtime error.
     """
     return float(max(1, _int_setting("MEM0_TIMEOUT_SECONDS", 15, settings)))
+
+
+def _optional_nonnegative_float_setting(
+    key: str, settings: RuntimeSettings | None
+) -> float | None:
+    """An explicit non-negative float knob, or ``None`` when unset or invalid."""
+    raw = (get_setting_env(key, settings) or "").strip()
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    return value if value >= 0 else None
+
+
+# Content brief stage deadlines (api/v1/ppt/endpoints/content_brief_policy.py).
+# Each returns the explicit override or ``None`` for the policy's code default:
+# base deadline of one attempt (600), seconds per 1,000 input characters (1),
+# cap on one attempt (900), ceiling on both attempts together (1500) and the
+# least deadline a retry needs to be attempted at all (0.8 x base).
+def get_content_brief_timeout_seconds_env(settings: RuntimeSettings | None = None) -> float | None:
+    return _optional_nonnegative_float_setting("CONTENT_BRIEF_TIMEOUT_SECONDS", settings)
+
+
+def get_content_brief_timeout_per_kchar_seconds_env(settings: RuntimeSettings | None = None) -> float | None:
+    return _optional_nonnegative_float_setting("CONTENT_BRIEF_TIMEOUT_PER_KCHAR_SECONDS", settings)
+
+
+def get_content_brief_timeout_max_seconds_env(settings: RuntimeSettings | None = None) -> float | None:
+    return _optional_nonnegative_float_setting("CONTENT_BRIEF_TIMEOUT_MAX_SECONDS", settings)
+
+
+def get_content_brief_total_budget_seconds_env(settings: RuntimeSettings | None = None) -> float | None:
+    return _optional_nonnegative_float_setting("CONTENT_BRIEF_TOTAL_BUDGET_SECONDS", settings)
+
+
+def get_content_brief_retry_floor_seconds_env(settings: RuntimeSettings | None = None) -> float | None:
+    return _optional_nonnegative_float_setting("CONTENT_BRIEF_RETRY_FLOOR_SECONDS", settings)

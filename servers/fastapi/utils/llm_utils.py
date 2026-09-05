@@ -41,13 +41,20 @@ from utils.provider_idempotency import (
     provider_generate_call,
     supports_provider_idempotency,
 )
+from utils.structured_call_budget import (
+    PUBLIC_STRUCTURED_MAX_PHYSICAL_CALLS,  # noqa: F401  (re-exported)
+    StructuredProviderCallBudget,
+)
 LOGGER = logging.getLogger(__name__)
 CLIENT_DISCONNECT_POLL_SECONDS = 0.1
 TRANSIENT_LLM_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 TRANSIENT_LLM_MAX_ATTEMPTS = 2
 TRANSIENT_LLM_RETRY_BASE_DELAY_SECONDS = 1.0
 TRANSIENT_LLM_RETRY_MAX_DELAY_SECONDS = 8.0
-PUBLIC_STRUCTURED_MAX_PHYSICAL_CALLS = 2
+#: How long a cancelled structured call waits for its worker thread to observe
+#: the transport abort before giving up on confirming it (see
+#: ``_await_provider_call``).
+PROVIDER_CALL_ABORT_GRACE_SECONDS = 30.0
 PUBLIC_STRUCTURED_MAX_PARSE_ATTEMPTS = 2
 PUBLIC_STRUCTURED_MAX_VALIDATION_LOOPS = 2
 DisconnectChecker = Callable[[], Awaitable[bool]]
@@ -95,25 +102,47 @@ class _StructuredGenerationResult:
     response: object | None
 
 
-@dataclass
-class _StructuredProviderCallBudget:
-    """One initial call plus one public-policy retry across all helper loops."""
+#: Kept under its historical private name for the helpers below.
+_StructuredProviderCallBudget = StructuredProviderCallBudget
 
-    limit: int = PUBLIC_STRUCTURED_MAX_PHYSICAL_CALLS
-    used: int = 0
 
-    @property
-    def remaining(self) -> int:
-        return max(0, self.limit - self.used)
+async def _await_provider_call(generate_call: Callable[[], Any]) -> Any:
+    """Run one blocking SDK call in a thread without leaving it behind on cancel.
 
-    def consume(self) -> None:
-        if self.remaining <= 0:
-            raise HTTPException(
-                status_code=503,
-                detail="public_provider_retry_limit_exceeded",
-                headers={"Retry-After": "10"},
+    A thread cannot be interrupted, so ``asyncio.to_thread`` alone leaves a
+    cancelled call -- the brief's stage deadline in ``asyncio.wait_for`` --
+    running to completion: it keeps spending provider tokens, the retry runs
+    concurrently with it and the orphan holds a default-executor slot.  The
+    transport bounds the call instead (``provider_generate_call``: the SDK
+    request timeout is the caller's deadline, and a streaming transport is
+    told to abort at its next event).  On cancellation this asks for that
+    abort and then waits for the worker to actually finish, so the caller's
+    ``wait_for`` does not return -- and no retry starts -- while the call is
+    still in flight.  The wait is bounded by
+    ``PROVIDER_CALL_ABORT_GRACE_SECONDS``: a transport that cannot honour the
+    abort is logged rather than waited on forever.
+    """
+
+    worker = asyncio.ensure_future(asyncio.to_thread(generate_call))
+    try:
+        return await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        abort = getattr(generate_call, "abort", None)
+        if callable(abort):
+            abort()
+        if not worker.done():
+            done, _pending = await asyncio.wait(
+                {worker}, timeout=PROVIDER_CALL_ABORT_GRACE_SECONDS
             )
-        self.used += 1
+            if not done:
+                LOGGER.warning(
+                    "provider_call_abort_unconfirmed grace_seconds=%s: the "
+                    "transport did not end the cancelled call in time",
+                    PROVIDER_CALL_ABORT_GRACE_SECONDS,
+                )
+        if worker.done() and not worker.cancelled():
+            worker.exception()  # observed: the result belongs to nobody now
+        raise
 
 
 def _provider_receipt_identity() -> str:
@@ -139,6 +168,7 @@ async def _generate_structured_content(
     *,
     disconnect_checker: Optional[DisconnectChecker],
     text_chunk_callback: Optional[TextChunkCallback] = None,
+    call_timeout_seconds: Optional[float] = None,
     **kwargs: Any,
 ) -> _StructuredGenerationResult:
     generate_call = provider_generate_call(
@@ -146,9 +176,10 @@ async def _generate_structured_content(
         provider_id=_provider_receipt_identity(),
         kwargs=kwargs,
         idempotency_key=current_provider_idempotency_key(),
+        timeout_seconds=call_timeout_seconds,
     )
     if disconnect_checker is None and text_chunk_callback is None:
-        response = await asyncio.to_thread(generate_call)
+        response = await _await_provider_call(generate_call)
         return _StructuredGenerationResult(
             content=extract_structured_content(response.content),
             response=response,
@@ -205,6 +236,7 @@ async def _generate_structured_content_with_transient_retries(
     is_retry: bool = False,
     semantic_slot: str,
     call_budget: _StructuredProviderCallBudget,
+    call_timeout_seconds: Optional[float] = None,
     **kwargs: Any,
 ) -> Optional[dict]:
     """Retry only transient provider failures, then expose a retryable 503."""
@@ -234,6 +266,7 @@ async def _generate_structured_content_with_transient_retries(
                     result = await _generate_structured_content(
                         client,
                         disconnect_checker=disconnect_checker,
+                        call_timeout_seconds=call_timeout_seconds,
                         **kwargs,
                     )
             except BaseException as call_error:
@@ -844,6 +877,8 @@ async def generate_structured_with_schema_retries(
     is_retry: bool = False,
     semantic_slot_suffix: str = "",
     semantic_slot_prefix: str = "structured",
+    call_budget: Optional[StructuredProviderCallBudget] = None,
+    call_timeout_seconds: Optional[float] = None,
 ) -> dict:
     """
     Parse retries (inner loop) plus optional JSON Schema validation feedback loops (outer loop),
@@ -855,13 +890,21 @@ async def generate_structured_with_schema_retries(
     default prefix: the second would be admitted as a replay of the first and
     refused with ``public_provider_terminal_replay_unsupported``. Callers that
     add a structured call to a stage that already has one pass their own prefix.
+
+    ``call_budget`` is the physical-call budget for this logical call; a caller
+    that runs the same logical call twice (the content brief and its retry)
+    passes one budget to both runs so together they stay within
+    ``PUBLIC_STRUCTURED_MAX_PHYSICAL_CALLS``.  ``call_timeout_seconds`` bounds
+    each physical request at the transport (``provider_generate_call``) so a
+    caller's ``asyncio.wait_for`` deadline also ends the HTTP call itself.
     """
     max_validation_loops = min(
         max(1, validate_schema_max_loop_count),
         PUBLIC_STRUCTURED_MAX_VALIDATION_LOOPS,
     )
     working_messages: list[Message] = list(messages)
-    call_budget = _StructuredProviderCallBudget()
+    if call_budget is None:
+        call_budget = StructuredProviderCallBudget()
 
     for validation_attempt in range(max_validation_loops):
         content: Optional[dict] = None
@@ -883,6 +926,7 @@ async def generate_structured_with_schema_retries(
                 ),
                 semantic_slot=semantic_slot,
                 call_budget=call_budget,
+                call_timeout_seconds=call_timeout_seconds,
                 text_chunk_callback=(
                     text_chunk_callback
                     if validation_attempt == 0 and parse_attempt == 0

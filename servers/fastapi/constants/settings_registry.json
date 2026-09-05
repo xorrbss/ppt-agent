@@ -1036,6 +1036,51 @@
       "description": "Fraction of the remaining public operation deadline the content brief stage may spend; unset takes the default (0.25)."
     },
     {
+      "key": "CONTENT_BRIEF_TIMEOUT_SECONDS",
+      "type": "number",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Base deadline in seconds for one content brief attempt before the per-kchar term; unset takes the measured default (600)."
+    },
+    {
+      "key": "CONTENT_BRIEF_TIMEOUT_PER_KCHAR_SECONDS",
+      "type": "number",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Seconds added to a content brief attempt's deadline per 1,000 input characters; unset takes the default (1)."
+    },
+    {
+      "key": "CONTENT_BRIEF_TIMEOUT_MAX_SECONDS",
+      "type": "number",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Cap in seconds on one content brief attempt's scaled deadline; unset takes the default (900), never below the base."
+    },
+    {
+      "key": "CONTENT_BRIEF_TOTAL_BUDGET_SECONDS",
+      "type": "number",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Ceiling in seconds on the content brief stage as a whole (first attempt plus its one retry); unset takes the default (1500 = max + base), never below the max. It is also the brief term of the public generation deadline."
+    },
+    {
+      "key": "CONTENT_BRIEF_RETRY_FLOOR_SECONDS",
+      "type": "number",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Minimum deadline in seconds a content brief retry must be able to get before it is attempted; below it the stage falls back to the raw source at once. Unset derives it from the base (0.8 x base = 480)."
+    },
+    {
       "key": "PROVIDER_DURABLE_RUNTIME_REQUIRED",
       "type": "boolean",
       "default": false,
@@ -1043,6 +1088,16 @@
       "targets": ["fastapi.runtime"],
       "group": "runtime",
       "description": "Require the durable, PostgreSQL-backed cross-process provider admission path instead of best-effort in-process admission; multi-process deployments (API and worker processes sharing PostgreSQL) must set this to true."
+    },
+    {
+      "key": "WORKSPACE_OPERATION_WORKER_LAUNCH",
+      "type": "enum",
+      "default": "bundled",
+      "secret": false,
+      "targets": ["start.process", "docs.public"],
+      "group": "runtime",
+      "description": "How start.js provides the external workspace operation worker when WORKSPACE_OPERATION_WORKER_MODE=external: bundled spawns one generation worker beside the API in the same container (stock images); service means a separate deployment unit runs python -m services.workspace_operation_worker (the docker-compose multi profile), so start.js must not spawn one.",
+      "choices": ["bundled", "service"]
     },
     {
       "key": "TEMPLATE_V2_DEPLOYMENT_TIER",

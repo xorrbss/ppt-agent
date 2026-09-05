@@ -55,6 +55,7 @@ from services.public_workstation_runtime_profile import (
 
 
 PUBLIC_DEFAULT_MAX_SLIDES = 100
+CONTENT_BRIEF_RETRY_REQUESTS = 1  # the brief's one reduced-input retry (content_brief_policy), retry_class "retry"
 PUBLIC_PHASE2_DEFAULT_POLICY_VERSION = PUBLIC_DEFAULT_POLICY_VERSION
 PUBLIC_PROVIDER_STAGES = frozenset(
     {
@@ -101,7 +102,7 @@ class ProviderRequestPlan:
     @property
     def initial_request_limit(self) -> int:
         return (
-            4  # content brief + outline + chapter/deck plan + header contract
+            4  # first content brief attempt + outline + chapter/deck plan + header contract, one call each
             + self.slide_count
             + min(self.image_budget, self.slide_count)
             + self.repair_budget
@@ -110,9 +111,8 @@ class ProviderRequestPlan:
 
     @property
     def retry_request_limit(self) -> int:
-        """Reserve at most one bounded validation retry per authored slide."""
-
-        return self.slide_count
+        """One bounded validation retry per authored slide, plus the content brief's own retry."""
+        return self.slide_count + CONTENT_BRIEF_RETRY_REQUESTS
 
 
 @dataclass(frozen=True, slots=True)
