@@ -32,8 +32,11 @@ def requested_generation_driver(
 ) -> PresentationDriverId:
     """Translate admitted compatibility fields, never a client driver field."""
 
-    if request.strategy == "template_v2":
-        return "template-v2"
+    # A request can no longer name the template-v2 driver: the strategy
+    # literal that produced it was retired with the Template V2 generation
+    # entry. The driver itself survives in identity_by_driver below, because
+    # a deck generated before that retirement still carries it in its
+    # persisted profile.
     if request.strategy == "authored" or request.template == "authored":
         return "authored"
     raise PresentationProfileError("generation_strategy_not_supported")
