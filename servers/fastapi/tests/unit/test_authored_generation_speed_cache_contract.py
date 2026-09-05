@@ -170,6 +170,7 @@ def test_author_slide_preserves_nonretryable_public_provider_budget_limit(monkey
 def test_final_outline_infographic_resolver_is_separate_from_outline_expansion(
     monkeypatch,
 ) -> None:
+    monkeypatch.setenv("AUTHORED_INFOGRAPHIC_PLAN_ENABLED", "true")
     outline = PresentationOutlineModel(slides=[SlideOutlineModel(content="one")])
     request = SimpleNamespace(slides_markdown="fixed", instructions="keep it")
     style = SimpleNamespace(reference_mode="style_reference", illustration_prompt="art")

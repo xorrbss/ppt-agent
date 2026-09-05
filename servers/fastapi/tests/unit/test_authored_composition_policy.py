@@ -366,7 +366,8 @@ def test_owner_text_reducer_fixes_actual_355_427_shape_without_owner_drift(monke
     assert 'data-qid="content.note"' in admitted
 
 
-def test_dense_proposal_roles_admit_short_editable_label_systems() -> None:
+def test_dense_proposal_roles_admit_short_editable_label_systems(monkeypatch) -> None:
+    monkeypatch.setenv("AUTHORED_COMPOSITION_ENVELOPE_ENABLED", "true")
     profile = CompositionProfile("ordinary", "authored", True, True, 1)
     plan = build_authored_capacity_plan(
         ["architecture", "pillars", "closing", "generic"],
@@ -2191,8 +2192,9 @@ def test_library_node_icons_do_not_spend_the_slide_image_budget():
     assert count_content_images(with_illustration) == 1
 
 
-def test_the_ordinary_deck_no_longer_stops_at_one_image_slot():
+def test_the_ordinary_deck_no_longer_stops_at_one_image_slot(monkeypatch):
     """The gate admits a figure's icons; the author is still offered one slot."""
+    monkeypatch.setenv("AUTHORED_COMPOSITION_ENVELOPE_ENABLED", "true")
     profile = CompositionProfile("ordinary", "authored", True, True, 1)
     capacity = build_authored_capacity_plan(("# 슬라이드",), ("CONTENT",), profile).at(0)
 

@@ -17,11 +17,13 @@ from hashlib import sha256
 from html.parser import HTMLParser
 from typing import Any, Literal, Sequence
 
+from services.authored_vnext.capability_registry import AUTHORED_FONT_FLOOR_PX
 from utils.authored_dom_quality import (
     build_compact_dom_map,
     ensure_authored_qids,
     normalize_browser_metrics,
 )
+from utils.get_env import is_authored_composition_envelope_enabled
 
 
 CompositionProfileId = Literal["ordinary", "source-verbatim", "source-outline"]
@@ -111,6 +113,12 @@ class SlideCapacity:
     # fail after it fixed the actual clipping defect.
     min_font_px: int = 15
     source_image_count: int = 0
+    # Whether the envelope binds this slide at all. A relaxed envelope
+    # (ordinary decks with ``AUTHORED_COMPOSITION_ENVELOPE_ENABLED`` unset)
+    # keeps its role, image ceiling and font floor for the code that reads
+    # them, but states nothing to the model and reports no capacity
+    # violation: the composition is the model's, as it was before 2026-08-28.
+    enforced: bool = True
 
     def with_source_images(self, count: int) -> "SlideCapacity":
         """Return the same plan after binding the already-admitted image offer."""
@@ -135,9 +143,12 @@ class SlideCapacity:
             max_qids=self.max_qids,
             min_font_px=self.min_font_px,
             source_image_count=count,
+            enforced=self.enforced,
         )
 
     def prompt_brief(self, profile: CompositionProfile) -> str:
+        if not self.enforced:
+            return ""
         source_rule = {
             "verbatim": (
                 "Source text is verbatim authority: do not omit, paraphrase, translate, "
@@ -235,6 +246,17 @@ def build_authored_capacity_plan(
 
     if len(contents) != len(roles):
         raise ValueError("authored capacity contents and roles must match")
+    # The ordinary deck is bound by the envelope only when asked (2026-09-05).
+    # Measured against the August decks the envelope was meant to protect,
+    # bound decks carried about half the visible text and a third of the
+    # text-bearing elements per slide, and the 15px floor forbade the 12-14px
+    # supporting type those decks were set in. Source-verbatim and
+    # source-outline keep their envelope: theirs is a fidelity contract, not a
+    # density preference.
+    relaxed = (
+        profile.profile_id == "ordinary"
+        and not is_authored_composition_envelope_enabled()
+    )
     slides: list[SlideCapacity] = []
     for index, role in enumerate(roles):
         title, body, visible, qids = _role_budget(role)
@@ -263,6 +285,12 @@ def build_authored_capacity_plan(
                 # "images:4>1" and the deck failed to publish.
                 max_images=8,
                 max_qids=qids,
+                min_font_px=(
+                    int(AUTHORED_FONT_FLOOR_PX)
+                    if relaxed
+                    else SlideCapacity.__dataclass_fields__["min_font_px"].default
+                ),
+                enforced=not relaxed,
             )
         )
     return AuthoredCapacityPlan(profile=profile, slides=tuple(slides))
@@ -1342,8 +1370,13 @@ def capacity_violations(
     published.  It deliberately reports only measurable limits (semantic
     targets, visible text, images, and font floor) and leaves geometry defects
     to ``inspect_authored_dom``.
+
+    A relaxed envelope reports nothing: it was never stated to the model, so
+    there is no limit for the rendered slide to have broken.
     """
 
+    if not capacity.enforced:
+        return ()
     violations: list[str] = []
     nodes = build_compact_dom_map(html)
 

@@ -797,8 +797,10 @@ def test_author_deck_uses_authored_html_when_valid(monkeypatch):
 
 
 def test_author_deck_recovers_only_failed_slide_from_batch(monkeypatch):
-    # The expected wave shape (3 slides per call) is the token profile's.
+    # Recovery is exercised on a three-slide batch; the profile default is one
+    # slide per call, so the batch shape is asked for explicitly.
     monkeypatch.setenv("AUTHORED_PROVIDER_RATE_PROFILE", "token")
+    monkeypatch.setenv("AUTHORED_BATCH_SLIDES_PER_CALL", "3")
     calls = []
     failed = AuthoredBatchFailure(ValueError("slide 1 rejected"), "repair slide 1")
 

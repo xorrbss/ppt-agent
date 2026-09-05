@@ -32,14 +32,16 @@ def _clean_knobs(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
 
-def test_token_profile_keeps_todays_conservative_values(monkeypatch) -> None:
+def test_token_profile_authors_one_slide_per_call_on_a_small_wave(monkeypatch) -> None:
+    """One slide per call is the shape the August decks were authored in; the
+    token profile keeps only its wave and pool sizes from the batching era."""
     monkeypatch.setenv("AUTHORED_PROVIDER_RATE_PROFILE", "token")
 
     profile = resolve_authored_rate_profile()
 
     assert profile == AuthoredRateProfile(
         name="token",
-        slides_per_call=3,
+        slides_per_call=1,
         initial_wave_concurrency=1,
         steady_wave_concurrency=2,
         recovery_successes=3,
@@ -146,7 +148,7 @@ def test_non_positive_explicit_knobs_fall_back_to_profile_values(monkeypatch, ba
 
     profile = resolve_authored_rate_profile()
 
-    assert profile.slides_per_call == 3
+    assert profile.slides_per_call == 1
     assert profile.author_concurrency_default == 5
 
 

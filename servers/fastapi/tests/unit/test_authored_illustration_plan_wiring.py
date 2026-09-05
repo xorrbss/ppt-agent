@@ -15,6 +15,7 @@ import io
 import uuid
 from types import SimpleNamespace
 
+import pytest
 from PIL import Image
 
 from models.authored_illustration_plan import AuthoredIllustrationPlan
@@ -39,6 +40,12 @@ from utils.llm_calls.author_deck import (
 )
 from utils.llm_calls.author_slide import Brand
 from models.authored_header_contract import default_header_contract
+
+
+@pytest.fixture(autouse=True)
+def _plan_wiring_under_test(monkeypatch):
+    """These tests exercise the plan wiring, which is off by default."""
+    monkeypatch.setenv("AUTHORED_INFOGRAPHIC_PLAN_ENABLED", "true")
 
 
 def _run(coro):

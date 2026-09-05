@@ -32,9 +32,13 @@ PROFILE_NAMES = frozenset({TOKEN_PROFILE_NAME, API_PROFILE_NAME})
 # Providers whose throughput is a personal quota rather than a billed API.
 _TOKEN_PROVIDER_IDS = frozenset({"codex"})
 
-# Today's conservative token-profile values: one three-slide call to warm up,
-# then two calls per wave, on a 5..8 author pool.
-_TOKEN_SLIDES_PER_CALL = 3
+# Token-profile values: one call to warm up, then two calls per wave, on a
+# 5..8 author pool. Each call authors ONE slide (2026-09-05): the three-slide
+# batch the profile shipped with made the model compress every document it
+# had to return alongside two others, and the decks it produced carried about
+# a quarter of the per-slide markup of the one-slide-per-call August decks.
+# ``AUTHORED_BATCH_SLIDES_PER_CALL`` restores batching for a quota-bound run.
+_TOKEN_SLIDES_PER_CALL = 1
 _TOKEN_INITIAL_WAVE_CONCURRENCY = 1
 _TOKEN_STEADY_WAVE_CONCURRENCY = 2
 _TOKEN_AUTHOR_CONCURRENCY_DEFAULT = 5

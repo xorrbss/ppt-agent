@@ -31,6 +31,7 @@ from services.authored_deck_infographic_plan import (
     derive_illustration_plan,
     resolve_infographic_plan,
 )
+from utils.get_env import is_authored_infographic_plan_enabled
 from utils.llm_calls.author_deck import plan_deck_roles
 from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
@@ -65,7 +66,18 @@ def _infographic_plan_applies(request: GeneratePresentationRequest, style) -> bo
     have to break. Every other deck decides — including a caller-supplied
     ``slides_markdown``: that caller is stating the deck's pages, not how each
     of them is drawn.
+
+    The plan is off unless ``AUTHORED_INFOGRAPHIC_PLAN_ENABLED`` is set
+    (2026-09-05). Planned decks came back visibly thinner than free
+    composition — one server-drawn figure of 3-6 short labels per page, no side
+    content, no charts — so the ordinary deck takes exactly the path it took
+    before the library existed: no plan call, no figure brief, no library CSS,
+    and each slide decides its own picture. This is the single seam for that
+    decision; a half-on state (brief emitted, CSS absent) would fail the
+    figure checker on every planned slide.
     """
+    if not is_authored_infographic_plan_enabled():
+        return False
     if getattr(request, "_source_content_authored_reflow", False):
         return False
     return _reference_mode(style) != EXACT_RECONSTRUCTION

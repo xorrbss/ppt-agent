@@ -31,7 +31,8 @@ from utils.llm_calls import author_deck as author_deck_module
 from utils.llm_calls.author_slide import Brand, authored_provider_semantic_slot
 
 
-def test_pre_author_planner_freezes_known_closing_text_and_call_budget() -> None:
+def test_pre_author_planner_freezes_known_closing_text_and_call_budget(monkeypatch) -> None:
+    monkeypatch.setenv("AUTHORED_COMPOSITION_ENVELOPE_ENABLED", "true")
     content = "최종 실행 원칙\n" + ("검증 가능한 운영 근거를 유지합니다. " * 20)
     profile = CompositionProfile("ordinary", "authored", True, True, 1)
     capacity_plan = build_authored_capacity_plan((content,), ("CLOSING",), profile)
@@ -39,8 +40,8 @@ def test_pre_author_planner_freezes_known_closing_text_and_call_budget() -> None
     planned = plan_authored_text((content,), capacity_plan).at(0)
 
     assert planned.input_title_chars == len("최종 실행 원칙")
-    assert planned.input_body_chars > planned.body_target_chars == 270
-    assert planned.input_visible_chars > planned.visible_target_chars == 350
+    assert planned.input_body_chars > planned.body_target_chars == 380
+    assert planned.input_visible_chars > planned.visible_target_chars == 460
     assert planned.semantic_target_limit == 20
     assert planned.condensation_required is True
     assert planned.condensation_allowed is True

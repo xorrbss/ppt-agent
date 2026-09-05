@@ -1382,7 +1382,13 @@ def prepare_authored_deck(
         "ordinary", "authored", True, True, 1
     )
     capacity_plan = build_authored_capacity_plan(contents, roles, profile)
-    text_plan = plan_authored_text(contents, capacity_plan)
+    # A relaxed envelope states no budget, so there is no text plan to freeze
+    # against it; the prompt then carries neither brief.
+    text_plan = (
+        plan_authored_text(contents, capacity_plan)
+        if _envelope_enforced(capacity_plan)
+        else None
+    )
     # Exact reconstruction reproduces a source slide verbatim, so imposing a
     # header design on it would contradict the mode.
     #
@@ -1466,11 +1472,33 @@ def _planned_slide_capacity_inputs(
     if capacity_plan is None:
         return None, None
     capacity = capacity_plan.at(index).with_source_images(len(source_images))
+    return capacity, _capacity_brief(plan, index, capacity)
+
+
+def _envelope_enforced(capacity_plan: AuthoredCapacityPlan) -> bool:
+    """Whether any slide of this plan states an envelope to the model."""
+    return any(slide.enforced for slide in capacity_plan.slides)
+
+
+def _capacity_brief(
+    plan: AuthoredDeckPlan, index: int, capacity: SlideCapacity
+) -> str | None:
+    """The envelope and text-plan brief for one slide, or None when relaxed.
+
+    A relaxed capacity has no brief of its own and its plan froze no text
+    budget, so the author prompt carries no server-owned composition text at
+    all — the state before the envelope existed.
+    """
+    capacity_plan = getattr(plan, "capacity_plan", None)
+    if capacity_plan is None:
+        return None
     brief = capacity.prompt_brief(capacity_plan.profile)
+    if not brief:
+        return None
     text_plan = getattr(plan, "text_plan", None)
     if text_plan is not None:
         brief += " " + text_plan.at(index, capacity=capacity).prompt_brief()
-    return capacity, brief
+    return brief
 
 
 def _planned_batch_request(
@@ -1735,12 +1763,7 @@ async def author_planned_slide(
     capacity = None
     if capacity_plan is not None:
         capacity = capacity_plan.at(index).with_source_images(len(source_images))
-        capacity_brief = capacity.prompt_brief(capacity_plan.profile)
-        text_plan = getattr(plan, "text_plan", None)
-        if text_plan is not None:
-            capacity_brief += " " + text_plan.at(
-                index, capacity=capacity
-            ).prompt_brief()
+        capacity_brief = _capacity_brief(plan, index, capacity)
     return await _author_one_resilient(
         plan.contents[index],
         plan.design_system,
