@@ -39,8 +39,10 @@ services:
     image: ${CHAT_FIRST_CANARY_IMAGE:-presenton-chat-first-canary:local}
     # Intentionally image-only: `--build` against the stock Dockerfile would
     # silently replace a scanner-equipped derivative with an unsafe image.
-    # Reaches Next.js through nginx (nginx only proxies /api/v1/* to FastAPI),
-    # same as the stock compose services; see docker-compose.yml.
+    # Reaches Next.js's own /api/health route through nginx (nginx only
+    # proxies /api/v1/* to FastAPI), same as the stock compose services; that
+    # route reflects a bounded FastAPI /health call, so a dead or hung
+    # FastAPI fails this healthcheck too; see docker-compose.yml.
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/api/health"]
       interval: 30s
@@ -71,6 +73,9 @@ services:
     image: ${CHAT_FIRST_POSTGRES_CANARY_IMAGE:-presenton-chat-first-postgres-canary:local}
     # The supplied image must contain the scanner and a Next bundle built with
     # the matching frontend flag.  The stock Dockerfile remains fail-closed.
+    # See the production healthcheck comment in docker-compose.yml: this
+    # reaches Next.js's own /api/health route, which reflects a bounded
+    # FastAPI /health call.
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/api/health"]
       interval: 30s
@@ -102,6 +107,9 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: "false"
+    # See the production healthcheck comment in docker-compose.yml: this
+    # reaches Next.js's own /api/health route, which reflects a bounded
+    # FastAPI /health call.
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/api/health"]
       interval: 30s

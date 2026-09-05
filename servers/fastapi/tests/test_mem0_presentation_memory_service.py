@@ -1,11 +1,13 @@
 import asyncio
 import logging
 import os
+import threading
 import time
 import uuid
 from unittest.mock import patch
 
 import services.mem0_oss_memory as mem0_oss
+import services.mem0_presentation_memory_service as mem0_service_module
 from services.mem0_presentation_memory_service import Mem0PresentationMemoryService
 
 
@@ -291,4 +293,73 @@ class TestMem0PresentationMemoryService:
 
         assert context == ""
         assert any("timed out" in record.message for record in caplog.records)
+
+    def test_mem0_blocking_calls_run_on_a_dedicated_executor(self):
+        # A timeout test only proves the *caller* stops waiting; it says
+        # nothing about the worker thread, which asyncio.wait_for cannot
+        # cancel. This test proves isolation directly: mem0's blocking calls
+        # must land on the dedicated mem0 executor, never on the loop's
+        # default (shared) executor that unrelated to_thread callers use.
+        captured_thread_names: list[str] = []
+
+        class ThreadRecordingClient(FakeMemoryClient):
+            def add(self, *args, **kwargs):
+                captured_thread_names.append(threading.current_thread().name)
+                return super().add(*args, **kwargs)
+
+            def search(self, *args, **kwargs):
+                captured_thread_names.append(threading.current_thread().name)
+                return super().search(*args, **kwargs)
+
+        with patch.dict(
+            "os.environ",
+            {"MEM0_ENABLED": "true", "APP_DATA_DIRECTORY": "/tmp/presenton-test"},
+            clear=False,
+        ), patch(
+            "services.mem0_presentation_memory_service.get_shared_mem0_client",
+            return_value=ThreadRecordingClient.from_config({}),
+        ):
+            service = Mem0PresentationMemoryService()
+            presentation_id = uuid.uuid4()
+
+            async def _run() -> str:
+                await service.store_generated_outlines(
+                    presentation_id, {"slides": [{"content": "One"}]}
+                )
+                await service.retrieve_context(
+                    presentation_id=presentation_id, query="anything"
+                )
+                # A plain asyncio.to_thread call uses the loop's default
+                # (shared) executor -- the one every other unrelated
+                # to_thread caller in the process, e.g. the Chrome discovery
+                # health check, also uses.
+                return await asyncio.to_thread(
+                    lambda: threading.current_thread().name
+                )
+
+            default_executor_thread_name = asyncio.run(_run())
+
+        assert captured_thread_names, "mem0 client was never called"
+        for name in captured_thread_names:
+            assert name.startswith("mem0-presentation-memory"), name
+        assert not default_executor_thread_name.startswith(
+            "mem0-presentation-memory"
+        )
+
+    def test_mem0_executor_is_distinct_and_bounded(self):
+        # Guards against a regression that re-inlines the dedicated executor
+        # back into asyncio.to_thread's shared default pool.
+        executor = mem0_service_module._MEM0_EXECUTOR
+        assert executor is not None
+        assert (
+            executor._max_workers  # noqa: SLF001 - test-only introspection
+            == mem0_service_module.MEM0_EXECUTOR_MAX_WORKERS
+        )
+
+        async def _default_executor():
+            await asyncio.to_thread(lambda: None)
+            return asyncio.get_running_loop()._default_executor  # noqa: SLF001
+
+        default_executor = asyncio.run(_default_executor())
+        assert default_executor is not executor
 

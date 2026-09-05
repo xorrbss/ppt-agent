@@ -60,7 +60,9 @@ def test_liveness_returns_ok_without_touching_the_database(monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert "version" in body
+    # The app version is not public information for an unauthenticated probe.
+    assert "version" not in body
+    assert set(body) == {"status"}
 
 
 def test_health_and_ready_paths_are_classified_as_not_requiring_auth():
@@ -83,19 +85,31 @@ def test_ready_is_reachable_without_a_session_when_auth_is_enabled(monkeypatch):
     assert response.status_code in (200, 503)
 
 
-def test_ready_returns_503_when_the_database_check_fails(monkeypatch):
+def test_ready_returns_503_when_the_database_check_fails(monkeypatch, caplog):
     monkeypatch.setattr(health_module, "async_session_maker", lambda: _BrokenSession())
     monkeypatch.setattr(health_module, "find_chrome", lambda: "/usr/bin/chromium")
     monkeypatch.delenv("NEXT_INTERNAL_URL", raising=False)
     monkeypatch.delenv("LLM", raising=False)
 
-    response = TestClient(app).get("/ready")
+    with caplog.at_level("WARNING", logger=health_module.LOGGER.name):
+        response = TestClient(app).get("/ready")
 
     assert response.status_code == 503
     body = response.json()
     assert body["status"] == "degraded"
-    assert body["checks"]["database"]["ok"] is False
-    assert "detail" in body["checks"]["database"]
+    # Public body is boolean-only: no exception type or other check detail.
+    assert body["checks"]["database"] is False
+    assert body == {
+        "status": "degraded",
+        "checks": {
+            "database": False,
+            "provider_credentials": True,
+            "chrome": True,
+            "nextjs": True,
+        },
+    }
+    # The detail that used to leak into the body is still visible server-side.
+    assert any("database" in record.message and "RuntimeError" in record.message for record in caplog.records)
 
 
 def test_ready_returns_200_when_every_check_passes(monkeypatch):
@@ -105,15 +119,16 @@ def test_ready_returns_200_when_every_check_passes(monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["status"] == "ok"
-    assert body["checks"]["database"]["ok"] is True
-    assert body["checks"]["chrome"]["ok"] is True
-    assert body["checks"]["provider_credentials"]["ok"] is True
-    # NEXT_INTERNAL_URL is unset in this test: the check is skipped, not failed.
-    assert body["checks"]["nextjs"] == {
-        "ok": True,
-        "skipped": True,
-        "detail": "NEXT_INTERNAL_URL not set",
+    assert body == {
+        "status": "ok",
+        "checks": {
+            "database": True,
+            "provider_credentials": True,
+            "chrome": True,
+            # NEXT_INTERNAL_URL is unset in this test: skipped counts as ok,
+            # and the skip reason does not leak into the public body.
+            "nextjs": True,
+        },
     }
 
 
@@ -126,4 +141,58 @@ def test_ready_fails_when_chrome_is_not_discoverable(monkeypatch):
     response = TestClient(app).get("/ready")
 
     assert response.status_code == 503
-    assert response.json()["checks"]["chrome"]["ok"] is False
+    assert response.json()["checks"]["chrome"] is False
+
+
+def test_ready_codex_provider_missing_token_fails_without_leaking_provider(monkeypatch, caplog):
+    _passing_ready_dependencies(monkeypatch)
+    monkeypatch.setenv("LLM", "codex")
+    monkeypatch.delenv("CODEX_ACCESS_TOKEN", raising=False)
+
+    with caplog.at_level("WARNING", logger=health_module.LOGGER.name):
+        response = TestClient(app).get("/ready")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "degraded"
+    # The public body never names the provider or the credential reason.
+    assert body["checks"]["provider_credentials"] is False
+    assert "codex" not in str(body).lower()
+    # The provider id and reason are still available in the server logs.
+    assert any(
+        "codex" in record.message.lower() and "missing_access_token" in record.message
+        for record in caplog.records
+    )
+
+
+def test_ready_codex_provider_fresh_token_passes(monkeypatch):
+    _passing_ready_dependencies(monkeypatch)
+    monkeypatch.setenv("LLM", "codex")
+    monkeypatch.setenv("CODEX_ACCESS_TOKEN", "test-token")
+    monkeypatch.delenv("CODEX_TOKEN_EXPIRES", raising=False)
+
+    response = TestClient(app).get("/ready")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["checks"]["provider_credentials"] is True
+
+
+def test_ready_codex_provider_expiring_token_without_auto_refresh_fails(monkeypatch, caplog):
+    _passing_ready_dependencies(monkeypatch)
+    monkeypatch.setenv("LLM", "codex")
+    monkeypatch.setenv("CODEX_ACCESS_TOKEN", "test-token")
+    # Already expired: well within any leeway window.
+    monkeypatch.setenv("CODEX_TOKEN_EXPIRES", "1")
+    monkeypatch.setenv("CODEX_TOKEN_AUTO_REFRESH", "false")
+
+    with caplog.at_level("WARNING", logger=health_module.LOGGER.name):
+        response = TestClient(app).get("/ready")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["checks"]["provider_credentials"] is False
+    assert "expiring" not in str(body)
+    assert any(
+        "expiring_soon" in record.message for record in caplog.records
+    )

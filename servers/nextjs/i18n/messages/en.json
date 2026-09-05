@@ -1710,6 +1710,14 @@
       "gate": "Automatic checks left unresolved issues on this page ({categories}). Please review it.",
       "gateUnknown": "Automatic checks left unresolved issues on this page. Please review it.",
       "other": "This page was flagged during generation: {reason}"
+    },
+    "category": {
+      "overflow": "content overflow",
+      "clipping": "clipped content",
+      "offCanvas": "content off the slide",
+      "overlap": "overlapping elements",
+      "repairBudgetExhausted": "repair budget exhausted",
+      "gateRepairNotAdmitted": "repair not admitted"
     }
   },
   "notFound": {

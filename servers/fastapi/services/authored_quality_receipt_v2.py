@@ -2130,9 +2130,9 @@ def _v3_blockers(evidence: Mapping[str, object], *, quality_tier: str) -> tuple[
     triggers = quality_receipt_t1_triggers(evidence)
     if triggers and quality_tier == "T0":
         _append(blockers, "tier.t1_required")
-    visual = _mapping(evidence.get("visualReview"))
-    if quality_tier in {"T1", "T2", "T3"} and _status(_read(visual, "status", "verdict", default=None)) != "passed":
-        _append(blockers, "visualReview.required_failed")
+    visual = _mapping(evidence.get("visualReview"))  # "failed" (ran, residual defect) never waives like "required_failed" (never ran) does.
+    if quality_tier in {"T1", "T2", "T3"} and (visual_status := _status(_read(visual, "status", "verdict", default=None))) != "passed":
+        _append(blockers, "visualReview.failed" if visual_status == "failed" else "visualReview.required_failed")
     if quality_tier in {"T2", "T3"} and (visual is None or visual.get("fullDeck") is not True):
         _append(blockers, "visualReview.full_deck_required")
     if quality_tier == "T3":

@@ -4,6 +4,7 @@ from pydantic import BaseModel, model_validator
 
 from api.error_handling import install_api_error_handling
 from models.api_error_model import APIErrorModel
+from utils.owner_context import OwnerContextRequiredError
 
 
 class _RevisionPayload(BaseModel):
@@ -38,6 +39,10 @@ def _test_app() -> FastAPI:
     @app.post("/sealed-schema")
     async def validate_sealed_schema(payload: _SealedPayload):
         return payload
+
+    @app.get("/owner-context-required")
+    async def owner_context_required():
+        raise OwnerContextRequiredError()
 
     @app.get("/unexpected")
     async def unexpected():
@@ -125,6 +130,21 @@ def test_unhandled_error_does_not_expose_internal_exception_text():
     assert response.json()["error"]["code"] == "internal_server_error"
     assert "provider secret response" not in response.text
     assert response.headers["X-Request-ID"] == response.json()["request_id"]
+
+
+def test_owner_context_refusal_is_a_403_and_not_an_internal_error():
+    """The fail-closed guard raises from inside the ORM session hooks."""
+
+    client = TestClient(_test_app(), raise_server_exceptions=False)
+
+    response = client.get("/owner-context-required")
+
+    assert response.status_code == 403
+    body = response.json()
+    assert body["detail"] == "owner_context_required"
+    assert body["error"]["code"] == "owner_context_required"
+    assert body["error"]["retryable"] is False
+    assert "Traceback" not in response.text
 
 
 def test_structured_http_detail_is_promoted_to_the_error_envelope():

@@ -1710,6 +1710,14 @@
       "gate": "자동 검사에서 해결되지 않은 문제가 남았습니다({categories}). 페이지를 확인해 주세요.",
       "gateUnknown": "자동 검사에서 해결되지 않은 문제가 남았습니다. 페이지를 확인해 주세요.",
       "other": "생성 과정에서 표시된 페이지입니다: {reason}"
+    },
+    "category": {
+      "overflow": "내용 넘침",
+      "clipping": "내용 잘림",
+      "offCanvas": "슬라이드 밖으로 벗어남",
+      "overlap": "요소 겹침",
+      "repairBudgetExhausted": "복구 예산 소진",
+      "gateRepairNotAdmitted": "복구 미승인"
     }
   },
   "notFound": {

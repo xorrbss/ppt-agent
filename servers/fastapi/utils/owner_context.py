@@ -112,8 +112,16 @@ def owner_context_enforced() -> bool:
 
 
 def require_owner_context() -> None:
-    """Raise when an enforced request would otherwise run an unscoped query."""
+    """Raise when an enforced request would otherwise run an unscoped query.
+
+    The owner is the only identity that can stand in here.  ``api.middlewares``
+    sets the tenant on every authenticated request from a non-optional field
+    that falls back to ``"default"``, so accepting a tenant as a substitute
+    made the guard unreachable; and the tenant criteria in
+    ``services.database_owner_scope`` cover only the three public authority
+    models, not the owner-scoped tables this guard protects.
+    """
     if not owner_context_enforced():
         return
-    if _CURRENT_OWNER_ID.get() is None and _CURRENT_TENANT_ID.get() is None:
+    if _CURRENT_OWNER_ID.get() is None:
         raise OwnerContextRequiredError()

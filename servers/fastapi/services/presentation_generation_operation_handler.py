@@ -60,6 +60,7 @@ from services.presentation_generation_attempt_timing import (
     _queue_wait_ms,
     _safe_failure,
 )
+from services.public_operation_deadline_scope import public_operation_deadline_scope
 from services.provider_usage_instrumentation import provider_operation_usage_scope
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
@@ -713,8 +714,12 @@ class PresentationGenerationOperationHandler:
         if remaining_seconds <= 0:
             raise NonRetryableWorkspaceOperationError("public_deadline_exceeded")
         try:
-            async with asyncio.timeout(remaining_seconds):
-                return await self._execute_without_deadline(context)
+            # Publish the pinned instant so stages below can size their own
+            # sub-budget against what is left; asyncio.timeout does not expose
+            # its deadline to the code it wraps.
+            with public_operation_deadline_scope(deadline):
+                async with asyncio.timeout(remaining_seconds):
+                    return await self._execute_without_deadline(context)
         except TimeoutError:
             if datetime.now(timezone.utc) >= deadline:
                 raise NonRetryableWorkspaceOperationError(

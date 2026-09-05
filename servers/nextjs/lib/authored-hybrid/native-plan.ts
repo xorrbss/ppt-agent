@@ -31,7 +31,7 @@ import type { AuthoredHybridNativeChartSource } from "./native-chart.ts";
 import type { AuthoredHybridNativeTableSource } from "./native-table.ts";
 import { serializeNativeTableFrame } from "./native-table.ts";
 import { nativeCropSourceRectXml } from "./native-image-crop.ts";
-import { outerShadowEffectXml, outerShadowIsSafe } from "./shadow-effect.ts";
+import { outerShadowEffectXml, outerShadowMappingIsSafe } from "./shadow-effect.ts";
 
 export const EMU_PER_CSS_PX = 9_525;
 export const MIN_EDITABLE_FONT_SIZE_PT = 9;
@@ -455,7 +455,7 @@ function shapeIsSafe(shape: AuthoredHybridShapePayload): boolean {
   // gradient paint as OOXML is not part of the supported simple-shape contract.
   if (shape.gradient) return false;
   if (shape.shape === "freeform" && !normalizedPointsAreSafe(shape)) return false;
-  if (shape.outerShadow && !outerShadowIsSafe(shape.outerShadow)) return false;
+  if (!outerShadowMappingIsSafe(shape, shapeHasBaseObject(shape))) return false;
   if (
     shape.borderLines?.some(
       (border) =>

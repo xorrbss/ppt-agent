@@ -8,7 +8,7 @@ import aiohttp
 from sqlmodel import select
 from enums.webhook_event import WebhookEvent
 from models.sql.webhook_subscription import WebhookSubscription
-from services.database import get_async_session
+from services.database import async_session_maker, get_async_session
 from services.outbound_url_guard import (
     EgressPolicyError,
     OutboundTarget,
@@ -17,6 +17,7 @@ from services.outbound_url_guard import (
     validate_outbound_url_async,
 )
 from services.provider_egress_policy import AddressResolver
+from utils.datetime_utils import get_current_utc_datetime
 
 LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ _RETRYABLE_POLICY_CODES = frozenset({"egress_dns_unavailable"})
 # opens a socket. Production code never reassigns them.
 _resolver: AddressResolver | None = None
 _build_session = pinned_client_session
+# Seam for tests: the DB session factory used to record delivery outcomes.
+_session_maker = async_session_maker
 
 
 class WebhookService:
@@ -85,6 +88,9 @@ class WebhookService:
                     subscription.url, resolver=_resolver
                 )
                 await cls._post_once(target, body, headers)
+                # Clear any earlier recorded rejection now that delivery
+                # recovered (operator fixed the target, allowlisted it, etc).
+                await cls._record_delivery_outcome(subscription.id, code=None)
                 return
             except EgressPolicyError as exc:
                 error_detail = exc.code
@@ -94,6 +100,10 @@ class WebhookService:
                         subscription.id,
                         exc.code,
                     )
+                    # A terminal rejection is stored on the row rather than
+                    # only logged, so a subscription pointed at a target the
+                    # guard now refuses does not fail silently forever.
+                    await cls._record_delivery_outcome(subscription.id, code=exc.code)
                     return
             except Exception as exc:  # noqa: BLE001
                 error_detail = str(exc)
@@ -116,6 +126,30 @@ class WebhookService:
                     _MAX_ATTEMPTS,
                     error_detail,
                 )
+
+    @staticmethod
+    async def _record_delivery_outcome(subscription_id: str, *, code: str | None) -> None:
+        """Persist the terminal outcome of a delivery attempt on the row.
+
+        ``code`` is the rejecting ``EgressPolicyError`` code, or ``None`` to
+        clear a previously recorded rejection after a delivery succeeds. Best
+        effort: a failure to persist must not raise out of the delivery path.
+        """
+        try:
+            async with _session_maker() as sql_session:
+                subscription = await sql_session.get(WebhookSubscription, subscription_id)
+                if subscription is None:
+                    return
+                subscription.last_delivery_rejected_code = code
+                subscription.last_delivery_rejected_at = (
+                    get_current_utc_datetime() if code else None
+                )
+                sql_session.add(subscription)
+                await sql_session.commit()
+        except Exception:  # noqa: BLE001
+            LOGGER.exception(
+                "webhook %s: failed to persist delivery outcome", subscription_id
+            )
 
     @staticmethod
     async def _post_once(

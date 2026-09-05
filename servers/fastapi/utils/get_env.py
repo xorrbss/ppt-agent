@@ -137,6 +137,7 @@ _GETTER_KEYS = {
     "get_openai_compat_image_model_env": "OPENAI_COMPAT_IMAGE_MODEL",
     "get_provider_durable_runtime_required_env": "PROVIDER_DURABLE_RUNTIME_REQUIRED",
     "get_template_v2_deployment_tier_env": "TEMPLATE_V2_DEPLOYMENT_TIER",
+    "get_webhook_private_target_allowlist_env": "WEBHOOK_PRIVATE_TARGET_ALLOWLIST",
 }
 
 globals().update({name: _make_getter(key) for name, key in _GETTER_KEYS.items()})

@@ -29,6 +29,12 @@ instructions -- everything the brief has to read. Defaults:
   the stage including the retry, so two attempts cannot double the deadline.
   When the first attempt spends it all, the retry is skipped.
 
+``total`` is also the brief term of the whole-deck budget in
+``services/public_generation_deadline_policy.py``, which reads it from here
+rather than repeating it, and callers running under a public operation pass
+``remaining_operation_seconds`` so the stage is additionally clamped to a share
+of what the operation has left (``content_brief_operation_share``).
+
 Retry
 -----
 One retry after a timeout, with a reduced input: the document context is
@@ -57,6 +63,10 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from time import monotonic
 from typing import Literal, Optional
+
+from api.v1.ppt.endpoints.content_brief_operation_share import (
+    clamp_brief_policy_to_operation,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -182,6 +192,7 @@ async def run_content_brief_with_policy(
     instructions: Optional[str],
     presentation_id: object = None,
     policy: ContentBriefTimeoutPolicy | None = None,
+    remaining_operation_seconds: float | None = None,
 ) -> ContentBriefOutcome:
     """Run ``brief_fn`` under the scaled deadline, retrying once on timeout.
 
@@ -189,8 +200,16 @@ async def run_content_brief_with_policy(
     argument order so call sites can pass the module-level function they
     already expose (and tests can keep monkeypatching that name).
     Exceptions other than the timeout propagate untouched.
+
+    ``remaining_operation_seconds`` is what the caller has left on its public
+    operation deadline.  The stage budget is clamped to a share of it (see
+    ``content_brief_operation_share``) so a slow brief cannot spend a small
+    deck's whole allowance; ``None`` means "not under an operation deadline"
+    and leaves the policy untouched.
     """
-    active = policy or content_brief_timeout_policy()
+    active = clamp_brief_policy_to_operation(
+        policy or content_brief_timeout_policy(), remaining_operation_seconds
+    )
     timeout = active.timeout_for(
         content_brief_input_chars(content, additional_context, instructions)
     )

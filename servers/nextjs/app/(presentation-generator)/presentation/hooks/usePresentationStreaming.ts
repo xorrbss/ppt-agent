@@ -3,6 +3,7 @@ import { useTranslations } from "next-intl";
 import { useDispatch } from "react-redux";
 import {
   clearPresentationData,
+  setFlaggedSlides,
   setPresentationData,
   setStreaming,
   updateSlide,
@@ -14,6 +15,7 @@ import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 import { getApiUrl, normalizeBackendAssetUrls } from "@/utils/api";
 import { store } from "@/store/store";
 import type { Slide } from "@/app/(presentation-generator)/types/slide";
+import { deriveFlaggedSlideMap } from "../utils/flaggedSlides";
 
 const MAX_STREAM_RETRIES = 3;
 const STREAM_RETRY_DELAY_MS = 1_000;
@@ -353,7 +355,14 @@ export const usePresentationStreaming = (
 
           case "complete":
             try {
-              dispatch(setPresentationData(normalizeBackendAssetUrls(data.presentation)));
+              const completedPresentation = normalizeBackendAssetUrls(
+                data.presentation
+              );
+              dispatch(setPresentationData(completedPresentation));
+              // The quality-gate receipt rides on the theme in this same
+              // payload; derive its badge map here too, or a deck watched to
+              // completion shows no flags until the next full reload.
+              dispatch(setFlaggedSlides(deriveFlaggedSlideMap(completedPresentation)));
               dispatch(setStreaming(false));
               setLoading(false);
               isClosed = true;
@@ -374,8 +383,10 @@ export const usePresentationStreaming = (
             accumulatedChunks = "";
             break;
 
-          case "closing":
-            dispatch(setPresentationData(normalizeBackendAssetUrls(data.presentation)));
+          case "closing": {
+            const closingPresentation = normalizeBackendAssetUrls(data.presentation);
+            dispatch(setPresentationData(closingPresentation));
+            dispatch(setFlaggedSlides(deriveFlaggedSlideMap(closingPresentation)));
             setLoading(false);
             dispatch(setStreaming(false));
             isClosed = true;
@@ -386,9 +397,10 @@ export const usePresentationStreaming = (
             // Remove stream parameter from URL
             const newUrl = new URL(window.location.href);
             newUrl.searchParams.delete("stream");
-              newUrl.searchParams.delete("regenerate");
+            newUrl.searchParams.delete("regenerate");
             window.history.replaceState({}, "", newUrl.toString());
             break;
+          }
           case "error":
             if (
               !scheduleRetry(

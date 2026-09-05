@@ -45,6 +45,7 @@ from utils.llm_calls.author_slide import (
     validate_authored_slide_html,
 )
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
+from tests.unit.test_authored_terminal_slide_fallback import _pop_slide_ids
 
 _ORDINARY = CompositionProfile("ordinary", "authored", True, True, 1)
 _STYLE = SimpleNamespace(id="default", illustration_prompt=None)
@@ -519,4 +520,6 @@ def test_the_author_flag_reaches_the_published_quality_gate(monkeypatch, tmp_pat
     finally:
         reset_current_owner_id(owner_token)
 
-    assert presentation.theme["authoredQualityGate"]["flaggedSlides"] == [flag]
+    assert _pop_slide_ids(
+        presentation.theme["authoredQualityGate"]["flaggedSlides"]
+    ) == [flag]

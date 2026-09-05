@@ -13,8 +13,10 @@ import {
   outerShadowDirection,
   outerShadowEffectXml,
   outerShadowIsSafe,
+  outerShadowMappingIsSafe,
   outerShadowScalePercent,
   promotedElementEmitsOuterShadow,
+  shapeHasOpaqueShadowCarrier,
 } from "./shadow-effect.ts";
 
 // The browser helpers are plain hoisted functions; evaluate the same text
@@ -147,7 +149,8 @@ test("outer shadow effect XML uses EMU lengths, screen-space direction, and alph
   const xml = outerShadowEffectXml(softShadow, 1, { x: 0, y: 0, width: 400, height: 240 });
   assert.equal(
     xml,
-    '<a:effectLst><a:outerShdw blurRad="114300" dist="38100" dir="5400000" algn="ctr" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="25000"/></a:srgbClr></a:outerShdw></a:effectLst>'
+    // rotWithShape="1" so the effect rotates with a tilted shape, matching CSS.
+    '<a:effectLst><a:outerShdw blurRad="114300" dist="38100" dir="5400000" algn="ctr" rotWithShape="1"><a:srgbClr val="000000"><a:alpha val="25000"/></a:srgbClr></a:outerShdw></a:effectLst>'
   );
   // Element opacity multiplies into the effect alpha like every other paint.
   assert.match(outerShadowEffectXml(softShadow, 0.5), /<a:alpha val="12500"\/>/);
@@ -162,13 +165,63 @@ test("outer shadow effect XML uses EMU lengths, screen-space direction, and alph
   assert.equal(outerShadowDirection(4, 4), 2_700_000);
   assert.equal(outerShadowDirection(0, -4), 16_200_000);
   assert.equal(outerShadowScalePercent(2, 0), 100_000);
-  assert.equal(outerShadowScalePercent(-500, 100), 10_000);
+  // A small residual extent still clamps to the 10% floor...
+  assert.equal(outerShadowScalePercent(-48, 100), 10_000);
+  // ...but a spread that consumes the whole extent (or inverts it) erases the
+  // shadow in CSS, so it must not be represented as a visible 10% blob.
+  assert.equal(outerShadowScalePercent(-50, 100), null);
+  assert.equal(outerShadowScalePercent(-500, 100), null);
 
   assert.equal(outerShadowIsSafe(softShadow), true);
   assert.equal(outerShadowIsSafe({ ...softShadow, blurPx: Number.POSITIVE_INFINITY }), false);
   assert.equal(outerShadowIsSafe({ ...softShadow, blurPx: -1 }), false);
   assert.equal(outerShadowIsSafe({ ...softShadow, color: { hex: "00000", alpha: 1 } }), false);
   assert.equal(outerShadowIsSafe(null), false);
+});
+
+test("shapeHasOpaqueShadowCarrier accepts only an opaque fill or a gradient", () => {
+  assert.equal(shapeHasOpaqueShadowCarrier({ fill: { hex: "FFFFFF", alpha: 1 } }), true);
+  assert.equal(shapeHasOpaqueShadowCarrier({ fill: { hex: "FFFFFF", alpha: 0.999 } }), true);
+  assert.equal(shapeHasOpaqueShadowCarrier({ fill: { hex: "FFFFFF", alpha: 0.9 } }), false);
+  assert.equal(shapeHasOpaqueShadowCarrier({ fill: null, stroke: { hex: "000000", alpha: 1 } }), false);
+  assert.equal(shapeHasOpaqueShadowCarrier({ fill: null }), false);
+  assert.equal(
+    shapeHasOpaqueShadowCarrier({ fill: null, gradient: { angleDeg: 0, stops: [] } }),
+    true
+  );
+});
+
+test("outerShadowMappingIsSafe combines the two shapeIsSafe gates into one predicate", () => {
+  // No outerShadow: trivially safe regardless of the base object.
+  assert.equal(outerShadowMappingIsSafe({ outerShadow: undefined }, true), true);
+  assert.equal(outerShadowMappingIsSafe({ outerShadow: undefined }, false), true);
+  // An unsafe (e.g. non-finite) shadow value is refused independent of the base object.
+  const unsafeShadow = { ...softShadow, blurPx: Number.NaN };
+  assert.equal(outerShadowMappingIsSafe({ outerShadow: unsafeShadow }, true), false);
+  assert.equal(outerShadowMappingIsSafe({ outerShadow: unsafeShadow }, false), false);
+  // A safe shadow with no base object at all (e.g. border-only) is not refused here.
+  assert.equal(outerShadowMappingIsSafe({ outerShadow: softShadow, fill: null }, false), true);
+  // A safe shadow with a base object requires that base object to be opaque.
+  assert.equal(
+    outerShadowMappingIsSafe({ outerShadow: softShadow, fill: { hex: "FFFFFF", alpha: 1 } }, true),
+    true
+  );
+  assert.equal(
+    outerShadowMappingIsSafe({ outerShadow: softShadow, fill: { hex: "FFFFFF", alpha: 0.5 } }, true),
+    false
+  );
+  assert.equal(
+    outerShadowMappingIsSafe({ outerShadow: softShadow, fill: null }, true),
+    false
+  );
+});
+
+test("a spread that collapses the extent skips the effect instead of drawing a clamped blob", () => {
+  const collapsingSpread = { ...softShadow, spreadPx: -60 };
+  // With bounds, the collapsing spread must suppress the whole effect...
+  assert.equal(outerShadowEffectXml(collapsingSpread, 1, { x: 0, y: 0, width: 100, height: 400 }), "");
+  // ...even though the same shadow renders fine on a larger axis alone.
+  assert.notEqual(outerShadowEffectXml(collapsingSpread, 1, { x: 0, y: 0, width: 400, height: 400 }), "");
 });
 
 test("a native shape with a mapped shadow serializes one outerShdw on its base object only", async () => {
@@ -195,7 +248,7 @@ test("a native shape with a mapped shadow serializes one outerShdw on its base o
   assert.equal((xml.match(/<a:effectLst>/g) ?? []).length, 1);
   assert.match(
     xml,
-    /<a:solidFill><a:srgbClr val="FFFFFF"><\/a:srgbClr><\/a:solidFill><a:ln><a:noFill\/><\/a:ln><a:effectLst><a:outerShdw blurRad="114300" dist="38100" dir="5400000" algn="ctr" rotWithShape="0">/
+    /<a:solidFill><a:srgbClr val="FFFFFF"><\/a:srgbClr><\/a:solidFill><a:ln><a:noFill\/><\/a:ln><a:effectLst><a:outerShdw blurRad="114300" dist="38100" dir="5400000" algn="ctr" rotWithShape="1">/
   );
   assert.ok(promotedElementEmitsOuterShadow(element));
 
@@ -231,7 +284,7 @@ test("text in a shadowed container is native text over a native container with t
   assert.equal(prepared.length, 1);
   assert.equal(prepared[0].kind, "text");
   const underlay = serializePreparedNativeElementUnderlay(prepared[0], 3);
-  assert.match(underlay, /<a:effectLst><a:outerShdw blurRad="57150" dist="19050" dir="5400000" algn="ctr" rotWithShape="0">/);
+  assert.match(underlay, /<a:effectLst><a:outerShdw blurRad="57150" dist="19050" dir="5400000" algn="ctr" rotWithShape="1">/);
   const overlay = serializePreparedNativeElementOverlay(prepared[0], 4);
   assert.match(overlay, /Chip label/);
   assert.doesNotMatch(overlay, /<a:effectLst>/);
@@ -246,17 +299,170 @@ test("text in a shadowed container is native text over a native container with t
   );
 });
 
-test("an unselected shape with any shadow paint reports shadow-backplate-only", () => {
+test("a shadowed shape can never reach native classification, so no shadow-backplate-only reason is produced", () => {
+  // `hasExternalPaint` in browser-source.ts treats any non-"none" box-shadow
+  // as external paint, which forces raster classification with an
+  // "external-paint" reason. `classification.mode === "native"` therefore
+  // never coexists with shadow paint in real captures; the reporting branch
+  // that used to special-case it was dead code and has been removed. Only a
+  // gradient background (which is not box-shadow) can survive native
+  // classification and then get rejected later by `shapeIsSafe`.
   const nativeShape = (shape) => ({
     ...base("panel", bounds(0, 0, 100, 100)),
     classification: { mode: "native", kind: "shape", confidence: "safe" },
     shape: { shape: "rectangle", fill: { hex: "FFFFFF", alpha: 1 }, stroke: null, strokeWidthPt: 0, radiusPt: 0, ...shape },
   });
-  assert.deepEqual(fallbackElementForContractElement(nativeShape({ outerShadow: softShadow })).reasons, ["shadow-backplate-only"]);
-  assert.deepEqual(fallbackElementForContractElement(nativeShape({ backplateShadowLayers: 2 })).reasons, ["shadow-backplate-only"]);
+  assert.deepEqual(
+    fallbackElementForContractElement(nativeShape({ outerShadow: softShadow })).reasons,
+    ["native-preparation-or-layer-safety-rejected"]
+  );
+  assert.deepEqual(
+    fallbackElementForContractElement(nativeShape({ backplateShadowLayers: 2 })).reasons,
+    ["native-preparation-or-layer-safety-rejected"]
+  );
   assert.deepEqual(
     fallbackElementForContractElement(nativeShape({ shadowLayers: [{ offsetXPx: 1, offsetYPx: 1, spreadPx: 0, color: { hex: "000000", alpha: 1 } }] })).reasons,
-    ["shadow-backplate-only"]
+    ["native-preparation-or-layer-safety-rejected"]
   );
   assert.deepEqual(fallbackElementForContractElement(nativeShape({})).reasons, ["native-preparation-or-layer-safety-rejected"]);
+  // The gradient branch is real: a gradient background does not set
+  // `hasExternalPaint`, so it does reach native classification before
+  // `shapeIsSafe` rejects it for the gradient itself.
+  assert.deepEqual(
+    fallbackElementForContractElement(nativeShape({ fill: null, gradient: { angleDeg: 0, stops: [] } })).reasons,
+    ["gradient-backplate-only"]
+  );
+});
+
+// --- Defects: a mapped shadow must never be claimed as "will be emitted
+// natively" unless a real native carrier will actually paint it. Verifying
+// both halves separately (does the plan claim suppression? does the XML
+// contain the effect?) let them drift apart before; this helper enforces the
+// single invariant "suppressed implies emitted" (and its converse) directly.
+async function shadowInvariant(element, prepareOptions) {
+  const prepared = await prepareNativeElements([element], prepareOptions);
+  const xml = prepared
+    .map((item) => serializePreparedNativeElement(item, 3))
+    .join("");
+  const claims = promotedElementEmitsOuterShadow(element);
+  const emitted = /<a:outerShdw\b/.test(xml);
+  assert.equal(
+    claims,
+    emitted,
+    claims
+      ? `promotedElementEmitsOuterShadow(${element.id}) claimed a shadow that no native output emits`
+      : `promotedElementEmitsOuterShadow(${element.id}) missed a shadow that native output does emit`
+  );
+  return { prepared, xml, claims };
+}
+
+test("a transparent card with only a border has no native shadow carrier, so the backplate keeps the shadow", async () => {
+  const element = {
+    ...base("accent-card", bounds(100, 100, 400, 240)),
+    classification: { mode: "raster", candidateKind: "shape", reasons: ["external-paint"] },
+    shape: {
+      shape: "round-rectangle",
+      fill: null,
+      stroke: null,
+      strokeWidthPt: 0,
+      radiusPt: 9,
+      borderLines: [
+        { side: "left", color: { hex: "1F55D5", alpha: 1 }, widthPt: 2 },
+        { side: "top", color: { hex: "1F55D5", alpha: 1 }, widthPt: 1 },
+      ],
+      outerShadow: softShadow,
+    },
+  };
+  const { prepared, xml, claims } = await shadowInvariant(element, { includeRasterShapes: true });
+  // The asymmetric border is still its own carrier and stays promoted...
+  assert.equal(prepared.length, 1);
+  assert.equal((xml.match(/<p:sp>/g) ?? []).length, 2);
+  // ...but nothing in the plan carries the shadow, so it must not be claimed.
+  assert.doesNotMatch(xml, /<a:outerShdw/);
+  assert.equal(claims, false);
+});
+
+test("a translucent fill refuses the whole shadow mapping, leaving the shape and its shadow to the backplate", async () => {
+  const element = {
+    ...base("glass-card", bounds(100, 100, 400, 240)),
+    classification: { mode: "raster", candidateKind: "shape", reasons: ["external-paint"] },
+    shape: {
+      shape: "round-rectangle",
+      fill: { hex: "FFFFFF", alpha: 0.6 },
+      stroke: null,
+      strokeWidthPt: 0,
+      radiusPt: 9,
+      outerShadow: softShadow,
+    },
+  };
+  const { prepared, claims } = await shadowInvariant(element, { includeRasterShapes: true });
+  // Translucent fill + shadow is refused entirely, not partially mapped:
+  // DrawingML would let the native shadow show through the see-through card.
+  assert.equal(prepared.length, 0);
+  assert.equal(claims, false);
+});
+
+test("a stroke-only shape refuses the whole shadow mapping instead of shadowing the stroke path", async () => {
+  const element = {
+    ...base("outline-card", bounds(100, 100, 400, 240)),
+    classification: { mode: "raster", candidateKind: "shape", reasons: ["external-paint"] },
+    shape: {
+      shape: "round-rectangle",
+      fill: null,
+      stroke: { hex: "1F55D5", alpha: 1 },
+      strokeWidthPt: 1.5,
+      radiusPt: 9,
+      outerShadow: softShadow,
+    },
+  };
+  const { prepared, claims } = await shadowInvariant(element, { includeRasterShapes: true });
+  assert.equal(prepared.length, 0);
+  assert.equal(claims, false);
+});
+
+test("a spread that collapses the shadow is not claimed even on an otherwise-opaque base object", async () => {
+  const element = {
+    ...base("thin-card", bounds(100, 100, 40, 240)),
+    classification: { mode: "raster", candidateKind: "shape", reasons: ["external-paint"] },
+    shape: {
+      shape: "round-rectangle",
+      fill: { hex: "FFFFFF", alpha: 1 },
+      stroke: null,
+      strokeWidthPt: 0,
+      radiusPt: 4,
+      // spreadPx: -30 on a 40px-wide box collapses the horizontal extent to
+      // nothing (40 - 60 <= 0), which must erase the shadow rather than
+      // clamp it to a visible blob (see `outerShadowScalePercent`).
+      outerShadow: { ...softShadow, spreadPx: -30 },
+    },
+  };
+  const { prepared, xml, claims } = await shadowInvariant(element, { includeRasterShapes: true });
+  // The base object (fill) still promotes normally...
+  assert.equal(prepared.length, 1);
+  assert.match(xml, /<a:solidFill>/);
+  // ...just without the effect that would have been a visible blob.
+  assert.doesNotMatch(xml, /<a:outerShdw/);
+  assert.equal(claims, false);
+});
+
+test("a rotated card's shadow rotates with the shape, matching CSS", async () => {
+  const element = {
+    ...base("tilted-card", bounds(100, 100, 400, 240)),
+    classification: { mode: "raster", candidateKind: "shape", reasons: ["external-paint"] },
+    rotationDeg: 15,
+    shape: {
+      shape: "round-rectangle",
+      fill: { hex: "FFFFFF", alpha: 1 },
+      stroke: null,
+      strokeWidthPt: 0,
+      radiusPt: 9,
+      outerShadow: softShadow,
+    },
+  };
+  const { xml, claims } = await shadowInvariant(element, { includeRasterShapes: true });
+  assert.match(xml, /<a:outerShdw[^>]*rotWithShape="1"/);
+  // A rotated transform is still applied to the shape itself, independent of
+  // the effect flag; rotWithShape="1" is what keeps the shadow attached to it.
+  assert.match(xml, /<a:xfrm rot="900000">/);
+  assert.equal(claims, true);
 });

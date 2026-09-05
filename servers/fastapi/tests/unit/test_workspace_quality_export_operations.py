@@ -1844,6 +1844,31 @@ def test_legacy_fidelity_compatibility_and_nonretryable_export_error(
     )
     assert pending_quality == pending_digest.removeprefix("sha256:")
     assert pending_compatibility == "visual-review-pending"
+    # A real, non-waivable defect ("VQA ran and failed") must never be
+    # laundered into the same pending waiver as "VQA never ran", even in
+    # fidelity mode where the never-ran blocker alone is tolerated.
+    failed_sealed = {**sealed, "blockers": ["visualReview.failed"]}
+    failed_digest = "sha256:" + hashlib.sha256(
+        json.dumps(
+            failed_sealed,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="quality_receipt_v3_blocked",
+    ):
+        _resolved_authored_quality_digest(
+            {
+                "authoredQualityGate": {
+                    "qualityReceiptV3": {**failed_sealed, "receiptDigest": failed_digest}
+                }
+            },
+            scene_digest=scene_digest,
+            pptx_mode="fidelity",
+        )
     # A present but blocked receipt is never bypassed, in either mode, and
     # compatibility must not launder it into the legacy binding.
     with pytest.raises(

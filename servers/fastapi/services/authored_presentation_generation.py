@@ -1089,6 +1089,46 @@ async def _apply_final_checkpoint_closing_capacity_reducer(
     return repaired
 
 
+def _merge_flagged_slide_entries(
+    entries: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Merge author-stage and terminal-gate flags for the same slide index.
+
+    A slide can be flagged twice: once by the author-stage rescue (a fresh
+    authoring call exhausted its attempts) and again by the terminal gate
+    fallback (the remade slide is still terminal). Concatenating both lists
+    used to let the second entry silently replace the first once the client
+    keys badges by slide, dropping the author-stage reason. Keep the first
+    entry's fields (so every existing single-flag receipt is byte-identical)
+    and record every distinct reason seen for that index under ``reasons``
+    -- only added when there is more than one, so a slide flagged once still
+    serializes exactly as it did before this function existed.
+    """
+
+    merged: dict[int, dict[str, object]] = {}
+    reasons_by_index: dict[int, list[str]] = {}
+    order: list[int] = []
+    for entry in entries:
+        index = int(entry["index"])
+        reason = entry.get("reason")
+        if index not in merged:
+            merged[index] = dict(entry)
+            reasons_by_index[index] = [reason] if isinstance(reason, str) else []
+            order.append(index)
+            continue
+        reasons = reasons_by_index[index]
+        if isinstance(reason, str) and reason not in reasons:
+            reasons.append(reason)
+    result: list[dict[str, object]] = []
+    for index in order:
+        entry = merged[index]
+        reasons = reasons_by_index[index]
+        if len(reasons) > 1:
+            entry = {**entry, "reasons": reasons}
+        result.append(entry)
+    return result
+
+
 def build_authored_quality_gate_receipt(
     *,
     htmls: list[str],
@@ -2726,7 +2766,24 @@ async def _generate_authored_presentation(
         remake_counts=remake_counts,
     )
     scene_envelope = terminal_fallback.scene_envelope
-    flagged_slides = [dict(e) for e in (*pipeline.author_flagged_slides, *terminal_fallback.flagged_slides)]
+    flagged_slides = _merge_flagged_slide_entries(
+        (*pipeline.author_flagged_slides, *terminal_fallback.flagged_slides)
+    )
+    # Decided once, here, and threaded through to ``publish_authored_presentation``
+    # (as ``slide_ids``) so each persisted ``SlideModel`` row gets exactly this id.
+    # A flagged entry's ``slideId`` then names the row it was generated for
+    # directly -- no post-construction lookup, and no risk of the receipt's
+    # ``index`` field later addressing a different slide after an in-session
+    # reorder renumbers every slide's ``index``.
+    slide_ids = [uuid.uuid4() for _ in htmls]
+    flagged_slides = [
+        (
+            {**entry, "slideId": str(slide_ids[entry["index"]])}
+            if isinstance(entry.get("index"), int) and 0 <= entry["index"] < len(slide_ids)
+            else entry
+        )
+        for entry in flagged_slides
+    ]
     flagged_residual_failures: list[dict[str, object]] = []
     object.__setattr__(request, "_authored_flagged_slides", flagged_slides)
     # F3: the seconds the wave scheduler slept out a provider cooldown, on the
@@ -3173,6 +3230,7 @@ async def _generate_authored_presentation(
         native_export_evidence=native_export_evidence,
         header_contract=header_contract,
         quality_gate_receipt=quality_gate_receipt,
+        slide_ids=slide_ids,
     )
     publication_elapsed = time.monotonic() - publication_started
     record_stage_timing("publication", publication_elapsed * 1000)

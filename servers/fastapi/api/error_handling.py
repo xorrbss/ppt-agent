@@ -11,6 +11,10 @@ from services.workspace_error_registry import (
     WorkspaceAPIException,
     resolve_workspace_error,
 )
+from utils.owner_context import (
+    OWNER_CONTEXT_REQUIRED_CODE,
+    OwnerContextRequiredError,
+)
 
 
 REQUEST_ID_HEADER = "X-Request-ID"
@@ -146,6 +150,27 @@ async def _validation_exception_handler(
     )
 
 
+async def _owner_context_required_handler(
+    request: Request, exception: OwnerContextRequiredError
+) -> JSONResponse:
+    """Refuse an identity-less request instead of leaking an ORM traceback.
+
+    The fail-closed guard fires deep inside the session hooks, so without this
+    handler a refusal surfaced as a 500 with an internal stack trace.
+    """
+    message = "Owner context is required for this request"
+    return _error_response(
+        request,
+        exception,
+        status_code=403,
+        detail=OWNER_CONTEXT_REQUIRED_CODE,
+        code=OWNER_CONTEXT_REQUIRED_CODE,
+        message=message,
+        safe_message=message,
+        retryable=False,
+    )
+
+
 async def _unhandled_exception_handler(
     request: Request, exception: Exception
 ) -> JSONResponse:
@@ -186,4 +211,9 @@ def install_api_error_handling(app: FastAPI) -> None:
 
     app.add_exception_handler(HTTPException, _http_exception_handler)
     app.add_exception_handler(RequestValidationError, _validation_exception_handler)
+    # Registered before the catch-all: Starlette resolves a handler by walking
+    # the exception's MRO, so the specific class wins over ``Exception``.
+    app.add_exception_handler(
+        OwnerContextRequiredError, _owner_context_required_handler
+    )
     app.add_exception_handler(Exception, _unhandled_exception_handler)

@@ -52,9 +52,11 @@ export async function GET(request: Request) {
   try {
     return await forwardProviderSettings(request, "GET");
   } catch {
+    // Upstream (FastAPI) failure or timeout, not a fault in this route:
+    // 502, consistent with every other bounded-fetch route in app/api/*.
     return NextResponse.json(
-      { error: "Unable to read provider settings", status: 500 },
-      { status: 500 }
+      { error: "Unable to read provider settings", status: 502 },
+      { status: 502 }
     );
   }
 }
@@ -87,9 +89,11 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    // Upstream (FastAPI) failure or timeout, not a fault in this route:
+    // 502, consistent with every other bounded-fetch route in app/api/*.
     return NextResponse.json(
-      { error: "Unable to save provider settings", status: 500 },
-      { status: 500 }
+      { error: "Unable to save provider settings", status: 502 },
+      { status: 502 }
     );
   }
 }

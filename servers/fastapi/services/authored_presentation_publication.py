@@ -201,7 +201,7 @@ async def publish_authored_presentation(
     chapter_plan: AuthoredChapterPlan | None = None,
     illustration_plan: AuthoredIllustrationPlan | None = None,
     infographic_plan: AuthoredInfographicPlan | None = None,
-    quality_gate_receipt: dict[str, object] | None = None,
+    quality_gate_receipt: dict[str, object] | None = None, slide_ids: list[uuid.UUID] | None = None,
 ) -> tuple[str, float]:
     persist_started = time.monotonic()
     # Rollback expires ORM attributes even with expire_on_commit=False. Error
@@ -437,7 +437,7 @@ async def publish_authored_presentation(
             }
         slides = [
             SlideModel(
-                presentation=presentation_id,
+                presentation=presentation_id, id=(slide_ids[i] if slide_ids is not None else uuid.uuid4()),
                 layout_group=AUTHORED_TEMPLATE,
                 layout=f"{AUTHORED_TEMPLATE}:{roles[i]}",
                 index=i,

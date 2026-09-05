@@ -29,3 +29,11 @@ class WebhookSubscription(SQLModel, table=True):
     url: str
     secret: Optional[str] = None
     event: str = Field(index=True)
+    # A terminal (non-retryable) egress-policy rejection is recorded here
+    # instead of only being logged, so a subscription whose target became
+    # unreachable (e.g. re-pointed at a private address) is visible rather
+    # than failing silently forever. A successful delivery clears both.
+    last_delivery_rejected_code: Optional[str] = None
+    last_delivery_rejected_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )

@@ -2091,7 +2091,7 @@ test("Chrome maps simple outer box-shadows natively and keeps unmapped shadows o
   });
   assert.deepEqual(prepared.map((item) => item.source.id).sort(), ids.slice().sort());
   const cardXml = serializePreparedNativeElement(prepared.find((item) => item.source.id === "card"), 3);
-  assert.match(cardXml, /<a:effectLst><a:outerShdw blurRad="152400" dist="57150" dir="5400000" algn="ctr" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="40000"\/><\/a:srgbClr><\/a:outerShdw><\/a:effectLst>/);
+  assert.match(cardXml, /<a:effectLst><a:outerShdw blurRad="152400" dist="57150" dir="5400000" algn="ctr" rotWithShape="1"><a:srgbClr val="000000"><a:alpha val="40000"\/><\/a:srgbClr><\/a:outerShdw><\/a:effectLst>/);
   const chipUnderlay = serializePreparedNativeElementUnderlay(prepared.find((item) => item.source.id === "chip"), 4);
   assert.match(chipUnderlay, /<a:outerShdw blurRad="57150" dist="19050" dir="5400000"/);
   assert.doesNotMatch(serializePreparedNativeElement(prepared.find((item) => item.source.id === "inset"), 5), /effectLst/);

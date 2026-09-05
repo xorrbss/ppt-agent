@@ -198,3 +198,164 @@ def test_errors_never_embed_the_url():
         validate_outbound_url(secret_url, resolver=_resolver_returning(_PUBLIC))
     assert "hunter2" not in str(raised.value)
     assert "hooks.example.com" not in str(raised.value)
+
+
+# --- WEBHOOK_PRIVATE_TARGET_ALLOWLIST -----------------------------------
+
+
+def _with_allowlist(monkeypatch, raw: str) -> None:
+    monkeypatch.setattr(guard, "_get_private_allowlist_env", lambda: raw)
+
+
+def test_private_target_stays_denied_when_allowlist_is_unset(monkeypatch):
+    _with_allowlist(monkeypatch, "")
+    assert (
+        _code(
+            "http://internal.example.com/hook",
+            resolver=_resolver_returning("10.0.0.5"),
+        )
+        == "egress_private_address_denied"
+    )
+
+
+def test_allowlisted_hostname_admits_every_dns_answer_for_that_name(monkeypatch):
+    _with_allowlist(monkeypatch, "internal.example.com")
+    target = validate_outbound_url(
+        "http://internal.example.com/hook", resolver=_resolver_returning("10.0.0.5")
+    )
+    assert target.resolved_ips == frozenset({"10.0.0.5"})
+
+
+def test_allowlisted_hostname_wildcard_matches_subdomains(monkeypatch):
+    _with_allowlist(monkeypatch, "*.corp.internal.example.com")
+    target = validate_outbound_url(
+        "http://n8n.corp.internal.example.com/hook",
+        resolver=_resolver_returning("192.168.1.50"),
+    )
+    assert target.resolved_ips == frozenset({"192.168.1.50"})
+
+
+def test_allowlisted_hostname_does_not_admit_a_different_host(monkeypatch):
+    _with_allowlist(monkeypatch, "internal.example.com")
+    assert (
+        _code(
+            "http://other.example.com/hook",
+            resolver=_resolver_returning("10.0.0.5"),
+        )
+        == "egress_private_address_denied"
+    )
+
+
+def test_allowlisted_ip_literal_is_admitted(monkeypatch):
+    _with_allowlist(monkeypatch, "10.0.0.5")
+    target = validate_outbound_url(
+        "http://10.0.0.5:9000/hook", resolver=_resolver_returning("10.0.0.5")
+    )
+    assert target.resolved_ips == frozenset({"10.0.0.5"})
+
+
+def test_allowlisted_cidr_admits_addresses_in_range(monkeypatch):
+    _with_allowlist(monkeypatch, "10.0.0.0/24")
+    target = validate_outbound_url(
+        "http://10.0.0.200/hook", resolver=_resolver_returning("10.0.0.200")
+    )
+    assert target.resolved_ips == frozenset({"10.0.0.200"})
+
+
+def test_allowlisted_ip_literal_does_not_admit_a_different_address(monkeypatch):
+    _with_allowlist(monkeypatch, "10.0.0.5")
+    assert (
+        _code("http://10.0.0.6/hook", resolver=_resolver_returning("10.0.0.6"))
+        == "egress_private_address_denied"
+    )
+
+
+def test_allowlisted_hostname_does_not_admit_an_ip_literal_url(monkeypatch):
+    # A hostname pattern names a DNS name, not a raw address: a request that
+    # bypasses DNS entirely with an IP literal must not ride the hostname
+    # entry's admission.
+    _with_allowlist(monkeypatch, "internal.example.com")
+    assert (
+        _code("http://10.0.0.5/hook", resolver=_resolver_returning("10.0.0.5"))
+        == "egress_private_address_denied"
+    )
+
+
+def test_allowlisted_local_suffix_hostname_is_admitted(monkeypatch):
+    _with_allowlist(monkeypatch, "printer.local")
+    target = validate_outbound_url(
+        "http://printer.local/hook", resolver=_resolver_returning("192.168.1.5")
+    )
+    assert target.resolved_ips == frozenset({"192.168.1.5"})
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://metadata.google.internal/computeMetadata/v1/",
+        "http://metadata/hook",
+        "http://instance-data.ec2.internal/latest/",
+    ],
+)
+def test_cloud_metadata_aliases_are_never_allowlist_overridable(monkeypatch, url):
+    # Even an operator who explicitly lists a cloud-metadata alias must not
+    # be able to unlock the credential-theft target; only the allowlist
+    # module itself can whitelist real internal hostnames.
+    hostname = url.split("//", 1)[1].split("/", 1)[0]
+    _with_allowlist(monkeypatch, hostname)
+    assert _code(url) == "egress_metadata_or_loopback_denied"
+
+
+def test_malformed_allowlist_entry_is_ignored_not_crashing(monkeypatch):
+    _with_allowlist(monkeypatch, " , not a valid host! , ")
+    assert (
+        _code(
+            "http://internal.example.com/hook",
+            resolver=_resolver_returning("10.0.0.5"),
+        )
+        == "egress_private_address_denied"
+    )
+
+
+# --- pinned_client_session: real DNS-rebinding defenses -----------------
+
+
+def test_pinned_client_session_disables_trust_env_and_pins_resolver():
+    import asyncio as _asyncio
+
+    import aiohttp
+
+    async def scenario():
+        target = validate_outbound_url(
+            "https://hooks.example.com/deliver", resolver=_resolver_returning(_PUBLIC)
+        )
+        session = guard.pinned_client_session(target)
+        try:
+            assert session.trust_env is False
+            connector = session.connector
+            assert isinstance(connector, aiohttp.TCPConnector)
+
+            resolved = await connector._resolver.resolve("hooks.example.com", 443)
+            assert {entry["host"] for entry in resolved} == {_PUBLIC}
+        finally:
+            await session.close()
+
+    _asyncio.run(scenario())
+
+
+def test_pinned_resolver_refuses_a_host_it_was_not_pinned_to():
+    import asyncio as _asyncio
+
+    async def scenario():
+        target = validate_outbound_url(
+            "https://hooks.example.com/deliver", resolver=_resolver_returning(_PUBLIC)
+        )
+        session = guard.pinned_client_session(target)
+        try:
+            connector = session.connector
+            with pytest.raises(OSError):
+                await connector._resolver.resolve("attacker.example.com", 443)
+        finally:
+            await session.close()
+
+    _asyncio.run(scenario())

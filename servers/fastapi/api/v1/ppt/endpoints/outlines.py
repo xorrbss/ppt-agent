@@ -15,6 +15,7 @@ from api.v1.ppt.endpoints.content_brief_policy import (
     run_content_brief_with_policy,
 )
 from models.presentation_outline_model import PresentationOutlineModel
+from services.public_operation_deadline_scope import remaining_public_operation_seconds
 from models.sse_response import (
     SSECompleteResponse,
     SSEErrorResponse,
@@ -178,6 +179,9 @@ async def stream_outlines(
                 verbosity=presentation.verbosity,
                 instructions=presentation.instructions,
                 presentation_id=presentation.id,
+                # ``None`` outside a public operation, which is the normal case
+                # for this stream; under one, the brief takes only its share.
+                remaining_operation_seconds=remaining_public_operation_seconds(),
             )
             brief_status = brief_outcome.status
             if brief_outcome.brief is not None:

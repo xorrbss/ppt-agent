@@ -145,13 +145,11 @@ def test_generation_deadline_scales_the_wave_budget_by_slides_per_call(monkeypat
     # One slide per call is budgeted below the documented three-slide wave.
     assert wave_seconds < deadline_policy.PUBLIC_GENERATION_DEADLINE_PER_WAVE_SECONDS
 
-    expected = min(
-        deadline_policy.PUBLIC_GENERATION_DEADLINE_MAX_SECONDS,
-        max(
-            deadline_policy.PUBLIC_GENERATION_DEADLINE_MIN_SECONDS,
-            deadline_policy.PUBLIC_GENERATION_DEADLINE_BASE_SECONDS + wave_seconds * waves,
-        ),
-    )
+    # Pinned literal rather than a re-derivation of the production formula:
+    # 600 base + 1410 preamble + 140 * 4 waves + 1120 remediation + 928 review.
+    # The full term-by-term contract lives in
+    # tests/unit/test_public_generation_deadline_policy.py.
+    expected = 4618
     assert deadline_policy.public_generation_deadline_seconds(
         slide_count, profile=profile
     ) == expected

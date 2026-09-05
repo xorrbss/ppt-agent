@@ -7,10 +7,10 @@ import contextlib
 import uuid
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from models.sql.presentation import PresentationModel
+from models.sql.presentation import PresentationModel, PresentationVersion
 from models.sql.slide import SlideModel
 from models.sql.user import User
 from services import database as _database_events  # noqa: F401
@@ -50,21 +50,43 @@ def _owner(owner_id):
         reset_current_owner_id(token)
 
 
+@contextlib.contextmanager
+def _tenant(tenant_id):
+    token = set_current_tenant_id(tenant_id)
+    try:
+        yield
+    finally:
+        reset_current_tenant_id(token)
+
+
+@contextlib.contextmanager
+def _middleware_request_without_owner():
+    """The exact shape api.middlewares produces for an ownerless request.
+
+    ``PrincipalEnvelope.tenant_id`` is a non-optional string that falls back to
+    ``"default"``, so the tenant is always set on an authenticated request.
+    A guard that accepted the tenant as an identity could therefore never fire.
+    """
+    with _request_scope(), _tenant("default"), _owner(None):
+        yield
+
+
 def test_require_owner_context_raises_inside_request_without_identity() -> None:
     with _request_scope():
         with pytest.raises(OwnerContextRequiredError, match="owner_context_required"):
             require_owner_context()
 
 
-def test_require_owner_context_accepts_owner_or_tenant_identity() -> None:
-    with _request_scope():
+def test_require_owner_context_raises_when_only_the_tenant_is_set() -> None:
+    with _middleware_request_without_owner():
+        with pytest.raises(OwnerContextRequiredError, match="owner_context_required"):
+            require_owner_context()
+
+
+def test_require_owner_context_accepts_an_owner_identity() -> None:
+    with _request_scope(), _tenant("default"):
         with _owner(uuid.uuid4()):
             require_owner_context()
-        token = set_current_tenant_id("tenant-a")
-        try:
-            require_owner_context()
-        finally:
-            reset_current_tenant_id(token)
 
 
 def test_require_owner_context_is_silent_for_worker_context() -> None:
@@ -120,6 +142,112 @@ def test_owned_select_inside_request_without_identity_raises() -> None:
             # Worker context: same statement, no request flag, no error.
             async with session_maker() as session:
                 await session.execute(select(PresentationModel))
+        finally:
+            await engine.dispose()
+
+    asyncio.run(run())
+
+
+def test_owned_select_with_a_tenant_but_no_owner_reads_nobody() -> None:
+    """The reproduction: two owners' decks were visible to an ownerless request."""
+
+    async def run():
+        engine, session_maker = _session_factory()
+        await _create_tables(engine)
+        first, second = uuid.uuid4(), uuid.uuid4()
+        try:
+            async with session_maker() as session:
+                session.add_all(
+                    [
+                        PresentationModel(
+                            id=uuid.uuid4(),
+                            owner_id=owner,
+                            version=PresentationVersion.V2_STANDARD,
+                            content=content,
+                            n_slides=1,
+                            language="en",
+                        )
+                        for owner, content in ((first, "first"), (second, "second"))
+                    ]
+                )
+                await session.commit()
+            with _middleware_request_without_owner():
+                async with session_maker() as session:
+                    with pytest.raises(OwnerContextRequiredError):
+                        await session.execute(select(PresentationModel))
+        finally:
+            await engine.dispose()
+
+    asyncio.run(run())
+
+
+def test_owned_update_and_delete_inside_request_without_identity_raise() -> None:
+    """SQLite has no row-level security behind the guard, so writes count."""
+
+    async def run():
+        engine, session_maker = _session_factory()
+        await _create_tables(engine)
+        owner_id = uuid.uuid4()
+
+        async def _seed() -> None:
+            async with session_maker() as session:
+                session.add(
+                    PresentationModel(
+                        id=uuid.uuid4(),
+                        owner_id=owner_id,
+                        version=PresentationVersion.V2_STANDARD,
+                        content="owned",
+                        n_slides=1,
+                        language="en",
+                    )
+                )
+                await session.commit()
+
+        try:
+            await _seed()
+            with _middleware_request_without_owner():
+                async with session_maker() as session:
+                    with pytest.raises(OwnerContextRequiredError):
+                        await session.execute(
+                            update(PresentationModel).values(content="hijacked")
+                        )
+                async with session_maker() as session:
+                    with pytest.raises(OwnerContextRequiredError):
+                        await session.execute(delete(PresentationModel))
+                # session.dirty
+                async with session_maker() as session:
+                    with _owner(owner_id):
+                        row = (await session.scalars(select(PresentationModel))).one()
+                    row.content = "hijacked"
+                    with pytest.raises(OwnerContextRequiredError):
+                        await session.flush()
+                # session.deleted
+                async with session_maker() as session:
+                    with _owner(owner_id):
+                        row = (await session.scalars(select(PresentationModel))).one()
+                        await session.delete(row)
+                    with pytest.raises(OwnerContextRequiredError):
+                        await session.flush()
+            async with session_maker() as session:
+                survivors = (await session.scalars(select(PresentationModel))).all()
+            assert [row.content for row in survivors] == ["owned"]
+        finally:
+            await engine.dispose()
+
+    asyncio.run(run())
+
+
+def test_owned_writes_stay_open_for_worker_context() -> None:
+    """The same statements outside a request keep their cross-owner authority."""
+
+    async def run():
+        engine, session_maker = _session_factory()
+        await _create_tables(engine)
+        try:
+            async with session_maker() as session:
+                await session.execute(update(PresentationModel).values(content="swept"))
+                await session.execute(delete(PresentationModel))
+                await session.commit()
         finally:
             await engine.dispose()
 

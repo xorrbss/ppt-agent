@@ -86,7 +86,11 @@ function isApiAuthExempt(pathname: string): boolean {
     pathname.startsWith("/api/export-presentation-data/") ||
     /** Read-only public share view (token-scoped; FastAPI re-checks on the
      * normalized path, so a traversal here still fails auth there). */
-    pathname.startsWith("/api/v1/ppt/presentation/public/")
+    pathname.startsWith("/api/v1/ppt/presentation/public/") ||
+    // CSP violation report sink (next.config.mjs report-uri): a browser can
+    // legitimately POST here with no session, e.g. from the anonymous /p/
+    // share view, so this must not require one. It only logs; see route.ts.
+    pathname === "/api/csp-report"
   );
 }
 

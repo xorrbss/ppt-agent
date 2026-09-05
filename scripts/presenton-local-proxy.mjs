@@ -66,9 +66,12 @@ function pickUpstream(url) {
 }
 
 // Same application security header set as nginx.conf. Frame embedding stays
-// SAMEORIGIN (slide previews are same-origin sandboxed iframes; /p/ share pages
-// may be embedded). HSTS is only sent when a TLS terminator in front of this
-// proxy reports https — this proxy itself only ever listens on plain HTTP.
+// SAMEORIGIN: the editor's slide-preview iframes are same-origin (isolated by
+// their own <meta> CSP, not by cross-origin framing), so DENY would break
+// them; /p/ share pages are opened directly via the share link and are not
+// framed by anything in this codebase, so SAMEORIGIN regresses no feature
+// there. HSTS is only sent when a TLS terminator in front of this proxy
+// reports https — this proxy itself only ever listens on plain HTTP.
 export const SECURITY_HEADERS = Object.freeze({
   "x-content-type-options": "nosniff",
   "x-frame-options": "SAMEORIGIN",

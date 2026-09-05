@@ -11,6 +11,7 @@ import uuid
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
@@ -22,6 +23,7 @@ from models.presentation_outline_model import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.slide import SlideModel
 from services import authored_presentation_generation as authored_generation_mod
 from services import authored_presentation_service as authored_service
 from services import authored_repair_round_order as order_mod
@@ -55,6 +57,26 @@ _REMADE_HTML = (
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+def _pop_slide_ids(entries):
+    """Strip each entry's ``slideId`` after checking it looks right.
+
+    Publication now backfills every flagged-slide entry with the id of the
+    slide it was generated for (see ``authored_presentation_publication``).
+    Its value is a fresh ``uuid4`` the test cannot predict, so assert only
+    that it is present and well-formed, then compare the rest of the entry
+    against the fixed expectations the tests already had.
+    """
+
+    result = []
+    for entry in entries:
+        entry = dict(entry)
+        slide_id = entry.pop("slideId", None)
+        assert isinstance(slide_id, str) and slide_id, entry
+        uuid.UUID(slide_id)
+        result.append(entry)
+    return result
 
 
 class _FakeIssue:
@@ -118,6 +140,22 @@ async def _generate_on_sqlite(tmp_path, request, outline, generation_job=None):
     finally:
         await engine.dispose()
     return result, presentation
+
+
+async def _slides_for(tmp_path, presentation_id):
+    """Read back the persisted slide rows the same sqlite file now holds."""
+
+    engine = await _sqlite_engine(tmp_path)
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            rows = await session.scalars(
+                select(SlideModel)
+                .where(SlideModel.presentation == presentation_id)
+                .order_by(SlideModel.index)
+            )
+            return list(rows)
+    finally:
+        await engine.dispose()
 
 
 def _install_deck_stubs(monkeypatch, tmp_path, htmls):
@@ -275,7 +313,7 @@ def test_remake_that_stays_terminal_publishes_the_deck_with_a_flag(
 
     assert result.path == "deck.pptx"
     gate = presentation.theme["authoredQualityGate"]
-    assert gate["flaggedSlides"] == [
+    assert _pop_slide_ids(gate["flaggedSlides"]) == [
         {
             "index": 0,
             "reason": "composition_safety:overlap",
@@ -286,6 +324,43 @@ def test_remake_that_stays_terminal_publishes_the_deck_with_a_flag(
     # The residual evidence is still recorded next to the flag.
     assert gate["residualIssueCount"] == 1
     assert calls == [[0]]
+
+
+def test_the_flagged_slide_id_matches_the_actual_persisted_slide(
+    monkeypatch, tmp_path
+):
+    """Defect 1 (editor flagged-slide badge review): the receipt's ``index``
+
+    is a generation-time position, not a durable handle -- a client-side
+    reorder renumbers every slide's ``index`` and persists it, which would
+    then match the receipt's frozen index to a different slide. Publication
+    backfills each entry with the id of the slide it actually describes, so
+    the client can key its badge by that id instead.
+    """
+
+    # Two slides: only the second is terminal, so the flag must name it and
+    # not the first (whose id publication assigns first).
+    _install_deck_stubs(monkeypatch, tmp_path, [_REMADE_HTML, _TERMINAL_HTML])
+    calls: list[object] = []
+    _install_remake(monkeypatch, calls, candidate=_TERMINAL_HTML)
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(tmp_path, _request(), _outline(2))
+        )
+        slides = _run(_slides_for(tmp_path, presentation.id))
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert result.path == "deck.pptx"
+    flagged = presentation.theme["authoredQualityGate"]["flaggedSlides"]
+    assert [entry["index"] for entry in flagged] == [1]
+
+    flagged_slide = next(slide for slide in slides if slide.index == 1)
+    other_slide = next(slide for slide in slides if slide.index == 0)
+    assert flagged[0]["slideId"] == str(flagged_slide.id)
+    assert flagged[0]["slideId"] != str(other_slide.id)
 
 
 def test_knob_off_keeps_todays_failed_deck(monkeypatch, tmp_path):
@@ -389,6 +464,50 @@ def test_verbatim_source_decks_never_lose_density(monkeypatch):
 
     assert outcome.flagged_slides == ()
     assert calls == []
+
+
+def test_merge_flagged_slide_entries_keeps_a_lone_flag_byte_identical():
+    entry = {
+        "index": 3,
+        "reason": "composition_safety:overlap",
+        "remakeAttempted": True,
+        "remakeOutcome": "remake_gate_failed",
+    }
+    assert authored_generation_mod._merge_flagged_slide_entries([entry]) == [entry]
+
+
+def test_merge_flagged_slide_entries_combines_duplicate_indices():
+    author_entry = {
+        "index": 0,
+        "reason": "author:attempts_exhausted",
+        "remakeAttempted": True,
+        "remakeOutcome": "placeholder",
+    }
+    gate_entry = {
+        "index": 0,
+        "reason": "composition_safety:overlap",
+        "remakeAttempted": True,
+        "remakeOutcome": "remake_gate_failed",
+    }
+    unrelated = {"index": 1, "reason": "composition_safety:clipping"}
+
+    merged = authored_generation_mod._merge_flagged_slide_entries(
+        (author_entry, gate_entry, unrelated)
+    )
+
+    assert merged == [
+        {
+            **author_entry,
+            "reasons": ["author:attempts_exhausted", "composition_safety:overlap"],
+        },
+        unrelated,
+    ]
+
+
+def test_merge_flagged_slide_entries_does_not_duplicate_an_identical_reason():
+    entry = {"index": 5, "reason": "composition_safety:overflow"}
+    merged = authored_generation_mod._merge_flagged_slide_entries([entry, dict(entry)])
+    assert merged == [entry]
 
 
 def test_flagged_slide_receipt_entries_are_validated_and_serialized():
@@ -572,7 +691,9 @@ def test_repair_round_residual_reaches_the_remake_instead_of_failing_the_deck(
     # Both remakes, for the residual slide only: one ahead of the round and one
     # behind it.
     assert remake_calls == [[1], [1]]
-    assert presentation.theme["authoredQualityGate"]["flaggedSlides"] == [
+    assert _pop_slide_ids(
+        presentation.theme["authoredQualityGate"]["flaggedSlides"]
+    ) == [
         {
             "index": 1,
             "reason": "composition_safety:overlap",
@@ -946,7 +1067,7 @@ def test_unadmitted_gate_repair_with_a_layout_defect_publishes_flagged(
     # Both remakes for the unadmitted slide only, then the flag.
     assert remake_calls == [[1], [1]]
     gate = presentation.theme["authoredQualityGate"]
-    assert gate["flaggedSlides"] == [
+    assert _pop_slide_ids(gate["flaggedSlides"]) == [
         {
             "index": 1,
             "reason": policy_mod.GATE_REPAIR_NOT_ADMITTED_REASON,
@@ -1195,7 +1316,9 @@ def test_two_failed_remakes_publish_the_slide_flagged_with_its_count(
     assert [len(call) for call in round_calls] == [1]
     # Two spent remakes and a patch round later the slide is still terminal,
     # so it is published flagged with the count that proves nothing is left.
-    assert presentation.theme["authoredQualityGate"]["flaggedSlides"] == [
+    assert _pop_slide_ids(
+        presentation.theme["authoredQualityGate"]["flaggedSlides"]
+    ) == [
         {
             "index": 1,
             "reason": "composition_safety:overlap",
@@ -1476,4 +1599,78 @@ def test_repair_checkpoints_carry_the_workspace_fencing_token(monkeypatch, tmp_p
     assert [call.get("fencing_token") for call in recorded] == [
         _FENCING_TOKEN,
         _FENCING_TOKEN,
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Defect 3 (editor flagged-slide badge review): a slide can be flagged twice --
+# once by the author-stage rescue, once by the terminal gate fallback that
+# runs after it. Before ``_merge_flagged_slide_entries`` existed, the two
+# lists were concatenated as-is, so the client's badge map (keyed by slide,
+# not by list position) let the second entry silently replace the first,
+# dropping the author-stage reason.
+# ---------------------------------------------------------------------------
+
+
+def test_a_slide_flagged_by_both_stages_keeps_both_reasons(monkeypatch, tmp_path):
+    _install_deck_stubs(monkeypatch, tmp_path, [_TERMINAL_HTML])
+    author_flag = {
+        "index": 0,
+        "reason": "author:attempts_exhausted",
+        "remakeAttempted": True,
+        "remakeOutcome": "placeholder",
+    }
+
+    async def fake_pipeline(
+        outline,
+        brand,
+        style,
+        header_contract=None,
+        page_number_mode="none",
+        chapter_plan=None,
+        illustration_plan=None,
+        instructions=None,
+        **_job_kwargs,
+    ):
+        return authored_service.AuthoredGenerationPipelineResult(
+            deck=AuthoredDeckResult([_TERMINAL_HTML], "DESIGN SYSTEM"),
+            pngs=[b"png"],
+            elapsed=0.1,
+            author_work=0.1,
+            illustration_work=0.0,
+            render_work=0.1,
+            author_flagged_slides=(author_flag,),
+        )
+
+    monkeypatch.setattr(
+        authored_service, "_author_illustrate_render_pipeline", fake_pipeline
+    )
+    calls: list[object] = []
+    # The remake candidate still carries the terminal marker, so the slide
+    # stays terminal and the D7 fallback flags it too, with its own reason.
+    _install_remake(monkeypatch, calls, candidate=_TERMINAL_HTML)
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(tmp_path, _request(), _outline(1))
+        )
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert result.path == "deck.pptx"
+    entries = _pop_slide_ids(presentation.theme["authoredQualityGate"]["flaggedSlides"])
+    # One merged entry: the author-stage entry's own fields (it came first),
+    # plus every distinct reason both stages recorded for this slide.
+    assert entries == [
+        {
+            "index": 0,
+            "reason": "author:attempts_exhausted",
+            "remakeAttempted": True,
+            "remakeOutcome": "placeholder",
+            "reasons": [
+                "author:attempts_exhausted",
+                "composition_safety:overlap",
+            ],
+        }
     ]

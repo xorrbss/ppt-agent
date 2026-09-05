@@ -186,7 +186,10 @@ async def test_visual_review_run_with_residual_issues_fails() -> None:
     assert sealed["status"] == "failed"
     assert sealed["fullDeck"] is False
     assert sealed["residualSlideIndices"] == [0]
-    assert "visualReview.required_failed" in receipt_v3.blockers
+    # A real, ran-and-failed defect gets its own code and must never be
+    # confused with (or waived like) the never-ran "required_failed" code.
+    assert "visualReview.failed" in receipt_v3.blockers
+    assert "visualReview.required_failed" not in receipt_v3.blockers
 
 
 @pytest.mark.anyio

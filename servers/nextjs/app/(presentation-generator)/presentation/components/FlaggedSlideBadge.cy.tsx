@@ -17,12 +17,14 @@ import SidePanel from "./SidePanel";
 
 const GATE_ENTRY = {
   index: 1,
-  reason: "composition_safety:overflow,text_collision",
+  slideId: "s2",
+  reason: "composition_safety:overflow,clipping",
   remakeAttempted: true,
   remakeOutcome: "remake_budget_exhausted",
 };
 const AUTHOR_ENTRY = {
   index: 0,
+  slideId: "s1",
   reason: "author:attempts_exhausted",
   remakeAttempted: true,
   remakeOutcome: "placeholder",
@@ -88,7 +90,8 @@ describe("FlaggedSlideBadge", () => {
     cy.get('[data-slide-thumbnail-index="1"] [data-testid="flagged-slide-badge"]')
       .should("have.attr", "data-flag-stage", "gate")
       .invoke("attr", "title")
-      .should("contain", "overflow, text_collision");
+      // The raw "overflow"/"clipping" tokens are localized, not shown as-is.
+      .should("contain", "content overflow, clipped content");
     cy.get('[data-slide-thumbnail-index="2"] [data-testid="flagged-slide-badge"]').should(
       "not.exist",
     );

@@ -104,8 +104,23 @@ _OWNER_SCOPED_TABLE_NAMES = frozenset(
 
 
 def owner_scoped_table_names() -> tuple[str, ...]:
-    """Tables whose rows are owner-scoped by the ORM hooks (RLS parity source)."""
-    return tuple(sorted(model.__tablename__ for model in _STRICT_OWNER_MODELS))
+    """Tables whose rows are owner-scoped by the ORM hooks (RLS parity source).
+
+    This is the full guarded set, ``TemplateV2`` included.  Deriving it from
+    ``_STRICT_OWNER_MODELS`` alone hid ``template_v2`` from the row-level
+    security parity test, which is exactly the omission that test exists to
+    catch.
+    """
+    return tuple(sorted(_OWNER_SCOPED_TABLE_NAMES))
+
+
+def catalog_shared_table_names() -> tuple[str, ...]:
+    """Owner-scoped tables that also hold shared, ownerless catalog rows.
+
+    Their row-level security predicate has to admit ``owner_id IS NULL`` rows,
+    because the ORM criteria admit the shared catalog entries too.
+    """
+    return (TemplateV2.__tablename__,)
 
 
 def tenant_scoped_table_names() -> tuple[str, ...]:
@@ -156,22 +171,30 @@ def _set_postgres_transaction_principal(_session, _transaction, connection) -> N
     )
 
 
-def _scope_owned_selects(execute_state) -> None:
-    """Apply independent owner and tenant criteria to request ORM SELECTs."""
+def _scope_owned_statements(execute_state) -> None:
+    """Guard every owned-table statement; scope request ORM SELECTs."""
     owner_id = get_current_owner_id()
     tenant_id = get_current_tenant_id()
+    skip_owner_scope = bool(execute_state.execution_options.get("skip_owner_scope"))
+    if (
+        owner_id is None
+        and not skip_owner_scope
+        # Ask the cheap question first.  Worker loops run with enforcement off,
+        # and walking the statement for owned tables is the expensive part of
+        # this hook -- it used to run on every SELECT they issued.
+        and owner_context_enforced()
+        and _statement_targets_owned_table(execute_state)
+    ):
+        # A tenant is not a substitute identity here: the tenant criteria below
+        # cover only ``_STRICT_TENANT_MODELS``, so an ownerless request would
+        # otherwise read every owner's rows out of the owner-scoped tables.
+        # The guard covers UPDATE and DELETE as well, which matters on SQLite
+        # where no row-level security stands behind it.
+        require_owner_context()
     if not execute_state.is_select:
         return
 
     statement = execute_state.statement
-    skip_owner_scope = bool(execute_state.execution_options.get("skip_owner_scope"))
-    if (
-        owner_id is None
-        and tenant_id is None
-        and not skip_owner_scope
-        and _statement_targets_owned_table(execute_state)
-    ):
-        require_owner_context()
     if owner_id is not None and not skip_owner_scope:
         catalog_default_id = get_template_v2_default_template_id()
         for model in _STRICT_OWNER_MODELS:
@@ -210,17 +233,25 @@ def _scope_owned_selects(execute_state) -> None:
     execute_state.statement = statement
 
 
+def _pending_owned_instances(session, owner_models) -> bool:
+    """Does this flush touch an owned row -- inserted, changed or deleted?"""
+    if not owner_context_enforced():
+        return False
+    return any(
+        isinstance(instance, owner_models)
+        for collection in (session.new, session.dirty, session.deleted)
+        for instance in collection
+    )
+
+
 def _stamp_new_owned_rows(session, _flush_context, _instances) -> None:
     owner_id = get_current_owner_id()
     tenant_id = get_current_tenant_id()
     owner_models = _STRICT_OWNER_MODELS + (TemplateV2,)
-    if (
-        owner_id is None
-        and tenant_id is None
-        and any(isinstance(instance, owner_models) for instance in session.new)
-    ):
-        # An enforced request must not persist ownerless rows; check before
-        # any profile derivation so the failure names the real cause.
+    if owner_id is None and _pending_owned_instances(session, owner_models):
+        # An enforced request must not persist, mutate or delete ownerless
+        # rows; check before any profile derivation so the failure names the
+        # real cause.
         require_owner_context()
     profile_identity_fields = {
         "generation_mode",
@@ -266,7 +297,7 @@ def _stamp_new_owned_rows(session, _flush_context, _instances) -> None:
 
 _HOOKS = (
     ("after_begin", _set_postgres_transaction_principal),
-    ("do_orm_execute", _scope_owned_selects),
+    ("do_orm_execute", _scope_owned_statements),
     ("before_flush", _stamp_new_owned_rows),
 )
 

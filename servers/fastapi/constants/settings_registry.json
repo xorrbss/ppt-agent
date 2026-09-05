@@ -955,6 +955,87 @@
       "description": "Fixed seconds of public generation deadline budgeted per authoring wave on top of the per-slide allowance; unset takes the measured default (60)."
     },
     {
+      "key": "PUBLIC_GENERATION_DEADLINE_BASE_SECONDS",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Residual seconds of public generation deadline for deck plan, illustration, images and persistence; unset takes the measured default (600)."
+    },
+    {
+      "key": "PUBLIC_GENERATION_DEADLINE_OUTLINE_SECONDS",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Seconds of public generation deadline budgeted for the outline stage inside the preamble term; unset takes the measured default (420)."
+    },
+    {
+      "key": "PUBLIC_GENERATION_DEADLINE_HEADER_SECONDS",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Seconds of public generation deadline budgeted for the header contract inside the preamble term; unset takes the measured default (90)."
+    },
+    {
+      "key": "PUBLIC_GENERATION_DEADLINE_REMEDIATION_WAVE_SECONDS",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Seconds of public generation deadline budgeted for one repair/remake wave; unset takes the measured default (280)."
+    },
+    {
+      "key": "PUBLIC_GENERATION_DEADLINE_REVIEW_PER_SLIDE_SECONDS",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Seconds of public generation deadline budgeted for the chromium review of one slide; unset takes the measured default (8)."
+    },
+    {
+      "key": "PUBLIC_GENERATION_DEADLINE_REVIEW_PER_REMAKE_SECONDS",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Seconds of public generation deadline budgeted for re-rendering one remade slide during review; unset takes the measured default (110)."
+    },
+    {
+      "key": "PUBLIC_GENERATION_DEADLINE_BUDGETED_WAVE_CONCURRENCY",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Ceiling on the authoring wave concurrency the deadline formula may assume, so a wider configured wave cannot shrink a budget; unset takes the measured default (2)."
+    },
+    {
+      "key": "PUBLIC_GENERATION_DEADLINE_MAX_SECONDS",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Stuck-job ceiling on the whole public generation deadline; unset takes the default (14400), set above the formula for the largest admitted deck."
+    },
+    {
+      "key": "CONTENT_BRIEF_OPERATION_DEADLINE_SHARE",
+      "type": "number",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Fraction of the remaining public operation deadline the content brief stage may spend; unset takes the default (0.25)."
+    },
+    {
       "key": "PROVIDER_DURABLE_RUNTIME_REQUIRED",
       "type": "boolean",
       "default": false,
@@ -1251,6 +1332,15 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
       "description": "Carry the deck-invariant design-system block in the authoring call's system message instead of repeating it inside each slide's user message. The assembled prompt text is unchanged."
+    },
+    {
+      "key": "WEBHOOK_PRIVATE_TARGET_ALLOWLIST",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "webhook",
+      "description": "Comma-separated hostnames (exact or *.suffix wildcard), IP addresses, or CIDR ranges exempted from the webhook outbound URL guard's private/loopback/link-local rejection. Empty by default: no internal webhook target is admitted until the operator explicitly lists it here."
     }
   ]
 }

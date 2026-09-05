@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 from uuid import UUID
 
@@ -10,6 +11,22 @@ from utils.get_env import get_mem0_timeout_seconds, is_mem0_enabled
 
 
 LOGGER = logging.getLogger(__name__)
+
+# asyncio.wait_for cancelling a to_thread call does not stop the underlying
+# worker thread: the mem0 SDK call keeps running to completion (or forever,
+# for a hung backend) inside whichever executor it was submitted to.
+# asyncio.to_thread submits to the loop's default executor, which every other
+# unrelated to_thread caller in this process also shares -- including the
+# Chrome discovery check in api/health.py. A stalled mem0 backend would
+# therefore slowly consume every worker thread in that shared pool and starve
+# callers that never touch mem0 at all. Routing mem0's blocking calls through
+# a small, dedicated executor instead means a mem0 stall can only ever
+# exhaust mem0's own thread budget.
+MEM0_EXECUTOR_MAX_WORKERS = 4
+_MEM0_EXECUTOR = ThreadPoolExecutor(
+    max_workers=MEM0_EXECUTOR_MAX_WORKERS,
+    thread_name_prefix="mem0-presentation-memory",
+)
 
 
 class Mem0PresentationMemoryService:
@@ -82,8 +99,10 @@ class Mem0PresentationMemoryService:
                 )
 
         try:
+            loop = asyncio.get_running_loop()
             await asyncio.wait_for(
-                asyncio.to_thread(_add), timeout=self._timeout_seconds
+                loop.run_in_executor(_MEM0_EXECUTOR, _add),
+                timeout=self._timeout_seconds,
             )
         except asyncio.TimeoutError:
             LOGGER.warning(
@@ -205,8 +224,10 @@ class Mem0PresentationMemoryService:
                 )
 
         try:
+            loop = asyncio.get_running_loop()
             response = await asyncio.wait_for(
-                asyncio.to_thread(_search), timeout=self._timeout_seconds
+                loop.run_in_executor(_MEM0_EXECUTOR, _search),
+                timeout=self._timeout_seconds,
             )
         except asyncio.TimeoutError:
             LOGGER.warning(

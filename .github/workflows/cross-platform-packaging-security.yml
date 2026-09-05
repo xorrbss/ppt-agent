@@ -82,12 +82,15 @@ jobs:
       # non-dev FastAPI tree that PyInstaller freezes. Any known vulnerability
       # fails (same "info" severity floor as npm audit), and --strict also
       # fails when a dependency cannot be audited instead of skipping it.
+      # pip-audit itself is pinned to an exact version, like every other
+      # input in this hardening gate, so the tool that decides pass/fail
+      # cannot silently change under us.
       - name: Audit locked FastAPI production dependencies
         working-directory: servers/fastapi
         run: |
           uv export --frozen --no-dev --no-emit-project --no-hashes \
             --format requirements-txt --output-file requirements-audit.txt
-          uvx pip-audit --strict --desc on --no-deps --requirement requirements-audit.txt
+          uvx pip-audit==2.10.1 --strict --desc on --no-deps --requirement requirements-audit.txt
 
       - name: Test Electron runtime settings refresh contract
         working-directory: electron

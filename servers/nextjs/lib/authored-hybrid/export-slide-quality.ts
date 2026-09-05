@@ -1,6 +1,5 @@
 import { extractAuthoredSlideDom } from "./index.ts";
 import type { AuthoredHybridSlideLayer } from "./pptx-assembler.ts";
-import { shapeHasShadowPaint } from "./shadow-effect.ts";
 import type {
   PresentationExportFallbackElement,
   PresentationExportSlideQuality,
@@ -56,13 +55,18 @@ export function fallbackElementForContractElement(
   additionalReasons: readonly string[] = []
 ): PresentationExportFallbackElement {
   const candidateKind = element.classification.mode === "native" ? element.classification.kind : element.classification.candidateKind;
+  // A shadowed shape can never reach `classification.mode === "native"`: the
+  // browser's `hasExternalPaint` check (see `browser-source.ts`) treats any
+  // non-"none" `box-shadow` as external paint and routes the element through
+  // raster classification with an "external-paint" reason instead. So there
+  // is no "native classification, but shadow left on the backplate" case to
+  // report here -- only a gradient background survives native classification
+  // and then gets rejected later (by `shapeIsSafe`'s deliberate
+  // gradient-is-backplate-only rule in `native-plan.ts`).
   const nativeBackplateReasons =
     element.classification.mode === "native" && "shape" in element && element.shape !== undefined
       ? [
           ...(element.shape.gradient ? ["gradient-backplate-only"] : []),
-          // This element was not selected as a native owner, so any shadow it
-          // carries (mappable or not) is painted only on the residual backplate.
-          ...(shapeHasShadowPaint(element.shape) ? ["shadow-backplate-only"] : []),
         ]
       : [];
   return {

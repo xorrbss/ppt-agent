@@ -9,17 +9,24 @@ that set, so they are reachable without a session even when auth is enabled —
 the same pattern already used by ``/metrics/workspace`` and
 ``/metrics/authored-render-runtime`` in ``api/main.py``.
 
+Because both routes are unauthenticated, their response bodies never carry
+anything beyond a boolean per check plus the overall status: no configured
+provider id, no credential-expiry state, no app version. That detail would
+otherwise be a free information-disclosure oracle for anyone who can reach the
+port. Every check still logs its full detail server-side, so an operator can
+diagnose a failing check from the logs.
+
 ``/health`` is a liveness probe: it never touches the database or the
 filesystem and must answer immediately. ``/ready`` is a readiness probe: it
-runs a small set of independent checks, each bounded by ``_CHECK_TIMEOUT_SECONDS``,
-and reports per-check detail without ever including secret values.
+runs a small set of independent checks, each bounded by
+``_CHECK_TIMEOUT_SECONDS``.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
-import tomllib
 from typing import Any
 
 import httpx
@@ -37,33 +44,20 @@ from utils.get_env import (
     get_next_internal_base_url,
     is_codex_token_auto_refresh_enabled,
 )
-from utils.path_helpers import get_resource_path
 from utils.runtime_settings import get_process_runtime_settings
 from utils.slide_capture_chrome_discovery import find_chrome
 
 
+LOGGER = logging.getLogger(__name__)
 _CHECK_TIMEOUT_SECONDS = 2.0
 
 router = APIRouter(tags=["health"], include_in_schema=False)
 
 
-def _read_version() -> str:
-    """Best-effort package version from ``pyproject.toml``; never raises."""
-    try:
-        with open(get_resource_path("pyproject.toml"), "rb") as pyproject_file:
-            data = tomllib.load(pyproject_file)
-        return str(data["project"]["version"])
-    except Exception:
-        return "unknown"
-
-
-_VERSION = _read_version()
-
-
 @router.get("/health")
 async def liveness() -> JSONResponse:
     """Liveness: no DB, no filesystem, no outbound calls. Always 200 if serving."""
-    return JSONResponse({"status": "ok", "version": _VERSION})
+    return JSONResponse({"status": "ok"})
 
 
 async def _check_database() -> dict[str, Any]:
@@ -117,8 +111,7 @@ async def _check_nextjs() -> dict[str, Any]:
 
 async def _bounded(name: str, coro: Any) -> tuple[str, dict[str, Any]]:
     try:
-        result = await asyncio.wait_for(coro, timeout=_CHECK_TIMEOUT_SECONDS)
-        return name, result
+        return name, await asyncio.wait_for(coro, timeout=_CHECK_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
         return name, {"ok": False, "detail": "timeout"}
     except Exception as exc:  # noqa: BLE001 - reported, never re-raised
@@ -129,8 +122,11 @@ async def _bounded(name: str, coro: Any) -> tuple[str, dict[str, Any]]:
 async def readiness() -> JSONResponse:
     """Readiness: each check is independent and bounded to ~2s.
 
-    200 when every check reports ``ok: true`` (a skipped check counts as
-    ``ok``); 503 otherwise, with per-check detail in the body.
+    The full result of every check (which can include the configured
+    provider id and Codex credential-expiry state) is logged server-side
+    only. The response body — reachable without a session — exposes nothing
+    but a boolean per check plus the overall status. 200 when every check
+    reports ``ok: true`` (a skipped check counts as ``ok``); 503 otherwise.
     """
     pairs = await asyncio.gather(
         _bounded("database", _check_database()),
@@ -139,8 +135,15 @@ async def readiness() -> JSONResponse:
         _bounded("nextjs", _check_nextjs()),
     )
     checks = dict(pairs)
+    for name, detail in checks.items():
+        (LOGGER.debug if detail.get("ok") else LOGGER.warning)(
+            "readiness check %r: %s", name, detail
+        )
     overall_ok = all(check.get("ok") is True for check in checks.values())
     return JSONResponse(
-        {"status": "ok" if overall_ok else "degraded", "checks": checks},
+        {
+            "status": "ok" if overall_ok else "degraded",
+            "checks": {name: bool(check.get("ok")) for name, check in checks.items()},
+        },
         status_code=200 if overall_ok else 503,
     )

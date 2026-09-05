@@ -190,9 +190,8 @@ from utils.authored_styles import (
     resolve_authored_style,
 )
 from utils.document_context import build_document_context
-from utils.get_env import (
-    get_authored_resume_max_attempts_env,
-)
+from utils.get_env import get_authored_resume_max_attempts_env
+from services.public_operation_deadline_scope import remaining_public_operation_seconds
 from api.v1.ppt.endpoints.content_brief_policy import (
     brief_failure_is_terminal, log_content_brief_skipped, merge_brief_context, run_content_brief_with_policy,
 )
@@ -1060,6 +1059,7 @@ async def generate_presentation_handler(
                         verbosity=request.verbosity.value,
                         instructions=request.instructions,
                         presentation_id=presentation_id,
+                        remaining_operation_seconds=remaining_public_operation_seconds(),
                     )
                 if brief_outcome.brief is not None:
                     outline_context = merge_brief_context(additional_context, brief_outcome.brief)

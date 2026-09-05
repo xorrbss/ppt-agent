@@ -144,9 +144,12 @@ services:
         NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI: ${NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI:-true}
         NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES: ${NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES:-true}
     # nginx only proxies /api/v1/* to FastAPI; everything else (including
-    # /api/health) goes to Next.js (see nginx.conf). So this checks Next.js
-    # liveness through the full nginx front, not FastAPI's own /health or
-    # /ready (those are process-local; see servers/fastapi/api/health.py).
+    # /api/health) goes to Next.js (see nginx.conf), so this reaches
+    # Next.js's own /api/health route through the full nginx front. That
+    # route (servers/nextjs/app/api/health/route.ts) makes one short, bounded
+    # call to FastAPI's own /health (servers/fastapi/api/health.py) and
+    # reflects the result, so this healthcheck also fails when FastAPI is
+    # dead or hung, not only when Next.js is.
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/api/health"]
       interval: 30s
@@ -190,10 +193,8 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    # nginx only proxies /api/v1/* to FastAPI; everything else (including
-    # /api/health) goes to Next.js (see nginx.conf). So this checks Next.js
-    # liveness through the full nginx front, not FastAPI's own /health or
-    # /ready (those are process-local; see servers/fastapi/api/health.py).
+    # See the production healthcheck comment above: this reaches Next.js's
+    # own /api/health route, which reflects a bounded FastAPI /health call.
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/api/health"]
       interval: 30s
@@ -224,8 +225,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    # See the production healthcheck comment above: this reaches Next.js
-    # through nginx, not FastAPI's own /health or /ready directly.
+    # See the production healthcheck comment above: this reaches Next.js's
+    # own /api/health route, which reflects a bounded FastAPI /health call.
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/api/health"]
       interval: 30s
@@ -257,8 +258,8 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    # See the production healthcheck comment above: this reaches Next.js
-    # through nginx, not FastAPI's own /health or /ready directly.
+    # See the production healthcheck comment above: this reaches Next.js's
+    # own /api/health route, which reflects a bounded FastAPI /health call.
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/api/health"]
       interval: 30s

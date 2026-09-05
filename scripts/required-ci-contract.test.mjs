@@ -265,7 +265,7 @@ test("the packaging security gate audits the locked FastAPI dependency tree", ()
   );
   assert.match(
     job,
-    /uvx pip-audit --strict --desc on --no-deps --requirement requirements-audit\.txt/u,
+    /uvx pip-audit==\d+\.\d+\.\d+ --strict --desc on --no-deps --requirement requirements-audit\.txt/u,
   );
 });
 
