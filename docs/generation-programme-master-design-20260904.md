@@ -279,6 +279,15 @@ has a far better prior than prose repair (3 of 24). Per-slide remake exists:
 Expected: most of the 16 gate failures resolve without a provider call;
 provider spend on repair (24 runs, 3 successes) goes to zero.
 
+**Outcome (D15, 2026-09-05): the ladder is withdrawn.** The measurement below found no overflow at all in 98 pre-repair slides; see the linked document's section 11.
+
+Ladder depth is decided by measurement, not assumed:
+`docs/authored-fit-magnitude-measurement-design-20260904.md` instruments
+the gate with miss magnitude, replays stored slides at fixed scale steps in
+Chromium, and fixes A4's shape by a rule written before the data (its
+section 7). The remake fallback (D7) proceeds in parallel and is not gated
+on it.
+
 ### A5. Quality loop: user-triggered after generation, never on the
 generation path
 
@@ -647,6 +656,7 @@ Items marked **[verify]** above, to be closed during design review:
 | D12 | Blind rating by a single expert rater (the product owner) with sealed key and five duplicated slides per sheet as the consistency check | 2026-09-04 |
 | D13 | `chromiumReview` is not a workstream: the receipt's 67 s is summed per-slide work; E4 records wall per stage | 2026-09-04 |
 | D14 | The quality loop (best-of-N, critique) runs only from the user-triggered quality review after generation; the generation path renders each slide once | 2026-09-04 |
+| D15 | A4's fit ladder is withdrawn: 0 of 98 pre-repair current-code slides overflow; the only geometry defect is overlap (3 %). Remake-then-flag (D7) is A4's repair; M1/M2 stay as instruments. See `authored-fit-magnitude-measurement-design-20260904.md` section 11 | 2026-09-05 |
 | D8 | The existing blind pack is rated before development starts | 2026-09-04 |
 
 ## 13. Related documents
@@ -656,6 +666,8 @@ Items marked **[verify]** above, to be closed during design review:
   phases 2–3 withdrawn by this document (see its section 6c).
 - `docs/composer-archetype-library-phase1-design-20260904.md` — verbatim
   figure library; scope narrowed and selection amended (see its section 0).
+- `docs/authored-fit-magnitude-measurement-design-20260904.md` — how far
+  failing slides miss; decides the A4 ladder's depth (M1–M5).
 - `docs/authored-infographic-plan-20260903.md`,
   `docs/authored-native-figure-contract-20260903.md` — the library and
   export contract the ordinary route relies on.

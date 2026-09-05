@@ -67,7 +67,11 @@ def test_preflight_blocks_unmeasured_font_qid_and_visibility_failures():
     assert terminal.terminal is True
     assert terminal.retryable is False
     assert terminal.provider_call_allowed is False
-    assert terminal.code == "authored_slide_capacity_exceeded"
+    # Both violations name the "body" element rather than carrying a
+    # measurement, and an unloaded font / invisible element is not a DOM
+    # safety category, so this falls through to the deterministic gate rather
+    # than the capacity code.
+    assert terminal.code == "authored_deterministic_preflight_failed"
     assert "browser_font_unverified:body" in terminal.violations
     assert "browser_text_not_visible:body" in terminal.violations
 
@@ -198,6 +202,95 @@ def test_a_restyled_slide_over_its_text_budget_is_still_terminal():
         artifact=artifact,
         capacity=SlideCapacity(15, "CONTENT", 4, 4, 8, 0, 8),
         profile_id="source-verbatim",
+        reference_mode="style_reference",
+    )
+    assert any(">" in item for item in preflight.violations)
+    assert preflight.code == "authored_slide_capacity_exceeded"
+    assert preflight.terminal is True
+
+
+def _ordinary_artifact_with_offcanvas_figure_node():
+    """An ordinary (non-restyled) slide whose figure caption is off canvas.
+
+    ``ig.s14.n6.desc`` is a node of a server-generated infographic figure (the
+    component library in ``utils/authored_infographic/``, whose text is held
+    verbatim to the plan by ``utils/authored_infographic/checker.py``), pushed
+    off the bottom of the canvas. This slide carries no
+    ``data-source-block-id`` anywhere: the model owns every other node.
+    """
+
+    html = (
+        "<html><head></head><body>"
+        '<h1 data-qid="title" data-semantic-role="title">Title</h1>'
+        '<p data-qid="body" data-semantic-role="body">Body</p>'
+        '<p data-qid="ig.s14.n6.desc" data-semantic-role="body">'
+        "Figure caption text</p>"
+        "</body></html>"
+    )
+    figure = _metric(
+        "ig.s14.n6.desc",
+        "body",
+        "Figure caption text",
+        y=700,
+        visible=False,
+    )
+    figure["clipped"] = True
+    figure["bbox"] = {"x": 40, "y": 700, "width": 400, "height": 80}
+    elements = [
+        _metric("title", "title", "Title", y=30),
+        _metric("body", "body", "Body", y=120),
+        figure,
+    ]
+    return AuthoredSlideArtifact(
+        html=html,
+        png=b"png",
+        browser_metrics={
+            "viewport": {"width": 1280, "height": 720},
+            "elements": elements,
+        },
+    )
+
+
+def test_an_offcanvas_infographic_figure_node_still_reaches_the_repair_call():
+    """A library figure's own text is not the model's to shorten.
+
+    Slide 14 of a 24-of-24-slide authored operation was ended by this exact
+    violation set:
+
+        violations=['browser_text_not_visible:ig.s14.n6.desc',
+                     'safety:clipping:ig.s14.n6.desc',
+                     'safety:off_canvas:ig.s14.n6']
+
+    ``ig.s14.n6.desc`` is a figure caption, not model prose: shrinking it is
+    not a legal repair, and it was simply pushed off the bottom of the
+    canvas. That is a layout defect regardless of whether the deck is
+    restyled, so it must reach the repair call rather than end the deck.
+    """
+
+    preflight = preflight_authored_provider_repair(
+        slide_index=13,
+        artifact=_ordinary_artifact_with_offcanvas_figure_node(),
+        capacity=SlideCapacity(13, "CONTENT", 20, 30, 400, 0, 8),
+        profile_id="ordinary",
+        reference_mode="style_reference",
+    )
+    assert "browser_text_not_visible:ig.s14.n6.desc" in preflight.violations
+    assert preflight.code == "authored_composition_safety_gate_failed"
+
+
+def test_an_ordinary_slide_over_its_text_budget_is_still_terminal():
+    """An ordinary deck owns its own text, so an over-budget page still ends.
+
+    This is the measurement the terminal classification exists for, and it
+    stays terminal whether or not the deck is a restyle.
+    """
+
+    artifact = _artifact("Body")
+    preflight = preflight_authored_provider_repair(
+        slide_index=2,
+        artifact=artifact,
+        capacity=SlideCapacity(2, "CONTENT", 4, 4, 8, 0, 8),
+        profile_id="ordinary",
         reference_mode="style_reference",
     )
     assert any(">" in item for item in preflight.violations)

@@ -13,6 +13,8 @@ from pathlib import Path
 from time import monotonic
 
 from services.authored_generation_timing_receipt_e4 import (
+    fit_summary_entries,
+    flagged_slide_entries,
     merged_stage_wall_millis,
     normalization_entries,
     optional_top_level_fields,
@@ -677,6 +679,11 @@ class GenerationAttemptTimingReceiptV2:
     provider_rate_profile: str | None = None
     normalizations: tuple[dict[str, object], ...] = ()
     quality_loop_variant: str | None = None
+    flagged_slides: tuple[dict[str, object], ...] = ()
+    #: M1: per-slide fit magnitude for the slides that failed the composition
+    #: safety gate. Empty on a succeeded attempt, and then absent from the
+    #: serialized form for the same digest reason as the fields above.
+    fit_summaries: tuple[dict[str, object], ...] = ()
     receipt_digest: str = ""
 
     def to_dict(self) -> dict[str, object]:
@@ -702,6 +709,8 @@ class GenerationAttemptTimingReceiptV2:
                 provider_rate_profile=self.provider_rate_profile,
                 normalizations=self.normalizations,
                 quality_loop_variant=self.quality_loop_variant,
+                flagged_slides=self.flagged_slides,
+                fit_summaries=self.fit_summaries,
             ),
             "receiptDigest": self.receipt_digest,
         }
@@ -865,6 +874,8 @@ def _attempt_receipt_v2_from_dict(
         quality_loop_variant=quality_loop_variant_field(
             value.get("qualityLoop"), optional_reason=_optional_reason
         ),
+        flagged_slides=flagged_slide_entries(value.get("flaggedSlides")),
+        fit_summaries=fit_summary_entries(value.get("fitSummary")),
         receipt_digest=_required_sha256(value.get("receiptDigest"), "receipt_digest"),
     )
     if receipt.receipt_digest != _attempt_receipt_v2_digest(receipt):
@@ -1074,6 +1085,8 @@ def create_generation_attempt_timing_receipt_v2(
     provider_rate_profile: str | None = None,
     normalizations: Sequence[Mapping[str, object]] = (),
     quality_loop_variant: str | None = None,
+    flagged_slides: Sequence[Mapping[str, object]] = (),
+    fit_summaries: Sequence[Mapping[str, object]] | Mapping[object, object] = (),
 ) -> GenerationAttemptTimingReceiptV2:
     """Seal one v2 terminal receipt without prompt, content, or provider traces.
 
@@ -1204,6 +1217,8 @@ def create_generation_attempt_timing_receipt_v2(
         quality_loop_variant=_optional_reason(
             quality_loop_variant, "quality_loop_variant"
         ),
+        flagged_slides=flagged_slide_entries(flagged_slides),
+        fit_summaries=fit_summary_entries(fit_summaries),
     )
     if (outcome == "succeeded") != (receipt.terminal_error is None):
         raise ValueError("generation_attempt_timing_receipt_v2_invalid")

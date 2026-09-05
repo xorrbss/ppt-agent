@@ -27,6 +27,15 @@ from html import unescape
 from html.parser import HTMLParser
 from typing import Any, Literal
 
+from utils.authored_dom_fit_magnitude import (
+    build_element_kind_index,
+    build_fit_summary,
+    clipping_magnitude,
+    element_kind,
+    off_canvas_magnitude,
+    overflow_magnitude,
+)
+
 EXACT_RECONSTRUCTION = "exact_reconstruction"
 STYLE_REFERENCE = "style_reference"
 ReferenceMode = Literal["exact_reconstruction", "style_reference"]
@@ -143,10 +152,21 @@ class DomQualityIssue:
     detail: str
     qids: tuple[str, ...] = ()
     policy: ReferenceMode = STYLE_REFERENCE
+    #: M1 (``docs/authored-fit-magnitude-measurement-design-20260904.md``): how
+    #: far this element missed, for the three geometry categories that have a
+    #: magnitude.  ``None`` everywhere else, and the last field so that every
+    #: existing positional construction keeps working.
+    magnitude: Mapping[str, float | str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         result = asdict(self)
         result["qids"] = list(self.qids)
+        # Emitted only when measured: receipts, consumers and tests that compare
+        # issue dicts written before M1 must stay byte-identical.
+        if self.magnitude is None:
+            result.pop("magnitude", None)
+        else:
+            result["magnitude"] = dict(self.magnitude)
         return result
 
 
@@ -157,6 +177,9 @@ class DomQualityReport:
     compact_dom: tuple[CompactDomNode, ...]
     inspected_elements: int
     telemetry_status: TelemetryStatus = "available"
+    #: M1 section 3.3: this slide's fit magnitude, projected from the issues
+    #: above.  ``None`` on a report built by a caller that did not measure it.
+    fit_summary: Mapping[str, Any] | None = None
 
     @property
     def needs_attention(self) -> bool:
@@ -166,7 +189,7 @@ class DomQualityReport:
         return self.telemetry_status != "available" or bool(self.issues)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "reference_mode": self.reference_mode,
             "needs_attention": self.needs_attention,
             "issues": [issue.to_dict() for issue in self.issues],
@@ -174,6 +197,11 @@ class DomQualityReport:
             "inspected_elements": self.inspected_elements,
             "telemetry_status": self.telemetry_status,
         }
+        # Optional for the same reason ``magnitude`` is: a report serialized
+        # before M1 must keep its exact key set.
+        if self.fit_summary is not None:
+            result["fit_summary"] = dict(self.fit_summary)
+        return result
 
 
 def has_dom_quality_regression(
@@ -1139,6 +1167,40 @@ def inspect_authored_dom(
             current = parent_by_qid.get(current, "")
         return False
 
+    # M1 measurement helpers.  Neither participates in a verdict: they are only
+    # consulted after an issue has already been decided.
+    kind_index = build_element_kind_index(ensure_authored_qids(html))
+
+    def kind_of(target_qid: str) -> str:
+        return element_kind(target_qid, item_by_qid.get(target_qid), kind_index)
+
+    def clipping_ancestor_box(qid: str) -> BoundingBox:
+        """The nearest measured ancestor that actually clips, else the canvas.
+
+        The browser reports ``clipped`` as a boolean and never names the clipper,
+        so the comparison box is resolved here from the same ancestor walk the
+        rest of this function uses.  The viewport is the fallback because it is
+        the outermost clipper every slide has.
+        """
+
+        current = parent_by_qid.get(qid, "")
+        seen: set[str] = set()
+        while current and current not in seen:
+            seen.add(current)
+            ancestor = item_by_qid.get(current)
+            if ancestor is not None:
+                style = ancestor.get("computed_style", ancestor.get("style", {}))
+                ancestor_box = _coerce_bbox(ancestor.get("bbox"))
+                if isinstance(style, Mapping) and ancestor_box is not None:
+                    modes = {
+                        str(style.get(key, style.get("overflow", ""))).strip().lower()
+                        for key in ("overflowX", "overflowY")
+                    }
+                    if modes & {"hidden", "clip", "scroll", "auto"}:
+                        return ancestor_box
+            current = parent_by_qid.get(current, "")
+        return BoundingBox(0.0, 0.0, width, height)
+
     def off_canvas_owner(qid: str) -> str:
         """Promote escaped descendant paint to its escaped layout container."""
 
@@ -1372,6 +1434,7 @@ def inspect_authored_dom(
                     "content scroll dimensions exceed its client box",
                     (qid,),
                     mode,
+                    overflow_magnitude(item, kind=kind_of(qid)),
                 )
             )
         structural_off_canvas_is_actionable = (
@@ -1390,13 +1453,25 @@ def inspect_authored_dom(
             and not intentional
             and not clipped_by_authored_parent(item)
         ):
+            # The reported target may be an escaped ancestor; measure the box
+            # the issue actually names so magnitude and qid agree.
+            owner_qid = off_canvas_owner(qid)
+            owner_box = (
+                _coerce_bbox(item_by_qid.get(owner_qid, item).get("bbox")) or box
+            )
             issues.append(
                 DomQualityIssue(
                     "off_canvas",
                     "high",
                     "element extends outside the slide canvas",
-                    (off_canvas_owner(qid),),
+                    (owner_qid,),
                     mode,
+                    off_canvas_magnitude(
+                        asdict(owner_box),
+                        viewport_width=width,
+                        viewport_height=height,
+                        kind=kind_of(owner_qid),
+                    ),
                 )
             )
         if (
@@ -1411,6 +1486,11 @@ def inspect_authored_dom(
                     "browser reports clipped visible content",
                     (qid,),
                     mode,
+                    clipping_magnitude(
+                        asdict(box),
+                        asdict(clipping_ancestor_box(qid)),
+                        kind=kind_of(qid),
+                    ),
                 )
             )
         occluded_fraction = item.get("occluded_fraction")
@@ -1704,10 +1784,27 @@ def inspect_authored_dom(
             key=lambda issue: (issue.category, issue.qids, issue.detail),
         )
     )
+    # M1 section 3.3.  ``content_bbox_fill`` reuses the owned-content notion the
+    # geometry checks above use, and each box is first intersected with the
+    # canvas so an escaped element cannot report more fill than the slide holds.
+    viewport_box = BoundingBox(0.0, 0.0, width, height)
+    owned_content_boxes = [
+        visible
+        for _content_qid, content_box, content_item in boxes
+        if browser_proves_owned_content(content_item)
+        and (visible := _intersection(content_box, viewport_box)) is not None
+    ]
     return DomQualityReport(
         mode,
         ordered,
         tuple(compact),
         len(elements),
         telemetry_status,
+        build_fit_summary(
+            ordered,
+            content_area=(
+                _rect_union_area(owned_content_boxes) if owned_content_boxes else 0.0
+            ),
+            viewport_area=width * height,
+        ),
     )

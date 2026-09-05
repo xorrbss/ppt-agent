@@ -21,6 +21,7 @@ from llmai.shared import SystemMessage, TextContentPart, UserMessage
 from models.authored_infographic_plan import AuthoredSlideInfographic
 from models.authored_visual_plan import AuthoredSlideVisualIntent
 from utils.authored_infographic import finalize_infographic_slide_html
+from services.authored_header_body_extent import ensure_body_root_horizontal_extent
 from services.provider_usage_instrumentation import (
     ProviderCallTimer,
     current_provider_idempotency_key,
@@ -228,7 +229,11 @@ def _postprocess_slide(
     authored_html = _strip_nonvisual_pointer_events(authored_html)
     if mode != EXACT_RECONSTRUCTION:
         authored_html = enforce_authored_font_floor(authored_html)
-        # Same figure contract and library injection as the single-slide path.
+        # Same collapse guard, figure contract, and library injection as the
+        # single-slide path: a pinned data-header-part="body" wrapper with no
+        # left/right/width has no horizontal extent and collapses to zero
+        # width, taking every child anchored inside it down with it.
+        authored_html = ensure_body_root_horizontal_extent(authored_html)
         authored_html = finalize_infographic_slide_html(
             authored_html, brand=brand, slide=request.infographic
         )

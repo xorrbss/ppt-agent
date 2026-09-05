@@ -189,6 +189,7 @@ async def _persist_terminal_attempt_timing(
     outcome: str,
     retry_reason: str | None,
     terminal_error: str | None,
+    request: object = None,
 ) -> dict[str, object] | None:
     usage_snapshot = provider_usage.snapshot()
     totals = usage_snapshot.get("totals", {})
@@ -220,6 +221,12 @@ async def _persist_terminal_attempt_timing(
             worker="workspace-generation-worker",
             terminal_error=terminal_error,
             provider_rate_profile=resolve_authored_rate_profile().name,
+            # D7: the terminal-slide fallback stashes what it flagged on the
+            # request, the same channel the authored timing stage uses.
+            flagged_slides=getattr(request, "_authored_flagged_slides", ()) or (),
+            # M1: the composition gate stashes the failing slides' fit magnitude
+            # on the same request channel.
+            fit_summaries=getattr(request, "_authored_gate_fit_summaries", None) or {},
         )
         return receipt.to_dict()
     except (OSError, TypeError, ValueError):
@@ -294,6 +301,7 @@ async def _persist_failed_attempt_timing(
         ),
         retry_reason=("retryable_failure" if retryable else "terminal_failure"),
         terminal_error=normalized_stage_reason,
+        request=request,
     )
 
 
@@ -589,6 +597,7 @@ class PresentationGenerationOperationHandler:
                         else None
                     ),
                     terminal_error=None,
+                    request=request,
                 )
                 if success_receipt_payload is None:
                     raise NonRetryableWorkspaceOperationError(
@@ -755,6 +764,7 @@ class PresentationGenerationOperationHandler:
                             else None
                         ),
                         terminal_error=None,
+                        request=request,
                     )
                     if success_receipt_payload is None:
                         raise NonRetryableWorkspaceOperationError(
@@ -916,6 +926,7 @@ class PresentationGenerationOperationHandler:
                     "workspace_retry" if context.claim.attempt_number > 1 else None
                 ),
                 terminal_error=None,
+                request=request,
             )
             if success_receipt_payload is None:
                 raise NonRetryableWorkspaceOperationError(

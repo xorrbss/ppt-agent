@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 from services.authored_composition_policy import (
     SlideCapacity,
@@ -30,32 +30,11 @@ _CAPACITY_PREFIXES = (
 )
 
 
-#: ``data-qid="..."`` of an element that also carries ``data-source-block-id``.
-#: Those elements render immutable source text; everything else on the slide is
-#: the model's own composition.
-_SOURCE_OWNER_QID = re.compile(
-    r"<[^>]*?data-qid=\"([^\"]+)\"[^>]*?data-source-block-id=|"
-    r"<[^>]*?data-source-block-id=[^>]*?data-qid=\"([^\"]+)\"",
-    re.IGNORECASE,
-)
-
-
 #: A QID names an element; anything else in a violation tail is a measurement.
 _QID_TOKEN = re.compile(r"[A-Za-z][\w.\-]*(?::[\w.\-]+)*")
 
 
-def _source_owner_qids(html: str) -> frozenset[str]:
-    """QIDs of the elements that own source text on this slide."""
-
-    found: set[str] = set()
-    for first, second in _SOURCE_OWNER_QID.findall(str(html or "")):
-        name = (first or second or "").strip()
-        if name:
-            found.add(name)
-    return frozenset(found)
-
-
-def _is_slide_over_budget(violation: str) -> bool:
+def is_slide_over_budget(violation: str) -> bool:
     """Whether a capacity violation says the slide's text does not fit.
 
     A violation reads ``<check>:<qid>[,<qid>...]`` when it is about one
@@ -75,6 +54,18 @@ def _is_slide_over_budget(violation: str) -> bool:
         if _QID_TOKEN.fullmatch(item.strip())
     ]
     return not names
+
+
+def over_budget_violations(violations: Iterable[str]) -> tuple[str, ...]:
+    """The violations that measure a slide against its budget, not an element.
+
+    A violation that names no element at all -- ``browser_metrics_unavailable``
+    is the one that matters -- is counted here so every caller stays
+    fail-closed on an unmeasured slide: only a violation that positively names
+    an element is a layout defect a re-layout can fix.
+    """
+
+    return tuple(item for item in violations if is_slide_over_budget(item))
 
 
 @dataclass(frozen=True)
@@ -177,23 +168,24 @@ def preflight_authored_provider_repair(
         )
 
     # A capacity violation is terminal because verbatim source text cannot be
-    # shortened to fit.  On a restyled deck that reasoning belongs to the
-    # violations that measure the slide against its budget, not to the ones
-    # naming an element that ended up invisible, clipped or off-canvas: those
-    # are layout mistakes and re-laying out the slide is exactly what a repair
-    # call does.  Operation 3d0b9e72 was ended for a "+" ornament that rendered
-    # no glyph, and 069c620d for one clipped block on a page carrying 168
-    # characters -- neither deck was over budget, and neither got a repair call.
-    # An ordinary authored deck owns all of its text and keeps the original
-    # classification, where shortening is the repair.
-    restyled = bool(_source_owner_qids(artifact.html))
+    # shortened to fit.  That reasoning belongs to the violations that measure
+    # the slide against its budget, not to the ones naming an element that
+    # ended up invisible, clipped or off-canvas: those are layout mistakes and
+    # re-laying out the slide is exactly what a repair call does. Operation
+    # 3d0b9e72 was ended for a "+" ornament that rendered no glyph, and
+    # 069c620d for one clipped block on a page carrying 168 characters --
+    # neither deck was over budget, and neither got a repair call. That
+    # distinction is not particular to a restyled deck: an ordinary authored
+    # slide can carry a server-generated infographic figure (the component
+    # library in utils/authored_infographic/) whose text is held verbatim to
+    # the plan by the checker, so it is no more the model's to shorten than a
+    # restyled slide's source block is. Slide 14 of a 24-slide operation was
+    # ended for exactly that figure's description node pushed off the bottom
+    # of the canvas, with no measurement anywhere over budget.
     capacity_violations_found = [
         item for item in violations if item.startswith(_CAPACITY_PREFIXES)
     ]
-    source_capacity_blocked = bool(capacity_violations_found) and (
-        not restyled
-        or any(_is_slide_over_budget(item) for item in capacity_violations_found)
-    )
+    source_capacity_blocked = bool(over_budget_violations(capacity_violations_found))
     code = (
         "authored_slide_capacity_exceeded"
         if source_capacity_blocked
@@ -216,5 +208,7 @@ def preflight_authored_provider_repair(
 __all__ = [
     "AuthoredSlideArtifact",
     "AuthoredSlidePreflight",
+    "is_slide_over_budget",
+    "over_budget_violations",
     "preflight_authored_provider_repair",
 ]

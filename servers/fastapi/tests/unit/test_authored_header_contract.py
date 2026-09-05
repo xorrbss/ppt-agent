@@ -523,6 +523,13 @@ def test_the_brief_pins_the_band_box_and_the_bodys_frame_of_reference():
     assert "its body must be pinned too" in text
 
 
+def test_the_pinned_body_form_names_the_full_canvas_width():
+    text = render_header_contract(_numbered_contract())
+
+    assert "position:absolute;left:0;right:0;top:(N +" in text
+    assert "has no horizontal extent and collapses to zero width" in text
+
+
 def test_a_structured_deck_takes_its_geometry_from_the_template():
     """Template zone bounds and a per-slide derived band cannot both be authoritative.
 

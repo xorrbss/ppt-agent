@@ -10,7 +10,7 @@ import os
 import time
 import traceback
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -141,6 +141,16 @@ from services.authored_offcanvas_repair import (
 from services.authored_generation_preflight import (
     AuthoredSlideArtifact,
     preflight_authored_provider_repair,
+)
+from services.authored_terminal_slide_fallback import resolve_terminal_gate_slides
+from services.authored_terminal_slide_policy import (
+    claim_bounded_repairs,
+    declare_unadmitted_gate_repair,
+    flagged_slide_absorbs_capacity,
+    gate_repair_rejection_is_terminal_slide,
+    partition_residual_failures,
+    recover_residual_repair_round,
+    terminal_fallback_active,
 )
 from services.authored_decoration_containment import (
     plan_decoration_containment,
@@ -819,6 +829,7 @@ def _admit_vqa_capacity_candidate(
     candidate_metrics: object | None,
     capacity: object,
     allow_original_fallback: bool = True,
+    terminal_fallback_enabled: bool = False,
 ) -> tuple[str, bytes, object | None, bool]:
     """Admit a VQA rewrite only when it stays inside the frozen envelope.
 
@@ -842,16 +853,15 @@ def _admit_vqa_capacity_candidate(
         else ("browser_metrics_unavailable",)
     )
     LOGGER.warning(
-        "[authored] rejected post-VQA capacity candidate slide=%d "
-        "candidate_digest=%s candidate_violations=%s "
-        "restored_digest=%s restored_violations=%s",
-        slide_index + 1,
-        digest_html(candidate_html),
-        list(candidate_violations),
-        digest_html(original_html),
-        list(original_violations),
+        "[authored] rejected post-VQA capacity candidate slide=%d candidate_digest=%s "
+        "candidate_violations=%s restored_digest=%s restored_violations=%s",
+        slide_index + 1, digest_html(candidate_html), list(candidate_violations),
+        digest_html(original_html), list(original_violations),
     )
-    if not allow_original_fallback:
+    if not allow_original_fallback and not gate_repair_rejection_is_terminal_slide(
+        enabled=terminal_fallback_enabled, candidate_violations=candidate_violations,
+        original_violations=original_violations,
+    ):
         raise AuthoredStageError(
             slide_index=slide_index,
             stage="render",
@@ -909,6 +919,7 @@ async def _revise_gate_repair_candidates(
     brand: object,
     design_system: str,
     repair_kwargs: Mapping[str, object],
+    terminal_fallback_enabled: bool = False,
 ) -> tuple[list[str], list[int]]:
     """Review unchanged inputs only; admit all candidates after one fresh bind.
 
@@ -948,16 +959,29 @@ async def _revise_gate_repair_candidates(
         key: value for key, value in subset_kwargs.items() if key in accepted_kwargs
     }
     reviewed_absolute_indices = [flagged[index] for index in reviewed_local_indices]
-    repaired = await revise_authored_deck(
-        [htmls[index] for index in reviewed_absolute_indices],
-        [pngs[index] for index in reviewed_absolute_indices],
-        [contents[index] for index in reviewed_absolute_indices],
-        [roles[index] for index in reviewed_absolute_indices],
-        brand,
-        design_system,
-        **subset_kwargs,
-    )
-    reviewed_htmls, reviewed_pngs, fixed = repaired[:3]
+    try:
+        repaired = await revise_authored_deck(
+            [htmls[index] for index in reviewed_absolute_indices],
+            [pngs[index] for index in reviewed_absolute_indices],
+            [contents[index] for index in reviewed_absolute_indices],
+            [roles[index] for index in reviewed_absolute_indices],
+            brand,
+            design_system,
+            **subset_kwargs,
+        )
+        reviewed_htmls, reviewed_pngs, fixed = repaired[:3]
+    except AuthoredVqaResidualDomIssuesError as error:
+        # D7: a residual DOM defect reported by the round is the same defect the
+        # final gate reports, and it must reach the terminal-slide fallback the
+        # same way. Recover the round's own bound state instead of throwing the
+        # whole round away; every candidate below is still re-rendered into one
+        # fresh (html, png, metrics) capture before admission.
+        recovered = recover_residual_repair_round(
+            error, enabled=terminal_fallback_enabled
+        )
+        if recovered is None:
+            raise
+        reviewed_htmls, reviewed_pngs, fixed = recovered
     if not (
         len(reviewed_htmls) == len(reviewed_pngs) == len(reviewed_local_indices)
     ):
@@ -1382,6 +1406,11 @@ async def _final_authored_quality_gate(
     profile,
     reference_mode: str,
     browser_metrics_by_slide=None,
+    flagged_slide_indices: Sequence[int] = (),
+    # M1 (docs/authored-fit-magnitude-measurement-design-20260904.md, 3.4): an
+    # out-parameter rather than a new key in the residual dicts, so the gate
+    # receipt this function feeds keeps its exact recorded shape.
+    fit_summaries: dict[int, Mapping[str, object]] | None = None,
 ) -> list[dict[str, object]]:
     """Re-check the exact final HTML before export/publication.
 
@@ -1399,10 +1428,8 @@ async def _final_authored_quality_gate(
     residual: list[dict[str, object]] = []
     for index, (html, browser_metrics) in enumerate(zip(htmls, metrics, strict=True)):
         if capacity_plan is not None:
-            violations = capacity_violations(
-                html, browser_metrics, capacity_plan.at(index)
-            )
-            if violations:
+            violations = capacity_violations(html, browser_metrics, capacity_plan.at(index))
+            if violations and not flagged_slide_absorbs_capacity(index, violations, flagged=flagged_slide_indices):
                 # Keep a content-free, digest-bound diagnostic in the service
                 # log even though the workspace projection exposes only a safe
                 # terminal code.
@@ -1447,6 +1474,8 @@ async def _final_authored_quality_gate(
                     "issues": [issue.to_dict() for issue in defects],
                 }
             )
+            if fit_summaries is not None and report.fit_summary is not None:
+                fit_summaries[index] = dict(report.fit_summary)
     return residual
 
 
@@ -2284,6 +2313,15 @@ async def _generate_authored_presentation(
         if (signature := _gate_failure_signature(htmls, item)) is not None
     }
     repaired_gate_indices: list[int] = []
+    # D7: one predicate decides for the whole attempt whether a terminal slide
+    # may be published flagged, so the claim loop, the bounded repair round and
+    # the final gate cannot disagree about this deck.
+    terminal_fallback_enabled = terminal_fallback_active(
+        profile=composition_profile,
+        reference_mode=reference_mode,
+        source_reflow=source_reflow,
+    )
+    predeclared_terminal: list[dict[str, object]] = []
     await mark_stage("repair")
     repair_started = time.monotonic()
     repair_claims: dict[int, object] = {}
@@ -2293,28 +2331,42 @@ async def _generate_authored_presentation(
             failures_by_index = {
                 int(item["slide_index"]): item for item in gate_failures
             }
-            for index in flagged:
-                try:
-                    repair_claims[index] = claim_scene_repair(
-                        generation_job.id,
-                        scene_envelope.slides[index],
-                        error_code="authored_composition_safety_gate_failed",
-                        issues=failures_by_index[index].get("issues", ()),
-                    )
-                except SceneRepairBudgetExhausted as error:
-                    raise AuthoredStageError(
-                        slide_index=index,
-                        stage="render",
-                        code="authored_composition_safety_gate_failed",
-                        cause=error,
-                        retryable=False,
-                        message=(
-                            "The same Scene digest and quality error repeated "
-                            "after the single slide repair"
-                            if error.repeated
-                            else "The immutable Scene slide repair budget is exhausted"
-                        ),
-                    ) from error
+            # D7: a slide whose single durable repair was already spent by an
+            # earlier attempt is declared terminal and dropped from the bounded
+            # round (it has no claim, so its original triple stays untouched);
+            # it reaches the remake-then-flag fallback below instead of killing
+            # the deck. A deck that may not publish flagged keeps today's raise.
+            claim_outcome = claim_bounded_repairs(
+                flagged,
+                claim=lambda index: claim_scene_repair(
+                    generation_job.id,
+                    scene_envelope.slides[index],
+                    error_code="authored_composition_safety_gate_failed",
+                    issues=failures_by_index[index].get("issues", ()),
+                ),
+                budget_exhausted=SceneRepairBudgetExhausted,
+                profile=composition_profile,
+                reference_mode=reference_mode,
+                source_reflow=source_reflow,
+            )
+            if claim_outcome.blocked is not None:
+                blocked_index, blocked_error = claim_outcome.blocked
+                raise AuthoredStageError(
+                    slide_index=blocked_index,
+                    stage="render",
+                    code="authored_composition_safety_gate_failed",
+                    cause=blocked_error,
+                    retryable=False,
+                    message=(
+                        "The same Scene digest and quality error repeated "
+                        "after the single slide repair"
+                        if blocked_error.repeated
+                        else "The immutable Scene slide repair budget is exhausted"
+                    ),
+                ) from blocked_error
+            repair_claims.update(claim_outcome.claims)
+            predeclared_terminal.extend(claim_outcome.predeclared)
+            flagged = claim_outcome.flagged
         repair_kwargs: dict[str, object] = {
             "slide_indices": flagged,
             "total_slides": len(htmls),
@@ -2464,6 +2516,7 @@ async def _generate_authored_presentation(
                     brand=brand,
                     design_system=authored_deck.design_system,
                     repair_kwargs=repair_kwargs,
+                    terminal_fallback_enabled=terminal_fallback_enabled,
                 )
             if has_author_provider_attempt_counts:
                 for local_index, index in enumerate(flagged):
@@ -2505,6 +2558,7 @@ async def _generate_authored_presentation(
                         candidate_png=revised_pngs[local_index],
                         candidate_metrics=revised_metrics[local_index],
                         capacity=capacity_plan.at(absolute_index),
+                        terminal_fallback_enabled=terminal_fallback_enabled,
                         allow_primary_title_shortening=(
                             composition_profile.profile_id == "ordinary"
                             and composition_profile.allow_summarization
@@ -2514,13 +2568,9 @@ async def _generate_authored_presentation(
                     )
                 )
                 if not admitted or selected_metrics is None:
-                    raise AuthoredStageError(
-                        slide_index=absolute_index,
-                        stage="render",
-                        code="authored_slide_capacity_exceeded",
-                        retryable=False,
-                        message="bounded gate-repair candidate was not admitted",
-                    )
+                    # D7 layout defect only: the admission raises on everything else.
+                    predeclared_terminal.append(declare_unadmitted_gate_repair(absolute_index))
+                    continue
                 admitted_repairs.append(
                     (
                         absolute_index,
@@ -2554,6 +2604,7 @@ async def _generate_authored_presentation(
                             slide_index=absolute_index,
                             stage="render",
                             attempt_token=generation_job.attempt_token,
+                            fencing_token=getattr(generation_job, "_workspace_fencing_token", None),
                             html=selected_html,
                             png=selected_png,
                             browser_metrics=selected_metrics,
@@ -2756,6 +2807,7 @@ async def _generate_authored_presentation(
                             slide_index=index,
                             stage="render",
                             attempt_token=generation_job.attempt_token,
+                            fencing_token=getattr(generation_job, "_workspace_fencing_token", None),
                             html=selected_html,
                             png=selected_png,
                             browser_metrics=selected_metrics,
@@ -2797,6 +2849,24 @@ async def _generate_authored_presentation(
     await _record_deck_stage_latency(
         generation_job, stage="repair", elapsed_seconds=repair_elapsed
     )
+
+    # D7: a slide that is still terminal after the bounded repair gets one
+    # automatic lower-density remake here, before the attempt evidence is
+    # sealed; whatever stays terminal is flagged instead of failing the deck.
+    terminal_fallback = await resolve_terminal_gate_slides(
+        htmls=htmls, pngs=pngs, contents=contents, roles=roles, brand=brand,
+        design_system=authored_deck.design_system, style=style,
+        capacity_plan=capacity_plan, profile=composition_profile,
+        reference_mode=reference_mode, scene_envelope=scene_envelope,
+        metrics_by_slide=revised_metrics_by_slide, source_reflow=source_reflow,
+        chapter_plan=chapter_plan, illustration_plan=illustration_plan,
+        infographic_plan=infographic_plan, instructions=request.instructions,
+        generation_job=generation_job, predeclared=predeclared_terminal,
+    )
+    scene_envelope = terminal_fallback.scene_envelope
+    flagged_slides = [dict(entry) for entry in terminal_fallback.flagged_slides]
+    flagged_residual_failures: list[dict[str, object]] = []
+    object.__setattr__(request, "_authored_flagged_slides", flagged_slides)
 
     await mark_stage("checkpoint")
     checkpoint_started = time.monotonic()
@@ -2855,6 +2925,9 @@ async def _generate_authored_presentation(
     # non-blocking quality findings, not a way around the safety gate.
     residual_gate_failures: list[dict[str, object]] = []
     if composition_profile.strict_dom_gate and reference_mode != EXACT_RECONSTRUCTION:
+        # M1: the failing slides' fit magnitude travels to the E4 attempt-timing
+        # receipt on the same request the timing stage already rides.
+        gate_fit_summaries: dict[int, Mapping[str, object]] = {}
         residual_gate_failures = await _final_authored_quality_gate(
             htmls=htmls,
             capacity_plan=capacity_plan,
@@ -2863,7 +2936,15 @@ async def _generate_authored_presentation(
             browser_metrics_by_slide=(
                 retained_final_metrics if evidence_ledger is not None else None
             ),
+            flagged_slide_indices=[int(entry["index"]) for entry in flagged_slides],
+            fit_summaries=gate_fit_summaries,
         )
+        if gate_fit_summaries:
+            object.__setattr__(request, "_authored_gate_fit_summaries", gate_fit_summaries)
+        if residual_gate_failures and flagged_slides:
+            residual_gate_failures, flagged_residual_failures = (
+                partition_residual_failures(residual_gate_failures, flagged_slides)
+            )
         if residual_gate_failures:
             first = residual_gate_failures[0]
             repeated_signature = any(
@@ -2928,29 +3009,33 @@ async def _generate_authored_presentation(
     quality_gate_receipt = build_authored_quality_gate_receipt(
         htmls=htmls,
         profile_id=composition_profile.profile_id,
-        gate_failures=residual_gate_failures,
+        # A D7-flagged slide is published, so its measured issues are residual
+        # evidence in the receipt rather than a blocker.
+        gate_failures=[*residual_gate_failures, *flagged_residual_failures],
         repaired_slide_indices=repaired_gate_indices,
     )
     quality_gate_receipt["sceneEnvelope"] = scene_envelope.receipt()
+    if flagged_slides:
+        quality_gate_receipt["flaggedSlides"] = flagged_slides
     if source_readback_receipt is not None:
         quality_gate_receipt["sourceReadback"] = source_readback_receipt.as_dict()
 
     quality_receipt_v2 = None
     if evidence_ledger is not None and evidence_attempt_id is not None:
-        capacity_checks: list[dict[str, object]] = []
-        for index, metrics in enumerate(retained_final_metrics or ()):
-            capacity_checks.append(
-                _evaluate_capacity_role_evidence(
-                    metrics,
-                    capacity_plan.at(index) if capacity_plan is not None else {},
-                )
-            )
+        # A D7-flagged slide is published with its defects on record (see the
+        # safety evidence below), so its capacity checks never block the deck.
+        flagged_indices = {int(entry["index"]) for entry in flagged_slides}
+        capacity_checks: list[dict[str, object]] = [
+            _evaluate_capacity_role_evidence(metrics, capacity_plan.at(index) if capacity_plan is not None else {})
+            for index, metrics in enumerate(retained_final_metrics or ()) if index not in flagged_indices
+        ]
         if capacity_checks:
             names = ("text", "title", "body", "font", "qid", "image")
             capacity_evidence = {
                 "browserObserved": all(item.get("browserObserved") is True for item in capacity_checks),
                 "checks": {name: all(bool(item.get("checks", {}).get(name)) for item in capacity_checks) for name in names},
                 "violations": [v for item in capacity_checks for v in item.get("violations", [])],
+                "flaggedSlideIndices": sorted(flagged_indices),
             }
         else:
             capacity_evidence = {"browserObserved": False, "checks": {name: False for name in ("text", "title", "body", "font", "qid", "image")}}
@@ -2962,6 +3047,9 @@ async def _generate_authored_presentation(
         safety_evidence = {
             "status": "passed" if not residual_gate_failures else "blocked",
             "residuals": residual_gate_failures,
+            # D7-accepted terminal slides are recorded, never dropped: they do
+            # not block publication but they stay in the sealed evidence.
+            "flagged": flagged_slides,
         }
         checkpoint_elapsed = time.monotonic() - checkpoint_started
         record_stage_timing("checkpoint", checkpoint_elapsed * 1000)
@@ -3142,9 +3230,7 @@ async def _generate_authored_presentation(
                 attempt_token=attempt_token,
                 error=error,
                 request_id=export_generation_request_id,
-                fencing_token=getattr(
-                    generation_job, "_workspace_fencing_token", None
-                ),
+                fencing_token=getattr(generation_job, "_workspace_fencing_token", None),
             )
         raise error from exc
     export_elapsed = time.monotonic() - export_started

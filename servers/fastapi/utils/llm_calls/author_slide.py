@@ -39,6 +39,7 @@ from utils.authored_font_policy import enforce_authored_font_floor
 from utils.authored_dom_quality import validate_declared_authored_qids
 from utils.authored_header_prompt import render_header_contract
 from utils.authored_html_normalize import normalize_authored_html
+from services.authored_header_body_extent import ensure_body_root_horizontal_extent
 from utils.get_env import (
     is_authored_html_normalize_enabled,
     is_authored_source_images_enabled,
@@ -820,6 +821,9 @@ _CODEX_REASONING_CAPABILITIES = {
     # capability exception local to the one authoring request builder so every
     # author call has the same deterministic normalization before egress.
     "gpt-5.6-sol": frozenset(("none", "low", "medium", "high", "xhigh", "max")),
+    # gpt-6-astra (probed 2026-09-05) rejects "minimal" and "none" alike:
+    # "Supported values are: 'low', 'medium', 'high', 'xhigh', and 'max'."
+    "gpt-6-astra": frozenset(("low", "medium", "high", "xhigh", "max")),
 }
 
 
@@ -1186,6 +1190,12 @@ async def author_slide_html(
     authored_html = _strip_nonvisual_pointer_events(authored_html)
     if mode != EXACT_RECONSTRUCTION:
         authored_html = enforce_authored_font_floor(authored_html)
+        # A pinned data-header-part="body" wrapper with no left/right/width
+        # has no horizontal extent and collapses to zero width, taking every
+        # child anchored inside it down with it. Normalise that before the
+        # figure contract and library injection below, which assume a
+        # renderable document.
+        authored_html = ensure_body_root_horizontal_extent(authored_html)
         # A planned figure is held to its contract and given the library
         # stylesheet here, before admission, so the injected CSS is validated
         # like the model's own and every author path (first pass, review

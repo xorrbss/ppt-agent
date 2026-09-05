@@ -24,6 +24,20 @@ Fields covered:
 * ``qualityLoop.variant`` -- the best-of-N winner's variant id
   (``services/authored_figure_best_of.py`` -> ``FigureSelection.to_dict()``
   -> ``variant_chosen``) for a representative slide the quality loop ran on.
+* ``fitSummary`` -- M1 of
+  ``docs/authored-fit-magnitude-measurement-design-20260904.md`` (section 3.4):
+  one entry per slide that failed the composition safety gate, carrying the
+  ``DomQualityReport.fit_summary`` the gate produced for it. It exists so a
+  failed deck's misses can be read from the timing receipt without opening the
+  slide-quality receipt. A succeeded attempt has no entries and the key is
+  absent, exactly like the three fields above.
+
+* ``flaggedSlides`` -- D7 (master design section A4): one entry per slide the
+  deck published with a quality flag after its one automatic remake stayed
+  terminal (``services/authored_terminal_slide_fallback.py``), each
+  ``{"index", "reason", "remakeAttempted", "remakeOutcome"}``. It exists so a
+  benchmark can tell a clean publish from a flagged one. A clean publish has
+  no entries and the key is absent.
 
 ``fitLadder.trail`` (A4, the deterministic fit ladder) is a RESERVED key:
 no field or validator exists for it anywhere in this pair of modules on
@@ -48,6 +62,25 @@ from services.authored_provider_rate_profile import PROFILE_NAMES
 STAGE_WALL_KEY = "wallMillis"
 
 _NORMALIZATION_ENTRY_KEYS = frozenset({"rule", "detail", "count"})
+
+#: The fit-summary keys ``DomQualityReport.fit_summary`` carries (M1, 3.3),
+#: plus the slide the entry belongs to.
+_FIT_SUMMARY_ENTRY_KEYS = frozenset(
+    {
+        "slideIndex",
+        "worstOverflowRatio",
+        "worstOffCanvasPx",
+        "overflowKinds",
+        "contentBboxFill",
+    }
+)
+#: ``fit_summary`` is snake_case (it is a DOM-gate value, not a receipt value);
+#: the receipt is camelCase throughout. Translate once, here.
+_FIT_SUMMARY_FIELDS = (
+    ("worst_overflow_ratio", "worstOverflowRatio"),
+    ("worst_off_canvas_px", "worstOffCanvasPx"),
+    ("content_bbox_fill", "contentBboxFill"),
+)
 
 
 def stage_has_wall(raw: Mapping[str, object]) -> bool:
@@ -109,6 +142,76 @@ def normalization_entries(value: object) -> tuple[dict[str, object], ...]:
     return tuple(output)
 
 
+def fit_summary_entries(value: object) -> tuple[dict[str, object], ...]:
+    """Validate the per-slide fit summaries of the gate-failed slides (M1).
+
+    Accepts either the already-serialized receipt form (camelCase entries with
+    ``slideIndex``) or the gate's own ``{slide_index: fit_summary}`` mapping,
+    because the caller reads the latter straight off the failing request. The
+    result is deterministic in slide order so the receipt digest is stable.
+    """
+
+    if value is None:
+        return ()
+    if isinstance(value, Mapping):
+        pairs: list[tuple[object, object]] = list(value.items())
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        pairs = []
+        for entry in value:
+            if not isinstance(entry, Mapping) or not set(entry) <= _FIT_SUMMARY_ENTRY_KEYS:
+                raise ValueError("generation_attempt_v2_fit_summary_invalid")
+            pairs.append((entry.get("slideIndex"), entry))
+    else:
+        raise ValueError("generation_attempt_v2_fit_summary_invalid")
+    output: list[dict[str, object]] = []
+    for raw_index, summary in pairs:
+        index = _fit_summary_slide_index(raw_index)
+        if not isinstance(summary, Mapping):
+            raise ValueError("generation_attempt_v2_fit_summary_invalid")
+        entry: dict[str, object] = {"slideIndex": index}
+        for source, target in _FIT_SUMMARY_FIELDS:
+            number = summary.get(source, summary.get(target))
+            if isinstance(number, bool) or not isinstance(number, (int, float)):
+                raise ValueError("generation_attempt_v2_fit_summary_invalid")
+            entry[target] = round(float(number), 4)
+        entry["overflowKinds"] = _fit_summary_kinds(
+            summary.get("overflow_kinds", summary.get("overflowKinds"))
+        )
+        output.append(entry)
+    output.sort(key=lambda entry: entry["slideIndex"])
+    if len({entry["slideIndex"] for entry in output}) != len(output):
+        raise ValueError("generation_attempt_v2_fit_summary_invalid")
+    return tuple(output)
+
+
+def _fit_summary_slide_index(value: object) -> int:
+    if isinstance(value, str) and value.strip().lstrip("-").isdigit():
+        value = int(value)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError("generation_attempt_v2_fit_summary_invalid")
+    return value
+
+
+def _fit_summary_kinds(value: object) -> dict[str, int]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValueError("generation_attempt_v2_fit_summary_invalid")
+    kinds: dict[str, int] = {}
+    for raw_kind, raw_count in value.items():
+        kind = str(raw_kind)
+        if (
+            not kind
+            or len(kind) > 32
+            or isinstance(raw_count, bool)
+            or not isinstance(raw_count, int)
+            or raw_count < 1
+        ):
+            raise ValueError("generation_attempt_v2_fit_summary_invalid")
+        kinds[kind] = raw_count
+    return dict(sorted(kinds.items()))
+
+
 def quality_loop_variant_field(
     value: object,
     *,
@@ -122,11 +225,71 @@ def quality_loop_variant_field(
     return optional_reason(value.get("variant"), "quality_loop_variant")
 
 
+_FLAGGED_SLIDE_KEYS = frozenset(
+    {"index", "reason", "remakeAttempted", "remakeOutcome"}
+)
+#: Only a slide declared terminal by the durable Scene repair claim knows
+#: whether the same digest and error came back, so this key is present on
+#: those entries and absent everywhere else.
+_FLAGGED_SLIDE_OPTIONAL_KEYS = frozenset({"repeated"})
+
+
+def flagged_slide_entries(value: object) -> tuple[dict[str, object], ...]:
+    """Validate the D7 terminal-slide flags a published deck carried.
+
+    One entry per slide that was still terminal after the bounded repair, so a
+    benchmark can tell a clean publish from a flagged one
+    (``services/authored_terminal_slide_fallback.py``).
+    """
+    if value is None:
+        return ()
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise ValueError("generation_attempt_v2_flagged_slides_invalid")
+    output: list[dict[str, object]] = []
+    for entry in value:
+        if not isinstance(entry, Mapping) or not (
+            set(entry) >= _FLAGGED_SLIDE_KEYS
+            and set(entry) <= _FLAGGED_SLIDE_KEYS | _FLAGGED_SLIDE_OPTIONAL_KEYS
+        ):
+            raise ValueError("generation_attempt_v2_flagged_slides_invalid")
+        index = entry.get("index")
+        reason = entry.get("reason")
+        attempted = entry.get("remakeAttempted")
+        outcome = entry.get("remakeOutcome")
+        repeated = entry.get("repeated", False)
+        if (
+            not isinstance(repeated, bool)
+            or isinstance(index, bool)
+            or not isinstance(index, int)
+            or index < 0
+            or not isinstance(reason, str)
+            or not reason.strip()
+            or len(reason) > 160
+            or not isinstance(attempted, bool)
+            or not isinstance(outcome, str)
+            or not outcome.strip()
+            or len(outcome) > 64
+        ):
+            raise ValueError("generation_attempt_v2_flagged_slides_invalid")
+        record: dict[str, object] = {
+            "index": index,
+            "reason": reason,
+            "remakeAttempted": attempted,
+            "remakeOutcome": outcome,
+        }
+        if "repeated" in entry:
+            record["repeated"] = bool(entry["repeated"])
+        output.append(record)
+    return tuple(output)
+
+
 def optional_top_level_fields(
     *,
     provider_rate_profile: str | None,
     normalizations: Sequence[Mapping[str, object]],
     quality_loop_variant: str | None,
+    flagged_slides: Sequence[Mapping[str, object]] = (),
+    fit_summaries: Sequence[Mapping[str, object]] = (),
 ) -> dict[str, object]:
     """The receipt-level keys to splice into ``to_dict()``, only when set."""
     fields: dict[str, object] = {}
@@ -136,11 +299,17 @@ def optional_top_level_fields(
         fields["normalizations"] = [dict(entry) for entry in normalizations]
     if quality_loop_variant is not None:
         fields["qualityLoop"] = {"variant": quality_loop_variant}
+    if flagged_slides:
+        fields["flaggedSlides"] = [dict(entry) for entry in flagged_slides]
+    if fit_summaries:
+        fields["fitSummary"] = [dict(entry) for entry in fit_summaries]
     return fields
 
 
 __all__ = [
     "STAGE_WALL_KEY",
+    "fit_summary_entries",
+    "flagged_slide_entries",
     "merged_stage_wall_millis",
     "normalization_entries",
     "optional_top_level_fields",

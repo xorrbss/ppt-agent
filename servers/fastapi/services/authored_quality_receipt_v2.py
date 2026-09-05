@@ -634,6 +634,15 @@ def evaluate_capacity_browser_metrics(
     min_font = _read(limits, "min_font_px", "minFontPx", default=None)
     if not all(isinstance(v, (int, float)) for v in (max_qids, max_images, max_text, min_font)):
         return {"browserObserved": False, "checks": {name: False for name in ("text", "title", "body", "font", "qid", "image")}, "violations": ["limits_missing"]}
+    # A relaxed envelope (``SlideCapacity.enforced`` False: ordinary decks with
+    # AUTHORED_COMPOSITION_ENVELOPE_ENABLED unset) states no text, qid or image
+    # budget to the model, so the receipt must not fail the deck against one.
+    # The font floor, text visibility, image integrity and semantic-role
+    # presence are still measured: they are properties of the rendered page,
+    # not of a budget. 2026-09-05: a freely composed deck (400-530 visible
+    # characters, 50-60 text owners per slide) authored and rendered 10/10 and
+    # was then blocked here on the frozen 460-character / 40-qid limits.
+    budget_enforced = _read(limits, "enforced", default=True) is not False
     violations: list[str] = []
     qids: set[str] = set()
     qid_values: list[str] = []
@@ -713,13 +722,13 @@ def evaluate_capacity_browser_metrics(
     # Each entry is an independently owned Chromium text run. Joining with a
     # synthetic separator would charge characters that were never rendered.
     text_value = "".join(visible_text)
-    if len(capacity_qids) > int(max_qids):
-        violations.append(f"qids:{len(capacity_qids)}>{int(max_qids)}")
     image_count = sum(1 for item in elements if isinstance(item, Mapping) and (str(item.get("tag", "")).lower() == "img" or "image" in item))
-    if image_count > int(max_images):
+    if budget_enforced and len(capacity_qids) > int(max_qids):
+        violations.append(f"qids:{len(capacity_qids)}>{int(max_qids)}")
+    if budget_enforced and image_count > int(max_images):
         image_ok = False
         violations.append(f"images:{image_count}>{int(max_images)}")
-    if len(text_value) > int(max_text):
+    if budget_enforced and len(text_value) > int(max_text):
         text_ok = False
         violations.append(f"visible_text:{len(text_value)}>{int(max_text)}")
     # Expected title/body values are checked against their declared semantic
@@ -737,7 +746,8 @@ def evaluate_capacity_browser_metrics(
         violations.append("body:semantic_role_missing")
     if len(qid_values) != len(set(qid_values)):
         violations.append("qids:duplicate")
-    checks = {"text": text_ok, "title": title_ok, "body": body_ok, "font": font_ok, "qid": bool(qids) and "" not in qids and len(capacity_qids) <= int(max_qids) and len(qid_values) == len(set(qid_values)), "image": image_ok}
+    qid_within_budget = not budget_enforced or len(capacity_qids) <= int(max_qids)
+    checks = {"text": text_ok, "title": title_ok, "body": body_ok, "font": font_ok, "qid": bool(qids) and "" not in qids and qid_within_budget and len(qid_values) == len(set(qid_values)), "image": image_ok}
     return {"browserObserved": True, "checks": checks, "visibleText": text_value, "violations": violations}
 
 

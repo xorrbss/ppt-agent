@@ -26,6 +26,7 @@ from utils.asset_directory_utils import (
     get_images_directory,
 )
 from utils.filename_utils import safe_export_basename
+from utils.get_env import is_authored_retain_checkpoint_html_enabled
 from utils.llm_calls.author_deck import build_image_pptx
 from utils.llm_calls.author_slide import Brand
 from utils.outline_utils import get_presentation_title_from_presentation_outline
@@ -227,6 +228,11 @@ async def _cleanup_published_checkpoints(job_id: uuid.UUID) -> None:
     policy.  The caller writes the durable ``.sealed`` marker before entering
     this function; failed or in-flight attempts therefore remain protected.
     """
+    if is_authored_retain_checkpoint_html_enabled():
+        # Bench runs keep the pre-repair HTML for the offline fit replay
+        # (design 20260904, section 6.3); statuses are sealed either way.
+        LOGGER.info("Retaining authored checkpoint HTML for job %s", job_id)
+        return
     try:
         await clear_checkpoint_html(job_id)
     except SQLAlchemyError:
