@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   downloadWorkspaceArtifact,
   WorkspaceApiError,
@@ -264,6 +264,7 @@ export function WorkspaceOperationCard({
   presentationRefreshState,
 }: WorkspaceOperationCardProps) {
   const t = useTranslations("qualityReview.workspace");
+  const locale = useLocale();
   const operationKnown = isKnownWorkspaceOperationType(operation.operationType);
   const statusKnown = (KNOWN_OPERATION_STATUSES as readonly string[]).includes(
     operation.status,
@@ -298,14 +299,13 @@ export function WorkspaceOperationCard({
   const latestProgressEvent = [...operation.events]
     .reverse()
     .find((event) => event.type === "operation.progress");
-  const latestProgressAt = formatTimestamp(
-    latestProgressEvent?.createdAt ?? operation.updatedAt,
-  );
+  const progressAt = latestProgressEvent?.createdAt ?? operation.updatedAt;
+  const latestProgressAt = formatTimestamp(progressAt, locale);
   const isPresentationGeneration =
     operation.operationType === "presentation.generate";
   const actor = actorSummary(operation);
-  const createdAt = formatTimestamp(operation.createdAt);
-  const updatedAt = formatTimestamp(operation.updatedAt);
+  const createdAt = formatTimestamp(operation.createdAt, locale);
+  const updatedAt = formatTimestamp(operation.updatedAt, locale);
   const target = targetSummary(operation.target, operation.operationType);
   const activity = activitySummary(operation);
   const revision =

@@ -17,7 +17,7 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { usePathname, useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { notify } from "@/components/ui/sonner";
 
 import { applyPresentationThemeToElement } from "@/app/(presentation-generator)/presentation/utils/applyPresentationThemeDom";
@@ -26,6 +26,7 @@ import MarkdownRenderer from "@/components/MarkDownRender";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { SharePopover } from "./SharePopover";
 import { tryResolveServerIssuedPresentationProfile } from "@/lib/presentation-profile";
+import { formatViewerDate } from "@/i18n/viewer-time";
 
 export const PresentationCard = ({
   id,
@@ -39,6 +40,7 @@ export const PresentationCard = ({
   onDeleted?: (presentationId: string) => void;
 }) => {
   const t = useTranslations("community");
+  const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
@@ -179,7 +181,7 @@ export const PresentationCard = ({
                 <MarkdownRenderer content={title} className="text-sm mb-0  font-syne text-[#191919] font-semibold  overflow-hidden line-clamp-1" />
               </div>
               <p className="text-[#808080] text-sm font-syne">
-                {new Date(presentation?.created_at).toLocaleDateString()}
+                {formatViewerDate(presentation?.created_at, locale)}
               </p>
 
             </div>

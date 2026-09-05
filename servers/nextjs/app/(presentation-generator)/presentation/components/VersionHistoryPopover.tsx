@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from "react";
+import { useLocale } from "next-intl";
 import { History, Loader2, RotateCcw } from "lucide-react";
 
 import {
@@ -10,6 +11,7 @@ import {
 import { notify } from "@/components/ui/sonner";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import type { WorkspaceCommandDispatcher } from "../workspace";
+import { formatViewerTimestamp } from "@/i18n/viewer-time";
 
 interface VersionSummary {
   id: string;
@@ -18,15 +20,15 @@ interface VersionSummary {
   slide_count: number;
 }
 
-function formatWhen(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString("ko-KR", {
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function formatWhen(iso: string, locale: string): string {
+  return (
+    formatViewerTimestamp(iso, locale, {
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }) ?? iso
+  );
 }
 
 const VersionHistoryPopover = ({
@@ -42,6 +44,7 @@ const VersionHistoryPopover = ({
   workspaceCommandsEnabled?: boolean;
   onWorkspaceCommand?: WorkspaceCommandDispatcher;
 }) => {
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,7 +77,7 @@ const VersionHistoryPopover = ({
     setRestoringId(version.id);
     try {
       await onWorkspaceCommand?.(
-        `${formatWhen(version.created_at)} 버전으로 복원해 줘`,
+        `${formatWhen(version.created_at, locale)} 버전으로 복원해 줘`,
         {
           commandType: "version.restore",
           context: { version_id: version.id, source: "version_history" },
@@ -127,7 +130,7 @@ const VersionHistoryPopover = ({
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm text-[#101323]">
-                    {formatWhen(version.created_at)}
+                    {formatWhen(version.created_at, locale)}
                   </p>
                   <p className="truncate text-xs text-gray-500">
                     {version.label ? `${version.label} · ` : ""}

@@ -67,7 +67,11 @@ test("root locale, provider, and persistence contracts stay synchronized", () =>
   assert.match(layout, /<html lang=\{locale\}/u);
   assert.doesNotMatch(layout, /<html lang=["'](?:en|ko)["']/u);
   assert.match(providers, /NextIntlClientProvider/u);
-  assert.match(providers, /timeZone=["']UTC["']/u);
+  // Times must render in the viewer's zone: the provider resolves it at
+  // runtime instead of pinning UTC.
+  assert.doesNotMatch(providers, /timeZone=["']UTC["']/u);
+  assert.match(providers, /resolveViewerTimeZone/u);
+  assert.match(providers, /timeZone=\{timeZone\}/u);
   assert.match(globalError, /document\.documentElement\.lang\s*=\s*nextLocale/u);
   assert.match(globalError, /<html lang=\{locale \?\? DEFAULT_UI_LOCALE\}/u);
   assert.match(switcher, /await setUiLocale\(nextLocale\)/u);

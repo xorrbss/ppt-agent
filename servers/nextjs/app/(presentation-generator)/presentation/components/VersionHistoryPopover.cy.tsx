@@ -1,12 +1,45 @@
 import React from "react";
 import { mount } from "cypress/react";
+import { NextIntlClientProvider } from "next-intl";
 
+import koMessages from "@/i18n/messages/ko.json";
 import VersionHistoryPopover from "./VersionHistoryPopover";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
+
+// The component reads the active UI locale, exactly as it does in the app
+// under the root provider. Asia/Seoul is deliberate: the specs below assert
+// that a UTC instant is rendered in the viewer's zone, not in UTC.
+//
+// The browser's own zone is overridden through CDP rather than inherited from
+// the host, so the assertion means the same thing on a developer's Seoul
+// machine and on a CI runner in UTC.
+const VIEWER_TIME_ZONE = "Asia/Seoul";
+
+function useViewerTimeZone(timezoneId: string) {
+  beforeEach(() => {
+    cy.wrap(
+      Cypress.automation("remote:debugger:protocol", {
+        command: "Emulation.setTimezoneOverride",
+        params: { timezoneId },
+      }),
+      { log: false },
+    );
+  });
+}
+
+function mountWithIntl(ui: React.ReactElement) {
+  mount(
+    <NextIntlClientProvider locale="ko" messages={koMessages} timeZone={VIEWER_TIME_ZONE}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 // The popover loads durable slide versions on open and restores one on click,
 // then signals the parent to reload the deck.
 describe("VersionHistoryPopover", () => {
+  useViewerTimeZone(VIEWER_TIME_ZONE);
+
   it("loads versions on open and restores the chosen one", () => {
     cy.stub(PresentationGenerationApi, "getPresentationVersions").resolves([
       {
@@ -24,7 +57,7 @@ describe("VersionHistoryPopover", () => {
     ]);
     const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
 
-    mount(
+    mountWithIntl(
       <VersionHistoryPopover
         presentationId="p1"
         workspaceCommandsEnabled
@@ -37,6 +70,11 @@ describe("VersionHistoryPopover", () => {
     cy.contains("5개 슬라이드").should("be.visible");
     cy.contains("복원 전 자동 저장").should("exist");
 
+    // 01:00 UTC is 10:00 in Seoul. The label must show the viewer's wall clock,
+    // never the raw UTC hour.
+    cy.contains("7월 17일 오전 10:00").should("be.visible");
+    cy.contains("오전 01:00").should("not.exist");
+
     // Restore the first (newest) version.
     cy.contains("button", "복원").first().click();
 
@@ -46,7 +84,7 @@ describe("VersionHistoryPopover", () => {
   it("shows an empty state when there are no versions", () => {
     cy.stub(PresentationGenerationApi, "getPresentationVersions").resolves([]);
 
-    mount(
+    mountWithIntl(
       <VersionHistoryPopover presentationId="p1" />
     );
 
@@ -65,7 +103,7 @@ describe("VersionHistoryPopover", () => {
     ]);
     const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
 
-    mount(
+    mountWithIntl(
       <VersionHistoryPopover
         presentationId="p1"
         workspaceCommandsEnabled

@@ -173,25 +173,7 @@ export function qualityReviewHistory(
   return merged;
 }
 
-export function formatTimestamp(value: string | undefined): string | undefined {
-  if (!value) return undefined;
-  // Backend timestamps are UTC but older rows were serialized without an
-  // offset. Parse those values as UTC instead of shifting them as local time.
-  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value.trim())
-    ? value
-    : `${value}Z`;
-  const timestamp = new Date(normalized);
-  if (!Number.isFinite(timestamp.getTime())) return undefined;
-  return new Intl.DateTimeFormat("ko-KR", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "UTC",
-    timeZoneName: "short",
-  }).format(timestamp);
-}
+export { formatViewerTimestamp as formatTimestamp } from "@/i18n/viewer-time";
 
 export function actorSummary(operation: WorkspaceOperationAnchor): string | undefined {
   const actor = operation.actor;

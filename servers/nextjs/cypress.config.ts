@@ -44,6 +44,12 @@ export default defineConfig({
         resolve: {
           extensions: [".tsx", ".ts", ".jsx", ".js", ".json"],
           alias: { "@": path.resolve(process.cwd()) },
+          // `app/globals.css` declares @font-face with server-absolute URLs
+          // ("/devax-slide-ui/fonts/..."), which Next serves out of `public/`.
+          // Webpack resolves a leading "/" against `roots`, so without this the
+          // support file's stylesheet import fails to build and every component
+          // spec dies before its first test.
+          roots: [path.resolve(process.cwd(), "public")],
         },
         plugins: [
           // next/link and next/navigation read process.env.* at module load;
@@ -78,6 +84,12 @@ export default defineConfig({
             {
               test: /\.css$/,
               use: ["style-loader", "css-loader", "postcss-loader"],
+            },
+            // Font files reached from that stylesheet. Emitted as assets so the
+            // bundle keeps a real URL instead of failing to find a module.
+            {
+              test: /\.(woff2?|ttf|otf|eot)$/,
+              type: "asset/resource",
             },
           ],
         },

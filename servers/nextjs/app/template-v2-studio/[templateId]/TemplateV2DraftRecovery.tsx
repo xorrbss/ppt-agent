@@ -1,8 +1,9 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import type { TemplateV2StudioJournalEntry } from "@/lib/template-v2-studio-journal";
+import { formatViewerTimestamp } from "@/i18n/viewer-time";
 
 export default function TemplateV2DraftRecovery({
   draft,
@@ -18,10 +19,12 @@ export default function TemplateV2DraftRecovery({
   onDiscard: () => void;
 }) {
   const t = useTranslations("studio");
-  const capturedAt = new Date(draft.capturedAt);
-  const capturedLabel = Number.isNaN(capturedAt.getTime())
-    ? draft.capturedAt
-    : capturedAt.toLocaleString();
+  const locale = useLocale();
+  const capturedLabel =
+    formatViewerTimestamp(draft.capturedAt, locale, {
+      dateStyle: "short",
+      timeStyle: "short",
+    }) ?? draft.capturedAt;
 
   return (
     <section
