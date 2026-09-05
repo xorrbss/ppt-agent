@@ -819,6 +819,42 @@
       "description": "Run the closed-operation design critic on DOM-flagged and figure slides only."
     },
     {
+      "key": "AUTHORED_PUBLISH_FLAGGED_SLIDES",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Give a slide that is still terminal after the bounded repair one automatic lower-density remake, then publish the deck with that slide flagged instead of failing the whole deck."
+    },
+    {
+      "key": "AUTHORED_RETAIN_CHECKPOINT_HTML",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Keep each slide's pre-repair author_html and illustrated_html in authored_slide_checkpoints after the deck is published, for offline fit measurement; the default clears them to save storage."
+    },
+    {
+      "key": "AUTHORED_INFOGRAPHIC_PLAN_ENABLED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Run the deck-wide infographic plan and draw planned figures from the archetype component library; off authors every slide by free composition."
+    },
+    {
+      "key": "AUTHORED_COMPOSITION_ENVELOPE_ENABLED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Bind ordinary authored decks to the server-frozen composition envelope (text/qid budgets, 15px floor); off leaves composition to the model as before 2026-08-28."
+    },
+    {
       "key": "COMPOSER_RESTYLE_ENABLED",
       "type": "boolean",
       "default": false,

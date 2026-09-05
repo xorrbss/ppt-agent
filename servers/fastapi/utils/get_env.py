@@ -239,6 +239,66 @@ def is_authored_design_critique_enabled(
     return _is_truthy(get_setting_env("AUTHORED_DESIGN_CRITIQUE_ENABLED", settings))
 
 
+def is_authored_publish_flagged_slides_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Whether a still-terminal slide is remade once and then published flagged.
+
+    On by default (D7, ``docs/generation-programme-master-design-20260904.md``
+    section A4): a published deck carrying one flagged slide beats a deck that
+    failed with ``authored_composition_safety_gate_failed``. Setting it to
+    false restores the fail-closed deck behaviour exactly.
+    """
+    parsed = parse_bool_or_none(
+        get_setting_env("AUTHORED_PUBLISH_FLAGGED_SLIDES", settings)
+    )
+    return True if parsed is None else parsed
+
+
+def is_authored_retain_checkpoint_html_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Whether published decks keep their pre-repair slide HTML in checkpoints.
+
+    Off by default: publication nulls ``author_html``/``illustrated_html`` to
+    save storage. Bench runs turn it on so the offline fit replay
+    (``docs/authored-fit-magnitude-measurement-design-20260904.md`` section 6)
+    can measure how far slides missed before repair.
+    """
+    parsed = parse_bool_or_none(
+        get_setting_env("AUTHORED_RETAIN_CHECKPOINT_HTML", settings)
+    )
+    return False if parsed is None else parsed
+
+
+def is_authored_infographic_plan_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Whether the deck-wide infographic plan and archetype component library run.
+
+    Off by default (2026-09-05): an ordinary deck is authored by free
+    composition exactly as before commit 7c95334e1 — no plan call, no figure
+    brief, no library CSS. On restores the plan/library path.
+    """
+    return _is_truthy(get_setting_env("AUTHORED_INFOGRAPHIC_PLAN_ENABLED", settings))
+
+
+def is_authored_composition_envelope_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Whether the server-frozen composition envelope binds ordinary decks.
+
+    Off by default (2026-09-05): no envelope or text-plan brief in the prompt,
+    no qid / visible-text / font-floor capacity violations at the gate, and
+    the 12px authored font floor instead of 15px. Source-verbatim and
+    source-outline profiles keep their envelope regardless. On restores the
+    460-char / 40-qid / 15px envelope.
+    """
+    return _is_truthy(
+        get_setting_env("AUTHORED_COMPOSITION_ENVELOPE_ENABLED", settings)
+    )
+
+
 def get_composer_restyle_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:
