@@ -244,3 +244,111 @@ def test_a_single_text_owner_is_still_promoted() -> None:
     repaired, findings = ensure_title_role(html)
     assert findings[0]["rule"] == TITLE_PROMOTED_RULE_ID
     assert _roles(repaired)["only"] == "title"
+
+
+# --- body mirror: bench run 30, pass B -----------------------------------------
+
+
+def test_sentence_like_supporting_owners_are_promoted_to_body_when_none_exists() -> None:
+    """The live defect: title=1, supporting=14, body=0 blocks the whole deck."""
+
+    long_sentence = "이 슬라이드는 프로젝트의 배경과 목표를 설명하는 문장입니다."
+    short_label = "예산"
+    html = (
+        '<h1 data-qid="t" data-semantic-role="title">제목</h1>'
+        f'<p data-qid="s1" data-semantic-role="supporting">{long_sentence}</p>'
+        f'<p data-qid="s2" data-semantic-role="supporting">{short_label}</p>'
+    )
+    repaired, findings = ensure_title_role(html)
+    assert findings == [{"rule": TITLE_PROMOTED_RULE_ID, "detail": "body", "count": 1}]
+    roles = _roles(repaired)
+    assert roles["t"] == "title"
+    assert roles["s1"] == "body"
+    assert roles["s2"] == "supporting"
+
+
+def test_a_long_enough_supporting_owner_is_promoted_without_punctuation() -> None:
+    """The 40-character floor catches a sentence with no terminal punctuation."""
+
+    html = (
+        '<h1 data-qid="t" data-semantic-role="title">제목</h1>'
+        '<p data-qid="s" data-semantic-role="supporting">'
+        "이 항목은 마침표가 전혀 없이도 충분히 길게 이어지는 설명 텍스트</p>"
+    )
+    repaired, findings = ensure_title_role(html)
+    assert findings == [{"rule": TITLE_PROMOTED_RULE_ID, "detail": "body", "count": 1}]
+    assert _roles(repaired)["s"] == "body"
+
+
+def test_largest_supporting_owner_is_promoted_when_none_reads_like_a_sentence() -> None:
+    html = (
+        '<h1 data-qid="t" data-semantic-role="title">제목</h1>'
+        '<p data-qid="s1" data-semantic-role="supporting">짧은 라벨</p>'
+        '<p data-qid="s2" data-semantic-role="supporting">더 긴 라벨 텍스트 조금 더</p>'
+    )
+    repaired, findings = ensure_title_role(html)
+    assert findings == [{"rule": TITLE_PROMOTED_RULE_ID, "detail": "body", "count": 1}]
+    roles = _roles(repaired)
+    assert roles["s2"] == "body"
+    assert roles["s1"] == "supporting"
+
+
+def test_supporting_owners_are_untouched_when_a_body_owner_already_exists() -> None:
+    html = (
+        '<h1 data-qid="t" data-semantic-role="title">제목</h1>'
+        '<p data-qid="b" data-semantic-role="body">본문 문장입니다.</p>'
+        '<p data-qid="s" data-semantic-role="supporting">라벨</p>'
+    )
+    repaired, findings = ensure_title_role(html)
+    assert repaired == html
+    assert findings == []
+
+
+def test_header_part_supporting_owner_is_never_promoted_to_body() -> None:
+    """A header eyebrow may read long, but it is furniture, never body copy."""
+
+    long_eyebrow = "이 헤더는 매우 긴 아이브로우 텍스트를 담고 있습니다."
+    html = (
+        '<h1 data-qid="t" data-semantic-role="title">제목</h1>'
+        f'<p data-qid="hdr" data-header-part="eyebrow" data-semantic-role="supporting">{long_eyebrow}</p>'
+        '<p data-qid="s" data-semantic-role="supporting">짧은 라벨</p>'
+    )
+    repaired, findings = ensure_title_role(html)
+    roles = _roles(repaired)
+    assert roles["hdr"] == "supporting"
+    assert roles["s"] == "body"
+    assert findings == [{"rule": TITLE_PROMOTED_RULE_ID, "detail": "body", "count": 1}]
+
+
+def test_decoration_and_image_owners_are_never_considered_for_body() -> None:
+    html = (
+        '<h1 data-qid="t" data-semantic-role="title">제목</h1>'
+        '<div data-qid="d" data-semantic-role="decoration">'
+        "이것은 매우 긴 장식용 텍스트로 문장처럼 보이지만 절대 본문이 되면 안 됩니다.</div>"
+        '<img data-qid="im" data-semantic-role="image" src="x"/>'
+        '<p data-qid="s" data-semantic-role="supporting">라벨</p>'
+    )
+    repaired, findings = ensure_title_role(html)
+    roles = _roles(repaired)
+    assert roles["d"] == "decoration"
+    assert roles["im"] == "image"
+    assert roles["s"] == "body"
+    assert findings == [{"rule": TITLE_PROMOTED_RULE_ID, "detail": "body", "count": 1}]
+
+
+def test_body_promotion_is_a_fixed_point_with_the_stamper() -> None:
+    """Bench run 30 shape: title=1, supporting=14, body=0 reaches the gate."""
+
+    items = "".join(
+        f'<p data-qid="item{i}" data-semantic-role="supporting">'
+        f"이것은 항목 {i}에 대한 충분히 긴 설명 문장입니다.</p>"
+        for i in range(14)
+    )
+    html = (
+        '<section><h1 data-qid="cover" data-semantic-role="title">제목</h1>'
+        f"{items}</section>"
+    )
+    once = canonicalize_authored_roles(html, role="ORDINARY")
+    twice = canonicalize_authored_roles(once, role="ORDINARY")
+    assert once == twice
+    assert "body" in set(_roles(once).values())

@@ -34,6 +34,15 @@ This module repairs both, deterministically and without a provider call:
   Only the pipeline's pre-render canonicalization asks for it: every other
   caller compares its document against a sibling attempt or a reducer result
   and must change nothing but a genuinely missing title role.
+* **Body promotion** -- run unconditionally after the title step, on every
+  caller.  A slide the model files entirely as ``title`` + ``supporting`` (no
+  ``body`` at all) reaches the gate with ``capacity.required_failed:body`` /
+  ``body:semantic_role_missing`` just as surely as a missing title blocks it.
+  When no text owner carries ``body``, every ``supporting`` owner whose text
+  reads like content -- 40+ characters, or containing sentence punctuation --
+  is promoted to ``body``; when none qualifies, the single longest
+  ``supporting`` owner is promoted instead.  ``title``, ``decoration``,
+  ``image``, and any ``data-header-part`` owner are never candidates.
 
 Like every other authored normaliser this edits exact byte spans located by
 ``html.parser`` and never reserializes the document; a slide that already has
@@ -62,7 +71,7 @@ _FONT_SIZE_PX = re.compile(r"(?i)(?:^|[;{])\s*font-size\s*:\s*([0-9]*\.?[0-9]+)\
 class _Owner:
     """One qid-bearing start tag and everything the repair ranks it by."""
 
-    __slots__ = ("tag", "raw", "attrs", "start", "owns_text", "font_px")
+    __slots__ = ("tag", "raw", "attrs", "start", "owns_text", "font_px", "text_parts")
 
     def __init__(self, tag: str, raw: str, attrs: dict[str, str], start: int, font_px: float | None) -> None:
         self.tag = tag
@@ -71,6 +80,7 @@ class _Owner:
         self.start = start
         self.font_px = font_px
         self.owns_text = False
+        self.text_parts: list[str] = []
 
     @property
     def role(self) -> str:
@@ -135,6 +145,7 @@ class _OwnerCollector(HTMLParser):
         for _tag, index, _font in reversed(self._stack):
             if index is not None:
                 self.owners[index].owns_text = True
+                self.owners[index].text_parts.append(data)
                 return
 
 
@@ -155,6 +166,30 @@ def _rank(owner: _Owner) -> tuple[float, int, int]:
     return (-(owner.font_px or 0.0), _HEADING_RANK.get(owner.tag, 9), owner.start)
 
 
+#: Substrings that mark a run of text as a sentence rather than a short label.
+#: ``.`` and ``。`` already cover the Korean sentence endings ``다.``/``요.``;
+#: they are listed anyway so the rule reads the way the design names it.
+_SENTENCE_MARKERS = (".", "。", "다.", "요.")
+#: A comma only counts as sentence punctuation once the run is long enough
+#: that it reads as a clause rather than a short "A, B" label pair.
+_SENTENCE_COMMA_MIN_LENGTH = 25
+_SENTENCE_MIN_LENGTH = 40
+
+
+def _owned_text(owner: _Owner) -> str:
+    """The owner's own text, whitespace-collapsed the way the gate reads it."""
+    return re.sub(r"\s+", " ", "".join(owner.text_parts)).strip()
+
+
+def _is_sentence_like_text(text: str) -> bool:
+    """Content long or punctuated enough to be body copy, not a label."""
+    if len(text) >= _SENTENCE_MIN_LENGTH:
+        return True
+    if any(marker in text for marker in _SENTENCE_MARKERS):
+        return True
+    return "," in text and len(text) >= _SENTENCE_COMMA_MIN_LENGTH
+
+
 def _set_role(html: str, owner: _Owner, role: str) -> str:
     raw = owner.raw
     if html[owner.start : owner.start + len(raw)] != raw:
@@ -173,10 +208,41 @@ def _set_role(html: str, owner: _Owner, role: str) -> str:
     return html[: owner.start] + replacement + html[owner.start + len(raw) :]
 
 
+def _ensure_body_role(html: str) -> tuple[str, list[dict]]:
+    """Promote a ``supporting`` text owner to ``body`` when the slide has none.
+
+    Mirrors :func:`ensure_title_role`'s promotion for the gate's other
+    required role: when every text owner is filed as ``title`` or
+    ``supporting`` (see the module docstring's live-defect slide), the
+    ``supporting`` owners that read like content are relabelled ``body``, or
+    -- when none reads that way -- the single longest one is.  ``title``,
+    ``decoration``, ``image``, and any ``data-header-part`` owner (an
+    eyebrow, a page number, ...) are never touched: they are excluded by
+    only ever drawing candidates from owners already marked ``supporting``.
+    """
+    owners = _collect(html)
+    if not owners or any(owner.role == "body" for owner in owners):
+        return html, []
+    candidates = [
+        owner
+        for owner in owners
+        if owner.role == "supporting" and not owner.attrs.get("data-header-part", "").strip()
+    ]
+    if not candidates:
+        return html, []
+    promoted = [owner for owner in candidates if _is_sentence_like_text(_owned_text(owner))]
+    if not promoted:
+        promoted = [max(candidates, key=lambda owner: (len(_owned_text(owner)), -owner.start))]
+    for owner in sorted(promoted, key=lambda item: item.start, reverse=True):
+        html = _set_role(html, owner, "body")
+    LOGGER.info("promoted %d authored supporting owners to body", len(promoted))
+    return html, [{"rule": TITLE_PROMOTED_RULE_ID, "detail": "body", "count": len(promoted)}]
+
+
 def ensure_title_role(
     html: str, *, role: str = "", demote: bool = False
 ) -> tuple[str, list[dict]]:
-    """Leave exactly one title text owner on the slide; report what changed."""
+    """Leave exactly one title text owner, and at least one body owner."""
 
     if not isinstance(html, str):
         raise TypeError("authored HTML must be a string")
@@ -203,38 +269,35 @@ def ensure_title_role(
             chosen.attrs.get("data-qid", ""),
             chosen.tag,
         )
-        return html, findings
-    if len(titled) == 1 or not demote:
-        return html, findings
-    # Demotion must not remove the slide's last body owner: the gate requires a
-    # body text owner exactly as it requires a title one.
-    if not any(owner.role == "body" for owner in owners):
-        return html, findings
-    keep = min(
-        (owner for owner in titled if owner.attrs.get("data-header-part", "").strip().lower() == "title"),
-        default=min(titled, key=_rank),
-        key=_rank,
-    )
-    demoted = [
-        owner
-        for owner in titled
-        if owner is not keep and owner.attrs.get("data-header-part", "").strip().lower() != "title"
-    ]
-    if not demoted:
-        return html, findings
-    for owner in sorted(demoted, key=lambda item: item.start, reverse=True):
-        html = _set_role(html, owner, "supporting")
-    findings.append({
-        "rule": TITLE_DEMOTED_RULE_ID,
-        "detail": "title->supporting",
-        "count": len(demoted),
-    })
-    LOGGER.info(
-        "demoted %d extra authored title roles role=%s keep=%s",
-        len(demoted),
-        role or "unknown",
-        keep.attrs.get("data-qid", ""),
-    )
+    elif len(titled) > 1 and demote and any(owner.role == "body" for owner in owners):
+        # Demotion must not remove the slide's last body owner: the gate
+        # requires a body text owner exactly as it requires a title one.
+        keep = min(
+            (owner for owner in titled if owner.attrs.get("data-header-part", "").strip().lower() == "title"),
+            default=min(titled, key=_rank),
+            key=_rank,
+        )
+        demoted = [
+            owner
+            for owner in titled
+            if owner is not keep and owner.attrs.get("data-header-part", "").strip().lower() != "title"
+        ]
+        if demoted:
+            for owner in sorted(demoted, key=lambda item: item.start, reverse=True):
+                html = _set_role(html, owner, "supporting")
+            findings.append({
+                "rule": TITLE_DEMOTED_RULE_ID,
+                "detail": "title->supporting",
+                "count": len(demoted),
+            })
+            LOGGER.info(
+                "demoted %d extra authored title roles role=%s keep=%s",
+                len(demoted),
+                role or "unknown",
+                keep.attrs.get("data-qid", ""),
+            )
+    html, body_findings = _ensure_body_role(html)
+    findings.extend(body_findings)
     return html, findings
 
 

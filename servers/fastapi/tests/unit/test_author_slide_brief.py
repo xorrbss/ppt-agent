@@ -155,6 +155,18 @@ def test_the_composition_intent_teaches_the_semantic_role_vocabulary():
     assert "never `decoration`" in block
 
 
+def test_the_composition_intent_distinguishes_body_from_supporting() -> None:
+    """Bench run 30, pass B: the model filed 14 owners as `supporting` and
+    none as `body`, so the gate blocked the whole deck on a missing body
+    owner even though a title was correctly marked.
+    """
+    block = composition_intent_block()
+
+    assert "`body` is the slide's readable content" in block
+    assert "`supporting` is short structural text only" in block
+    assert "A content slide must have body owners." in block
+
+
 def test_every_role_including_the_cover_is_told_how_to_mark_its_title():
     """One prompt builder serves every lane, so every role gets one sentence.
 
