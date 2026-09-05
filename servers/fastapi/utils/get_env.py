@@ -299,6 +299,22 @@ def is_authored_composition_envelope_enabled(
     )
 
 
+def is_authored_visual_story_plan_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Whether the deck-wide visual story plan is frozen and briefed to the author.
+
+    The plan (story kind + silhouette per slide, 2026-08-22) is off by default
+    (2026-09-05): its silhouettes (stepped path, diagonal balance) and
+    metric-dominance rule produced stair-stepped roadmaps, cascading cards and
+    pseudo-chart pill bars the user rejected; off, each slide composes as
+    before 2026-08-22.
+    """
+    return _is_truthy(
+        get_setting_env("AUTHORED_VISUAL_STORY_PLAN_ENABLED", settings)
+    )
+
+
 def get_composer_restyle_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:

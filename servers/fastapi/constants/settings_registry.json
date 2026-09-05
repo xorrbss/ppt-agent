@@ -855,6 +855,15 @@
       "description": "Bind ordinary authored decks to the server-frozen composition envelope (text/qid budgets, 15px floor); off leaves composition to the model as before 2026-08-28."
     },
     {
+      "key": "AUTHORED_VISUAL_STORY_PLAN_ENABLED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Freeze a story kind and silhouette per slide and brief the author with it; off leaves composition to the model as before 2026-08-22."
+    },
+    {
       "key": "COMPOSER_RESTYLE_ENABLED",
       "type": "boolean",
       "default": false,
