@@ -62,9 +62,14 @@ LEGACY_FIXED_DEADLINE_SECONDS = 900
 
 @pytest.fixture(autouse=True)
 def _token_rate_profile(monkeypatch):
-    """The scaled budgets below are the token profile's 3-slide, 1-then-2 shape."""
+    """The scaled budgets below are the token profile's 3-slide, 1-then-2 shape.
+
+    The profile now authors one slide per call by default, so the batch shape
+    these budgets were derived from is asked for explicitly.
+    """
 
     monkeypatch.setenv("AUTHORED_PROVIDER_RATE_PROFILE", "token")
+    monkeypatch.setenv("AUTHORED_BATCH_SLIDES_PER_CALL", "3")
 
 
 def test_public_default_policy_version_is_v3() -> None:
@@ -111,6 +116,7 @@ def test_generation_deadline_follows_the_api_profile_wave_shape(monkeypatch) -> 
     """Per-slide calls, five at a time: 20 slides are four waves."""
 
     monkeypatch.setenv("AUTHORED_PROVIDER_RATE_PROFILE", "api")
+    monkeypatch.delenv("AUTHORED_BATCH_SLIDES_PER_CALL", raising=False)
 
     assert public_generation_wave_count(5) == 1
     assert public_generation_wave_count(20) == 4
