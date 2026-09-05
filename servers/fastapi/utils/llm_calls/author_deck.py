@@ -29,6 +29,7 @@ from utils.authored_geometry_brief import relaxed_geometry_brief
 from utils.authored_header_validation import validate_header_contract
 from utils.authored_infographic import CONTRACT_ERROR_PREFIX
 from services.source_images.models import SourceImageCandidate
+from utils.authored_semantic_role_repair import ensure_title_role
 from services.authored_composition_policy import (
     AuthoredCapacityPlan,
     CompositionProfile,
@@ -234,6 +235,17 @@ _SILHOUETTE_FALLBACKS = (
     "editorial-narrow-wide",
     "editorial-wide-narrow",
 )
+
+
+def _repair_slide_title_role(
+    html: str, *, role: str, receipt: list[dict] | None
+) -> str:
+    """Guarantee one title text owner at author time (no provider call)."""
+
+    repaired, findings = ensure_title_role(html, role=role)
+    if findings and receipt is not None:
+        receipt.extend(findings)
+    return repaired
 
 
 def _requirements_enabled(contract: AuthoredHeaderContract | None) -> bool:
@@ -848,6 +860,11 @@ async def _author_one_resilient(
                     # Header targets may not yet have QIDs. Count and reduce
                     # the same owner namespace that the render pipeline seals.
                     constrained = canonicalize_authored_capacity_html(constrained)
+                    # A slide the model left without a title owner is repaired
+                    # here, not failed at the terminal gate.
+                    constrained = _repair_slide_title_role(
+                        constrained, role=role, receipt=normalization_receipt
+                    )
                 violations = (
                     validate_header_contract(
                         constrained,
@@ -1390,6 +1407,9 @@ def _validate_planned_batch_candidate(
     )
     if capacity is not None:
         constrained = canonicalize_authored_capacity_html(constrained)
+        constrained = _repair_slide_title_role(
+            constrained, role=plan.roles[index], receipt=normalization_receipt
+        )
     slide_contract = plan.header_contract_at(index)
     slide_chapter_prefix = plan.chapter_prefixes[index] if plan.chapter_prefixes else None
     header_violations = (

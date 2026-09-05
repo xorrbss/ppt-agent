@@ -141,6 +141,52 @@ def test_the_composition_intent_states_the_bottom_line_from_one_source():
     assert "labelled HTML/CSS bar or column chart" in block
 
 
+def test_the_composition_intent_teaches_the_semantic_role_vocabulary():
+    """Bench run 26: nothing ever told the model what data-semantic-role means.
+
+    The gate requires exactly one title text owner per slide and blocks the
+    whole deck without it, so the vocabulary has to be stated in the brief.
+    """
+    block = composition_intent_block()
+
+    assert "data-semantic-role" in block
+    assert "title, body, supporting" in block
+    assert 'exactly ONE element per slide `data-semantic-role="title"`' in block
+    assert "never `decoration`" in block
+
+
+def test_every_role_including_the_cover_is_told_how_to_mark_its_title():
+    """One prompt builder serves every lane, so every role gets one sentence.
+
+    The cover is excluded from the header contract (``DEFAULT_EXCLUDED_ROLES``),
+    which used to leave it with no structural title marker at all.
+    """
+    design_system = build_design_system(_brand())
+    for role in ("COVER", "AGENDA", "PILLARS", "SECTION", "CLOSING"):
+        prompt = author_prompt("CONTENT", design_system, _brand(), role, 0, 9)
+        assert 'exactly ONE element per slide `data-semantic-role="title"`' in prompt
+        assert "on a cover the main title" in prompt
+
+
+def test_the_lane_knobs_do_not_change_what_the_cover_is_told(monkeypatch):
+    """Both P0 lanes share one prompt builder; the knobs only schedule calls.
+
+    Bench runs 24-26 correlated the mislabelled cover with the legacy lane, so
+    this pins that the lane knobs cannot introduce a role-guidance difference.
+    """
+    prompts = []
+    for barrier, streaming in (("true", "false"), ("false", "true")):
+        monkeypatch.setenv("AUTHORED_WAVE_BARRIER_DISABLED", barrier)
+        monkeypatch.setenv("AUTHORED_TAIL_STREAMING_ENABLED", streaming)
+        prompts.append(
+            author_prompt(
+                "CONTENT", build_design_system(_brand()), _brand(), "COVER", 0, 9
+            )
+        )
+    assert prompts[0] == prompts[1]
+    assert 'data-semantic-role="title"' in prompts[0]
+
+
 def test_the_composition_intent_reaches_every_deck_including_a_preset_one():
     for design_system in (
         build_design_system(_brand()),

@@ -3413,3 +3413,122 @@ def test_slide_pipeline_records_normalizations_in_the_slides_own_receipt(
     # A slide that needed no normalisation, and whose quality loop did not
     # run, is not force-added with an empty receipt.
     assert 1 not in result.slide_quality_receipts
+
+
+def test_slide_pipeline_promotes_a_cover_title_the_model_marked_decoration(
+    monkeypatch,
+):
+    """Bench run 26: a mislabelled cover title ended a 24-slide deck at the gate.
+
+    The model wrapped the cover title in qid-bearing spans, so the ``h1`` owned
+    no text and ``ensure_authored_semantic_roles`` left every element
+    decoration/body/supporting. The v2 gate then blocked the whole deck on
+    ``title:semantic_role_missing`` / ``capacity.required_failed:title``.
+    """
+
+    from services.authored_quality_receipt_v2 import evaluate_capacity_browser_metrics
+
+    async def scenario():
+        plan = SimpleNamespace(
+            contents=("cover", "slide 1"),
+            design_system="DESIGN SYSTEM",
+            roles=("COVER", "PILLARS"),
+        )
+
+        async def fake_author(selected_plan, index):
+            assert selected_plan is plan
+            if index == 0:
+                return (
+                    "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+                    '<h1 data-qid="cover-title" data-semantic-role="decoration"'
+                    ' style="font-size:54px">'
+                    '<span data-qid="cover-title-line1" data-semantic-role="decoration"'
+                    ' style="display:block">통합 회원관리 시스템</span>'
+                    '<span data-qid="cover-title-line2" data-semantic-role="decoration"'
+                    ' style="display:block">재구축 사업 제안서</span></h1>'
+                    '<p data-qid="cover-summary" data-semantic-role="body"'
+                    ' style="font-size:18px">제안 개요 문장</p>'
+                    "</body></html>"
+                )
+            # Every ``h2`` is stamped ``title`` by the composition policy, so an
+            # agenda reaches the gate with one title owner per chapter.
+            return (
+                "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+                '<h1 data-qid="s1-title" style="font-size:34px">목차</h1>'
+                '<h2 data-qid="s1-ch1" style="font-size:24px">제안사 소개</h2>'
+                '<h2 data-qid="s1-ch2" style="font-size:24px">제안 개요</h2>'
+                '<p data-qid="s1-body" style="font-size:18px">본문 문장</p>'
+                "</body></html>"
+            )
+
+        async def fake_render(_html):
+            return b"png"
+
+        monkeypatch.setattr(
+            authored_service, "prepare_authored_deck", lambda *args, **kwargs: plan
+        )
+        monkeypatch.setattr(authored_service, "author_planned_slide", fake_author)
+        monkeypatch.setattr(authored_service, "render_html_to_png", fake_render)
+
+        return await authored_service._author_illustrate_render_pipeline(
+            _outline(2),
+            _brand(),
+            SimpleNamespace(id="default", illustration_prompt=None),
+        )
+
+    result = _run(scenario())
+    cover_html = result.deck.htmls[0]
+    assert 'data-qid="cover-title-line1" data-semantic-role="title"' in cover_html
+
+    fired_rules = {
+        entry["rule"]
+        for entry in result.slide_quality_receipts[0]["normalizations"]
+    }
+    assert "semantic_role_promoted" in fired_rules
+
+    # The exact readback the deck died on now reports a title owner.
+    metrics = {
+        "elements": [
+            {
+                "qid": "cover-title-line1",
+                "tag": "span",
+                "semantic_role": "title",
+                "rendered_text": "통합 회원관리 시스템",
+                "owned_text": "통합 회원관리 시스템",
+                "has_owned_text": True,
+                "css_visible": True,
+                "clipped": False,
+                "font_size": 54,
+                "font_loaded": True,
+            },
+            {
+                "qid": "cover-summary",
+                "tag": "p",
+                "semantic_role": "body",
+                "rendered_text": "제안 개요 문장",
+                "owned_text": "제안 개요 문장",
+                "has_owned_text": True,
+                "css_visible": True,
+                "clipped": False,
+                "font_size": 18,
+                "font_loaded": True,
+            },
+        ]
+    }
+    limits = SimpleNamespace(
+        max_qids=40, max_images=4, max_visible_text_chars=460, min_font_px=15
+    )
+    evaluation = evaluate_capacity_browser_metrics(metrics, limits)
+    assert "title:semantic_role_missing" not in evaluation["violations"]
+    assert evaluation["checks"]["title"] is True
+
+    # Over-labelling is the mirror defect: the chapter headings keep one title
+    # between them instead of one each.
+    agenda_html = result.deck.htmls[1]
+    assert '"s1-title" style="font-size:34px" data-semantic-role="title"' in agenda_html
+    assert '"s1-ch1" style="font-size:24px" data-semantic-role="supporting"' in agenda_html
+    assert '"s1-ch2" style="font-size:24px" data-semantic-role="supporting"' in agenda_html
+    assert "semantic_role_demoted" in {
+        entry["rule"]
+        for entry in result.slide_quality_receipts[1]["normalizations"]
+    }

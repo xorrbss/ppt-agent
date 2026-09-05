@@ -111,6 +111,7 @@ from services.authored_source_images import (
     collect_source_image_candidates,
     plan_slide_source_images,
 )
+from utils.authored_semantic_role_repair import canonicalize_authored_roles
 from services.authored_composition_policy import (
     blocking_safety_issues,
     build_authored_capacity_plan,
@@ -681,7 +682,7 @@ def _deterministic_repair_candidate(
         )
     if profile_id == "ordinary":
         candidate = repair_authored_layout_alignment(candidate, role=role)
-    return ensure_authored_semantic_roles(ensure_authored_qids(candidate))
+    return canonicalize_authored_roles(candidate, role=role)
 
 
 def _admit_vqa_capacity_candidate(
@@ -874,6 +875,8 @@ async def _bind_bounded_repair_evidence(
     bound_pngs: list[bytes] = []
     bound_metrics: list[object] = []
     for html in htmls:
+        # Bind the reducer's exact document: role immutability already keeps a
+        # title owner here, so this must not re-normalise anything.
         canonical_html = ensure_authored_semantic_roles(ensure_authored_qids(html))
         capture = await render_html_to_png_with_metrics(canonical_html)
         if capture.png == _placeholder_png() or capture.browser_metrics is None:
@@ -2114,7 +2117,7 @@ async def _generate_authored_presentation(
         # seals before Chromium and supplies this immutable authority.
         if reference_mode != EXACT_RECONSTRUCTION:
             compatibility_htmls = [
-                ensure_authored_semantic_roles(ensure_authored_qids(html))
+                canonicalize_authored_roles(html)
                 for html in authored_deck.htmls
             ]
         elif semantic_mode == "declared":
@@ -2665,8 +2668,8 @@ async def _generate_authored_presentation(
                 pngs = list(pre_vqa_pngs)
                 accepted_fixed: list[int] = []
                 for index in fixed:
-                    candidate_html = ensure_authored_semantic_roles(
-                        ensure_authored_qids(candidate_htmls[index])
+                    candidate_html = canonicalize_authored_roles(
+                        candidate_htmls[index]
                     )
                     candidate_metrics = get_cached_browser_metrics(candidate_html)
                     (

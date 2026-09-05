@@ -36,8 +36,8 @@ from typing import Any
 from services.authored_composition_policy import (
     blocking_safety_issues,
     capacity_violations,
-    ensure_authored_semantic_roles,
 )
+from utils.authored_semantic_role_repair import canonicalize_authored_roles
 from services.authored_infographic_assets import (
     build_infographic_asset_context,
     deck_has_picture_source,
@@ -49,7 +49,7 @@ from services.authored_terminal_slide_policy import terminal_fallback_active
 from services.authored_vnext.generation.scene_envelope import replace_deck_scene_slide
 from services.image_generation_service import ImageGenerationService
 from utils.asset_directory_utils import get_images_directory
-from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
+from utils.authored_dom_quality import inspect_authored_dom
 from utils.llm_calls.author_vision_qa import revise_authored_deck
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 from utils.slide_capture import (
@@ -251,7 +251,7 @@ async def _admit_remade_slide(
 ) -> tuple[str, bytes, object] | None:
     """Bind fresh pixels/telemetry and admit only a candidate that clears both gates."""
 
-    canonical = ensure_authored_semantic_roles(ensure_authored_qids(candidate_html))
+    canonical = canonicalize_authored_roles(candidate_html)
     capture = await render_html_to_png_with_metrics(canonical)
     metrics = capture.browser_metrics
     if metrics is None or capture.png == _placeholder_png():

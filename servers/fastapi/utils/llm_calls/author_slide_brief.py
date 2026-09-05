@@ -52,6 +52,11 @@ def composition_intent_block() -> str:
     scale. Do not pad, and do not summarise the CONTENT into a caption.
   - Make ONE element dominant per slide (a figure, a number, a headline, a diagram);
     everything else is subordinate to it.
+  - Mark every text element with `data-semantic-role`, one of: title, body, supporting,
+    decoration, image. Mark exactly ONE element per slide `data-semantic-role="title"` —
+    the slide's title, on a cover the main title — on the element that directly contains
+    that text, never `decoration`. Sub-headings and claims are `supporting`; sentences,
+    bullets and table text are `body`; empty shapes and rules are `decoration`.
   - When CONTENT states three or more comparable numbers sharing a unit, draw them as a
     labelled HTML/CSS bar or column chart with one explicit takeaway; every value and
     unit verbatim, no invented series.

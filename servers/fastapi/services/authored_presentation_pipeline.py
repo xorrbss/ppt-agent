@@ -49,9 +49,9 @@ from services.authored_composition_policy import (
     blocking_safety_issues,
     capacity_violations,
     capacity_overflow,
-    ensure_authored_semantic_roles,
 )
 from services.authored_quality_receipt_v2 import public_attempt_id
+from utils.authored_semantic_role_repair import canonicalize_authored_roles, plan_slide_role
 from services.authored_vnext.generation.scene_checkpoint import persist_scene_envelope, read_scene_checkpoint_state
 from services.authored_vnext.generation.scene_envelope import (
     AuthoredSlideSceneEnvelope,
@@ -1159,8 +1159,11 @@ async def _author_illustrate_render_pipeline(
             # the gate can then reuse the metrics captured with this PNG instead
             # of launching a second browser probe in shadow semantic mode.
             if plan_reference_mode != EXACT_RECONSTRUCTION:
-                illustrated_html = ensure_authored_semantic_roles(
-                    ensure_authored_qids(illustrated_html)
+                illustrated_html = canonicalize_authored_roles(
+                    illustrated_html,
+                    role=plan_slide_role(plan, index),
+                    demote=True,
+                    receipt=normalization_receipt,
                 )
             else:
                 illustrated_html = ensure_authored_qids(illustrated_html)
