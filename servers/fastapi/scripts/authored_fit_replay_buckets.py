@@ -123,7 +123,13 @@ def worst_geometry_kind(issues: Iterable[Mapping[str, object]]) -> str | None:
 
 
 #: The categories ``blocking_safety_issues`` treats as publication blockers.
-BLOCKING_CATEGORIES = ("overflow", "clipping", "off_canvas", "overlap")
+BLOCKING_CATEGORIES = (
+    "overflow",
+    "clipping",
+    "off_canvas",
+    "overlap",
+    "text_escapes_card",
+)
 
 
 def blocking_categories(issues: Iterable[Mapping[str, object]]) -> list[str]:

@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from typing import Any
 
+from utils.authored_dom_text_escape import TEXT_ESCAPE_CATEGORY
+
 #: The infographic library's figure-root marker.  ``utils/authored_infographic``
 #: emits exactly one ``<section class="ig ...">`` per figure and the archetype
 #: checker identifies the root the same way (``checker.py``: ``"ig" in classes``).
@@ -36,7 +38,15 @@ FIGURE_ROOT_CLASS = "ig"
 ELEMENT_KINDS = ("text", "figure", "figure_part", "container", "image")
 
 #: Categories that carry a magnitude.  Every other category is unchanged.
-MAGNITUDE_CATEGORIES = ("overflow", "off_canvas", "clipping")
+#: ``text_escapes_card`` (``utils/authored_dom_text_escape``) reports its miss
+#: in the same ratio shape as ``overflow`` and is projected the same way, so
+#: the A4 text-scale rung can bound a shrink from it.
+MAGNITUDE_CATEGORIES = (
+    "overflow",
+    "off_canvas",
+    "clipping",
+    TEXT_ESCAPE_CATEGORY,
+)
 
 _BLOCK_TAGS = frozenset(
     {
@@ -378,7 +388,7 @@ def build_fit_summary(
             continue
         kind = str(magnitude.get("element_kind", "container"))
         kinds[kind] = kinds.get(kind, 0) + 1
-        if category == "overflow":
+        if category in {"overflow", TEXT_ESCAPE_CATEGORY}:
             worst_ratio = max(
                 worst_ratio,
                 _number(magnitude.get("ratio_x"), 1.0),

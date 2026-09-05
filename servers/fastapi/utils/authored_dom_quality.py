@@ -40,6 +40,12 @@ from utils.authored_dom_tags import (
     is_edit_target as _is_edit_target,
     normalize_dom_text as _normal_text,
 )
+from utils.authored_dom_text_escape import (
+    TEXT_ESCAPE_CATEGORY,
+    find_text_escapes,
+    text_escape_detail,
+    text_escape_magnitude,
+)
 from utils.authored_qid_namespace import (
     ensure_authored_qids,
     # Re-exported: the qid namespace moved to `authored_qid_namespace`, but the
@@ -110,6 +116,7 @@ class DomQualityIssue:
         "clipping",
         "off_canvas",
         "overlap",
+        "text_escapes_card",
         "font",
         "image",
         "content",
@@ -1567,6 +1574,24 @@ def inspect_authored_dom(
                         mode,
                     )
                 )
+    # Text whose glyphs print outside the card that owns them.  See
+    # ``utils/authored_dom_text_escape`` for why none of the checks above can
+    # see this: it is the only one that compares an owner's line rects with the
+    # box of its nearest painted ancestor.
+    for escape in find_text_escapes(elements):
+        owner = item_by_qid.get(escape.qid, {})
+        if mode == EXACT_RECONSTRUCTION and not bool(owner.get("unintentional", False)):
+            continue
+        issues.append(
+            DomQualityIssue(
+                TEXT_ESCAPE_CATEGORY,
+                "high" if escape.collides_with else "medium",
+                text_escape_detail(escape),
+                (escape.qid,),
+                mode,
+                text_escape_magnitude(escape, kind=kind_of(escape.qid)),
+            )
+        )
     # Coalesce same category/target reports while retaining deterministic ordering.
     unique = {(issue.category, issue.qids, issue.detail): issue for issue in issues}
     ordered = tuple(

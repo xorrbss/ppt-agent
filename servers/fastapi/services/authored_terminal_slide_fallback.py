@@ -209,19 +209,28 @@ async def _remake_candidate(
 ) -> str | None:
     """One bounded full re-author of a single slide, or ``None`` on failure."""
 
+    # ``CritiqueIssue.detail`` caps at 200 characters and ``LOWER_DENSITY_HINT``
+    # is 203, so measured defects appended to the hint were silently truncated
+    # away every time and no remake was ever told what the gate had found. They
+    # travel as their own issue, first: ``_feedback`` joins every issue on a
+    # critique, so the brief now names the offending qid and its card before it
+    # asks for a lower density.
     evidence = "; ".join(
         str(getattr(issue, "detail", "") or "") for issue in defects[:2]
     ).strip()
-    detail = LOWER_DENSITY_HINT + (f" Measured defects: {evidence}" if evidence else "")
-    overlap = any(getattr(issue, "category", "") == "overlap" for issue in defects)
+    issue_type = (
+        "overlap"
+        if any(getattr(issue, "category", "") == "overlap" for issue in defects)
+        else "other"
+    )
+    details = ([f"Measured defects: {evidence}"] if evidence else []) + [
+        LOWER_DENSITY_HINT
+    ]
     critique = SlideCritique(
         needs_fix=True,
         issues=[
-            CritiqueIssue(
-                type="overlap" if overlap else "other",
-                severity="high",
-                detail=detail[:200],
-            )
+            CritiqueIssue(type=issue_type, severity="high", detail=detail[:200])
+            for detail in details
         ],
     )
     result = await revise_authored_deck(

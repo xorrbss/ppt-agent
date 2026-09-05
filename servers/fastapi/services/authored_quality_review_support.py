@@ -3,6 +3,7 @@
 from sqlalchemy import inspect
 
 from services import authored_quality_review_service as _service
+from utils.authored_dom_text_escape import BLOCKING_SAFETY_CATEGORIES
 
 
 def _merge_dom_repair_triggers(
@@ -11,11 +12,12 @@ def _merge_dom_repair_triggers(
     """Make required geometry defects start repair independently from VQA.
 
     VQA remains useful evidence, but it cannot veto deterministic clipping,
-    off-canvas, overflow, or unintended-overlap telemetry.  Only medium/high
+    off-canvas, overflow, card-escaping-text or unintended-overlap telemetry
+    -- the categories the composition policy blocks on.  Only medium/high
     geometry defects are promoted; unavailable telemetry stays fail-closed and
     does not fabricate a repair target.
     """
-    geometry_categories = {"clipping", "off_canvas", "overflow", "overlap"}
+    geometry_categories = BLOCKING_SAFETY_CATEGORIES
     merged = list(critiques)
     for index, report in enumerate(local_reports):
         promoted = [

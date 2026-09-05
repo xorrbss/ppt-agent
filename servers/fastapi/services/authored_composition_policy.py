@@ -23,6 +23,7 @@ from utils.authored_dom_quality import (
     ensure_authored_qids,
     normalize_browser_metrics,
 )
+from utils.authored_dom_text_escape import BLOCKING_SAFETY_CATEGORIES
 from utils.get_env import is_authored_composition_envelope_enabled
 
 
@@ -2315,14 +2316,13 @@ def blocking_safety_issues(report: Any) -> tuple[Any, ...]:
 
     Typography availability and contrast remain design-quality signals.  A
     clipped, escaped, overflowing or unintentionally overlapping object is a
-    publication blocker regardless of whether VQA was requested.
+    publication blocker regardless of whether VQA was requested.  The category
+    set lives in ``utils.authored_dom_text_escape`` so a detector can add one.
     """
-
-    safety_categories = {"overflow", "clipping", "off_canvas", "overlap"}
     return tuple(
         issue
         for issue in getattr(report, "issues", ())
-        if getattr(issue, "category", None) in safety_categories
+        if getattr(issue, "category", None) in BLOCKING_SAFETY_CATEGORIES
     )
 
 
