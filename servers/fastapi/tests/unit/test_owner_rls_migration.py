@@ -69,14 +69,26 @@ def _run(module, direction: str, dialect: str) -> list[str]:
     return recorder.statements
 
 
-def test_owner_rls_revision_is_the_linear_head(migration_module) -> None:
+def test_owner_rls_revision_is_on_the_single_linear_head(migration_module) -> None:
+    """One head, and this revision on its ancestry.
+
+    It was the tip when it landed; a later revision may sit on top of it, and
+    that is fine. What must not happen is a second head -- two migrations that
+    both claim the same parent -- because Alembic then refuses to upgrade at
+    all. So the head count is pinned, not this revision's position in it.
+    """
+
     assert migration_module.revision == revision_contract.REVISION_OWNER_ROW_LEVEL_SECURITY
     assert migration_module.down_revision == (
         revision_contract.REVISION_COM_LEASE_TOKEN_VERIFIER_WIDTH
     )
     script = ScriptDirectory.from_config(_alembic_config("sqlite://"))
     assert script.get_heads() == [revision_contract.HEAD_REVISION]
-    assert revision_contract.HEAD_REVISION == migration_module.revision
+    ancestry = {
+        entry.revision
+        for entry in script.iterate_revisions(revision_contract.HEAD_REVISION, "base")
+    }
+    assert migration_module.revision in ancestry
 
 
 def test_owner_rls_revision_round_trips_on_sqlite(tmp_path) -> None:
@@ -91,7 +103,10 @@ def test_owner_rls_revision_round_trips_on_sqlite(tmp_path) -> None:
             ).scalar_one()
 
     try:
-        command.upgrade(config, "head")
+        # Upgrade to THIS revision rather than to head: the round trip under
+        # test is this migration's own, and a revision that lands on top of it
+        # later must not change what is being measured here.
+        command.upgrade(config, revision_contract.REVISION_OWNER_ROW_LEVEL_SECURITY)
         assert _version() == revision_contract.REVISION_OWNER_ROW_LEVEL_SECURITY
         command.downgrade(config, "-1")
         assert _version() == revision_contract.REVISION_COM_LEASE_TOKEN_VERIFIER_WIDTH

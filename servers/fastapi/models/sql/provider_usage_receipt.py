@@ -63,6 +63,10 @@ class ProviderUsageReceipt(SQLModel, table=True):
             name="ck_provider_usage_receipts_output_tokens",
         ),
         CheckConstraint(
+            "cached_tokens IS NULL OR cached_tokens >= 0",
+            name="ck_provider_usage_receipts_cached_tokens",
+        ),
+        CheckConstraint(
             "reported_cost_microunits IS NULL OR reported_cost_microunits >= 0",
             name="ck_provider_usage_receipts_reported_cost",
         ),
@@ -130,6 +134,13 @@ class ProviderUsageReceipt(SQLModel, table=True):
         default=None, sa_column=Column(BigInteger, nullable=True)
     )
     output_tokens: int | None = Field(
+        default=None, sa_column=Column(BigInteger, nullable=True)
+    )
+    # OpenAI-style cached-input token count; null when the provider omits it.
+    # Not covered by the "unavailable usage is null" check below because it
+    # was added after that constraint shipped -- see the Python-side
+    # ``validate_provider_usage_receipt`` for the equivalent enforcement.
+    cached_tokens: int | None = Field(
         default=None, sa_column=Column(BigInteger, nullable=True)
     )
     request_count: int = Field(

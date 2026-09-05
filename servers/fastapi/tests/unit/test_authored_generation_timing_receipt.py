@@ -297,6 +297,7 @@ def test_terminal_v2_timing_is_durable_for_success_failure_and_rc_invalid(
             "latencyMs": 13,
             "inputTokens": 3,
             "outputTokens": 4,
+            "cachedTokens": 2,
             "actualCostMicrounits": 0,
             "estimatedCostMicrounits": 7,
         },
@@ -774,6 +775,7 @@ def _v2_usage() -> dict:
             "latencyMs": 13,
             "inputTokens": 3,
             "outputTokens": 4,
+            "cachedTokens": 2,
             "actualCostMicrounits": 0,
             "estimatedCostMicrounits": 7,
         },
@@ -1152,3 +1154,82 @@ def test_v2_authoring_stage_accepts_optional_cooldown_wait_seconds() -> None:
     elsewhere["outline"] = {**base["outline"], "cooldownWaitSeconds": 1.0}
     with pytest.raises(ValueError, match="generation_attempt_v2_stages_invalid"):
         _attempt_receipt_v2_from_dict(_v2_receipt_dict(elsewhere, "private-cooldown-elsewhere"))
+
+
+def _cooldown_receipt(cooldown, *, attempt_id):
+    return create_generation_attempt_timing_receipt_v2(
+        job_id=uuid.uuid4(),
+        attempt_id=attempt_id,
+        attempt_number=1,
+        revision=1,
+        outcome="succeeded",
+        stage_observations={
+            "author": {"startMillis": 0, "endMillis": 900, "durationMillis": 900}
+        },
+        executed_stages=("authoring",),
+        queue_wait_ms=0,
+        wall_ms=900,
+        provider_usage=_v2_usage(),
+        retry_reason=None,
+        worker="workspace-generation-worker",
+        terminal_error=None,
+        authoring_cooldown_wait_seconds=cooldown,
+    )
+
+
+def test_v2_writer_records_the_authoring_cooldown_wait(tmp_path, monkeypatch) -> None:
+    """F3: the wave scheduler's measured cooldown reaches the receipt.
+
+    The validator has accepted ``cooldownWaitSeconds`` on the authoring stage
+    since E4; this is the writer, so a slow attempt can be read as "waiting on
+    the provider" instead of "slow to author".
+    """
+
+    monkeypatch.setenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path))
+
+    stages = _cooldown_receipt(31.5, attempt_id="private-cooldown-writer").to_dict()[
+        "stages"
+    ]
+
+    assert stages["authoring"]["cooldownWaitSeconds"] == 31.5
+    # Only the authoring stage carries it.
+    assert all(
+        "cooldownWaitSeconds" not in stage
+        for name, stage in stages.items()
+        if name != "authoring"
+    )
+
+
+def test_v2_writer_omits_the_cooldown_wait_when_nothing_measured_it(
+    tmp_path, monkeypatch
+) -> None:
+    """A caller that does not measure it writes no key, not a zero."""
+
+    monkeypatch.setenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path))
+
+    stages = _cooldown_receipt(None, attempt_id="private-cooldown-absent").to_dict()[
+        "stages"
+    ]
+
+    assert "cooldownWaitSeconds" not in stages["authoring"]
+
+
+def test_v2_writer_records_a_measured_zero_cooldown_wait(tmp_path, monkeypatch) -> None:
+    """An attempt that met no overload reports zero, which is not "unknown"."""
+
+    monkeypatch.setenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path))
+
+    stages = _cooldown_receipt(0.0, attempt_id="private-cooldown-zero-w").to_dict()[
+        "stages"
+    ]
+
+    assert stages["authoring"]["cooldownWaitSeconds"] == 0.0
+
+
+def test_v2_writer_refuses_a_negative_cooldown_wait(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path))
+
+    with pytest.raises(
+        ValueError, match="generation_timing_authoring_cooldown_wait_invalid"
+    ):
+        _cooldown_receipt(-1.0, attempt_id="private-cooldown-negative-w")

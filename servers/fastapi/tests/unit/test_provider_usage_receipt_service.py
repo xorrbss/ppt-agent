@@ -100,6 +100,28 @@ def test_unavailable_usage_is_null_not_zero_and_source_is_exclusive() -> None:
         )
 
 
+def test_cached_tokens_follows_the_same_rules_as_input_tokens() -> None:
+    receipt = _receipt(uuid.uuid4(), cached_tokens=17)
+    validate_provider_usage_receipt(receipt)
+
+    with pytest.raises(ValueError, match="non-negative integer"):
+        validate_provider_usage_receipt(replace(receipt, cached_tokens=-1))
+    with pytest.raises(ValueError, match="cannot be represented as zero"):
+        validate_provider_usage_receipt(
+            replace(
+                _receipt(
+                    uuid.uuid4(),
+                    usage_state="unavailable",
+                    input_tokens=None,
+                    output_tokens=None,
+                    estimated_cost_microunits=None,
+                    pricing_version=None,
+                ),
+                cached_tokens=0,
+            )
+        )
+
+
 def test_receipts_dedupe_retries_and_keep_cancel_resume_aggregate_exact(tmp_path: Path) -> None:
     async def scenario() -> None:
         engine, sessions = await _database(tmp_path / "provider-usage.db")
@@ -143,6 +165,7 @@ def test_receipts_dedupe_retries_and_keep_cancel_resume_aggregate_exact(tmp_path
                     "latency_ms": 642,
                     "input_tokens": 123,
                     "output_tokens": 45,
+                    "cached_tokens": None,
                     "reported_cost_microunits": None,
                     "estimated_cost_microunits": 678,
                     "cost_by_pricing_version": {

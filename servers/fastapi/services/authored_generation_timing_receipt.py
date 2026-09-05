@@ -20,16 +20,28 @@ from services.authored_generation_timing_receipt_e4 import (
     optional_top_level_fields,
     provider_rate_profile as _e4_provider_rate_profile,
     quality_loop_variant_field,
+    STAGE_COOLDOWN_WAIT_KEY,
     stage_cooldown_wait_seconds,
     stage_optional_keys,
     stage_wall_millis,
 )
+from services.authored_generation_observability_metrics import (
+    # Redundant alias: this module stays the published import surface for the
+    # metric vocabulary, so the name is deliberately re-exported.
+    GENERATION_OBSERVABILITY_METRICS as GENERATION_OBSERVABILITY_METRICS,
+    _observability_metrics,
+)
+from services.authored_generation_timing_values import (
+    MAX_GENERATION_STAGE_TIMING_MS,
+    _bounded_timing_ms,
+    _required_sha256,
+)
 from services.provider_call_timing import provider_call_timing_field
+from services.provider_operation_usage import STAGE_COUNTER_KEYS
 from services.authored_quality_receipt_v2 import (
     QualityReceiptV2,
     _manifest_digest,
     _manifest_lock,
-    _optional_prefixed_sha256,
     _receipt_digest as _quality_receipt_digest,
     public_attempt_id,
     quality_receipt_manifest_path,
@@ -50,67 +62,6 @@ GENERATION_TIMING_STAGES = (
 LEGACY_GENERATION_TIMING_STAGES = (
     "outline", "author", "repair", "checkpoint", "export", "publication"
 )
-GENERATION_OBSERVABILITY_METRICS = (
-    "queueWait", "queuePosition", "outlineDuration", "authorDuration",
-    "illustrationDuration", "renderDuration", "qualityDuration", "repairDuration",
-    "checkpointDuration", "publicationDuration", "exportDuration",
-    "providerInitialCalls", "providerRetryCalls", "providerLogicalOrdinal",
-    "estimatedTokens", "actualTokens", "estimatedCost", "actualCost",
-    "stageRetryCalls", "stageEstimatedCost", "stageActualCost",
-    "attemptNumber", "fencingOutcome", "chromeLaunch", "chromeRestart",
-    "blockedRequest", "timeout", "crash", "workerPeakMemory",
-    "workerPeakHandles", "artifactBytes", "cacheHit", "cacheMiss",
-    "cacheEviction", "objectStoreLatency", "finalOutcome",
-)
-PRE_REPAIR_GENERATION_OBSERVABILITY_METRICS = tuple(
-    name
-    for name in GENERATION_OBSERVABILITY_METRICS
-    if name != "repairDuration"
-)
-LEGACY_GENERATION_OBSERVABILITY_METRICS = tuple(
-    name
-    for name in PRE_REPAIR_GENERATION_OBSERVABILITY_METRICS
-    if name not in {"stageRetryCalls", "stageEstimatedCost", "stageActualCost"}
-)
-_TEXT_METRICS = frozenset(("fencingOutcome", "finalOutcome"))
-_STAGE_MAP_METRICS = frozenset(
-    {"stageRetryCalls", "stageEstimatedCost", "stageActualCost"}
-)
-_OBSERVED_TEXT_VALUES = {
-    "fencingOutcome": frozenset(
-        {"claim_acquired", "transition_committed", "publish_committed", "lease_lost"}
-    ),
-    "finalOutcome": frozenset(
-        {
-            "succeeded",
-            "budget_exhausted",
-            "cancelled",
-            "failed",
-            "dead_letter",
-            "worker_crash",
-        }
-    ),
-}
-_METRIC_STATES = frozenset(("observed", "unavailable", "not_applicable"))
-_UNAVAILABLE_REASONS = frozenset(
-    (
-        "legacy_receipt_no_metric",
-        "provider_actual_cost_not_reported",
-        "provider_token_estimate_not_recorded",
-        "provider_token_usage_not_reported",
-        "public_admission_not_found",
-        "counter_not_implemented",
-    )
-)
-_NOT_APPLICABLE_REASONS = frozenset(
-    {
-        "stage_not_executed",
-        "provider_not_used",
-        "artifact_store_not_used",
-        "worker_resource_not_applicable",
-    }
-)
-MAX_GENERATION_STAGE_TIMING_MS = 30 * 24 * 60 * 60 * 1000
 GENERATION_ATTEMPT_OUTCOMES = frozenset(
     {
         "succeeded",
@@ -132,19 +83,10 @@ PUBLIC_GENERATION_TIMING_STAGES = (
     "chromiumReview",
     "publication",
 )
-_PROVIDER_USAGE_COUNTERS = (
-    "logicalCalls",
-    "physicalCalls",
-    "retryCalls",
-    "reportedUsageCalls",
-    "unavailableUsageCalls",
-    "pricedCalls",
-    "latencyMs",
-    "inputTokens",
-    "outputTokens",
-    "actualCostMicrounits",
-    "estimatedCostMicrounits",
-)
+#: The writer is ``services/provider_operation_usage.py``; taking its tuple
+#: rather than restating it keeps the validator from drifting away from the
+#: snapshot it validates (the check below is an exact set match).
+_PROVIDER_USAGE_COUNTERS = STAGE_COUNTER_KEYS
 _ATTEMPT_CAUSE_KEYS = ("queueReason", "stageReason", "retryReason")
 
 
@@ -169,25 +111,6 @@ def _attempt_causes(value: object | None) -> tuple[tuple[str, str], ...]:
     return tuple(output)
 
 
-def _stage_metric_values(value: object, field_name: str) -> dict[str, int]:
-    if not isinstance(value, Mapping) or not value or len(value) > 128:
-        raise ValueError(f"generation_observability_{field_name}_invalid")
-    output: dict[str, int] = {}
-    for raw_stage, raw_value in sorted(value.items(), key=lambda item: str(item[0])):
-        stage = str(raw_stage).strip().lower()
-        if (
-            not stage
-            or len(stage) > 64
-            or any(
-                character not in "abcdefghijklmnopqrstuvwxyz0123456789._-"
-                for character in stage
-            )
-        ):
-            raise ValueError(f"generation_observability_{field_name}_invalid")
-        output[stage] = _bounded_timing_ms(raw_value, field_name)
-    return output
-
-
 def generation_timing_receipt_path(job_id: object) -> Path:
     """Return the job-scoped timing sidecar beside its QualityReceipt ledger."""
 
@@ -200,15 +123,6 @@ def generation_attempt_timing_receipt_path(job_id: object) -> Path:
 
     manifest = quality_receipt_manifest_path(job_id)
     return manifest.with_name(f"{manifest.stem}-attempt-timing.json")
-
-
-def _bounded_timing_ms(value: object, field_name: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ValueError(f"generation_timing_{field_name}_invalid")
-    numeric = float(value)
-    if not (numeric >= 0.0 and numeric < float("inf")):
-        raise ValueError(f"generation_timing_{field_name}_invalid")
-    return min(round(numeric), MAX_GENERATION_STAGE_TIMING_MS)
 
 
 def _stage_timings(value: object) -> tuple[tuple[str, int], ...]:
@@ -227,62 +141,6 @@ def _stage_timings(value: object) -> tuple[tuple[str, int], ...]:
         (stage, _bounded_timing_ms(value[stage], stage))
         for stage in stages
     )
-
-
-def _observability_metrics(value: object) -> tuple[tuple[str, dict[str, object]], ...]:
-    if not isinstance(value, Mapping):
-        raise ValueError("generation_observability_metrics_invalid")
-    # Keep the two previously sealed shapes readable without filling missing
-    # metrics. Every supported profile still requires its exact complete set.
-    metric_names = next(
-        (
-            names
-            for names in (
-                GENERATION_OBSERVABILITY_METRICS,
-                PRE_REPAIR_GENERATION_OBSERVABILITY_METRICS,
-                LEGACY_GENERATION_OBSERVABILITY_METRICS,
-            )
-            if set(value) == set(names)
-        ),
-        None,
-    )
-    if metric_names is None:
-        raise ValueError("generation_observability_metrics_invalid")
-    output: list[tuple[str, dict[str, object]]] = []
-    for name in metric_names:
-        metric = value.get(name)
-        if not isinstance(metric, Mapping) or metric.get("state") not in _METRIC_STATES:
-            raise ValueError(f"generation_observability_{name}_invalid")
-        state = str(metric["state"])
-        if state == "observed":
-            observed = metric.get("value")
-            if name in _TEXT_METRICS:
-                if observed not in _OBSERVED_TEXT_VALUES[name]:
-                    raise ValueError(f"generation_observability_{name}_invalid")
-            elif name in _STAGE_MAP_METRICS:
-                observed = _stage_metric_values(observed, name)
-            else:
-                _bounded_timing_ms(observed, name)
-            normalized = {"state": state, "value": observed}
-        else:
-            reason = metric.get("reason")
-            allowed_reasons = (
-                _UNAVAILABLE_REASONS
-                if state == "unavailable"
-                else _NOT_APPLICABLE_REASONS
-            )
-            if reason not in allowed_reasons:
-                raise ValueError(f"generation_observability_{name}_invalid")
-            normalized = {"state": state, "reason": reason}
-        output.append((name, normalized))
-    return tuple(output)
-
-
-def _required_sha256(value: object, field_name: str) -> str:
-    digest = _optional_prefixed_sha256(value, field_name)
-    if digest is None:
-        raise ValueError(f"generation_timing_{field_name}_invalid")
-    return digest
 
 
 def _partial_stage_timings(value: object) -> tuple[tuple[str, int], ...]:
@@ -748,6 +606,14 @@ def _attempt_receipt_v2_digest(receipt: GenerationAttemptTimingReceiptV2) -> str
     ).hexdigest()
 
 
+def _authoring_cooldown_wait(value: float | int) -> float | int:
+    """Validate a writer-supplied cooldown wait with the reader's own rule."""
+
+    return stage_cooldown_wait_seconds(
+        {STAGE_COOLDOWN_WAIT_KEY: value}, stage_name="authoring"
+    )
+
+
 def _public_stage_receipts(
     value: object,
 ) -> tuple[tuple[str, dict[str, object]], ...]:
@@ -1098,6 +964,7 @@ def create_generation_attempt_timing_receipt_v2(
     flagged_slides: Sequence[Mapping[str, object]] = (),
     fit_summaries: Sequence[Mapping[str, object]] | Mapping[object, object] = (),
     provider_call_timing: Mapping[str, object] | None = None,
+    authoring_cooldown_wait_seconds: float | int | None = None,
 ) -> GenerationAttemptTimingReceiptV2:
     """Seal one v2 terminal receipt without prompt, content, or provider traces.
 
@@ -1167,6 +1034,16 @@ def create_generation_attempt_timing_receipt_v2(
                 # per-source work above (authored_generation_timing_receipt_e4.py).
                 "wallMillis": merged_stage_wall_millis(merged_start, merged_end),
             }
+            # F3: the authoring stage alone carries the cooldown the wave
+            # scheduler slept out, so a slow attempt can be read as "waiting on
+            # the provider" rather than "slow to author".
+            if (
+                public_name == "authoring"
+                and authoring_cooldown_wait_seconds is not None
+            ):
+                public_stages[public_name][STAGE_COOLDOWN_WAIT_KEY] = (
+                    _authoring_cooldown_wait(authoring_cooldown_wait_seconds)
+                )
         elif public_name in executed:
             public_stages[public_name] = {
                 "state": "invalid",

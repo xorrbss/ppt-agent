@@ -32,11 +32,13 @@ from services.provider_pricing import (
     ProviderModelPricing,
     calculate_actual_usage_cost,
 )
+from services.provider_usage_cached_tokens import cached_tokens_from_usage
 from services.provider_runtime_job_registration import (
     ensure_runtime_job,
     optional_env_int,
 )
-from services.provider_call_timing import ProviderCallTimingLedger
+from services.provider_operation_usage import ProviderOperationUsage
+from utils.get_env_programme import is_authored_local_stage_async_enabled
 
 
 _RECEIPT_OBSERVABILITY = {
@@ -152,120 +154,6 @@ class PublicOperationFence:
     operation_id: UUID
     attempt_token: str | None
     fencing_token: int | None
-
-
-@dataclass(slots=True)
-class _ProviderStageUsage:
-    logical_keys: set[tuple[int, int]] = field(default_factory=set)
-    physical_calls: int = 0
-    retry_calls: int = 0
-    reported_usage_calls: int = 0
-    unavailable_usage_calls: int = 0
-    priced_calls: int = 0
-    latency_ms: int = 0
-    input_tokens: int = 0
-    output_tokens: int = 0
-    actual_cost_microunits: int = 0
-    estimated_cost_microunits: int = 0
-
-    def to_dict(self) -> dict[str, int]:
-        return {
-            "logicalCalls": len(self.logical_keys),
-            "physicalCalls": self.physical_calls,
-            "retryCalls": self.retry_calls,
-            "reportedUsageCalls": self.reported_usage_calls,
-            "unavailableUsageCalls": self.unavailable_usage_calls,
-            "pricedCalls": self.priced_calls,
-            "latencyMs": self.latency_ms,
-            "inputTokens": self.input_tokens,
-            "outputTokens": self.output_tokens,
-            "actualCostMicrounits": self.actual_cost_microunits,
-            "estimatedCostMicrounits": self.estimated_cost_microunits,
-        }
-
-
-@dataclass(slots=True)
-class ProviderOperationUsage:
-    """Content-free logical/physical provider usage for one operation attempt."""
-
-    _stages: dict[str, _ProviderStageUsage] = field(default_factory=dict)
-    #: SPEED-12: per-call admission/executor/provider spans, keyed by stage.
-    call_timing: ProviderCallTimingLedger = field(default_factory=ProviderCallTimingLedger)
-
-    def _stage(self, name: str) -> _ProviderStageUsage:
-        normalized = str(name).strip().lower()
-        if (
-            not normalized
-            or len(normalized) > 64
-            or any(
-                character not in "abcdefghijklmnopqrstuvwxyz0123456789._-"
-                for character in normalized
-            )
-        ):
-            raise ValueError("provider_usage_stage_invalid")
-        return self._stages.setdefault(normalized, _ProviderStageUsage())
-
-    def record_admission(
-        self,
-        scope: ProviderUsageScope,
-        *,
-        semantic_slot: str,
-        is_retry: bool,
-        estimated_cost_microunits: int,
-    ) -> None:
-        stage = self._stage(scope.stage)
-        slide = -1 if scope.slide_index is None else scope.slide_index
-        stage.logical_keys.add(
-            (slide, scope.public_logical_call_ordinal(semantic_slot))
-        )
-        stage.physical_calls += 1
-        stage.retry_calls += int(is_retry)
-        stage.estimated_cost_microunits += max(0, estimated_cost_microunits)
-
-    def record_latency(self, stage_name: str, latency_ms: float) -> None:
-        self._stage(stage_name).latency_ms += max(0, round(float(latency_ms)))
-
-    def record_usage(
-        self,
-        stage_name: str,
-        *,
-        usage_state: str,
-        input_tokens: int | None,
-        output_tokens: int | None,
-        actual_cost_microunits: int | None,
-    ) -> None:
-        stage = self._stage(stage_name)
-        stage.reported_usage_calls += int(usage_state == "reported")
-        stage.unavailable_usage_calls += int(usage_state == "unavailable")
-        stage.priced_calls += int(actual_cost_microunits is not None)
-        stage.input_tokens += input_tokens or 0
-        stage.output_tokens += output_tokens or 0
-        stage.actual_cost_microunits += actual_cost_microunits or 0
-
-    def snapshot(self) -> dict[str, object]:
-        """Return the strict scalar shape accepted by attempt timing receipts."""
-
-        stages = {
-            name: usage.to_dict()
-            for name, usage in sorted(self._stages.items())
-        }
-        totals = {
-            key: sum(stage[key] for stage in stages.values())
-            for key in (
-                "logicalCalls",
-                "physicalCalls",
-                "retryCalls",
-                "reportedUsageCalls",
-                "unavailableUsageCalls",
-                "pricedCalls",
-                "latencyMs",
-                "inputTokens",
-                "outputTokens",
-                "actualCostMicrounits",
-                "estimatedCostMicrounits",
-            )
-        }
-        return {"totals": totals, "stages": stages}
 
 
 class ProviderSpendFenceRejected(RuntimeError):
@@ -434,8 +322,6 @@ def _positive_int(value: Any) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int):
         return None
     return value if 0 <= value <= 2_000_000_000 else None
-
-
 
 
 @asynccontextmanager
@@ -653,7 +539,7 @@ async def provider_runtime_job_status(
     )
 
 
-def response_usage(response: object) -> tuple[str, int | None, int | None]:
+def response_usage(response: object) -> tuple[str, int | None, int | None, int | None]:
     """Extract only standard numeric usage fields; absence is *unavailable*.
 
     No fallback token estimation occurs here: an estimate must be explicitly
@@ -664,7 +550,7 @@ def response_usage(response: object) -> tuple[str, int | None, int | None]:
     if usage is None and isinstance(response, dict):
         usage = response.get("usage")
     if usage is None:
-        return "unavailable", None, None
+        return "unavailable", None, None, None
 
     def get(*names: str) -> Any:
         for name in names:
@@ -676,8 +562,8 @@ def response_usage(response: object) -> tuple[str, int | None, int | None]:
     input_tokens = _positive_int(get("input_tokens", "prompt_tokens"))
     output_tokens = _positive_int(get("output_tokens", "completion_tokens"))
     if input_tokens is None and output_tokens is None:
-        return "unavailable", None, None
-    return "reported", input_tokens, output_tokens
+        return "unavailable", None, None, None
+    return "reported", input_tokens, output_tokens, cached_tokens_from_usage(usage)
 
 
 def _reported_cost(
@@ -722,7 +608,7 @@ async def record_provider_call(
             record_provider_usage_receipt_detached,
         )
 
-        usage_state, input_tokens, output_tokens = response_usage(response)
+        usage_state, input_tokens, output_tokens, cached_tokens = response_usage(response)
         public_accounting = (
             scope._public_leases.pop(0) if scope._public_leases else None
         )
@@ -747,6 +633,7 @@ async def record_provider_call(
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 actual_cost_microunits=reported_cost,
+                cached_tokens=cached_tokens,
             )
         if public_accounting is not None:
             public_lease = public_accounting.lease
@@ -795,6 +682,7 @@ async def record_provider_call(
             usage_state=usage_state,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            cached_tokens=cached_tokens,
             reported_cost_microunits=reported_cost,
             estimated_cost_microunits=None,
             pricing_version=(
@@ -825,9 +713,79 @@ async def record_provider_call(
         return
 
 
-async def record_local_stage(*, latency_ms: float) -> None:
-    """Record a stage latency with no provider usage or cost attached."""
+def _queue_local_stage(scope: ProviderUsageScope, latency_ms: float) -> bool:
+    """Build this stage's receipt in the caller's context and hand it over.
 
+    Everything order-sensitive stays synchronous here -- the receipt key
+    ordinal and the in-memory operation-usage roll-up -- so only the database
+    write is deferred.
+    """
+
+    from services.local_stage_receipt_queue import enqueue_local_stage_receipt
+    from services.provider_usage_receipt_service import ProviderUsageReceiptInput
+
+    usage_state, input_tokens, output_tokens, cached_tokens = response_usage(None)
+    operation_usage = _ACTIVE_OPERATION_USAGE.get()
+    if operation_usage is not None:
+        operation_usage.record_usage(
+            scope.stage,
+            usage_state=usage_state,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            actual_cost_microunits=None,
+        )
+    return enqueue_local_stage_receipt(
+        ProviderUsageReceiptInput(
+            job_id=scope.job_id,
+            operation=scope.operation,
+            stage=scope.stage,
+            provider="local",
+            model="none",
+            receipt_key_hash=scope.next_receipt_key_hash("provider"),
+            retry_class="initial",
+            outcome="succeeded",
+            latency_ms=max(0, round(float(latency_ms))),
+            usage_state=usage_state,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cached_tokens=cached_tokens,
+            reported_cost_microunits=None,
+            estimated_cost_microunits=None,
+            pricing_version="not-applicable-v1",
+        )
+    )
+
+
+async def record_local_stage(*, latency_ms: float) -> None:
+    """Record a stage latency with no provider usage or cost attached.
+
+    Local stages are CPU-only measurements: nothing waits on them and nothing
+    is charged for them, so their write goes through the batching queue instead
+    of costing the generation lane a transaction each.
+
+    A scope still holding an unconsumed provider lease keeps the synchronous
+    path: those leases are FIFO and belong to a real provider call, so they must
+    be popped in the order ``record_provider_call`` pops them.
+    """
+
+    scope = _ACTIVE_SCOPE.get()
+    queueable = (
+        scope is not None
+        and not scope._public_leases
+        and not scope._durable_leases
+        and is_authored_local_stage_async_enabled()
+    )
+    if queueable:
+        _RECEIPT_OBSERVABILITY["attempted"] += 1
+        try:
+            queued = _queue_local_stage(scope, latency_ms)
+        except Exception:
+            _RECEIPT_OBSERVABILITY["failed"] += 1
+            return
+        # A refused receipt is already counted as dropped by the queue, and
+        # re-recording it here would spend a second receipt ordinal.
+        _RECEIPT_OBSERVABILITY["persisted" if queued else "failed"] += 1
+        return
     await record_provider_call(
         provider="local",
         model="none",

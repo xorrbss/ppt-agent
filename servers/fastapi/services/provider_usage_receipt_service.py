@@ -46,6 +46,7 @@ class ProviderUsageReceiptInput:
     usage_state: str
     input_tokens: int | None = None
     output_tokens: int | None = None
+    cached_tokens: int | None = None
     request_count: int = 1
     reported_cost_microunits: int | None = None
     estimated_cost_microunits: int | None = None
@@ -97,6 +98,7 @@ def validate_provider_usage_receipt(receipt: ProviderUsageReceiptInput) -> None:
     for name in (
         "input_tokens",
         "output_tokens",
+        "cached_tokens",
         "reported_cost_microunits",
         "estimated_cost_microunits",
     ):
@@ -106,6 +108,7 @@ def validate_provider_usage_receipt(receipt: ProviderUsageReceiptInput) -> None:
         for name in (
             "input_tokens",
             "output_tokens",
+            "cached_tokens",
             "reported_cost_microunits",
             "estimated_cost_microunits",
         )
@@ -288,6 +291,7 @@ async def aggregate_provider_usage_for_job(
         "latency_ms": total("latency_ms"),
         "input_tokens": total("input_tokens"),
         "output_tokens": total("output_tokens"),
+        "cached_tokens": total("cached_tokens"),
         "reported_cost_microunits": total("reported_cost_microunits"),
         "estimated_cost_microunits": total("estimated_cost_microunits"),
         "cost_by_pricing_version": pricing_versions,

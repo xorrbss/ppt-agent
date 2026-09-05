@@ -37,16 +37,49 @@ def test_response_usage_uses_only_standard_numeric_counters() -> None:
         usage=SimpleNamespace(prompt_tokens=12, completion_tokens=34)
     )
 
-    assert response_usage(response) == ("reported", 12, 34)
+    assert response_usage(response) == ("reported", 12, 34, None)
 
 
 def test_response_usage_missing_or_non_numeric_is_unavailable_not_zero() -> None:
-    assert response_usage(SimpleNamespace()) == ("unavailable", None, None)
+    assert response_usage(SimpleNamespace()) == ("unavailable", None, None, None)
     assert response_usage({"usage": {"input_tokens": "12"}}) == (
         "unavailable",
         None,
         None,
+        None,
     )
+
+
+def test_response_usage_extracts_cached_tokens_from_responses_api_details() -> None:
+    response = SimpleNamespace(
+        usage=SimpleNamespace(
+            input_tokens=100,
+            output_tokens=20,
+            details={"input_tokens_details": {"cached_tokens": 64}},
+        )
+    )
+
+    assert response_usage(response) == ("reported", 100, 20, 64)
+
+
+def test_response_usage_extracts_cached_tokens_from_chat_completions_details() -> None:
+    response = {
+        "usage": {
+            "prompt_tokens": 100,
+            "completion_tokens": 20,
+            "details": {"prompt_tokens_details": {"cached_tokens": 32}},
+        }
+    }
+
+    assert response_usage(response) == ("reported", 100, 20, 32)
+
+
+def test_response_usage_cached_tokens_is_none_when_absent() -> None:
+    response = SimpleNamespace(
+        usage=SimpleNamespace(input_tokens=100, output_tokens=20, details={})
+    )
+
+    assert response_usage(response) == ("reported", 100, 20, None)
 
 
 def test_receipt_sink_observability_is_scalar_only() -> None:
@@ -396,7 +429,11 @@ def test_unpriced_local_call_records_tokens_without_inventing_a_cost(
                 provider="codex",
                 model="test-model",
                 response=SimpleNamespace(
-                    usage=SimpleNamespace(input_tokens=12, output_tokens=34)
+                    usage=SimpleNamespace(
+                        input_tokens=12,
+                        output_tokens=34,
+                        details={"input_tokens_details": {"cached_tokens": 5}},
+                    )
                 ),
                 latency_ms=23,
             )
@@ -406,6 +443,7 @@ def test_unpriced_local_call_records_tokens_without_inventing_a_cost(
         assert recorded.usage_state == "reported"
         assert recorded.input_tokens == 12
         assert recorded.output_tokens == 34
+        assert recorded.cached_tokens == 5
         assert recorded.reported_cost_microunits is None
         assert recorded.pricing_version == "unpriced-v1"
 
@@ -458,3 +496,108 @@ def test_required_durable_admission_reserves_and_reconciles_before_sdk(
         )
 
     asyncio.run(scenario())
+
+
+def test_cached_tokens_reach_the_operation_usage_snapshot(monkeypatch) -> None:
+    """R2-D: a provider-served cache hit is counted, never netted off input.
+
+    ``cachedTokens`` is a subset of ``inputTokens`` the provider billed at a
+    reduced rate, so the two are reported side by side: subtracting one from
+    the other would make a receipt disagree with the invoice.
+    """
+
+    from services.provider_usage_instrumentation import (
+        provider_operation_usage_scope,
+    )
+
+    async def scenario() -> dict:
+        async def receipt(_value):
+            return None
+
+        monkeypatch.setattr(
+            "services.provider_usage_instrumentation.durable_provider_runtime_required",
+            lambda: False,
+        )
+        monkeypatch.setattr(
+            "services.provider_usage_receipt_service.record_provider_usage_receipt_detached",
+            receipt,
+        )
+
+        with provider_operation_usage_scope() as usage:
+            with provider_usage_scope(
+                job_id=uuid.uuid4(),
+                operation="generate",
+                stage="author",
+                attempt_number=1,
+                slide_index=0,
+            ):
+                async with provider_call_admission(
+                    provider="codex", model="test-model"
+                ):
+                    pass
+                await record_provider_call(
+                    provider="codex",
+                    model="test-model",
+                    response=SimpleNamespace(
+                        usage=SimpleNamespace(
+                            input_tokens=1200,
+                            output_tokens=340,
+                            details={"input_tokens_details": {"cached_tokens": 900}},
+                        )
+                    ),
+                    latency_ms=17,
+                )
+        return usage.snapshot()
+
+    snapshot = asyncio.run(scenario())
+
+    assert snapshot["totals"]["cachedTokens"] == 900
+    assert snapshot["totals"]["inputTokens"] == 1200
+    assert snapshot["stages"]["author"]["cachedTokens"] == 900
+
+
+def test_a_provider_without_a_cache_counter_reports_zero_cached_tokens(
+    monkeypatch,
+) -> None:
+    from services.provider_usage_instrumentation import (
+        provider_operation_usage_scope,
+    )
+
+    async def scenario() -> dict:
+        async def receipt(_value):
+            return None
+
+        monkeypatch.setattr(
+            "services.provider_usage_instrumentation.durable_provider_runtime_required",
+            lambda: False,
+        )
+        monkeypatch.setattr(
+            "services.provider_usage_receipt_service.record_provider_usage_receipt_detached",
+            receipt,
+        )
+
+        with provider_operation_usage_scope() as usage:
+            with provider_usage_scope(
+                job_id=uuid.uuid4(),
+                operation="generate",
+                stage="author",
+                attempt_number=1,
+            ):
+                async with provider_call_admission(
+                    provider="codex", model="test-model"
+                ):
+                    pass
+                await record_provider_call(
+                    provider="codex",
+                    model="test-model",
+                    response=SimpleNamespace(
+                        usage=SimpleNamespace(input_tokens=10, output_tokens=2)
+                    ),
+                    latency_ms=3,
+                )
+        return usage.snapshot()
+
+    snapshot = asyncio.run(scenario())
+
+    assert snapshot["totals"]["cachedTokens"] == 0
+    assert snapshot["totals"]["inputTokens"] == 10
