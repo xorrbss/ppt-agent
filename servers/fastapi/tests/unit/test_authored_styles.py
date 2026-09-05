@@ -29,6 +29,7 @@ EXPECTED_AUTHORED_STYLE_IDS = {
     "cobalt-editorial",
     "cyber-ai",
     "default",
+    "devax-si-proposal",
     "editorial-tritone",
     "exec-report",
     "flat-infographic",
@@ -106,7 +107,7 @@ def _tracked_authored_style_sources() -> list[Path]:
     developer can preview a local style.  The catalogue contract, however,
     describes the versioned product surface.  Resolving that surface via Git
     keeps this test hermetic when a developer has an ignored draft next to the
-    37 shipped styles, while still failing if a tracked file is added, removed,
+    38 shipped styles, while still failing if a tracked file is added, removed,
     or renamed without updating the contract.
     """
 
@@ -500,7 +501,7 @@ def test_authored_catalogue_has_complete_contracts(tmp_path, caplog):
     with caplog.at_level(logging.WARNING, logger="utils.authored_styles"):
         styles = load_authored_styles(tracked_catalogue)
 
-    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 37
+    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 38
     assert {source.stem for source in sources} == EXPECTED_AUTHORED_STYLE_IDS
     assert {style.id for style in styles} == EXPECTED_AUTHORED_STYLE_IDS
     assert not [
@@ -534,6 +535,7 @@ def test_authored_catalogue_has_complete_contracts(tmp_path, caplog):
         expected_preview_fields = {"bg", "accent", "palette", "variant"}
         if style_id in {
             "cyber-ai",
+            "devax-si-proposal",
             "hyundai-culture-center",
             "osb-smart-banking",
             "tech-blueprint",
@@ -582,7 +584,7 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body) == 37
+    assert len(body) == 38
     assert [style["id"] for style in body] == sorted(style["id"] for style in body)
     assert {style["id"] for style in body} == EXPECTED_AUTHORED_STYLE_IDS
     assert all(
@@ -610,6 +612,9 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
     )
     assert by_id["osb-smart-banking"]["preview"]["image"] == (
         "/api/v1/ppt/authored/styles/osb-smart-banking/preview"
+    )
+    assert by_id["devax-si-proposal"]["preview"]["image"] == (
+        "/api/v1/ppt/authored/styles/devax-si-proposal/preview"
     )
     assert by_id["default"]["name"] == "기본 블루프린트"
     assert by_id["default"]["description"] == (

@@ -183,43 +183,6 @@ describe("PresentationGenerationApi.generateAuthoredAsync", () => {
   });
 });
 
-describe("PresentationGenerationApi.generateTemplateV2Async", () => {
-  it("sends an explicit strategy and immutable template provenance", () => {
-    cy.intercept("POST", "**/api/v1/ppt/presentation/generate/async", {
-      statusCode: 200,
-      body: { id: "template-v2-task" },
-    }).as("startTemplateV2Generation");
-
-    cy.then(() =>
-      PresentationGenerationApi.generateTemplateV2Async({
-        presentation_id: "template-v2-shell",
-        content: "Outline title",
-        slides_markdown: ["# Outline title"],
-        language: "Korean",
-        template_v2_id: "brand-template",
-        template_v2_revision: 4,
-        idempotency_key: "template-v2-generation-key",
-      })
-    );
-
-    cy.wait("@startTemplateV2Generation").then(({ request }) => {
-      expect(request.headers).to.include({
-        "idempotency-key": "template-v2-generation-key",
-      });
-      expect(request.body).to.deep.equal({
-        presentation_id: "template-v2-shell",
-        content: "Outline title",
-        slides_markdown: ["# Outline title"],
-        language: "Korean",
-        strategy: "template_v2",
-        template_v2_id: "brand-template",
-        template_v2_revision: 4,
-        export_as: "pptx",
-      });
-    });
-  });
-});
-
 describe("PresentationGenerationApi.getGenerationStatus", () => {
   it("returns authored checkpoint progress and sanitized slide failure fields", () => {
     cy.intercept("GET", "**/api/v1/ppt/presentation/status/task-47", {

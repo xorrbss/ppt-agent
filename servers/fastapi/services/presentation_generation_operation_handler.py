@@ -819,16 +819,6 @@ class PresentationGenerationOperationHandler:
                     request._quality_receipt_v3_durability_profile = "public"
                     _validate_authored_exact_admission(request)
                     await _validate_authored_master_pin_admission(request)
-                    if job.template_v2_target is not None:
-                        from services.template_v2_generation_service import (
-                            TemplateV2GenerationTarget,
-                        )
-
-                        request._template_v2_generation_target = (
-                            TemplateV2GenerationTarget.from_durable_payload(
-                                job.template_v2_target
-                            )
-                        )
                     await generate_presentation_handler(
                         request,
                         job.presentation_id,

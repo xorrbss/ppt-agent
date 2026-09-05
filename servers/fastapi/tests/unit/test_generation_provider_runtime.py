@@ -28,7 +28,6 @@ def _settings(provider: str) -> RuntimeSettings:
 @pytest.mark.parametrize(
     ("strategy", "template", "driver_id", "required"),
     [
-        ("template_v2", "general", "template-v2", ("structuredOutput",)),
         ("authored", "general", "authored", ("structuredOutput", "thinking")),
     ],
 )
@@ -47,8 +46,6 @@ def test_generation_profiles_admit_supported_provider(
         content="provider admission",
         strategy=strategy,
         template=template,
-        template_v2_id="template" if strategy == "template_v2" else None,
-        template_v2_revision=1 if strategy == "template_v2" else None,
     )
     identity = server_generation_profile_identity(request, None)
     profile = resolve_presentation_profile(identity)

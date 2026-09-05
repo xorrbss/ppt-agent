@@ -4,30 +4,17 @@ from types import SimpleNamespace
 import uuid
 from unittest.mock import AsyncMock, patch
 
-from fastapi import HTTPException
+from pydantic import ValidationError
 import pytest
 
-from api.v1.ppt.endpoints.presentation_generate import (
-    _generate_template_v2_presentation,
-    _template_v2_http_exception,
-    check_if_api_request_is_valid,
-    generate_presentation_handler,
-)
 from models.generate_presentation_request import GeneratePresentationRequest
-from models.presentation_and_path import PresentationAndPath
 from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
 )
 from models.presentation_structure_model import PresentationStructureModel
 from models.presentation_layout import SlideLayoutModel
-from models.sql.presentation import PresentationModel
-from models.sql.presentation_generation_job import PresentationGenerationJob
-from models.sql.image_asset import ImageAsset
 from models.sql.slide import SlideModel
-from models.sql.async_presentation_generation_status import (
-    AsyncPresentationGenerationTaskModel,
-)
 from services.template_v2_generation_service import (
     TemplateV2GenerationError,
     TemplateV2GenerationLayout,
@@ -36,7 +23,6 @@ from services.template_v2_generation_service import (
     load_template_v2_generation_target,
     preflight_template_v2_native_pptx,
 )
-from templates.v2.constants import TEMPLATE_V2_VERSION
 from templates.v2.models.layouts import SlideLayout
 from utils.llm_calls.generate_slide_content import _prepare_response_schema
 
@@ -304,121 +290,19 @@ class RecordingSession:
         return _Result()
 
 
-def test_template_v2_generation_is_default_off(monkeypatch):
-    monkeypatch.delenv("ENABLE_TEMPLATE_V2", raising=False)
-    monkeypatch.delenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", raising=False)
-    request = GeneratePresentationRequest(
-        content="Topic",
-        strategy="template_v2",
-        template_v2_id="native-template",
-        template_v2_revision=7,
-    )
 
-    with pytest.raises(HTTPException) as exc:
-        asyncio.run(check_if_api_request_is_valid(request, RecordingSession()))
+def test_template_v2_is_no_longer_an_accepted_generation_strategy():
+    """New generation from a Template V2 template has been retired.
 
-    assert exc.value.status_code == 403
-    assert exc.value.detail == "template_v2_creation_disabled"
+    The studio, its PPTX import pipeline and export of decks that were
+    already generated from a Template V2 template are unaffected.
+    """
 
+    with pytest.raises(ValidationError) as rejected:
+        GeneratePresentationRequest(content="Topic", strategy="template_v2")
 
-def test_template_v2_requires_explicit_target_fields():
-    request = GeneratePresentationRequest(content="Topic", strategy="template_v2")
-
-    with pytest.raises(HTTPException) as exc:
-        asyncio.run(check_if_api_request_is_valid(request, RecordingSession()))
-
-    assert exc.value.status_code == 400
-    assert exc.value.detail == "template_v2_id_required"
-
-
-def test_template_v2_admission_stores_the_exact_snapshot(monkeypatch):
-    monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
-    monkeypatch.setenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", "native-template")
-    request = GeneratePresentationRequest(
-        content="Topic",
-        strategy="template_v2",
-        template_v2_id="native-template",
-        template_v2_revision=7,
-    )
-    admitted = _target()
-    loader = AsyncMock(return_value=admitted)
-
-    with patch(
-        "api.v1.ppt.endpoints.presentation_generate."
-        "load_template_v2_generation_target",
-        new=loader,
-    ):
-        asyncio.run(check_if_api_request_is_valid(request, RecordingSession()))
-
-    loader.assert_awaited_once()
-    assert request._template_v2_generation_target is admitted
-
-
-def test_template_v2_accepts_inherited_references_with_grounded_slides(monkeypatch):
-    monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
-    monkeypatch.setenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", "native-template")
-    request = GeneratePresentationRequest(
-        content="Topic",
-        slides_markdown=["# Grounded slide"],
-        reference_snapshot_ids=[uuid.uuid4()],
-        strategy="template_v2",
-        template_v2_id="native-template",
-        template_v2_revision=7,
-    )
-    admitted = _target()
-
-    with (
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate."
-            "_admit_generation_references",
-            new=AsyncMock(return_value=()),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate."
-            "load_template_v2_generation_target",
-            new=AsyncMock(return_value=admitted),
-        ),
-    ):
-        asyncio.run(check_if_api_request_is_valid(request, RecordingSession()))
-
-    assert request._template_v2_generation_target is admitted
-
-
-def test_template_v2_still_rejects_raw_reference_generation(monkeypatch):
-    monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
-    monkeypatch.setenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", "native-template")
-    request = GeneratePresentationRequest(
-        content="Topic",
-        reference_snapshot_ids=[uuid.uuid4()],
-        strategy="template_v2",
-        template_v2_id="native-template",
-        template_v2_revision=7,
-    )
-
-    with patch(
-        "api.v1.ppt.endpoints.presentation_generate."
-        "_admit_generation_references",
-        new=AsyncMock(return_value=()),
-    ):
-        with pytest.raises(HTTPException) as exc:
-            asyncio.run(check_if_api_request_is_valid(request, RecordingSession()))
-
-    assert exc.value.status_code == 400
-    assert exc.value.detail == "template_v2_source_mode_not_supported"
-
-
-def test_template_v2_fields_are_rejected_without_discriminator():
-    request = GeneratePresentationRequest(
-        content="Topic",
-        template_v2_id="native-template",
-        template_v2_revision=7,
-    )
-
-    with pytest.raises(HTTPException) as exc:
-        asyncio.run(check_if_api_request_is_valid(request, RecordingSession()))
-
-    assert exc.value.status_code == 400
-    assert exc.value.detail == "generation_strategy_conflict"
+    assert rejected.value.errors()[0]["loc"] == ("strategy",)
+    assert rejected.value.errors()[0]["type"] == "literal_error"
 
 
 def test_target_loader_pins_revision_and_projects_only_fillable_layouts(monkeypatch):
@@ -538,9 +422,6 @@ def test_target_loader_rejects_catalog_template_without_release_admission(monkey
             )
 
     assert exc.value.code == "template_v2_template_not_published"
-    response = _template_v2_http_exception(exc.value)
-    assert response.status_code == 403
-    assert response.detail == "template_v2_template_not_published"
 
 
 def test_target_loader_preserves_private_non_catalog_generation(monkeypatch):
@@ -1018,368 +899,3 @@ def test_native_pptx_preflight_records_explicit_unsupported_capability():
         "template_v2_native_pptx_element_unsupported"
     )
     assert capability["unsupported"]["path"].endswith(".type=chart")
-
-
-def test_handler_persists_v2_identity_provenance_and_native_ui():
-    presentation_id = uuid.uuid4()
-    request = GeneratePresentationRequest(
-        content="Topic",
-        slides_markdown=["A title"],
-        strategy="template_v2",
-        template_v2_id="native-template",
-        template_v2_revision=7,
-    )
-    outlines = PresentationOutlineModel(
-        slides=[SlideOutlineModel(content="A title")]
-    )
-    session = RecordingSession()
-    request._template_v2_generation_target = _target()
-    observations: list[dict[str, object]] = []
-    progress_updates: list[dict[str, object]] = []
-
-    async def report_progress(**update):
-        progress_updates.append(update)
-        return True
-
-    async def publish_staged(_session, presentation, export_path, *args, **kwargs):
-        presentation.lifecycle_status = "published"
-        return export_path
-
-    with (
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate."
-            "log_template_v2_generation_observation",
-            new=lambda **event: observations.append(event),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate."
-            "MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context",
-            new=AsyncMock(),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate."
-            "MEM0_PRESENTATION_MEMORY_SERVICE.store_generated_outlines",
-            new=AsyncMock(),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate.build_template_structure",
-            new=AsyncMock(
-                return_value=(outlines, PresentationStructureModel(slides=[0]))
-            ),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate.get_images_directory",
-            return_value="/tmp/images",
-        ),
-        patch(
-            "services.template_v2_generation_service."
-            "get_slide_content_from_type_and_outline",
-            new=AsyncMock(return_value={"hero": {"title": "Generated title"}}),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate._execute_generation_export",
-            new=AsyncMock(
-                return_value=SimpleNamespace(
-                    presentation=PresentationAndPath(
-                        presentation_id=presentation_id,
-                        path="/tmp/native-template.pptx",
-                    )
-                )
-            ),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate._publish_staged_presentation",
-            new=AsyncMock(side_effect=publish_staged),
-        ),
-    ):
-        response = asyncio.run(
-            generate_presentation_handler(
-                request,
-                presentation_id,
-                async_status=None,
-                progress_reporter=report_progress,
-                sql_session=session,
-            )
-        )
-
-    presentation = next(
-        value for value in session.added if isinstance(value, PresentationModel)
-    )
-    slide = next(value for value in session.added_many if isinstance(value, SlideModel))
-    assert response.presentation_id == presentation_id
-    assert presentation.version == TEMPLATE_V2_VERSION
-    assert presentation.mode == "template"
-    assert presentation.lifecycle_status == "published"
-    assert presentation.layout is None
-    assert presentation.structure is None
-    assert presentation.theme["template_v2"]["request_strategy"] == "template_v2"
-    assert presentation.theme["template_v2"]["generation_strategy"] == "template-v2"
-    assert presentation.theme["template_v2"]["template_v2_id"] == "native-template"
-    assert presentation.theme["template_v2"]["template_v2_revision"] == 7
-    assert presentation.theme["template_v2"]["request_id"] == str(presentation_id)
-    assert presentation.theme["template_v2"]["job_id"] == f"sync:{presentation_id}"
-    assert presentation.theme["template_v2"]["compiler_version"] == "1"
-    native_preflight = presentation.theme["template_v2"][
-        "native_pptx_preflight"
-    ]
-    assert native_preflight["schema_version"] == (
-        "presenton.template-v2-native-pptx/v1"
-    )
-    assert native_preflight["compiler_name"] == (
-        "presenton-template-v2-native-ooxml"
-    )
-    assert native_preflight["compiler_version"] == "1"
-    assert native_preflight["status"] == "compiled"
-    assert native_preflight["selected_for_export"] is False
-    assert native_preflight["structural_sha256"].startswith("sha256:")
-    assert native_preflight["package_sha256"].startswith("sha256:")
-    assert native_preflight["unsupported"] is None
-    assert presentation.theme["template_v2"]["source_content_sha256"].startswith(
-        "sha256:"
-    )
-    assert "Topic" not in str(presentation.theme["template_v2"])
-    assert slide.layout_group == "native"
-    assert slide.ui["id"] == "title-slide"
-    assert slide.content == {"hero": {"title": "Generated title"}}
-    assert [event["operation"] for event in observations] == [
-        "generate",
-        "export",
-    ]
-    assert all(event["outcome"] == "success" for event in observations)
-    assert all(
-        isinstance(event["duration_ms"], float) and event["duration_ms"] >= 0
-        for event in observations
-    )
-    assert observations[1]["export_type"] == "pptx"
-    assert all("code" not in event for event in observations)
-    assert [update["stage"] for update in progress_updates] == [
-        "template_v2_layout_selection",
-        "template_v2_slide_generation",
-        "template_v2_slide_generation",
-        "template_v2_pptx_validation",
-        "template_v2_saving",
-        "template_v2_exporting",
-        "template_v2_publishing",
-    ]
-    assert progress_updates[2] == {
-        "stage": "template_v2_slide_generation",
-        "current": 1,
-        "total": 1,
-        "percent": 80,
-        "message": "슬라이드 내용을 생성하고 있습니다. 1/1장 완료",
-    }
-
-
-def test_durable_template_v2_assets_use_fenced_staging_and_atomic_publication():
-    presentation_id = uuid.uuid4()
-    operation_id = uuid.uuid4()
-    target_presentation = PresentationModel(
-        id=presentation_id,
-        revision=4,
-        lifecycle_status="staging",
-    )
-    job = PresentationGenerationJob(
-        task_id="task-id",
-        presentation_id=presentation_id,
-        workspace_operation_id=operation_id,
-        request_sha256="e" * 64,
-        request_payload={},
-        attempt_token="attempt-token",
-    )
-    request = GeneratePresentationRequest(
-        content="Topic",
-        slides_markdown=["A title"],
-        strategy="template_v2",
-        template_v2_id="native-template",
-        template_v2_revision=7,
-    )
-    request._template_v2_generation_target = _target()
-    outlines = PresentationOutlineModel(
-        slides=[SlideOutlineModel(content="A title")]
-    )
-    session = RecordingSession()
-    session.add(target_presentation)
-    staging = SimpleNamespace(
-        artifact_id=uuid.uuid4(),
-        staging_directory="/tmp/staging",
-    )
-    image_artifact = SimpleNamespace(artifact_id=uuid.uuid4())
-    promoted = SimpleNamespace(
-        artifacts=(image_artifact,),
-        replacements={"/tmp/staging/generated.png": "/tmp/artifacts/generated.png"},
-    )
-    generated_asset = ImageAsset(path="/tmp/staging/generated.png")
-    publish = AsyncMock(return_value="/tmp/native-template.pptx")
-
-    async def report_progress(**_update):
-        return True
-
-    with (
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate.build_template_structure",
-            new=AsyncMock(
-                return_value=(outlines, PresentationStructureModel(slides=[0]))
-            ),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate.get_images_directory",
-            return_value="/tmp/images",
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate."
-            "_workspace_operation_fencing_token",
-            new=AsyncMock(return_value=9),
-        ) as fencing_token,
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate."
-            "prepare_workspace_chat_artifact_staging",
-            new=AsyncMock(return_value=staging),
-        ) as prepare_staging,
-        patch(
-            "services.template_v2_generation_service."
-            "get_slide_content_from_type_and_outline",
-            new=AsyncMock(return_value={"hero": {"title": "Generated title"}}),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate."
-            "process_slide_and_fetch_assets",
-            new=AsyncMock(return_value=[generated_asset]),
-        ) as process_assets,
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate."
-            "promote_workspace_chat_image_artifacts",
-            new=AsyncMock(return_value=promoted),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate._execute_generation_export",
-            new=AsyncMock(
-                return_value=SimpleNamespace(
-                    presentation=PresentationAndPath(
-                        presentation_id=presentation_id,
-                        path="/tmp/native-template.pptx",
-                    )
-                )
-            ),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate."
-            "_publish_staged_presentation",
-            new=publish,
-        ),
-    ):
-        response = asyncio.run(
-            _generate_template_v2_presentation(
-                request=request,
-                presentation_id=presentation_id,
-                presentation_outlines=outlines,
-                using_slides_markdown=True,
-                language_to_use="English",
-                async_status=None,
-                generation_job=job,
-                export_cookie_header=None,
-                progress_reporter=report_progress,
-                sql_session=session,
-            )
-        )
-
-    assert response.path == "/tmp/native-template.pptx"
-    fencing_token.assert_awaited_once()
-    assert prepare_staging.await_args.kwargs == {
-        "operation_id": operation_id,
-        "presentation_id": presentation_id,
-        "source_revision": 5,
-        "attempt_token": "attempt-token",
-        "fencing_token": 9,
-    }
-    assert process_assets.await_args.kwargs["template_v2"] is True
-    publish_kwargs = publish.await_args.kwargs
-    assert publish_kwargs["generated_assets"] == (generated_asset,)
-    assert publish_kwargs["image_staging"] is staging
-    assert publish_kwargs["image_artifacts"] == (image_artifact,)
-    assert generated_asset.path == "/tmp/artifacts/generated.png"
-
-
-def test_async_export_failure_removes_partial_deck_and_rolls_back_session():
-    presentation_id = uuid.uuid4()
-    request = GeneratePresentationRequest(
-        content="Topic",
-        slides_markdown=["A title"],
-        strategy="template_v2",
-        template_v2_id="native-template",
-        template_v2_revision=7,
-    )
-    request._template_v2_generation_target = _target()
-    outlines = PresentationOutlineModel(
-        slides=[SlideOutlineModel(content="A title")]
-    )
-    async_status = AsyncPresentationGenerationTaskModel(
-        status="pending",
-        message="Queued for generation",
-    )
-    session = RecordingSession()
-    observations: list[dict[str, object]] = []
-
-    with (
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate."
-            "log_template_v2_generation_observation",
-            new=lambda **event: observations.append(event),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate."
-            "MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context",
-            new=AsyncMock(),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate."
-            "MEM0_PRESENTATION_MEMORY_SERVICE.store_generated_outlines",
-            new=AsyncMock(),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate.build_template_structure",
-            new=AsyncMock(
-                return_value=(outlines, PresentationStructureModel(slides=[0]))
-            ),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate.get_images_directory",
-            return_value="/tmp/images",
-        ),
-        patch(
-            "services.template_v2_generation_service."
-            "get_slide_content_from_type_and_outline",
-            new=AsyncMock(return_value={"hero": {"title": "Generated title"}}),
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation_generate._execute_generation_export",
-            new=AsyncMock(side_effect=RuntimeError("export failed")),
-        ),
-    ):
-        result = asyncio.run(
-            generate_presentation_handler(
-                request,
-                presentation_id,
-                async_status=async_status,
-                sql_session=session,
-            )
-        )
-
-    assert result is None
-    assert async_status.status == "error"
-    assert async_status.error["detail"] == "Presentation generation failed"
-    assert session.rollbacks >= 2
-    assert len(session.executed) == 2
-    assert "slides" in str(session.executed[0]).lower()
-    assert "presentations" in str(session.executed[1]).lower()
-    assert [event["operation"] for event in observations] == [
-        "generate",
-        "export",
-    ]
-    assert observations[0]["outcome"] == "success"
-    assert observations[1]["outcome"] == "failure"
-    assert observations[1]["export_type"] == "pptx"
-    assert observations[1]["code"] == "template_v2_export_failed"
-    assert all(
-        isinstance(event["duration_ms"], float) and event["duration_ms"] >= 0
-        for event in observations
-    )

@@ -73,10 +73,6 @@ class DesignPackPinInput(StrictCamelModel):
 class GeneratePresentationRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    # Admission-only state. This never crosses the HTTP wire, but lets the
-    # in-process background task execute the exact immutable revision that was
-    # accepted instead of re-reading mutable current state.
-    _template_v2_generation_target: Any = PrivateAttr(default=None)
     _request_id: Optional[str] = PrivateAttr(default=None)
     _authored_exact_snapshot_id: Optional[str] = PrivateAttr(default=None)
     _authored_master_pin: Any = PrivateAttr(default=None)
@@ -137,9 +133,7 @@ class GeneratePresentationRequest(BaseModel):
             "server-owned pre-export and export evidence gates."
         ),
     )
-    strategy: Optional[
-        Literal["authored", "template_v2"]
-    ] = Field(
+    strategy: Optional[Literal["authored"]] = Field(
         default=None,
         description=(
             "Explicit generation strategy. Omit to use the authored source."
@@ -177,16 +171,6 @@ class GeneratePresentationRequest(BaseModel):
     content_policy: Optional[SourceContentPolicy] = Field(
         default=None,
         alias="contentPolicy",
-    )
-    template_v2_id: Optional[str] = Field(
-        default=None,
-        description="Structured Template V2 id (required for strategy=template_v2)",
-    )
-    template_v2_revision: Optional[int] = Field(
-        default=None,
-        description=(
-            "Immutable Template V2 revision (required for strategy=template_v2)"
-        ),
     )
     include_table_of_contents: bool = Field(
         default=False, description="Whether to include a table of contents"
@@ -292,10 +276,7 @@ class GeneratePresentationRequest(BaseModel):
             raise ValueError("source_content_manifest_pin_required")
         if self.content_policy is None:
             raise ValueError("source_content_policy_required")
-        if self.template.strip().lower() != "authored" or self.strategy not in {
-            None,
-            "authored",
-        }:
+        if self.template.strip().lower() != "authored":
             raise ValueError("generation_strategy_conflict")
         if not (self.authored_style or "").strip():
             raise ValueError("source_content_template_required")

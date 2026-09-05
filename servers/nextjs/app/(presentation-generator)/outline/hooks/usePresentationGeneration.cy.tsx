@@ -56,7 +56,6 @@ describe("usePresentationGeneration authored-only generation", () => {
     cy.stub(PresentationGenerationApi, "generateAuthoredAsync")
       .resolves({ id: "task-authored", status: "running" } as any)
       .as("generateAuthored");
-    cy.spy(PresentationGenerationApi, "generateTemplateV2Async").as("templateV2Generate");
 
     mount(
       <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="UTC">
@@ -82,7 +81,6 @@ describe("usePresentationGeneration authored-only generation", () => {
         },
       }),
     );
-    cy.get("@templateV2Generate").should("not.have.been.called");
   });
 
   it("reports a public slide-policy rejection without offering a transport retry", () => {

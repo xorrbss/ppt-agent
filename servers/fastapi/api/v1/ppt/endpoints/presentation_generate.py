@@ -35,7 +35,7 @@ from fastapi import (
     Request,
 )
 from pydantic import BaseModel
-from sqlalchemy import delete, select, update
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,11 +44,7 @@ from api.v1.ppt.endpoints import presentation_generation_staging as generation_s
 from api.v1.ppt.endpoints.presentation_generation_staging import (
     _durable_request_payload,
     _uses_isolated_render_staging,
-    _render_staging_id,
-    _replace_workspace_image_paths,
-    _workspace_operation_fencing_token,
     _discard_render_staging,
-    _record_generation_export_failure,
     _request_from_durable_payload,
 )
 from constants.presentation import (
@@ -72,7 +68,6 @@ from models.sql.presentation import (
     PresentationModel,
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
-from models.sql.slide import SlideModel
 from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
 from models.workspace import WorkspaceBootstrapRequest
 from services.authored_checkpoint_service import (
@@ -117,8 +112,6 @@ from services.compatibility_migration.authored_vnext_contract import (
 from services.compatibility_migration.admission import (
     stamp_new_authored_presentation,
 )
-from services.generation_pipeline import build_template_structure
-from services.image_generation_service import ImageGenerationService
 from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
@@ -146,17 +139,6 @@ from services.references import (
     claim_reference_snapshots,
     fit_uploaded_reference_payload,
 )
-from services.template_v2_generation_observability import (
-    log_template_v2_generation_observation,
-)
-from services.template_v2_generation_service import (
-    TemplateV2GenerationError,
-    build_template_v2_slides,
-    load_template_v2_generation_target,
-    preflight_template_v2_native_pptx,
-    refresh_template_v2_slide_ui,
-    source_content_sha256,
-)
 from services.webhook_service import WebhookService
 from services.workspace_artifact_publication_service import (
     PreparedWorkspaceChatArtifactStaging,
@@ -166,8 +148,6 @@ from services.workspace_artifact_publication_service import (
     prepare_workspace_generation_artifact,
     publish_workspace_generation_artifact,
     compensate_workspace_chat_artifact_staging,
-    prepare_workspace_chat_artifact_staging,
-    promote_workspace_chat_image_artifacts,
     stage_workspace_chat_artifacts_for_publication,
     workspace_chat_artifacts_were_published,
 )
@@ -205,12 +185,6 @@ from services.workspace_service import (
     WorkspaceServiceError,
     activate_workspace_operation,
 )
-from templates.v2.constants import TEMPLATE_V2_VERSION
-from templates.v2.strategies import (
-    TEMPLATE_V2_STRATEGIES,
-    resolve_presentation_strategies,
-)
-from utils.asset_directory_utils import get_images_directory
 from utils.authored_styles import (
     AuthoredExactReconstructionUnavailableError,
     resolve_authored_style,
@@ -229,12 +203,9 @@ from utils.llm_calls.generate_presentation_outlines import (
 from utils.llm_utils import message_content_to_text
 from utils.outline_citations import strip_outline_citations
 from utils.outline_utils import (
-    get_images_for_slides_from_outline,
     get_no_of_outlines_to_generate_for_n_slides,
-    get_presentation_title_from_presentation_outline,
 )
 from utils.owner_context import get_current_owner_id
-from utils.process_slides import process_slide_and_fetch_assets
 
 logger = logging.getLogger(__name__)
 
@@ -486,29 +457,6 @@ async def _validate_authored_master_pin_admission(
     request._authored_composition_pin = composition
 
 
-def _template_v2_http_exception(error: TemplateV2GenerationError) -> HTTPException:
-    status_by_code = {
-        "template_v2_creation_disabled": 403,
-        "template_v2_allowlist_required": 403,
-        "template_v2_template_not_allowed": 403,
-        "template_v2_template_not_published": 403,
-        "template_v2_template_id_required": 400,
-        "template_v2_rollout_config_invalid": 503,
-        "template_v2_template_not_found": 404,
-        "template_v2_revision_conflict": 409,
-        "template_v2_snapshot_not_found": 409,
-        "template_v2_snapshot_missing": 500,
-        "template_v2_source_invalid": 422,
-        "template_v2_layouts_invalid": 422,
-        "template_v2_fillable_layout_required": 422,
-        "template_v2_generation_invalid": 422,
-    }
-    return HTTPException(
-        status_code=status_by_code.get(error.code, 422),
-        detail=error.code,
-    )
-
-
 def _source_content_http_exception(error: SourceContentError) -> HTTPException:
     exception = HTTPException(
         status_code=error.status_code,
@@ -678,45 +626,6 @@ async def check_if_api_request_is_valid(
             status_code=400,
             detail="Number of slides cannot be less than 3 if table of contents is included",
         )
-
-    if request.strategy == "template_v2":
-        template_v2_id = (request.template_v2_id or "").strip()
-        if not template_v2_id:
-            raise HTTPException(status_code=400, detail="template_v2_id_required")
-        if request.template_v2_revision is None:
-            raise HTTPException(status_code=400, detail="template_v2_revision_required")
-        if request.template_v2_revision < 1:
-            raise HTTPException(status_code=400, detail="template_v2_revision_invalid")
-        # A chat-first deck keeps its uploaded-document snapshots attached for
-        # audit/download history.  Once the client supplies the already-grounded
-        # slide markdown, Template V2 does not consume those snapshots again, so
-        # their inherited identities are not an unsupported source mode.
-        # Direct Template V2 generation from raw references remains rejected.
-        unsupported_reference_source = (
-            bool(request.reference_snapshot_ids) and not request.slides_markdown
-        )
-        if request.files or request.web_search or unsupported_reference_source:
-            raise HTTPException(
-                status_code=400,
-                detail="template_v2_source_mode_not_supported",
-            )
-        request.template_v2_id = template_v2_id
-        try:
-            # Validate admission, existence, the pinned revision and its strict
-            # fillable schemas before a sync run or async job is started.
-            request._template_v2_generation_target = (
-                await load_template_v2_generation_target(
-                    sql_session,
-                    template_id=template_v2_id,
-                    revision=request.template_v2_revision,
-                )
-            )
-        except TemplateV2GenerationError as error:
-            raise _template_v2_http_exception(error) from error
-        return (presentation_id,)
-
-    if request.template_v2_id is not None or request.template_v2_revision is not None:
-        raise HTTPException(status_code=400, detail="generation_strategy_conflict")
 
     if request.strategy not in {None, "authored"}:
         raise HTTPException(status_code=400, detail="generation_strategy_conflict")
@@ -917,7 +826,6 @@ async def _record_chat_first_generation_admission_failure(
         data=None,
         updated_at=now,
     )
-    target = request._template_v2_generation_target
     job = PresentationGenerationJob(
         task_id=status.id,
         presentation_id=presentation.id,
@@ -926,9 +834,6 @@ async def _record_chat_first_generation_admission_failure(
         request_id=request._request_id,
         request_sha256=fingerprint,
         request_payload=payload,
-        template_v2_target=(
-            target.to_durable_payload() if target is not None else None
-        ),
         export_cookie_required=False,
         state="failed",
         current_stage="admission",
@@ -1024,485 +929,6 @@ async def _revalidate_generation_admission_for_retry(
             status_code=status_code,
             retryable=retryable,
         ) from error
-
-
-async def _generate_template_v2_presentation(
-    *,
-    request: GeneratePresentationRequest,
-    presentation_id: uuid.UUID,
-    presentation_outlines: PresentationOutlineModel,
-    using_slides_markdown: bool,
-    language_to_use: Optional[str],
-    async_status: Optional[AsyncPresentationGenerationTaskModel],
-    generation_job: Optional[PresentationGenerationJob],
-    export_cookie_header: Optional[str],
-    progress_reporter: GenerationProgressReporter | None,
-    sql_session: AsyncSession,
-) -> PresentationPathAndEditPath:
-    """Execute the explicit, revision-pinned Template V2 generation branch."""
-
-    if request.template_v2_id is None or request.template_v2_revision is None:
-        raise HTTPException(status_code=400, detail="template_v2_target_required")
-
-    isolated_render = _uses_isolated_render_staging(generation_job)
-    render_presentation_id = (
-        _render_staging_id(generation_job)
-        if isolated_render and generation_job is not None
-        else presentation_id
-    )
-    target_presentation: PresentationModel | None = None
-    image_staging: PreparedWorkspaceChatArtifactStaging | None = None
-    promoted_images = PromotedWorkspaceChatArtifacts(artifacts=(), replacements={})
-    generated_assets_by_slide: dict[int, list[ImageAsset]] = {}
-
-    async def compensate_template_v2_images(*, reconcile: bool = False) -> None:
-        if image_staging is None:
-            return
-        try:
-            if reconcile and await workspace_chat_artifacts_were_published(
-                sql_session,
-                staging=image_staging,
-                artifacts=promoted_images.artifacts,
-            ):
-                return
-            await sql_session.rollback()
-            await compensate_workspace_chat_artifact_staging(
-                sql_session,
-                image_staging,
-            )
-        except BaseException:
-            logger.exception(
-                "Failed to compensate Template V2 image staging %s",
-                image_staging.artifact_id,
-            )
-
-    async def report_template_v2_progress(**update: Any) -> None:
-        if progress_reporter is None:
-            return
-        if await progress_reporter(**update) is False:
-            raise WorkspaceArtifactPublicationError("operation_lease_lost")
-
-    generation_started_at = perf_counter()
-    try:
-        target = request._template_v2_generation_target
-        if target is None:
-            raise TemplateV2GenerationError("template_v2_snapshot_missing")
-        await report_template_v2_progress(
-            stage="template_v2_layout_selection",
-            current=0,
-            total=None,
-            percent=5,
-            message="템플릿 레이아웃을 분석하고 있습니다.",
-        )
-        if async_status:
-            async_status.message = "Selecting Template V2 layouts"
-            async_status.updated_at = datetime.now(timezone.utc)
-            sql_session.add(async_status)
-            await sql_session.commit()
-
-        presentation_outlines, presentation_structure = await build_template_structure(
-            presentation_outlines,
-            target.as_pipeline_layout(),
-            instructions=request.instructions,
-            using_slides_markdown=using_slides_markdown,
-            include_table_of_contents=request.include_table_of_contents,
-            include_title_slide=request.include_title_slide,
-            target_n_slides=request.n_slides,
-        )
-
-        target_presentation = await sql_session.get(PresentationModel, presentation_id)
-        image_output_directory = get_images_directory()
-        if isolated_render:
-            if generation_job is None or target_presentation is None:
-                raise WorkspaceArtifactPublicationError("operation_lease_lost")
-            fencing_token = await _workspace_operation_fencing_token(
-                sql_session,
-                generation_job=generation_job,
-                presentation_id=presentation_id,
-            )
-            image_staging = await prepare_workspace_chat_artifact_staging(
-                sql_session,
-                operation_id=generation_job.workspace_operation_id,
-                presentation_id=presentation_id,
-                source_revision=target_presentation.revision + 1,
-                attempt_token=generation_job.attempt_token,
-                fencing_token=fencing_token,
-            )
-            image_output_directory = str(image_staging.staging_directory)
-        image_generation_service = ImageGenerationService(image_output_directory)
-        outline_image_urls = (
-            get_images_for_slides_from_outline(presentation_outlines.slides)
-            if using_slides_markdown
-            else [[] for _ in presentation_structure.slides]
-        )
-
-        async def process_template_v2_assets(slide: SlideModel) -> None:
-            generated_assets_by_slide[slide.index] = (
-                await process_slide_and_fetch_assets(
-                    image_generation_service,
-                    slide,
-                    outline_image_urls=outline_image_urls[slide.index],
-                    icon_weight=target.as_pipeline_layout().icon_weight,
-                    template_v2=True,
-                )
-            )
-
-        total_slides = len(presentation_structure.slides)
-        await report_template_v2_progress(
-            stage="template_v2_slide_generation",
-            current=0,
-            total=total_slides,
-            percent=10,
-            message=f"슬라이드 내용을 생성하고 있습니다. 0/{total_slides}장 완료",
-        )
-
-        if async_status:
-            async_status.message = "Generating Template V2 slides"
-            async_status.updated_at = datetime.now(timezone.utc)
-            sql_session.add(async_status)
-            await sql_session.commit()
-
-        async def report_slide_progress(completed: int, total: int) -> None:
-            percent = 10 + int((completed * 70) / max(1, total))
-            await report_template_v2_progress(
-                stage="template_v2_slide_generation",
-                current=completed,
-                total=total,
-                percent=min(80, percent),
-                message=f"슬라이드 내용을 생성하고 있습니다. {completed}/{total}장 완료",
-            )
-
-        slides = await build_template_v2_slides(
-            target=target,
-            presentation_id=render_presentation_id,
-            outlines=presentation_outlines,
-            structure=presentation_structure,
-            language=language_to_use,
-            tone=request.tone.value,
-            verbosity=request.verbosity.value,
-            instructions=request.instructions,
-            on_progress=report_slide_progress,
-            process_assets=process_template_v2_assets,
-        )
-
-        generated_assets = [
-            asset
-            for index in sorted(generated_assets_by_slide)
-            for asset in generated_assets_by_slide[index]
-        ]
-        if isolated_render and image_staging is not None:
-            promoted_images = await promote_workspace_chat_image_artifacts(
-                sql_session,
-                image_staging,
-            )
-            for slide in slides:
-                slide.content = _replace_workspace_image_paths(
-                    slide.content,
-                    promoted_images.replacements,
-                )
-                refresh_template_v2_slide_ui(target=target, slide=slide)
-            for generated_asset in generated_assets:
-                generated_asset.path = _replace_workspace_image_paths(
-                    generated_asset.path,
-                    promoted_images.replacements,
-                )
-                generated_asset.extras = _replace_workspace_image_paths(
-                    generated_asset.extras,
-                    promoted_images.replacements,
-                )
-        await report_template_v2_progress(
-            stage="template_v2_pptx_validation",
-            current=total_slides,
-            total=total_slides,
-            percent=84,
-            message="PowerPoint 구성을 검사하고 있습니다.",
-        )
-        native_pptx_preflight = preflight_template_v2_native_pptx(
-            target=target,
-            slides=slides,
-            select_for_export=request.export_as == "pptx",
-        )
-        created_at = datetime.now(timezone.utc)
-        provenance = target.provenance(
-            source_sha256=source_content_sha256(
-                {
-                    "content": request.content,
-                    "slides_markdown": request.slides_markdown,
-                    "instructions": request.instructions,
-                    "language": request.language,
-                    "tone": request.tone.value,
-                    "verbosity": request.verbosity.value,
-                    "n_slides": request.n_slides,
-                    "include_table_of_contents": request.include_table_of_contents,
-                    "include_title_slide": request.include_title_slide,
-                }
-            ),
-            request_id=str(presentation_id),
-            job_id=(
-                str(async_status.id)
-                if async_status is not None
-                else f"sync:{presentation_id}"
-            ),
-            created_at=created_at,
-            native_pptx_preflight=native_pptx_preflight,
-        )
-        if isolated_render:
-            if target_presentation is None:
-                raise TemplateV2GenerationError("template_v2_generation_invalid")
-            presentation = PresentationModel(
-                id=render_presentation_id,
-                owner_id=target_presentation.owner_id,
-                content=request.content,
-                n_slides=len(slides),
-                language=language_to_use or "",
-                lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
-            )
-        elif target_presentation is None:
-            presentation = PresentationModel(
-                id=presentation_id,
-                content=request.content,
-                n_slides=len(slides),
-                language=language_to_use or "",
-                lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
-            )
-        elif target_presentation.lifecycle_status != PRESENTATION_LIFECYCLE_STAGING:
-            raise TemplateV2GenerationError("template_v2_generation_invalid")
-        else:
-            presentation = target_presentation
-        presentation.content = request.content
-        presentation.n_slides = len(slides)
-        presentation.language = language_to_use or ""
-        presentation.title = get_presentation_title_from_presentation_outline(
-            presentation_outlines
-        )
-        presentation.file_paths = request.files
-        presentation.reference_snapshot_ids = [
-            str(snapshot_id) for snapshot_id in request.reference_snapshot_ids
-        ] or None
-        presentation.outlines = presentation_outlines.model_dump(mode="json")
-        presentation.layout = None
-        presentation.structure = None
-        presentation.tone = request.tone.value
-        presentation.verbosity = request.verbosity.value
-        presentation.instructions = request.instructions
-        presentation.include_table_of_contents = request.include_table_of_contents
-        presentation.include_title_slide = request.include_title_slide
-        presentation.web_search = request.web_search
-        presentation.mode = "template"
-        presentation.version = TEMPLATE_V2_VERSION
-        presentation.lifecycle_status = PRESENTATION_LIFECYCLE_STAGING
-        presentation.theme = {
-            "mode": "template",
-            "template_v2": provenance,
-        }
-        if resolve_presentation_strategies(presentation, slides) != TEMPLATE_V2_STRATEGIES:
-            raise TemplateV2GenerationError("template_v2_generation_invalid")
-
-        await report_template_v2_progress(
-            stage="template_v2_saving",
-            current=total_slides,
-            total=total_slides,
-            percent=88,
-            message="생성된 슬라이드를 저장하고 있습니다.",
-        )
-        sql_session.add(presentation)
-        sql_session.add_all(slides)
-        if not isolated_render:
-            sql_session.add_all(generated_assets)
-        if generation_job is not None:
-            generation_job.state = "staging"
-            generation_job.updated_at = datetime.now(timezone.utc)
-            sql_session.add(generation_job)
-        await sql_session.commit()
-        log_template_v2_generation_observation(
-            operation="generate",
-            outcome="success",
-            template_id=request.template_v2_id,
-            template_revision=request.template_v2_revision,
-            duration_ms=(perf_counter() - generation_started_at) * 1000,
-        )
-    except TemplateV2GenerationError as error:
-        log_template_v2_generation_observation(
-            operation="generate",
-            outcome="failure",
-            template_id=request.template_v2_id,
-            template_revision=request.template_v2_revision,
-            duration_ms=(perf_counter() - generation_started_at) * 1000,
-            code=error.code,
-        )
-        await compensate_template_v2_images()
-        if isolated_render:
-            try:
-                await _discard_render_staging(
-                    sql_session,
-                    render_presentation_id,
-                    target_presentation_id=presentation_id,
-                )
-            except BaseException:
-                logger.exception(
-                    "Failed to discard Template V2 render staging %s",
-                    render_presentation_id,
-                )
-        raise _template_v2_http_exception(error) from error
-    except BaseException:
-        log_template_v2_generation_observation(
-            operation="generate",
-            outcome="failure",
-            template_id=request.template_v2_id,
-            template_revision=request.template_v2_revision,
-            duration_ms=(perf_counter() - generation_started_at) * 1000,
-            code="template_v2_unexpected_failure",
-        )
-        await compensate_template_v2_images()
-        if isolated_render:
-            try:
-                await _discard_render_staging(
-                    sql_session,
-                    render_presentation_id,
-                    target_presentation_id=presentation_id,
-                )
-            except BaseException:
-                logger.exception(
-                    "Failed to discard Template V2 render staging %s",
-                    render_presentation_id,
-                )
-        raise
-
-    if async_status:
-        async_status.message = "Exporting presentation"
-        async_status.updated_at = datetime.now(timezone.utc)
-        sql_session.add(async_status)
-
-    publication_target = target_presentation if isolated_render else presentation
-    if publication_target is None:
-        raise HTTPException(status_code=409, detail="revision_conflict")
-    export_started_at = perf_counter()
-    export_execution: PresentationExportExecution | None = None
-    try:
-        await report_template_v2_progress(
-            stage="template_v2_exporting",
-            current=len(slides),
-            total=len(slides),
-            percent=92,
-            message="PowerPoint 파일을 만들고 있습니다.",
-        )
-        export_execution = await _execute_generation_export(
-            sql_session,
-            publication_target=publication_target,
-            render_presentation=presentation,
-            request=request,
-            export_cookie_header=export_cookie_header,
-            generation_job=generation_job,
-            template_target=target,
-        )
-        presentation_and_path = export_execution.presentation
-        log_template_v2_generation_observation(
-            operation="export",
-            outcome="success",
-            template_id=request.template_v2_id,
-            template_revision=request.template_v2_revision,
-            duration_ms=(perf_counter() - export_started_at) * 1000,
-            export_type=request.export_as,
-        )
-    except BaseException as error:
-        await _record_generation_export_failure(
-            sql_session,
-            export_execution,
-            error,
-        )
-        log_template_v2_generation_observation(
-            operation="export",
-            outcome="failure",
-            template_id=request.template_v2_id,
-            template_revision=request.template_v2_revision,
-            duration_ms=(perf_counter() - export_started_at) * 1000,
-            export_type=request.export_as,
-            code="template_v2_export_failed",
-        )
-        await compensate_template_v2_images()
-        # The exporter reads through committed database state. Chat-first writes
-        # use an isolated render identity, so compensating it never deletes or
-        # mutates the durable target deck. Legacy generation retains its prior
-        # staging-row cleanup behavior.
-        try:
-            await _discard_render_staging(
-                sql_session,
-                render_presentation_id,
-                target_presentation_id=presentation_id,
-            )
-            if not isolated_render:
-                await sql_session.rollback()
-                await sql_session.execute(
-                    delete(SlideModel).where(SlideModel.presentation == presentation_id)
-                )
-                await sql_session.execute(
-                    delete(PresentationModel).where(
-                        PresentationModel.id == presentation_id
-                    )
-                )
-                await sql_session.commit()
-        except BaseException:
-            logger.exception(
-                "Failed to compensate Template V2 export for presentation %s",
-                presentation_id,
-            )
-        raise
-    response = PresentationPathAndEditPath(
-        presentation_id=presentation_id,
-        path=presentation_and_path.path,
-        edit_path=f"/presentation?id={presentation_id}",
-    )
-    try:
-        await report_template_v2_progress(
-            stage="template_v2_publishing",
-            current=len(slides),
-            total=len(slides),
-            percent=97,
-            message="최종 결과를 게시하고 있습니다.",
-        )
-        published_path = await _publish_staged_presentation(
-            sql_session,
-            publication_target,
-            presentation_and_path.path,
-            generation_job,
-            async_status,
-            render_presentation=presentation if isolated_render else None,
-            generated_assets=tuple(generated_assets) if isolated_render else (),
-            image_staging=image_staging,
-            image_artifacts=promoted_images.artifacts,
-            export_execution=export_execution,
-        )
-    except BaseException as error:
-        await _record_generation_export_failure(
-            sql_session,
-            export_execution,
-            error,
-        )
-        await compensate_template_v2_images(reconcile=True)
-        if isolated_render:
-            try:
-                await _discard_render_staging(
-                    sql_session,
-                    render_presentation_id,
-                    target_presentation_id=presentation_id,
-                )
-            except BaseException:
-                logger.exception(
-                    "Failed to discard Template V2 render staging %s",
-                    render_presentation_id,
-                )
-        raise
-    if published_path != response.path:
-        response.path = published_path
-
-    if request.trigger_webhook:
-        CONCURRENT_SERVICE.run_task(
-            None,
-            WebhookService.send_webhook,
-            WebhookEvent.PRESENTATION_GENERATION_COMPLETED,
-            response.model_dump(mode="json"),
-        )
-    return response
 
 
 @generation_provider_admitted
@@ -1793,20 +1219,6 @@ async def generate_presentation_handler(
             presentation_outlines.model_dump(mode="json"),
         )
 
-        if request.strategy == "template_v2":
-            return await _generate_template_v2_presentation(
-                request=request,
-                presentation_id=presentation_id,
-                presentation_outlines=presentation_outlines,
-                using_slides_markdown=using_slides_markdown,
-                language_to_use=language_to_use,
-                async_status=async_status,
-                generation_job=generation_job,
-                export_cookie_header=export_cookie_header,
-                progress_reporter=progress_reporter,
-                sql_session=sql_session,
-            )
-
         # Authored mode (opt-in via template="authored"): the model AUTHORS bespoke
         # HTML per slide instead of filling a React archetype. Self-contained pipeline
         # (author -> render -> optional vision-QA -> image PPTX/PDF -> persist) that
@@ -2033,16 +1445,6 @@ async def run_generation_job(
             # safe, explicit task error instead of falling back during authoring.
             _validate_authored_exact_admission(request)
             await _validate_authored_master_pin_admission(request)
-            if job.template_v2_target is not None:
-                from services.template_v2_generation_service import (
-                    TemplateV2GenerationTarget,
-                )
-
-                request._template_v2_generation_target = (
-                    TemplateV2GenerationTarget.from_durable_payload(
-                        job.template_v2_target
-                    )
-                )
             await generate_presentation_handler(
                 request,
                 job.presentation_id,
@@ -2684,7 +2086,6 @@ async def queue_presentation_generation(
         # workers consume only ``reference_snapshot_ids`` from ``payload``.
         presentation.file_paths = None
         sql_session.add(presentation)
-    target = request._template_v2_generation_target
     job = PresentationGenerationJob(
         task_id=async_status.id,
         presentation_id=presentation_id,
@@ -2693,9 +2094,6 @@ async def queue_presentation_generation(
         request_id=request._request_id,
         request_sha256=fingerprint,
         request_payload=payload,
-        template_v2_target=(
-            target.to_durable_payload() if target is not None else None
-        ),
         export_cookie_required=(
             export_cookie_header is not None and workspace_operation_id is None
         ),
