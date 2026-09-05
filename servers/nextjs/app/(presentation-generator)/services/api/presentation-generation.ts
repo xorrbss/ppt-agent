@@ -1039,21 +1039,4 @@ export class PresentationGenerationApi {
       throw error;
     }
   }
-
-  /**
-   * Frozen compatibility shim. Template V2 remains import/edit/export
-   * infrastructure, but it cannot start a new product generation request.
-   */
-  static async generateTemplateV2Async(
-    _body: GenerationPreferences & {
-      presentation_id: string;
-      content: string;
-      slides_markdown: string[];
-      template_v2_id: string;
-      template_v2_revision: number;
-      idempotency_key?: string;
-    },
-  ): Promise<StartGenerationResponse> {
-    throw new Error("template_v2_new_generation_disabled");
-  }
 }
