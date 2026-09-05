@@ -217,10 +217,12 @@ def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypat
     token_error.title_token_diagnostic["differences"][0]["token"] = "private"
     assert "title_token_diagnostic" not in authored_pipeline_mod._author_stage_failure(2, token_error).as_safe_dict()
 
-    # Exact aggregate shape observed in run14, with synthetic wording: title
-    # 15+64=79, non-title 270+62=332, visible411. Fixed limits imply title<=48.
+    # Aggregate shape observed in run14, with synthetic wording: visible 411.
+    # The single-title policy files the brand line as ``supporting`` -- only the
+    # ``h2`` owns the title role -- so the joint budget is measured over the one
+    # remaining title owner, and the brand line joins the non-title characters.
     long_title = "PPT supports dependable delivery through simple automated checks"
-    joint_candidate = (
+    joint_candidate = author_deck_mod.canonicalize_authored_capacity_html(
         '<!doctype html><html><head></head><body>'
         '<div data-qid="brand.title" data-semantic-role="title">Trusted Exports</div>'
         f'<h2 data-qid="long.title" data-semantic-role="title">{long_title}</h2>'
@@ -233,17 +235,19 @@ def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypat
     assert calls == [1, 2]
     hint = kwargs_seen[1]["correction_hint"]
     for expected in (
-        "jointTitleBudget=48", "recoveryTargetBudget=44", "recoveryGuardChars=4",
-        "fixedTitleChars=0", "nonTitleVisibleChars=332",
-        "availableEligibleChars=44", "requiredReduction=35",
-        "brand.title: currentChars=15, suggestedTargetChars=15",
+        "jointTitleBudget=33", "recoveryTargetBudget=29", "recoveryGuardChars=4",
+        "fixedTitleChars=0", "nonTitleVisibleChars=347",
+        "availableEligibleChars=29", "requiredReduction=35",
         "long.title: currentChars=64, suggestedTargetChars=29",
     ):
         assert expected in hint
+    # The demoted brand line is not a title owner at all, so marking its text
+    # fixed changes neither the fixed-title accounting nor the eligible owners.
+    assert "brand.title: currentChars" not in hint
     fixed = joint_candidate.replace('data-qid="brand.title"', 'data-text-fixed="true" data-qid="brand.title"')
     result, kwargs_seen = _run(exercise(fixed, fixed, capacity=SlideCapacity(2, "PILLARS", 58, 290, 380, 0, 32)))
     hint = kwargs_seen[1]["correction_hint"]
-    assert "fixedTitleChars=15" in hint and "availableEligibleChars=29" in hint
+    assert "fixedTitleChars=0" in hint and "availableEligibleChars=29" in hint
     assert "requiredReduction=35" in hint and "brand.title: currentChars" not in hint
 
     for marker in ('data-source-block-id="source.1"', 'data-text-fixed="true"'):
@@ -262,7 +266,9 @@ def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypat
     safe = stage_error.as_safe_dict()
     evidence = safe["owner_capacity_diagnostic"]
     assert safe["retryable"] is False and safe["provider_attempt_count"] == 2
-    assert evidence["measured"]["owner_title"] == len(title) + len("검증 절차") + len("운영 전환")
+    # Only the header title owns the title role; the two card headings are
+    # ``supporting`` under the single-title policy and no longer inflate it.
+    assert evidence["measured"]["owner_title"] == len(title)
     assert evidence["limits"]["owner_title"] == 58
     assert evidence["htmlDigest"] == hashlib.sha256(candidate.encode()).hexdigest()
     assert evidence["owners"][0]["qidDigest"] == hashlib.sha256(b"customer.alice.title").hexdigest()
@@ -3528,7 +3534,7 @@ def test_slide_pipeline_promotes_a_cover_title_the_model_marked_decoration(
     assert '"s1-title" style="font-size:34px" data-semantic-role="title"' in agenda_html
     assert '"s1-ch1" style="font-size:24px" data-semantic-role="supporting"' in agenda_html
     assert '"s1-ch2" style="font-size:24px" data-semantic-role="supporting"' in agenda_html
-    assert "semantic_role_demoted" in {
-        entry["rule"]
-        for entry in result.slide_quality_receipts[1]["normalizations"]
-    }
+    # The stamper itself now leaves one title owner, so the repair's demotion is
+    # a safety net that never has to fire: no normalization is recorded, and the
+    # document the gate reads is the document that was stamped.
+    assert 1 not in result.slide_quality_receipts

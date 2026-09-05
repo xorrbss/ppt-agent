@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlmodel import SQLModel
+from sqlmodel import SQLModel, select
 
 from models.presentation_outline_model import (
     PresentationOutlineModel,
@@ -27,11 +27,15 @@ from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import WorkspaceOperation
 from services import authored_checkpoint_service as checkpoints
+from services.authored_checkpoint_html import checkpoint_stage_html
 from services import authored_presentation_pipeline as pipeline
+from services.authored_composition_policy import ensure_authored_semantic_roles
 from services.authored_tail_streaming import (
     AuthoredTailStreamCoordinator,
     run_streamed_slide_tail,
 )
+from utils.authored_dom_quality import ensure_authored_qids
+from utils.authored_semantic_role_repair import canonicalize_authored_roles
 from utils.llm_calls.author_deck import (
     AuthoredBatchFailure,
     AuthoredPlannedBatchResult,
@@ -482,3 +486,76 @@ def test_streaming_never_hands_the_pool_a_twice_failed_slide(tmp_path, monkeypat
     assert error.stage == "author"
     assert error.slide_index == 2
     assert all("slide-2" not in html for html in processed)
+
+
+_MANY_HEADING_SLIDE = (
+    "<!DOCTYPE html><html><head></head><body>"
+    "<h1 data-qid='slide-0.title' style='font-size:34px'>목차</h1>"
+    + "".join(
+        f"<h2 data-qid='slide-0.chapter{index}' style='font-size:24px'>"
+        f"제 {index} 장</h2>"
+        f"<p data-qid='slide-0.summary{index}'>이 장에서 다루는 내용을 설명합니다.</p>"
+        for index in range(6)
+    )
+    + "</body></html>"
+)
+
+
+def test_one_title_owner_reaches_the_checkpoint_the_ledger_and_the_gate(
+    tmp_path, monkeypatch
+):
+    """Bench runs 30/31: the demotion reached the gate's copy only.
+
+    ``ensure_authored_semantic_roles`` promoted every ``h1``/``h2`` to ``title``
+    and only the pipeline's pre-gate normaliser demoted the extras, so the
+    document written to ``illustrated_html`` and handed to the evidence ledger
+    still carried one title per heading.  The stamper now selects the single
+    title owner itself, so the three documents are byte-identical.
+    """
+
+    monkeypatch.setenv("AUTHORED_TAIL_STREAMING_ENABLED", "false")
+
+    async def batch(_plan, indexes, **_kwargs):
+        return AuthoredPlannedBatchResult(
+            htmls={index: _MANY_HEADING_SLIDE for index in indexes}, failures={}
+        )
+
+    async def render(_html):
+        return b"png"
+
+    async def scenario():
+        engine, maker = await _checkpoint_database(tmp_path, monkeypatch)
+        _install_pipeline_fakes(
+            monkeypatch, slide_count=1, batch=batch, render=render
+        )
+        try:
+            job = await _running_authored_job(maker, total_slides=1)
+            result = await _drive_pipeline(job)
+            async with maker() as session:
+                rows = await session.execute(
+                    select(AuthoredSlideCheckpoint).where(
+                        AuthoredSlideCheckpoint.job_id == job.id,
+                        AuthoredSlideCheckpoint.slide_index == 0,
+                    )
+                )
+                stored = checkpoint_stage_html(rows.scalars().one())
+            return result, stored
+        finally:
+            await engine.dispose()
+
+    result, checkpointed = _run(scenario())
+
+    gated = result.deck.htmls[0]
+    ledger = result.evidence_ledger.latest(result.evidence_attempt_id, 0).html
+    assert gated.count('data-semantic-role="title"') == 1
+    assert 'data-qid=\'slide-0.title\' style=\'font-size:34px\' data-semantic-role="title"' in gated
+    assert gated.count('data-semantic-role="supporting"') == 6
+    # The exact bytes, not just the same title count.
+    assert checkpointed == gated
+    assert ledger == gated
+    # The repair is a safety net now: it changes nothing on this slide. Nor
+    # does the bare stamper the bounded-repair evidence binding runs -- that is
+    # the call that used to promote all six headings back to ``title`` after the
+    # pre-gate demotion, so the published deck disagreed with the gated one.
+    assert canonicalize_authored_roles(gated) == gated
+    assert ensure_authored_semantic_roles(ensure_authored_qids(gated)) == gated

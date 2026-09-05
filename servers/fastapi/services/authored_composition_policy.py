@@ -17,6 +17,14 @@ from hashlib import sha256
 from html.parser import HTMLParser
 from typing import Any, Literal, Sequence
 
+from services.authored_semantic_role_policy import (
+    VOID_TAGS as _VOID_TAGS,
+    inline_font_px as _inline_font_px,
+    is_primary_title_candidate as _is_primary_title_candidate,
+    is_supporting_candidate as _is_supporting_candidate,
+    plan_title_roles as _plan_title_roles,
+    resolve_semantic_role as _resolve_semantic_role,
+)
 from services.authored_vnext.capability_registry import AUTHORED_FONT_FLOOR_PX
 from utils.authored_dom_quality import (
     build_compact_dom_map,
@@ -417,26 +425,35 @@ class _AuthoredStartTagCollector(HTMLParser):
         self.owns_text: list[bool] = []
         self.owned_text_parts: list[list[str]] = []
         self.header_title_text_owners: set[int] = set()
+        # Effective inline ``font-size`` in px, inherited from the nearest sized
+        # ancestor. The single-title policy ranks candidates by what they render
+        # at, so a title line nested inside a sized heading still ranks with it.
+        self.font_px: list[float | None] = []
         self._stack: list[tuple[str, int]] = []
+
+    def _record(
+        self, tag: str, attrs: list[tuple[str, str | None]], raw_tag: str
+    ) -> int:
+        index = len(self.tags)
+        inherited = self.font_px[self._stack[-1][1]] if self._stack else None
+        self.tags.append((tag, attrs, raw_tag))
+        self.owns_text.append(False)
+        self.owned_text_parts.append([])
+        self.font_px.append(
+            _inline_font_px(_attribute_map(attrs).get("style", "")) or inherited
+        )
+        return index
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         normalized = tag.lower()
-        index = len(self.tags)
-        self.tags.append((normalized, attrs, self.get_starttag_text()))
-        self.owns_text.append(False)
-        self.owned_text_parts.append([])
-        if normalized not in {
-            "area", "base", "br", "col", "embed", "hr", "img", "input",
-            "link", "meta", "param", "source", "track", "wbr",
-        }:
+        index = self._record(normalized, attrs, self.get_starttag_text())
+        if normalized not in _VOID_TAGS:
             self._stack.append((normalized, index))
 
     def handle_startendtag(
         self, tag: str, attrs: list[tuple[str, str | None]]
     ) -> None:
-        self.tags.append((tag.lower(), attrs, self.get_starttag_text()))
-        self.owns_text.append(False)
-        self.owned_text_parts.append([])
+        self._record(tag.lower(), attrs, self.get_starttag_text())
 
     def handle_endtag(self, tag: str) -> None:
         normalized = tag.lower()
@@ -603,94 +620,6 @@ def _is_supporting_role(value: str) -> bool:
     )
 
 
-def _is_primary_title_candidate(tag: str, attrs: dict[str, str]) -> bool:
-    if tag in {"h1", "h2"}:
-        return True
-    if attrs.get("data-header-part", "").strip().lower() == "title":
-        return True
-    qid = attrs.get("data-qid", "").strip().lower()
-    primary = ("cover.title", "header.title", "slide.title")
-    return qid in {"title", "text.title", *primary} or qid.endswith(
-        ".title.text"
-    ) or any(
-        qid.startswith(f"{prefix}.") for prefix in primary
-    )
-
-
-def _is_supporting_candidate(
-    attrs: dict[str, str], *, owned_text: str = "", capacity_only: bool = False
-) -> bool:
-    qid = attrs.get("data-qid", "").strip().lower()
-    hints = " ".join(
-        (
-            qid,
-            attrs.get("id", ""),
-            attrs.get("class", ""),
-            attrs.get("data-header-part", ""),
-        )
-    ).lower()
-    tokens = tuple(token for token in re.split(r"[^a-z0-9]+", hints) if token)
-    exact = {
-        "eyebrow",
-        "kicker",
-        "label",
-        "num",
-        "number",
-        "date",
-        "presenter",
-        "metric",
-        "caption",
-        "index",
-        "badge",
-        "meta",
-    }
-    chart_annotation = qid.startswith("chart.") and any(
-        token in {"axis", "unit", "scale", "source", "zero", "mid", "max", "min"}
-        for token in tokens
-    )
-    normalized_text = re.sub(r"\s+", " ", owned_text).strip()
-    qid_suffix = next(
-        reversed(tuple(token for token in re.split(r"[._:-]+", qid) if token)),
-        "",
-    )
-    short_number_label = qid_suffix == "no" and bool(
-        re.fullmatch(r"0?[0-9]{1,2}[.)]?", normalized_text)
-    )
-    short_symbol_marker = (
-        qid_suffix == "mark"
-        and 0 < len(normalized_text) <= 3
-        and not any(character.isalnum() for character in normalized_text)
-    )
-    week_tick_match = (
-        re.fullmatch(r".+\.chart\.week(?P<tick>[0-9]{2})", qid)
-        if capacity_only
-        else None
-    )
-    numeric_tick = (
-        re.fullmatch(r"[0-9]{1,2}", normalized_text)
-        if week_tick_match is not None
-        else None
-    )
-    capacity_chart_week_tick = bool(
-        week_tick_match is not None
-        and numeric_tick is not None
-        and int(week_tick_match.group("tick")) == int(normalized_text)
-    )
-    return (
-        chart_annotation
-        or short_number_label
-        or short_symbol_marker
-        or capacity_chart_week_tick
-        or any(
-            token in exact
-            or token.startswith("metric")
-            or token.startswith("label")
-            or token.startswith("num")
-            for token in tokens
-        )
-    )
-
-
 def ensure_authored_semantic_roles(html: str) -> str:
     """Stamp deterministic roles onto the exact HTML rendered by Chromium.
 
@@ -702,6 +631,12 @@ def ensure_authored_semantic_roles(html: str) -> str:
     structural and decorative targets become ``decoration``. Attribute-only
     stamping is idempotent and happens before render so HTML, PNG, and browser
     evidence share one digest-bound source.
+
+    Exactly one text owner keeps the ``title`` role
+    (:func:`services.authored_semantic_role_policy.plan_title_roles` picks it);
+    every other title candidate is filed ``supporting``. That selection lives
+    here rather than in a downstream normaliser so that every caller -- gate,
+    checkpoint, repair, publication -- sees the same single-title document.
     """
 
     if not isinstance(html, str):
@@ -709,36 +644,34 @@ def ensure_authored_semantic_roles(html: str) -> str:
     parser = _AuthoredStartTagCollector()
     parser.feed(html)
     parser.close()
+    attrs_by_index = [_attribute_map(raw_attrs) for _tag, raw_attrs, _raw in parser.tags]
+    primary_title, title_candidates = _plan_title_roles(
+        tags=parser.tags,
+        attrs_by_index=attrs_by_index,
+        owns_text=parser.owns_text,
+        font_px=parser.font_px,
+        header_title_text_owners=parser.header_title_text_owners,
+    )
     cursor = 0
     parts: list[str] = []
-    for tag_index, (tag, raw_attrs, raw_tag) in enumerate(parser.tags):
+    for tag_index, (tag, _raw_attrs, raw_tag) in enumerate(parser.tags):
         index = html.find(raw_tag, cursor)
         if index < 0:
             continue
         parts.append(html[cursor:index])
-        attrs = _attribute_map(raw_attrs)
+        attrs = attrs_by_index[tag_index]
         replacement = raw_tag
         if attrs.get("data-qid", "").strip():
             declared = attrs.get("data-semantic-role", "").strip()
-            owns_text = parser.owns_text[tag_index]
-            owned_text = "".join(parser.owned_text_parts[tag_index])
-            if tag == "img":
-                role = "image"
-            elif owns_text and (_is_primary_title_candidate(tag, attrs) or tag_index in parser.header_title_text_owners):
-                role = "title"
-            elif _is_supporting_candidate(attrs, owned_text=owned_text):
-                role = "supporting"
-            elif declared.lower() == "decoration" and owns_text:
-                role = "body"
-            elif declared.lower() == "body" and not owns_text:
-                # Early semantic rollout checkpoints stamped every missing role
-                # as body, including empty shapes and structural wrappers. The
-                # direct-text ownership rule deterministically migrates them.
-                role = "decoration"
-            elif declared.lower() == "title" and not owns_text:
-                role = "decoration"
-            else:
-                role = declared or ("body" if owns_text else "decoration")
+            role = _resolve_semantic_role(
+                tag=tag,
+                attrs=attrs,
+                declared=declared,
+                owns_text=parser.owns_text[tag_index],
+                owned_text="".join(parser.owned_text_parts[tag_index]),
+                is_primary_title=tag_index == primary_title,
+                is_title_candidate=tag_index in title_candidates,
+            )
             if role != declared:
                 replacement = _insert_or_replace_attribute(
                     raw_tag, attrs, "data-semantic-role", role
@@ -909,6 +842,10 @@ def semantic_repair_boundary_violations(
             or source_block_id
             or header_part
             or _is_title_role(role)
+            # A heading demoted to ``supporting`` by the single-title policy is
+            # still a heading: keep the immutability it had while the stamper
+            # labelled every title candidate ``title``.
+            or _primary_title
             or not (_is_body_role(role) or _is_supporting_role(role))
             or _LOW_PRIORITY_OWNER_QID.search(qid) is None
         ):
@@ -961,6 +898,9 @@ def semantic_repair_boundary_violations(
             or original_source
             or original_header
             or _is_title_role(original_role)
+            # Same reason as the removal guard above: demotion to
+            # ``supporting`` must not make a heading's text rewritable.
+            or original_primary_title
             or not (_is_body_role(original_role) or _is_supporting_role(original_role))
             or (
                 not _is_supporting_role(original_role)

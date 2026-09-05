@@ -243,6 +243,9 @@ def test_semantic_repair_boundary_narrowly_allows_one_primary_title_shortening()
         )
     )
 
+    # Two title owners cannot survive the stamper any more: the ``h2`` is filed
+    # ``supporting``. It stays a heading, so its text is still immutable and the
+    # allowance covers only the one remaining primary title.
     two_titles = original.replace(
         '<p data-qid="body.item1" data-semantic-role="body">Body</p>',
         '<h2 data-qid="slide.subtitle" data-semantic-role="title">Second long title</h2>',
@@ -250,7 +253,7 @@ def test_semantic_repair_boundary_narrowly_allows_one_primary_title_shortening()
     two_shortened = two_titles.replace(
         "A deliberately long primary title", "Short title"
     ).replace("Second long title", "Second")
-    assert "semantic_primary_title_rewrite_too_broad" in (
+    assert "semantic_text_rewrite_forbidden:slide.subtitle" in (
         semantic_repair_boundary_violations(
             two_titles,
             two_shortened,
@@ -1877,9 +1880,15 @@ def test_bounded_closing_reducer_recaptures_21_targets_and_299_body_chars(
     }
     captures = []
 
+    # The binding step stamps the reducer's exact document. The four ``h2``
+    # owners this fixture declares ``title`` leave that step with one title and
+    # three ``supporting`` owners, which is what the gate and the checkpoint see.
+    bound = canonicalize_authored_capacity_html(reduced)
+    assert bound.count('data-semantic-role="title"') == 1
+
     async def fake_capture(candidate_html):
         captures.append(candidate_html)
-        assert candidate_html == reduced
+        assert candidate_html == bound
         return SimpleNamespace(png=b"reduced-closing", browser_metrics=after_metrics)
 
     monkeypatch.setattr(
