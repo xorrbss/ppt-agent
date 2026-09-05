@@ -77,7 +77,6 @@ Protect `main` with these exact, always-present pull-request checks:
 - `Test All Applications / Workspace chat-first browser E2E`
 - `G4 round-trip and release gates / production export runtime stage`
 - `G4 round-trip and release gates / Windows v0.4.8 release gate`
-- `G4 round-trip and release gates / adaptive PPTX round-trip`
 
 The following checks are path- or matrix-scoped and therefore must not be added
 as global branch-protection requirements in their current form; GitHub would
@@ -128,7 +127,7 @@ capability-specific integration gates:
 | `template-v2-export-fidelity.yml` | Ubuntu, macOS, and Windows with Chromium, LibreOffice, and PDF tools | Template V2 structural export checks and required rendered-image fidelity on all three operating systems. |
 | `export-platform-archives.yml` | Ubuntu, macOS, and Windows with Node 22 and `tar` | Downloads every pinned v0.4.8 export archive into runner temporary storage, verifies its SHA-256 and exact two-entry structure, and checks the target ELF/Mach-O/PE ABI without claiming cross-OS native execution. |
 | `cross-platform-packaging-security.yml` | Ubuntu and macOS unsigned builders; Ubuntu ClamAV scanner | Gates the root, Next.js, and Electron packaged production dependency trees (npm audit) and the locked FastAPI production tree (pip-audit) before rebuilding FastAPI, Next.js, and Electron; records SHA-256 manifests, retains quarantined candidates for seven days, and fails closed when the downstream ClamAV scan cannot complete. |
-| `g4-pptx-roundtrip.yml` | Ubuntu Docker; Windows for release gates | Pinned export-runtime contract, Windows Electron/resource safety tests, optional manual Windows packaging, and required adaptive plus legacy end-to-end PPTX round trips. |
+| `g4-pptx-roundtrip.yml` | Ubuntu Docker; macOS and Windows for release gates | Pinned export-runtime contract, macOS/Windows Electron release preflights and resource safety tests, and optional manual macOS/Windows packaging. The adaptive/legacy PPTX round-trip job that gave this workflow its name was removed with the `legacy`/`adaptive` generation strategies (see `docs/adaptive-backlog.md`); no round-trip check remains for the `authored` strategy that replaced them. |
 | `sync-releaes-to-r2.yml` | Release event and deployment credentials | Publishes release artifacts. This is a deployment workflow, not a pull-request test gate. |
 
 ### FastAPI consolidation
@@ -199,7 +198,6 @@ Capability-specific gates are explicit:
 | `--with-fidelity` | Chromium, LibreOffice, and `pdftocairo`; runs the current host OS only. CI remains authoritative for both Ubuntu and Windows. |
 | `--with-postgres` | `PPT_AGENT_POSTGRES_TEST_URL` pointing to a database whose name ends in `test` or `tests`. |
 | `--with-electron` | Windows only; runs the release code/resource tests and typecheck/build checks. Package creation and install/uninstall smoke remain an explicit manual workflow input. |
-| `--with-g4` | Linux, Bash, and Docker; starts the development stack and requires both adaptive and legacy PPTX round trips. |
 | `--all` | Requests every capability gate and fails when any precondition is unavailable. |
 
 For PostgreSQL, keep credentials outside command history:

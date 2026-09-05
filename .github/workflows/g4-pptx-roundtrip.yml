@@ -1,10 +1,13 @@
-# G4 — editable-PPTX byte round-trip for adaptive decks.
-# Runs the full stack (FastAPI + Next + export converter) in Docker on a Linux
-# runner and asserts a 7-archetype adaptive deck (+ a legacy regression smoke)
-# exports to editable PPTX shapes (scripts/check_adaptive_pptx_roundtrip.py +
-# check_legacy_pptx_roundtrip.py).
+# Release gates: macOS/Windows Electron packaging preflights and release
+# checks, plus the pinned production export-runtime contract.
 #
-# PR-gate: validated green in real CI (run 27089398688, 4m52s) before promotion.
+# The adaptive-deck PPTX byte round-trip that gave this workflow its "G4" name
+# was removed here: it exercised the `legacy`/`adaptive` generation strategies,
+# which were retired in b11a92e62 ("refactor: remove legacy presentation
+# sources") along with the scripts it ran
+# (scripts/check_adaptive_pptx_roundtrip.py, scripts/check_legacy_pptx_roundtrip.py).
+# Only `authored` generation remains; there is no equivalent round-trip check
+# for it in this workflow today.
 name: G4 round-trip and release gates
 
 on:
@@ -436,77 +439,3 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
-
-  g4:
-    name: adaptive PPTX round-trip
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-
-      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
-        with:
-          node-version: '22'
-
-      - name: Invoke production release lifecycle preflight
-        run: node scripts/operational-release-preflight.mjs release
-
-      - name: Test export runtime release gate
-        run: npm run test:presentation-export-sync
-
-      # presentation-export is gitignored; sync the pinned v0.4.8 runtime so the
-      # dev compose bind-mount (./ -> /app) exposes the converter in-container.
-      - name: Sync export runtime
-        run: node scripts/sync-presentation-export.cjs --force
-
-      - name: Verify synced export runtime
-        run: npm run check:presentation-export
-
-      - name: Start dev stack (auth/mem0/image off, cypress binary skipped)
-        run: |
-          cat > g4-ci-override.yml <<'YML'
-          services:
-            development:
-              environment:
-                - DISABLE_AUTH=true
-                - MEM0_ENABLED=false
-                - DISABLE_IMAGE_GENERATION=true
-                - CYPRESS_INSTALL_BINARY=0
-          YML
-          docker compose -f docker-compose.yml -f g4-ci-override.yml up -d development
-
-      - name: Wait for app readiness
-        run: |
-          for i in $(seq 1 120); do
-            fa=$(docker compose exec -T development bash -lc 'curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/openapi.json' 2>/dev/null || true)
-            ng=$(docker compose exec -T development bash -lc 'curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:80/' 2>/dev/null || true)
-            echo "try $i fastapi=$fa nginx=$ng"
-            if [ -n "$fa" ] && [ "$fa" != "000" ] && [ -n "$ng" ] && [ "$ng" != "000" ] && [ "$ng" != "502" ] && [ "$ng" != "504" ]; then
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "readiness timeout — logs:"; docker compose logs --tail=60 development
-          exit 1
-
-      - name: Run G4 round-trip (adaptive)
-        run: |
-          # Keep the Puppeteer page and its data fetches on the nginx origin.
-          docker compose exec -T \
-            -e RUN_PPTX_ROUNDTRIP=1 \
-            -e APP_DATA_DIRECTORY=/app_data \
-            -e NEXT_PUBLIC_FAST_API=http://127.0.0.1 \
-            development bash -lc 'export PATH=$PATH:/root/.local/bin; cd /app/servers/fastapi && uv run python ../../scripts/check_adaptive_pptx_roundtrip.py'
-
-      - name: Run legacy export smoke (regression guard)
-        run: |
-          # Keep the legacy smoke on the same nginx-proxied URL contract.
-          docker compose exec -T \
-            -e RUN_PPTX_ROUNDTRIP=1 \
-            -e APP_DATA_DIRECTORY=/app_data \
-            -e NEXT_PUBLIC_FAST_API=http://127.0.0.1 \
-            development bash -lc 'export PATH=$PATH:/root/.local/bin; cd /app/servers/fastapi && uv run python ../../scripts/check_legacy_pptx_roundtrip.py'
-
-      - name: Tear down
-        if: always()
-        run: docker compose -f docker-compose.yml -f g4-ci-override.yml down -v || true
