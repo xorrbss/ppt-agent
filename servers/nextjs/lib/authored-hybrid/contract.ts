@@ -9,7 +9,6 @@ import {
   AUTHORED_SLIDE_WIDTH_PX,
   type AuthoredHybridElement,
   type AuthoredHybridElementBase,
-  type AuthoredHybridShapePayload,
   type AuthoredHybridSlideV1,
   type AuthoredHybridTextPayload,
 } from "./schema.ts";
@@ -24,6 +23,12 @@ import {
   rectPxToBounds,
 } from "./units.ts";
 import { outerShadowIsSafe } from "./shadow-effect.ts";
+import { BACKPLATE_SCALE } from "./capture-scale.ts";
+import {
+  hasShapePayload,
+  hasTextPayload,
+  isEditableRasterShapePayload,
+} from "./element-payload.ts";
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const HEX_COLOR_PATTERN = /^[A-F0-9]{6}$/;
@@ -38,54 +43,6 @@ function invariant(condition: unknown, message: string): asserts condition {
 
 function finite(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
-}
-
-function hasTextPayload(
-  element: AuthoredHybridElement
-): element is AuthoredHybridElement & { text: AuthoredHybridTextPayload } {
-  return "text" in element && element.text !== undefined;
-}
-
-function hasShapePayload(
-  element: AuthoredHybridElement
-): element is AuthoredHybridElement & { shape: AuthoredHybridShapePayload } {
-  return "shape" in element && element.shape !== undefined;
-}
-
-const UNSAFE_EDITABLE_SHAPE_REASONS = new Set([
-  "extraction-error",
-  "invalid-bounds",
-  "outside-slide",
-  "clip-path",
-  "mask",
-  "filter",
-  "backdrop-filter",
-  "mix-blend-mode",
-  "complex-transform",
-  "transformed-ancestor",
-  "animated",
-  "unsupported-background",
-  "unsupported-opacity",
-]);
-
-function isEditableRasterShapePayload(
-  element: AuthoredHybridElement
-): element is AuthoredHybridElement & { shape: AuthoredHybridShapePayload } {
-  return (
-    element.classification.mode === "raster" &&
-    element.classification.candidateKind === "shape" &&
-    hasShapePayload(element) &&
-    !element.classification.reasons.some((reason) =>
-      UNSAFE_EDITABLE_SHAPE_REASONS.has(reason)
-    ) &&
-    Boolean(
-      element.shape.fill ||
-      element.shape.gradient ||
-      element.shape.stroke ||
-      element.shape.borderLines?.length ||
-      element.shape.shadowLayers?.length
-    )
-  );
 }
 
 function oneOf(value: unknown, allowed: readonly string[], label: string): void {
@@ -472,8 +429,8 @@ export function buildAuthoredHybridSlide(
     `expected ${AUTHORED_SLIDE_WIDTH_PX}x${AUTHORED_SLIDE_HEIGHT_PX} viewport, received ${browserObservation.viewport.widthPx}x${browserObservation.viewport.heightPx}`
   );
   invariant(
-    browserObservation.viewport.devicePixelRatio === 1,
-    `expected devicePixelRatio 1, received ${browserObservation.viewport.devicePixelRatio}`
+    browserObservation.viewport.devicePixelRatio === BACKPLATE_SCALE,
+    `expected devicePixelRatio ${BACKPLATE_SCALE}, received ${browserObservation.viewport.devicePixelRatio}`
   );
   invariant(
     browserObservation.appliedPromotedElementIds.length === 0,

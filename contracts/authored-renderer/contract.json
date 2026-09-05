@@ -4,6 +4,17 @@
     "service": "authored-render-worker",
     "module": "utils.authored_renderer_worker",
     "transport": "newline-delimited-json-over-stdin-stdout",
+    "framed_transport": {
+      "name": "length-prefixed-json-over-stdin-stdout",
+      "frame_header": "8-byte-big-endian-unsigned-payload-length",
+      "detected_from": "first-eight-bytes-without-handshake",
+      "requests_per_process": "max_requests-on-the-first-request-default-200",
+      "response_extra_fields": ["request_ordinal"],
+      "container_lifetime": "one-per-stream",
+      "browser_context_lifetime": "one-per-request",
+      "retire_on_error": true,
+      "single_deck_scope_per_container": true
+    },
     "browser_control_transport": "chromium-cdp-pipe",
     "request": {
       "schema_version": "authored-render-request/v1",

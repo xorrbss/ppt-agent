@@ -80,8 +80,12 @@ export interface NativeChartPreparationResult {
 
 function nativeChartAdmissionEnabled(): boolean {
   // Native chart serialization remains compiled and type-checked, but actual
-  // product admission stays disabled until the PowerPoint reopen seal passes.
-  return false;
+  // product admission stays default-off until a fresh PowerPoint Desktop
+  // reopen seal passes (scripts/powerpoint-desktop-calibration.ps1: open A,
+  // SaveAs B, reopen B, and report success only if COM and the reopen both
+  // succeed). Set AUTHORED_HYBRID_NATIVE_CHARTS=1 to exercise the admitted
+  // path in tests without changing the product default.
+  return process.env.AUTHORED_HYBRID_NATIVE_CHARTS === "1";
 }
 
 const HEX = /^#?[0-9A-Fa-f]{6}$/;

@@ -7,6 +7,7 @@ import {
   parseAuthoredNativeChartPayload,
   prepareDeclaredNativeCharts,
 } from "./native-chart.ts";
+import { backplatePixelSize } from "./capture-scale.ts";
 import { planLayerSafeNativeElements } from "./native-plan.ts";
 import { assembleAuthoredHybridPptx } from "./pptx-assembler.ts";
 import { createAuthoredHybridCoverageManifest } from "./export-metadata.ts";
@@ -16,6 +17,8 @@ import {
   inspectPptxNativeElementReadback,
 } from "./pptx-quality-inspection.ts";
 import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
+
+const { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT } = backplatePixelSize();
 
 const bounds = (x, y, width, height) => ({
   px: { x, y, width, height },
@@ -144,8 +147,8 @@ test("bounded semantic chart becomes native OOXML with data, axes, legend, and f
 
   const backplatePng = await sharp({
     create: {
-      width: 1280,
-      height: 720,
+      width: BACKPLATE_WIDTH,
+      height: BACKPLATE_HEIGHT,
       channels: 4,
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     },

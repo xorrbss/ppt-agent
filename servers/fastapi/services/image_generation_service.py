@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import re
-import secrets
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 from weakref import WeakKeyDictionary
@@ -29,6 +28,7 @@ from utils.get_env import (
     get_image_generation_timeout_seconds,
     is_parallel_image_generation_enabled,
 )
+from utils.get_env_programme import get_image_generation_concurrency
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
 from utils.get_env import get_pixabay_api_key_env
 from utils.get_env import get_comfyui_url_env
@@ -59,6 +59,11 @@ from services.provider_egress_policy import (
     validate_builtin_provider_endpoint,
     validate_configured_provider_endpoint,
 )
+from services.comfyui_workflow_seeds import (
+    build_comfyui_node_index,
+    generate_comfyui_seed,
+    inject_random_seeds_into_workflow,
+)
 from services.provider_transport_security import require_pinned_transport
 from services.image_generation_google_adapter import generate_google_image
 from services.image_generation_stock_adapter import (
@@ -69,22 +74,26 @@ from utils.asset_directory_utils import absolute_fastapi_asset_url
 import uuid
 
 
-COMFYUI_MAX_SEED = 0xFFFFFFFFFFFFFFFF
-COMFYUI_SEED_SOURCE_VALUE_KEYS = {"value", "int", "integer", "number"}
-_IMAGE_GENERATION_LOCKS: WeakKeyDictionary[
-    asyncio.AbstractEventLoop, asyncio.Lock
+_IMAGE_GENERATION_GATES: WeakKeyDictionary[
+    asyncio.AbstractEventLoop, asyncio.Semaphore
 ] = WeakKeyDictionary()
 LOGGER = logging.getLogger(__name__)
 
 
-def _get_image_generation_lock() -> asyncio.Lock:
-    """Share one image request lock across presentation, editor, and chat services."""
+def _get_image_generation_gate() -> asyncio.Semaphore:
+    """Bounded image-request gate, sized by ``IMAGE_GENERATION_CONCURRENCY``
+    (F2: was a strict-serialization ``asyncio.Lock``; parallel mode still
+    skips this entirely). Created lazily per event loop, same as before."""
     loop = asyncio.get_running_loop()
-    lock = _IMAGE_GENERATION_LOCKS.get(loop)
-    if lock is None:
-        lock = asyncio.Lock()
-        _IMAGE_GENERATION_LOCKS[loop] = lock
-    return lock
+    gate = _IMAGE_GENERATION_GATES.get(loop)
+    if gate is None:
+        gate = asyncio.Semaphore(get_image_generation_concurrency())
+        _IMAGE_GENERATION_GATES[loop] = gate
+    return gate
+
+
+# Alias kept for services/authored_icon_pack/provider.py (another workstream).
+_get_image_generation_lock = _get_image_generation_gate
 
 
 @asynccontextmanager
@@ -224,7 +233,7 @@ class ImageGenerationService:
             if is_parallel_image_generation_enabled(self.settings):
                 image_path = await self._call_image_provider(image_prompt)
             else:
-                async with _get_image_generation_lock():
+                async with _get_image_generation_gate():
                     image_path = await self._call_image_provider(image_prompt)
             if image_path:
                 if image_path.startswith("http"):
@@ -653,141 +662,18 @@ class ImageGenerationService:
         """
         Randomize ComfyUI seed inputs before submitting the workflow.
 
-        ComfyUI API-format workflows only include current widget values, not the
-        UI's control_after_generate setting. Randomizing numeric seed-like inputs
-        here gives each Presenton regeneration a new output for the same prompt.
+        Seed drawing stays an instance method so a caller (and the test suite)
+        can pin it without reaching into the workflow walker.
         """
-        node_index = self._build_comfyui_node_index(workflow)
-        randomized_inputs: set[tuple[int, str]] = set()
-        visited_objects: set[int] = set()
-        seed_update_count = 0
-
-        def randomize_input(inputs: dict, key: object) -> bool:
-            nonlocal seed_update_count
-
-            key_text = str(key)
-            marker = (id(inputs), key_text)
-            if marker in randomized_inputs:
-                return False
-
-            value = inputs.get(key)
-            if not self._is_comfyui_seed_value(value):
-                return False
-
-            new_seed = self._generate_comfyui_seed()
-            inputs[key] = str(new_seed) if isinstance(value, str) else new_seed
-            randomized_inputs.add(marker)
-            seed_update_count += 1
-            return True
-
-        def randomize_linked_seed_source(link: list | tuple) -> None:
-            source_node = node_index.get(str(link[0]))
-            if not isinstance(source_node, dict):
-                return
-
-            inputs = source_node.get("inputs")
-            if not isinstance(inputs, dict):
-                return
-
-            updated = False
-            for source_key in list(inputs.keys()):
-                if self._is_comfyui_seed_key(source_key):
-                    updated = randomize_input(inputs, source_key) or updated
-
-            if updated:
-                return
-
-            source_candidates = [
-                key
-                for key, value in inputs.items()
-                if self._normalize_comfyui_key(key) in COMFYUI_SEED_SOURCE_VALUE_KEYS
-                and self._is_comfyui_seed_value(value)
-            ]
-            if len(source_candidates) == 1:
-                randomize_input(inputs, source_candidates[0])
-
-        def walk(obj) -> None:
-            object_id = id(obj)
-            if object_id in visited_objects:
-                return
-            visited_objects.add(object_id)
-
-            if isinstance(obj, dict):
-                inputs = obj.get("inputs")
-                if isinstance(inputs, dict):
-                    for input_key, input_value in list(inputs.items()):
-                        if not self._is_comfyui_seed_key(input_key):
-                            continue
-                        if self._is_comfyui_link(input_value):
-                            randomize_linked_seed_source(input_value)
-                        else:
-                            randomize_input(inputs, input_key)
-
-                for value in obj.values():
-                    walk(value)
-            elif isinstance(obj, list):
-                for value in obj:
-                    walk(value)
-
-        walk(workflow)
-        return seed_update_count
-
-    def _build_comfyui_node_index(self, workflow: dict) -> dict[str, dict]:
-        node_index: dict[str, dict] = {}
-        visited_objects: set[int] = set()
-
-        def walk(obj) -> None:
-            object_id = id(obj)
-            if object_id in visited_objects:
-                return
-            visited_objects.add(object_id)
-
-            if isinstance(obj, dict):
-                if isinstance(obj.get("inputs"), dict):
-                    node_id = obj.get("id")
-                    if node_id is not None:
-                        node_index[str(node_id)] = obj
-
-                for key, value in obj.items():
-                    if isinstance(value, dict) and isinstance(value.get("inputs"), dict):
-                        node_index[str(key)] = value
-                    walk(value)
-            elif isinstance(obj, list):
-                for value in obj:
-                    walk(value)
-
-        walk(workflow)
-        return node_index
-
-    def _normalize_comfyui_key(self, key: object) -> str:
-        return str(key or "").strip().replace("-", "_").replace(" ", "_").lower()
-
-    def _is_comfyui_seed_key(self, key: object) -> bool:
-        normalized_key = self._normalize_comfyui_key(key).replace("_", "")
-        return normalized_key == "seed" or normalized_key.endswith("seed")
-
-    def _is_comfyui_seed_value(self, value: object) -> bool:
-        if isinstance(value, bool):
-            return False
-        if isinstance(value, int):
-            return True
-        if isinstance(value, str):
-            raw_value = value.strip()
-            return raw_value.isdigit() or (
-                raw_value.startswith("-") and raw_value[1:].isdigit()
-            )
-        return False
-
-    def _is_comfyui_link(self, value: object) -> bool:
-        return (
-            isinstance(value, (list, tuple))
-            and len(value) >= 2
-            and isinstance(value[0], (str, int))
-            and isinstance(value[1], int)
+        return inject_random_seeds_into_workflow(
+            workflow, seed_factory=self._generate_comfyui_seed
         )
 
+    def _build_comfyui_node_index(self, workflow: dict) -> dict[str, dict]:
+        return build_comfyui_node_index(workflow)
+
     def _generate_comfyui_seed(self) -> int:
-        return secrets.randbelow(COMFYUI_MAX_SEED + 1)
+        return generate_comfyui_seed()
 
     async def _submit_comfyui_workflow(
         self, session: aiohttp.ClientSession, comfyui_url: str, workflow: dict

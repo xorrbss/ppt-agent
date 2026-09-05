@@ -3,9 +3,12 @@ import test from "node:test";
 
 import sharp from "sharp";
 
+import { backplatePixelSize } from "./capture-scale.ts";
 import { nestPreparedNativeGroups } from "./native-plan.ts";
 import { assembleAuthoredHybridPptx } from "./pptx-assembler.ts";
 import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
+
+const { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT } = backplatePixelSize();
 
 const CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -31,7 +34,7 @@ function skeleton() {
 
 const transparentPng = () =>
   sharp({
-    create: { width: 1280, height: 720, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   })
     .png()
     .toBuffer();

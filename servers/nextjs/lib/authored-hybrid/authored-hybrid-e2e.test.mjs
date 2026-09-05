@@ -18,6 +18,7 @@ import {
 import { assembleAuthoredHybridPptx } from "./pptx-assembler.ts";
 import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
 import { preflightAuthoredHtmlForHybrid } from "./security.ts";
+import { backplatePixelSize, BACKPLATE_SCALE } from "./capture-scale.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "..", "..", "..", "..");
@@ -145,10 +146,14 @@ function slideXml(entries, slideNumber) {
   return entries.get(`ppt/slides/slide${slideNumber}.xml`).toString("utf8");
 }
 
-async function rgbAt(png, x, y) {
+// x/y are CSS px (matching the fixtures' own coordinates); the backplate PNG
+// is captured at BACKPLATE_SCALE device pixels per CSS px (capture-scale.ts).
+async function rgbAt(png, cssX, cssY) {
   const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({
     resolveWithObject: true,
   });
+  const x = Math.min(info.width - 1, Math.round(cssX * BACKPLATE_SCALE));
+  const y = Math.min(info.height - 1, Math.round(cssY * BACKPLATE_SCALE));
   const offset = (y * info.width + x) * info.channels;
   return [...data.subarray(offset, offset + 3)];
 }
@@ -314,9 +319,10 @@ test("isolated authored CSS keeps each slide's right-edge sentinel through PPTX 
 
   for (let index = 0; index < layers.length; index += 1) {
     const metadata = await sharp(layers[index].backplatePng).metadata();
+    const expectedBackplateSize = backplatePixelSize();
     assert.deepEqual(
       [metadata.width, metadata.height],
-      [1280, 720],
+      [expectedBackplateSize.width, expectedBackplateSize.height],
       `slide ${index + 1} capture changed the authored viewport`
     );
     assertRgb(

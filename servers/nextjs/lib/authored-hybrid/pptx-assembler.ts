@@ -11,6 +11,16 @@ import {
   type PreparedNativeElement,
 } from "./native-plan.ts";
 import { serializeNativeChartPart } from "./native-chart.ts";
+import { backplatePixelSize } from "./capture-scale.ts";
+import {
+  addChartContentType,
+  addPngContentType,
+  allocateMediaName,
+  appendRelationship,
+  CHART_RELATIONSHIP_TYPE,
+  nextChartNumber,
+  nextRelationshipNumber,
+} from "./pptx-package-parts.ts";
 import {
   decodeXmlAttributeValue,
   opcPartComparisonKey,
@@ -30,12 +40,6 @@ const SLIDE_HEIGHT_EMU = 6_858_000;
 const SLIDE_WIDTH_PX = 1_280;
 const SLIDE_HEIGHT_PX = 720;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-const IMAGE_RELATIONSHIP_TYPE =
-  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
-const CHART_RELATIONSHIP_TYPE =
-  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
-const CHART_CONTENT_TYPE =
-  "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
 export interface AuthoredHybridSlideLayer {
   /** One-based OOXML slide number. */
   slideNumber: number;
@@ -83,10 +87,10 @@ function assertBackplatePng(png: Buffer): void {
   if (
     png.length < 24 ||
     !png.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE) ||
-    png.readUInt32BE(16) !== 1280 ||
-    png.readUInt32BE(20) !== 720
+    png.readUInt32BE(16) !== backplatePixelSize().width ||
+    png.readUInt32BE(20) !== backplatePixelSize().height
   ) {
-    throw new Error("Hybrid backplate must be a 1280x720 PNG.");
+    throw new Error(`Hybrid backplate must be a ${backplatePixelSize().width}x${backplatePixelSize().height} PNG.`);
   }
 }
 
@@ -117,111 +121,6 @@ export function isCanvasBackgroundShape(item: PreparedNativeElement): boolean {
     x + width >= SLIDE_WIDTH_PX - 0.5 &&
     y + height >= SLIDE_HEIGHT_PX - 0.5
   );
-}
-
-function appendRelationship(
-  relationshipsXml: string,
-  relationshipId: string,
-  target: string,
-  relationshipType = IMAGE_RELATIONSHIP_TYPE,
-): string {
-  if (!/<Relationships\b[^>]*>[\s\S]*<\/Relationships>\s*$/i.test(relationshipsXml)) {
-    throw new Error("PPTX slide relationship document is malformed.");
-  }
-  const relationship =
-    `<Relationship Id="${relationshipId}" ` +
-    `Type="${relationshipType}" ` +
-    `Target="${target}"/>`;
-  return relationshipsXml.replace(/<\/Relationships>\s*$/i, `${relationship}</Relationships>`);
-}
-
-function nextChartNumber(entries: ReadonlyMap<string, Buffer>): number {
-  let maximum = 0;
-  for (const name of entries.keys()) {
-    const number = /^ppt\/charts\/chart(\d+)\.xml$/i.exec(name)?.[1];
-    if (number) maximum = Math.max(maximum, Number(number));
-  }
-  return maximum + 1;
-}
-
-function addChartContentType(
-  entries: Map<string, Buffer>,
-  chartPath: string,
-): void {
-  const path = "[Content_Types].xml";
-  const original = entries.get(path)?.toString("utf8");
-  if (!original) throw new Error("PPTX content types document is missing.");
-  if (original.includes(`PartName="/${chartPath}"`)) return;
-  if (!/<\/Types>\s*$/i.test(original)) {
-    throw new Error("PPTX content types document is malformed.");
-  }
-  const override =
-    `<Override PartName="/${chartPath}" ContentType="${CHART_CONTENT_TYPE}"/>`;
-  entries.set(
-    path,
-    Buffer.from(original.replace(/<\/Types>\s*$/i, `${override}</Types>`), "utf8"),
-  );
-}
-
-function nextRelationshipNumber(relationshipsXml: string): number {
-  let maximum = 0;
-  for (const match of relationshipsXml.matchAll(
-    /<(?:[A-Za-z_][\w.-]*:)?Relationship\b[^>]*>/gi
-  )) {
-    const rawId = rawRelationshipAttribute(match[0], "Id");
-    if (rawId === null) continue;
-    const id = decodeXmlAttributeValue(rawId);
-    if (id === null) {
-      throw new Error("PPTX slide relationship Id is malformed.");
-    }
-    const numericId = id.match(/^rId(\d+)$/i)?.[1];
-    if (numericId === undefined) continue;
-    const value = Number(numericId);
-    if (!Number.isSafeInteger(value)) {
-      throw new Error("PPTX slide relationship Id is out of range.");
-    }
-    maximum = Math.max(maximum, value);
-  }
-  return maximum + 1;
-}
-
-function addPngContentType(entries: Map<string, Buffer>): void {
-  const path = "[Content_Types].xml";
-  const original = entries.get(path)?.toString("utf8");
-  if (!original) throw new Error("PPTX content types document is missing.");
-  if (/<Default\b[^>]*\bExtension=["']png["']/i.test(original)) return;
-  if (!/<\/Types>\s*$/i.test(original)) {
-    throw new Error("PPTX content types document is malformed.");
-  }
-  entries.set(
-    path,
-    Buffer.from(
-      original.replace(
-        /<\/Types>\s*$/i,
-        '<Default Extension="png" ContentType="image/png"/></Types>'
-      ),
-      "utf8"
-    )
-  );
-}
-
-function allocateMediaName(
-  entries: ReadonlyMap<string, Buffer>,
-  slideNumber: number,
-  role: string,
-  bytes: Buffer
-): string {
-  const digest = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
-  const stem = `hybrid-s${slideNumber}-${role}-${digest}`;
-  let candidate = `${stem}.png`;
-  let suffix = 2;
-  while (entries.has(`ppt/media/${candidate}`)) {
-    const existing = entries.get(`ppt/media/${candidate}`);
-    if (existing?.equals(bytes)) return candidate;
-    candidate = `${stem}-${suffix}.png`;
-    suffix += 1;
-  }
-  return candidate;
 }
 
 export const SEMANTIC_OWNERSHIP_ALT_TEXT_PREFIX =

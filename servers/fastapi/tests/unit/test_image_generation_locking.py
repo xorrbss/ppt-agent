@@ -34,6 +34,12 @@ def test_image_generation_lock_is_shared_across_service_instances(
     monkeypatch, parallel_env: str, expected_max_active: int
 ):
     monkeypatch.setenv("ENABLE_PARALLEL_IMAGE_GENERATION", parallel_env)
+    # F2 replaced the process-wide lock with a semaphore sized by
+    # IMAGE_GENERATION_CONCURRENCY (default 3). Pin it to 1 here so the
+    # "not parallel" branch still means strict serialization, matching this
+    # test's original lock-based expectation; concurrency > 1 behaviour is
+    # covered by test_image_generation_concurrency.py.
+    monkeypatch.setenv("IMAGE_GENERATION_CONCURRENCY", "1")
     active_requests = 0
     max_active_requests = 0
 

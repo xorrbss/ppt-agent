@@ -4,6 +4,7 @@ import test from "node:test";
 
 import sharp from "sharp";
 
+import { backplatePixelSize, BACKPLATE_SCALE } from "./capture-scale.ts";
 import { resolveScriptAwareTypeface } from "./font-policy.ts";
 import { instrumentAuthoredHtml } from "./html-instrumentation.ts";
 import { planLayerSafeNativeElements, prepareNativeElements } from "./native-plan.ts";
@@ -21,6 +22,7 @@ import {
   parseActiveAuthoredEmissionResponseV1,
 } from "./active-emission.ts";
 
+const { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT } = backplatePixelSize();
 const digest = (value) =>
   `sha256:${createHash("sha256").update(value).digest("hex")}`;
 const bounds = (x, y, width, height) => ({
@@ -83,7 +85,7 @@ test("declared QID reconciliation ignores diagnostic DOM path and fails closed o
     requiredFeatures: [],
   }];
   const observation = {
-    viewport: { widthPx: 1280, heightPx: 720, devicePixelRatio: 1 },
+    viewport: { widthPx: 1280, heightPx: 720, devicePixelRatio: BACKPLATE_SCALE },
     elements: [{
       id: "title.main",
       identityAuthority: "declared-qid",
@@ -195,8 +197,8 @@ test("OOXML readback recovers one native owner from raster-classified shape frag
   });
   const backplatePng = await sharp({
     create: {
-      width: 1280,
-      height: 720,
+      width: BACKPLATE_WIDTH,
+      height: BACKPLATE_HEIGHT,
       channels: 4,
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     },
@@ -238,7 +240,7 @@ test("declared image asset authority uses decoded bytes and fails closed on mism
     assetContentDigest: assetDigest,
   }];
   const observation = {
-    viewport: { widthPx: 1280, heightPx: 720, devicePixelRatio: 1 },
+    viewport: { widthPx: 1280, heightPx: 720, devicePixelRatio: BACKPLATE_SCALE },
     elements: [{
       id: "image.hero",
       identityAuthority: "declared-qid",
@@ -374,8 +376,8 @@ test("serializer preserves native paint order and CJK serif run readback", async
   const prepared = await prepareNativeElements([text, foreground]);
   const backplatePng = await sharp({
     create: {
-      width: 1280,
-      height: 720,
+      width: BACKPLATE_WIDTH,
+      height: BACKPLATE_HEIGHT,
       channels: 4,
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     },

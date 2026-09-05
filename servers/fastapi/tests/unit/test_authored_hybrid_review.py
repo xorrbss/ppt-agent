@@ -376,10 +376,6 @@ def test_full_reauthor_canonicalizes_time_once_and_keeps_active_tags_blocked(
     dangerous_documents = (
         _VALID_HTML.replace("<h1", "<script").replace("</h1>", "</script>"),
         _VALID_HTML.replace("<h1", "<iframe").replace("</h1>", "</iframe>"),
-        _VALID_HTML.replace(
-            "<h1 data-qid='q-title'>Title</h1>",
-            "<style>@import url(https://example.invalid/x.css)</style>",
-        ),
     )
     for dangerous in dangerous_documents:
         canonical = author_vision_qa._canonicalize_full_reauthor_semantic_aliases(
@@ -390,6 +386,24 @@ def test_full_reauthor_canonicalizes_time_once_and_keeps_active_tags_blocked(
             author_vision_qa.validate_authored_slide_html(
                 canonical, finalized=True
             )
+
+    # H1 (docs/authored-quality-speed-programme-design-20260905.md section 6)
+    # removes every non-hoistable at-rule before admission, so a remote
+    # ``@import`` no longer reaches the gate to be rejected: it is deleted
+    # whole, and the admitted document can never fetch the stylesheet.
+    remote_import = _VALID_HTML.replace(
+        "<h1 data-qid='q-title'>Title</h1>",
+        "<style>@import url(https://example.invalid/x.css)</style>",
+    )
+    canonical = author_vision_qa._canonicalize_full_reauthor_semantic_aliases(
+        remote_import
+    )
+    assert canonical == remote_import
+    stripped = author_vision_qa.validate_authored_slide_html(
+        canonical, finalized=True
+    )
+    assert "@import" not in stripped and "example.invalid" not in stripped
+
     assert author_calls == 1
 
 

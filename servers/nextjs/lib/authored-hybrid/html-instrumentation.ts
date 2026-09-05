@@ -6,6 +6,7 @@ import {
   AUTHORED_FONT_FALLBACK_POLICY,
   POWERPOINT_GENERIC_FONT_FALLBACK_POLICY,
 } from "./font-policy.ts";
+import { BACKPLATE_SCALE } from "./capture-scale.ts";
 import type {
   AuthoredHybridExpectedPromotedElement,
   BrowserAuthoredHybridObservation,
@@ -114,6 +115,13 @@ export function instrumentAuthoredHtml(
     fontFallbackPolicy: AUTHORED_FONT_FALLBACK_POLICY,
     captureMode: options.captureMode ??
       (promotedElements.length ? "hybrid-backplate" : "observation"),
+    // The Chromium session's deviceScaleFactor (see capture-scale.ts) is
+    // always applied before this script runs, so window.devicePixelRatio
+    // already reports it. Passing it through explicitly lets the injected
+    // analyser validate/report against the intended value instead of a
+    // hardcoded legacy constant, and lets raster-island rendering scale its
+    // internal canvas to the same density as the surrounding backplate.
+    captureScale: BACKPLATE_SCALE,
     declaredElementIds: [...(options.declaredElementIds ?? [])],
     ...(options.fontLayoutMode
       ? { fontLayoutMode: options.fontLayoutMode }

@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from hashlib import sha256
 import hmac
 import os
 from pathlib import Path
@@ -43,15 +42,20 @@ from services.presentation_export_capabilities import (
     PresentationExportCapabilityAnalysis,
     PresentationExportContractError,
     PresentationExportFreshnessError,
-    PresentationExportSlideInput,
     UnsupportedCapability,
     analyze_presentation_export_capabilities,
+)
+from services.presentation_export_route_inputs import (
+    build_slide_inputs,
+    hash_export_artifact,
+    resolve_template_identity,
 )
 from services.template_v2_generation_service import (
     TemplateV2GenerationError,
     TemplateV2GenerationTarget,
     load_template_v2_generation_target,
 )
+from utils.export_font_embedding_default import resolve_font_embedding_default
 
 
 PresentationExportAdapterRunner = Callable[
@@ -222,23 +226,13 @@ class PresentationExportExecution:
         )
 
 
-def _hash_export_artifact(path: Path) -> tuple[str, int]:
-    digest = sha256()
-    size_bytes = 0
-    with path.open("rb") as stream:
-        while chunk := stream.read(1024 * 1024):
-            digest.update(chunk)
-            size_bytes += len(chunk)
-    return digest.hexdigest(), size_bytes
-
-
 async def _require_standalone_artifact_integrity(
     execution: PresentationExportExecution,
 ) -> None:
     result = execution.route.result
     try:
         actual_sha256, actual_size = await asyncio.to_thread(
-            _hash_export_artifact,
+            hash_export_artifact,
             Path(result.presentation.path),
         )
     except OSError as error:
@@ -254,71 +248,6 @@ async def _require_standalone_artifact_integrity(
             "presentation_export_artifact_digest_mismatch",
             path="artifact",
         )
-
-
-def _template_identity(
-    presentation: PresentationModel,
-) -> tuple[str, int, str] | None:
-    theme = presentation.theme
-    if not isinstance(theme, Mapping):
-        return None
-    raw = theme.get("template_v2")
-    if not isinstance(raw, Mapping):
-        return None
-    template_id = raw.get("template_v2_id")
-    revision = raw.get("template_v2_revision")
-    digest = raw.get("template_snapshot_sha256")
-    if (
-        not isinstance(template_id, str)
-        or not template_id.strip()
-        or not isinstance(revision, int)
-        or isinstance(revision, bool)
-        or revision < 1
-        or not isinstance(digest, str)
-        or not digest.startswith("sha256:")
-        or len(digest) != 71
-    ):
-        raise PresentationExportContractError(
-            "presentation_export_template_provenance_invalid"
-        )
-    normalized_digest = digest.removeprefix("sha256:").lower()
-    if any(character not in "0123456789abcdef" for character in normalized_digest):
-        raise PresentationExportContractError(
-            "presentation_export_template_provenance_invalid"
-        )
-    return template_id.strip(), revision, normalized_digest
-
-
-def _slide_inputs(
-    target: TemplateV2GenerationTarget,
-    slides: Sequence[SlideModel],
-) -> tuple:
-    layouts = {item.layout.id: item.layout for item in target.layouts}
-    if len(layouts) != len(target.layouts):
-        raise PresentationExportContractError(
-            "presentation_export_template_layout_duplicate"
-        )
-    result = []
-    for index, slide in enumerate(sorted(slides, key=lambda item: item.index)):
-        layout = layouts.get(slide.layout or "")
-        if layout is None or not isinstance(slide.content, Mapping):
-            raise PresentationExportContractError(
-                "presentation_export_slide_contract_invalid",
-                path=f"slides.{index}",
-            )
-        source_part = (
-            target.native_source.layout_source_parts.get(layout.id)
-            if target.native_source is not None
-            else None
-        )
-        result.append(
-            PresentationExportSlideInput(
-                layout=layout,
-                content=dict(slide.content),
-                source_part=source_part,
-            )
-        )
-    return tuple(result)
 
 
 async def execute_presentation_export(
@@ -339,17 +268,25 @@ async def execute_presentation_export(
     requested_adapter: str = "auto",
     template_target: TemplateV2GenerationTarget | None = None,
     pptx_mode: Literal["fidelity", "hybrid"] = "fidelity",
-    font_embedding: bool = False,
+    font_embedding: bool | None = None,
 ) -> PresentationExportExecution:
     """Analyze a persisted snapshot, record intent, then execute one route.
 
     ``render_presentation_id`` may be an isolated staging deck while
     ``attempt_presentation_id`` remains the durable target identity.
+    ``font_embedding=None`` means the caller said nothing, so I1's CJK
+    default (D21) applies once the presentation's language is known below;
+    ``True``/``False`` is explicit and always wins.
     """
 
     presentation = await session.get(PresentationModel, render_presentation_id)
     if presentation is None:
         raise PresentationExportContractError("presentation_not_found")
+    font_embedding = resolve_font_embedding_default(
+        font_embedding,
+        pptx_mode=pptx_mode if export_format == "pptx" else "fidelity",
+        language=presentation.language,
+    )
     if presentation.revision != expected_render_revision:
         raise PresentationExportContractError("stale_presentation_revision")
     slides = (
@@ -371,7 +308,7 @@ async def execute_presentation_export(
     html_source_sha256 = build_export_html_source_sha256(slides)
     composition_sha256 = build_export_composition_sha256(presentation, slides)
 
-    template_identity = _template_identity(presentation)
+    template_identity = resolve_template_identity(presentation)
     if template_target is None and template_identity is not None:
         template_id, template_revision, _snapshot_digest = template_identity
         try:
@@ -396,7 +333,7 @@ async def execute_presentation_export(
             raise PresentationExportContractError(
                 "presentation_export_template_snapshot_mismatch"
             )
-        slide_inputs = _slide_inputs(template_target, slides)
+        slide_inputs = build_slide_inputs(template_target, slides)
     else:
         slide_inputs = ()
 

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   AUTHORED_HYBRID_RESULT_MARKER_ID,
 } from "./browser-source.ts";
+import { BACKPLATE_SCALE } from "./capture-scale.ts";
 import {
   instrumentAuthoredHtml,
   parseAuthoredHybridDomDump,
@@ -100,7 +101,7 @@ test("classifier is deterministic, conservative, and isolated per element", () =
 test("browser observations become a versioned JSON-safe H2 contract", () => {
   const html = "<!doctype html><p>분기 <strong>성과</strong></p>";
   const observation = {
-    viewport: { widthPx: 1280, heightPx: 720, devicePixelRatio: 1 },
+    viewport: { widthPx: 1280, heightPx: 720, devicePixelRatio: BACKPLATE_SCALE },
     appliedPromotedElementIds: [],
     rejectedPromotedElementIds: [],
     warnings: ["font substituted", "font substituted"],
@@ -269,7 +270,7 @@ test("raster-classified text keeps an editable payload and suppression eligibili
   const slide = buildAuthoredHybridSlide(
     html,
     {
-      viewport: { widthPx: 1280, heightPx: 720, devicePixelRatio: 1 },
+      viewport: { widthPx: 1280, heightPx: 720, devicePixelRatio: BACKPLATE_SCALE },
       appliedPromotedElementIds: [],
       rejectedPromotedElementIds: [],
       warnings: [],
@@ -311,7 +312,7 @@ test("contract construction rejects a viewport that would corrupt geometry", () 
       buildAuthoredHybridSlide(
         "<p>x</p>",
         {
-          viewport: { widthPx: 1024, heightPx: 768, devicePixelRatio: 1 },
+          viewport: { widthPx: 1024, heightPx: 768, devicePixelRatio: BACKPLATE_SCALE },
           appliedPromotedElementIds: [],
           rejectedPromotedElementIds: [],
           warnings: [],
@@ -356,7 +357,7 @@ test("HTML instrumentation fixes the asset context and neutralises only temporar
 
 test("DOM dump parser selects the actual result element, not analyser source text", () => {
   const value = {
-    viewport: { widthPx: 1280, heightPx: 720, devicePixelRatio: 1 },
+    viewport: { widthPx: 1280, heightPx: 720, devicePixelRatio: BACKPLATE_SCALE },
     elements: [],
     warnings: [],
     appliedPromotedElementIds: [],

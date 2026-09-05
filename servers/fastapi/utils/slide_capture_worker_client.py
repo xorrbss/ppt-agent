@@ -4,91 +4,31 @@
 from __future__ import annotations
 
 import asyncio
-import base64
-import binascii
-import hashlib
 import json
 import os
-import re
 import signal
 import subprocess
 from typing import Any, Mapping
 
+from utils.get_env_programme import (
+    get_authored_renderer_lease_max_renders,
+    get_authored_renderer_lease_pool_size,
+    is_authored_renderer_framed_protocol_enabled,
+    is_authored_renderer_lease_enabled,
+)
 from utils.renderer_isolation import (
-    MAX_RESPONSE_BYTES, RendererPolicyError,
+    MAX_RESPONSE_BYTES,
     build_worker_environment, encode_request, worker_command,
 )
+from utils.renderer_worker_policy import renderer_requires_external_worker
+from utils.renderer_worker_response import (
+    RendererIsolationError,
+    decode_worker_response as _decode_worker_response,
+    source_digest_for,
+)
 from utils.slide_capture import _admit_render_source, _cache_browser_metrics
-
-class RendererIsolationError(RuntimeError):
-    """The isolated authored render boundary failed without a publishable artifact."""
-
-
-def _decode_worker_response(payload: bytes) -> tuple[bytes, Mapping[str, Any] | None]:
-    if not payload or len(payload) > MAX_RESPONSE_BYTES:
-        raise RendererIsolationError("authored renderer response limit exceeded")
-    try:
-        response = json.loads(payload)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise RendererIsolationError("authored renderer returned invalid JSON") from exc
-    if not isinstance(response, Mapping):
-        raise RendererIsolationError("authored renderer returned a non-object response")
-    if response.get("schema_version") != "authored-render-response/v1":
-        raise RendererIsolationError("authored renderer response schema is unsupported")
-    ok = response.get("ok")
-    if not isinstance(ok, bool):
-        raise RendererIsolationError("authored renderer response is missing status")
-    if not ok:
-        allowed = {"schema_version", "ok", "error", "error_type"}
-        if not set(response).issubset(allowed):
-            raise RendererIsolationError("authored renderer failure response has invalid fields")
-        message = response.get("error")
-        safe_message = (
-            str(message).replace("\r", " ").replace("\n", " ")[:256]
-            if isinstance(message, str)
-            else "isolated authored renderer failed"
-        )
-        if response.get("error_type") in {
-            "RendererPolicyError",
-            "RendererDisabledError",
-        }:
-            raise RendererPolicyError(safe_message)
-        raise RendererIsolationError(safe_message)
-    allowed = {
-        "schema_version",
-        "ok",
-        "png_base64",
-        "metrics",
-        "source_digest",
-        "asset_digests",
-    }
-    if set(response) != allowed:
-        raise RendererIsolationError("authored renderer success response has invalid fields")
-    encoded_png = response.get("png_base64")
-    if not isinstance(encoded_png, str):
-        raise RendererIsolationError("authored renderer response has no PNG")
-    try:
-        png = base64.b64decode(encoded_png, validate=True)
-    except (ValueError, binascii.Error) as exc:
-        raise RendererIsolationError("authored renderer PNG is not valid base64") from exc
-    if not png.startswith(b"\x89PNG\r\n\x1a\n"):
-        raise RendererIsolationError("authored renderer returned a non-PNG artifact")
-    if len(png) > MAX_RESPONSE_BYTES:
-        raise RendererIsolationError("authored renderer PNG exceeds response limit")
-    metrics = response.get("metrics")
-    if metrics is not None and not isinstance(metrics, Mapping):
-        raise RendererIsolationError("authored renderer metrics are invalid")
-    digest = response.get("source_digest")
-    assets = response.get("asset_digests")
-    if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
-        raise RendererIsolationError("authored renderer source digest is invalid")
-    if not isinstance(assets, list) or any(
-        not isinstance(item, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", item)
-        for item in assets
-    ):
-        raise RendererIsolationError("authored renderer asset digests are invalid")
-    return png, metrics
-
+from utils.slide_capture_worker_lease import acquire_lease
+from utils.slide_capture_worker_session import RendererWorkerSession
 
 async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     html: str, timeout: int
@@ -159,7 +99,7 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     if len(stdout) > MAX_RESPONSE_BYTES:
         raise RendererIsolationError("authored renderer response limit exceeded")
     png, metrics = _decode_worker_response(stdout)
-    expected_digest = "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
+    expected_digest = source_digest_for(html)
     # Admission is intentionally repeated in the worker.  The parent digest check
     # binds the returned artifact to the exact request across an external launcher.
     response = json.loads(stdout)
@@ -170,3 +110,57 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     if metrics is not None:
         _cache_browser_metrics(html, metrics)
     return png, metrics
+
+
+async def render_with_lease(  # noqa: ASYNC109
+    deck_scope: str,
+    html: str,
+    timeout: int = 60,
+    *,
+    render_fn: Any = None,
+) -> tuple[bytes, Mapping[str, Any] | None]:
+    """Render one authored slide, batching same-deck renders behind a lease.
+
+    Uses a :class:`~utils.slide_capture_worker_lease.RendererWorkerLease` keyed
+    by the opaque ``deck_scope`` when ``AUTHORED_RENDERER_LEASE_ENABLED`` is on
+    and this process requires the external isolated worker boundary (see
+    ``renderer_worker_policy.renderer_requires_external_worker``). When the
+    lease knob is off, or this process is not in "requires external worker"
+    mode (development's reusable-Chrome path already amortizes cold starts on
+    its own), this degrades to exactly ``_render_html_in_isolated_worker``.
+
+    How the lease renders depends on the framed-protocol knob:
+
+    * ``AUTHORED_RENDERER_FRAMED_PROTOCOL_ENABLED`` on -- the lease owns up to
+      ``AUTHORED_RENDERER_LEASE_POOL_SIZE`` framed worker sessions, each
+      keeping one worker process and one Chromium alive across its renders.
+      This is where the batching actually saves a cold start; it requires a
+      launcher and worker image that speak the framed protocol
+      (``utils.renderer_frame_codec``), which is why it is opt-in.
+    * off -- the lease performs the same one-process-per-render isolated-worker
+      exchange as before, so it only groups bookkeeping.
+
+    Either way each render is admitted, digest-bound to its response, and
+    served by a fresh browser context and target inside the worker.
+
+    ``render_fn`` overrides the single-shot exchange this falls back to (and
+    the one a non-framed lease performs). ``utils.slide_capture`` passes its
+    own module-level ``_render_html_in_isolated_worker`` so the renderer's
+    isolation tests keep their existing monkeypatch seam.
+    """
+
+    exchange = _render_html_in_isolated_worker if render_fn is None else render_fn
+    if not (is_authored_renderer_lease_enabled() and renderer_requires_external_worker()):
+        return await exchange(html, timeout)
+    if is_authored_renderer_framed_protocol_enabled():
+        lease = await acquire_lease(
+            deck_scope,
+            exchange,
+            session_factory=lambda: RendererWorkerSession(
+                max_requests=get_authored_renderer_lease_max_renders()
+            ),
+            pool_size=get_authored_renderer_lease_pool_size(),
+        )
+    else:
+        lease = await acquire_lease(deck_scope, exchange)
+    return await lease.render(html, timeout)

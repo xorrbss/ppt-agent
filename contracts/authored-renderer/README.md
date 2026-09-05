@@ -1,10 +1,48 @@
 # Authored renderer production isolation contract
 
-This contract runs `utils.authored_renderer_worker` as a one-shot OCI worker.
-The author process sends exactly one versioned newline-delimited JSON request on stdin and
+This contract runs `utils.authored_renderer_worker` as an OCI worker. The author
+process sends exactly one versioned newline-delimited JSON request on stdin and
 receives the PNG artifact as base64 in the worker's single JSON stdout response.
 There is no HTTP listener, host artifact mount, provider environment, secret,
 preload, or privileged IPC surface.
+
+## Framed serve mode (many renders per container)
+
+The same stdin also accepts a **framed** stream: an 8-byte big-endian payload
+length followed by that many bytes of JSON, per request and per response. The
+launcher and the worker both detect it from the first eight bytes with no
+handshake and no argv change — a legacy payload starts with ASCII JSON, whose
+first eight bytes are far larger than any admissible frame length — so a
+deployment that has not moved to frames keeps the exact one-shot behaviour.
+`invoke.py serve` selects the framed protocol explicitly for manual use.
+
+In framed mode `invoke.py` starts **one** container for the whole stream and
+proxies frames to it in lock step, and the worker keeps **one** Chromium alive
+and serves requests until stdin EOF, `max_requests` renders (sent on the first
+request, default 200), or the first failure. Each response carries the same
+fields as the single-shot protocol plus `request_ordinal`. The parent gates this
+on `AUTHORED_RENDERER_FRAMED_PROTOCOL_ENABLED` (default off) and opens at most
+`AUTHORED_RENDERER_LEASE_POOL_SIZE` containers per deck scope.
+
+Security posture, stated exactly: framed mode uses the **same image, the same
+compose service, `network_mode: none`, read-only root, non-root uid, dropped
+capabilities and seccomp profile**, and the same tmpfs `/tmp` and `/dev/shm`.
+The one property that changes is the *lifetime* of that tmpfs and of the browser
+process: per container instead of per render. Three rules keep the boundary
+meaningful under reuse.
+
+1. **Fresh page state per request.** Every request gets a new disposable CDP
+   browser context and target, disposed before the response is written; no
+   cookie jar, storage, cache entry, or JavaScript context outlives a request.
+2. **One deck scope per container.** The parent's lease keys sessions by an
+   opaque `deck_scope` and never routes two scopes to one process, so a reused
+   container is never shared between tenants or decks.
+3. **Retire on error.** A failed render, protocol violation, or timeout kills
+   the container and the lease; the next slide pays a cold start rather than
+   inheriting a possibly poisoned browser.
+
+A per-request watchdog still bounds each exchange to `timeout +
+STARTUP_GRACE_SECONDS` and force-removes the container when it expires.
 
 The worker service is non-root, read-only, `network_mode: none`, private-IPC,
 capability-free, and constrained by `/tmp` and `/dev/shm` tmpfs, PID, memory, CPU, file-descriptor,

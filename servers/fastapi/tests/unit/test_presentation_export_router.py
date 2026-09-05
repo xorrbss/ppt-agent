@@ -597,3 +597,97 @@ def test_authored_hybrid_execution_binds_attempt_to_active_semantic_manifest(
     assert captured["request"].canonical_source_digest == canonical_digest
     assert captured["request"].export_attempt_id == attempt_id
     assert captured["request"].workspace_operation_id == operation_id
+    # I1 (D21): the caller stated no font_embedding, the deck is Korean, and
+    # the export is hybrid PPTX, so the CJK default applies.
+    assert captured["request"].font_embedding is True
+
+
+def test_hybrid_korean_export_keeps_an_explicit_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """I1's CJK default never overrides a caller that said false explicitly."""
+
+    presentation_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
+    operation_id = uuid.uuid4()
+    attempt_id = uuid.uuid4()
+    canonical_digest = "a" * 64
+    presentation = PresentationModel(
+        id=presentation_id,
+        owner_id=owner_id,
+        content="authored semantic deck",
+        n_slides=1,
+        language="ko",
+        revision=1,
+        profile_driver_id="authored",
+        mode="authored",
+    )
+    slide = SlideModel(
+        presentation=presentation_id,
+        layout_group="authored",
+        layout="authored",
+        index=0,
+        content={},
+        html_content='<section data-qid="s01-root">semantic</section>',
+    )
+    captured: dict = {}
+
+    class ScalarRows:
+        def all(self):
+            return [slide]
+
+    class QueryResult:
+        def scalars(self):
+            return ScalarRows()
+
+    class Session:
+        async def get(self, model, row_id):
+            assert model is PresentationModel and row_id == presentation_id
+            return presentation
+
+        async def execute(self, _statement):
+            return QueryResult()
+
+    async def active_emission(*_args, **_kwargs):
+        return SimpleNamespace(
+            canonical_mode="bundleGraph",
+            presentation_revision=1,
+            canonical_digest=f"sha256:{canonical_digest}",
+        )
+
+    async def verify_assets(_session, *, expected_asset_digests):
+        assert expected_asset_digests == {}
+
+    async def begin(_session, **kwargs):
+        return SimpleNamespace(id=attempt_id)
+
+    async def route(export_request, _analysis, *, asset_digests_verified=False):
+        captured["request"] = export_request
+        return SimpleNamespace(result=SimpleNamespace())
+
+    monkeypatch.setattr(router, "get_active_authored_emission", active_emission)
+    monkeypatch.setattr(router, "require_export_asset_digests", verify_assets)
+    monkeypatch.setattr(router, "begin_export_attempt", begin)
+    monkeypatch.setattr(router, "route_presentation_export", route)
+
+    asyncio.run(
+        router.execute_presentation_export(
+            Session(),
+            render_presentation_id=presentation_id,
+            attempt_presentation_id=presentation_id,
+            export_format="pptx",
+            expected_render_revision=1,
+            source_revision=1,
+            title="Semantic Hybrid",
+            cookie_header="session=test",
+            owner_id=owner_id,
+            owner_scope="owner",
+            workspace_operation_id=operation_id,
+            request_hash="b" * 64,
+            idempotency_key_hash="c" * 64,
+            pptx_mode="hybrid",
+            font_embedding=False,
+        )
+    )
+
+    assert captured["request"].font_embedding is False

@@ -25,16 +25,12 @@ import {
   type AuthoredEditorCapability,
   type AuthoredPatchOperation,
 } from "@/lib/authored-editor/client";
+import {
+  AUTHORED_EDITABLE_STYLE_GROUPS,
+  EDITABLE_STYLE_PROPERTIES,
+} from "./authored-editable-style-properties";
 
 type SelectedCapability = AuthoredEditorCapability & { slideId: string };
-
-const EDITABLE_STYLE_PROPERTIES = [
-  "color",
-  "backgroundColor",
-  "fontSize",
-  "fontWeight",
-  "textAlign",
-] as const;
 
 function supportedOperation(
   capability: SelectedCapability | null,
@@ -385,8 +381,12 @@ const AuthoredElementEditor = ({
                           }
                           className="rounded-md border p-2 text-sm"
                         >
-                          {EDITABLE_STYLE_PROPERTIES.map((property) => (
-                            <option key={property}>{property}</option>
+                          {AUTHORED_EDITABLE_STYLE_GROUPS.map((group) => (
+                            <optgroup key={group.groupLabel} label={group.groupLabel}>
+                              {group.properties.map((property) => (
+                                <option key={property}>{property}</option>
+                              ))}
+                            </optgroup>
                           ))}
                         </select>
                         <input

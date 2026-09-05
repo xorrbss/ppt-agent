@@ -54,6 +54,12 @@ from utils.renderer_isolation import (
     renderer_requires_external_worker,
     worker_command,
 )
+from utils.slide_capture_assets import (
+    _asset_fingerprint,
+    # Re-exported: `authored_presentation_generation` collects a slide's asset
+    # references through this module and that import path is part of its contract.
+    _asset_references,  # noqa: F401
+)
 from utils.render_cache_budget import (
     capture_cache_resident_bytes,
     metrics_cache_resident_bytes,
@@ -84,13 +90,6 @@ _SCENE_DIGEST_PATTERN = re.compile(
     r'\s*=\s*["\']([^"\']+)["\']',
     re.IGNORECASE,
 )
-_ASSET_REFERENCE_PATTERN = re.compile(
-    r'''(?:\b(?:src|srcset|poster|href|data)\s*=\s*["\']([^"\']+)["\'])|'''
-    r'''(?:url\(\s*["\']?([^\s)"\']+)["\']?\s*\))''',
-    re.IGNORECASE,
-)
-_asset_digest_lock = threading.Lock()
-_asset_digest_cache: dict[tuple[str, int, int], str] = {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,98 +102,6 @@ class _RenderCacheIdentity:
     asset_fingerprint: str
     measurement_version: str
     digest: str
-
-
-def _asset_references(source: str) -> list[str]:
-    references: list[str] = []
-    for match in _ASSET_REFERENCE_PATTERN.finditer(source):
-        value = match.group(1) or match.group(2)
-        if value:
-            references.append(html_lib.unescape(value).strip())
-    return references
-
-
-def _local_asset_path(reference: str, *, base: pathlib.Path | None = None) -> pathlib.Path | None:
-    """Resolve only explicit local assets; network URLs remain renderer-blocked."""
-
-    direct = pathlib.Path(urllib.parse.unquote(reference))
-    if direct.is_absolute():
-        return direct.resolve()
-    parsed = urllib.parse.urlparse(reference)
-    if parsed.scheme == "file":
-        local_path = urllib.request.url2pathname(parsed.path)
-        if parsed.netloc:
-            local_path = f"//{parsed.netloc}{local_path}"
-        return pathlib.Path(local_path).resolve()
-    if parsed.scheme or reference.startswith(("#", "//", "/")):
-        return None
-    candidate = pathlib.Path(reference)
-    if candidate.is_absolute():
-        return candidate.resolve()
-    if base is not None:
-        return (base / candidate).resolve()
-    return None
-
-
-def _fingerprint_local_asset(path: pathlib.Path, seen: set[pathlib.Path]) -> str:
-    """Hash a local asset and CSS dependencies without retaining its contents."""
-
-    resolved: pathlib.Path | None = None
-    try:
-        resolved = path.resolve()
-        if resolved in seen:
-            return f"cycle:{resolved.as_posix()}"
-        seen.add(resolved)
-        stat = resolved.stat()
-        key = (str(resolved), int(stat.st_size), int(stat.st_mtime_ns))
-        is_stylesheet = resolved.suffix.lower() in {".css", ".scss", ".sass", ".less"}
-        with _asset_digest_lock:
-            cached = None if is_stylesheet else _asset_digest_cache.get(key)
-        if cached is None:
-            content = resolved.read_bytes()
-            digest = hashlib.sha256(content).hexdigest()
-            if is_stylesheet:
-                children = [
-                    _fingerprint_local_asset(child, seen)
-                    for ref in _asset_references(content.decode("utf-8", errors="replace"))
-                    if (child := _local_asset_path(ref, base=resolved.parent)) is not None
-                ]
-                digest = hashlib.sha256(
-                    (digest + "\0" + "\0".join(sorted(children))).encode("utf-8")
-                ).hexdigest()
-            cached = f"sha256:{digest}"
-            if not is_stylesheet:
-                with _asset_digest_lock:
-                    _asset_digest_cache[key] = cached
-        return cached
-    except OSError as error:
-        # The sentinel itself is identity-bearing, so a later readable asset
-        # creates a different key rather than reusing an uncertain render.
-        return "unreadable:" + hashlib.sha256(
-            f"{path}\0{type(error).__name__}".encode("utf-8")
-        ).hexdigest()
-    finally:
-        if resolved is not None:
-            seen.discard(resolved)
-
-
-def _asset_fingerprint(html: str) -> str:
-    """Fingerprint referenced local font/image/CSS assets plus inline asset URLs."""
-
-    components: list[str] = []
-    for reference in _asset_references(html):
-        if reference.lower().startswith("data:"):
-            components.append("data:" + hashlib.sha256(reference.encode("utf-8")).hexdigest())
-            continue
-        path = _local_asset_path(reference)
-        if path is not None:
-            components.append(_fingerprint_local_asset(path, set()))
-        else:
-            # This covers relative/blocked remote references deterministically;
-            # their literal URL is already part of HTML, but retaining it makes
-            # the asset boundary explicit in identity receipts.
-            components.append("reference:" + hashlib.sha256(reference.encode("utf-8")).hexdigest())
-    return "sha256:" + hashlib.sha256("\0".join(sorted(components)).encode("utf-8")).hexdigest()
 
 
 def _scene_digest(html: str, source_digest: str) -> str:
@@ -1091,16 +998,17 @@ def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> None:
     except Exception:
         metric_bytes = 0
     _count_runtime("metrics_cache_bytes", metric_bytes)
+    max_entries, max_bytes = _dom_metrics_cache_limits()
     while (
-        len(_browser_metrics_cache) > DOM_METRICS_CACHE_SIZE
-        or _metrics_cache_resident_bytes() > DOM_METRICS_CACHE_BYTE_BUDGET
+        len(_browser_metrics_cache) > max_entries
+        or _metrics_cache_resident_bytes() > max_bytes
     ):
         _browser_metrics_cache.popitem(last=False)
         _count_runtime("metrics_cache_evictions")
 
 
 async def ensure_browser_metrics(
-    html: str, timeout: int = 60
+    html: str, timeout: int = 60, *, deck_scope: str | None = None
 ) -> Mapping[str, Any] | None:
     """Return browser telemetry for ``html``, recollecting it when a PNG outlives it.
 
@@ -1145,7 +1053,8 @@ async def ensure_browser_metrics(
                 )
             return _peek_cached_browser_metrics(html)
 
-        task = asyncio.create_task(recollect())
+        with set_render_deck_scope(resolve_render_deck_scope(deck_scope)):
+            task = asyncio.create_task(recollect())
         _browser_metrics_inflight[key] = task
     try:
         # The renderer owns its own timeout, but a wedged browser semaphore or
@@ -1166,7 +1075,7 @@ async def ensure_browser_metrics(
 
 
 async def render_html_to_png_with_metrics(
-    html: str, timeout: int = 60
+    html: str, timeout: int = 60, *, deck_scope: str | None = None
 ) -> "RenderCapture":
     """Render one slide and return telemetry tied to the same HTML cache identity.
 
@@ -1192,7 +1101,7 @@ async def render_html_to_png_with_metrics(
         )
     _count_runtime("capture_cache_misses")
     cached_metrics = _peek_cached_browser_metrics(html)
-    png = await render_html_to_png(html, timeout=timeout)
+    png = await render_html_to_png(html, timeout=timeout, deck_scope=deck_scope)
     if cached_metrics is not None:
         _count_runtime("metrics_cache_hits")
         metrics = cached_metrics
@@ -1386,7 +1295,8 @@ def get_render_runtime_counters() -> dict[str, int]:
     snapshot["render_cache_byte_budget"] = RENDER_CACHE_BYTE_BUDGET
     snapshot["metrics_cache_entries"] = len(_browser_metrics_cache)
     snapshot["metrics_cache_bytes_current"] = _metrics_cache_resident_bytes()
-    snapshot["metrics_cache_byte_budget"] = DOM_METRICS_CACHE_BYTE_BUDGET
+    snapshot["metrics_cache_entry_budget"] = _dom_metrics_cache_limits()[0]
+    snapshot["metrics_cache_byte_budget"] = _dom_metrics_cache_limits()[1]
     snapshot["capture_cache_entries"] = len(_capture_cache)
     snapshot["capture_cache_bytes_current"] = _capture_cache_resident_bytes()
     snapshot["capture_cache_byte_budget"] = CAPTURE_CACHE_BYTE_BUDGET
@@ -1637,37 +1547,14 @@ from utils.slide_capture_pipe import (
 
 
 
-def _render_admitted_html_over_pipe(
-    admitted: AdmittedHtml, timeout: int
-) -> tuple[bytes, Mapping[str, Any] | None]:
-    from utils.slide_capture_pipe_render import render_admitted_html_over_pipe
-
-    return render_admitted_html_over_pipe(
-        admitted, timeout,
-        blocked_urls=_BLOCKED_RENDERER_URL_PATTERNS,
-        chrome_pipe=_ChromePipe,
-        find_chrome=find_chrome,
-        instrument_html=_instrument_authored_html,
-        runtime_value=_runtime_value,
-    )
-
-
-def _render_admitted_htmls_over_pipe(
-    admitted_htmls: Sequence[AdmittedHtml], timeout: int
-) -> list[tuple[bytes, Mapping[str, Any] | None]]:
-    """Worker-only operation batch using one Chrome pipe and fresh targets."""
-
-    from utils.slide_capture_pipe_render import render_admitted_htmls_over_pipe
-
-    return render_admitted_htmls_over_pipe(
-        admitted_htmls,
-        timeout,
-        blocked_urls=_BLOCKED_RENDERER_URL_PATTERNS,
-        chrome_pipe=_ChromePipe,
-        find_chrome=find_chrome,
-        instrument_html=_instrument_authored_html,
-        runtime_value=_runtime_value,
-    )
+# Chrome-pipe rendering binds this module's blocked URLs, instrumentation, and
+# Chrome discovery; the bindings live with the worker's long-lived Chromium
+# session in utils/authored_renderer_session.py and are re-exported here for
+# the worker entry points and tests that already import them from this module.
+from utils.authored_renderer_session import (
+    render_admitted_html_over_pipe as _render_admitted_html_over_pipe,
+    render_admitted_htmls_over_pipe as _render_admitted_htmls_over_pipe,
+)
 
 
 async def _render_html_in_reusable_chrome(
@@ -1824,10 +1711,12 @@ async def _render_html_to_png_subprocess(
             return buf.getvalue()
 
 
+from utils.slide_capture_deck_scope import resolve_render_deck_scope, set_render_deck_scope
 from utils.slide_capture_worker_client import (
     RendererIsolationError,
     _decode_worker_response,
     _render_html_in_isolated_worker,
+    render_with_lease,
 )
 
 
@@ -1839,8 +1728,10 @@ async def _render_admitted_html_in_worker(
 
     if os.getenv("AUTHORED_RENDERER_WORKER") != "1":
         raise RendererIsolationError("worker-only renderer called outside isolation boundary")
-    # This worker owns no author/network work and handles one request.  Keeping
-    # POSIX FD inheritance on its main thread avoids threaded spawn hazards.
+    # This worker owns no author/network work and renders one request in a
+    # private Chrome process.  Keeping POSIX FD inheritance on its main thread
+    # avoids threaded spawn hazards.  A framed worker instead renders through
+    # its own long-lived session (utils/authored_renderer_session.py).
     return _render_admitted_html_over_pipe(admitted, timeout)
 
 
@@ -1861,8 +1752,13 @@ async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
     if renderer_requires_external_worker() or env_enabled(
         "AUTHORED_RENDERER_LEGACY_ENABLED"
     ):
+        # The lease groups one deck's renders onto one worker process when the
+        # framed protocol is on; an unset scope resolves to a single-use key.
+        scope = resolve_render_deck_scope()
         async with _get_render_sem():
-            rendered, metrics = await _render_html_in_isolated_worker(html, timeout)
+            rendered, metrics = await render_with_lease(
+                scope, html, timeout, render_fn=_render_html_in_isolated_worker
+            )
         if metrics is not None:
             # Keep the worker's atomic PNG/metrics pair. Otherwise callers of
             # render_html_to_png_with_metrics recollect DOM telemetry in a
@@ -1897,13 +1793,26 @@ async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
     )
 
 
-async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
+async def render_html_to_png(
+    html: str, timeout: int = 60, *, deck_scope: str | None = None
+) -> bytes:
     """Render one authored slide, reusing successful identical renders in-process.
 
     Vision QA and repeated generation/export attempts can request the exact same HTML.
     A small memory-bounded LRU avoids relaunching Chrome, while the in-flight table
     prevents concurrent duplicate requests from doing the same work twice.
+
+    ``deck_scope`` names the deck for the isolated renderer's per-deck worker
+    lease.  It is bound for the render rather than threaded through the caches,
+    so the in-flight task inherits it; unset means no reuse, as before.
     """
+    if deck_scope:
+        with set_render_deck_scope(deck_scope):
+            return await _render_html_to_png_cached(html, timeout)
+    return await _render_html_to_png_cached(html, timeout)
+
+
+async def _render_html_to_png_cached(html: str, timeout: int) -> bytes:
     ensure_renderer_enabled()
     _count_runtime("requests")
     if RENDER_CACHE_SIZE <= 0:
@@ -1999,6 +1908,26 @@ DOM_METRICS_CACHE_SIZE = max(1, RENDER_CACHE_SIZE)
 DOM_METRICS_CACHE_BYTE_BUDGET = _env_nonnegative_int(
     "AUTHORED_DOM_METRICS_CACHE_BYTE_BUDGET", 32 * 1024 * 1024
 )
+#: F4: the LRU's size is resolved from the registered knobs on FIRST USE, never
+#: at import (see ``utils/authored_metrics_cache_policy.py``). ``None`` until
+#: the first cache write asks for it.
+_DOM_METRICS_CACHE_LIMITS: "tuple[int, int] | None" = None
+
+
+def _dom_metrics_cache_limits() -> "tuple[int, int]":
+    """The metrics LRU's (entries, byte budget), resolved once."""
+
+    global _DOM_METRICS_CACHE_LIMITS
+    if _DOM_METRICS_CACHE_LIMITS is None:
+        from utils.authored_metrics_cache_policy import resolve_metrics_cache_limits
+
+        _DOM_METRICS_CACHE_LIMITS = resolve_metrics_cache_limits(
+            entries_default=DOM_METRICS_CACHE_SIZE,
+            budget_default=DOM_METRICS_CACHE_BYTE_BUDGET,
+        )
+    return _DOM_METRICS_CACHE_LIMITS
+
+
 _browser_metrics_cache: "OrderedDict[tuple[str, str, str], Mapping[str, Any]]" = OrderedDict()
 _browser_metrics_inflight: Dict[tuple[str, str, str], "asyncio.Task[Mapping[str, Any] | None]"] = {}
 _observed_cache_identities: "OrderedDict[str, _RenderCacheIdentity]" = OrderedDict()
@@ -2019,19 +1948,19 @@ def _render_cache_resident_bytes() -> int:
 
 def _metrics_payload_bytes(value: Mapping[str, Any]) -> int:
     return metrics_payload_bytes(
-        value, overflow_bytes=DOM_METRICS_CACHE_BYTE_BUDGET
+        value, overflow_bytes=_dom_metrics_cache_limits()[1]
     )
 
 
 def _metrics_cache_resident_bytes() -> int:
     return metrics_cache_resident_bytes(
-        _browser_metrics_cache, overflow_bytes=DOM_METRICS_CACHE_BYTE_BUDGET
+        _browser_metrics_cache, overflow_bytes=_dom_metrics_cache_limits()[1]
     )
 
 
 def _capture_cache_resident_bytes() -> int:
     return capture_cache_resident_bytes(
-        _capture_cache, overflow_bytes=DOM_METRICS_CACHE_BYTE_BUDGET
+        _capture_cache, overflow_bytes=_dom_metrics_cache_limits()[1]
     )
 
 

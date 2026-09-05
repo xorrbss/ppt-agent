@@ -3,12 +3,15 @@ import test from "node:test";
 
 import sharp from "sharp";
 
+import { backplatePixelSize } from "./capture-scale.ts";
 import { prepareNativeElements } from "./native-plan.ts";
 import {
   assembleAuthoredHybridPptx,
   SEMANTIC_OWNERSHIP_ALT_TEXT_PREFIX,
 } from "./pptx-assembler.ts";
 import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
+
+const { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT } = backplatePixelSize();
 
 const CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -95,7 +98,7 @@ function skeleton(
 
 test("assembler sandwiches residual raster between the editable canvas and foreground geometry", async () => {
   const backplate = await sharp({
-    create: { width: 1280, height: 720, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   })
     .png()
     .toBuffer();
@@ -210,7 +213,7 @@ test("assembler sandwiches residual raster between the editable canvas and foreg
 
 test("assembler preserves audited raster-native-raster z-band order", async () => {
   const raster = await sharp({
-    create: { width: 1280, height: 720, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   }).png().toBuffer();
   const text = {
     id: "middle.text", identityAuthority: "declared-qid", domPath: "body > p", tagName: "p",
@@ -239,7 +242,7 @@ test("assembler preserves audited raster-native-raster z-band order", async () =
 
 test("assembler stores an opaque full-slide residual as the slide background", async () => {
   const backplate = await sharp({
-    create: { width: 1280, height: 720, channels: 3, background: "#F7FAFC" },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 3, background: "#F7FAFC" },
   })
     .png()
     .toBuffer();
@@ -276,7 +279,7 @@ test("assembler stores an opaque full-slide residual as the slide background", a
 
 test("assembler preserves the exact raster semantic QID set in PowerPoint-readable ownership shapes", async () => {
   const backplate = await sharp({
-    create: { width: 1280, height: 720, channels: 3, background: "#F7FAFC" },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 3, background: "#F7FAFC" },
   }).png().toBuffer();
   const qids = ["s01-title-main", "s01-chart-revenue", "s01-note-cjk"];
   const output = assembleAuthoredHybridPptx(skeleton(), [{
@@ -322,7 +325,7 @@ test("assembler preserves the exact raster semantic QID set in PowerPoint-readab
 
 test("assembler keeps media that an untouched slide still references", async () => {
   const backplate = await sharp({
-    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: "transparent" },
   })
     .png()
     .toBuffer();
@@ -344,7 +347,7 @@ test("assembler keeps media that an untouched slide still references", async () 
 
 test("assembler keeps media referenced by an explicitly closed Relationship", async () => {
   const backplate = await sharp({
-    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: "transparent" },
   })
     .png()
     .toBuffer();
@@ -362,7 +365,7 @@ test("assembler keeps media referenced by an explicitly closed Relationship", as
 
 test("assembler keeps relationships referenced through an alternate namespace prefix", async () => {
   const backplate = await sharp({
-    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: "transparent" },
   })
     .png()
     .toBuffer();
@@ -382,7 +385,7 @@ test("assembler keeps relationships referenced through an alternate namespace pr
 
 test("assembler resolves XML entities in slide relationship references", async () => {
   const backplate = await sharp({
-    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: "transparent" },
   })
     .png()
     .toBuffer();
@@ -402,7 +405,7 @@ test("assembler resolves XML entities in slide relationship references", async (
 
 test("assembler resolves XML entities before checking shared media targets", async () => {
   const backplate = await sharp({
-    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: "transparent" },
   })
     .png()
     .toBuffer();
@@ -420,7 +423,7 @@ test("assembler resolves XML entities before checking shared media targets", asy
 
 test("assembler compares shared OPC part targets without ASCII case", async () => {
   const backplate = await sharp({
-    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: "transparent" },
   })
     .png()
     .toBuffer();
@@ -438,7 +441,7 @@ test("assembler compares shared OPC part targets without ASCII case", async () =
 
 test("assembler scans relationship parts without ASCII case", async () => {
   const backplate = await sharp({
-    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: "transparent" },
   })
     .png()
     .toBuffer();
@@ -456,7 +459,7 @@ test("assembler scans relationship parts without ASCII case", async () => {
 
 test("assembler inserts promoted text literally even with $-escape sequences", async () => {
   const backplate = await sharp({
-    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: "transparent" },
   })
     .png()
     .toBuffer();
@@ -499,7 +502,7 @@ test("assembler inserts promoted text literally even with $-escape sequences", a
 
 test("assembler fails closed for an incompatible slide size or malformed PNG", async () => {
   const png = await sharp({
-    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: "transparent" },
   })
     .png()
     .toBuffer();
@@ -515,13 +518,13 @@ test("assembler fails closed for an incompatible slide size or malformed PNG", a
       assembleAuthoredHybridPptx(skeleton(), [
         { slideNumber: 1, backplatePng: Buffer.from("not-png"), elements: [] },
       ]),
-    /1280x720 PNG/
+    new RegExp(`${BACKPLATE_WIDTH}x${BACKPLATE_HEIGHT} PNG`)
   );
 });
 
 test("assembler preserves authored breaks, bounds text safely, and never emits CJK as Consolas", async () => {
   const backplate = await sharp({
-    create: { width: 1280, height: 720, channels: 4, background: "transparent" },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: "transparent" },
   }).png().toBuffer();
   const risky = {
     id: "mixed-cjk-mono",

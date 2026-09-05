@@ -18,6 +18,7 @@ import {
   serializePreparedNativeElement,
   serializePreparedNativeElementUnderlay,
 } from "./native-plan.ts";
+import { backplatePixelSize, BACKPLATE_SCALE } from "./capture-scale.ts";
 
 test("declared HTML table is observed as one complex-table ownership node", async (t) => {
   const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
@@ -156,21 +157,33 @@ function rasterElement(slide, reason) {
   );
 }
 
-async function rgbaAt(png, x, y) {
+// Coordinates and regions throughout this file are CSS px (matching the
+// fixture's own `left`/`top` styles), but the backplate PNG is captured at
+// AUTHORED_HYBRID_BACKPLATE_SCALE device pixels per CSS px (capture-scale.ts).
+// Both helpers translate CSS-px inputs to device-px reads so every existing
+// call site (and its literal thresholds) keeps working at any configured
+// scale without being rewritten.
+async function rgbaAt(png, cssX, cssY) {
   const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({
     resolveWithObject: true,
   });
+  const x = Math.min(info.width - 1, Math.round(cssX * BACKPLATE_SCALE));
+  const y = Math.min(info.height - 1, Math.round(cssY * BACKPLATE_SCALE));
   const offset = (y * info.width + x) * info.channels;
   return [...data.subarray(offset, offset + 4)];
 }
 
-async function changedPixels(pngA, pngB, region) {
-  const [left, top, width, height] = region;
+async function changedPixels(pngA, pngB, cssRegion) {
+  const [cssLeft, cssTop, cssWidth, cssHeight] = cssRegion;
+  const left = Math.round(cssLeft * BACKPLATE_SCALE);
+  const top = Math.round(cssTop * BACKPLATE_SCALE);
+  const width = Math.round(cssWidth * BACKPLATE_SCALE);
+  const height = Math.round(cssHeight * BACKPLATE_SCALE);
   const [a, b] = await Promise.all([
     sharp(pngA).extract({ left, top, width, height }).ensureAlpha().raw().toBuffer(),
     sharp(pngB).extract({ left, top, width, height }).ensureAlpha().raw().toBuffer(),
   ]);
-  let changed = 0;
+  let changedDevicePixels = 0;
   for (let index = 0; index < a.length; index += 4) {
     if (
       a[index] !== b[index] ||
@@ -178,10 +191,13 @@ async function changedPixels(pngA, pngB, region) {
       a[index + 2] !== b[index + 2] ||
       a[index + 3] !== b[index + 3]
     ) {
-      changed += 1;
+      changedDevicePixels += 1;
     }
   }
-  return changed;
+  // Normalize back to a CSS-pixel count so every existing call site's
+  // literal threshold (`> 500`, `< 10`, ...) stays meaningful regardless of
+  // the configured backplate scale.
+  return Math.round(changedDevicePixels / (BACKPLATE_SCALE * BACKPLATE_SCALE));
 }
 
 test("Chrome extracts candidates and produces subset-aware RGBA backplates", async (t) => {
@@ -319,9 +335,10 @@ test("Chrome extracts candidates and produces subset-aware RGBA backplates", asy
   ]);
   assert.deepEqual(titleAndImageResult.fallbackElementIds, []);
   const metadata = await sharp(titleAndImage).metadata();
+  const expectedBackplateSize = backplatePixelSize();
   assert.equal(metadata.format, "png");
-  assert.equal(metadata.width, 1280);
-  assert.equal(metadata.height, 720);
+  assert.equal(metadata.width, expectedBackplateSize.width);
+  assert.equal(metadata.height, expectedBackplateSize.height);
   assert.equal(metadata.hasAlpha, true);
   assert.deepEqual(await rgbaAt(titleAndImage, 5, 5), [0, 0, 0, 0]);
 

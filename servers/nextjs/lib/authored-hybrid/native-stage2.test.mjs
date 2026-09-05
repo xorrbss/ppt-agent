@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import sharp from "sharp";
 import { nativeCoverCrop, nativeCropSourceRectXml, parseNativeObjectPosition } from "./native-image-crop.ts";
+import { backplatePixelSize } from "./capture-scale.ts";
 import { parseAuthoredNativeTablePayload, prepareDeclaredNativeTables, serializeNativeTableFrame } from "./native-table.ts";
 import { parseAuthoredNativeChartPayload } from "./native-chart.ts";
 import { embedPowerPointFonts, inspectPowerPointFontCollectionInput } from "./pptx-font-embedding.ts";
@@ -11,6 +12,8 @@ import { inspectPptxEditability, inspectPptxNativeElementReadback } from "./pptx
 import { createAuthoredHybridCoverageManifest } from "./export-metadata.ts";
 import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
 import { parseActiveNativeTablePayload } from "./active-emission.ts";
+
+const { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT } = backplatePixelSize();
 
 function skeletonPptx() {
   return writePptxArchive(new Map([
@@ -168,7 +171,7 @@ test("assembler preserves Scene-authoritative advanced text autofit and empty-ru
     ],
   };
   const backplatePng = await sharp({
-    create: { width: 1280, height: 720, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   }).png().toBuffer();
   const textElement = {
     kind: "text",
@@ -217,7 +220,7 @@ test("stage2 eligible table and crop survive assembler, OOXML readback, and cove
   const pie = parseAuthoredNativeChartPayload({ ...chartBase, chartType: "pie", palette: ["#F59E0B"], series: [{ name: "Share", values: [50, 30, 20], color: "#F59E0B", pointColors: ["#F59E0B", "#EF4444", "#10B981"] }] });
   assert.ok(line); assert.ok(pie);
   const bounds = (x, y, width, height) => ({ px: { x, y, width, height }, inches: { x: x / 96, y: y / 96, width: width / 96, height: height / 96 } });
-  const backplatePng = await sharp({ create: { width: 1280, height: 720, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
+  const backplatePng = await sharp({ create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
   const imagePng = await sharp({ create: { width: 200, height: 100, channels: 3, background: "#2457D6" } }).png().toBuffer();
   const pptx = assembleAuthoredHybridPptx(skeletonPptx(), [{ slideNumber: 1, backplatePng, elements: [
     { kind: "table", source: { id: "table.stage2", domPath: "table", tagName: "TABLE", sourceIndex: 0, zOrder: 1, cssZIndex: 1, bounds: bounds(80, 80, 520, 240), rotationDeg: 0, opacity: 1, parentElementId: null, classification: { mode: "native", kind: "table", confidence: "safe" }, table } },
