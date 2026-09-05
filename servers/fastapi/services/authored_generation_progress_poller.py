@@ -1,9 +1,9 @@
 """Narrate authored deck generation on the workspace timeline.
 
-Template V2 generation reports slide progress directly through the reporter it
-is handed (``_generate_template_v2_presentation``). The authored pipeline has no
-such seam: it is a deep chain of stages, so the operation would only report
-``generation_started`` and then go silent for the whole authoring run.
+The authored pipeline has no seam that reports slide progress directly to the
+reporter it is handed: it is a deep chain of stages, so the operation would
+only report ``generation_started`` and then go silent for the whole authoring
+run.
 
 It does, however, already record per-slide stage completion durably —
 ``complete_stage`` keeps ``PresentationGenerationJob.completed_slides`` current.
