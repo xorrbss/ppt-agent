@@ -81,6 +81,106 @@ const mountHeader = (
 
 const openExportOptions = () => cy.get('[data-testid="export-trigger"]').click();
 
+/**
+ * Every export leaves the header as a durable workspace command. The direct
+ * `POST /api/export-presentation` browser download was removed from the header
+ * in 3a96901 ("feat(public-service): add durable generation and export path"),
+ * so a request on that route now means the header regressed to the legacy path.
+ */
+const stubLegacyDirectExportRoute = () =>
+  cy
+    .intercept("POST", "/api/export-presentation", {
+      statusCode: 500,
+      body: { success: false, error: "legacy direct export must not be used" },
+    })
+    .as("legacyDirectExport");
+
+const expectNoLegacyDirectExport = () => {
+  cy.get("@legacyDirectExport.all").should("have.length", 0);
+  cy.get("@notifyLoading").should("not.have.been.called");
+  cy.get("@notifySuccess").should("not.have.been.called");
+  cy.get("@notifyError").should("not.have.been.called");
+};
+
+const CAPABILITY_IDS = [
+  "shape.gradient",
+  "shape.shadow",
+  "layout.transform",
+  "layout.flex",
+  "layout.grid",
+  "shape.borderRadius",
+  "shape.opacity",
+  "shape.clip",
+];
+const RECEIPT_IDS = ["cjk", "chart", "zBand", "degradation"];
+const FIXTURE_DIGEST = `sha256:${"a".repeat(64)}`;
+
+/**
+ * A hybrid-ready capability projection on the retained v1 compatibility route.
+ * The header only renders the Hybrid options when the server publishes a
+ * hybrid-ready projection: 2800b3c ("feat(public-service): complete generation
+ * and fidelity export path") retired Hybrid for the bounded v3 release profile,
+ * whose `nativeSubsetStatus` is always "notApplicable". Pinning the projection
+ * keeps this spec about the export labels instead of about which readiness
+ * endpoint happens to answer.
+ */
+const hybridReadyCapabilityProjection = {
+  schemaVersion: "workbench-capability-projection/v1",
+  presentationId: "deck-1",
+  presentationRevision: 3,
+  canonicalMode: "bundleGraph",
+  canonicalDigest: FIXTURE_DIGEST,
+  manifestDigest: FIXTURE_DIGEST,
+  degradedFidelityOnly: false,
+  fidelity: { state: "ready", receiptDigest: FIXTURE_DIGEST },
+  hybrid: {
+    text: { state: "ready", receiptDigest: FIXTURE_DIGEST },
+    image: { state: "ready", receiptDigest: FIXTURE_DIGEST },
+    shape: { state: "ready", receiptDigest: FIXTURE_DIGEST },
+  },
+  capabilityMatrix: CAPABILITY_IDS.map((capabilityId) => ({
+    capabilityId,
+    state: "ready",
+    decision: "native",
+    reasonCode: "capability.ready",
+    receiptDigest: FIXTURE_DIGEST,
+  })),
+  receipts: RECEIPT_IDS.map((receiptId) => ({
+    receiptId,
+    state: "ready",
+    decision: "native",
+    reasonCode: "receipt.ready",
+    receiptDigest: FIXTURE_DIGEST,
+  })),
+  readiness: {
+    authoredCreationReady: true,
+    fidelityExportReady: true,
+    fullNativeParityReady: false,
+    independentVnextGenerationReady: false,
+    promotionReady: false,
+  },
+  killSwitches: [],
+  elements: [],
+  projectionDigest: FIXTURE_DIGEST,
+};
+
+const stubHybridReadyCapabilityProjection = () => {
+  // 501 is the "explicitly unsupported" answer that lets the client fall back
+  // one route at a time; anything else fails closed instead.
+  cy.intercept("GET", "**/authored-emission/capability-projection-v3", {
+    statusCode: 501,
+    body: {},
+  }).as("capabilityProjectionV3");
+  cy.intercept("GET", "**/authored-emission/capability-projection-v2", {
+    statusCode: 501,
+    body: {},
+  }).as("capabilityProjectionV2");
+  cy.intercept("GET", "**/authored-emission/capability-projection", {
+    statusCode: 200,
+    body: hybridReadyCapabilityProjection,
+  }).as("capabilityProjection");
+};
+
 describe("PresentationHeader workspace controls", () => {
   beforeEach(() => {
     cy.stub(notify, "loading").returns("direct-export").as("notifyLoading");
@@ -106,15 +206,7 @@ describe("PresentationHeader workspace controls", () => {
     const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
     const qualityReview = cy.stub().as("qualityReview");
     const pageRemake = cy.stub().as("pageRemake");
-    cy.intercept("POST", "/api/export-presentation", (request) => {
-      expect(request.body).to.include({
-        format: "pptx",
-        id: "deck-1",
-        pptxMode: "fidelity",
-      });
-      expect(request.body).not.to.have.property("fontEmbedding");
-      request.reply({ success: true, path: "/api/export-presentation/file?name=fidelity.pptx" });
-    }).as("fidelityExport");
+    stubLegacyDirectExportRoute();
     mountHeader(true, false, {
       enabled: true,
       command: workspaceCommand,
@@ -136,71 +228,100 @@ describe("PresentationHeader workspace controls", () => {
     cy.get('[data-testid="export-pdf"]').click({ force: true });
     openExportOptions();
     cy.get('[data-testid="export-pptx"]').click({ force: true });
-    cy.wait("@fidelityExport");
-    cy.get("@notifyLoading").should(
-      "have.been.calledWith",
-      "Fidelity PPTX를 준비하고 있습니다",
-      "완료되면 다운로드가 자동으로 시작됩니다.",
-    );
-    cy.get("@notifySuccess").should(
-      "have.been.calledWith",
-      "Fidelity PPTX 다운로드를 시작했습니다",
-      "브라우저의 다운로드 목록에서 파일을 확인하세요.",
-      { id: "direct-export" },
-    );
-    cy.get("@notifyError").should("not.have.been.called");
 
     cy.wrap(null).then(() => {
       expect(workspaceCommand.getCall(0).args).to.deep.equal([
         "PDF로 내보내기",
         { commandType: "export.pdf", context: { format: "pdf" } },
       ]);
-      expect(workspaceCommand).to.have.been.calledOnce;
+      // Fidelity carries its mode and an explicit font-embedding decision into
+      // the durable operation rather than into a direct browser download.
+      expect(workspaceCommand.getCall(1).args).to.deep.equal([
+        "PPTX로 내보내기",
+        {
+          commandType: "export.pptx",
+          context: {
+            format: "pptx",
+            pptx_mode: "fidelity",
+            font_embedding: false,
+          },
+        },
+      ]);
+      expect(workspaceCommand).to.have.been.calledTwice;
     });
+    expectNoLegacyDirectExport();
     cy.get("@updatePresentationContent").should("not.have.been.called");
   });
 
-  it("surfaces a direct Authored export failure without creating a workspace operation", () => {
-    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
-    cy.intercept("POST", "/api/export-presentation", {
-      statusCode: 409,
-      body: { success: false, error: "Hybrid export quality evidence is incomplete" },
-    }).as("failedDirectExport");
+  it("leaves a failed Authored export to the durable workspace operation", () => {
+    const workspaceCommand = cy
+      .stub()
+      .as("workspaceCommand")
+      .rejects(new Error("Hybrid export quality evidence is incomplete"));
+    stubLegacyDirectExportRoute();
     mountHeader(true, false, { enabled: true, command: workspaceCommand });
 
     openExportOptions();
     cy.get('[data-testid="export-pptx"]').click({ force: true });
-    cy.wait("@failedDirectExport");
 
-    cy.get("@notifyLoading").should(
-      "have.been.calledWith",
-      "Fidelity PPTX를 준비하고 있습니다",
-      "완료되면 다운로드가 자동으로 시작됩니다.",
-    );
-    cy.get("@notifyError").should(
-      "have.been.calledWith",
-      "PPTX 내보내기 실패",
-      "Hybrid export quality evidence is incomplete",
-      { id: "direct-export" },
-    );
-    cy.get("@notifySuccess").should("not.have.been.called");
-    cy.get("@workspaceCommand").should("not.have.been.called");
+    cy.wrap(null).then(() => {
+      expect(workspaceCommand.getCall(0).args).to.deep.equal([
+        "PPTX로 내보내기",
+        {
+          commandType: "export.pptx",
+          context: {
+            format: "pptx",
+            pptx_mode: "fidelity",
+            font_embedding: false,
+          },
+        },
+      ]);
+      expect(workspaceCommand).to.have.been.calledOnce;
+    });
+    // The timeline owns the failure and its retry affordance, so a rejected
+    // dispatch must not raise a header toast or fall back to a direct download.
+    expectNoLegacyDirectExport();
+    cy.get("@updatePresentationContent").should("not.have.been.called");
   });
 
   it("labels Hybrid fallback and font-free compatibility explicitly", () => {
     const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
+    stubHybridReadyCapabilityProjection();
     mountHeader(true, false, { enabled: true, command: workspaceCommand });
+    cy.wait("@capabilityProjection");
 
     openExportOptions();
     cy.get('[data-testid="export-pptx"]')
       .should("contain.text", "Fidelity PPTX")
-      .and("contain.text", "격리 캡처");
+      .and("contain.text", "1280×720 raster")
+      .and("contain.text", "접근 가능한 텍스트·개체 편집은 제공하지 않으며");
     cy.get('[data-testid="authored-export-hybrid"]')
       .should("contain.text", "raster fallback (기본)")
       .and("contain.text", "글꼴 포함 결과만 검증");
     cy.get('[data-testid="authored-export-hybrid-compatibility"]')
       .should("contain.text", "raster fallback 호환 모드")
       .and("contain.text", "글꼴 미포함 호환 모드");
+  });
+
+  it("withholds Hybrid and keeps Fidelity when the capability projection is unavailable", () => {
+    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
+    cy.intercept("GET", "**/authored-emission/capability-projection*", {
+      statusCode: 503,
+      body: { code: "capability_projection_unavailable" },
+    }).as("capabilityProjectionUnavailable");
+    mountHeader(true, false, { enabled: true, command: workspaceCommand });
+    cy.wait("@capabilityProjectionUnavailable");
+
+    openExportOptions();
+    cy.get('[data-testid="export-pptx"]').should("contain.text", "Fidelity PPTX");
+    cy.get('[data-testid="authored-export-hybrid-unavailable"]').should(
+      "contain.text",
+      "Hybrid 비활성",
+    );
+    cy.get('[data-testid="authored-export-hybrid"]').should("not.exist");
+    cy.get('[data-testid="authored-export-hybrid-compatibility"]').should(
+      "not.exist",
+    );
   });
 
   it("dispatches durable version restore commands for chat-first undo and redo", () => {

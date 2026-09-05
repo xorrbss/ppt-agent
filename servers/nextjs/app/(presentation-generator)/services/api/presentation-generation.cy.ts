@@ -156,6 +156,9 @@ describe("PresentationGenerationApi.generateAuthoredAsync", () => {
         slides_markdown: ["# Outline title"],
         language: "Korean",
         template: "authored",
+        // 1e4a818 made the authored strategy explicit alongside the legacy
+        // `template` field; the backend resume path reads `strategy`.
+        strategy: "authored",
         export_as: "pptx",
         vision_qa: true,
         authored_style: "strategic-navy",
