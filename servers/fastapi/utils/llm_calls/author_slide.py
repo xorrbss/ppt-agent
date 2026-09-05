@@ -58,6 +58,7 @@ from services.source_images.models import SourceImageCandidate
 from services.public_operation_admission import PublicAdmissionRejected
 from services.provider_usage_instrumentation import (
     ProviderCallTimer,
+    active_usage_scope_slide_index,
     current_provider_idempotency_key,
     provider_call_admission,
     record_provider_call,
@@ -868,14 +869,22 @@ def authored_provider_semantic_slot(
     *,
     receipt_retry_class: str | None,
     receipt_attempt_ordinal: int | None,
+    slide_index: int | None = None,
 ) -> str:
-    """Return the stable public logical-call slot for one slide attempt."""
+    """Return the stable public logical-call slot for one slide attempt.
 
-    return (
+    ``slide_index`` is set only when the enclosing usage scope names no slide.
+    The durable identity of a call is (operation, stage, slide, slot), so inside
+    a deck-level stage two slides authored at once would otherwise reserve the
+    same logical call and the second is refused as a replay.
+    """
+
+    base = (
         "author.recovery"
         if receipt_attempt_ordinal == 2 or receipt_retry_class == "recovery"
         else "author.initial"
     )
+    return base if slide_index is None else f"{base}.slide-{slide_index}"
 
 
 async def author_slide_html(
@@ -1046,6 +1055,9 @@ async def author_slide_html(
     author_semantic_slot = authored_provider_semantic_slot(
         receipt_retry_class=receipt_retry_class,
         receipt_attempt_ordinal=receipt_attempt_ordinal,
+        # The repair and vqa stages remake several slides at once under one
+        # deck-level scope, so the slide has to travel in the slot there.
+        slide_index=(None if active_usage_scope_slide_index() is not None else index),
     )
     try:
         provider = str(get_llm_provider().value)

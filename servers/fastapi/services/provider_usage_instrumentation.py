@@ -318,6 +318,18 @@ def provider_usage_scope(
             _ACTIVE_SCOPE.reset(token)
 
 
+def active_usage_scope_slide_index() -> int | None:
+    """Slide the active scope is pinned to, or ``None`` for a deck-level stage.
+
+    A stage that names no slide (repair, vqa) reserves one logical call per
+    semantic slot, so a caller that runs several slides inside it has to put the
+    slide into its own slot.
+    """
+
+    scope = _ACTIVE_SCOPE.get()
+    return scope.slide_index if scope is not None else None
+
+
 def _positive_int(value: Any) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int):
         return None

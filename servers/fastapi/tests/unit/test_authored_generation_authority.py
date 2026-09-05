@@ -405,3 +405,73 @@ def test_initial_and_recovery_use_distinct_stable_public_logical_slots() -> None
     assert first_scope.public_logical_call_ordinal(recovery) == (
         resumed_scope.public_logical_call_ordinal(recovery)
     )
+
+
+def test_deck_level_stage_gives_every_remade_slide_its_own_logical_call():
+    """Repair and vqa remake several slides inside one scope that names none.
+
+    Durable identity is (operation, stage, slide, slot). Without the slide in the
+    slot, two slides remade at once reserve the same logical call and the second
+    is refused as a replay, which fails the whole deck.
+    """
+
+    job_id = uuid.uuid4()
+    deck_scope = ProviderUsageScope(
+        job_id=job_id,
+        operation="authored_generation",
+        stage="repair",
+        attempt_number=1,
+        slide_index=None,
+    )
+
+    slots = {
+        authored_provider_semantic_slot(
+            receipt_retry_class="recovery",
+            receipt_attempt_ordinal=2,
+            slide_index=index,
+        )
+        for index in (3, 7)
+    }
+    assert len(slots) == 2
+
+    ordinals = {
+        deck_scope.public_logical_call_ordinal(slot) for slot in slots
+    }
+    assert len(ordinals) == 2
+
+
+def test_a_slide_scope_keeps_the_slot_free_of_the_slide():
+    """The per-slide author stage already separates calls by the scope's slide."""
+
+    assert (
+        authored_provider_semantic_slot(
+            receipt_retry_class="recovery", receipt_attempt_ordinal=2
+        )
+        == "author.recovery"
+    )
+    assert (
+        authored_provider_semantic_slot(
+            receipt_retry_class="initial", receipt_attempt_ordinal=1
+        )
+        == "author.initial"
+    )
+
+
+def test_active_scope_slide_index_tells_a_deck_stage_from_a_slide_stage():
+    """The wiring in author_slide_html asks this to decide the slot shape."""
+
+    from services.provider_usage_instrumentation import (
+        active_usage_scope_slide_index,
+        provider_usage_scope,
+    )
+
+    job_id = uuid.uuid4()
+    assert active_usage_scope_slide_index() is None
+    with provider_usage_scope(
+        job_id=job_id, operation="authored_generation", stage="author", slide_index=4
+    ):
+        assert active_usage_scope_slide_index() == 4
+    with provider_usage_scope(
+        job_id=job_id, operation="authored_generation", stage="repair"
+    ):
+        assert active_usage_scope_slide_index() is None
