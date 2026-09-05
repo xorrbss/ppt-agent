@@ -228,9 +228,15 @@ async def reserve_provider_attempt(
     The ordinals are scoped to one operation attempt: when the fencing token
     advances the slide's counter restarts at zero and the calls it already paid
     for are added to ``provider_attempt_total`` for cost accounting.
+
+    Three ordinals, not two: authoring's own budget is two calls, and the third
+    belongs to the author-stage rescue
+    (``services/authored_author_stage_rescue.py``), which spends one simplified
+    attempt before publishing a flagged placeholder. It is fenced here like the
+    other two so a crash mid-rescue cannot buy the call again.
     """
 
-    if isinstance(ordinal, bool) or ordinal not in {1, 2}:
+    if isinstance(ordinal, bool) or ordinal not in {1, 2, 3}:
         raise ValueError("authored_provider_attempt_ordinal_invalid")
     async with _checkpoint_mutation_session(session) as (mutation_session, owns_session):
         job = await _owned_job(
@@ -257,7 +263,7 @@ async def reserve_provider_attempt(
             metadata["provider_attempt_total"] = max(0, total) + max(0, current)
             metadata["provider_attempt_epoch"] = epoch
             current = 0
-        if current not in {0, 1, 2}:
+        if current not in {0, 1, 2, 3}:
             await mutation_session.rollback()
             raise AuthoredStageError(
                 slide_index=slide_index,

@@ -115,6 +115,39 @@ def test_scene_envelope_reuses_normal_slide_and_persists_one_repair_budget(
     assert changed_digest.value.repeated is False
 
 
+def test_a_second_scene_repair_needs_the_raised_ceiling(monkeypatch, tmp_path) -> None:
+    """Two durable claims exist, but only for a caller that asks for them.
+
+    A deck that may publish a flagged slide spends one remake ahead of the
+    bounded repair round and one behind it; every other deck keeps the single
+    claim it has always had.
+    """
+
+    monkeypatch.setenv("AUTHORED_CHECKPOINT_DIRECTORY", str(tmp_path))
+    envelope = seal_slide_scene_envelope(_html("One"), slide_index=0)
+    job_id = uuid.uuid4()
+    kwargs = {
+        "error_code": "authored_composition_safety_gate_failed",
+        "issues": ({"message": "browser_body:299>270"},),
+    }
+
+    assert claim_scene_repair(job_id, envelope, **kwargs).repair_count == 1
+    with pytest.raises(SceneRepairBudgetExhausted):
+        claim_scene_repair(job_id, envelope, **kwargs)
+    second = claim_scene_repair(job_id, envelope, max_claims=2, **kwargs)
+    assert second.repair_count == 2
+    with pytest.raises(SceneRepairBudgetExhausted):
+        claim_scene_repair(job_id, envelope, max_claims=2, **kwargs)
+    # The twice-claimed state still round-trips through its own digest.
+    recovered = read_scene_checkpoint_state(job_id, 0)
+    assert recovered is not None and recovered.repair_count == 2
+    # A repaired envelope may still be persisted against the second claim.
+    repaired = seal_slide_scene_envelope(_html("One repaired"), slide_index=0)
+    assert persist_repaired_scene_envelope(job_id, repaired, second).repair_count == 2
+    with pytest.raises(ValueError):
+        claim_scene_repair(job_id, envelope, max_claims=3, **kwargs)
+
+
 def test_scene_repair_claim_has_one_thread_winner(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("AUTHORED_CHECKPOINT_DIRECTORY", str(tmp_path))
     job_id = uuid.uuid4()

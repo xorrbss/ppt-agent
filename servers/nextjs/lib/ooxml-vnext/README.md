@@ -58,6 +58,10 @@ From `servers/nextjs`:
 node --experimental-strip-types --import ./scripts/register-node-test-loader.mjs `
   --test lib/ooxml-vnext/*.test.mjs
 
+node ./lib/ooxml-vnext/cli.mjs inspect C:\path\to\deck.pptx
+node ./lib/ooxml-vnext/cli.mjs noop C:\path\to\input.pptx C:\path\to\output.pptx
+node ./lib/ooxml-vnext/cli.mjs generate-demo C:\path\to\demo.pptx 4
+
 # Availability only; never launches or attaches to PowerPoint.
 .\lib\ooxml-vnext\tools\office-compatibility-matrix.ps1
 ```

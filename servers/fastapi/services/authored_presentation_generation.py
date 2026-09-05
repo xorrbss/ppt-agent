@@ -52,10 +52,6 @@ from models.authored_chapter_plan import AuthoredChapterPlan
 from models.authored_header_contract import AuthoredHeaderContract, default_header_contract
 from models.authored_illustration_plan import AuthoredIllustrationPlan
 from models.authored_infographic_plan import AuthoredInfographicPlan
-from services.authored_infographic_assets import (
-    build_infographic_asset_context,
-    deck_has_picture_source,
-)
 from services.authored_deck_plans import (
     AuthoredDeckPlans,
     derive_illustration_plan,
@@ -113,7 +109,6 @@ from services.authored_vnext.master.digests import canonical_digest
 from services.authored_vnext.master.errors import DeckAlreadyExistsError
 from services.presentation_export_attempt_service import sha256_canonical_json
 from services.authored_vnext.semantic.editable_scene import build_editable_hybrid_scene
-from services.image_generation_service import ImageGenerationService
 from services.authored_source_images import (
     collect_source_image_candidates,
     plan_slide_source_images,
@@ -142,7 +137,12 @@ from services.authored_generation_preflight import (
     AuthoredSlideArtifact,
     preflight_authored_provider_repair,
 )
-from services.authored_terminal_slide_fallback import resolve_terminal_gate_slides
+from services.authored_repair_round_order import remake_first_flagged_slides
+from services.authored_terminal_slide_fallback import (
+    MAX_REMAKES_PER_SLIDE,
+    replayed_plan_kwargs,
+    resolve_terminal_gate_slides,
+)
 from services.authored_terminal_slide_policy import (
     claim_bounded_repairs,
     declare_unadmitted_gate_repair,
@@ -159,7 +159,6 @@ from services.authored_decoration_containment import (
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
 from utils.authored_illustrations import validate_visible_source_images
-from utils.asset_directory_utils import get_images_directory
 from utils.authored_styles import resolve_authored_style, validate_exact_reconstruction_style
 from utils.llm_calls.author_deck import (
     plan_deck_roles,
@@ -2322,6 +2321,7 @@ async def _generate_authored_presentation(
         source_reflow=source_reflow,
     )
     predeclared_terminal: list[dict[str, object]] = []
+    remake_counts: dict[int, int] = {}
     await mark_stage("repair")
     repair_started = time.monotonic()
     repair_claims: dict[int, object] = {}
@@ -2343,6 +2343,7 @@ async def _generate_authored_presentation(
                     scene_envelope.slides[index],
                     error_code="authored_composition_safety_gate_failed",
                     issues=failures_by_index[index].get("issues", ()),
+                    max_claims=(MAX_REMAKES_PER_SLIDE if terminal_fallback_enabled else 1),
                 ),
                 budget_exhausted=SceneRepairBudgetExhausted,
                 profile=composition_profile,
@@ -2367,6 +2368,27 @@ async def _generate_authored_presentation(
             repair_claims.update(claim_outcome.claims)
             predeclared_terminal.extend(claim_outcome.predeclared)
             flagged = claim_outcome.flagged
+        if terminal_fallback_enabled:
+            # D7 remake-first: on a deck that may publish a flagged slide, a
+            # fresh composition briefed with the gate's own defects beats
+            # patching the failing HTML -- bench run 10 measured the patch
+            # round at 0 of 6 and the remake at 4 of 8. Everything below then
+            # runs only for the slides the remake did not rescue.
+            remake_first = await remake_first_flagged_slides(
+                flagged=flagged, gate_failures=gate_failures, htmls=htmls,
+                pngs=pngs, contents=contents, roles=roles, brand=brand,
+                design_system=authored_deck.design_system, style=style,
+                capacity_plan=capacity_plan, profile=composition_profile,
+                reference_mode=reference_mode, scene_envelope=scene_envelope,
+                metrics_by_slide=revised_metrics_by_slide,
+                chapter_plan=chapter_plan, illustration_plan=illustration_plan,
+                infographic_plan=infographic_plan,
+                instructions=request.instructions, generation_job=generation_job,
+            )
+            scene_envelope = remake_first.scene_envelope
+            flagged = remake_first.remaining_flagged
+            remake_counts.update(remake_first.remake_counts)
+            repaired_gate_indices = list(remake_first.remade_slide_indices)
         repair_kwargs: dict[str, object] = {
             "slide_indices": flagged,
             "total_slides": len(htmls),
@@ -2393,18 +2415,13 @@ async def _generate_authored_presentation(
             for index in flagged
         ]
         repair_kwargs["provider_recovery_allowed"] = provider_recovery_allowed
-        if chapter_plan is not None:
-            repair_kwargs["chapter_prefixes"] = [
-                chapter_plan.eyebrow_prefix_at(index) for index in flagged
-            ]
-        if illustration_plan is not None:
-            repair_kwargs["illustration_slots"] = [
-                illustration_plan.allows(index) for index in flagged
-            ]
-        if infographic_plan is not None:
-            repair_kwargs["infographic_briefs"] = [
-                infographic_plan.at(index) for index in flagged
-            ]
+        repair_kwargs.update(
+            replayed_plan_kwargs(
+                flagged, chapter_plan=chapter_plan,
+                illustration_plan=illustration_plan,
+                infographic_plan=infographic_plan,
+            )
+        )
         frozen_gate_inputs: dict[int, tuple[str, bytes, object | None, object | None]] = {}
         for absolute_index in flagged:
             latest = (
@@ -2609,7 +2626,7 @@ async def _generate_authored_presentation(
                             png=selected_png,
                             browser_metrics=selected_metrics,
                         )
-            repaired_gate_indices = [
+            repaired_gate_indices += [
                 flagged[index] for index in sorted(fixed_local_indices)
             ]
         except AuthoredStageError:
@@ -2660,55 +2677,25 @@ async def _generate_authored_presentation(
         ):
             try:
                 vision_qa_kwargs = {}
-                if normalize_reference_mode(
-                    getattr(style, "reference_mode", STYLE_REFERENCE)
-                ) == EXACT_RECONSTRUCTION:
+                if reference_mode == EXACT_RECONSTRUCTION:
                     exact_plan = prepare_authored_deck(outline, brand, style)
                     vision_qa_kwargs["reference_images_by_slide"] = (
                         exact_plan.reference_images
                     )
-                if chapter_plan is not None:
-                    # A corrected slide is authored the same way its first draft
-                    # was, so it needs the same chapter prefix. Without it the
-                    # one slide vision-QA touched is the one whose eyebrow
-                    # disagrees with the deck.
-                    vision_qa_kwargs["chapter_prefixes"] = [
-                        chapter_plan.eyebrow_prefix_at(index)
-                        for index in range(len(htmls))
-                    ]
-                if (
-                    normalize_reference_mode(
-                        getattr(style, "reference_mode", STYLE_REFERENCE)
+                # Re-authoring a slide must replay the deck-wide decisions
+                # made before its first draft: the chapter prefix always, and
+                # the illustration/infographic slots unless the reference page
+                # dictates them.
+                vision_qa_kwargs.update(
+                    replayed_plan_kwargs(
+                        range(len(htmls)), chapter_plan=chapter_plan,
+                        illustration_plan=illustration_plan,
+                        infographic_plan=infographic_plan, style=style,
+                        brand=brand, instructions=request.instructions,
+                        exact_reconstruction=(reference_mode == EXACT_RECONSTRUCTION),
+                        with_assets=True,
                     )
-                    != EXACT_RECONSTRUCTION
-                ):
-                    # Re-authoring a slide must replay the deck-wide decision
-                    # made before its first draft.  ``None`` remains distinct
-                    # from an empty plan: without a plan the legacy behavior
-                    # still lets a slide request an illustration.
-                    if illustration_plan is not None:
-                        vision_qa_kwargs["illustration_slots"] = [
-                            illustration_plan.allows(index)
-                            for index in range(len(htmls))
-                        ]
-                    if infographic_plan is not None:
-                        vision_qa_kwargs["infographic_briefs"] = [
-                            infographic_plan.at(index)
-                            for index in range(len(htmls))
-                        ]
-                        vision_qa_kwargs["infographic_assets"] = (
-                            build_infographic_asset_context(
-                                style=style,
-                                brand=brand,
-                                instructions=request.instructions,
-                            )
-                        )
-                    if deck_has_picture_source(style):
-                        # One service is shared by this bounded QA pass; the
-                        # reviser calls it only for an allowed replacement slot.
-                        vision_qa_kwargs["image_service"] = ImageGenerationService(
-                            get_images_directory()
-                        )
+                )
                 if source_reflow:
                     vision_qa_kwargs["fail_on_residual_dom_issues"] = True
                 revise_kwargs: dict[str, object] = {
@@ -2862,9 +2849,10 @@ async def _generate_authored_presentation(
         chapter_plan=chapter_plan, illustration_plan=illustration_plan,
         infographic_plan=infographic_plan, instructions=request.instructions,
         generation_job=generation_job, predeclared=predeclared_terminal,
+        remake_counts=remake_counts,
     )
     scene_envelope = terminal_fallback.scene_envelope
-    flagged_slides = [dict(entry) for entry in terminal_fallback.flagged_slides]
+    flagged_slides = [dict(e) for e in (*pipeline.author_flagged_slides, *terminal_fallback.flagged_slides)]
     flagged_residual_failures: list[dict[str, object]] = []
     object.__setattr__(request, "_authored_flagged_slides", flagged_slides)
 

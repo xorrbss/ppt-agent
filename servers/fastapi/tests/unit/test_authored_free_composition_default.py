@@ -130,7 +130,12 @@ def test_author_prompt_carries_no_server_composition_text_when_relaxed(monkeypat
     plan = SimpleNamespace(capacity_plan=relaxed, text_plan=None)
 
     assert author_deck_module._envelope_enforced(relaxed) is False
-    assert author_deck_module._capacity_brief(plan, 0, relaxed.at(0)) is None
+    brief = author_deck_module._capacity_brief(plan, 0, relaxed.at(0))
+    # No server-owned budget text: only the GEOMETRY reminder that took its
+    # place (2026-09-05) survives.
+    assert brief is not None and brief.startswith("GEOMETRY:")
+    assert "characters" not in brief and "qids" not in brief
+    assert "SERVER-FROZEN COMPOSITION ENVELOPE" not in brief
 
     monkeypatch.setenv("AUTHORED_COMPOSITION_ENVELOPE_ENABLED", "true")
     bound = build_authored_capacity_plan(("a",), ("PROBLEM",), _ORDINARY)

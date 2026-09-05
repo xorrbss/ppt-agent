@@ -19,6 +19,14 @@ from services.authored_vnext.generation.scene_envelope import (
 
 
 SCHEMA_VERSION = "authored-scene-checkpoint/v1"
+
+#: Durable repairs one slide may claim across every attempt of a job. A deck
+#: that may publish a flagged slide spends two -- the remake that now opens
+#: the bounded repair round and the terminal remake behind it
+#: (``services/authored_repair_round_order.py``). Every other deck keeps the
+#: single claim: ``claim_scene_repair`` defaults to it, so raising the ceiling
+#: a state may RECORD does not by itself hand anyone a second repair.
+MAX_SCENE_REPAIR_CLAIMS = 2
 _STATE_LOCK_STRIPES = tuple(RLock() for _ in range(64))
 
 
@@ -96,11 +104,11 @@ class AuthoredSceneCheckpointState:
         envelope = AuthoredSlideSceneEnvelope.from_payload(envelope_payload)
         repair_count = int(payload.get("repairCount", -1))
         fingerprint = payload.get("failureFingerprint")
-        if repair_count not in {0, 1}:
+        if not 0 <= repair_count <= MAX_SCENE_REPAIR_CLAIMS:
             raise ValueError("authored_scene_repair_budget_invalid")
         if repair_count == 0 and fingerprint is not None:
             raise ValueError("authored_scene_repair_fingerprint_unclaimed")
-        if repair_count == 1 and not isinstance(fingerprint, str):
+        if repair_count >= 1 and not isinstance(fingerprint, str):
             raise ValueError("authored_scene_repair_fingerprint_missing")
         return cls(
             envelope=envelope,
@@ -227,7 +235,17 @@ def claim_scene_repair(
     *,
     error_code: str,
     issues: Iterable[Mapping[str, Any]],
+    max_claims: int = 1,
 ) -> AuthoredSceneCheckpointState:
+    """Claim one durable repair for this slide, or refuse when they are spent.
+
+    ``max_claims`` is how many this caller's deck may hold in total; it
+    defaults to the single claim every deck had before the remake-first round
+    existed, so only a caller that actually spends two asks for two.
+    """
+
+    if not 1 <= max_claims <= MAX_SCENE_REPAIR_CLAIMS:
+        raise ValueError("authored_scene_repair_budget_invalid")
     fingerprint = repair_failure_fingerprint(
         envelope,
         error_code=error_code,
@@ -243,13 +261,13 @@ def claim_scene_repair(
                 repair_count=current.repair_count,
                 failure_fingerprint=current.failure_fingerprint,
             )
-        if current.repair_count >= 1:
+        if current.repair_count >= max_claims:
             raise SceneRepairBudgetExhausted(
                 repeated=current.failure_fingerprint == fingerprint
             )
         claimed = AuthoredSceneCheckpointState(
             envelope=envelope,
-            repair_count=1,
+            repair_count=current.repair_count + 1,
             failure_fingerprint=fingerprint,
         )
         write_scene_checkpoint_state(job_id, claimed)
@@ -261,12 +279,12 @@ def persist_repaired_scene_envelope(
     envelope: AuthoredSlideSceneEnvelope,
     claimed: AuthoredSceneCheckpointState,
 ) -> AuthoredSceneCheckpointState:
-    if claimed.repair_count != 1 or claimed.failure_fingerprint is None:
+    if claimed.repair_count < 1 or claimed.failure_fingerprint is None:
         raise ValueError("authored_scene_repair_claim_required")
     with _scene_state_lock(job_id, envelope.slide_index):
         state = AuthoredSceneCheckpointState(
             envelope=envelope,
-            repair_count=1,
+            repair_count=claimed.repair_count,
             failure_fingerprint=claimed.failure_fingerprint,
         )
         write_scene_checkpoint_state(job_id, state)
@@ -274,6 +292,7 @@ def persist_repaired_scene_envelope(
 
 
 __all__ = [
+    "MAX_SCENE_REPAIR_CLAIMS",
     "AuthoredSceneCheckpointState",
     "SceneRepairBudgetExhausted",
     "claim_scene_repair",

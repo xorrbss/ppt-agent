@@ -16,6 +16,7 @@ from models.authored_infographic_plan import AuthoredInfographicPlan
 from models.presentation_outline_model import PresentationOutlineModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services.authored_checkpoint_state import provider_attempt_count_in_epoch
+from services.authored_author_stage_rescue import rescue_author_stage
 from services.authored_checkpoint_service import (
     AuthoredStageError,
     fail_stage,
@@ -345,6 +346,15 @@ async def _author_illustrate_render_pipeline(
         )
     )
     roles = plan_deck_roles(outline, chapter_plan)
+    # A restyle binds every slide's source blocks; nothing else does. That is
+    # what makes this deck one a word may not be lost from, so it is also what
+    # keeps the author-stage rescue off it.
+    source_reflow = (
+        source_image_block_bindings is not None or source_images_locked_to_source_slide
+    )
+    # D7 author-stage flags, keyed by slide index so parallel slide workers
+    # produce one deterministic, index-ordered list for the receipt.
+    author_flagged_slides: dict[int, dict[str, object]] = {}
     if plan_reference_mode == EXACT_RECONSTRUCTION:
         # Reproducing a source slide-for-slide may not gain a picture the
         # source does not have, whatever the caller uploaded.
@@ -963,9 +973,32 @@ async def _author_illustrate_render_pipeline(
                                 author_kwargs["attempt_reserver"] = (
                                     reserve_author_attempt
                                 )
-                            html = await author_planned_slide(
-                                plan, index, **author_kwargs
-                            )
+                            try:
+                                html = await author_planned_slide(
+                                    plan, index, **author_kwargs
+                                )
+                            except Exception as author_error:
+                                # D7 at the author stage: one simplified attempt,
+                                # then a flagged placeholder. ``None`` keeps
+                                # today's fail-closed raise for this deck.
+                                rescue = await rescue_author_stage(
+                                    plan,
+                                    index,
+                                    author_error,
+                                    author_kwargs=author_kwargs,
+                                    profile=composition_profile,
+                                    reference_mode=plan_reference_mode,
+                                    source_reflow=source_reflow,
+                                )
+                                if rescue is None:
+                                    raise
+                                html = rescue.html
+                                author_provider_attempt_count = max(
+                                    author_provider_attempt_count,
+                                    rescue.provider_attempt_count,
+                                )
+                                if rescue.flagged_entry is not None:
+                                    author_flagged_slides[index] = rescue.flagged_entry
                 except RendererPolicyError as exc:
                     raise AuthoredStageError(
                         slide_index=index,
@@ -1452,6 +1485,9 @@ async def _author_illustrate_render_pipeline(
         scene_envelope=scene_envelope,
         author_provider_attempt_counts=tuple(
             int(result[10]) for result in completed_results
+        ),
+        author_flagged_slides=tuple(
+            author_flagged_slides[index] for index in sorted(author_flagged_slides)
         ),
         # Slides are authored in parallel child tasks, so the quality loop's
         # per-slide choice has no ambient way back to the measurement stage.

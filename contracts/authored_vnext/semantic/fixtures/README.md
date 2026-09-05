@@ -12,14 +12,10 @@ right/bottom/internal sentinels. Every slide intentionally reuses the same
 generic CSS class name under a distinct `data-scope` so class isolation is
 observable rather than inferred.
 
-The seed is not product evidence. `scripts/verify-authored-semantic-fixtures.mjs`
-derives bundle/manifest digests and verifies fresh mode-scoped artifact hashes.
-`scripts/verify-authored-semantic-vertical-slice-evidence.mjs` binds the
-eight-slide manifest, revision, operation, generation attempt, export attempt,
-PPTX digest, render/report digests, and all eight PNG hashes. It also requires
-explicit rejected remake/rollback stale-revision/attempt records. Both tools
-always report `not-verified`; they reject reused artifacts, mismatched lineage,
-and any true promotion flag. A real UI/PowerPoint evidence bundle must be
-supplied by the product verification path. The wrapper
-`scripts/run-authored-semantic-dual-output-fixture.mjs` runs both checks and
-adds the fixture/evidence identity fence.
+The seed is not product evidence. The verification tools that once consumed it
+(`verify-authored-semantic-fixtures.mjs`,
+`verify-authored-semantic-vertical-slice-evidence.mjs`, and the wrapper
+`run-authored-semantic-dual-output-fixture.mjs`) were removed as unreferenced
+code on 2026-09-05 (commit 64b7d646e); recover them from that commit's parent
+if the checks are needed again. A real UI/PowerPoint evidence bundle must be
+supplied by the product verification path.

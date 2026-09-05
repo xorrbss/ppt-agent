@@ -43,6 +43,11 @@ class AuthoredGenerationPipelineResult:
     # resumed checkpoint is conservatively treated as budget-exhausted because
     # its historical call count is not encoded in the checkpoint row.
     author_provider_attempt_counts: tuple[int, ...] = ()
+    # D7 at the author stage: slides that spent every author attempt and are
+    # published with a deterministic placeholder instead of failing the deck.
+    # Index-ordered, and merged into the deck's one ``flaggedSlides`` list next
+    # to the gate-stage flags so every consumer sees one kind of flagged page.
+    author_flagged_slides: tuple[dict[str, Any], ...] = ()
     def __post_init__(self) -> None:
         # The result is a public boundary consumed by API/publication code.
         # Never propagate a worker lease or raw generation token through it.

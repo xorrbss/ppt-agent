@@ -33,9 +33,10 @@ Fields covered:
   absent, exactly like the three fields above.
 
 * ``flaggedSlides`` -- D7 (master design section A4): one entry per slide the
-  deck published with a quality flag after its one automatic remake stayed
+  deck published with a quality flag after its automatic remakes stayed
   terminal (``services/authored_terminal_slide_fallback.py``), each
-  ``{"index", "reason", "remakeAttempted", "remakeOutcome"}``. It exists so a
+  ``{"index", "reason", "remakeAttempted", "remakeOutcome"}`` plus an optional
+  ``"remakeCount"`` when the slide spent more than one remake. It exists so a
   benchmark can tell a clean publish from a flagged one. A clean publish has
   no entries and the key is absent.
 
@@ -57,6 +58,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 
 from services.authored_provider_rate_profile import PROFILE_NAMES
+from services.authored_terminal_slide_fallback import MAX_REMAKES_PER_SLIDE
 
 #: The optional key added to one stage's ``"observed"`` dict.
 STAGE_WALL_KEY = "wallMillis"
@@ -228,10 +230,10 @@ def quality_loop_variant_field(
 _FLAGGED_SLIDE_KEYS = frozenset(
     {"index", "reason", "remakeAttempted", "remakeOutcome"}
 )
-#: Only a slide declared terminal by the durable Scene repair claim knows
-#: whether the same digest and error came back, so this key is present on
-#: those entries and absent everywhere else.
-_FLAGGED_SLIDE_OPTIONAL_KEYS = frozenset({"repeated"})
+#: ``repeated`` is present only on a slide declared terminal by the durable
+#: Scene repair claim, which is the only place that knows whether the same
+#: digest and error came back; ``remakeCount`` only when it exceeds one.
+_FLAGGED_SLIDE_OPTIONAL_KEYS = frozenset({"repeated", "remakeCount"})
 
 
 def flagged_slide_entries(value: object) -> tuple[dict[str, object], ...]:
@@ -257,8 +259,14 @@ def flagged_slide_entries(value: object) -> tuple[dict[str, object], ...]:
         attempted = entry.get("remakeAttempted")
         outcome = entry.get("remakeOutcome")
         repeated = entry.get("repeated", False)
+        # Absent means one: every receipt sealed before the remake-first round
+        # existed carries no count, and one remake is what those decks spent.
+        remake_count = entry.get("remakeCount", 1)
         if (
             not isinstance(repeated, bool)
+            or isinstance(remake_count, bool)
+            or not isinstance(remake_count, int)
+            or not 1 <= remake_count <= MAX_REMAKES_PER_SLIDE
             or isinstance(index, bool)
             or not isinstance(index, int)
             or index < 0
@@ -279,6 +287,8 @@ def flagged_slide_entries(value: object) -> tuple[dict[str, object], ...]:
         }
         if "repeated" in entry:
             record["repeated"] = bool(entry["repeated"])
+        if "remakeCount" in entry:
+            record["remakeCount"] = int(entry["remakeCount"])
         output.append(record)
     return tuple(output)
 

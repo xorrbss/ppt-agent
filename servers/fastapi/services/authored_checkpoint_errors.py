@@ -83,7 +83,11 @@ class AuthoredStageError(RuntimeError):
             provider_attempt_count
             if isinstance(provider_attempt_count, int)
             and not isinstance(provider_attempt_count, bool)
-            and 0 <= provider_attempt_count <= 2
+            # Three, not two: the author-stage rescue
+            # (``services/authored_author_stage_rescue.py``) spends a third
+            # call, and a resumed attempt that reports the spent budget must
+            # not have that number silently dropped as out of range.
+            and 0 <= provider_attempt_count <= 3
             else None
         )
         super().__init__(self.safe_message)

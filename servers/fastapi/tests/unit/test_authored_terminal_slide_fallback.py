@@ -24,6 +24,7 @@ from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services import authored_presentation_generation as authored_generation_mod
 from services import authored_presentation_service as authored_service
+from services import authored_repair_round_order as order_mod
 from services import authored_terminal_slide_fallback as terminal_mod
 from services import authored_terminal_slide_policy as policy_mod
 from services.authored_vnext.generation.scene_checkpoint import (
@@ -204,8 +205,21 @@ def _install_deck_stubs(monkeypatch, tmp_path, htmls):
 
 
 def _install_remake(monkeypatch, calls, *, candidate):
+    """The same candidate for every remake call."""
+
+    _install_remakes(monkeypatch, calls, candidates=[candidate])
+
+
+def _install_remakes(monkeypatch, calls, *, candidates):
+    """One candidate per remake CALL, so the two remake rounds can differ.
+
+    The last entry is reused once the list runs out, which keeps a deck with
+    more terminal slides than entries on a single final outcome.
+    """
+
     async def fake_revise(*args, **kwargs):
         calls.append(kwargs.get("slide_indices"))
+        candidate = candidates[min(len(calls) - 1, len(candidates) - 1)]
         if candidate is None:
             # The reviser hands the source back unchanged when it fails.
             return [list(args[0]), list(args[1]), [], [{"attempted": True}]]
@@ -434,8 +448,13 @@ def _residual_round_error(htmls):
     )
 
 
-def _install_repair_round(monkeypatch, *, raises):
-    """Drive the first-pass gate into the bounded repair round for one slide."""
+def _install_repair_round(monkeypatch, *, raises, candidate=None):
+    """Drive the first-pass gate into the bounded repair round for one slide.
+
+    ``candidate`` is the HTML the patch round returns for every reviewed
+    slide; the default hands the input back unchanged, which is what a patch
+    that repaired nothing does.
+    """
 
     monkeypatch.setattr(
         authored_generation_mod,
@@ -476,6 +495,8 @@ def _install_repair_round(monkeypatch, *, raises):
         round_calls.append(list(args[0]))
         if raises is not None:
             raise raises(list(args[0]))
+        if candidate is not None:
+            return [[candidate for _ in args[0]], list(args[1]), []]
         return [list(args[0]), list(args[1]), []]
 
     # The facade copies its own name into the generation module on every call.
@@ -532,7 +553,7 @@ def test_repair_round_residual_reaches_the_remake_instead_of_failing_the_deck(
     _flagged_pipeline_stub(monkeypatch, deck, 1)
     round_calls = _install_repair_round(monkeypatch, raises=_residual_round_error)
     remake_calls: list[object] = []
-    # The remake stays terminal, so the deck must publish with the flag.
+    # Both remakes stay terminal, so the deck must publish with the flag.
     _install_remake(monkeypatch, remake_calls, candidate=_TERMINAL_HTML)
 
     owner_token = set_current_owner_id(uuid.uuid4())
@@ -548,14 +569,16 @@ def test_repair_round_residual_reaches_the_remake_instead_of_failing_the_deck(
     # it QID-sealed by the scene envelope, so match the marker, not the source).
     assert [len(call) for call in round_calls] == [1]
     assert TERMINAL_MARKER in round_calls[0][0]
-    # Exactly one remake, for the residual slide only.
-    assert remake_calls == [[1]]
+    # Both remakes, for the residual slide only: one ahead of the round and one
+    # behind it.
+    assert remake_calls == [[1], [1]]
     assert presentation.theme["authoredQualityGate"]["flaggedSlides"] == [
         {
             "index": 1,
             "reason": "composition_safety:overlap",
             "remakeAttempted": True,
-            "remakeOutcome": "remake_gate_failed",
+            "remakeOutcome": "remake_budget_exhausted",
+            "remakeCount": 2,
         }
     ]
 
@@ -619,7 +642,8 @@ def test_repair_round_provider_failure_keeps_todays_failed_deck(monkeypatch, tmp
 
     _install_repair_round(monkeypatch, raises=provider_failure)
     remake_calls: list[object] = []
-    _install_remake(monkeypatch, remake_calls, candidate=_REMADE_HTML)
+    # The remake ahead of the round is rejected, so the round actually runs.
+    _install_remake(monkeypatch, remake_calls, candidate=_TERMINAL_HTML)
 
     owner_token = set_current_owner_id(uuid.uuid4())
     try:
@@ -631,7 +655,10 @@ def test_repair_round_provider_failure_keeps_todays_failed_deck(monkeypatch, tmp
     assert getattr(caught.value, "code", None) == (
         "authored_composition_safety_gate_failed"
     )
-    assert remake_calls == []
+    # A transport failure is not evidence about the slide, so the durable
+    # claim it already consumed still ends the attempt: the second remake is
+    # never reached.
+    assert remake_calls == [[1]]
 
 
 def test_recovery_refuses_a_disabled_deck_and_an_empty_round():
@@ -916,15 +943,16 @@ def test_unadmitted_gate_repair_with_a_layout_defect_publishes_flagged(
         reset_current_owner_id(owner_token)
 
     assert result.path == "deck.pptx"
-    # One remake for the unadmitted slide only, then the flag.
-    assert remake_calls == [[1]]
+    # Both remakes for the unadmitted slide only, then the flag.
+    assert remake_calls == [[1], [1]]
     gate = presentation.theme["authoredQualityGate"]
     assert gate["flaggedSlides"] == [
         {
             "index": 1,
             "reason": policy_mod.GATE_REPAIR_NOT_ADMITTED_REASON,
             "remakeAttempted": True,
-            "remakeOutcome": "remake_gate_failed",
+            "remakeOutcome": "remake_budget_exhausted",
+            "remakeCount": 2,
         }
     ]
 
@@ -952,8 +980,10 @@ def test_unadmitted_gate_repair_publishes_clean_when_the_remake_passes(
 
 
 def test_a_measured_over_budget_candidate_still_fails_the_deck(monkeypatch, tmp_path):
+    # The remake ahead of the round is rejected, so the round's candidate is
+    # the one measured over budget.
     remake_calls = _unadmitted_gate_repair_deck(
-        monkeypatch, tmp_path, _MEASURED_VIOLATION, remake=_REMADE_HTML
+        monkeypatch, tmp_path, _MEASURED_VIOLATION, remake=_TERMINAL_HTML
     )
 
     owner_token = set_current_owner_id(uuid.uuid4())
@@ -964,7 +994,7 @@ def test_a_measured_over_budget_candidate_still_fails_the_deck(monkeypatch, tmp_
         reset_current_owner_id(owner_token)
 
     assert getattr(caught.value, "code", None) == "authored_slide_capacity_exceeded"
-    assert remake_calls == []
+    assert remake_calls == [[1]]
 
 
 def test_unadmitted_gate_repair_still_fails_the_deck_with_the_knob_off(
@@ -1054,6 +1084,179 @@ def test_the_final_capacity_gate_is_reachable_for_a_flagged_slide(monkeypatch):
         )
     )
     assert [item["slide_index"] for item in residual] == [0]
+
+
+# ---------------------------------------------------------------------------
+# Remake-first ordering (bench run 10: the patch round fixed 0 of 6 flagged
+# slides, a fresh composition briefed with the same defects passed 4 of 8).
+# On a fallback-active deck the remake now runs BEFORE the patch round, and a
+# slide both rounds miss gets a second remake before it is flagged.
+# ---------------------------------------------------------------------------
+
+
+def _ordered_rounds_deck(monkeypatch, tmp_path, *, patched=None, remakes):
+    """One flagged slide, with both rounds observable."""
+
+    deck = [_REMADE_HTML, _TERMINAL_HTML]
+    _install_deck_stubs(monkeypatch, tmp_path, deck)
+    _flagged_pipeline_stub(monkeypatch, deck, 1)
+    round_calls = _install_repair_round(monkeypatch, raises=None, candidate=patched)
+    remake_calls: list[object] = []
+    _install_remakes(monkeypatch, remake_calls, candidates=remakes)
+    return round_calls, remake_calls
+
+
+def test_an_admitted_remake_first_never_calls_the_patch_round(monkeypatch, tmp_path):
+    round_calls, remake_calls = _ordered_rounds_deck(
+        monkeypatch, tmp_path, remakes=[_REMADE_HTML]
+    )
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(tmp_path, _request(), _outline(2))
+        )
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert result.path == "deck.pptx"
+    # The remake ran first and was admitted, so the patch round was left with
+    # nothing to repair and never called the provider.
+    assert remake_calls == [[1]]
+    assert round_calls == []
+    gate = presentation.theme["authoredQualityGate"]
+    assert "flaggedSlides" not in gate
+    assert gate["status"] == "passed"
+    # A remade slide is still a slide the bounded round rewrote.
+    assert gate["repairedSlideIndices"] == [1]
+
+
+def test_a_rejected_remake_first_falls_back_to_the_patch_round(monkeypatch, tmp_path):
+    round_calls, remake_calls = _ordered_rounds_deck(
+        monkeypatch, tmp_path, patched=_REMADE_HTML, remakes=[_TERMINAL_HTML]
+    )
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(tmp_path, _request(), _outline(2))
+        )
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert result.path == "deck.pptx"
+    # One remake, rejected, then the patch round for that slide only.
+    assert remake_calls == [[1]]
+    assert [len(call) for call in round_calls] == [1]
+    gate = presentation.theme["authoredQualityGate"]
+    assert "flaggedSlides" not in gate
+    assert gate["status"] == "passed"
+
+
+def test_a_second_remake_rescues_a_slide_both_rounds_missed(monkeypatch, tmp_path):
+    round_calls, remake_calls = _ordered_rounds_deck(
+        monkeypatch, tmp_path, remakes=[_TERMINAL_HTML, _REMADE_HTML]
+    )
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(tmp_path, _request(), _outline(2))
+        )
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert result.path == "deck.pptx"
+    # Remake, patch round, remake -- in that order, all for the one slide.
+    assert remake_calls == [[1], [1]]
+    assert [len(call) for call in round_calls] == [1]
+    gate = presentation.theme["authoredQualityGate"]
+    assert "flaggedSlides" not in gate
+    assert gate["status"] == "passed"
+
+
+def test_two_failed_remakes_publish_the_slide_flagged_with_its_count(
+    monkeypatch, tmp_path
+):
+    round_calls, remake_calls = _ordered_rounds_deck(
+        monkeypatch, tmp_path, remakes=[_TERMINAL_HTML]
+    )
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(tmp_path, _request(), _outline(2))
+        )
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert result.path == "deck.pptx"
+    assert remake_calls == [[1], [1]]
+    assert [len(call) for call in round_calls] == [1]
+    # Two spent remakes and a patch round later the slide is still terminal,
+    # so it is published flagged with the count that proves nothing is left.
+    assert presentation.theme["authoredQualityGate"]["flaggedSlides"] == [
+        {
+            "index": 1,
+            "reason": "composition_safety:overlap",
+            "remakeAttempted": True,
+            "remakeOutcome": "remake_budget_exhausted",
+            "remakeCount": 2,
+        }
+    ]
+
+
+def test_the_knob_off_deck_keeps_patch_first_and_never_remakes(monkeypatch, tmp_path):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES", "false")
+    round_calls, remake_calls = _ordered_rounds_deck(
+        monkeypatch, tmp_path, remakes=[_REMADE_HTML]
+    )
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        with pytest.raises(Exception) as caught:
+            _run(_generate_on_sqlite(tmp_path, _request(), _outline(2)))
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert getattr(caught.value, "code", None) == (
+        "authored_composition_safety_gate_failed"
+    )
+    # Today's order, byte for byte: the patch round first, no remake at all,
+    # and the deck fails rather than publishing a flagged slide.
+    assert [len(call) for call in round_calls] == [1]
+    assert remake_calls == []
+
+
+def test_gate_defects_reach_the_brief_with_the_measured_detail():
+    defects = order_mod.gate_defects_by_slide(
+        [
+            {"slide_index": 1, "issues": [_FakeIssue().to_dict()]},
+            {"slide_index": 1, "issues": [{"category": "clipping", "message": "cut"}]},
+            {"slide_index": "x", "issues": [{"category": "overlap"}]},
+        ]
+    )
+
+    assert sorted(defects) == [1]
+    assert [(item.category, item.detail) for item in defects[1]] == [
+        ("overlap", "two owned boxes overlap"),
+        ("clipping", "cut"),
+    ]
+
+
+def test_the_receipt_accepts_only_a_count_within_the_slide_budget():
+    entry = {
+        "index": 1,
+        "reason": "composition_safety:overlap",
+        "remakeAttempted": True,
+        "remakeOutcome": "remake_budget_exhausted",
+        "remakeCount": 2,
+    }
+
+    assert flagged_slide_entries([entry]) == (entry,)
+    for invalid in (0, 3, True, "2"):
+        with pytest.raises(ValueError):
+            flagged_slide_entries([{**entry, "remakeCount": invalid}])
 
 
 # ---------------------------------------------------------------------------
@@ -1250,8 +1453,9 @@ def test_repair_checkpoints_carry_the_workspace_fencing_token(monkeypatch, tmp_p
     # The round returns its input unchanged and capacity is clean, so slide 1's
     # candidate is admitted and its checkpoint is persisted.
     _install_repair_round(monkeypatch, raises=None)
-    # The remake is admitted too, so the fallback's own persist is exercised.
-    _install_remake(monkeypatch, [], candidate=_REMADE_HTML)
+    # The remake ahead of the round is rejected so the round runs; the terminal
+    # remake behind it is admitted, so the fallback's own persist is exercised.
+    _install_remakes(monkeypatch, [], candidates=[_TERMINAL_HTML, _REMADE_HTML])
     recorded = _install_job_stubs(monkeypatch)
 
     owner_token = set_current_owner_id(uuid.uuid4())
@@ -1265,8 +1469,8 @@ def test_repair_checkpoints_carry_the_workspace_fencing_token(monkeypatch, tmp_p
         reset_current_owner_id(owner_token)
 
     assert result.path == "deck.pptx"
-    # The admitted gate repair and the admitted remake both persisted a render
-    # checkpoint for the same slide.
+    # The admitted gate repair and the admitted second remake both persisted a
+    # render checkpoint for the same slide.
     assert [call["stage"] for call in recorded] == ["render", "render"]
     assert [call["slide_index"] for call in recorded] == [1, 1]
     assert [call.get("fencing_token") for call in recorded] == [

@@ -133,7 +133,7 @@ def build_authored_generation_observation(
         if provider_attempt_count is not None:
             event.update(
                 provider_attempt_count=_bounded_int(
-                    "provider_attempt_count", provider_attempt_count, maximum=2
+                    "provider_attempt_count", provider_attempt_count, maximum=3
                 ),
                 retry_reason=(
                     "retryable_failure" if retryable else "terminal_failure"

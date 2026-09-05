@@ -16,11 +16,14 @@ force_full_reauthor_indices=[0], max_cycles=1)`` call driven by a synthetic
 ``SlideCritique``; that mechanism is reused here with the deck's own plan
 decisions, and the critique carries D7's lower-density hint instead.
 
-Bounds. One remake per terminal slide, at most
-``MAX_TERMINAL_REMAKES_PER_DECK`` per deck; a remake is admitted only when it
-clears BOTH the capacity envelope and the safety gate, so the fallback can
-never hand back a worse deck than it was given. A failed call flags the slide
-rather than calling again.
+Bounds. ``MAX_REMAKES_PER_SLIDE`` remakes per terminal slide and at most
+``MAX_TERMINAL_REMAKES_PER_DECK`` per deck, counted across BOTH rounds that
+may remake a slide: the remake-first round that now opens the bounded repair
+(``services/authored_repair_round_order.py``) and this terminal round behind
+it. A remake is admitted only when it clears BOTH the capacity envelope and
+the safety gate, so the fallback can never hand back a worse deck than it was
+given. A failed call flags the slide rather than calling again; the wall
+clock those two calls cost is documented in the ordering module named above.
 """
 
 from __future__ import annotations
@@ -57,11 +60,17 @@ from utils.slide_capture import (
 
 LOGGER = logging.getLogger(__name__)
 
-#: Remake attempts one deck may spend. Each one is a full authoring call
-#: (~170-240 s on the worker lane), so a deck whose gate flagged a dozen
-#: slides must not turn into a dozen sequential provider calls. Slides past
-#: the budget are flagged with ``remakeAttempted: false`` rather than dropped.
-MAX_TERMINAL_REMAKES_PER_DECK = 4
+#: Remake attempts one deck may spend, shared by the remake-first round and
+#: this terminal round. Each one is a full authoring call, so a deck whose
+#: gate flagged a dozen slides must not turn into a dozen sequential provider
+#: calls. Slides past the budget are flagged with ``remake_budget_exhausted``
+#: rather than dropped.
+MAX_TERMINAL_REMAKES_PER_DECK = 8
+
+#: Remake attempts one slide may spend across those two rounds. Bench run 10
+#: measured the single remake as the binding limit: 4 of 8 terminal slides
+#: were published flagged with the budget already spent.
+MAX_REMAKES_PER_SLIDE = 2
 
 #: The D7 lower-density hint. ``CritiqueIssue.detail`` is truncated to 200
 #: characters by the remake service and by the reviser's prompt budget.
@@ -89,6 +98,7 @@ def _flagged_entry(
     attempted: bool,
     outcome: str,
     repeated: bool | None = None,
+    remake_count: int = 0,
 ) -> dict[str, object]:
     entry: dict[str, object] = {
         "index": int(index),
@@ -96,6 +106,10 @@ def _flagged_entry(
         "remakeAttempted": bool(attempted),
         "remakeOutcome": str(outcome)[:64],
     }
+    if remake_count > 1:
+        # Omitted for one remake: a receipt sealed before the remake-first
+        # round existed carries no count, and one is what it means.
+        entry["remakeCount"] = int(remake_count)
     if repeated is not None:
         # Only the durable Scene repair claim knows whether the same digest and
         # error came back; an ordinary terminal slide has nothing to say here
@@ -142,24 +156,47 @@ def _blocking_defects(
     return tuple(blocking_safety_issues(report))
 
 
-def _remake_reference_kwargs(
+def replayed_plan_kwargs(
+    indices: Sequence[int],
     *,
-    index: int, style: Any, brand: Any, chapter_plan: Any,
-    illustration_plan: Any, infographic_plan: Any, instructions: object,
+    chapter_plan: Any = None, illustration_plan: Any = None,
+    infographic_plan: Any = None, style: Any = None, brand: Any = None,
+    instructions: object = None, exact_reconstruction: bool = False,
+    with_assets: bool = False,
 ) -> dict[str, Any]:
-    """The deck's own per-slide plan decisions, as the remake service passes them."""
+    """The deck's own per-slide plan decisions, replayed into a revise call.
+
+    A repaired or re-authored slide must be produced under the same deck-wide
+    decisions its first draft was: without the chapter prefix, the one slide a
+    revise pass touched is the one whose eyebrow disagrees with the deck.
+    ``None`` stays distinct from an empty plan -- with no plan at all the
+    legacy behaviour still lets a slide request an illustration.
+
+    An exact-reconstruction deck replays only the chapter prefixes; its
+    illustration and infographic slots are dictated by the reference page.
+    ``with_assets`` adds the deck-level infographic asset context and the image
+    service a reviser needs for an allowed replacement slot; the bounded patch
+    round passes neither, because a local patch may not replace an image.
+    """
 
     kwargs: dict[str, Any] = {}
     if chapter_plan is not None:
-        kwargs["chapter_prefixes"] = [chapter_plan.eyebrow_prefix_at(index)]
+        kwargs["chapter_prefixes"] = [
+            chapter_plan.eyebrow_prefix_at(index) for index in indices
+        ]
+    if exact_reconstruction:
+        return kwargs
     if illustration_plan is not None:
-        kwargs["illustration_slots"] = [illustration_plan.allows(index)]
+        kwargs["illustration_slots"] = [
+            illustration_plan.allows(index) for index in indices
+        ]
     if infographic_plan is not None:
-        kwargs["infographic_briefs"] = [infographic_plan.at(index)]
-        kwargs["infographic_assets"] = build_infographic_asset_context(
-            style=style, brand=brand, instructions=instructions
-        )
-    if deck_has_picture_source(style):
+        kwargs["infographic_briefs"] = [infographic_plan.at(i) for i in indices]
+        if with_assets:
+            kwargs["infographic_assets"] = build_infographic_asset_context(
+                style=style, brand=brand, instructions=instructions
+            )
+    if with_assets and deck_has_picture_source(style):
         kwargs["image_service"] = ImageGenerationService(get_images_directory())
     return kwargs
 
@@ -228,14 +265,18 @@ async def _admit_remade_slide(
     return canonical, capture.png, metrics
 
 
-async def _remake_one_slide(
+async def remake_slide_once(
     *,
     index: int, html: str, png: bytes, content: str, role: str,
     defects: Sequence[Any], capacity: object, profile: Any,
     reference_mode: str, brand: Any, design_system: str, style: Any,
     total_slides: int, reference_kwargs: Mapping[str, Any],
 ) -> tuple[tuple[str, bytes, object] | None, str]:
-    """One remake plus its admission, as ``(admitted, outcome)``."""
+    """One remake plus its admission, as ``(admitted, outcome)``.
+
+    Shared with the remake-first round, so a slide is briefed, captured and
+    admitted identically whichever of the two rounds pays for it.
+    """
 
     try:
         candidate = await _remake_candidate(
@@ -268,6 +309,43 @@ async def _remake_one_slide(
     return admitted, ("remade" if admitted is not None else "remake_gate_failed")
 
 
+async def apply_admitted_remake(
+    *,
+    index: int,
+    admitted: tuple[str, bytes, object],
+    htmls: list[str],
+    pngs: list[bytes],
+    metrics_by_slide: dict[int, object],
+    scene_envelope: Any,
+    generation_job: Any = None,
+) -> Any:
+    """Install one admitted remake into the deck state; return a resealed envelope.
+
+    Shared with the remake-first round so both write one whole
+    (html, png, metrics) triple and the same durable render checkpoint.
+    """
+
+    selected_html, selected_png, selected_metrics = admitted
+    htmls[index] = selected_html
+    pngs[index] = selected_png
+    metrics_by_slide[index] = selected_metrics
+    resealed = replace_deck_scene_slide(
+        scene_envelope, slide_index=index, html_projection=selected_html
+    )
+    attempt_token = getattr(generation_job, "attempt_token", None)
+    if generation_job is not None and attempt_token:
+        # A resumed attempt must replay the admitted remake, not the terminal
+        # draft it replaced. A workspace-linked job's checkpoint write is
+        # refused without the lease's fencing token.
+        await _complete_stage_after_external_success(
+            job_id=generation_job.id, slide_index=index, stage="render",
+            attempt_token=attempt_token, html=selected_html,
+            png=selected_png, browser_metrics=selected_metrics,
+            fencing_token=getattr(generation_job, "_workspace_fencing_token", None),
+        )
+    return resealed
+
+
 async def resolve_terminal_gate_slides(
     *,
     htmls: list[str], pngs: list[bytes], contents: Sequence[str],
@@ -278,8 +356,9 @@ async def resolve_terminal_gate_slides(
     illustration_plan: Any = None, infographic_plan: Any = None,
     instructions: object = None, generation_job: Any = None,
     predeclared: Sequence[Mapping[str, object]] = (),
+    remake_counts: Mapping[int, int] | None = None,
 ) -> TerminalSlideFallback:
-    """Remake every ladder-terminal slide once; flag the ones that stay terminal.
+    """Remake every ladder-terminal slide again; flag the ones that stay terminal.
 
     ``htmls``, ``pngs`` and ``metrics_by_slide`` are updated in place for an
     admitted remake so the caller keeps one deck state; the resealed scene
@@ -291,6 +370,11 @@ async def resolve_terminal_gate_slides(
     as terminal on the strength of that declaration rather than rediscovered
     from the DOM, so the outcome cannot depend on whether a later gate happens
     to re-report the same defect.
+
+    ``remake_counts`` carries what the remake-first round already spent, per
+    slide index. It is both budgets at once: its total is the deck's spent
+    share of ``MAX_TERMINAL_REMAKES_PER_DECK``, and a slide already at
+    ``MAX_REMAKES_PER_SLIDE`` is flagged here without another call.
     """
 
     if not terminal_fallback_active(
@@ -324,62 +408,58 @@ async def resolve_terminal_gate_slides(
     if not terminal:
         return TerminalSlideFallback(scene_envelope=scene_envelope)
 
+    prior_counts = {int(key): int(value) for key, value in (remake_counts or {}).items()}
     flagged: list[dict[str, object]] = []
     remade: list[int] = []
-    remake_calls = 0
+    remake_calls = sum(prior_counts.values())
     for index, defects, declaration in terminal:
         reason = str(declaration.get("reason") or _terminal_reason(defects))
         repeated = declaration.get("repeated")
         repeated = bool(repeated) if isinstance(repeated, bool) else None
-        if remake_calls >= MAX_TERMINAL_REMAKES_PER_DECK:
+        spent = prior_counts.get(index, 0)
+        if remake_calls >= MAX_TERMINAL_REMAKES_PER_DECK or spent >= MAX_REMAKES_PER_SLIDE:
             flagged.append(
                 _flagged_entry(
-                    index=index, reason=reason, attempted=False,
+                    index=index, reason=reason, attempted=spent > 0,
                     outcome="remake_budget_exhausted", repeated=repeated,
+                    remake_count=spent,
                 )
             )
             continue
         remake_calls += 1
-        admitted, outcome = await _remake_one_slide(
+        spent += 1
+        admitted, outcome = await remake_slide_once(
             index=index, html=htmls[index], png=pngs[index],
             content=str(contents[index]), role=str(roles[index]),
             defects=defects, profile=profile, reference_mode=reference_mode,
             capacity=(capacity_plan.at(index) if capacity_plan is not None else {}),
             brand=brand, design_system=design_system, style=style,
             total_slides=len(htmls),
-            reference_kwargs=_remake_reference_kwargs(
-                index=index, style=style, brand=brand, chapter_plan=chapter_plan,
-                illustration_plan=illustration_plan,
+            reference_kwargs=replayed_plan_kwargs(
+                [index], style=style, brand=brand, chapter_plan=chapter_plan,
+                illustration_plan=illustration_plan, with_assets=True,
                 infographic_plan=infographic_plan, instructions=instructions,
             ),
         )
         if admitted is None:
+            if spent >= MAX_REMAKES_PER_SLIDE:
+                # Nothing is left to try for this slide, which is the fact a
+                # benchmark reads off the flag; the failing call's own outcome
+                # stays in this module's log.
+                outcome = "remake_budget_exhausted"
             flagged.append(
                 _flagged_entry(
                     index=index, reason=reason, attempted=True, outcome=outcome,
-                    repeated=repeated,
+                    repeated=repeated, remake_count=spent,
                 )
             )
             continue
-        selected_html, selected_png, selected_metrics = admitted
-        htmls[index] = selected_html
-        pngs[index] = selected_png
-        metrics_by_slide[index] = selected_metrics
-        scene_envelope = replace_deck_scene_slide(
-            scene_envelope, slide_index=index, html_projection=selected_html
+        scene_envelope = await apply_admitted_remake(
+            index=index, admitted=admitted, htmls=htmls, pngs=pngs,
+            metrics_by_slide=metrics_by_slide, scene_envelope=scene_envelope,
+            generation_job=generation_job,
         )
         remade.append(index)
-        attempt_token = getattr(generation_job, "attempt_token", None)
-        if generation_job is not None and attempt_token:
-            # A resumed attempt must replay the admitted remake, not the
-            # terminal draft it replaced. A workspace-linked job's checkpoint
-            # write is refused without the lease's fencing token.
-            await _complete_stage_after_external_success(
-                job_id=generation_job.id, slide_index=index, stage="render",
-                attempt_token=attempt_token, html=selected_html,
-                png=selected_png, browser_metrics=selected_metrics,
-                fencing_token=getattr(generation_job, "_workspace_fencing_token", None),
-            )
     LOGGER.info(
         "[authored] terminal slide fallback terminal=%d remade=%s flagged=%s",
         len(terminal),
@@ -396,7 +476,11 @@ async def resolve_terminal_gate_slides(
 
 __all__ = [
     "LOWER_DENSITY_HINT",
+    "MAX_REMAKES_PER_SLIDE",
     "MAX_TERMINAL_REMAKES_PER_DECK",
     "TerminalSlideFallback",
+    "apply_admitted_remake",
+    "remake_slide_once",
+    "replayed_plan_kwargs",
     "resolve_terminal_gate_slides",
 ]

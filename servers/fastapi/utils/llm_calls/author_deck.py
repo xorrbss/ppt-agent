@@ -26,6 +26,7 @@ from models.authored_visual_plan import (
     StoryKind,
 )
 from models.presentation_outline_model import PresentationOutlineModel
+from utils.authored_geometry_brief import relaxed_geometry_brief
 from utils.authored_header_validation import validate_header_contract
 from utils.authored_infographic import CONTRACT_ERROR_PREFIX
 from services.source_images.models import SourceImageCandidate
@@ -1500,15 +1501,18 @@ def _envelope_enforced(capacity_plan: AuthoredCapacityPlan) -> bool:
 def _capacity_brief(
     plan: AuthoredDeckPlan, index: int, capacity: SlideCapacity
 ) -> str | None:
-    """The envelope and text-plan brief for one slide, or None when relaxed.
+    """The envelope/text-plan brief for one slide, or a GEOMETRY-only one.
 
-    A relaxed capacity has no brief of its own and its plan froze no text
-    budget, so the author prompt carries no server-owned composition text at
-    all — the state before the envelope existed.
+    A relaxed capacity has no budget brief of its own and its plan froze no
+    text budget; instead of a blank result it now gets the GEOMETRY-only
+    brief from ``relaxed_geometry_brief`` (frame/footer-line/overlap/header
+    rules, no character or qid counts).
     """
     capacity_plan = getattr(plan, "capacity_plan", None)
     if capacity_plan is None:
         return None
+    if not capacity.enforced:
+        return relaxed_geometry_brief(plan, index)
     brief = capacity.prompt_brief(capacity_plan.profile)
     if not brief:
         return None
