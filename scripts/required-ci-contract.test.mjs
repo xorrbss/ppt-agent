@@ -1059,7 +1059,7 @@ test("developer documentation matches the executable lint and test workflow", ()
   assert.equal(nextPackage.scripts["test:ci-node"], "node scripts/run-ci-node-tests.mjs");
   assert.match(rootPackage.scripts["test:next-ci"], /test:ci-node/u);
   assert.match(pyproject, /select = \["E", "F", "B", "ASYNC"\]/u);
-  assert.match(nodeRunner, /const ROOTS = \["app", "components", "lib", "scripts", "tests", "utils"\]/u);
+  assert.match(nodeRunner, /const ROOTS = \["app", "components", "i18n", "lib", "scripts", "store", "tests", "utils"\]/u);
   assert.equal(specList?.length, 26);
   assert.match(claude, /Ruff is locked/u);
   assert.match(claude, /tests\/?`, and `utils\//u);
