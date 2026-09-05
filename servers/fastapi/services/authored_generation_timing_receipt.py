@@ -216,7 +216,7 @@ def _checkpoint_signals(value: object) -> tuple[dict[str, object], ...]:
         enabled = item.get("enabled")
         reused = item.get("reused")
         outcome = item.get("outcome")
-        if stage not in {"deck_plan", "chapter_plan", "header", "illustration"}:
+        if stage not in {"deck_plan", "chapter_plan", "header", "illustration", "content_brief"}:
             raise ValueError("generation_attempt_checkpoint_signals_invalid")
         if (
             not isinstance(enabled, bool)

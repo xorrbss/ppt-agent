@@ -475,7 +475,7 @@ class AuthoredDeckPlanCheckpoint(SQLModel, table=True):
             "generation_job_id", "stage", name="uq_authored_deck_plan_checkpoint_stage"
         ),
         CheckConstraint(
-            "stage IN ('deck_plan', 'chapter_plan', 'header', 'illustration')",
+            "stage IN ('deck_plan', 'chapter_plan', 'header', 'illustration', 'content_brief')",
             name="ck_authored_deck_plan_checkpoint_stage",
         ),
         CheckConstraint(

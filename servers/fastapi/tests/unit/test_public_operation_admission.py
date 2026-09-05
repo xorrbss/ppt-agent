@@ -62,7 +62,7 @@ def test_weighted_resource_plan_is_deterministic_and_mode_weighted() -> None:
     with pytest.raises(ValueError, match="public_fidelity_mode_invalid"):
         _ = WeightedResourcePlan(**base, fidelity_mode="unknown").resource_units
 
-    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v3"
+    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v4"
     assert PUBLIC_DEFAULT_MAX_SLIDES == 100
 
 
@@ -110,7 +110,7 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                         User(id=owner_a, username="owner-a", hashed_password="test"),
                         User(id=owner_b, username="owner-b", hashed_password="test"),
                         PublicPolicyProfile(
-                            version="public-default/v3",
+                            version="public-default/v4",
                             max_slides=100,
                             global_active_generation=4,
                             global_queued_generation=8,
@@ -216,7 +216,7 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                 )
                 assert first.planned_request_limit == 9
                 assert first.retry_request_limit == 3
-                assert first.policy_version == "public-default/v3"
+                assert first.policy_version == "public-default/v4"
                 with pytest.raises(PublicAdmissionRejected) as rejected:
                     await admit_public_operation(
                         session,
@@ -380,7 +380,7 @@ def test_phase2_sqlite_lifecycle_is_contract_only(monkeypatch, tmp_path: Path) -
                 session.add(User(id=owner_id, username="phase2-owner", hashed_password="test"))
                 session.add(
                     PublicPolicyProfile(
-                        version="public-default/v3",
+                        version="public-default/v4",
                         max_slides=100,
                         global_active_generation=2,
                         global_queued_generation=4,

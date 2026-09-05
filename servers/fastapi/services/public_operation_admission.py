@@ -15,8 +15,7 @@ import re
 import uuid
 
 from sqlalchemy import and_, case, exists, func, or_, text, update
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlmodel import select
@@ -46,19 +45,17 @@ from services.provider_pricing import (
     ProviderUsageCost,
     calculate_actual_usage_cost,
 )
-from services.public_generation_deadline_policy import (
-    public_generation_deadline_seconds,
-)
+from services.public_generation_deadline_policy import public_generation_deadline_seconds
 from services.public_operation_correlation import log_public_operation_correlation
+from services.public_policy_versions import PUBLIC_DEFAULT_POLICY_VERSION, resolve_public_policy_row
 from services.public_workstation_runtime_profile import (
     PublicWorkstationProfileError,
     resolve_enabled_workstation_runtime_profile,
 )
 
 
-PUBLIC_DEFAULT_POLICY_VERSION = "public-default/v3"
 PUBLIC_DEFAULT_MAX_SLIDES = 100
-PUBLIC_PHASE2_DEFAULT_POLICY_VERSION = "public-default/v3"
+PUBLIC_PHASE2_DEFAULT_POLICY_VERSION = PUBLIC_DEFAULT_POLICY_VERSION
 PUBLIC_PROVIDER_STAGES = frozenset(
     {
         "outline",
@@ -566,8 +563,11 @@ async def _require_phase2_provider_contract(
 async def load_public_policy(
     session: AsyncSession, version: str = PUBLIC_DEFAULT_POLICY_VERSION
 ) -> PublicPolicyProfile:
-    row = await session.get(PublicPolicyProfile, version)
-    if row is None or not row.enabled:
+    # The resolver may answer the current default with the previous default's
+    # row while a deployment is ahead of its migration.  The check below then
+    # applies to whatever row was actually resolved, and still fails closed.
+    row = await resolve_public_policy_row(session, version)
+    if row is None:
         raise PublicAdmissionRejected("public_policy_unavailable")
     if (
         version == PUBLIC_DEFAULT_POLICY_VERSION

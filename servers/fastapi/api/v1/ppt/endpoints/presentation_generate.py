@@ -193,8 +193,9 @@ from utils.document_context import build_document_context
 from utils.get_env import get_authored_resume_max_attempts_env
 from services.public_operation_deadline_scope import remaining_public_operation_seconds
 from api.v1.ppt.endpoints.content_brief_policy import (
-    brief_failure_is_terminal, log_content_brief_skipped, merge_brief_context, run_content_brief_with_policy,
+    brief_failure_is_terminal, log_content_brief_skipped, merge_brief_context,
 )
+from services.authored_content_brief_checkpoint import run_content_brief_with_checkpoint
 from utils.llm_calls.generate_content_brief import generate_content_brief
 from utils.llm_calls.generate_presentation_outlines import (
     generate_ppt_outline,
@@ -1050,15 +1051,14 @@ async def generate_presentation_handler(
                     stage="content_brief",
                     attempt_number=(generation_job.attempt_number if generation_job else 0),
                 ):
-                    brief_outcome = await run_content_brief_with_policy(
-                        generate_content_brief,
-                        content=request.content,
+                    brief_outcome = await run_content_brief_with_checkpoint(
+                        generate_content_brief, content=request.content,
                         language=language_to_use,
                         additional_context=additional_context,
-                        tone=request.tone.value,
-                        verbosity=request.verbosity.value,
+                        tone=request.tone.value, verbosity=request.verbosity.value,
                         instructions=request.instructions,
-                        presentation_id=presentation_id,
+                        # A resume reuses this brief instead of re-paying its 500 s.
+                        presentation_id=presentation_id, generation_job=generation_job,
                         remaining_operation_seconds=remaining_public_operation_seconds(),
                     )
                 if brief_outcome.brief is not None:

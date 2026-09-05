@@ -21,8 +21,12 @@ branch_labels: str | None = None
 depends_on: str | None = None
 
 
-# Matches PUBLIC_GENERATION_DEADLINE_MAX_SECONDS in
-# services/public_generation_deadline_policy.py.
+# The value ``PUBLIC_GENERATION_DEADLINE_MAX_SECONDS`` in
+# ``services/public_generation_deadline_policy.py`` held when this revision was
+# written.  It is FROZEN: an applied row is immutable, and admission takes
+# ``min(row ceiling, formula)``, so this row keeps capping generation at 7200 s
+# no matter what the code constant becomes.  Raising the code ceiling therefore
+# requires a new policy row -- see ``a2c4e6f8b1d3`` -- not an edit here.
 _GENERATION_DEADLINE_CEILING_SECONDS = 7200
 
 

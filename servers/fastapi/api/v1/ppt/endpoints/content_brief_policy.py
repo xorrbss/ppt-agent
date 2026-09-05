@@ -51,7 +51,9 @@ outline proceeds on the raw source) or ``skipped`` (the brief failed for a
 non-timeout reason the caller chose to tolerate). Non-timeout exceptions are
 propagated unchanged so each call site keeps its own 429 / retryability
 handling; the call site records ``skipped`` in that case via
-:func:`log_content_brief_skipped`.
+:func:`log_content_brief_skipped`. A fifth status, ``reused``, is produced
+only by ``services/authored_content_brief_checkpoint.py`` and means this
+attempt made no provider call at all.
 """
 
 from __future__ import annotations
@@ -70,12 +72,18 @@ from api.v1.ppt.endpoints.content_brief_operation_share import (
 
 LOGGER = logging.getLogger(__name__)
 
-BriefStatus = Literal["applied", "retry_applied", "timed_out_fallback", "skipped"]
+BriefStatus = Literal[
+    "applied", "retry_applied", "timed_out_fallback", "skipped", "reused"
+]
 
 BRIEF_STATUS_APPLIED: BriefStatus = "applied"
 BRIEF_STATUS_RETRY_APPLIED: BriefStatus = "retry_applied"
 BRIEF_STATUS_TIMED_OUT_FALLBACK: BriefStatus = "timed_out_fallback"
 BRIEF_STATUS_SKIPPED: BriefStatus = "skipped"
+#: This attempt made no provider call: a previous attempt of the same
+#: generation job already produced the brief and it was read back from its
+#: durable checkpoint (``services/authored_content_brief_checkpoint.py``).
+BRIEF_STATUS_REUSED: BriefStatus = "reused"
 
 BASE_TIMEOUT_ENV = "CONTENT_BRIEF_TIMEOUT_SECONDS"
 PER_KCHAR_TIMEOUT_ENV = "CONTENT_BRIEF_TIMEOUT_PER_KCHAR_SECONDS"
@@ -348,6 +356,7 @@ def log_content_brief_skipped(presentation_id: object, error: BaseException) -> 
 __all__ = [
     "BRIEF_STATUS_APPLIED",
     "BRIEF_STATUS_RETRY_APPLIED",
+    "BRIEF_STATUS_REUSED",
     "BRIEF_STATUS_SKIPPED",
     "BRIEF_STATUS_TIMED_OUT_FALLBACK",
     "BriefStatus",

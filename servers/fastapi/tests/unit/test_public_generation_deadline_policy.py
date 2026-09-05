@@ -1,8 +1,8 @@
 """Slide-count scaled public generation deadline contract.
 
-Covers the pure formula boundaries, the deadline actually pinned by v3
+Covers the pure formula boundaries, the deadline actually pinned by v4
 admission, the fact that retry/resume never re-grants a whole budget, and the
-untouched fixed budget of the already-pinned v1/v2 policies.
+untouched fixed budget of the already-pinned v1/v2/v3 policies.
 """
 
 from __future__ import annotations
@@ -69,12 +69,16 @@ TABLES = [
 
 LEGACY_FIXED_DEADLINE_SECONDS = 900
 
-# The ceiling column the v3 policy row was migrated with.  It is NOT
-# ``PUBLIC_GENERATION_DEADLINE_MAX_SECONDS`` any more: admission takes
-# ``min(policy ceiling, formula)``, so raising the code clamp alone does not
-# lift the ceiling a deployed database already pins.  See the module note on
-# ``test_v3_policy_row_ceiling_still_caps_large_decks``.
+# The ceiling column the v3 policy row was migrated with.  It is frozen at the
+# code clamp of the day and must stay that way: admission takes ``min(policy
+# ceiling, formula)``, so this row caps generation at 7200 s forever.  The
+# default policy version therefore had to move to a new row, not be edited.
 V3_POLICY_ROW_CEILING_SECONDS = 7200
+
+# The ceiling column the v4 policy row carries.  It tracks the code clamp, and
+# ``tests/unit/test_public_policy_v4_ceiling.py`` fails the moment the migrated
+# row and the code constant diverge again.
+V4_POLICY_ROW_CEILING_SECONDS = PUBLIC_GENERATION_DEADLINE_MAX_SECONDS
 
 # Shipped token profile: one slide per call, one warm-up call, then two calls
 # per wave; a one-slide wave is budgeted at 60 + 80 s.
@@ -125,9 +129,9 @@ def _three_slide_calls(monkeypatch):
     monkeypatch.setenv("AUTHORED_BATCH_SLIDES_PER_CALL", "3")
 
 
-def test_public_default_policy_version_is_v3() -> None:
-    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v3"
-    assert PUBLIC_PHASE2_DEFAULT_POLICY_VERSION == "public-default/v3"
+def test_public_default_policy_version_is_v4() -> None:
+    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v4"
+    assert PUBLIC_PHASE2_DEFAULT_POLICY_VERSION == "public-default/v4"
 
 
 def test_wave_budget_scales_with_the_slides_one_call_returns(monkeypatch) -> None:
@@ -400,26 +404,25 @@ def test_stuck_job_ceiling_is_a_knob_that_no_realistic_deck_reaches(
     assert public_generation_deadline_seconds(24) == 60
 
 
-def test_v3_policy_row_ceiling_still_caps_large_decks() -> None:
-    """Admission takes ``min(policy ceiling, formula)`` -- and the row is 7200 s.
+def test_v4_policy_row_ceiling_lets_the_formula_decide_for_large_decks() -> None:
+    """Admission takes ``min(policy ceiling, formula)``; v4 raises the ceiling.
 
-    The formula now decides for every deck the code clamp admits, but the
-    ``public-default/v3`` row that production migrated in still pins 7200 s, so
-    the ceiling and not the formula decides from 40 slides up.  Closing that
-    needs a ``public-default/v4`` row plus a default-version flip, which is a
-    control-plane contract change and is deliberately not made here.
+    The v3 row was a mirror of the code clamp of the day, so once the clamp was
+    raised the smaller mirror won and decks from 40 slides up were silently cut
+    to 7200 s.  The v4 row carries the current clamp, so the formula decides for
+    every deck the policy admits -- including the 90- and 100-slide decks
+    production really does generate.
     """
 
     assert public_generation_deadline_seconds(39) == 7122
-    assert min(V3_POLICY_ROW_CEILING_SECONDS, public_generation_deadline_seconds(39)) == 7122
-
-    assert public_generation_deadline_seconds(40) == 7270
     assert min(V3_POLICY_ROW_CEILING_SECONDS, public_generation_deadline_seconds(40)) == (
         V3_POLICY_ROW_CEILING_SECONDS
     )
-    assert min(V3_POLICY_ROW_CEILING_SECONDS, public_generation_deadline_seconds(90)) == (
-        V3_POLICY_ROW_CEILING_SECONDS
-    )
+
+    for slide_count, expected in ((40, 7270), (90, 11170), (100, 11950)):
+        formula = public_generation_deadline_seconds(slide_count)
+        assert formula == expected
+        assert min(V4_POLICY_ROW_CEILING_SECONDS, formula) == formula
 
 
 def test_every_term_is_overridable_at_runtime(monkeypatch) -> None:
@@ -557,7 +560,7 @@ def _plan(slide_count: int):
     )
 
 
-def test_v3_admission_pins_scaled_deadline_and_retry_never_regrants_it(
+def test_v4_admission_pins_scaled_deadline_and_retry_never_regrants_it(
     monkeypatch, tmp_path: Path
 ) -> None:
     """A 35-slide job gets its budget once; requeue and replay keep that instant.
@@ -617,7 +620,7 @@ def test_v3_admission_pins_scaled_deadline_and_retry_never_regrants_it(
                 assert granted == 6810
                 assert granted == public_generation_deadline_seconds(35)
                 assert granted < PUBLIC_GENERATION_DEADLINE_MAX_SECONDS
-                assert admitted.policy_version == "public-default/v3"
+                assert admitted.policy_version == "public-default/v4"
                 operation = await session.get(WorkspaceOperation, operation_id)
                 assert _naive_utc(operation.deadline_at) == _naive_utc(admitted.deadline_at)
                 pinned_deadline = admitted.deadline_at
@@ -685,8 +688,8 @@ def test_v3_admission_pins_scaled_deadline_and_retry_never_regrants_it(
     asyncio.run(scenario())
 
 
-def test_v3_policy_migration_adds_row_without_touching_v1_and_v2(tmp_path: Path) -> None:
-    """The new row raises only the generation ceiling; older rows stay pinned."""
+def test_policy_migrations_add_rows_without_touching_older_ones(tmp_path: Path) -> None:
+    """Each new row raises only the generation ceiling; older rows stay pinned."""
 
     database_url = f"sqlite:///{(tmp_path / 'public-policy-v3.db').as_posix()}"
     config = Config()
@@ -718,19 +721,17 @@ def test_v3_policy_migration_adds_row_without_touching_v1_and_v2(tmp_path: Path)
             "public-default/v1",
             "public-default/v2",
             "public-default/v3",
+            "public-default/v4",
         }
         for legacy in ("public-default/v1", "public-default/v2"):
             assert rows[legacy]["generation_deadline_seconds"] == (
                 LEGACY_FIXED_DEADLINE_SECONDS
             )
         v3 = rows["public-default/v3"]
-        # KNOWN GAP.  The v3 row was migrated with the code clamp of the day
-        # (7200 s) and admission takes ``min(policy ceiling, formula)``, so
-        # raising ``PUBLIC_GENERATION_DEADLINE_MAX_SECONDS`` in code does not
-        # lift the ceiling a deployed database already pins.  Decks from about
-        # 40 slides up are still capped at 7200 s until a ``public-default/v4``
-        # row carrying the new ceiling is migrated in and made the default
-        # policy version.
+        # The v3 row stays exactly where it was migrated.  It is a frozen
+        # mirror of the code clamp of the day, and already-pinned operations
+        # depend on its policy digest, so the raised ceiling had to arrive as a
+        # new row rather than as an update to this one.
         assert v3["generation_deadline_seconds"] == V3_POLICY_ROW_CEILING_SECONDS
         assert V3_POLICY_ROW_CEILING_SECONDS < PUBLIC_GENERATION_DEADLINE_MAX_SECONDS
         assert v3["export_deadline_seconds"] == 600
@@ -739,5 +740,10 @@ def test_v3_policy_migration_adds_row_without_touching_v1_and_v2(tmp_path: Path)
             v3["retry_request_limit"]
             == rows["public-default/v2"]["retry_request_limit"]
         )
+        v4 = rows["public-default/v4"]
+        assert v4["generation_deadline_seconds"] == V4_POLICY_ROW_CEILING_SECONDS
+        assert v4["export_deadline_seconds"] == v3["export_deadline_seconds"]
+        assert v4["max_slides"] == v3["max_slides"]
+        assert v4["retry_request_limit"] == v3["retry_request_limit"]
     finally:
         engine.dispose()

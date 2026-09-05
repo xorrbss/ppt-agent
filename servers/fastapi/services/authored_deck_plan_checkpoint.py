@@ -27,7 +27,7 @@ from utils.datetime_utils import get_current_utc_datetime
 
 
 _T = TypeVar("_T")
-_STAGES = frozenset({"deck_plan", "chapter_plan", "header", "illustration"})
+_STAGES = frozenset({"deck_plan", "chapter_plan", "header", "illustration", "content_brief"})
 
 
 class AuthoredDeckPlanCheckpointError(RuntimeError):
@@ -134,8 +134,16 @@ async def commit_authored_deck_plan_checkpoint(
     stage: str,
     input_digest: str,
     payload: Mapping[str, object],
+    replace_on_input_change: bool = False,
 ) -> dict:
-    """Commit one output only while the producing generation lease is current."""
+    """Commit one output only while the producing generation lease is current.
+
+    ``replace_on_input_change`` overwrites a stored row whose input digest no
+    longer matches. Plan stages leave it off and stay fail-closed; a stage
+    whose loader treats a digest mismatch as a miss (and therefore recomputes)
+    must turn it on, or the row it can never reuse would block every later
+    commit for the same job.
+    """
 
     _validate_stage(stage)
     if not attempt_token:
@@ -193,6 +201,14 @@ async def commit_authored_deck_plan_checkpoint(
             )
         )
         if existing is not None:
+            if replace_on_input_change and existing.input_digest != input_digest:
+                existing.input_digest = input_digest
+                existing.output_digest = output_digest
+                existing.payload = normalized
+                existing.produced_attempt_number = attempt_number
+                session.add(existing)
+                await session.commit()
+                return normalized
             if (
                 existing.input_digest != input_digest
                 or existing.output_digest != output_digest
