@@ -16,7 +16,7 @@ from models.presentation_outline_model import PresentationOutlineModel
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import enable_web_grounding, get_llm_config
-from utils.llm_provider import get_model, is_codex_selected
+from utils.llm_provider import get_model
 from utils.llm_utils import (
     DisconnectChecker,
     get_generate_kwargs,
@@ -32,34 +32,35 @@ def get_system_prompt(
     include_title_slide: bool = True,
     include_table_of_contents: bool = False,
 ):
-    # Slide text budgets are CEILINGS. They were floors ("at least ~N words")
-    # until decks came back too dense to lay out: the authored pipeline hands
-    # this outline text to the slide author verbatim, so an over-long outline
-    # becomes a crowded slide with no later stage able to trim it.
+    # Slide text has a FLOOR again (2026-09-05). The 08-19 rewrite turned the
+    # "at least ~N words" floor into a per-bullet ceiling because dense outlines
+    # crowded slides under the frozen composition envelope. That envelope is now
+    # off by default (free composition, as before 08-28), and the measured effect
+    # of the ceiling plus the 08-28 low reasoning effort was an outline of 128
+    # characters per slide against ~600 on the same prompt on 08-18. A page that
+    # says a fifth as much cannot be laid out into a richer slide by any later
+    # stage, so the floor is stated as content — statements with a concrete fact
+    # each — and the schema ceiling stays the only hard upper bound.
     #
-    # The budget is stated as the SHAPE of the body — how many bullets, how long
-    # each may be — rather than as a total the model has to audit itself against.
-    # A per-slide total plus override wording ("hard ceiling", "outranks every
-    # other instruction", "in any language") made the model monitor its own
-    # drafts, and that self-correction leaked into the streamed content field.
-    # Per-bullet limits bound the same total without asking for the audit.
-    #
-    # Characters are the primary unit because one CJK "word" is an eojeol of
-    # three to four characters, so a word-only limit reads as several times more
-    # text in Korean than the same number does in English.
+    # Characters are quoted beside words because one CJK "word" is an eojeol of
+    # three to four characters, so a word-only figure reads as several times
+    # more text in Korean than the same number does in English.
     verbosity_budget = (
-        "at most 3 bullets, each at most about 24 characters (about 6 words)"
+        "at least about 80 words (Korean: about 250 characters) in 3 to 4 bullets"
         if verbosity == "concise"
         else (
-            "at most 6 bullets, each at most about 100 characters (about 25 words)"
+            "at least about 250 words (Korean: about 800 characters) in 5 to 7 bullets"
             if verbosity == "text-heavy"
-            else "at most 5 bullets, each at most about 60 characters (about 15 words)"
+            else "at least about 150 words (Korean: about 500 characters) in 4 to 6 bullets"
         )
     )
     verbosity_instruction = (
-        f"Each slide's body is a bullet list: {verbosity_budget}. The body is those bullets and "
-        "nothing else. Keep the concrete facts, figures, and named examples; leave out "
-        "restatement, adjectives, and connective prose that do not fit."
+        f"Each slide's body is a bullet list of {verbosity_budget}. Every bullet is a "
+        "full statement that carries one concrete fact, figure, date, named example, "
+        "or cause-and-effect detail, not a label or a heading. The body is those "
+        "bullets and nothing else: no restatement, no adjectives for their own "
+        "sake, no connective prose, and never padding or repetition to reach the "
+        "length — when the material honestly has less to say, say less."
     )
 
     title_slide_instruction = (
@@ -254,11 +255,11 @@ async def generate_ppt_outline(
             tools=([WebSearchTool()] if use_search_tool else None),
             stream=True,
         )
-        # A configured CODEX_REASONING_EFFORT remains authoritative. When it is
-        # absent, outline JSON is a bounded extraction task and should not inherit
-        # the provider's potentially long default reasoning mode.
-        if is_codex_selected() and "extra_body" not in generate_kwargs:
-            generate_kwargs["extra_body"] = {"reasoning": {"effort": "low"}}
+        # A configured CODEX_REASONING_EFFORT remains authoritative (applied by
+        # get_generate_kwargs). When it is absent the provider's default effort
+        # applies: the outline is the deck's only content-writing step, and
+        # forcing it low (08-28) was one half of the 600 -> 128 characters per
+        # slide collapse measured on 2026-09-05.
         async for event in stream_generate_events(
             client,
             disconnect_checker=disconnect_checker,

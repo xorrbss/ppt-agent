@@ -53,8 +53,6 @@ def test_generate_ppt_outline_streams_json_chunks_and_keeps_schema_shape():
     with patch.object(outline_module, "get_model", return_value="fake-model"), patch.object(
         outline_module, "get_client", return_value=object()
     ), patch.object(outline_module, "get_llm_config", return_value={}), patch.object(
-        outline_module, "is_codex_selected", return_value=True
-    ), patch.object(
         outline_module,
         "get_generate_kwargs",
         side_effect=lambda **kwargs: kwargs,
@@ -76,7 +74,9 @@ def test_generate_ppt_outline_streams_json_chunks_and_keeps_schema_shape():
     assert validated.slides[0].content.startswith("## Intro")
     assert captured_kwargs["disconnect_checker"] is is_disconnected
     assert captured_kwargs["inactivity_timeout_seconds"] == 120
-    assert captured_kwargs["extra_body"] == {"reasoning": {"effort": "low"}}
+    # 2026-09-05: the outline no longer forces low reasoning; with no
+    # CODEX_REASONING_EFFORT configured the provider default applies.
+    assert "extra_body" not in captured_kwargs
 
 
 def test_generate_ppt_outline_returns_http_exception_chunk_on_failure():
@@ -166,28 +166,30 @@ def test_presentation_outline_model_schema_validation_rejects_invalid_ai_payload
 
 
 @pytest.mark.parametrize(
-    ("verbosity", "bullets", "per_bullet"),
+    ("verbosity", "floor", "bullets"),
     [
-        ("concise", "at most 3 bullets", "about 24 characters"),
-        ("standard", "at most 5 bullets", "about 60 characters"),
-        (None, "at most 5 bullets", "about 60 characters"),
-        ("text-heavy", "at most 6 bullets", "about 100 characters"),
+        ("concise", "at least about 80 words", "3 to 4 bullets"),
+        ("standard", "at least about 150 words", "4 to 6 bullets"),
+        (None, "at least about 150 words", "4 to 6 bullets"),
+        ("text-heavy", "at least about 250 words", "5 to 7 bullets"),
     ],
 )
-def test_slide_text_budget_is_a_ceiling_per_verbosity(verbosity, bullets, per_bullet):
-    """Each verbosity caps slide text instead of setting a floor.
+def test_slide_text_has_a_content_floor_per_verbosity(verbosity, floor, bullets):
+    """Each verbosity states a floor of concrete content, not a per-bullet cap.
 
-    The authored pipeline renders this outline text verbatim, so a floor here
-    reached the slide as text no later stage could trim. The cap is expressed
-    per bullet: a self-audited per-slide total made the model narrate its own
-    corrections into the content field.
+    The 08-19 ceiling (at most N bullets of M characters) plus the 08-28 low
+    reasoning effort collapsed the outline from ~600 to 128 characters per
+    slide on the same prompt. With free composition back, the floor returns:
+    every bullet carries one concrete fact, and padding is forbidden by name.
     """
     system = outline_module.get_system_prompt(verbosity)
 
+    assert floor in system
     assert bullets in system
-    assert per_bullet in system
-    assert "The body is those bullets and nothing else." in system
-    assert "at least ~" not in system
+    assert "one concrete fact, figure, date, named example" in system
+    assert "never padding or repetition to reach the length" in system
+    budget_line = system.split("Each slide's body")[1].splitlines()[0]
+    assert "at most" not in budget_line
 
 
 @pytest.mark.parametrize(

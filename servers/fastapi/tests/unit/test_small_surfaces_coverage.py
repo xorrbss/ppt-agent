@@ -329,17 +329,19 @@ def test_dynamic_outline_and_structure_factories_validate():
 @pytest.mark.parametrize(
     ("verbosity", "min_length", "max_length"),
     [
-        ("concise", 50, 250),
-        ("standard", 150, 800),
-        (None, 150, 800),
-        ("text-heavy", 300, 2500),
+        ("concise", 1, 400),
+        ("standard", 1, 1000),
+        (None, 1, 1000),
+        ("text-heavy", 1, 2500),
     ],
 )
 def test_outline_content_bounds_follow_verbosity(verbosity, min_length, max_length):
-    """The decoder's floor must sit below what the outline prompt asks for.
+    """Only the ceiling follows verbosity; the floor is nominal.
 
-    A floor above the requested length leaves the model unable to close the
-    string on its own text, and it pads to the ceiling with whitespace.
+    A floor above what a page honestly says leaves the model unable to close
+    the string on its own text, and it pads to the floor — with whitespace at
+    a 300 floor (2026-08-19), with zero-width spaces at a 150 floor
+    (2026-09-05). One character means the slide exists, nothing more.
     """
     schema = get_presentation_outline_model_with_n_slides(
         2, verbosity

@@ -13,11 +13,18 @@ from models.presentation_structure_model import PresentationStructureModel
 #: the outline prompt asks for. A fixed 300-character floor under a prompt that
 #: asked for ~140 left the model unable to close the string on its own text, so
 #: it padded with whitespace until it hit the ceiling — every slide arriving as
-#: ~100 characters of content and 2,400 blanks.
+#: ~100 characters of content and 2,400 blanks. The lowered floors were still
+#: floors: on 2026-09-05 a 150-character minimum under a prompt whose honest
+#: agenda and section pages run 70–90 characters made the model append a
+#: "페이지: N" line and 600–700 zero-width spaces to reach it. A schema minimum
+#: cannot make a page say more, only pad, so the floor is now nominal (one
+#: character: the slide must exist) and the ceiling stays the real bound. The
+#: ceilings sit above the prompt's restored content floors (about 250 / 500 /
+#: 800 Korean characters) with room for a long bullet.
 _OUTLINE_CONTENT_BOUNDS = {
-    "concise": (50, 250),
-    "standard": (150, 800),
-    "text-heavy": (300, 2500),
+    "concise": (1, 400),
+    "standard": (1, 1000),
+    "text-heavy": (1, 2500),
 }
 
 
