@@ -7,6 +7,7 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, PlainTextResponse
 
 from api.error_handling import install_api_error_handling
+from api.health import router as HEALTH_ROUTER
 from api.lifespan import app_lifespan
 from api.middlewares import RuntimeSettingsContextMiddleware, SessionAuthMiddleware
 from api.v1.auth.router import API_V1_AUTH_ROUTER
@@ -48,6 +49,7 @@ if _public_v2_integration_profile is not None:
     )
 
 # Routers
+app.include_router(HEALTH_ROUTER)
 app.include_router(API_V1_PPT_ROUTER)
 app.include_router(API_V1_ASYNC_TASKS_ROUTER)
 app.include_router(API_V1_WEBHOOK_ROUTER)

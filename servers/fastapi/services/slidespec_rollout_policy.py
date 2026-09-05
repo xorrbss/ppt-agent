@@ -1,8 +1,33 @@
-"""Default-on policy with explicit rollback for SlideSpec quality repair.
+"""Rollout policy for SlideSpec quality repair, reached only from the manual
+quality review.
 
-This is intentionally independent from the Chat-first workspace rollout.  The
-The workspace owns write admission, while this module keeps operational
-rollback controls (kill switch, cohort, slide scope, and per-request legacy
+Scope, stated plainly: SlideSpec import/inspect/repair/publish runs only when
+a user triggers the quality review
+(``services/authored_quality_review_canonical.py``, which calls
+:func:`resolve_slidespec_repair_rollout` with ``opt_in=True``). The
+generation pipeline never invokes it -- no slide is repaired while a deck is
+being generated, and production has applied zero SlideSpec repairs outside a
+review (see ``docs/slidespec-production-quality-speed-analysis-20260805.md``).
+The knobs below therefore narrow or disable what that review may do; none of
+them turns SlideSpec on for generation.
+
+``SLIDESPEC_*`` knobs (env only; not in ``constants/settings_registry.json``):
+
+* ``SLIDESPEC_KILL_SWITCH`` -- ``true`` makes every review take the legacy
+  route, even an explicit opt-in.
+* ``SLIDESPEC_REPAIR_APPLY`` (default ``true``) -- ``false`` keeps a review
+  in shadow mode: repairs are computed and reported, never published.
+* ``SLIDESPEC_REPAIR_ALL_SLIDES`` (default ``true``) -- ``false`` limits a
+  review to the page-11 diagnostic slide (``PAGE_11_SLIDE_INDEX``).
+* ``SLIDESPEC_REPAIR_CANARY`` (default ``100``) -- percent of the stable
+  owner/presentation cohort a review may repair; ``true`` means 100.
+* ``SLIDESPEC_REPAIR_ROLLOUT_SALT`` -- salt for that cohort bucket.
+* ``SLIDESPEC_IMPORT_SHADOW`` / ``SLIDESPEC_REPAIR_SHADOW`` -- report-only
+  import/repair runs alongside a review that is not admitted to repair.
+
+This is intentionally independent from the Chat-first workspace rollout. The
+workspace owns write admission, while this module keeps operational rollback
+controls (kill switch, cohort, slide scope, and per-request legacy
 comparison) independent from that admission decision.
 """
 
@@ -95,11 +120,14 @@ def resolve_slidespec_repair_rollout(
     opt_in: bool,
     owner_id: object | None = None,
 ) -> SlideSpecRepairRolloutDecision:
-    """Resolve the default-on SlideSpec path with explicit rollback controls.
+    """Decide what a user-triggered quality review may do with SlideSpec.
 
-    SlideSpec repair and publication are active for all slides by default.
-    Deployments can narrow the cohort or slide scope for diagnosis, while
-    ``SLIDESPEC_KILL_SWITCH=true`` immediately restores the legacy path.
+    The only caller is the manual quality review, which passes
+    ``opt_in=True``; generation never calls this, so ``opt_in=False`` (and
+    therefore the legacy route) is what every non-review path would get.
+    Within a review, all slides are eligible by default; deployments can
+    narrow the cohort or slide scope for diagnosis, hold repairs in shadow
+    mode, or set ``SLIDESPEC_KILL_SWITCH=true`` to force the legacy path.
     """
 
     import_shadow = _enabled(_IMPORT_SHADOW)

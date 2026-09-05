@@ -272,6 +272,20 @@ export interface AuthoredHybridShapePayload {
     color: AuthoredHybridColor;
   }>;
   /**
+   * The strongest simple outer CSS box-shadow layer (no `inset`, at most two
+   * layers in the list) emitted as the owning shape's native DrawingML
+   * `<a:outerShdw>` effect and removed from the residual backplate.
+   */
+  outerShadow?: {
+    offsetXPx: number;
+    offsetYPx: number;
+    blurPx: number;
+    spreadPx: number;
+    color: AuthoredHybridColor;
+  };
+  /** CSS box-shadow layers that stay painted on the residual backplate. */
+  backplateShadowLayers?: number;
+  /**
    * A simple CSS outline reconstructed as an independent editable PowerPoint
    * shape outside the owning shape. Unlike a border, an outline does not
    * participate in the element's CSS box dimensions.

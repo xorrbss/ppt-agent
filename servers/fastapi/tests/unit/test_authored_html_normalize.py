@@ -207,3 +207,101 @@ def test_normalize_authored_html_never_matches_aria_hidden():
 def test_normalize_authored_html_handles_empty_and_non_string_input():
     assert normalize_authored_html("").normalizations == []
     assert normalize_authored_html("").html == ""
+
+
+# --- title-role <br> (QUAL-12, utils/authored_html_normalize_rules_title.py) ---
+
+
+def test_normalize_authored_html_replaces_br_inside_header_contract_title():
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<div data-header-part="title" data-qid="header.title">'
+        "디지털 전환<br>추진 전략<br/>2026</div>"
+        '<p data-qid="body">본문<br>줄바꿈은 유지</p>'
+        "</body></html>"
+    )
+
+    result = normalize_authored_html(html)
+
+    assert "디지털 전환 추진 전략 2026</div>" in result.html
+    assert "본문<br>줄바꿈은 유지" in result.html
+    assert result.normalizations == [
+        {"rule": "title_role_line_break_replaced", "detail": "div", "count": 2}
+    ]
+
+
+def test_normalize_authored_html_recognises_every_title_marker():
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        "<h1>커버<br>제목</h1>"
+        '<span data-semantic-role="title">시맨틱<br />제목</span>'
+        '<div data-qid="cover.title.text">큐아이디<br>제목</div>'
+        '<div data-qid="slide.title">슬라이드<br>제목</div>'
+        '<div data-qid="card.title">카드<br>제목</div>'
+        "</body></html>"
+    )
+
+    result = normalize_authored_html(html)
+
+    assert "<h1>커버 제목</h1>" in result.html
+    assert "시맨틱 제목</span>" in result.html
+    assert "큐아이디 제목</div>" in result.html
+    assert "슬라이드 제목</div>" in result.html
+    # `card.title` is not in the primary title vocabulary: untouched.
+    assert "카드<br>제목" in result.html
+    assert result.normalizations == [
+        {
+            "rule": "title_role_line_break_replaced",
+            "detail": "div, h1, span",
+            "count": 4,
+        }
+    ]
+
+
+def test_normalize_authored_html_title_br_swallows_surrounding_whitespace_once():
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<h2 data-qid="header.title">\n  첫 줄 <br>\n  둘째 줄\n</h2>'
+        "</body></html>"
+    )
+
+    result = normalize_authored_html(html)
+
+    assert '<h2 data-qid="header.title">\n  첫 줄 둘째 줄\n</h2>' in result.html
+
+
+def test_normalize_authored_html_title_br_handles_nested_title_once():
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<div data-header-part="title"><h1 data-qid="header.title">A<br>B</h1></div>'
+        "</body></html>"
+    )
+
+    result = normalize_authored_html(html)
+
+    assert '<h1 data-qid="header.title">A B</h1>' in result.html
+    assert result.normalizations == [
+        {"rule": "title_role_line_break_replaced", "detail": "div", "count": 1}
+    ]
+
+
+def test_normalize_authored_html_title_br_is_a_no_op_outside_titles():
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<p data-qid="body.text">첫 줄<br>둘째 줄</p><h1>제목</h1>'
+        "</body></html>"
+    )
+
+    result = normalize_authored_html(html)
+
+    assert result.html == html
+    assert result.normalizations == []
+
+
+def test_normalize_authored_html_title_br_leaves_unbalanced_documents_alone():
+    html = "<html><body><h1>A<br>B</div></body></html>"
+
+    result = normalize_authored_html(html)
+
+    assert result.html == html
+    assert result.normalizations == []

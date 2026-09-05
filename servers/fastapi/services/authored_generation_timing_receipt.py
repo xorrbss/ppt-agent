@@ -20,9 +20,11 @@ from services.authored_generation_timing_receipt_e4 import (
     optional_top_level_fields,
     provider_rate_profile as _e4_provider_rate_profile,
     quality_loop_variant_field,
-    stage_has_wall,
+    stage_cooldown_wait_seconds,
+    stage_optional_keys,
     stage_wall_millis,
 )
+from services.provider_call_timing import provider_call_timing_field
 from services.authored_quality_receipt_v2 import (
     QualityReceiptV2,
     _manifest_digest,
@@ -684,6 +686,9 @@ class GenerationAttemptTimingReceiptV2:
     #: safety gate. Empty on a succeeded attempt, and then absent from the
     #: serialized form for the same digest reason as the fields above.
     fit_summaries: tuple[dict[str, object], ...] = ()
+    #: SPEED-12: per-stage admission/executor/provider split of every provider
+    #: call (``services/provider_call_timing.py``); absent when no call ran.
+    provider_call_timing: dict[str, object] | None = None
     receipt_digest: str = ""
 
     def to_dict(self) -> dict[str, object]:
@@ -711,6 +716,7 @@ class GenerationAttemptTimingReceiptV2:
                 quality_loop_variant=self.quality_loop_variant,
                 flagged_slides=self.flagged_slides,
                 fit_summaries=self.fit_summaries,
+                provider_call_timing=self.provider_call_timing,
             ),
             "receiptDigest": self.receipt_digest,
         }
@@ -754,11 +760,11 @@ def _public_stage_receipts(
             raise ValueError("generation_attempt_v2_stages_invalid")
         state = raw.get("state")
         if state == "observed":
-            # ``wallMillis`` (D13/E4, authored_generation_timing_receipt_e4.py)
-            # is optional so a receipt written before it existed still loads.
-            has_wall = stage_has_wall(raw)
+            # ``wallMillis`` (D13/E4) and the authoring-only
+            # ``cooldownWaitSeconds`` (authored_generation_timing_receipt_e4.py)
+            # are optional so a receipt written before them still loads.
             required_keys = {"state", "startMillis", "endMillis", "durationMillis"}
-            if set(raw) != required_keys | ({"wallMillis"} if has_wall else set()):
+            if set(raw) != required_keys | stage_optional_keys(raw, stage_name=name):
                 raise ValueError("generation_attempt_v2_stages_invalid")
             start = _bounded_timing_ms(raw.get("startMillis"), f"{name}_start")
             end = _bounded_timing_ms(raw.get("endMillis"), f"{name}_end")
@@ -776,6 +782,9 @@ def _public_stage_receipts(
             )
             if wall is not None:
                 normalized["wallMillis"] = wall
+            cooldown_wait = stage_cooldown_wait_seconds(raw, stage_name=name)
+            if cooldown_wait is not None:
+                normalized["cooldownWaitSeconds"] = cooldown_wait
         elif state == "not_started" and set(raw) == {"state"}:
             normalized = {"state": "not_started"}
         elif (
@@ -876,6 +885,7 @@ def _attempt_receipt_v2_from_dict(
         ),
         flagged_slides=flagged_slide_entries(value.get("flaggedSlides")),
         fit_summaries=fit_summary_entries(value.get("fitSummary")),
+        provider_call_timing=provider_call_timing_field(value.get("providerCallTiming")),
         receipt_digest=_required_sha256(value.get("receiptDigest"), "receipt_digest"),
     )
     if receipt.receipt_digest != _attempt_receipt_v2_digest(receipt):
@@ -1087,6 +1097,7 @@ def create_generation_attempt_timing_receipt_v2(
     quality_loop_variant: str | None = None,
     flagged_slides: Sequence[Mapping[str, object]] = (),
     fit_summaries: Sequence[Mapping[str, object]] | Mapping[object, object] = (),
+    provider_call_timing: Mapping[str, object] | None = None,
 ) -> GenerationAttemptTimingReceiptV2:
     """Seal one v2 terminal receipt without prompt, content, or provider traces.
 
@@ -1219,6 +1230,7 @@ def create_generation_attempt_timing_receipt_v2(
         ),
         flagged_slides=flagged_slide_entries(flagged_slides),
         fit_summaries=fit_summary_entries(fit_summaries),
+        provider_call_timing=provider_call_timing_field(provider_call_timing),
     )
     if (outcome == "succeeded") != (receipt.terminal_error is None):
         raise ValueError("generation_attempt_timing_receipt_v2_invalid")

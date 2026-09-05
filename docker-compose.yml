@@ -142,6 +142,16 @@ services:
         NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: ${NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED:-false}
         NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI: ${NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI:-true}
         NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES: ${NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES:-true}
+    # nginx only proxies /api/v1/* to FastAPI; everything else (including
+    # /api/health) goes to Next.js (see nginx.conf). So this checks Next.js
+    # liveness through the full nginx front, not FastAPI's own /health or
+    # /ready (those are process-local; see servers/fastapi/api/health.py).
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     ports:
       # You can replace 5000 with any other port number of your choice to run Presenton on a different port number.
       - "5000:80"
@@ -154,6 +164,10 @@ services:
     environment:
       <<: *presenton-env
       TEMPLATE_V2_DEPLOYMENT_TIER: production
+      # Mem0 needs a local embedder/vector-store footprint the stock image
+      # does not provision; keep it off in production/production-gpu and let
+      # development opt in via the shared default above.
+      MEM0_ENABLED: "false"
       ENABLE_TEMPLATE_V2: ${ENABLE_TEMPLATE_V2:-false}
       TEMPLATE_V2_TEMPLATE_ALLOWLIST: ${TEMPLATE_V2_TEMPLATE_ALLOWLIST:-}
       TEMPLATE_V2_RIGHTS_APPROVER_ALLOWLIST: ${TEMPLATE_V2_RIGHTS_APPROVER_ALLOWLIST:-}
@@ -175,6 +189,16 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+    # nginx only proxies /api/v1/* to FastAPI; everything else (including
+    # /api/health) goes to Next.js (see nginx.conf). So this checks Next.js
+    # liveness through the full nginx front, not FastAPI's own /health or
+    # /ready (those are process-local; see servers/fastapi/api/health.py).
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     ports:
       # You can replace 5000 with any other port number of your choice to run Presenton on a different port number.
       - "5000:80"
@@ -186,6 +210,10 @@ services:
     environment:
       <<: *presenton-env
       TEMPLATE_V2_DEPLOYMENT_TIER: production
+      # Mem0 needs a local embedder/vector-store footprint the stock image
+      # does not provision; keep it off in production/production-gpu and let
+      # development opt in via the shared default above.
+      MEM0_ENABLED: "false"
       ENABLE_TEMPLATE_V2: ${ENABLE_TEMPLATE_V2:-false}
       TEMPLATE_V2_TEMPLATE_ALLOWLIST: ${TEMPLATE_V2_TEMPLATE_ALLOWLIST:-}
       TEMPLATE_V2_RIGHTS_APPROVER_ALLOWLIST: ${TEMPLATE_V2_RIGHTS_APPROVER_ALLOWLIST:-}
@@ -195,6 +223,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    # See the production healthcheck comment above: this reaches Next.js
+    # through nginx, not FastAPI's own /health or /ready directly.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     ports:
       - "5000:80"
       # Required for Codex OAuth callback (OpenAI redirects browser directly to localhost:1455)
@@ -220,6 +256,14 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+    # See the production healthcheck comment above: this reaches Next.js
+    # through nginx, not FastAPI's own /health or /ready directly.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     ports:
       - "5000:80"
       # Required for Codex OAuth callback (OpenAI redirects browser directly to localhost:1455)

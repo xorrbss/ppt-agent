@@ -78,6 +78,17 @@ jobs:
           npm run test:audit-release --prefix electron
           npm run audit:release --prefix electron
 
+      # Python counterpart of the npm audit above: audit exactly the locked,
+      # non-dev FastAPI tree that PyInstaller freezes. Any known vulnerability
+      # fails (same "info" severity floor as npm audit), and --strict also
+      # fails when a dependency cannot be audited instead of skipping it.
+      - name: Audit locked FastAPI production dependencies
+        working-directory: servers/fastapi
+        run: |
+          uv export --frozen --no-dev --no-emit-project --no-hashes \
+            --format requirements-txt --output-file requirements-audit.txt
+          uvx pip-audit --strict --desc on --no-deps --requirement requirements-audit.txt
+
       - name: Test Electron runtime settings refresh contract
         working-directory: electron
         run: npm run test:runtime-settings-refresh

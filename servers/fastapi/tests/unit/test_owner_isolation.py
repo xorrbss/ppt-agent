@@ -15,6 +15,7 @@ from models.sql.public_artifact import PublicArtifact
 from models.sql.template_v2 import TemplateV2
 from models.sql.user import User
 from services import database as _database_events  # noqa: F401
+from services import database_owner_scope as _owner_scope_hooks
 
 
 def test_owned_queries_include_catalog_default_even_when_database_flag_is_false(
@@ -97,7 +98,7 @@ def test_owned_queries_include_catalog_default_even_when_database_flag_is_false(
             await session.commit()
 
         monkeypatch.setattr(
-            _database_events,
+            _owner_scope_hooks,
             "get_template_v2_default_template_id",
             lambda: "catalog-default",
         )

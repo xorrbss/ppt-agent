@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { getFastApiBaseUrl } from "@/lib/fastapi-internal";
+import { fetchTimeoutSignal } from "@/lib/fetch-timeout-signal";
 import { requireAdminApi } from "@/lib/server-auth-role";
 
 const canChangeKeys = process.env.CAN_CHANGE_KEYS !== "false";
+// Provider settings are a small JSON document; a save also validates keys
+// against the provider, which is why this is not a few seconds.
+const PROVIDER_SETTINGS_TIMEOUT_MS = 30_000;
 
 function immutableResponse() {
   return NextResponse.json(
@@ -27,6 +31,7 @@ async function forwardProviderSettings(
       },
       body,
       cache: "no-store",
+      signal: fetchTimeoutSignal(PROVIDER_SETTINGS_TIMEOUT_MS, request.signal),
     }
   );
   const payload = await response.text();

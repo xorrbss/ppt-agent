@@ -29,9 +29,13 @@ from models.sql.public_admission import (
 from models.sql.user import User
 from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
 from services.public_generation_deadline_policy import (
+    PUBLIC_GENERATION_DEADLINE_BASE_SECONDS,
     PUBLIC_GENERATION_DEADLINE_MAX_SECONDS,
+    PUBLIC_GENERATION_DEADLINE_MIN_SECONDS,
+    PUBLIC_GENERATION_DEADLINE_PER_WAVE_SECONDS,
     public_generation_deadline_seconds,
     public_generation_wave_count,
+    public_generation_wave_seconds,
 )
 from services.public_operation_admission import (
     PUBLIC_DEFAULT_POLICY_VERSION,
@@ -60,15 +64,38 @@ TABLES = [
 LEGACY_FIXED_DEADLINE_SECONDS = 900
 
 
-@pytest.fixture(autouse=True)
-def _token_rate_profile(monkeypatch):
-    """The scaled budgets below are the token profile's 3-slide, 1-then-2 shape.
+# Shipped token profile: one slide per call, one warm-up call, then two calls
+# per wave; a one-slide wave is budgeted at 60 + 80 s.
+TOKEN_ONE_SLIDE_WAVE_SECONDS = 140
+# The explicit three-slide shape the formula was calibrated on keeps its
+# five-minute wave.
+THREE_SLIDE_WAVE_SECONDS = 300
 
-    The profile now authors one slide per call by default, so the batch shape
-    these budgets were derived from is asked for explicitly.
+_PROFILE_KNOBS = (
+    "AUTHORED_BATCH_SLIDES_PER_CALL",
+    "AUTHORED_BATCH_WAVE_CONCURRENCY",
+    "AUTHORED_AUTHOR_CONCURRENCY",
+    "PUBLIC_GENERATION_DEADLINE_PER_SLIDE_SECONDS",
+    "PUBLIC_GENERATION_DEADLINE_CALL_OVERHEAD_SECONDS",
+)
+
+
+@pytest.fixture(autouse=True)
+def _shipped_token_rate_profile(monkeypatch):
+    """Every budget below starts from the shipped token profile defaults.
+
+    The deploying environment may widen waves or batch calls; the contract is
+    checked against the code defaults, and tests that need another shape ask
+    for it explicitly.
     """
 
     monkeypatch.setenv("AUTHORED_PROVIDER_RATE_PROFILE", "token")
+    for knob in _PROFILE_KNOBS:
+        monkeypatch.delenv(knob, raising=False)
+
+
+@pytest.fixture
+def _three_slide_calls(monkeypatch):
     monkeypatch.setenv("AUTHORED_BATCH_SLIDES_PER_CALL", "3")
 
 
@@ -77,6 +104,47 @@ def test_public_default_policy_version_is_v3() -> None:
     assert PUBLIC_PHASE2_DEFAULT_POLICY_VERSION == "public-default/v3"
 
 
+def test_wave_budget_scales_with_the_slides_one_call_returns(monkeypatch) -> None:
+    """A wave costs its slowest call, so the allowance follows ``slides_per_call``."""
+
+    assert public_generation_wave_seconds() == TOKEN_ONE_SLIDE_WAVE_SECONDS
+    monkeypatch.setenv("AUTHORED_BATCH_SLIDES_PER_CALL", "2")
+    assert public_generation_wave_seconds() == 220
+    monkeypatch.setenv("AUTHORED_BATCH_SLIDES_PER_CALL", "3")
+    assert public_generation_wave_seconds() == THREE_SLIDE_WAVE_SECONDS
+    assert PUBLIC_GENERATION_DEADLINE_PER_WAVE_SECONDS == THREE_SLIDE_WAVE_SECONDS
+
+
+@pytest.mark.parametrize(
+    ("slide_count", "expected_waves", "expected_seconds"),
+    [
+        (1, 1, 1200),
+        (3, 2, 1200),
+        (4, 3, 1320),
+        (10, 6, 1740),
+        (20, 11, 2440),
+        (35, 18, 3420),
+        (100, 51, 7200),
+    ],
+)
+def test_generation_deadline_scales_with_the_shipped_one_slide_token_waves(
+    slide_count: int, expected_waves: int, expected_seconds: int
+) -> None:
+    """One serial warm-up call, then two one-slide calls per wave, 140 s a wave."""
+
+    assert public_generation_wave_count(slide_count) == expected_waves
+    unclamped = (
+        PUBLIC_GENERATION_DEADLINE_BASE_SECONDS
+        + TOKEN_ONE_SLIDE_WAVE_SECONDS * expected_waves
+    )
+    assert expected_seconds == min(
+        PUBLIC_GENERATION_DEADLINE_MAX_SECONDS,
+        max(PUBLIC_GENERATION_DEADLINE_MIN_SECONDS, unclamped),
+    )
+    assert public_generation_deadline_seconds(slide_count) == expected_seconds
+
+
+@pytest.mark.usefixtures("_three_slide_calls")
 @pytest.mark.parametrize(
     ("slide_count", "expected_seconds"),
     [
@@ -90,7 +158,7 @@ def test_public_default_policy_version_is_v3() -> None:
         (100, 6300),
     ],
 )
-def test_generation_deadline_scales_with_three_slide_batch_waves(
+def test_generation_deadline_scales_with_explicit_three_slide_batch_waves(
     slide_count: int, expected_seconds: int
 ) -> None:
     """One serial warm-up call, then two calls per wave, five minutes a wave."""
@@ -98,6 +166,7 @@ def test_generation_deadline_scales_with_three_slide_batch_waves(
     assert public_generation_deadline_seconds(slide_count) == expected_seconds
 
 
+@pytest.mark.usefixtures("_three_slide_calls")
 def test_generation_deadline_wave_count_and_ceiling_are_bounded() -> None:
     assert public_generation_wave_count(1) == 1
     assert public_generation_wave_count(4) == 2
@@ -113,14 +182,50 @@ def test_generation_deadline_wave_count_and_ceiling_are_bounded() -> None:
 
 
 def test_generation_deadline_follows_the_api_profile_wave_shape(monkeypatch) -> None:
-    """Per-slide calls, five at a time: 20 slides are four waves."""
+    """Per-slide calls, five at a time: 20 slides are four one-slide waves."""
 
     monkeypatch.setenv("AUTHORED_PROVIDER_RATE_PROFILE", "api")
-    monkeypatch.delenv("AUTHORED_BATCH_SLIDES_PER_CALL", raising=False)
 
+    assert public_generation_wave_seconds() == TOKEN_ONE_SLIDE_WAVE_SECONDS
     assert public_generation_wave_count(5) == 1
     assert public_generation_wave_count(20) == 4
-    assert public_generation_deadline_seconds(20) == 900 + 300 * 4
+    assert public_generation_deadline_seconds(20) == 900 + 140 * 4
+
+
+def test_widening_the_wave_reduces_the_budget_for_the_same_deck(monkeypatch) -> None:
+    """The budget follows the resolved wave shape, never a constant one.
+
+    ``AUTHORED_BATCH_WAVE_CONCURRENCY`` widens the steady wave (the deploying
+    environment runs it at 5); the same deck then needs fewer waves and a
+    smaller budget.
+    """
+
+    narrow = public_generation_deadline_seconds(20)
+    assert public_generation_wave_count(20) == 11
+
+    monkeypatch.setenv("AUTHORED_BATCH_WAVE_CONCURRENCY", "5")
+
+    # The token profile keeps its serial warm-up call: 1 + ceil(19 / 5).
+    assert public_generation_wave_count(20) == 5
+    wide = public_generation_deadline_seconds(20)
+    assert wide == 900 + 140 * 5
+    assert wide < narrow
+
+
+def test_per_slide_and_call_overhead_overrides_reshape_the_wave(monkeypatch) -> None:
+    monkeypatch.setenv("PUBLIC_GENERATION_DEADLINE_PER_SLIDE_SECONDS", "100")
+    assert public_generation_wave_seconds() == 160
+
+    monkeypatch.setenv("PUBLIC_GENERATION_DEADLINE_CALL_OVERHEAD_SECONDS", "40")
+    assert public_generation_wave_seconds() == 140
+    assert public_generation_deadline_seconds(20) == 900 + 140 * 11
+
+    # A non-positive override falls back to the code default.  (A non-integer
+    # value is rejected earlier, when the runtime settings snapshot coerces
+    # registry integers, so it never reaches this policy.)
+    monkeypatch.setenv("PUBLIC_GENERATION_DEADLINE_PER_SLIDE_SECONDS", "0")
+    monkeypatch.setenv("PUBLIC_GENERATION_DEADLINE_CALL_OVERHEAD_SECONDS", "-5")
+    assert public_generation_wave_seconds() == TOKEN_ONE_SLIDE_WAVE_SECONDS
 
 
 def _policy(version: str, *, generation_deadline_seconds: int) -> PublicPolicyProfile:
@@ -233,7 +338,11 @@ def _plan(slide_count: int):
 def test_v3_admission_pins_scaled_deadline_and_retry_never_regrants_it(
     monkeypatch, tmp_path: Path
 ) -> None:
-    """A 35-slide job gets 50 minutes once; requeue and replay keep that instant."""
+    """A 35-slide job gets 57 minutes once; requeue and replay keep that instant.
+
+    Under the shipped token profile 35 one-slide calls are 18 waves:
+    900 + 140 * 18 = 3420 s, below the v3 ceiling, so the formula decides.
+    """
 
     # SQLite is used only as a deterministic contract fixture; PostgreSQL
     # authority is covered by the control-plane race gate.
@@ -282,7 +391,9 @@ def test_v3_admission_pins_scaled_deadline_and_retry_never_regrants_it(
                 granted = (
                     _naive_utc(admitted.deadline_at) - _naive_utc(admitted.queued_at)
                 ).total_seconds()
-                assert granted == 3000
+                assert granted == 3420
+                assert granted == public_generation_deadline_seconds(35)
+                assert granted < PUBLIC_GENERATION_DEADLINE_MAX_SECONDS
                 assert admitted.policy_version == "public-default/v3"
                 operation = await session.get(WorkspaceOperation, operation_id)
                 assert _naive_utc(operation.deadline_at) == _naive_utc(admitted.deadline_at)

@@ -4,15 +4,17 @@ import { useTranslations } from 'next-intl';
 import type { Slide } from '../../types/slide';
 import { useRef, type PointerEventHandler } from 'react';
 import { SlideThumbnailCard } from './SlideThumbnailCard';
+import type { FlaggedSlideBadge } from '../utils/flaggedSlides';
 interface SortableSlideProps {
     slide: Slide;
     index: number;
     selectedSlide: number;
     onSlideClick: (index: any) => void;
     previewScale?: number;
+    flag?: FlaggedSlideBadge | null;
 }
 
-export function SortableSlide({ slide, index, selectedSlide, onSlideClick, previewScale }: SortableSlideProps) {
+export function SortableSlide({ slide, index, selectedSlide, onSlideClick, previewScale, flag }: SortableSlideProps) {
     const t = useTranslations('slideNavigation');
     const lastClickTime = useRef(0);
     const {
@@ -53,6 +55,7 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick, previ
             index={index}
             selected={selectedSlide === index}
             previewScale={previewScale}
+            flag={flag}
             style={style}
             onPointerDown={listeners?.onPointerDown as PointerEventHandler<HTMLDivElement> | undefined}
             dragHandleProps={{

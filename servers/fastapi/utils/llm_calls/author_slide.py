@@ -71,6 +71,7 @@ from utils.provider_idempotency import (
     provider_generate_call,
     supports_provider_idempotency,
 )
+from utils.llm_calls.author_call_spans import ProviderCallSpans, record_call_spans
 from services.authored_generation_performance import authored_provider_concurrency
 from utils.llm_utils import extract_text, get_generate_kwargs
 
@@ -1114,6 +1115,9 @@ async def author_slide_html(
         # Run the blocking call on the dedicated authoring pool (bounds concurrency to
         # AUTHOR_CONCURRENCY and keeps long authoring threads off the shared default
         # executor used by other LLM calls / exports).
+        # SPEED-12: the spans start before the rate slot so waiting (rate slot,
+        # cooldown, admission lease, executor queue) is split from provider time.
+        spans = ProviderCallSpans()
         await _wait_for_author_rate_slot()
         loop = asyncio.get_running_loop()
         nonlocal provider_call_attempt
@@ -1130,18 +1134,13 @@ async def author_slide_html(
                     client, provider_id=provider
                 ),
             ):
+                spans.mark_admitted()
                 enforce_llm_egress_policy()
                 generate_call = provider_generate_call(
-                    client,
-                    provider_id=provider,
-                    kwargs=generate_kwargs,
-                    idempotency_key=current_provider_idempotency_key(),
-                    outcome_scope="authored",
+                    client, provider_id=provider, kwargs=generate_kwargs,
+                    idempotency_key=current_provider_idempotency_key(), outcome_scope="authored",
                 )
-                response = await loop.run_in_executor(
-                    _AUTHOR_EXECUTOR,
-                    generate_call,
-                )
+                response = await loop.run_in_executor(_AUTHOR_EXECUTOR, spans.wrap(generate_call))
             return response
         except Exception as error:
             # A provider-declared cooldown is shared by all subsequent authored
@@ -1149,6 +1148,7 @@ async def author_slide_html(
             _register_author_rate_limit(error)
             raise
         finally:
+            record_call_spans(spans, response)
             # The receipt deliberately includes no prompt/reference/response body.
             await record_provider_call(
                 provider=provider,

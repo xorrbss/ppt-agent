@@ -6,6 +6,7 @@ from typing import Any, Optional
 from uuid import UUID
 
 from services.mem0_oss_memory import get_shared_mem0_client
+from utils.get_env import get_mem0_timeout_seconds, is_mem0_enabled
 
 
 LOGGER = logging.getLogger(__name__)
@@ -13,8 +14,9 @@ LOGGER = logging.getLogger(__name__)
 
 class Mem0PresentationMemoryService:
     def __init__(self):
-        self._enabled = self._to_bool(os.getenv("MEM0_ENABLED"), default=True)
+        self._enabled = is_mem0_enabled()
         self._runtime_enabled = True
+        self._timeout_seconds = get_mem0_timeout_seconds()
         self._top_k = self._to_int(os.getenv("MEM0_TOP_K"), default=8)
         self._max_context_chars = self._to_int(
             os.getenv("MEM0_MAX_CONTEXT_CHARS"), default=6000
@@ -22,12 +24,6 @@ class Mem0PresentationMemoryService:
         self._namespace_prefix = (
             os.getenv("MEM0_PRESENTATION_NAMESPACE_PREFIX") or "presentation"
         ).strip() or "presentation"
-
-    @staticmethod
-    def _to_bool(value: Optional[str], default: bool = False) -> bool:
-        if value is None:
-            return default
-        return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
     @staticmethod
     def _to_int(value: Optional[str], default: int) -> int:
@@ -86,7 +82,15 @@ class Mem0PresentationMemoryService:
                 )
 
         try:
-            await asyncio.to_thread(_add)
+            await asyncio.wait_for(
+                asyncio.to_thread(_add), timeout=self._timeout_seconds
+            )
+        except asyncio.TimeoutError:
+            LOGGER.warning(
+                "Mem0 add timed out after %.1fs for presentation_id=%s",
+                self._timeout_seconds,
+                presentation_id,
+            )
         except BaseException as exc:
             if not self._is_nonfatal_mem0_error(exc):
                 raise
@@ -201,7 +205,16 @@ class Mem0PresentationMemoryService:
                 )
 
         try:
-            response = await asyncio.to_thread(_search)
+            response = await asyncio.wait_for(
+                asyncio.to_thread(_search), timeout=self._timeout_seconds
+            )
+        except asyncio.TimeoutError:
+            LOGGER.warning(
+                "Mem0 search timed out after %.1fs for presentation_id=%s",
+                self._timeout_seconds,
+                presentation_id,
+            )
+            return ""
         except BaseException as exc:
             if not self._is_nonfatal_mem0_error(exc):
                 raise

@@ -20,6 +20,7 @@ const auditedFiles = [
   "app/(presentation-generator)/(dashboard)/templates/components/TemplatePanel.tsx",
   "app/(presentation-generator)/upload/components/AdvanceSettings.tsx",
   "app/(presentation-generator)/presentation/components/KeyboardShortcutsDialog.tsx",
+  "app/(presentation-generator)/presentation/components/FlaggedSlideBadge.tsx",
   "app/(presentation-generator)/presentation/components/SidePanel.tsx",
   "app/(presentation-generator)/presentation/components/SlideThumbnailCard.tsx",
   "app/(presentation-generator)/presentation/components/SortableSlide.tsx",

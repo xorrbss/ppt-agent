@@ -1,6 +1,7 @@
 """Webhook delivery: HMAC-SHA256 signs the exact posted bytes (never the shared
-secret), and a failed delivery (connection error OR non-2xx) is retried with
-backoff before giving up."""
+secret), a failed delivery (connection error OR non-2xx) is retried with
+backoff before giving up, and every attempt goes through the outbound URL
+guard (DNS pinned, redirects rejected, private targets never contacted)."""
 import asyncio
 import hashlib
 import hmac
@@ -9,6 +10,12 @@ import json
 from models.sql.webhook_subscription import WebhookSubscription
 from services import webhook_service as webhook_module
 from services.webhook_service import WebhookService
+
+_PUBLIC_ANSWER = "93.184.216.34"
+
+
+def _offline_resolver(_hostname: str, _port: int) -> tuple[str, ...]:
+    return (_PUBLIC_ANSWER,)
 
 
 class _FakeResponse:
@@ -26,9 +33,10 @@ class _FakeSession:
     """Captures posts; each post() consumes the next behaviour — a status int for
     a response, or an Exception instance to raise (simulating a connection error)."""
 
-    def __init__(self, captured: dict, behaviors: list):
+    def __init__(self, captured: dict, behaviors: list, target):
         self._captured = captured
         self._behaviors = list(behaviors)
+        self._captured["target"] = target
 
     async def __aenter__(self):
         return self
@@ -36,8 +44,8 @@ class _FakeSession:
     async def __aexit__(self, *exc):
         return False
 
-    def post(self, url, data=None, headers=None):
-        self._captured.update(url=url, data=data, headers=headers)
+    def post(self, url, data=None, headers=None, **kwargs):
+        self._captured.update(url=url, data=data, headers=headers, post_kwargs=kwargs)
         self._captured["attempts"] = self._captured.get("attempts", 0) + 1
         behavior = self._behaviors.pop(0) if self._behaviors else 200
         if isinstance(behavior, Exception):
@@ -50,15 +58,20 @@ async def _no_sleep(_seconds):
 
 
 def _send(sub: WebhookSubscription, data: dict, behaviors=(200,)) -> dict:
-    captured: dict = {}
-    original_session = webhook_module.aiohttp.ClientSession
+    captured: dict = {"attempts": 0}
+    original_build = webhook_module._build_session
+    original_resolver = webhook_module._resolver
     original_sleep = webhook_module.asyncio.sleep
-    webhook_module.aiohttp.ClientSession = lambda: _FakeSession(captured, behaviors)
+    webhook_module._build_session = lambda target: _FakeSession(
+        captured, behaviors, target
+    )
+    webhook_module._resolver = _offline_resolver
     webhook_module.asyncio.sleep = _no_sleep  # don't actually wait out the backoff
     try:
         asyncio.run(WebhookService.send_request_to_webhook(sub, data))
     finally:
-        webhook_module.aiohttp.ClientSession = original_session
+        webhook_module._build_session = original_build
+        webhook_module._resolver = original_resolver
         webhook_module.asyncio.sleep = original_sleep
     return captured
 
@@ -120,3 +133,31 @@ def test_webhook_succeeds_first_try_makes_one_attempt():
     )
     captured = _send(sub, {"x": 1}, behaviors=[200])
     assert captured["attempts"] == 1
+
+
+def test_webhook_posts_over_pinned_session_without_following_redirects():
+    sub = WebhookSubscription(
+        url="https://example.test/hook", secret=None, event="ppt.done"
+    )
+    captured = _send(sub, {"x": 1}, behaviors=[200])
+
+    assert captured["target"].hostname == "example.test"
+    assert captured["target"].resolved_ips == frozenset({_PUBLIC_ANSWER})
+    assert captured["post_kwargs"]["allow_redirects"] is False
+
+
+def test_webhook_redirect_is_denied_and_not_retried():
+    sub = WebhookSubscription(
+        url="https://example.test/hook", secret=None, event="ppt.done"
+    )
+    captured = _send(sub, {"x": 1}, behaviors=[302, 200, 200])
+    assert captured["attempts"] == 1
+
+
+def test_webhook_to_private_target_is_never_contacted():
+    sub = WebhookSubscription(
+        url="http://127.0.0.1:8000/hook", secret=None, event="ppt.done"
+    )
+    captured = _send(sub, {"x": 1}, behaviors=[200])
+    assert captured["attempts"] == 0
+    assert "target" not in captured

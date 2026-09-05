@@ -33,6 +33,46 @@ const runtimeTailwindTrace = [
   "node_modules/tailwindcss/lib/css/**/*",
 ];
 
+// Application security headers. The same set is emitted by nginx.conf and
+// scripts/presenton-local-proxy.mjs so direct :3000 access is covered too.
+// Frame embedding stays SAMEORIGIN: slide previews render in same-origin
+// sandboxed iframes and public share pages (/p/) may be embedded.
+export const securityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+];
+
+// Report-only CSP for application pages. Hosts are the ones the app actually
+// loads: the shared Tailwind runtime (components/runtime/TailwindCdnRuntime.tsx,
+// also used inside srcdoc preview iframes, which inherit this policy), Google
+// Fonts stylesheets referenced by deck themes, Mixpanel (utils/mixpanel.ts),
+// and https: images because deck images come from user-configured providers
+// (see images.remotePatterns). Next.js emits inline scripts/styles without a
+// nonce, and dev/HMR needs eval, so those stay allowed while report-only.
+export const appPageContentSecurityPolicyReportOnly = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https:",
+  "media-src 'self' data: blob:",
+  "connect-src 'self' https://api-eu.mixpanel.com https://fonts.googleapis.com https://fonts.gstatic.com",
+  "worker-src 'self' blob:",
+  "frame-src 'self' blob: data:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+].join("; ");
+
+// Renderer/export surfaces that already emit their own per-response CSP
+// (FastAPI share assets, workspace artifacts, the /pdf-maker export view) and
+// the proxied backend/static paths are left out so nothing is double-governed.
+export const appPageCspSource =
+  "/((?!pdf-maker|p/|api/|_next/|static/|app_data/|favicon\\.ico|.*\\.(?:png|svg|ico|txt|xml|webmanifest)$).*)";
+
 const nextConfig = {
   reactStrictMode: false,
   distDir: process.env.PRESENTON_TEST_NEXT_DIST_DIR || ".next-build",
@@ -112,6 +152,24 @@ const nextConfig = {
       {
         source: "/app_data/:path*",
         destination: `${fastApiUrl}/app_data/:path*`,
+      },
+    ];
+  },
+
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: securityHeaders,
+      },
+      {
+        source: appPageCspSource,
+        headers: [
+          {
+            key: "Content-Security-Policy-Report-Only",
+            value: appPageContentSecurityPolicyReportOnly,
+          },
+        ],
       },
     ];
   },

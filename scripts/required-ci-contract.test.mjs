@@ -236,13 +236,36 @@ test("chat-first deployment configuration is required by both CI providers", () 
     pipeline,
     /name: Run shared Next\.js CI Node suite[\s\S]*npm ci --prefix servers\/nextjs[\s\S]*npm run test:next-ci/u,
   );
+  // The shared Node suite must be in both required step lists; other required
+  // steps (e.g. the authored release-readiness check) may precede it.
   assert.match(
     pipeline,
-    /pull-requests:\s*\n\s*"\*\*":\s*\n\s*- step: \*nextjs-ci-node-contracts/u,
+    /pull-requests:\s*\n\s*"\*\*":\s*\n(?:\s*- step: \*[\w-]+\r?\n)*?\s*- step: \*nextjs-ci-node-contracts/u,
   );
   assert.match(
     pipeline,
-    /branches:\s*\n\s*main:\s*\n\s*- step: \*nextjs-ci-node-contracts/u,
+    /branches:\s*\n\s*main:\s*\n(?:\s*- step: \*[\w-]+\r?\n)*?\s*- step: \*nextjs-ci-node-contracts/u,
+  );
+});
+
+test("the packaging security gate audits the locked FastAPI dependency tree", () => {
+  const workflow = read(".github/workflows/cross-platform-packaging-security.yml");
+  const job = workflowJob(workflow, "package");
+  const npmAudit = job.indexOf("npm audit --omit=dev --audit-level=info");
+  const pipAudit = job.indexOf("name: Audit locked FastAPI production dependencies");
+  const firstBuild = job.indexOf("name: Build packaged Next.js resource");
+
+  assert.ok(npmAudit >= 0, "the npm production audit must remain");
+  assert.ok(pipAudit > npmAudit, "the Python audit must sit beside the npm audit");
+  assert.ok(firstBuild > pipAudit, "dependency audits must run before any build");
+  assert.match(job, /uv sync --frozen --directory servers\/fastapi/u);
+  assert.match(
+    job,
+    /uv export --frozen --no-dev --no-emit-project --no-hashes \\\n\s*--format requirements-txt --output-file requirements-audit\.txt/u,
+  );
+  assert.match(
+    job,
+    /uvx pip-audit --strict --desc on --no-deps --requirement requirements-audit\.txt/u,
   );
 });
 
@@ -1221,9 +1244,18 @@ test("presentation creation and outline generation retain one stable deck identi
     2,
     "both create admissions must derive idempotency from the stable deck id",
   );
+  // The outline hook once had four generation admissions; it now has a single
+  // authored admission. Assert the invariant (every admission carries the
+  // stable id) rather than a historical count.
+  const outlineAdmissions =
+    outline.match(/PresentationGenerationApi\.generate\w*\(\s*\{/gu)?.length ?? 0;
+  assert.ok(
+    outlineAdmissions >= 1,
+    "the outline hook must still admit generation through the typed API",
+  );
   assert.equal(
     outline.match(/presentation_id: presentationId,/gu)?.length,
-    4,
+    outlineAdmissions,
     "every outline generation admission must retain the stable deck id",
   );
 });

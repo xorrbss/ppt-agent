@@ -39,6 +39,7 @@ import {
 } from "../../_shared/blank-slide";
 import { MAX_NUMBER_OF_SLIDES } from "@/utils/presentationLimits";
 import { getThumbnailScrollTarget } from "../utils/slideScrollSync";
+import { flaggedSlideKey } from "../utils/flaggedSlides";
 
 interface SidePanelProps {
   selectedSlide: number;
@@ -61,11 +62,13 @@ const SidePanel = ({
   const pathname = usePathname();
   const thumbnailScrollRef = useRef<HTMLDivElement | null>(null);
 
-  const { presentationData, isStreaming } = useSelector(
+  const { presentationData, isStreaming, flaggedSlides } = useSelector(
     (state: RootState) => state.presentationGeneration,
   );
 
   const dispatch = useDispatch();
+  const flagFor = (slide: Slide, position: number) =>
+    flaggedSlides[flaggedSlideKey(slide, position)] ?? null;
 
   const lastSlideIndex = presentationData?.slides?.length
     ? presentationData.slides.length - 1
@@ -245,6 +248,7 @@ const SidePanel = ({
                     index={index}
                     selected={selectedSlide === index}
                     previewScale={previewScale}
+                    flag={flagFor(slide, index)}
                     onClick={() => onSlideClick(slide.index ?? index)}
                   />
                 ))
@@ -267,6 +271,7 @@ const SidePanel = ({
                           selectedSlide={selectedSlide}
                           onSlideClick={onSlideClick}
                           previewScale={previewScale}
+                          flag={flagFor(slide, index)}
                         />
                       ),
                     )}

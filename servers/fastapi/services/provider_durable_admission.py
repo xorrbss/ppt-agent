@@ -18,6 +18,10 @@ from services.provider_durable_runtime import (
     reserve_provider_call,
 )
 from services.provider_runtime_primitives import CancellationRequested
+from utils.get_env import (
+    get_provider_durable_runtime_required_env,
+    get_template_v2_deployment_tier_env,
+)
 from utils.owner_context import get_current_owner_id
 
 
@@ -27,8 +31,8 @@ _SERVICE_TOKEN = re.compile(r"[^a-z0-9._:-]+")
 
 
 def durable_provider_runtime_required() -> bool:
-    configured = (os.getenv("PROVIDER_DURABLE_RUNTIME_REQUIRED") or "").strip().lower()
-    tier = (os.getenv("TEMPLATE_V2_DEPLOYMENT_TIER") or "local").strip().lower()
+    configured = (get_provider_durable_runtime_required_env() or "").strip().lower()
+    tier = (get_template_v2_deployment_tier_env() or "local").strip().lower()
     return tier in _MANAGED or configured in _TRUE or (
         bool(configured) and configured not in {"0", "false", "no", "off"}
     )

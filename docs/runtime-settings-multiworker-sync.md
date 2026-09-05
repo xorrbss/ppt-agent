@@ -114,6 +114,17 @@ retried within a fixed budget so simultaneous local worker startup fails closed
 instead of running with mixed journal modes. SQLite is not a supported multi-host
 or shared network-filesystem cluster database.
 
+A separate, related knob governs provider call admission rather than settings
+sync: `PROVIDER_DURABLE_RUNTIME_REQUIRED` (`services/provider_durable_admission.py`)
+forces the durable, PostgreSQL-backed cross-process admission path (budgets,
+rate limits, and circuit state shared through the database) instead of
+best-effort in-process admission. A `TEMPLATE_V2_DEPLOYMENT_TIER` of `staging`
+or `production` already implies it. Any multi-process deployment — an API
+process plus one or more external workers sharing a PostgreSQL database — must
+set `PROVIDER_DURABLE_RUNTIME_REQUIRED=true` explicitly when the deployment
+tier is not itself `staging`/`production`, so that admission state is never
+silently local to one process.
+
 ## Failure and recovery
 
 - Initial authoritative load failure stops process startup instead of serving an

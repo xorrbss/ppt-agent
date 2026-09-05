@@ -1702,6 +1702,16 @@
     "slide": "{index}번 슬라이드",
     "reorder": "{index}번 슬라이드 순서 변경"
   },
+  "flaggedSlides": {
+    "badge": "검수 필요",
+    "ariaLabel": "{index}번 슬라이드 검수 필요: {reason}",
+    "reason": {
+      "author": "AI가 이 페이지를 작성하지 못해 자리표시자 페이지가 대신 들어갔습니다.",
+      "gate": "자동 검사에서 해결되지 않은 문제가 남았습니다({categories}). 페이지를 확인해 주세요.",
+      "gateUnknown": "자동 검사에서 해결되지 않은 문제가 남았습니다. 페이지를 확인해 주세요.",
+      "other": "생성 과정에서 표시된 페이지입니다: {reason}"
+    }
+  },
   "notFound": {
     "metadataTitle": "페이지를 찾을 수 없음 | Presenton",
     "imageAlt": "페이지를 찾을 수 없음",

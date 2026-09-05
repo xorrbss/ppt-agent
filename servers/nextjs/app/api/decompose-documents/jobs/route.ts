@@ -4,9 +4,13 @@ import {
   getFastApiAuthHeaders,
   getFastApiBaseUrl,
 } from "@/lib/fastapi-internal";
+import { fetchTimeoutSignal } from "@/lib/fetch-timeout-signal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// Queuing a job is a short admission call; the processing itself is polled.
+const START_JOB_TIMEOUT_MS = 30_000;
 
 function unavailableResponse() {
   return NextResponse.json(
@@ -45,6 +49,7 @@ export async function POST(request: NextRequest) {
         headers,
         body: await request.text(),
         cache: "no-store",
+        signal: fetchTimeoutSignal(START_JOB_TIMEOUT_MS, request.signal),
       },
     );
     const responseHeaders = new Headers({

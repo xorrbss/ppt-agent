@@ -197,6 +197,8 @@ from services.authored_quality_receipt_v2 import (
 from services.authored_quality_receipt_v3_pipeline import (
     create_generation_quality_receipt_v3,
 )
+from services.authored_font_signal import body_font_median_signal
+from services.authored_visual_review_evidence import visual_review_not_assessed, visual_review_outcome
 from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
     stamp_source_block_ids,
@@ -2656,18 +2658,18 @@ async def _generate_authored_presentation(
                 message="제한된 슬라이드 품질 게이트 복구 후에도 안전성 검증을 완료하지 못했습니다.",
             ) from error
     quality_gate_receipt = None
+    # QUAL-04: the receipt records what VQA did, not whether it was requested.
+    visual_review_evidence = visual_review_not_assessed()
     # A replay now produces authored slides, so the caller's own vision-QA choice
     # governs it like any other authored deck.
     if getattr(request, "vision_qa", False):
         pre_vqa_htmls = tuple(htmls)
         pre_vqa_pngs = tuple(pngs)
         pre_vqa_metrics_by_slide = {
-            index: (
-                revised_metrics_by_slide.get(index)
-                or get_cached_browser_metrics(pre_vqa_htmls[index])
-            )
+            index: (revised_metrics_by_slide.get(index) or get_cached_browser_metrics(pre_vqa_htmls[index]))
             for index in range(len(pre_vqa_htmls))
         }
+        fixed, accepted_fixed, vqa_repair_details = [], [], []
         vision_started = time.monotonic()
         with provider_usage_scope(
             job_id=generation_job.id if generation_job is not None else None,
@@ -2704,6 +2706,7 @@ async def _generate_authored_presentation(
                     "return_details": source_reflow,
                     "local_patch_only": source_reflow,
                     "capacity_briefs": capacity_briefs,
+                    "repair_details_sink": vqa_repair_details,
                     **vision_qa_kwargs,
                 }
                 vqa_provider_recovery_allowed: list[bool] | None = None
@@ -2800,14 +2803,16 @@ async def _generate_authored_presentation(
                             browser_metrics=selected_metrics,
                         )
                 fixed_count = len(accepted_fixed)
+                visual_review_evidence = visual_review_outcome(
+                    slide_count=len(htmls), fixed=fixed, accepted_fixed=accepted_fixed, repair_details=vqa_repair_details)
             except Exception as error:
                 traceback.print_exc()
+                visual_review_evidence = visual_review_outcome(
+                    slide_count=len(htmls), fixed=fixed, accepted_fixed=accepted_fixed,
+                    repair_details=vqa_repair_details, error=error)
                 if bool(request._source_content_authored_reflow):
                     if isinstance(error, AuthoredVqaResidualDomIssuesError):
-                        await _checkpoint_source_reflow_vqa_repairs(
-                            generation_job,
-                            error,
-                        )
+                        await _checkpoint_source_reflow_vqa_repairs(generation_job, error)
                     raise AuthoredStageError(
                         slide_index=0,
                         stage="render",
@@ -3024,6 +3029,8 @@ async def _generate_authored_presentation(
                 "checks": {name: all(bool(item.get("checks", {}).get(name)) for item in capacity_checks) for name in names},
                 "violations": [v for item in capacity_checks for v in item.get("violations", [])],
                 "flaggedSlideIndices": sorted(flagged_indices),
+                # QUAL-06: receipt-only typographic density signal, never a check.
+                "bodyFontMedianPx": body_font_median_signal(retained_final_metrics or ()),
             }
         else:
             capacity_evidence = {"browserObserved": False, "checks": {name: False for name in ("text", "title", "body", "font", "qid", "image")}}
@@ -3104,7 +3111,7 @@ async def _generate_authored_presentation(
             capacity_evidence=capacity_evidence,
             safety_evidence=safety_evidence,
             browser_metrics=tuple(retained_final_metrics or ()),
-            visual_review_passed=bool(request.vision_qa),
+            visual_review=visual_review_evidence,
             source_manifest=(request._source_content_manifest if source_reflow else None),
             source_readback=(
                 source_readback_receipt.as_dict()
@@ -3138,16 +3145,8 @@ async def _generate_authored_presentation(
             "requestedQualityProfile": quality_profile_id,
             "qualityReceiptV3": {
                 **quality_receipt_v3.to_dict(),
-                "qualityStatus": (
-                    "passed" if quality_receipt_v3.gate_passed else "blocked"
-                ),
-                "releaseReadiness": "blocked",
-                "promotionReady": False,
-                "phase7Evidence": {
-                    "powerPointReadback": "unavailable",
-                    "libreOfficeReadback": "unavailable",
-                    "canary": "not_run",
-                },
+                # QUAL-11: no constant release verdict here; the public V3 projection derives it.
+                "qualityStatus": ("passed" if quality_receipt_v3.gate_passed else "blocked"),
             },
             "releaseEligibility": {
                 "status": (
@@ -3446,7 +3445,7 @@ async def _generate_authored_presentation(
         await _cleanup_published_checkpoints(generation_job.id)
     LOGGER.info(
         "[authored] done id=%s slides=%d profile=%s provider=%s model=%s vision_qa=%s "
-        "vqa_fixed=%d blank_renders=%d total=%.1fs author=%.1fs "
+        "vqa_fixed=%d blank_renders=%d total=%.1fs author_sum=%.1fs "
         "illustrations=%.1fs render=%.1fs pipeline=%.1fs vision=%.1fs "
         "persist=%.1fs export=%.1fs publication=%.1fs",
         presentation_id,

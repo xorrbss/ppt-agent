@@ -1,7 +1,11 @@
 import { useCallback } from "react";
 import { useDispatch } from "react-redux";
 import { notify } from "@/components/ui/sonner";
-import { setPresentationData } from "@/store/slices/presentationGeneration";
+import {
+  setFlaggedSlides,
+  setPresentationData,
+} from "@/store/slices/presentationGeneration";
+import { deriveFlaggedSlideMap } from "../utils/flaggedSlides";
 import { DashboardApi } from '../../services/api/dashboard';
 import { clearHistory } from "@/store/slices/undoRedoSlice";
 import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
@@ -25,6 +29,9 @@ export const usePresentationData = (
 
       if (normalizedData) {
         dispatch(setPresentationData(normalizedData));
+        // The quality-gate receipt rides on the theme; key its flags by slide
+        // id now, before any in-session reorder renumbers the indices.
+        dispatch(setFlaggedSlides(deriveFlaggedSlideMap(normalizedData)));
         if (options?.clearHistory ?? true) {
           dispatch(clearHistory());
         }

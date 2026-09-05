@@ -3,6 +3,8 @@
  * source self-contained: Chrome executes it directly, without a bundler or a
  * dependency on the generated presentation-export runtime.
  */
+import { AUTHORED_HYBRID_SHADOW_BROWSER_SOURCE } from "./shadow-effect-browser.ts";
+
 export const AUTHORED_HYBRID_RESULT_MARKER_ID =
   "__presenton_authored_hybrid_result_v1__";
 
@@ -12,6 +14,8 @@ export const AUTHORED_HYBRID_COMPLETION_MARKER_NAME =
 export const AUTHORED_HYBRID_ELEMENT_ATTRIBUTE =
   "data-presenton-authored-hybrid-id";
 
+// The box-shadow mapping helpers are spliced in below; they are hoisted
+// function declarations that share this IIFE scope.
 export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
 (async function () {
   "use strict";
@@ -47,7 +51,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         return [rule.authored.trim().toLowerCase(), rule.powerpoint.trim()];
       })
   );
-
+${AUTHORED_HYBRID_SHADOW_BROWSER_SOURCE}
   function round(value) {
     return Math.round(value * 1000000) / 1000000;
   }
@@ -1124,7 +1128,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     }
     if (kind === "shape") {
       if (
-        ownStyle.boxShadow !== "none" ||
+        boxShadowUnmapped(ownStyle.boxShadow) ||
         (ownStyle.outlineStyle !== "none" &&
           hasPositiveCssComponent(ownStyle.outlineWidth))
       ) {
@@ -2433,31 +2437,6 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     return payload;
   }
 
-  function simpleBoxShadowLayers(style) {
-    if (!style.boxShadow || style.boxShadow === "none") return [];
-    return splitCssList(style.boxShadow).flatMap(function (shadow) {
-      if (/\binset\b/i.test(shadow)) return [];
-      var colorText = shadow.match(/rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}\b/i);
-      var color = colorText ? parseColor(colorText[0]) : null;
-      if (!color || color.alpha <= 0) return [];
-      var lengths = (shadow.match(/-?(?:\d+(?:\.\d+)?|\.\d+)px/g) || []).map(function (value) {
-        return number(value, 0);
-      });
-      if (lengths.length < 2) return [];
-      var blur = Math.max(0, lengths[2] || 0);
-      // A blurred shadow has no exact editable PowerPoint equivalent. Keep it
-      // in the fidelity backplate; solid shadows can be reconstructed exactly
-      // as independent editable shapes.
-      if (blur > 0.01) return [];
-      return [{
-        offsetXPx: round(lengths[0]),
-        offsetYPx: round(lengths[1]),
-        spreadPx: round(lengths[3] || 0),
-        color: color,
-      }];
-    });
-  }
-
   function roundedRectanglePoints(bounds, inputRadii) {
     var width = Math.max(0.01, bounds.width);
     var height = Math.max(0.01, bounds.height);
@@ -2649,6 +2628,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       fill = null;
       strokeWidthPt = round(Math.max(0.75, Math.min(bounds.width, bounds.height) * 0.75));
     }
+    var shadowPlan = boxShadowPlan(style.boxShadow);
     var payload = {
       shape: shape,
       fill: fill,
@@ -2664,7 +2644,9 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         : undefined,
       radiusPt: round(radiusPx * 0.75),
       borderLines: borderLines,
-      shadowLayers: simpleBoxShadowLayers(style),
+      shadowLayers: shadowPlan.shadowLayers,
+      outerShadow: shadowPlan.outerShadow,
+      backplateShadowLayers: shadowPlan.backplateShadowLayers || undefined,
       outline: outline,
       // CSS border triangles are materialized as independent editable
       // freeforms. Attaching another PowerPoint arrow to the host line would
@@ -2683,10 +2665,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
   function textContainerShape(element, bounds) {
     var style = getComputedStyle(element);
     if (!paintedBackground(style) && !hasBorder(style)) return null;
-    if (
-      (style.boxShadow && style.boxShadow !== "none") ||
-      nestedBlockContent(element)
-    ) {
+    if (boxShadowUnmapped(style.boxShadow) || nestedBlockContent(element)) {
       return null;
     }
     if (hasDecoratedDescendant(element)) return null;
@@ -3336,6 +3315,9 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
             style: run.style,
             script: run.script,
             breakKind: run.breakKind,
+            // The extractor's expected key carries the line index; omitting
+            // it here rejected every promoted text root at backplate capture.
+            lineIndex: run.lineIndex,
           };
         }),
         containerShape: observation.text.containerShape,
@@ -3439,9 +3421,12 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
           element.style.setProperty("background", "none", "important");
           element.style.setProperty("border-color", "transparent", "important");
           element.style.setProperty("outline", "none", "important");
-          // CSS shadows are intentionally not promoted. With the base paint
-          // removed, the shadow remains as a declared residual backplate layer
-          // without duplicating the native shape itself.
+          // A mapped outer shadow is a native effect on the container shape.
+          // Only residual (unmapped) layers stay on the backplate; with the
+          // base paint removed they cannot duplicate the native shape itself.
+          if (expected.suppressOuterShadow) {
+            element.style.setProperty("box-shadow", mappedResidualBoxShadow(getComputedStyle(element).boxShadow), "important");
+          }
         }
       } else if (kind === "image") {
         if (
@@ -3470,12 +3455,15 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
           element.style.setProperty("visibility", "hidden", "important");
         } else {
           // Remove only the editable CSS geometry. Descendant icons and
-          // unsupported decoration remain as transparent raster overlay paint,
-          // while the box shadow stays above the native card underneath it.
+          // unsupported decoration remain as transparent raster overlay paint.
+          // A mapped outer shadow becomes a native effect on the card, so only
+          // residual layers stay; an unmapped shadow stays whole on the backplate.
           element.style.setProperty("background", "none", "important");
           element.style.setProperty("border-color", "transparent", "important");
           element.style.setProperty("outline", "none", "important");
-          element.style.setProperty("box-shadow", "none", "important");
+          if (expected.suppressOuterShadow) {
+            element.style.setProperty("box-shadow", mappedResidualBoxShadow(getComputedStyle(element).boxShadow), "important");
+          }
           if (record.observation.shape.endArrow) {
             element.setAttribute("data-presenton-authored-hybrid-suppress-pseudo", "true");
           }

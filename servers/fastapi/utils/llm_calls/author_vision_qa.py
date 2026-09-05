@@ -567,6 +567,8 @@ async def revise_authored_deck(
     local_patch_only: bool = False,
     fail_on_residual_dom_issues: bool = False,
     capacity_briefs: Optional[Sequence[str]] = None,
+    # QUAL-04: receives every correction record even when ``return_details`` is off.
+    repair_details_sink: Optional[list[dict[str, Any]]] = None,
     provider_recovery_allowed: Optional[Sequence[bool]] = None,
     allow_patch_proposal_retry: bool = True,
 ) -> Any:
@@ -1218,6 +1220,8 @@ async def revise_authored_deck(
         if detail is not None:
             repair_details.append(detail)
         final_reports.append(final_report)
+    if repair_details_sink is not None:
+        repair_details_sink.extend(repair_details)
 
     if fail_on_residual_dom_issues:
         blocking_categories = {

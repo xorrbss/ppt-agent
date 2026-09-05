@@ -64,6 +64,26 @@ export interface DefaultTheme {
 }
 
 
+/**
+ * One row of the authored quality-gate receipt's ``flaggedSlides``: a slide the
+ * terminal fallback or author-stage rescue published remade-or-placeholder
+ * instead of failing the deck. ``index`` is the generation-time slide index.
+ */
+export interface AuthoredFlaggedSlideReceiptEntry {
+    index: number;
+    reason: string;
+    remakeAttempted?: boolean;
+    remakeOutcome?: string;
+    remakeCount?: number;
+    repeated?: boolean;
+}
+
+/** The persisted quality-gate receipt; only the keys the editor reads are typed. */
+export interface AuthoredQualityGateReceipt {
+    flaggedSlides?: AuthoredFlaggedSlideReceiptEntry[];
+    [key: string]: unknown;
+}
+
 export interface Theme {
     id: string;
     name: string;
@@ -73,6 +93,12 @@ export interface Theme {
     logo_url?: string; // preview url
     company_name?: string;
     data: ThemeData;
+    /**
+     * Authored decks persist their quality-gate receipt on the theme dict
+     * (``authored_presentation_publication.py``); it rides along with
+     * ``GET /presentation/{id}`` and is the editor's only source of flags.
+     */
+    authoredQualityGate?: AuthoredQualityGateReceipt;
 }
 export interface ThemeParams {
     id?: string;

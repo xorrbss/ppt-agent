@@ -135,6 +135,8 @@ _GETTER_KEYS = {
     "get_openai_compat_image_base_url_env": "OPENAI_COMPAT_IMAGE_BASE_URL",
     "get_openai_compat_image_api_key_env": "OPENAI_COMPAT_IMAGE_API_KEY",
     "get_openai_compat_image_model_env": "OPENAI_COMPAT_IMAGE_MODEL",
+    "get_provider_durable_runtime_required_env": "PROVIDER_DURABLE_RUNTIME_REQUIRED",
+    "get_template_v2_deployment_tier_env": "TEMPLATE_V2_DEPLOYMENT_TIER",
 }
 
 globals().update({name: _make_getter(key) for name, key in _GETTER_KEYS.items()})
@@ -411,3 +413,36 @@ def get_authored_batch_recovery_successes_env(
     return _optional_positive_int_setting(
         "AUTHORED_BATCH_RECOVERY_SUCCESSES", settings
     )
+
+
+def get_public_generation_deadline_per_slide_seconds_env(
+    settings: RuntimeSettings | None = None,
+) -> int | None:
+    """Explicit per-slide-in-call deadline allowance, or ``None`` for the default."""
+    return _optional_positive_int_setting(
+        "PUBLIC_GENERATION_DEADLINE_PER_SLIDE_SECONDS", settings
+    )
+
+
+def get_public_generation_deadline_call_overhead_seconds_env(
+    settings: RuntimeSettings | None = None,
+) -> int | None:
+    """Explicit fixed per-call deadline allowance, or ``None`` for the default."""
+    return _optional_positive_int_setting(
+        "PUBLIC_GENERATION_DEADLINE_CALL_OVERHEAD_SECONDS", settings
+    )
+
+
+def is_mem0_enabled(settings: RuntimeSettings | None = None) -> bool:
+    """Whether Mem0 presentation memory is enabled. On by default."""
+    parsed = parse_bool_or_none(get_setting_env("MEM0_ENABLED", settings))
+    return True if parsed is None else parsed
+
+
+def get_mem0_timeout_seconds(settings: RuntimeSettings | None = None) -> float:
+    """Per-call deadline in seconds for one Mem0 add/search call (default 15).
+
+    A call exceeding this is treated as a failed, non-fatal call by the
+    caller, the same as any other Mem0 runtime error.
+    """
+    return float(max(1, _int_setting("MEM0_TIMEOUT_SECONDS", 15, settings)))

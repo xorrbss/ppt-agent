@@ -31,6 +31,7 @@ import type { AuthoredHybridNativeChartSource } from "./native-chart.ts";
 import type { AuthoredHybridNativeTableSource } from "./native-table.ts";
 import { serializeNativeTableFrame } from "./native-table.ts";
 import { nativeCropSourceRectXml } from "./native-image-crop.ts";
+import { outerShadowEffectXml, outerShadowIsSafe } from "./shadow-effect.ts";
 
 export const EMU_PER_CSS_PX = 9_525;
 export const MIN_EDITABLE_FONT_SIZE_PT = 9;
@@ -453,12 +454,8 @@ function shapeIsSafe(shape: AuthoredHybridShapePayload): boolean {
   // Gradients are deliberately backplate-only. Reconstructing arbitrary CSS
   // gradient paint as OOXML is not part of the supported simple-shape contract.
   if (shape.gradient) return false;
-  if (
-    shape.shape === "freeform" &&
-    !normalizedPointsAreSafe(shape)
-  ) {
-    return false;
-  }
+  if (shape.shape === "freeform" && !normalizedPointsAreSafe(shape)) return false;
+  if (shape.outerShadow && !outerShadowIsSafe(shape.outerShadow)) return false;
   if (
     shape.borderLines?.some(
       (border) =>
@@ -1111,13 +1108,10 @@ export async function prepareNativeElements(
         });
       } else if (isEditableShapeCandidate(candidate)) {
         if (shapeIsSafe(candidate.shape)) {
-          // The simple base shape may be native, but CSS shadows remain in the
-          // residual fidelity backplate. Do not serialize a second shadow.
+          // Zero-blur shadow layers stay on the residual backplate; only the
+          // mapped `outerShadow` is serialized (as an effect, not a shape).
           const source = candidate.shape.shadowLayers?.length
-            ? {
-                ...candidate,
-                shape: { ...candidate.shape, shadowLayers: undefined },
-              }
+            ? { ...candidate, shape: { ...candidate.shape, shadowLayers: undefined } }
             : candidate;
           prepared.push({ kind: "shape", source });
         }
@@ -2304,7 +2298,7 @@ function gradientFillXml(
     .join("")}</a:gsLst><a:lin ang="${rotation(gradient.angleDeg - 90)}" scaled="1"/></a:gradFill>`;
 }
 
-function shapePaintXml(shape: AuthoredHybridShapePayload, opacity: number): string {
+function shapePaintXml(shape: AuthoredHybridShapePayload, opacity: number, bounds?: AuthoredHybridRect): string {
   const isLine = shape.shape === "line";
   const fill = isLine
     ? "<a:noFill/>"
@@ -2322,7 +2316,7 @@ function shapePaintXml(shape: AuthoredHybridShapePayload, opacity: number): stri
   const line = hasLine
     ? `<a:ln w="${Math.max(1, Math.round(shape.strokeWidthPt * EMU_PER_POINT))}"${shape.lineCap === "round" ? ' cap="rnd"' : ""}>${lineFill}${shape.dash ? `<a:prstDash val="${shape.dash}"/>` : ""}${shape.lineJoin === "round" ? "<a:round/>" : ""}${shape.endArrow ? `<a:tailEnd type="${shape.endArrow}" w="lg" len="lg"/>` : ""}</a:ln>`
     : "<a:ln><a:noFill/></a:ln>";
-  return `${fill}${line}`;
+  return `${fill}${line}${shape.outerShadow ? outerShadowEffectXml(shape.outerShadow, opacity, bounds) : ""}`;
 }
 
 function borderLineBounds(
@@ -2423,6 +2417,7 @@ function shadowShape(
       : 0,
     borderLines: undefined,
     shadowLayers: undefined,
+    outerShadow: undefined,
     outline: undefined,
     dash: undefined,
     endArrow: undefined,
@@ -2442,6 +2437,7 @@ function outlineShape(
     dash: outline.dash,
     borderLines: undefined,
     shadowLayers: undefined,
+    outerShadow: undefined,
     outline: undefined,
     endArrow: undefined,
   };
@@ -2636,6 +2632,7 @@ function transparentTextOverlayItem(
             stroke: null,
             strokeWidthPt: 0,
             borderLines: undefined,
+            outerShadow: undefined,
           },
         },
       },
@@ -2752,7 +2749,7 @@ export function serializePreparedNativeElement(
       ? shapeGeometryXml(container.shape, shapeBounds)
       : '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>';
     const paint = container
-      ? shapePaintXml(container.shape, element.opacity)
+      ? shapePaintXml(container.shape, element.opacity, shapeBounds)
       : "<a:noFill/><a:ln><a:noFill/></a:ln>";
     return `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="${name}"/>${container ? "<p:cNvSpPr/>" : '<p:cNvSpPr txBox="1"/>'}<p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(shapeBounds, element.rotationDeg)}${geometry}${paint}</p:spPr><p:txBody><a:bodyPr wrap="${wrap}" horzOverflow="${horizontalOverflow}" vertOverflow="${verticalOverflow}" anchor="${anchor}" lIns="${emu(insets.left)}" tIns="${emu(insets.top)}" rIns="${emu(insets.right)}" bIns="${emu(insets.bottom)}">${powerPointAutofitXml()}</a:bodyPr><a:lstStyle/>${paragraphsXml(element, options)}</p:txBody></p:sp>`;
   }
@@ -2778,7 +2775,7 @@ export function serializePreparedNativeElement(
         ? axisAlignedLineBounds(element.bounds.px, element.rotationDeg)
         : element.bounds.px;
       const paintShape = lineShapeForBounds(element.shape, element.bounds.px);
-      shapes.push(`<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId + idOffset}" name="${name}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(bounds, element.rotationDeg)}${shapeGeometryXml(paintShape, bounds)}${shapePaintXml(paintShape, element.opacity)}</p:spPr></p:sp>`);
+      shapes.push(`<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId + idOffset}" name="${name}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(bounds, element.rotationDeg)}${shapeGeometryXml(paintShape, bounds)}${shapePaintXml(paintShape, element.opacity, element.bounds.px)}</p:spPr></p:sp>`);
       idOffset += 1;
     }
     element.shape.borderLines?.forEach((border) => {

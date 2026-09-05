@@ -14,6 +14,10 @@ from services.authored_quality_receipt_v3_pipeline import (
     create_generation_quality_receipt_v3,
     project_persisted_authored_quality_receipt_v3,
 )
+from services.authored_visual_review_evidence import (
+    visual_review_not_assessed,
+    visual_review_outcome,
+)
 from services.authored_vnext.capability_registry import capability_metadata
 from models.authored_vnext.deck import (
     SceneEditability,
@@ -72,7 +76,7 @@ async def test_live_generation_binds_v2_to_evidence_bound_v3() -> None:
             {"capabilityRegistry": capability_metadata(consumer="chromium")},
             {"capabilityRegistry": capability_metadata(consumer="chromium")},
         ),
-        visual_review_passed=True,
+        visual_review=visual_review_outcome(slide_count=2, fixed=[1], accepted_fixed=[1]),
         source_manifest=None,
         source_readback=None,
     )
@@ -104,11 +108,85 @@ async def test_live_generation_binds_v2_to_evidence_bound_v3() -> None:
         for node in ast.walk(tree)
     )
     source = generation_path.read_text(encoding="utf-8")
-    assert '"promotionReady": False' in source
-    assert '"powerPointReadback": "unavailable"' in source
-    assert '"libreOfficeReadback": "unavailable"' in source
+    # QUAL-11: no constant release verdict or fabricated readback evidence is
+    # minted by generation; the public projection derives readiness.
+    assert '"promotionReady"' not in source
+    assert '"releaseReadiness"' not in source
+    assert '"phase7Evidence"' not in source
+    assert '"powerPointReadback"' not in source
+    assert '"libreOfficeReadback"' not in source
     assert '"performance_checker_evidence_not_persisted"' in source
     assert '"visual_checker_evidence_not_persisted"' in source
+    # QUAL-04: the V3 visual review is the actual VQA outcome.
+    assert "visual_review_passed=bool(request.vision_qa)" not in source
+    assert "visual_review=visual_review_evidence" in source
+
+
+async def _sealed_visual_review(visual_review, *, roles=("cover",)) -> tuple[object, dict]:
+    appended: list[dict] = []
+
+    class Port:
+        async def append_quality_receipt_v3(self, *, receipt, evidence) -> None:
+            appended.append(evidence)
+
+    receipt_v3 = await create_generation_quality_receipt_v3(
+        receipt_v2=_receipt_v2(),
+        job_id=None,
+        slide_roles=roles,
+        provider_attempt_counts=tuple(1 for _ in roles),
+        repaired_slide_indices=(),
+        capacity_evidence={"browserObserved": True, "checks": {"font": True}, "violations": []},
+        safety_evidence={"status": "passed", "residuals": []},
+        browser_metrics=tuple(
+            {"capabilityRegistry": capability_metadata(consumer="chromium")} for _ in roles
+        ),
+        visual_review=visual_review,
+        source_manifest=None,
+        source_readback=None,
+        persistence_port=Port(),
+        durability_profile="public",
+    )
+    return receipt_v3, appended[0]["visualReview"]
+
+
+@pytest.mark.anyio
+async def test_visual_review_not_run_is_not_assessed_and_never_passes() -> None:
+    receipt_v3, sealed = await _sealed_visual_review(visual_review_not_assessed())
+    assert sealed["status"] == "unavailable"
+    assert sealed["fullDeck"] is False
+    assert sealed["reasonCode"] == "visual_checker_not_run"
+    assert "visualReview.required_failed" in receipt_v3.blockers
+    # A T0 deck records the same absence as not required.
+    _receipt, t0 = await _sealed_visual_review(None, roles=("content",))
+    assert t0["status"] == "not_required" and t0["fullDeck"] is False
+
+
+@pytest.mark.anyio
+async def test_visual_review_run_without_residual_issues_passes_full_deck() -> None:
+    outcome = visual_review_outcome(
+        slide_count=1, fixed=[0], accepted_fixed=[0],
+        repair_details=[{"slide_index": 0, "succeeded": True}],
+    )
+    receipt_v3, sealed = await _sealed_visual_review(outcome)
+    assert sealed["status"] == "passed"
+    assert sealed["fullDeck"] is True
+    assert sealed["reviewedSlideCount"] == 1
+    assert sealed["fixedSlideCount"] == 1
+    assert sealed["residualSlideCount"] == 0
+    assert "visualReview.required_failed" not in receipt_v3.blockers
+
+
+@pytest.mark.anyio
+async def test_visual_review_run_with_residual_issues_fails() -> None:
+    outcome = visual_review_outcome(
+        slide_count=1, fixed=[0], accepted_fixed=[],
+        repair_details=[{"slide_index": 0, "succeeded": False}],
+    )
+    receipt_v3, sealed = await _sealed_visual_review(outcome)
+    assert sealed["status"] == "failed"
+    assert sealed["fullDeck"] is False
+    assert sealed["residualSlideIndices"] == [0]
+    assert "visualReview.required_failed" in receipt_v3.blockers
 
 
 @pytest.mark.anyio
@@ -128,7 +206,7 @@ async def test_live_source_generation_seals_occurrences_and_readback_registry() 
         browser_metrics=(
             {"capabilityRegistry": capability_metadata(consumer="chromium")},
         ),
-        visual_review_passed=False,
+        visual_review=None,
         source_manifest={
             "units": [
                 {
@@ -178,7 +256,7 @@ async def test_t1_without_visual_review_is_unavailable_and_blocks_quality() -> N
         browser_metrics=(
             {"capabilityRegistry": capability_metadata(consumer="chromium")},
         ),
-        visual_review_passed=False,
+        visual_review=None,
         source_manifest=None,
         source_readback=None,
     )
@@ -214,7 +292,7 @@ async def test_generation_seals_observed_prompt_scene_and_capacity_evidence_to_p
         browser_metrics=(
             {"capabilityRegistry": capability_metadata(consumer="chromium")},
         ),
-        visual_review_passed=False,
+        visual_review=None,
         source_manifest=None,
         source_readback=None,
         design_system_prompt=(
@@ -255,7 +333,7 @@ async def test_public_generation_without_persistence_port_is_blocked() -> None:
         capacity_evidence={"browserObserved": False, "checks": {}},
         safety_evidence={"status": "passed", "residuals": []},
         browser_metrics=(),
-        visual_review_passed=False,
+        visual_review=None,
         source_manifest=None,
         source_readback=None,
         durability_profile="public",
@@ -278,7 +356,7 @@ async def test_persisted_quality_gate_projects_only_verified_internal_receipts(t
         browser_metrics=(
             {"capabilityRegistry": capability_metadata(consumer="chromium")},
         ),
-        visual_review_passed=False,
+        visual_review=None,
         source_manifest=None,
         source_readback=None,
     )
@@ -366,7 +444,7 @@ async def test_persisted_quality_gate_projects_only_verified_internal_receipts(t
                 key: True for key in ("text", "title", "body", "font", "qid", "image")}, "violations": []},
             safety_evidence={"status": "passed", "residuals": []},
             browser_metrics=({"capabilityRegistry": capability_metadata(consumer="chromium")},),
-            visual_review_passed=False, source_manifest=None, source_readback=None,
+            visual_review=None, source_manifest=None, source_readback=None,
             design_system_prompt=capability_metadata(consumer="prompt")["registryDigest"],
             scene_envelope={"schemaVersion": "authored-deck-scene-envelope/v1",
                 "sceneDigest": "sha256:" + "1" * 64, "sourceDigest": "sha256:" + "2" * 64,

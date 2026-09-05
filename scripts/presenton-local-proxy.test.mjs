@@ -84,4 +84,37 @@ test("the browser blank-presentation path is proxied unchanged to FastAPI", asyn
       body: "",
     },
   ]);
+
+  // Same security header set as nginx.conf on every proxied response; HSTS
+  // only when a TLS terminator in front of the proxy reports https.
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("x-frame-options"), "SAMEORIGIN");
+  assert.equal(
+    response.headers.get("referrer-policy"),
+    "strict-origin-when-cross-origin",
+  );
+  assert.equal(
+    response.headers.get("permissions-policy"),
+    "camera=(), microphone=(), geolocation=()",
+  );
+  assert.equal(response.headers.get("strict-transport-security"), null);
+
+  const behindTls = await fetch(
+    `http://127.0.0.1:${proxyPort}/api/v1/ppt/presentation/create/blank`,
+    { method: "POST", headers: { "x-forwarded-proto": "https" } },
+  );
+  assert.equal(behindTls.status, 201);
+  await behindTls.arrayBuffer();
+  assert.equal(
+    behindTls.headers.get("strict-transport-security"),
+    "max-age=31536000; includeSubDomains",
+  );
+  assert.equal(behindTls.headers.get("x-frame-options"), "SAMEORIGIN");
+
+  // An unreachable upstream still gets the header set on the 502.
+  const unreachable = await fetch(`http://127.0.0.1:${proxyPort}/mcp`);
+  assert.equal(unreachable.status, 502);
+  await unreachable.arrayBuffer();
+  assert.equal(unreachable.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(unreachable.headers.get("x-frame-options"), "SAMEORIGIN");
 });

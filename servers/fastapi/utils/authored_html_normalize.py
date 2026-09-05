@@ -21,6 +21,9 @@ Whitelist (nothing more):
 * A ``hidden`` attribute on an element WITH bound source text only has the
   attribute stripped, so the gate re-measures the element instead of losing
   source content.
+* A ``<br>`` inside a title-role element is replaced with one space so a
+  Korean title wraps where the renderer puts it, not where the model forced
+  it (rule and title detection in ``utils/authored_html_normalize_rules_title.py``).
 * Anything else the admission policy would reject is left untouched --
   admission still rejects it, exactly as before this module existed.
 
@@ -58,6 +61,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 
+from utils.authored_html_normalize_rules_title import apply_title_line_break_rule
 from utils.renderer_markup_policy import VOID_TAGS
 
 #: Declarations normalised out of both inline ``style=""`` values and
@@ -170,6 +174,10 @@ def normalize_authored_html(html: str) -> NormalizedHtml:
                     "count": stripped_count,
                 }
             )
+
+    result, title_break_entry = apply_title_line_break_rule(result)
+    if title_break_entry is not None:
+        normalizations.append(title_break_entry)
 
     return NormalizedHtml(html=result, normalizations=normalizations)
 

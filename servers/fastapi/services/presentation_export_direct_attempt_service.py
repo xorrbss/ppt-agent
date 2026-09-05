@@ -731,7 +731,6 @@ async def complete_direct_fidelity_export_attempt(
     await session.refresh(attempt)
     return attempt, {
         "visualParity": "not-verified",
-        "promotionReady": False,
         "semanticBindingDigest": semantic_binding_digest,
         "atomicBinding": {
             "presentationId": str(presentation_id),

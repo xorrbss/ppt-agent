@@ -1016,3 +1016,139 @@ def test_v2_normalizations_reject_a_malformed_entry() -> None:
             terminal_error=None,
             normalizations=[{"rule": "x"}],
         )
+
+
+def _provider_call_timing_snapshot() -> dict:
+    from services.provider_call_timing import ProviderCallTimingLedger
+
+    ledger = ProviderCallTimingLedger()
+    for admission, executor, provider in ((100, 10, 1000), (300, 30, 3000)):
+        ledger.record(
+            "author",
+            {
+                "totalMillis": admission + executor + provider,
+                "admissionWaitMillis": admission,
+                "executorWaitMillis": executor,
+                "providerMillis": provider,
+                "outputTokensPerSecond": 25.5,
+            },
+        )
+    snapshot = ledger.snapshot()
+    assert snapshot is not None
+    return snapshot
+
+
+def test_v2_receipt_carries_the_per_stage_provider_call_timing_split(
+    tmp_path, monkeypatch
+) -> None:
+    """SPEED-12: the attempt receipt separates waiting from provider time per
+    stage, and the field survives the persisted round trip and its digest."""
+    monkeypatch.setenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path))
+    job_id = uuid.uuid4()
+    snapshot = _provider_call_timing_snapshot()
+    receipt = create_generation_attempt_timing_receipt_v2(
+        job_id=job_id,
+        attempt_id="private-call-timing-attempt",
+        attempt_number=1,
+        revision=0,
+        outcome="succeeded",
+        stage_observations={
+            "outline": {"startMillis": 0, "endMillis": 5, "durationMillis": 5},
+        },
+        executed_stages=("outline",),
+        queue_wait_ms=0,
+        wall_ms=5,
+        provider_usage=_v2_usage(),
+        retry_reason=None,
+        worker="workspace-generation-worker",
+        terminal_error=None,
+        provider_call_timing=snapshot,
+    )
+    payload = receipt.to_dict()
+    author = payload["providerCallTiming"]["stages"]["author"]
+    assert author["calls"] == 2
+    assert author["admissionWaitMillis"] == {"sum": 400, "p50": 100, "p90": 300}
+    assert author["executorWaitMillis"] == {"sum": 40, "p50": 10, "p90": 30}
+    assert author["providerMillis"] == {"sum": 4000, "p50": 1000, "p90": 3000}
+    assert author["outputTokensPerSecond"] == {"calls": 2, "p50": 25.5, "p90": 25.5}
+    assert load_generation_attempt_timing_receipts(job_id)[-1].to_dict() == payload
+    with pytest.raises(ValueError, match="generation_attempt_v2_provider_call_timing_invalid"):
+        _attempt_receipt_v2_from_dict(
+            {**payload, "providerCallTiming": {"schemaVersion": "bogus", "stages": {}}}
+        )
+
+
+def test_v2_terminal_attempt_timing_reads_the_usage_ledger_call_timing(
+    tmp_path, monkeypatch
+) -> None:
+    """The handler files the ledger the usage scope collected; a usage double
+    without one yields a receipt with the key absent."""
+    from services.presentation_generation_operation_handler import (
+        _provider_call_timing_snapshot as handler_snapshot,
+    )
+    from services.provider_usage_instrumentation import record_provider_call_timing
+
+    with provider_operation_usage_scope() as usage:
+        with provider_usage_scope(job_id=uuid.uuid4(), operation="authored_generation", stage="author"):
+            record_provider_call_timing(
+                {"totalMillis": 7, "admissionWaitMillis": 2, "executorWaitMillis": 1, "providerMillis": 4}
+            )
+    assert handler_snapshot(usage)["stages"]["author"]["calls"] == 1
+    assert handler_snapshot(SimpleNamespace(snapshot=lambda: {})) is None
+    assert handler_snapshot(ProviderOperationUsage()) is None
+
+
+def test_v2_legacy_receipt_without_provider_call_timing_still_loads() -> None:
+    stages = {
+        "outline": {"state": "observed", "startMillis": 0, "endMillis": 5, "durationMillis": 5},
+        "provider": {"state": "not_started"},
+        "authoring": {"state": "observed", "startMillis": 0, "endMillis": 5, "durationMillis": 5},
+        "repair": {"state": "not_started"},
+        "chromiumReview": {"state": "observed", "startMillis": 5, "endMillis": 10, "durationMillis": 5},
+        "publication": {"state": "observed", "startMillis": 10, "endMillis": 11, "durationMillis": 1},
+    }
+    payload = _v2_receipt_dict(stages, "private-legacy-call-timing")
+    receipt = _attempt_receipt_v2_from_dict(payload)
+    assert receipt.provider_call_timing is None
+    assert "providerCallTiming" not in receipt.to_dict()
+    assert receipt.to_dict() == payload
+
+
+def test_v2_authoring_stage_accepts_optional_cooldown_wait_seconds() -> None:
+    """The wave scheduler's ``cooldownWaitSeconds`` is accepted on the
+    ``authoring`` stage only, validated like ``wallMillis`` (float >= 0)."""
+    base = {
+        "outline": {"state": "observed", "startMillis": 0, "endMillis": 5, "durationMillis": 5},
+        "provider": {"state": "not_started"},
+        "authoring": {"state": "observed", "startMillis": 0, "endMillis": 5, "durationMillis": 5},
+        "repair": {"state": "not_started"},
+        "chromiumReview": {"state": "observed", "startMillis": 5, "endMillis": 10, "durationMillis": 5},
+        "publication": {"state": "observed", "startMillis": 10, "endMillis": 11, "durationMillis": 1},
+    }
+    with_cooldown = dict(base)
+    with_cooldown["authoring"] = {**base["authoring"], "wallMillis": 5, "cooldownWaitSeconds": 12.5}
+    receipt = _attempt_receipt_v2_from_dict(_v2_receipt_dict(with_cooldown, "private-cooldown-ok"))
+    assert receipt.to_dict()["stages"]["authoring"]["cooldownWaitSeconds"] == 12.5
+    assert receipt.to_dict()["stages"]["authoring"]["wallMillis"] == 5
+
+    zero = dict(base)
+    zero["authoring"] = {**base["authoring"], "cooldownWaitSeconds": 0}
+    assert _attempt_receipt_v2_from_dict(
+        _v2_receipt_dict(zero, "private-cooldown-zero")
+    ).to_dict()["stages"]["authoring"]["cooldownWaitSeconds"] == 0.0
+
+    negative = dict(base)
+    negative["authoring"] = {**base["authoring"], "cooldownWaitSeconds": -1.0}
+    with pytest.raises(ValueError, match="generation_timing_authoring_cooldown_wait_invalid"):
+        _attempt_receipt_v2_from_dict(_v2_receipt_dict(negative, "private-cooldown-negative"))
+
+    non_numeric = dict(base)
+    non_numeric["authoring"] = {**base["authoring"], "cooldownWaitSeconds": "12"}
+    with pytest.raises(ValueError, match="generation_timing_authoring_cooldown_wait_invalid"):
+        _attempt_receipt_v2_from_dict(_v2_receipt_dict(non_numeric, "private-cooldown-text"))
+
+    # Any other stage still rejects the key as unknown.
+    elsewhere = dict(base)
+    elsewhere["outline"] = {**base["outline"], "cooldownWaitSeconds": 1.0}
+    with pytest.raises(ValueError, match="generation_attempt_v2_stages_invalid"):
+        _attempt_receipt_v2_from_dict(_v2_receipt_dict(elsewhere, "private-cooldown-elsewhere"))

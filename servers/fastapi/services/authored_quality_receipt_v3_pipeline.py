@@ -16,6 +16,7 @@ from services.authored_quality_receipt_v2 import (
     create_quality_receipt_v3_from_v2,
     quality_receipt_manifest_path,
 )
+from services.authored_visual_review_evidence import seal_visual_review_evidence
 from services.authored_vnext.capability_registry import (
     CAPABILITY_REGISTRY_DIGEST,
     require_capability_metadata,
@@ -339,7 +340,7 @@ async def create_generation_quality_receipt_v3(
     capacity_evidence: Mapping[str, object],
     safety_evidence: Mapping[str, object],
     browser_metrics: Sequence[object],
-    visual_review_passed: bool,
+    visual_review: Mapping[str, object] | None,
     source_manifest: object | None,
     source_readback: object | None,
     design_system_prompt: object | None = None,
@@ -382,15 +383,10 @@ async def create_generation_quality_receipt_v3(
         item["repairApplied"] or str(item["role"]).lower() in {"cover", "closing", "last", "last_slide"}
         for item in slide_evidence
     ) else "T0"
-    # A caller that did not perform VQA has no visual-review evidence. It is
-    # only ``not_required`` for a T0 evaluation; risk-triggered tiers preserve
-    # the unavailable state so the V3 gate blocks rather than silently opting
-    # out.
-    visual_review_status = (
-        "passed"
-        if visual_review_passed
-        else ("not_required" if tier == "T0" else "unavailable")
-    )
+    # QUAL-04: ``visual_review`` is the actual VQA outcome
+    # (``services/authored_visual_review_evidence.py``); ``passed``/``fullDeck``
+    # can only come from a run that passed, never from the request flag.
+    visual_review_evidence = seal_visual_review_evidence(visual_review, tier=tier)
     profile = durability_profile or _durability_profile()
     scene_consumer = _sealed_scene_consumer(scene_envelope)
     sealed_scene_observed = scene_consumer["status"] == "passed"
@@ -484,10 +480,7 @@ async def create_generation_quality_receipt_v3(
         "providerCalls": provider_calls,
         "sourceContent": source_content,
         "slides": slide_evidence,
-        "visualReview": {
-            "status": visual_review_status,
-            "fullDeck": visual_review_passed,
-        },
+        "visualReview": visual_review_evidence,
         "sceneEvidence": (
             dict(_mapping(scene_envelope) or {}) if scene_envelope is not None else None
         ),

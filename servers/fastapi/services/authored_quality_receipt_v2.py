@@ -18,6 +18,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from services.authored_composition_policy import _normalized_capacity_owned_text
+from services.authored_font_signal import body_font_median_px
 
 
 def quality_receipt_root() -> Path:
@@ -696,10 +697,8 @@ def evaluate_capacity_browser_metrics(
         if (owns_text and (is_title_role or is_body_role)) or is_image_element:
             capacity_qids.append(qid)
         style = item.get("computed_style") if isinstance(item.get("computed_style"), Mapping) else {}
-        visible = (
-            item.get("css_visible", item.get("cssVisible", True)) is not False
-            and item.get("visibility", style.get("visibility", "visible")) not in {"hidden", "collapse"}
-        )
+        visible = item.get("css_visible", item.get("cssVisible", True)) is not False and (
+            item.get("visibility", style.get("visibility", "visible")) not in {"hidden", "collapse"})
         clipped = item.get("clipped", item.get("glyph_clipped", item.get("glyphClipped", False))) is True
         if owns_text and text and visible and not clipped:
             # Capacity counts each measured owner once, exactly as the author
@@ -748,7 +747,8 @@ def evaluate_capacity_browser_metrics(
         violations.append("qids:duplicate")
     qid_within_budget = not budget_enforced or len(capacity_qids) <= int(max_qids)
     checks = {"text": text_ok, "title": title_ok, "body": body_ok, "font": font_ok, "qid": bool(qids) and "" not in qids and qid_within_budget and len(qid_values) == len(set(qid_values)), "image": image_ok}
-    return {"browserObserved": True, "checks": checks, "visibleText": text_value, "violations": violations}
+    # ``bodyFontMedianPx`` is a receipt-only signal (QUAL-06), never a check.
+    return {"browserObserved": True, "checks": checks, "visibleText": text_value, "violations": violations, "bodyFontMedianPx": body_font_median_px(payload)}
 
 
 @dataclass(frozen=True, slots=True)

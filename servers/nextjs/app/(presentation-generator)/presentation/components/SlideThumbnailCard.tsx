@@ -3,6 +3,8 @@ import { GripVertical } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { Slide } from "../../types/slide";
 import { PresentationContentRender } from "../../components/PresentationContentRender";
+import { FlaggedSlideBadge } from "./FlaggedSlideBadge";
+import type { FlaggedSlideBadge as FlaggedSlideBadgeModel } from "../utils/flaggedSlides";
 
 interface SlideThumbnailCardProps extends React.HTMLAttributes<HTMLDivElement> {
   slide: Slide;
@@ -10,6 +12,8 @@ interface SlideThumbnailCardProps extends React.HTMLAttributes<HTMLDivElement> {
   selected: boolean;
   previewScale?: number;
   dragHandleProps?: React.ComponentPropsWithRef<"button">;
+  /** Set when the authored pipeline published this slide flagged for review. */
+  flag?: FlaggedSlideBadgeModel | null;
 }
 
 const SCALE = 0.061;
@@ -23,6 +27,7 @@ export const SlideThumbnailCard = forwardRef<
   selected,
   previewScale = SCALE,
   dragHandleProps,
+  flag = null,
   className = "",
   style,
   onClick,
@@ -88,6 +93,9 @@ export const SlideThumbnailCard = forwardRef<
             <PresentationContentRender slide={slide} />
           </div>
         </div>
+        {flag && (
+          <FlaggedSlideBadge badge={flag} slideNumber={index + 1} variant="thumbnail" />
+        )}
       </div>
 
       {dragHandleProps && (

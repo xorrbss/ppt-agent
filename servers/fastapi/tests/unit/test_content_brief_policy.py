@@ -1,0 +1,218 @@
+"""Unit tests for api.v1.ppt.endpoints.content_brief_policy (QUAL-07, SPEED-10).
+
+Covers the input-scaled timeout formula, the single reduced retry after a
+timeout, the timed-out fallback status, and that non-timeout failures are
+propagated so the call sites keep their own 429 / retryability handling."""
+
+import asyncio
+from types import SimpleNamespace
+
+import pytest
+
+from api.v1.ppt.endpoints import content_brief_policy as policy
+
+
+def _run(coroutine):
+    return asyncio.new_event_loop().run_until_complete(coroutine)
+
+
+# --- timeout formula ----------------------------------------------------------
+
+
+def test_timeout_formula_scales_with_input_and_caps():
+    formula = policy.ContentBriefTimeoutPolicy()
+
+    assert formula.timeout_for(0) == 45.0
+    assert formula.timeout_for(50_000) == 95.0
+    assert formula.timeout_for(135_000) == 180.0
+    assert formula.timeout_for(500_000) == 180.0
+    assert formula.timeout_for(-10) == 45.0
+
+
+def test_timeout_policy_reads_env_knobs_and_ignores_garbage(monkeypatch):
+    monkeypatch.setenv(policy.BASE_TIMEOUT_ENV, "30")
+    monkeypatch.setenv(policy.PER_KCHAR_TIMEOUT_ENV, "2")
+    monkeypatch.setenv(policy.MAX_TIMEOUT_ENV, "not-a-number")
+
+    formula = policy.content_brief_timeout_policy()
+
+    assert formula.base_seconds == 30.0
+    assert formula.per_kchar_seconds == 2.0
+    assert formula.max_seconds == policy.DEFAULT_MAX_TIMEOUT_SECONDS
+    assert formula.timeout_for(10_000) == 50.0
+
+
+def test_timeout_policy_max_never_drops_below_base(monkeypatch):
+    monkeypatch.setenv(policy.BASE_TIMEOUT_ENV, "90")
+    monkeypatch.setenv(policy.MAX_TIMEOUT_ENV, "10")
+
+    formula = policy.content_brief_timeout_policy()
+
+    assert formula.max_seconds == 90.0
+    assert formula.timeout_for(0) == 90.0
+
+
+def test_input_chars_counts_every_text_the_brief_reads():
+    assert policy.content_brief_input_chars("abc", "defgh", None) == 8
+    assert policy.content_brief_input_chars(None, None, "xy") == 2
+
+
+def test_reduced_context_keeps_the_head_at_half_length():
+    assert policy.reduced_brief_context("0123456789") == "01234"
+    assert policy.reduced_brief_context("") == ""
+    assert policy.reduced_brief_context(None) is None
+
+
+# --- run_content_brief_with_policy ---------------------------------------------
+
+
+def _brief(text: str):
+    return SimpleNamespace(to_prompt_context=lambda: text)
+
+
+def test_first_attempt_success_is_applied():
+    calls = []
+
+    async def fake_brief(*args):
+        calls.append(args)
+        return _brief("brief")
+
+    outcome = _run(
+        policy.run_content_brief_with_policy(
+            fake_brief,
+            content="topic",
+            language="Korean",
+            additional_context="ctx",
+            tone="formal",
+            verbosity="standard",
+            instructions=None,
+            presentation_id="p1",
+            policy=policy.ContentBriefTimeoutPolicy(base_seconds=5),
+        )
+    )
+
+    assert outcome.status == "applied"
+    assert outcome.attempts == 1
+    assert outcome.retry_timeout_seconds is None
+    assert outcome.brief.to_prompt_context() == "brief"
+    assert calls == [("topic", "Korean", "ctx", "formal", "standard", None)]
+    assert policy.merge_brief_context("ctx", outcome.brief) == "ctx\n\nbrief"
+    assert policy.merge_brief_context("", outcome.brief) == "brief"
+
+
+def test_timeout_then_retry_with_reduced_input_is_retry_applied():
+    calls = []
+
+    async def fake_brief(content, language, context, tone, verbosity, instructions):
+        calls.append((context, verbosity))
+        if len(calls) == 1:
+            await asyncio.sleep(10)
+        return _brief("second")
+
+    outcome = _run(
+        policy.run_content_brief_with_policy(
+            fake_brief,
+            content="topic",
+            language=None,
+            additional_context="0123456789",
+            tone=None,
+            verbosity="text-heavy",
+            instructions=None,
+            presentation_id="p2",
+            policy=policy.ContentBriefTimeoutPolicy(
+                base_seconds=0.05, per_kchar_seconds=0.0, max_seconds=1.0
+            ),
+        )
+    )
+
+    assert outcome.status == "retry_applied"
+    assert outcome.attempts == 2
+    assert outcome.brief.to_prompt_context() == "second"
+    assert calls == [("0123456789", "text-heavy"), ("01234", policy.RETRY_VERBOSITY)]
+    assert outcome.retry_timeout_seconds == pytest.approx(0.05)
+
+
+def test_retry_timeout_is_recomputed_from_the_reduced_input():
+    async def fake_brief(*_args):
+        await asyncio.sleep(10)
+
+    outcome = _run(
+        policy.run_content_brief_with_policy(
+            fake_brief,
+            content="",
+            language=None,
+            additional_context="x" * 100_000,
+            tone=None,
+            verbosity=None,
+            instructions=None,
+            policy=policy.ContentBriefTimeoutPolicy(
+                base_seconds=0.02, per_kchar_seconds=0.0004, max_seconds=5.0
+            ),
+        )
+    )
+
+    assert outcome.status == "timed_out_fallback"
+    assert outcome.brief is None
+    assert outcome.attempts == 2
+    assert outcome.timeout_seconds == pytest.approx(0.06)
+    assert outcome.retry_timeout_seconds == pytest.approx(0.04)
+
+
+def test_both_attempts_timing_out_is_timed_out_fallback():
+    attempts = 0
+
+    async def fake_brief(*_args):
+        nonlocal attempts
+        attempts += 1
+        await asyncio.sleep(10)
+
+    outcome = _run(
+        policy.run_content_brief_with_policy(
+            fake_brief,
+            content="topic",
+            language=None,
+            additional_context=None,
+            tone=None,
+            verbosity=None,
+            instructions=None,
+            presentation_id="p3",
+            policy=policy.ContentBriefTimeoutPolicy(base_seconds=0.05, max_seconds=0.05),
+        )
+    )
+
+    assert outcome.status == "timed_out_fallback"
+    assert outcome.brief is None
+    assert attempts == 2
+
+
+def test_non_timeout_failures_propagate_without_retry():
+    attempts = 0
+
+    async def fake_brief(*_args):
+        nonlocal attempts
+        attempts += 1
+        raise RuntimeError("provider down")
+
+    with pytest.raises(RuntimeError, match="provider down"):
+        _run(
+            policy.run_content_brief_with_policy(
+                fake_brief,
+                content="topic",
+                language=None,
+                additional_context=None,
+                tone=None,
+                verbosity=None,
+                instructions=None,
+                policy=policy.ContentBriefTimeoutPolicy(base_seconds=5),
+            )
+        )
+
+    assert attempts == 1
+
+
+def test_skipped_status_is_logged_with_the_presentation_id(caplog):
+    with caplog.at_level("INFO", logger=policy.LOGGER.name):
+        policy.log_content_brief_skipped("p4", ValueError("bad json"))
+
+    assert "status=skipped" in caplog.text
+    assert "presentation=p4" in caplog.text

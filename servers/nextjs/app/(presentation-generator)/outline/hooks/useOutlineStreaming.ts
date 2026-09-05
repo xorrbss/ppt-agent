@@ -16,10 +16,24 @@ export type OutlineEventSourceFactory = (url: string) => EventSource;
 
 type OutlineSlide = { content: string };
 
+/**
+ * Outcome of the Stage A content brief that grounded this outline
+ * (`content_brief_policy.py`). Absent on a replayed completion.
+ */
+export type OutlineBriefStatus =
+  | "applied"
+  | "retry_applied"
+  | "timed_out_fallback"
+  | "skipped";
+
 /** SSE frames emitted by `/api/outline-stream/{id}`. */
 type OutlineStreamEvent =
   | { type: "chunk"; chunk: string }
-  | { type: "complete"; presentation: { outlines: { slides: OutlineSlide[] } } }
+  | {
+      type: "complete";
+      presentation: { outlines: { slides: OutlineSlide[] } };
+      briefStatus?: OutlineBriefStatus;
+    }
   | { type: "closing" }
   | { type: "error"; detail?: string };
 

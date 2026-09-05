@@ -8,6 +8,7 @@ import type {
 } from "@/lib/presentation-profile";
 import { setNestedMediaValue } from "./presentationGenerationMedia";
 import type { PathContainer, SlideChart, SlideRecord } from "./presentationGenerationTypes";
+import type { FlaggedSlideMap } from "@/app/(presentation-generator)/presentation/utils/flaggedSlides";
 
 export interface PresentationData {
   id: string;
@@ -42,6 +43,12 @@ interface PresentationGenerationState {
   presentationData: PresentationData | null;
   isSlidesRendered: boolean;
   isLayoutLoading: boolean;
+  /**
+   * Slides the authored pipeline published flagged (D7 terminal fallback /
+   * author-stage rescue), keyed by slide id. Built once per load from the
+   * persisted quality-gate receipt so an in-session reorder keeps the badge.
+   */
+  flaggedSlides: FlaggedSlideMap;
 }
 
 const initialState: PresentationGenerationState = {
@@ -53,6 +60,7 @@ const initialState: PresentationGenerationState = {
   isStreaming: null,
   error: null,
   presentationData: null,
+  flaggedSlides: {},
 };
 
 const presentationGenerationSlice = createSlice({
@@ -86,6 +94,10 @@ const presentationGenerationSlice = createSlice({
     // Clear presentation data
     clearPresentationData: (state) => {
       state.presentationData = null;
+      state.flaggedSlides = {};
+    },
+    setFlaggedSlides: (state, action: PayloadAction<FlaggedSlideMap>) => {
+      state.flaggedSlides = action.payload;
     },
     clearOutlines: (state) => {
       state.outlines = [];
@@ -391,6 +403,7 @@ export const {
   clearOutlines,
   deleteSlideOutline,
   setPresentationData,
+  setFlaggedSlides,
   updateTitle,
   setOutlines,
   // slides operations

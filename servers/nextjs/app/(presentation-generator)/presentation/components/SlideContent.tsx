@@ -22,6 +22,8 @@ import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { addToHistory } from "@/store/slices/undoRedoSlice";
 import SlideScale, { ViewportCulledSlide } from "../../components/PresentationRender";
+import { FlaggedSlideBadge } from "./FlaggedSlideBadge";
+import { flaggedSlideKey } from "../utils/flaggedSlides";
 
 interface SlideContentProps {
   slide: any;
@@ -49,9 +51,10 @@ const SlideContent = ({
   const [isEditPopoverOpen, setIsEditPopoverOpen] = useState(false);
   const [isSpeakerPopoverOpen, setIsSpeakerPopoverOpen] = useState(false);
   const [editPrompt, setEditPrompt] = useState("");
-  const { presentationData, isStreaming } = useSelector(
+  const { presentationData, isStreaming, flaggedSlides } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
+  const flag = flaggedSlides[flaggedSlideKey(slide, index)] ?? null;
 
   // Use the centralized group layouts hook
 
@@ -132,6 +135,9 @@ const SlideContent = ({
       >
         {isStreaming && (
           <Loader2 className="w-8 h-8 absolute right-2 top-2 z-30 text-blue-800 animate-spin" />
+        )}
+        {flag && (
+          <FlaggedSlideBadge badge={flag} slideNumber={index + 1} variant="slide" />
         )}
         <div
           data-layout={slide.layout}

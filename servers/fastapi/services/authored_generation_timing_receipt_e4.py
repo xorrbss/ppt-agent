@@ -85,9 +85,39 @@ _FIT_SUMMARY_FIELDS = (
 )
 
 
+#: Optional key on the ``authoring`` stage only: seconds the wave scheduler
+#: spent idle in provider cooldown. Read here, written by the batch pipeline.
+STAGE_COOLDOWN_WAIT_KEY = "cooldownWaitSeconds"
+_COOLDOWN_WAIT_STAGES = frozenset({"authoring"})
+
+
 def stage_has_wall(raw: Mapping[str, object]) -> bool:
     """Whether one raw stage dict carries the optional wall span."""
     return STAGE_WALL_KEY in raw
+
+
+def stage_optional_keys(raw: Mapping[str, object], *, stage_name: str) -> set[str]:
+    """The optional keys this raw observed stage may carry in addition to the required ones."""
+    keys = {STAGE_WALL_KEY} if stage_has_wall(raw) else set()
+    if stage_name in _COOLDOWN_WAIT_STAGES and STAGE_COOLDOWN_WAIT_KEY in raw:
+        keys.add(STAGE_COOLDOWN_WAIT_KEY)
+    return keys
+
+
+def stage_cooldown_wait_seconds(
+    raw: Mapping[str, object], *, stage_name: str
+) -> float | None:
+    """Validate and return one stage's optional ``cooldownWaitSeconds``, or ``None``."""
+    if stage_name not in _COOLDOWN_WAIT_STAGES or STAGE_COOLDOWN_WAIT_KEY not in raw:
+        return None
+    value = raw.get(STAGE_COOLDOWN_WAIT_KEY)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"generation_timing_{stage_name}_cooldown_wait_invalid")
+    if not (float(value) >= 0.0 and float(value) < float("inf")):
+        raise ValueError(f"generation_timing_{stage_name}_cooldown_wait_invalid")
+    # Keep the writer's numeric type: the receipt digest is bound to the
+    # serialized form, and ``0`` and ``0.0`` do not serialize alike.
+    return value
 
 
 def stage_wall_millis(
@@ -300,9 +330,14 @@ def optional_top_level_fields(
     quality_loop_variant: str | None,
     flagged_slides: Sequence[Mapping[str, object]] = (),
     fit_summaries: Sequence[Mapping[str, object]] = (),
+    provider_call_timing: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """The receipt-level keys to splice into ``to_dict()``, only when set."""
     fields: dict[str, object] = {}
+    if provider_call_timing is not None:
+        # SPEED-12 (``services/provider_call_timing.py``): per-stage sums and
+        # percentiles of the admission/executor/provider spans of each call.
+        fields["providerCallTiming"] = dict(provider_call_timing)
     if provider_rate_profile is not None:
         fields["providerRateProfile"] = provider_rate_profile
     if normalizations:
@@ -317,6 +352,7 @@ def optional_top_level_fields(
 
 
 __all__ = [
+    "STAGE_COOLDOWN_WAIT_KEY",
     "STAGE_WALL_KEY",
     "fit_summary_entries",
     "flagged_slide_entries",
@@ -325,6 +361,8 @@ __all__ = [
     "optional_top_level_fields",
     "provider_rate_profile",
     "quality_loop_variant_field",
+    "stage_cooldown_wait_seconds",
     "stage_has_wall",
+    "stage_optional_keys",
     "stage_wall_millis",
 ]

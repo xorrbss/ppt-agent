@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import os
 import traceback
 import uuid
 import dirtyjson
@@ -9,6 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.v1.ppt.endpoints.content_brief_policy import (
+    BRIEF_STATUS_SKIPPED,
+    log_content_brief_skipped,
+    merge_brief_context,
+    run_content_brief_with_policy,
+)
 from models.presentation_outline_model import PresentationOutlineModel
 from models.sse_response import (
     SSECompleteResponse,
@@ -45,9 +50,6 @@ from utils.outline_citations import strip_outline_citations
 
 OUTLINES_ROUTER = APIRouter(prefix="/outlines", tags=["Outlines"])
 LOGGER = logging.getLogger(__name__)
-CONTENT_BRIEF_TIMEOUT_SECONDS = float(
-    os.getenv("CONTENT_BRIEF_TIMEOUT_SECONDS", "45")
-)
 
 
 @OUTLINES_ROUTER.get("/stream/{id}")
@@ -161,25 +163,27 @@ async def stream_outlines(
         yield SSEStatusResponse(
             status="Researching and organizing content..."
         ).to_string()
+        # The deadline scales with the input and times out into one reduced
+        # retry (content_brief_policy); `brief_status` travels on the
+        # complete event as `briefStatus`.
         outline_context = additional_context
+        brief_status = BRIEF_STATUS_SKIPPED
         try:
-            content_brief = await asyncio.wait_for(
-                generate_content_brief(
-                    presentation.content,
-                    presentation.language,
-                    additional_context,
-                    presentation.tone,
-                    presentation.verbosity,
-                    presentation.instructions,
-                ),
-                timeout=CONTENT_BRIEF_TIMEOUT_SECONDS,
+            brief_outcome = await run_content_brief_with_policy(
+                generate_content_brief,
+                content=presentation.content,
+                language=presentation.language,
+                additional_context=additional_context,
+                tone=presentation.tone,
+                verbosity=presentation.verbosity,
+                instructions=presentation.instructions,
+                presentation_id=presentation.id,
             )
-            brief_context = content_brief.to_prompt_context()
-            outline_context = (
-                f"{additional_context}\n\n{brief_context}".strip()
-                if additional_context
-                else brief_context
-            )
+            brief_status = brief_outcome.status
+            if brief_outcome.brief is not None:
+                outline_context = merge_brief_context(
+                    additional_context, brief_outcome.brief
+                )
         except HTTPException as error:
             detail = str(error.detail)
             if error.status_code == 429 or (
@@ -188,15 +192,10 @@ async def stream_outlines(
             ):
                 yield SSEErrorResponse(detail=detail).to_string()
                 return
+            log_content_brief_skipped(presentation.id, error)
             traceback.print_exc()
-        except asyncio.TimeoutError:
-            LOGGER.warning(
-                "Content brief generation timed out after %.1f seconds for "
-                "presentation %s; continuing with the source content",
-                CONTENT_BRIEF_TIMEOUT_SECONDS,
-                presentation.id,
-            )
-        except Exception:
+        except Exception as error:
+            log_content_brief_skipped(presentation.id, error)
             traceback.print_exc()
 
         presentation_outlines_text = ""
@@ -316,8 +315,15 @@ async def stream_outlines(
             presentation.outlines,
         )
 
-        yield SSECompleteResponse(
-            key="presentation", value=presentation.model_dump(mode="json")
+        yield SSEResponse(
+            event="response",
+            data=json.dumps(
+                {
+                    "type": "complete",
+                    "presentation": presentation.model_dump(mode="json"),
+                    "briefStatus": brief_status,
+                }
+            ),
         ).to_string()
 
     return StreamingResponse(inner(), media_type="text/event-stream")

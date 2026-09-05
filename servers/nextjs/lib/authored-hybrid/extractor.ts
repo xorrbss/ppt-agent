@@ -27,6 +27,7 @@ import {
 import sharp from "sharp";
 import { preflightTrustedSelfContainedAuthoredHtml } from "./security.ts";
 import { authoredRendererIsolationPolicy } from "./renderer-isolation.ts";
+import { promotedElementEmitsOuterShadow } from "./shadow-effect.ts";
 
 export interface AuthoredHybridExtractionOptions
   extends AuthoredHybridChromeOptions {
@@ -301,9 +302,8 @@ function expectedPromotedElements(
       // Suppress glyph paint only. Hiding a styled text container wholesale can
       // also hide inline SVG/icon descendants that must remain on the backplate.
       suppressWholeElement: rasterDeclaredChart || rasterDeclaredTable,
-      suppressContainerPaint: Boolean(
-        "text" in element && element.text?.containerShape
-      ),
+      suppressContainerPaint: Boolean("text" in element && element.text?.containerShape),
+      suppressOuterShadow: promotedElementEmitsOuterShadow(element),
     };
   });
 }

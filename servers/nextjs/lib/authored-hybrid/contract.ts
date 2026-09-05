@@ -23,6 +23,7 @@ import {
   AUTHORED_SLIDE_WIDTH_IN,
   rectPxToBounds,
 } from "./units.ts";
+import { outerShadowIsSafe } from "./shadow-effect.ts";
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const HEX_COLOR_PATTERN = /^[A-F0-9]{6}$/;
@@ -104,10 +105,7 @@ function assertStringArray(value: unknown, label: string): asserts value is stri
 function assertColor(value: unknown, label: string): void {
   invariant(typeof value === "object" && value !== null, `${label} is missing`);
   const color = value as Record<string, unknown>;
-  invariant(
-    typeof color.hex === "string" && HEX_COLOR_PATTERN.test(color.hex),
-    `${label}.hex must be six-digit uppercase sRGB`
-  );
+  invariant(typeof color.hex === "string" && HEX_COLOR_PATTERN.test(color.hex), `${label}.hex must be six-digit uppercase sRGB`);
   invariant(
     finite(color.alpha) && color.alpha >= 0 && color.alpha <= 1,
     `${label}.alpha must be between 0 and 1`
@@ -280,12 +278,12 @@ function assertShapePayload(value: unknown, label: string): void {
     shape.shadowLayers.forEach((layer, index) => {
       invariant(typeof layer === "object" && layer !== null, `${label}.shadowLayers[${index}] is invalid`);
       const shadowLayer = layer as Record<string, unknown>;
-      invariant(finite(shadowLayer.offsetXPx), `${label}.shadowLayers[${index}].offsetXPx is invalid`);
-      invariant(finite(shadowLayer.offsetYPx), `${label}.shadowLayers[${index}].offsetYPx is invalid`);
-      invariant(finite(shadowLayer.spreadPx), `${label}.shadowLayers[${index}].spreadPx is invalid`);
+      for (const key of ["offsetXPx", "offsetYPx", "spreadPx"]) invariant(finite(shadowLayer[key]), `${label}.shadowLayers[${index}].${key} is invalid`);
       assertColor(shadowLayer.color, `${label}.shadowLayers[${index}].color`);
     });
   }
+  if (shape.outerShadow !== undefined) invariant(outerShadowIsSafe(shape.outerShadow), `${label}.outerShadow is invalid`);
+  if (shape.backplateShadowLayers !== undefined) invariant(finite(shape.backplateShadowLayers) && shape.backplateShadowLayers >= 0, `${label}.backplateShadowLayers is invalid`);
   if (shape.outline !== undefined) {
     invariant(typeof shape.outline === "object" && shape.outline !== null, `${label}.outline is invalid`);
     const outline = shape.outline as Record<string, unknown>;

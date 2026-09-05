@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 
+import { fetchTimeoutSignal } from "@/lib/fetch-timeout-signal";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_SVG_BYTES = 2 * 1024 * 1024;
 const MAX_PNG_BYTES = 4 * 1024 * 1024;
+// A static SVG served by FastAPI; anything slower than this is a stuck backend.
+const ICON_FETCH_TIMEOUT_MS = 15_000;
 
 function errorResponse(status: 400 | 413 | 415 | 502) {
   const message = status === 400 ? "Invalid icon request" : "Icon rasterization failed";
@@ -45,6 +49,7 @@ export async function GET(req: NextRequest) {
       cache: "no-store",
       headers,
       redirect: "error",
+      signal: fetchTimeoutSignal(ICON_FETCH_TIMEOUT_MS, req.signal),
     });
     if (!resp.ok) {
       return errorResponse(502);

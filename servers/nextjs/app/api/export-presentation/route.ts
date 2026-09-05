@@ -4,6 +4,7 @@ import {
   getFastApiAuthHeaders,
   getFastApiBaseUrl,
 } from "@/lib/fastapi-internal";
+import { fetchTimeoutSignal } from "@/lib/fetch-timeout-signal";
 import {
   parsePublicExportAdmission,
   parsePublicExportReceipt,
@@ -11,6 +12,10 @@ import {
 } from "@/lib/public-export-admission";
 
 const MAX_REQUEST_BYTES = 64 * 1024;
+// This route only admits the export command (202 + receipt); the export itself
+// runs as a workspace operation. The bound is still generous because admission
+// waits on the workspace revision lock under load.
+const EXPORT_ADMISSION_TIMEOUT_MS = 120_000;
 
 function safeBackendStatus(status: number): number {
   if ([400, 401, 403, 404, 409, 429].includes(status)) return status;
@@ -59,6 +64,7 @@ export async function POST(request: NextRequest) {
           asset_ids: [],
         }),
         cache: "no-store",
+        signal: fetchTimeoutSignal(EXPORT_ADMISSION_TIMEOUT_MS, request.signal),
       },
     );
     if (!response.ok) {

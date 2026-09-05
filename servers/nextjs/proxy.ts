@@ -48,6 +48,9 @@ function isAuthDisabled(): boolean {
 
 const SESSION_COOKIE_NAME = "presenton_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
+// A hung backend must not hold every API request open. A timeout is handled
+// by the same catch as a network error: unauthenticated, never fail-open.
+const AUTH_STATUS_TIMEOUT_MS = 5_000;
 
 async function getAuthStatus(request: NextRequest): Promise<AuthStatus> {
   const cookieHeader = request.headers.get("cookie");
@@ -57,6 +60,7 @@ async function getAuthStatus(request: NextRequest): Promise<AuthStatus> {
       method: "GET",
       headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
       cache: "no-store",
+      signal: AbortSignal.timeout(AUTH_STATUS_TIMEOUT_MS),
     });
     if (!response.ok) {
       return { configured: true, authenticated: false };
@@ -75,6 +79,10 @@ function isApiAuthExempt(pathname: string): boolean {
   return (
     pathname.startsWith("/api/v1/auth/") ||
     pathname === "/api/telemetry-status" ||
+    // Liveness probe (EXT-08): container/process healthchecks hit this
+    // through nginx with no session. It returns only a static status, so
+    // exempting it discloses nothing.
+    pathname === "/api/health" ||
     pathname.startsWith("/api/export-presentation-data/") ||
     /** Read-only public share view (token-scoped; FastAPI re-checks on the
      * normalized path, so a traversal here still fails auth there). */

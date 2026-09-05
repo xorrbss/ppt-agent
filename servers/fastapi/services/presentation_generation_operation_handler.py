@@ -179,6 +179,12 @@ def _public_executed_stages(
     return tuple(sorted(executed))
 
 
+def _provider_call_timing_snapshot(provider_usage: object) -> dict[str, object] | None:
+    ledger = getattr(provider_usage, "call_timing", None)
+    snapshot = getattr(ledger, "snapshot", None)
+    return snapshot() if callable(snapshot) else None
+
+
 async def _persist_terminal_attempt_timing(
     *,
     job_id: uuid.UUID,
@@ -227,6 +233,9 @@ async def _persist_terminal_attempt_timing(
             # M1: the composition gate stashes the failing slides' fit magnitude
             # on the same request channel.
             fit_summaries=getattr(request, "_authored_gate_fit_summaries", None) or {},
+            # SPEED-12: the per-call admission/executor/provider split the
+            # usage ledger collected alongside its counters.
+            provider_call_timing=_provider_call_timing_snapshot(provider_usage),
         )
         return receipt.to_dict()
     except (OSError, TypeError, ValueError):

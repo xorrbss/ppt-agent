@@ -2,14 +2,13 @@ from collections.abc import AsyncGenerator
 import os
 import time
 
-from sqlalchemy import BigInteger, event, inspect, or_, text
+from sqlalchemy import BigInteger, event, inspect, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     create_async_engine,
     async_sessionmaker,
     AsyncSession,
 )
-from sqlalchemy.orm import Session, with_loader_criteria
 from sqlmodel import SQLModel
 
 from models.sql.async_task import AsyncTaskModel
@@ -28,10 +27,7 @@ from models.sql.image_asset import ImageAsset
 from models.sql.key_value import KeyValueSqlModel
 from models.sql.ollama_pull_status import OllamaPullStatus
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
-from models.sql.presentation import (
-    PRESENTATION_LIFECYCLE_DELETED,
-    PresentationModel,
-)
+from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.presentation_version import PresentationVersionModel
 from models.sql.template import TemplateModel
@@ -84,9 +80,7 @@ from models.sql.public_artifact import (
     PublicSlideCheckpoint,
 )
 from models.sql.authored_vnext_repository import AUTHORED_VNEXT_SQL_TABLES
-from templates.v2.catalog import get_template_v2_default_template_id
-from services.presentation_profile_persistence import stamp_presentation_profile
-from utils.owner_context import get_current_owner_id, get_current_tenant_id
+from services.database_owner_scope import register_owner_scope_hooks
 from utils.get_env import get_migrate_database_on_startup_env
 from utils.db_utils import (
     get_database_url_and_connect_args,
@@ -304,162 +298,10 @@ async def require_public_api_database_authority(
     )
 
 
-_STRICT_OWNER_MODELS = (
-    PresentationModel,
-    SlideModel,
-    PresentationLayoutCodeModel,
-    TemplateModel,
-    ChatHistoryMessageModel,
-    ImageAsset,
-    TemplateCreateInfoModel,
-    AsyncTaskModel,
-    AsyncPresentationGenerationTaskModel,
-    WebhookSubscription,
-    WorkspaceConversation,
-    WorkspaceMessage,
-    WorkspaceAsset,
-    WorkspaceMessageAttachment,
-    WorkspaceOperation,
-    WorkspaceOperationEvent,
-    WorkspaceOutbox,
-    WorkspaceActionReceipt,
-    WorkspaceArtifact,
-    ReferenceSnapshot,
-    AssetGatewayIdempotencyReceipt,
-    PresentationExportAttempt,
-    AuthoredCanonicalRevision,
-    AuthoredSlideEditorEvent,
-    PublicOperationAdmission,
-    PublicArtifact,
-    PublicExportIdentity,
-)
-
-# These public authority rows carry both dimensions.  Owner scoping alone is
-# insufficient because an external issuer may legitimately reuse the same
-# subject UUID in more than one tenant.
-_STRICT_TENANT_MODELS = (
-    PublicOperationAdmission,
-    PublicArtifact,
-    PublicExportIdentity,
-)
-
-
-@event.listens_for(Session, "after_begin")
-def _set_postgres_transaction_principal(_session, _transaction, connection) -> None:
-    """Expose request identity to PostgreSQL RLS without widening DB authority."""
-
-    if connection.dialect.name != "postgresql":
-        return
-    owner_id = get_current_owner_id()
-    tenant_id = get_current_tenant_id()
-    connection.execute(text("SET LOCAL row_security = on"))
-    connection.execute(
-        text(
-            "SELECT "
-            "set_config('presenton.owner_id', :owner_id, true), "
-            "set_config('presenton.tenant_id', :tenant_id, true)"
-        ),
-        {
-            "owner_id": str(owner_id) if owner_id is not None else "",
-            "tenant_id": tenant_id or "",
-        },
-    )
-
-
-@event.listens_for(Session, "do_orm_execute")
-def _scope_owned_selects(execute_state) -> None:
-    """Apply independent owner and tenant criteria to request ORM SELECTs."""
-    owner_id = get_current_owner_id()
-    tenant_id = get_current_tenant_id()
-    if not execute_state.is_select:
-        return
-
-    statement = execute_state.statement
-    if owner_id is not None and not execute_state.execution_options.get(
-        "skip_owner_scope"
-    ):
-        catalog_default_id = get_template_v2_default_template_id()
-        for model in _STRICT_OWNER_MODELS:
-            statement = statement.options(
-                with_loader_criteria(
-                    model,
-                    lambda row: row.owner_id == owner_id,
-                    include_aliases=True,
-                )
-            )
-        statement = statement.options(
-            with_loader_criteria(
-                TemplateV2,
-                lambda row: or_(
-                    row.owner_id == owner_id,
-                    (row.owner_id.is_(None) & row.is_default.is_(True)),
-                    (
-                        row.owner_id.is_(None)
-                        & (row.id == catalog_default_id)
-                    ),
-                ),
-                include_aliases=True,
-            )
-        )
-    if tenant_id is not None and not execute_state.execution_options.get(
-        "skip_tenant_scope"
-    ):
-        for model in _STRICT_TENANT_MODELS:
-            statement = statement.options(
-                with_loader_criteria(
-                    model,
-                    lambda row: row.tenant_id == tenant_id,
-                    include_aliases=True,
-                )
-            )
-    execute_state.statement = statement
-
-
-@event.listens_for(Session, "before_flush")
-def _stamp_new_owned_rows(session, _flush_context, _instances) -> None:
-    profile_identity_fields = {
-        "generation_mode",
-        "mode",
-        "version",
-        "theme",
-        "community_design_ids",
-        "deck_plan",
-        "profile_driver_id",
-        "profile_schema_version",
-    }
-    for instance in session.new:
-        if isinstance(instance, PresentationModel):
-            stamp_presentation_profile(instance)
-    for instance in session.dirty:
-        if not isinstance(instance, PresentationModel):
-            continue
-        if instance.lifecycle_status == PRESENTATION_LIFECYCLE_DELETED:
-            # A tombstone is not a deck. Deletion deliberately redacts the
-            # theme and the mode, which are two of the identity fields below,
-            # so re-deriving a profile here asked the resolver to describe a
-            # row that has just been emptied on purpose -- and it refused,
-            # which made deleting an authored presentation raise.
-            continue
-        state = inspect(instance)
-        if any(
-            state.attrs[field].history.has_changes()
-            for field in profile_identity_fields
-        ):
-            stamp_presentation_profile(instance, allow_driver_transition=True)
-
-    owner_id = get_current_owner_id()
-    tenant_id = get_current_tenant_id()
-    if owner_id is None and tenant_id is None:
-        return
-    owner_models = _STRICT_OWNER_MODELS + (TemplateV2,)
-    for instance in session.new:
-        if owner_id is not None and isinstance(instance, owner_models):
-            instance.owner_id = owner_id
-        if tenant_id is not None and isinstance(instance, _STRICT_TENANT_MODELS):
-            supplied_tenant = getattr(instance, "tenant_id", None)
-            if supplied_tenant not in {None, "", tenant_id}:
-                raise RuntimeError("tenant_scope_write_mismatch")
-            instance.tenant_id = tenant_id
+# Owner and tenant scoping is applied centrally by session-level ORM hooks.
+# Importing this module has always been what installed them, so keep that
+# contract: every caller of the engine gets the scoped session behaviour.
+register_owner_scope_hooks()
 
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:

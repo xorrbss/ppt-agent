@@ -65,6 +65,34 @@ function pickUpstream(url) {
   return NEXT;
 }
 
+// Same application security header set as nginx.conf. Frame embedding stays
+// SAMEORIGIN (slide previews are same-origin sandboxed iframes; /p/ share pages
+// may be embedded). HSTS is only sent when a TLS terminator in front of this
+// proxy reports https — this proxy itself only ever listens on plain HTTP.
+export const SECURITY_HEADERS = Object.freeze({
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "SAMEORIGIN",
+  "referrer-policy": "strict-origin-when-cross-origin",
+  "permissions-policy": "camera=(), microphone=(), geolocation=()",
+});
+export const HSTS_HEADER_VALUE = "max-age=31536000; includeSubDomains";
+
+export function withSecurityHeaders(req, upstreamHeaders) {
+  const headers = { ...upstreamHeaders };
+  for (const name of [...Object.keys(SECURITY_HEADERS), "strict-transport-security"]) {
+    delete headers[name];
+  }
+  Object.assign(headers, SECURITY_HEADERS);
+  const forwardedProto = String(req.headers["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  if (forwardedProto === "https") {
+    headers["strict-transport-security"] = HSTS_HEADER_VALUE;
+  }
+  return headers;
+}
+
 const server = http.createServer((req, res) => {
   const target = pickUpstream(req.url);
   const headers = { ...req.headers };
@@ -75,12 +103,14 @@ const server = http.createServer((req, res) => {
   const upstream = http.request(
     { host: target.host, port: target.port, method: req.method, path: req.url, headers },
     (ur) => {
-      res.writeHead(ur.statusCode || 502, ur.headers);
+      res.writeHead(ur.statusCode || 502, withSecurityHeaders(req, ur.headers));
       ur.pipe(res);
     }
   );
   upstream.on("error", (err) => {
-    if (!res.headersSent) res.writeHead(502, { "content-type": "text/plain" });
+    if (!res.headersSent) {
+      res.writeHead(502, withSecurityHeaders(req, { "content-type": "text/plain" }));
+    }
     res.end(`[local-proxy] upstream ${target.host}:${target.port} error: ${err.message}`);
   });
   // If the client goes away (browser tab closed, navigation), tear down the

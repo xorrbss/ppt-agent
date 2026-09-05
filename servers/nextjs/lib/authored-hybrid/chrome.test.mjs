@@ -15,6 +15,8 @@ import {
 import {
   prepareNativeElements,
   selectLayerSafeNativeElements,
+  serializePreparedNativeElement,
+  serializePreparedNativeElementUnderlay,
 } from "./native-plan.ts";
 
 test("declared HTML table is observed as one complex-table ownership node", async (t) => {
@@ -2013,4 +2015,77 @@ test("overflow-hidden slide containers do not rasterize contained text", async (
   assert.equal(contained.classification.mode, "native");
   assert.ok(clipped);
   assert.equal(clipped.classification.mode, "raster");
+});
+
+test("Chrome maps simple outer box-shadows natively and keeps unmapped shadows on the backplate", async (t) => {
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) {
+    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
+    t.skip("Chrome/Chromium is unavailable");
+    return;
+  }
+
+  const html = `<!doctype html><html><head><style>
+    html,body{width:1280px;height:720px;margin:0;overflow:hidden}
+    .card{position:absolute;left:100px;top:300px;width:200px;height:100px;background:#0a6;box-shadow:0 6px 16px rgba(0,0,0,.4)}
+    .inset{position:absolute;left:600px;top:300px;width:200px;height:100px;background:#0a6;box-shadow:inset 0 2px 6px rgba(0,0,0,.5)}
+    .stack{position:absolute;left:900px;top:300px;width:200px;height:100px;background:#0a6;box-shadow:0 1px 2px rgba(0,0,0,.2),0 2px 4px rgba(0,0,0,.2),0 4px 8px rgba(0,0,0,.2)}
+    .chip{position:absolute;left:600px;top:100px;width:120px;height:40px;line-height:40px;text-align:center;background:#eef;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.3);font:20px Arial;color:#123}
+  </style></head><body>
+    <div class="card" data-qid="card"></div>
+    <div class="inset" data-qid="inset"></div>
+    <div class="stack" data-qid="stack"></div>
+    <span class="chip" data-qid="chip">Chip</span>
+  </body></html>`;
+  const ids = ["card", "inset", "stack", "chip"];
+  const options = { chromeExecutable, timeoutMs: 30_000, declaredElementIds: ids };
+  const slide = await extractAuthoredSlideDom(html, options);
+  const byId = new Map(slide.elements.map((element) => [element.id, element]));
+
+  const card = byId.get("card");
+  assert.deepEqual(card.classification.reasons, ["external-paint"]);
+  assert.deepEqual(card.shape.outerShadow, {
+    offsetXPx: 0,
+    offsetYPx: 6,
+    blurPx: 16,
+    spreadPx: 0,
+    color: { hex: "000000", alpha: 0.4 },
+  });
+  assert.equal(card.shape.backplateShadowLayers, undefined);
+
+  const inset = byId.get("inset");
+  assert.ok(inset.classification.reasons.includes("unsupported-shape"));
+  assert.equal(inset.shape.outerShadow, undefined);
+  assert.equal(inset.shape.backplateShadowLayers, 1);
+
+  const stack = byId.get("stack");
+  assert.ok(stack.classification.reasons.includes("unsupported-shape"));
+  assert.equal(stack.shape.outerShadow, undefined);
+  assert.equal(stack.shape.backplateShadowLayers, 3);
+
+  const chip = byId.get("chip");
+  assert.equal(chip.classification.candidateKind, "text");
+  assert.equal(chip.text.containerShape?.shape.shape, "round-rectangle");
+  assert.equal(chip.text.containerShape?.shape.outerShadow?.blurPx, 6);
+
+  const prepared = await prepareNativeElements(slide.elements, {
+    includeRasterText: true,
+    includeRasterShapes: true,
+  });
+  assert.deepEqual(prepared.map((item) => item.source.id).sort(), ids.slice().sort());
+  const cardXml = serializePreparedNativeElement(prepared.find((item) => item.source.id === "card"), 3);
+  assert.match(cardXml, /<a:effectLst><a:outerShdw blurRad="152400" dist="57150" dir="5400000" algn="ctr" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="40000"\/><\/a:srgbClr><\/a:outerShdw><\/a:effectLst>/);
+  const chipUnderlay = serializePreparedNativeElementUnderlay(prepared.find((item) => item.source.id === "chip"), 4);
+  assert.match(chipUnderlay, /<a:outerShdw blurRad="57150" dist="19050" dir="5400000"/);
+  assert.doesNotMatch(serializePreparedNativeElement(prepared.find((item) => item.source.id === "inset"), 5), /effectLst/);
+
+  const result = await renderAuthoredBackplate(html, slide, ids, options);
+  assert.deepEqual(result.appliedPromotedElementIds, ids);
+  assert.deepEqual(result.fallbackElementIds, []);
+  // The mapped shadows are native effects, so nothing is painted under them.
+  assert.equal((await rgbaAt(result.backplatePng, 200, 410))[3], 0);
+  assert.equal((await rgbaAt(result.backplatePng, 660, 146))[3], 0);
+  // Unmapped shadows (inset, three layers) stay on the residual backplate.
+  assert.ok((await rgbaAt(result.backplatePng, 700, 306))[3] > 0);
+  assert.ok((await rgbaAt(result.backplatePng, 1000, 405))[3] > 0);
 });

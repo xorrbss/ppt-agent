@@ -24,10 +24,12 @@ from utils.owner_context import (
     reset_current_trace_id,
     reset_current_owner_id,
     reset_current_owner_is_admin,
+    reset_request_scope_active,
     set_current_owner_id,
     set_current_owner_is_admin,
     set_current_tenant_id,
     set_current_trace_id,
+    set_request_scope_active,
 )
 from api.v1.auth.users import get_jwt_strategy
 from models.sql.user import User
@@ -242,9 +244,11 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                 admin_context_token = set_current_owner_is_admin(True)
                 tenant_context_token = set_current_tenant_id(principal.tenant_id)
                 trace_context_token = set_current_trace_id(principal.trace_id)
+                request_scope_token = set_request_scope_active(True)
                 try:
                     return await call_next(request)
                 finally:
+                    reset_request_scope_active(request_scope_token)
                     reset_current_trace_id(trace_context_token)
                     reset_current_tenant_id(tenant_context_token)
                     reset_current_owner_is_admin(admin_context_token)
@@ -323,9 +327,13 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
             admin_context_token = set_current_owner_is_admin(principal.is_admin)
             tenant_context_token = set_current_tenant_id(principal.tenant_id)
             trace_context_token = set_current_trace_id(principal.trace_id)
+            # Marks the span in which an owned-table query without an identity
+            # is a bug rather than a worker's legitimate cross-owner read.
+            request_scope_token = set_request_scope_active(True)
             try:
                 return await call_next(request)
             finally:
+                reset_request_scope_active(request_scope_token)
                 reset_current_trace_id(trace_context_token)
                 reset_current_tenant_id(tenant_context_token)
                 reset_current_owner_is_admin(admin_context_token)

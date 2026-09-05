@@ -1702,6 +1702,16 @@
     "slide": "Slide {index}",
     "reorder": "Reorder slide {index}"
   },
+  "flaggedSlides": {
+    "badge": "Needs review",
+    "ariaLabel": "Slide {index} needs review: {reason}",
+    "reason": {
+      "author": "The AI could not write this page, so a placeholder page was published in its place.",
+      "gate": "Automatic checks left unresolved issues on this page ({categories}). Please review it.",
+      "gateUnknown": "Automatic checks left unresolved issues on this page. Please review it.",
+      "other": "This page was flagged during generation: {reason}"
+    }
+  },
   "notFound": {
     "metadataTitle": "Page not found | Presenton",
     "imageAlt": "Page not found",

@@ -4,9 +4,14 @@ import {
   getFastApiAuthHeaders,
   getFastApiBaseUrl,
 } from "@/lib/fastapi-internal";
+import { fetchTimeoutSignal } from "@/lib/fetch-timeout-signal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// The public v2 surface includes export artifact downloads (range requests),
+// so the bound covers a full response body on a slow link, not just admission.
+const V2_UPSTREAM_TIMEOUT_MS = 10 * 60_000;
 
 const FORWARDED_REQUEST_HEADERS = [
   "accept",
@@ -81,7 +86,7 @@ export async function proxyV2Request(
         headers: requestHeaders(request),
         cache: "no-store",
         redirect: "manual",
-        signal: request.signal,
+        signal: fetchTimeoutSignal(V2_UPSTREAM_TIMEOUT_MS, request.signal),
         ...(requestBody === null
           ? {}
           : { body: requestBody, duplex: "half" as const }),

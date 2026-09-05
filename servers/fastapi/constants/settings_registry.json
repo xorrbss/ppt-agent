@@ -916,7 +916,7 @@
       "secret": false,
       "targets": ["fastapi.runtime"],
       "group": "authored.throughput",
-      "description": "Explicit slides per authoring provider call; unset takes the rate profile default (token 3, api 1)."
+      "description": "Explicit slides per authoring provider call; unset takes the rate profile default (token 1, api 1)."
     },
     {
       "key": "AUTHORED_BATCH_WAVE_CONCURRENCY",
@@ -935,6 +935,60 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.throughput",
       "description": "Consecutive successful authoring calls after an overload cooldown before one concurrency step is restored; unset takes the rate profile default (3)."
+    },
+    {
+      "key": "PUBLIC_GENERATION_DEADLINE_PER_SLIDE_SECONDS",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Seconds of public generation deadline budgeted per slide inside one authoring call; unset takes the measured default (80)."
+    },
+    {
+      "key": "PUBLIC_GENERATION_DEADLINE_CALL_OVERHEAD_SECONDS",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.generation_deadline",
+      "description": "Fixed seconds of public generation deadline budgeted per authoring wave on top of the per-slide allowance; unset takes the measured default (60)."
+    },
+    {
+      "key": "PROVIDER_DURABLE_RUNTIME_REQUIRED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "runtime",
+      "description": "Require the durable, PostgreSQL-backed cross-process provider admission path instead of best-effort in-process admission; multi-process deployments (API and worker processes sharing PostgreSQL) must set this to true."
+    },
+    {
+      "key": "TEMPLATE_V2_DEPLOYMENT_TIER",
+      "type": "string",
+      "default": "local",
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "runtime",
+      "description": "Deployment tier (local, development, staging, production) used to gate managed-only behavior such as mandatory durable provider admission and stricter transport security; set per service in docker-compose.yml, not through the shared compose environment block."
+    },
+    {
+      "key": "MEM0_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "memory",
+      "description": "Enable Mem0 presentation memory (context capture and retrieval) during generation and slide editing."
+    },
+    {
+      "key": "MEM0_TIMEOUT_SECONDS",
+      "type": "integer",
+      "default": 15,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "memory",
+      "description": "Per-call timeout in seconds for a Mem0 memory add/search call; a call exceeding this is treated as a failed, non-fatal call."
     }
   ]
 }

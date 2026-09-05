@@ -107,7 +107,6 @@ def _authored_company_standard_projection(
         ),
         "safeAreaEnforced": False,
         "visualParity": "not-verified",
-        "promotionReady": False,
     }
 
 
@@ -590,7 +589,6 @@ async def publish_authored_presentation(
                 else "editable_hybrid_scene_unavailable"
             ),
             "blockerDetail": scene_blocker,
-            "promotionReady": False,
             "deploymentAuthorized": False,
         }
         presentation.theme = {

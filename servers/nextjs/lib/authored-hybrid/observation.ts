@@ -109,6 +109,8 @@ export interface AuthoredHybridExpectedPromotedElement {
   suppressWholeElement?: boolean;
   /** The text root's simple fill/border is emitted as a separate native underlay. */
   suppressContainerPaint?: boolean;
+  /** The mapped box-shadow layer is a native effect; only residual layers stay on the backplate. */
+  suppressOuterShadow?: boolean;
 }
 
 export interface BrowserRenderReadinessObservation {

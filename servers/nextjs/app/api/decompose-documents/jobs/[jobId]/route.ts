@@ -4,9 +4,13 @@ import {
   getFastApiAuthHeaders,
   getFastApiBaseUrl,
 } from "@/lib/fastapi-internal";
+import { fetchTimeoutSignal } from "@/lib/fetch-timeout-signal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// Poll and cancel are point lookups on a job row.
+const JOB_REQUEST_TIMEOUT_MS = 15_000;
 
 type RouteContext = { params: Promise<{ jobId: string }> };
 
@@ -42,6 +46,7 @@ async function proxyJobRequest(request: NextRequest, context: RouteContext) {
         method: request.method,
         headers,
         cache: "no-store",
+        signal: fetchTimeoutSignal(JOB_REQUEST_TIMEOUT_MS, request.signal),
       },
     );
     const responseHeaders = new Headers({

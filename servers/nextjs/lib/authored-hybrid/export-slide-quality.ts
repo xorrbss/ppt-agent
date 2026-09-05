@@ -1,5 +1,6 @@
 import { extractAuthoredSlideDom } from "./index.ts";
 import type { AuthoredHybridSlideLayer } from "./pptx-assembler.ts";
+import { shapeHasShadowPaint } from "./shadow-effect.ts";
 import type {
   PresentationExportFallbackElement,
   PresentationExportSlideQuality,
@@ -59,7 +60,9 @@ export function fallbackElementForContractElement(
     element.classification.mode === "native" && "shape" in element && element.shape !== undefined
       ? [
           ...(element.shape.gradient ? ["gradient-backplate-only"] : []),
-          ...(element.shape.shadowLayers?.length ? ["shadow-backplate-only"] : []),
+          // This element was not selected as a native owner, so any shadow it
+          // carries (mappable or not) is painted only on the residual backplate.
+          ...(shapeHasShadowPaint(element.shape) ? ["shadow-backplate-only"] : []),
         ]
       : [];
   return {

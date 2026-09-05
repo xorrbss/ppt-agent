@@ -1,5 +1,7 @@
 import asyncio
+import logging
 import os
+import time
 import uuid
 from unittest.mock import patch
 
@@ -232,4 +234,61 @@ class TestMem0PresentationMemoryService:
             "user_id": f"presentation:{presentation_id}"
         }
         assert client.search_calls[0]["top_k"] == 5
+
+    def test_add_message_timeout_is_treated_as_a_failed_call(self, caplog):
+        class SlowMemoryClient(FakeMemoryClient):
+            def add(self, *args, **kwargs):
+                time.sleep(0.2)
+                return super().add(*args, **kwargs)
+
+        with patch.dict(
+            "os.environ",
+            {"MEM0_ENABLED": "true", "APP_DATA_DIRECTORY": "/tmp/presenton-test"},
+            clear=False,
+        ), patch(
+            "services.mem0_presentation_memory_service.get_shared_mem0_client",
+            return_value=SlowMemoryClient.from_config({}),
+        ):
+            service = Mem0PresentationMemoryService()
+            service._timeout_seconds = 0.01
+            presentation_id = uuid.uuid4()
+
+            with caplog.at_level(logging.WARNING):
+                # Must not raise: a timed-out mem0 call is a non-fatal failure,
+                # the same as any other mem0 runtime error.
+                asyncio.run(
+                    service.store_generated_outlines(
+                        presentation_id, {"slides": [{"content": "One"}]}
+                    )
+                )
+
+        assert any("timed out" in record.message for record in caplog.records)
+
+    def test_retrieve_context_timeout_returns_empty_string(self, caplog):
+        class SlowMemoryClient(FakeMemoryClient):
+            def search(self, *args, **kwargs):
+                time.sleep(0.2)
+                return super().search(*args, **kwargs)
+
+        with patch.dict(
+            "os.environ",
+            {"MEM0_ENABLED": "true", "APP_DATA_DIRECTORY": "/tmp/presenton-test"},
+            clear=False,
+        ), patch(
+            "services.mem0_presentation_memory_service.get_shared_mem0_client",
+            return_value=SlowMemoryClient.from_config({}),
+        ):
+            service = Mem0PresentationMemoryService()
+            service._timeout_seconds = 0.01
+            presentation_id = uuid.uuid4()
+
+            with caplog.at_level(logging.WARNING):
+                context = asyncio.run(
+                    service.retrieve_context(
+                        presentation_id=presentation_id, query="anything"
+                    )
+                )
+
+        assert context == ""
+        assert any("timed out" in record.message for record in caplog.records)
 

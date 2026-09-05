@@ -193,6 +193,9 @@ from utils.document_context import build_document_context
 from utils.get_env import (
     get_authored_resume_max_attempts_env,
 )
+from api.v1.ppt.endpoints.content_brief_policy import (
+    brief_failure_is_terminal, log_content_brief_skipped, merge_brief_context, run_content_brief_with_policy,
+)
 from utils.llm_calls.generate_content_brief import generate_content_brief
 from utils.llm_calls.generate_presentation_outlines import (
     generate_ppt_outline,
@@ -1039,6 +1042,7 @@ async def generate_presentation_handler(
 
             # Stage A - Knowledge Brief: research rich, grounded substance first,
             # then ground the outline in it. Falls back to documents-only on failure.
+            # Deadline, single reduced retry and brief_status: content_brief_policy.
             outline_context = additional_context
             try:
                 with provider_usage_scope(
@@ -1047,31 +1051,26 @@ async def generate_presentation_handler(
                     stage="content_brief",
                     attempt_number=(generation_job.attempt_number if generation_job else 0),
                 ):
-                    content_brief = await generate_content_brief(
-                        request.content,
-                        language_to_use,
-                        additional_context,
-                        request.tone.value,
-                        request.verbosity.value,
-                        request.instructions,
+                    brief_outcome = await run_content_brief_with_policy(
+                        generate_content_brief,
+                        content=request.content,
+                        language=language_to_use,
+                        additional_context=additional_context,
+                        tone=request.tone.value,
+                        verbosity=request.verbosity.value,
+                        instructions=request.instructions,
+                        presentation_id=presentation_id,
                     )
-                brief_context = content_brief.to_prompt_context()
-                outline_context = (
-                    f"{additional_context}\n\n{brief_context}".strip()
-                    if additional_context
-                    else brief_context
-                )
-            except HTTPException as error:
-                if error.status_code == 429:
-                    raise
-                traceback.print_exc()
+                if brief_outcome.brief is not None:
+                    outline_context = merge_brief_context(additional_context, brief_outcome.brief)
             except Exception as error:
                 # A content brief is optional only for ordinary provider or
-                # parsing failures. Durable budget/admission decisions must
-                # retain their terminal retryability instead of falling through
-                # to outline generation and becoming a generic HTTP 500.
-                if getattr(error, "retryable", None) is False:
+                # parsing failures (and a 429 always ends generation). Durable
+                # budget/admission decisions must retain their terminal
+                # retryability instead of becoming a generic HTTP 500.
+                if brief_failure_is_terminal(error):
                     raise
+                log_content_brief_skipped(presentation_id, error)
                 traceback.print_exc()
 
             # Finding number of slides to generate by considering table of contents

@@ -13,7 +13,7 @@ from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from hashlib import sha256
 from time import monotonic
-from typing import Any, AsyncIterator, Iterator
+from typing import Any, AsyncIterator, Iterator, Mapping
 from uuid import UUID
 import asyncio
 from weakref import WeakKeyDictionary
@@ -36,6 +36,7 @@ from services.provider_runtime_job_registration import (
     ensure_runtime_job,
     optional_env_int,
 )
+from services.provider_call_timing import ProviderCallTimingLedger
 
 
 _RECEIPT_OBSERVABILITY = {
@@ -188,6 +189,8 @@ class ProviderOperationUsage:
     """Content-free logical/physical provider usage for one operation attempt."""
 
     _stages: dict[str, _ProviderStageUsage] = field(default_factory=dict)
+    #: SPEED-12: per-call admission/executor/provider spans, keyed by stage.
+    call_timing: ProviderCallTimingLedger = field(default_factory=ProviderCallTimingLedger)
 
     def _stage(self, name: str) -> _ProviderStageUsage:
         normalized = str(name).strip().lower()
@@ -835,6 +838,22 @@ async def record_local_stage(*, latency_ms: float) -> None:
     )
 
 
+def record_provider_call_timing(record: Mapping[str, object]) -> None:
+    """Attach one per-call span record to the active operation's stage (SPEED-12).
+
+    Best effort like the receipts above: no active stage scope or operation
+    ledger means the record is dropped, never an error in the generation path.
+    """
+    scope = _ACTIVE_SCOPE.get()
+    usage = _ACTIVE_OPERATION_USAGE.get()
+    if scope is None or usage is None:
+        return
+    try:
+        usage.call_timing.record(scope.stage, record)
+    except ValueError:
+        return
+
+
 class ProviderCallTimer:
     """Small helper for call boundaries that need a monotonic elapsed time."""
 
@@ -860,5 +879,6 @@ __all__ = [
     "provider_receipt_observability_snapshot",
     "record_local_stage",
     "record_provider_call",
+    "record_provider_call_timing",
     "response_usage",
 ]
