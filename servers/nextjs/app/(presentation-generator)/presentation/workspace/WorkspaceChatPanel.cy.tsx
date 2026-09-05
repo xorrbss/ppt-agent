@@ -1,11 +1,26 @@
 import React from "react";
+import { mount } from "cypress/react";
+import { NextIntlClientProvider } from "next-intl";
 
+import koMessages from "@/i18n/messages/ko.json";
 import { WorkspaceApiError } from "../../services/api/workspace";
 import WorkspaceChatPanel, {
   parseQualityReviewSlideRange,
 } from "./WorkspaceChatPanel";
 import { WorkspaceMessage } from "./WorkspaceMessage";
 import { WorkspaceOperationCard } from "./WorkspaceOperationCard";
+
+// The panel and its children read the active UI locale via useTranslations /
+// useLocale, exactly as they do in the app under the root provider. cy.mount
+// (registered in cypress/support/component.ts) wraps nothing, so every mount
+// here goes through this local helper instead of cy.mount directly.
+function mountWithIntl(ui: React.ReactElement) {
+  mount(
+    <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 const PRESENTATION_ID = "workspace-deck";
 const ROOT = "**/api/v1/ppt/workspace";
@@ -199,7 +214,7 @@ describe("WorkspaceChatPanel", () => {
       (request) => request.destroy(),
     );
 
-    cy.mount(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
+    mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@historyTimeline");
     cy.get('[data-testid="workspace-history-error"]')
       .should("be.visible")
@@ -214,7 +229,7 @@ describe("WorkspaceChatPanel", () => {
 
   it("renders immutable attachment snapshots, live lifecycle state, and only safe ready links", () => {
     const onReattach = cy.stub().as("onReattach");
-    cy.mount(
+    mountWithIntl(
       <WorkspaceMessage
         onReattach={onReattach}
         message={{
@@ -324,7 +339,7 @@ describe("WorkspaceChatPanel", () => {
   });
 
   it("renders operation actor, time, target, revisions, activity, and disabled action reason", () => {
-    cy.mount(
+    mountWithIntl(
       <WorkspaceOperationCard
         operation={{
           anchorType: "operation",
@@ -371,7 +386,7 @@ describe("WorkspaceChatPanel", () => {
   });
 
   it("does not interpret result fields from an unknown operation schema", () => {
-    cy.mount(
+    mountWithIntl(
       <WorkspaceOperationCard
         operation={{
           anchorType: "operation",
@@ -411,7 +426,7 @@ describe("WorkspaceChatPanel", () => {
       },
     });
 
-    cy.mount(
+    mountWithIntl(
       <WorkspaceOperationCard
         operation={qualityOperation}
         onAction={cy.stub()}
@@ -423,7 +438,7 @@ describe("WorkspaceChatPanel", () => {
       "PowerPoint 화면에 자동으로 반영했습니다.",
     );
 
-    cy.mount(
+    mountWithIntl(
       <WorkspaceOperationCard
         operation={qualityOperation}
         onAction={cy.stub()}
@@ -437,7 +452,7 @@ describe("WorkspaceChatPanel", () => {
   });
 
   it("keeps quality review below complete while the durable result is saving", () => {
-    cy.mount(
+    mountWithIntl(
       <WorkspaceOperationCard
         operation={operation({
           id: "operation-quality-saving",
@@ -460,7 +475,7 @@ describe("WorkspaceChatPanel", () => {
   });
 
   it("renders a dedicated durable result for version restore", () => {
-    cy.mount(
+    mountWithIntl(
       <WorkspaceOperationCard
         operation={{
           anchorType: "operation",
@@ -509,7 +524,7 @@ describe("WorkspaceChatPanel", () => {
   });
 
   it("renders template generation progress without a redundant source-timeline link", () => {
-    cy.mount(
+    mountWithIntl(
       <WorkspaceOperationCard
         operation={{
           anchorType: "operation",
@@ -540,7 +555,7 @@ describe("WorkspaceChatPanel", () => {
       .and("contain.text", "새 자료를 생성하고 있습니다")
       .and("contain.text", "원본 자료는 그대로 유지됩니다");
 
-    cy.mount(
+    mountWithIntl(
       <WorkspaceOperationCard
         operation={{
           anchorType: "operation",
@@ -597,7 +612,7 @@ describe("WorkspaceChatPanel", () => {
   it("expires a visible artifact at its TTL boundary without waiting for a server response", () => {
     cy.clock(new Date("2026-08-03T00:00:00Z").getTime());
     const reExport = cy.stub().as("reExport");
-    cy.mount(
+    mountWithIntl(
       <WorkspaceOperationCard
         operation={{
           anchorType: "operation",
@@ -656,7 +671,7 @@ describe("WorkspaceChatPanel", () => {
         ),
       )
       .as("retry");
-    cy.mount(
+    mountWithIntl(
       <WorkspaceOperationCard
         operation={{
           anchorType: "operation",
@@ -696,7 +711,7 @@ describe("WorkspaceChatPanel", () => {
       .stub()
       .rejects(new Error("provider credential and stack must stay hidden"))
       .as("reExport");
-    cy.mount(
+    mountWithIntl(
       <WorkspaceOperationCard
         operation={{
           anchorType: "operation",
@@ -744,7 +759,7 @@ describe("WorkspaceChatPanel", () => {
       has_more: false,
     });
 
-    cy.mount(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
+    mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@timeline");
 
     cy.get('[aria-label="초기 생성 요청"]')
@@ -826,7 +841,7 @@ describe("WorkspaceChatPanel", () => {
       },
     );
 
-    cy.mount(
+    mountWithIntl(
       <div className="h-[360px]">
         <WorkspaceChatPanel presentationId={PRESENTATION_ID} />
       </div>,
@@ -970,7 +985,7 @@ describe("WorkspaceChatPanel", () => {
       },
     );
 
-    cy.mount(
+    mountWithIntl(
       <div style={{ height: "360px", width: "360px" }}>
         <WorkspaceChatPanel presentationId={PRESENTATION_ID} />
       </div>,
@@ -1050,7 +1065,7 @@ describe("WorkspaceChatPanel", () => {
       request.reply({ statusCode: 200, body: timeline });
     }).as("operationAction");
 
-    cy.mount(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
+    mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@timeline");
 
     cy.get('[data-operation-id="operation-generate"]')
@@ -1105,7 +1120,7 @@ describe("WorkspaceChatPanel", () => {
       has_more: false,
     });
 
-    cy.mount(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
+    mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@timeline");
     cy.get('[data-operation-id="operation-non-retryable"]').within(() => {
       cy.get('[data-testid="operation-retry-unavailable"]')
@@ -1135,7 +1150,7 @@ describe("WorkspaceChatPanel", () => {
       revision: 1,
       has_more: false,
     });
-    cy.mount(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
+    mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@timeline");
     cy.get('input[aria-label="첨부할 파일 선택"]').then(($input) => {
       cy.stub($input[0], "click").as("filePickerClick");
@@ -1175,7 +1190,7 @@ describe("WorkspaceChatPanel", () => {
       revision: 1,
       has_more: false,
     });
-    cy.mount(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
+    mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@timeline");
 
     cy.get('[data-testid="attachment-asset-deleted-row"]')
@@ -1220,7 +1235,7 @@ describe("WorkspaceChatPanel", () => {
       },
     ).as("workspaceCommandWithAsset");
 
-    cy.mount(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
+    mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@timeline");
     cy.get('input[aria-label="첨부할 파일 선택"]').selectFile(
       {
@@ -1337,7 +1352,7 @@ describe("WorkspaceChatPanel", () => {
     ).as("workspaceCommand");
 
     const focusSlide = cy.stub().as("focusSlide");
-    cy.mount(
+    mountWithIntl(
       <WorkspaceChatPanel
         presentationId={PRESENTATION_ID}
         onSlideFocus={focusSlide}
@@ -1416,7 +1431,7 @@ describe("WorkspaceChatPanel", () => {
       event_high_watermark: "cursor-5",
     });
 
-    cy.mount(
+    mountWithIntl(
       <WorkspaceChatPanel
         presentationId={PRESENTATION_ID}
         commandsEnabled={false}
@@ -1459,7 +1474,7 @@ describe("WorkspaceChatPanel", () => {
       { omitSchemaVersion: true },
     );
 
-    cy.mount(
+    mountWithIntl(
       <WorkspaceChatPanel presentationId={PRESENTATION_ID} commandsEnabled />,
     );
     cy.wait("@timeline");
@@ -1540,7 +1555,7 @@ describe("WorkspaceChatPanel", () => {
       },
     ).as("reconnectEvents");
 
-    cy.mount(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
+    mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@rebaseTimeline");
     cy.wait("@reconnectEvents");
     cy.get('[data-operation-id="operation-generate"]', { timeout: 10_000 })
@@ -1608,7 +1623,7 @@ describe("WorkspaceChatPanel", () => {
       },
     ).as("protocolRecoveryEvents");
 
-    cy.mount(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
+    mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@timeline");
     cy.contains("백필 복구 완료", { timeout: 5_000 })
       .should("be.visible")
@@ -1650,7 +1665,7 @@ describe("WorkspaceChatPanel", () => {
       },
     ).as("workspaceCommand");
 
-    cy.mount(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
+    mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@timeline");
     cy.get("#workspace-command").type("Make the title shorter{enter}");
     cy.wait("@workspaceCommand");
@@ -1694,7 +1709,7 @@ describe("WorkspaceChatPanel", () => {
       },
     }).as("deterministicCommand");
 
-    cy.mount(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
+    mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@timeline");
     cy.get("#workspace-command").type("Delete the deck{enter}");
     cy.wait("@deterministicCommand");
@@ -1773,7 +1788,7 @@ describe("WorkspaceChatPanel", () => {
       },
     ).as("conflictingCommand");
 
-    cy.mount(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
+    mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@conflictTimeline");
     cy.get("#workspace-command").type("Use the latest revenue numbers{enter}");
     cy.wait("@conflictingCommand");
@@ -1807,7 +1822,7 @@ describe("WorkspaceChatPanel", () => {
       has_more: false,
     });
 
-    cy.mount(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
+    mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@timeline");
     cy.get('[data-operation-id="operation-expired-approval"]').within(() => {
       cy.get('[data-testid="operation-approve"]').should("be.disabled");
@@ -1835,7 +1850,7 @@ describe("WorkspaceChatPanel", () => {
       },
     ).as("qualityReviewCommand");
 
-    cy.mount(
+    mountWithIntl(
       <WorkspaceChatPanel
         presentationId={PRESENTATION_ID}
         currentSlide={2}
@@ -1892,7 +1907,7 @@ describe("WorkspaceChatPanel", () => {
 
   it("offers the remake flow on the page a chat turn was refused", () => {
     const remade = cy.stub().as("remade");
-    cy.mount(
+    mountWithIntl(
       <WorkspaceOperationCard
         operation={{
           anchorType: "operation",
@@ -1923,7 +1938,7 @@ describe("WorkspaceChatPanel", () => {
   });
 
   it("offers nothing when the turn edited the page it was asked to", () => {
-    cy.mount(
+    mountWithIntl(
       <WorkspaceOperationCard
         operation={{
           anchorType: "operation",
@@ -1947,7 +1962,7 @@ describe("WorkspaceChatPanel", () => {
   });
 
   it("does not offer a remake from an unknown operation schema", () => {
-    cy.mount(
+    mountWithIntl(
       <WorkspaceOperationCard
         operation={{
           anchorType: "operation",
