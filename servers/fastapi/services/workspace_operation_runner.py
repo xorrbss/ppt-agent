@@ -28,7 +28,7 @@ from services.workspace_generation_timing_payload import (
     sanitize_generation_timing_result,
 )
 from services.workspace_generation_timing_attachment import (
-    amend_generation_timing_projection,
+    amend_generation_timing_projection_with_error_marker,
     attach_durable_generation_timing as _attach_durable_generation_timing,
 )
 import inspect
@@ -2665,8 +2665,9 @@ async def finalize_workspace_operation_success(
         ).scalar_one_or_none()
         if existing is not None:
             if claim.kind == "presentation.generate":
-                amended = await amend_generation_timing_projection(
+                amended, operation = await amend_generation_timing_projection_with_error_marker(
                     session,
+                    claim=claim,
                     operation=operation,
                     safe_result=safe_result,
                     now=now,
