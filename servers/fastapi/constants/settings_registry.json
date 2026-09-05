@@ -989,6 +989,268 @@
       "targets": ["fastapi.runtime"],
       "group": "memory",
       "description": "Per-call timeout in seconds for a Mem0 memory add/search call; a call exceeding this is treated as a failed, non-fatal call."
+    },
+    {
+      "key": "IMAGE_GENERATION_CONCURRENCY",
+      "type": "integer",
+      "default": 3,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "image",
+      "description": "Concurrent image provider calls per process (1-8). Replaces the single process-wide lock; ENABLE_PARALLEL_IMAGE_GENERATION=true still means unbounded."
+    },
+    {
+      "key": "EXPORT_FONT_EMBEDDING_DEFAULT_CJK",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "export",
+      "description": "Embed fonts by default in hybrid PPTX exports of CJK-language decks when the caller did not say. Without embedding every Hangul run is exported as a picture."
+    },
+    {
+      "key": "AUTHORED_STYLE_ANCHOR_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Author the first content slide alone and hand its stylesheet to every other slide as the deck's established visual language."
+    },
+    {
+      "key": "AUTHORED_ILLUSTRATION_SHARE",
+      "type": "string",
+      "default": "0.25",
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Share of content slides (0-1) that receive one generated illustration slot, decided deterministically per deck. 0 disables illustrations and drops the slot rules from the prompt."
+    },
+    {
+      "key": "AUTHORED_EXEMPLAR_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Show the style's checked-in exemplar slide (authored_styles/exemplars/<style>.html) to the author as visual-language reference. No-op for styles without one."
+    },
+    {
+      "key": "AUTHORED_VISION_ADVISORY_ENABLED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "After generation, send one deck contact sheet to the vision-capable model and record its advisory findings in the receipt. Never a gate."
+    },
+    {
+      "key": "OUTLINE_DENSITY_FLOOR_CHARS",
+      "type": "integer",
+      "default": 350,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Median usable characters per outline slide below which a document-backed request gets one bounded expansion call. 0 disables."
+    },
+    {
+      "key": "AUTHORED_HEADER_DETERMINISTIC_REPAIR",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Repair header-contract geometry and part violations deterministically before spending a re-authoring call."
+    },
+    {
+      "key": "AUTHORED_TEXT_SCALE_RUNG_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Try the bounded deterministic text-scale rung on overflow/clipping defects before the first remake."
+    },
+    {
+      "key": "AUTHORED_DECK_INSTRUMENTS_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Record deck-level quality instruments (empty band, palette conformance, radius families, margin drift, small computed fonts, stretched images) in the receipt. Never a gate."
+    },
+    {
+      "key": "AUTHORED_METRICS_CACHE_ENTRIES",
+      "type": "integer",
+      "default": 64,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Browser-metrics LRU entries kept per process so a long deck's tail does not re-render slides for telemetry."
+    },
+    {
+      "key": "AUTHORED_METRICS_CACHE_MB",
+      "type": "integer",
+      "default": 96,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Browser-metrics LRU byte budget in megabytes."
+    },
+    {
+      "key": "AUTHORED_WAVE_BARRIER_DISABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Admit the next authoring call as soon as one finishes (semaphore) instead of waiting for the whole wave."
+    },
+    {
+      "key": "OPENAI_REASONING_EFFORT",
+      "type": "enum",
+      "default": null,
+      "secret": false,
+      "choices": ["minimal", "none", "low", "medium", "high", "xhigh"],
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.openai",
+      "description": "Optional reasoning effort for the OpenAI provider's chat-completions API on reasoning-capable models (o1/o3/o4/gpt-5/gpt-6 families). Unset sends no reasoning parameter; other model families reject it."
+    },
+    {
+      "key": "LLM_LIGHT_MODEL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "llm",
+      "description": "Optional lighter model id for latency-sensitive structured tasks (header contract, content brief, chapter plan, outline expansion, vision advisory) via utils.llm_provider.get_model_for. No call site adopts this yet; unset keeps every task on the main configured model."
+    },
+    {
+      "key": "AUTHORED_CHECKPOINT_BATCHING_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Share one fenced transaction across the checkpoint writes of a slide stage instead of committing each one separately. The fencing CAS still runs as the first statement of every transaction."
+    },
+    {
+      "key": "AUTHORED_CHECKPOINT_HTML_DEDUPE_ENABLED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Store NULL for a slide checkpoint's illustrated_html when it is byte-identical to author_html. Readers must go through services.authored_checkpoint_html; keep this false until every reader does."
+    },
+    {
+      "key": "AUTHORED_LOCAL_STAGE_ASYNC_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Write local stage-timing receipts from a bounded in-process queue in batches instead of one transaction per stage. Overflow drops receipts rather than blocking generation."
+    },
+    {
+      "key": "WORKSPACE_POLL_IDLE_CEILING_SECONDS",
+      "type": "integer",
+      "default": 5,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Ceiling in seconds for the exponential idle backoff of the worker-lane poll loops (operation runner, outbox dispatcher, authored progress poller). Cancellation latency is unaffected."
+    },
+    {
+      "key": "AUTHORED_RENDERER_LEASE_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Batch same-deck authored renders behind one per-deck renderer worker lease when this process requires the external isolated renderer worker boundary. Off falls back to one isolated-worker call per render."
+    },
+    {
+      "key": "AUTHORED_RENDERER_LEASE_IDLE_SECONDS",
+      "type": "integer",
+      "default": 60,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Idle seconds of inactivity before a per-deck renderer worker lease self-closes."
+    },
+    {
+      "key": "AUTHORED_RENDERER_LEASE_MAX_RENDERS",
+      "type": "integer",
+      "default": 200,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Renders a per-deck renderer worker lease serves before it force-closes; the next render for that deck opens a fresh lease."
+    },
+    {
+      "key": "AUTHORED_RENDERER_WARMUP_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Render one throwaway blank slide during startup on processes that run generation so the first authored render of a real deck does not pay the renderer's cold start."
+    },
+    {
+      "key": "AUTHORED_RENDERER_FRAMED_PROTOCOL_ENABLED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Talk to the isolated renderer worker over the length-prefixed framed protocol so one worker process and one Chromium serve many renders of a deck. Requires a launcher and worker image that speak frames; off keeps one worker process per render."
+    },
+    {
+      "key": "AUTHORED_RENDERER_LEASE_POOL_SIZE",
+      "type": "integer",
+      "default": 2,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Framed renderer worker processes one per-deck lease may keep open, clamped to 1-4. Higher values render more slides of the same deck concurrently at the cost of one Chromium each; only used when AUTHORED_RENDERER_FRAMED_PROTOCOL_ENABLED is on."
+    },
+    {
+      "key": "AUTHORED_TAIL_STREAMING_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Start each slide's illustrate/render/quality/checkpoint tail as soon as that slide's own authoring lands, instead of waiting for the whole deck to be authored first. Off restores the phase barrier."
+    },
+    {
+      "key": "AUTHORED_AUTHOR_STREAMING_ENABLED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Consume the authoring call as a stream and stop reading a runaway or already-finished response early, counting the abort as one invalid-HTML attempt."
+    },
+    {
+      "key": "AUTHORED_PROMPT_CACHE_KEY_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Send a per-deck prompt_cache_key with each authoring call so the provider can reuse the deck-invariant prompt prefix across slides."
+    },
+    {
+      "key": "AUTHORED_PROMPT_SYSTEM_HOIST_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Carry the deck-invariant design-system block in the authoring call's system message instead of repeating it inside each slide's user message. The assembled prompt text is unchanged."
     }
   ]
 }

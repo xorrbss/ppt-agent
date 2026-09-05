@@ -79,4 +79,5 @@ Secret values are never read or rendered by the generator.
 | `TAVILY_API_KEY` | string | — | yes | Tavily API key. |
 | `EXA_API_KEY` | string | — | yes | Exa API key. |
 | `BRAVE_SEARCH_API_KEY` | string | — | yes | Brave Search API key. |
+| `OPENAI_REASONING_EFFORT` | enum | — | no | Optional reasoning effort for the OpenAI provider's chat-completions API on reasoning-capable models (o1/o3/o4/gpt-5/gpt-6 families). Unset sends no reasoning parameter; other model families reject it. |
 

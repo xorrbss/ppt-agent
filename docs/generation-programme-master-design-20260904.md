@@ -569,9 +569,12 @@ informative rather than surprising:
   class **A4** replaces with the deterministic ladder in phase 2; no phase-1
   item addressed it.
 - The wall is dominated by provider latency: 774–814 s of the 790–981 s wall,
-  over 10–11 calls. The token profile's batch shape (3 slides per call,
-  1 then 2 concurrent waves) is the ceiling, and it is deliberate — it exists
-  to keep the personal token under its rate limit. The levers left are **A6**
+  over 10–11 calls. The token profile's batch shape at the time (3 slides per
+  call, 1 then 2 concurrent waves) was the ceiling. *Amended 2026-09-05:* D16
+  set one slide per call and the programme design F1/F3 widens the wave
+  (`AUTHORED_BATCH_WAVE_CONCURRENCY`) and replaces the wave barrier; the
+  user judged the 429 episodes transient, so the shape no longer exists to
+  protect the personal token. The levers left were **A6**
   (shorter calls) and the **API profile** (B1, `AUTHORED_PROVIDER_RATE_PROFILE=api`),
   both phase 3. G4's 7-minute figure is therefore a phase-3 number on the
   token profile, not a phase-1 one; this document's own arithmetic (section 2)
@@ -661,6 +664,11 @@ Items marked **[verify]** above, to be closed during design review:
 
 ## 13. Related documents
 
+- `docs/authored-quality-speed-programme-design-20260905.md` — workstreams
+  F–K (throughput, anchor inheritance so slides share one visual language,
+  prompt bundles, deck tokens and exemplar, gates that protect what the
+  reader sees, export defaults, input density, measurement protocol) from
+  the 2026-09-05 six-axis diagnosis; decisions D17–D26 pending review.
 - `docs/generation-quality-root-cause-and-composer-architecture-20260904.md`
   — root cause (sections 2–3 stand for the verbatim route); section 6
   phases 2–3 withdrawn by this document (see its section 6c).
@@ -681,7 +689,7 @@ Items marked **[verify]** above, to be closed during design review:
 
 | Flag | Default now | Flipped when | Rollback |
 |---|---|---|---|
-| `AUTHORED_BATCH_SLIDES_PER_CALL` / `_WAVE_CONCURRENCY` / `_RECOVERY_SUCCESSES` | today's constants (3 / 1→2 / n.a.) | phase 1 exit | set the old values |
+| `AUTHORED_BATCH_SLIDES_PER_CALL` / `_WAVE_CONCURRENCY` / `_RECOVERY_SUCCESSES` | 1 / 1→2 / 3 since D16 (2026-09-05); the programme design deploys `_WAVE_CONCURRENCY=5` after its P1 bench pass | phase 1 exit | set the old values |
 | `AUTHORED_PROVIDER_RATE_PROFILE` | `auto` (= `token` on codex) | never forced | `token` |
 | `AUTHORED_HTML_NORMALIZE_ENABLED` | **true** on merge (whitelist only) | — | `false` → today's admission failures return |
 | `CODEX_TOKEN_AUTO_REFRESH` | true | — | `false` → manual refresh endpoint |
