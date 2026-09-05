@@ -33,6 +33,11 @@ CONTENT_FONT_FLOOR_PX = 12
 #: The same floor in points, at the CSS 96dpi ratio the exporter uses (4px = 3pt).
 CONTENT_FONT_FLOOR_PT = CONTENT_FONT_FLOOR_PX * 3 // 4
 
+#: How far above the footer boundary the fill directive aims. Aiming AT the
+#: boundary made every rounding error a footer intrusion; a band leaves the
+#: page number its own air while still asking the page to be full.
+FILL_TARGET_MARGIN_PX = 28
+
 
 def composition_intent_block() -> str:
     """G1 — what the page is FOR, stated before any of the fit constraints.
@@ -45,6 +50,12 @@ def composition_intent_block() -> str:
     """
     numbered = content_bottom_px("template")
     unnumbered = content_bottom_px("none")
+    # Aim a band ABOVE the boundary, never at it. The 2026-09-05 wording told the
+    # model to finish "close to" the line itself; the blind rating of run 27 lost
+    # pages whose last line or card edge sat on the page number, so the fill
+    # target and the hard boundary are now two different numbers.
+    numbered_target = numbered - FILL_TARGET_MARGIN_PX
+    unnumbered_target = unnumbered - FILL_TARGET_MARGIN_PX
     return f"""\
 - COMPOSITION INTENT: the page must be visibly worth its place in the deck.
   - Render the CONTENT's claim and its evidence in full; shorten low-value wording
@@ -65,10 +76,13 @@ def composition_intent_block() -> str:
     unit verbatim, no invented series.
   - When CONTENT is a real row/column structure, render a semantic
     <table data-native="table"> with real <th>/<td>; never a div grid.
-  - On a numbered page compose so the content finishes close to y={numbered}px \
-(y={unnumbered}px on an
-    unnumbered deck); reach the line by adding evidence and structure, never by letting a
-    block cross it."""
+  - Fill the page down to about y={numbered_target}px on a numbered page \
+(y={unnumbered_target}px on an
+    unnumbered deck) by adding evidence and structure rather than white space. \
+y={numbered}px
+    (y={unnumbered}px) is a HARD boundary the footer owns: nothing — not a card edge, not a
+    last line, not a shadow — may touch or cross it, so aim for the target and keep the
+    remaining band clear."""
 
 
 @dataclass(frozen=True)
