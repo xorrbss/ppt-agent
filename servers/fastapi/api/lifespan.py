@@ -108,6 +108,7 @@ from utils.get_env import get_app_data_directory_env
 from utils.model_availability import (
     check_llm_and_image_provider_api_or_model_availability,
 )
+from utils.renderer_warmup import warm_up_authored_renderer
 
 logger = logging.getLogger(__name__)
 _LOCAL_ENVIRONMENTS = {"local", "development", "dev", "test"}
@@ -247,6 +248,11 @@ async def app_lifespan(_: FastAPI):
         ):
             await start_template_v2_pptx_dispatcher()
             template_v2_dispatcher_started = True
+        if should_start_embedded_workspace_operation_worker():
+            # Pay the renderer's cold start (Chromium bring-up, or the
+            # external worker binary/isolation check) at boot instead of on
+            # the first slide of the first real deck. Never fails startup.
+            await warm_up_authored_renderer()
         await bootstrap_database_admin()
         if os.getenv("PRESENTON_SKIP_PROVIDER_AVAILABILITY_CHECK") != "true":
             await check_llm_and_image_provider_api_or_model_availability()
@@ -290,5 +296,26 @@ async def app_lifespan(_: FastAPI):
                 await trusted_worker_runtime.close()
             except Exception:
                 logger.exception("Trusted worker runtime shutdown failed")
+        # A7's local stage-timing queue batches DB writes on its own timer;
+        # drain it before the engines it writes through go away. The
+        # function may not exist yet on older checkouts, so import it lazily
+        # and skip silently if it is missing.
+        try:
+            from services.local_stage_receipt_queue import flush_local_stage_queue
+        except ImportError:
+            flush_local_stage_queue = None
+        if flush_local_stage_queue is not None:
+            try:
+                await flush_local_stage_queue()
+            except Exception:
+                logger.exception("Local stage receipt queue flush failed")
+        # Renderer worker leases hold long-lived worker processes when the
+        # framed protocol is on; close them so no orphan Chromium survives.
+        try:
+            from utils.slide_capture_worker_lease import close_all_leases
+
+            await close_all_leases()
+        except Exception:
+            logger.exception("Renderer worker lease shutdown failed")
         # Release all database connections to prevent stale/leaked pools.
         await dispose_engines()

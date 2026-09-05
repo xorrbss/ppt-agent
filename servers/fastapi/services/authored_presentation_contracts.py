@@ -48,6 +48,11 @@ class AuthoredGenerationPipelineResult:
     # Index-ordered, and merged into the deck's one ``flaggedSlides`` list next
     # to the gate-stage flags so every consumer sees one kind of flagged page.
     author_flagged_slides: tuple[dict[str, Any], ...] = ()
+    # F3: seconds this attempt spent sleeping out a provider cooldown before an
+    # authoring admission. Zero on a run that never met an overload. The attempt
+    # timing receipt records it as ``cooldownWaitSeconds``.
+    cooldown_wait_seconds: float = 0.0
+
     def __post_init__(self) -> None:
         # The result is a public boundary consumed by API/publication code.
         # Never propagate a worker lease or raw generation token through it.

@@ -316,6 +316,12 @@ async def run_attempt_heartbeat_loop(
         min(float(poll_seconds), heartbeat_interval, 1.0),
     )
     next_heartbeat_at = loop.time() + heartbeat_interval
+    # The heartbeat write is itself a cancellation check: its CAS requires
+    # ``cancel_requested_at IS NULL`` and the attempt's own fence, so a
+    # cancellation between two ticks makes it return ``False``.  A separate
+    # cancel read in the same tick would ask the database the same question
+    # twice, so it is skipped for one interval after each heartbeat.
+    cancel_check_suppressed_until = 0.0
     while True:
         await asyncio.sleep(
             min(
@@ -324,16 +330,18 @@ async def run_attempt_heartbeat_loop(
             )
         )
         try:
-            cancel_kwargs = {"session_factory": session_factory}
-            if _supports_fencing_token(operation_cancel_requested):
-                cancel_kwargs["fencing_token"] = claim.fencing_token
-            if await operation_cancel_requested(
-                claim.operation_id,
-                claim.attempt_token,
-                **cancel_kwargs,
-            ):
-                raise WorkspaceOperationCancelled("workspace_operation_cancelled")
-            if loop.time() < next_heartbeat_at:
+            heartbeat_due = loop.time() >= next_heartbeat_at
+            if loop.time() >= cancel_check_suppressed_until:
+                cancel_kwargs = {"session_factory": session_factory}
+                if _supports_fencing_token(operation_cancel_requested):
+                    cancel_kwargs["fencing_token"] = claim.fencing_token
+                if await operation_cancel_requested(
+                    claim.operation_id,
+                    claim.attempt_token,
+                    **cancel_kwargs,
+                ):
+                    raise WorkspaceOperationCancelled("workspace_operation_cancelled")
+            if not heartbeat_due:
                 continue
             heartbeat_kwargs = {
                 "session_factory": session_factory,
@@ -365,4 +373,8 @@ async def run_attempt_heartbeat_loop(
             raise WorkspaceOperationLeaseLost(error.code) from error
         if not alive:
             raise WorkspaceOperationLeaseLost("workspace_operation_lease_lost")
+        # The renewal that just committed required ``cancel_requested_at IS
+        # NULL`` under this attempt's fence, so it already answered the
+        # cancellation question for this instant.
         next_heartbeat_at = loop.time() + heartbeat_interval
+        cancel_check_suppressed_until = loop.time() + cancellation_poll_interval

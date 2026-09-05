@@ -18,6 +18,7 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import WorkspaceOperation
 from models.presentation_outline_model import (
     PresentationOutlineModel,
@@ -26,6 +27,7 @@ from models.presentation_outline_model import (
 from services import authored_checkpoint_service as checkpoints
 from services import authored_presentation_pipeline as pipeline
 from utils.llm_calls.author_slide import Brand
+from utils.runtime_settings import replace_process_runtime_settings
 from utils.renderer_isolation import RendererPolicyError
 
 
@@ -41,6 +43,10 @@ async def _checkpoint_database(tmp_path, monkeypatch):
                 PresentationGenerationJob.__table__,
                 AuthoredSlideCheckpoint.__table__,
                 WorkspaceOperation.__table__,
+                # A render checkpoint asks the admission authority whether the
+                # generation is public before it writes its artifacts, so the
+                # scratch schema needs the table even for a local job.
+                PublicOperationAdmission.__table__,
             ],
         )
     maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -343,6 +349,15 @@ def test_linked_workspace_checkpoint_and_publication_require_matching_fence(
                 fencing_token=9,
             )
 
+            # This scenario is specific to the unbatched render write, which
+            # resolves the public binding in its own session before it opens
+            # the fenced transaction.  The batched write fences first and holds
+            # the operation row lock across the binding read, so a competing
+            # transaction cannot commit a takeover in that window at all; it is
+            # exercised separately below.
+            monkeypatch.setenv("AUTHORED_CHECKPOINT_BATCHING_ENABLED", "false")
+            replace_process_runtime_settings(None)
+
             async def take_over_before_pointer(*_args, **_kwargs):
                 async with maker() as takeover_session:
                     await takeover_session.execute(
@@ -370,6 +385,23 @@ def test_linked_workspace_checkpoint_and_publication_require_matching_fence(
                     browser_metrics={"visible": True},
                 )
             assert late_write.value.code == "authored_workspace_operation_fence_lost"
+
+            # The batched render write refuses the same stale attempt at its
+            # first statement, before any artifact bytes are produced.
+            monkeypatch.setenv("AUTHORED_CHECKPOINT_BATCHING_ENABLED", "true")
+            replace_process_runtime_settings(None)
+            with pytest.raises(checkpoints.AuthoredStageError) as batched_write:
+                await checkpoints.complete_stage(
+                    job_id=job.id,
+                    slide_index=0,
+                    stage="render",
+                    attempt_token="workspace-attempt",
+                    fencing_token=9,
+                    html="<section>later render</section>",
+                    png=b"later-render",
+                    browser_metrics={"visible": True},
+                )
+            assert batched_write.value.code == "authored_workspace_operation_fence_lost"
 
             async with maker() as session:
                 checkpoint = (

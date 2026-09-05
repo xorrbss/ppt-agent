@@ -73,6 +73,13 @@ from services.account_deletion_service import (
     AccountDeletionFenceConflict,
     require_active_account_generation,
 )
+from services.workspace_public_generation_lifecycle import (
+    PUBLIC_GENERATION_LIFECYCLE_SCHEMA,
+    PUBLIC_GENERATION_STATES,
+    _PUBLIC_GENERATION_STAGE_STATES,
+    _public_generation_transition_allowed,
+    _public_generation_transition_path,
+)
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     WorkspaceOperationBlocked,
@@ -103,6 +110,8 @@ from services.workspace_operation_observability import (
     WorkspaceOperationObservationName,
     log_workspace_operation_observation,
 )
+from services.workspace_poll_backoff import IdleCycle
+from services.workspace_worker_lane_probe import workspace_operation_work_pending
 from utils.datetime_utils import get_current_utc_datetime
 from utils.owner_context import (
     get_current_owner_id,
@@ -148,53 +157,6 @@ _DIRECT_CANCEL_STATES = frozenset(
     }
 )
 
-PUBLIC_GENERATION_LIFECYCLE_SCHEMA = "public-generation-lifecycle/v1"
-PUBLIC_GENERATION_STATES = (
-    "accepted",
-    "queued",
-    "outlining",
-    "authoring",
-    "rendering",
-    "quality_gate",
-    "staging",
-    "published",
-    "export_queued",
-    "exporting",
-    "completed",
-    "capacity_waiting",
-    "retry_waiting",
-    "cancelled",
-    "failed",
-    "dead_letter",
-)
-_PUBLIC_GENERATION_FORWARD_STATES = PUBLIC_GENERATION_STATES[:11]
-_PUBLIC_GENERATION_WAIT_STATES = frozenset({"capacity_waiting", "retry_waiting"})
-_PUBLIC_GENERATION_TERMINAL_STATES = frozenset(
-    {"completed", "cancelled", "failed", "dead_letter"}
-)
-_PUBLIC_GENERATION_STAGE_STATES = {
-    "generation_started": "outlining",
-    "content_brief": "outlining",
-    "outline": "outlining",
-    "authored_outline": "outlining",
-    "template_v2_layout_selection": "outlining",
-    "authored_generation": "authoring",
-    "authored_slide_generation": "authoring",
-    "authored_author": "authoring",
-    "authored_illustrate": "authoring",
-    "template_v2_slide_generation": "authoring",
-    "authored_render": "rendering",
-    "template_v2_pptx_validation": "rendering",
-    "authored_repair": "quality_gate",
-    "authored_checkpoint": "quality_gate",
-    "authored_generation_finalizing": "quality_gate",
-    "template_v2_saving": "quality_gate",
-    # Both generators stage an immutable export before the publication CAS.
-    "authored_export": "staging",
-    "authored_publication": "staging",
-    "template_v2_exporting": "staging",
-    "template_v2_publishing": "staging",
-}
 _PUBLIC_BUDGET_ERROR_CODES = frozenset(
     {
         "public_provider_request_limit_exceeded",
@@ -203,41 +165,6 @@ _PUBLIC_BUDGET_ERROR_CODES = frozenset(
         "public_provider_actual_cost_limit_exceeded",
     }
 )
-
-
-def _public_generation_transition_allowed(current: str, target: str) -> bool:
-    if current == target:
-        return True
-    if current in _PUBLIC_GENERATION_TERMINAL_STATES:
-        return False
-    if target in {"cancelled", "failed", "dead_letter"}:
-        return True
-    if target in _PUBLIC_GENERATION_WAIT_STATES:
-        return current not in {"accepted", "published", "export_queued", "exporting"}
-    if current in _PUBLIC_GENERATION_WAIT_STATES:
-        return target == "queued"
-    try:
-        return (
-            _PUBLIC_GENERATION_FORWARD_STATES.index(target)
-            == _PUBLIC_GENERATION_FORWARD_STATES.index(current) + 1
-        )
-    except ValueError:
-        return False
-
-
-def _public_generation_transition_path(current: str, target: str) -> tuple[str, ...]:
-    """Return the monotonic CAS steps needed to reach an observed lifecycle state."""
-
-    if current == target:
-        return (target,)
-    if current in _PUBLIC_GENERATION_FORWARD_STATES and target in _PUBLIC_GENERATION_FORWARD_STATES:
-        current_index = _PUBLIC_GENERATION_FORWARD_STATES.index(current)
-        target_index = _PUBLIC_GENERATION_FORWARD_STATES.index(target)
-        if target_index > current_index:
-            return _PUBLIC_GENERATION_FORWARD_STATES[current_index + 1 : target_index + 1]
-    if _public_generation_transition_allowed(current, target):
-        return (target,)
-    raise ValueError(f"public_generation_transition_invalid:{current}:{target}")
 
 
 def _public_generation_progress(
@@ -4351,14 +4278,33 @@ class WorkspaceOperationRunner:
             pass
         self._wake.clear()
 
+    async def _claim_cycle_due(self, cycle: IdleCycle) -> bool:
+        """Whether to pay for a claim/recovery cycle on this tick.
+
+        ``claim_next_workspace_operation`` opens ``BEGIN IMMEDIATE`` before it
+        knows whether a row exists, so an idle runner took the SQLite writer
+        lock once a second and contended with the deck it was generating.  A
+        read-only probe answers first; the backed-off sweep still runs the full
+        cycle, so a probe that reads nothing costs latency, never an operation.
+        """
+
+        if cycle.due():
+            return True
+        return await workspace_operation_work_pending(
+            session_factory=self.session_factory,
+            allowed_kinds=self.allowed_kinds,
+        )
+
     async def _run_loop(self) -> None:
+        cycle = IdleCycle(self.poll_seconds)
         while not self._stopping:
             try:
-                await recover_expired_workspace_operations(
-                    session_factory=self.session_factory,
-                    registry=self.registry,
-                )
-                await self.dispatch_once()
+                if await self._claim_cycle_due(cycle):
+                    await recover_expired_workspace_operations(
+                        session_factory=self.session_factory,
+                        registry=self.registry,
+                    )
+                    cycle.record(await self.dispatch_once())
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -4630,6 +4576,17 @@ async def stop_workspace_operation_runner() -> None:
 
 
 def wake_workspace_operation_runner() -> None:
+    """Shorten pickup latency in this process; the durable row is authority.
+
+    In split/external worker mode the runner lives in another process and this
+    is a no-op there, which is why the runner does not rely on it: its idle
+    loop asks ``workspace_operation_work_pending`` -- a read-only probe over
+    the queued rows themselves -- once per poll interval, and only the
+    expensive write-locking claim cycle backs off.  A submitted operation is
+    therefore picked up within one short poll in every worker mode, with no
+    extra table and no write per submission.
+    """
+
     if _workspace_operation_runner is not None:
         _workspace_operation_runner.wake()
 

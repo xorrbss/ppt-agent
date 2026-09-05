@@ -57,6 +57,7 @@ from services import authored_batch_policy as batch_policy_mod
 from services import authored_generation_preflight as preflight_mod
 from services import authored_presentation_generation as generation_mod
 from services import authored_presentation_pipeline as pipeline_mod
+from services import authored_wave_scheduler as wave_scheduler_mod
 from services import authored_presentation_service as authored_service
 from services import authored_terminal_slide_fallback as terminal_mod
 from services import database
@@ -75,6 +76,8 @@ from services.presentation_generation_operation_handler import (
     register_presentation_generation_operation_handler,
 )
 from utils.llm_calls import author_batch as author_batch_mod
+from utils.llm_calls import author_deck as author_deck_mod
+from utils.llm_calls import author_slide as author_slide_mod
 from utils.owner_context import (
     reset_current_owner_id,
     reset_current_tenant_id,
@@ -88,6 +91,9 @@ from utils.owner_context import (
 
 _LABEL_LINE_RATIO = 1.4
 _SLIDE_INDEX_PATTERN = re.compile(r"BEGIN REQUEST FOR SLIDE INDEX (\d+)")
+#: The single-slide prompt (``author_slide_prompt``) names its slide in
+#: human, 1-based form instead; the D7 rescue authors through that path.
+_SINGLE_SLIDE_PATTERN = re.compile(r"Author slide (\d+) of \d+")
 _STATUS_TIMEOUT_SECONDS = 120.0
 
 _STUB_MODEL = "stub-model"
@@ -268,6 +274,50 @@ class StubProvider:
         return found
 
 
+@dataclass
+class SingleSlideStub:
+    """The llmai client seen by ``author_slide.author_slide_html``.
+
+    The batch wave is not the only lane that reaches a provider: the D7
+    author-stage rescue authors ONE slide through ``author_planned_slide``,
+    which builds the single-slide prompt and resolves its own client. Without
+    this the rescue call would die resolving a real provider config, and a test
+    could not tell "the rescue was attempted" from "the rescue never ran".
+
+    Counts land in the same ``StubProvider.calls_by_index`` as the batch calls,
+    so a slide's total provider cost stays one number.
+    """
+
+    provider: StubProvider
+    calls: list[int] = field(default_factory=list)
+
+    def generate(self, **kwargs: Any) -> Any:
+        index = self._requested_index(kwargs)
+        self.calls.append(index)
+        ordinal = self.provider.calls_by_index.get(index, 0) + 1
+        self.provider.calls_by_index[index] = ordinal
+        return SimpleNamespace(content=self.provider.html_for(index, ordinal))
+
+    @staticmethod
+    def _requested_index(kwargs: dict[str, Any]) -> int:
+        for message in kwargs["messages"]:
+            content = getattr(message, "content", None)
+            texts = (
+                [content]
+                if isinstance(content, str)
+                else [
+                    getattr(part, "text", "")
+                    for part in (content or ())
+                    if getattr(part, "text", None)
+                ]
+            )
+            for text in texts:
+                match = _SINGLE_SLIDE_PATTERN.search(text)
+                if match:
+                    return int(match.group(1)) - 1
+        raise AssertionError("single-slide prompt did not name its slide")
+
+
 # --- wave / policy observation -------------------------------------------------
 
 
@@ -323,8 +373,16 @@ class WaveRecorder:
             self._pending_state = result
             return result
 
-        monkeypatch.setattr(pipeline_mod, "plan_authored_batch_wave", plan)
-        monkeypatch.setattr(pipeline_mod, "advance_authored_batch_policy", advance)
+        # The wave loop has moved between modules (pipeline -> wave scheduler)
+        # and may move again; patch every module that imported the names so the
+        # observation does not depend on who owns the loop today.
+        patched = 0
+        for module in (pipeline_mod, wave_scheduler_mod, author_deck_mod):
+            if hasattr(module, "plan_authored_batch_wave"):
+                monkeypatch.setattr(module, "plan_authored_batch_wave", plan)
+                monkeypatch.setattr(module, "advance_authored_batch_policy", advance)
+                patched += 1
+        assert patched, "no module exposes the authored batch wave planner"
 
     def final_state(self) -> batch_policy_mod.AuthoredBatchPolicyState | None:
         return self._pending_state
@@ -332,6 +390,9 @@ class WaveRecorder:
 
 #: Modules a cooldown wait may be issued from, whichever scheduler lands it.
 _SCHEDULER_MODULE_PREFIXES = ("services.authored_", "utils.llm_calls.author_")
+#: The function that performs the cooldown wait, in whichever module owns it.
+#: Only this sleep advances the policy clock: see ``_install_sleep_recorder``.
+_COOLDOWN_WAIT_FUNCTIONS = frozenset({"wait_out_cooldown"})
 
 
 def _install_sleep_recorder(
@@ -349,10 +410,17 @@ def _install_sleep_recorder(
     real_sleep = asyncio.sleep
 
     async def fake_sleep(delay, *args, **kwargs):
-        caller = sys._getframe(1).f_globals.get("__name__", "")
+        frame = sys._getframe(1)
+        caller = frame.f_globals.get("__name__", "")
         if delay >= 1.0 and caller.startswith(_SCHEDULER_MODULE_PREFIXES):
             recorded.append(float(delay))
-            clock.skip(float(delay))
+            # Only the cooldown wait moves the policy clock. The other authored
+            # sleeps in this window are the generation progress poller's, and
+            # they return immediately here: skipping the clock for them too
+            # would run the policy's clock ahead of the scheduler's, so the
+            # cooldown the scheduler then measures is inflated by every poll.
+            if frame.f_code.co_name in _COOLDOWN_WAIT_FUNCTIONS:
+                clock.skip(float(delay))
             return await real_sleep(0)
         return await real_sleep(delay, *args, **kwargs)
 
@@ -619,6 +687,15 @@ def _install_provider(
     monkeypatch.setattr(author_batch_mod, "get_llm_provider", lambda: LLMProvider.CODEX)
     monkeypatch.setattr(author_batch_mod, "enforce_llm_egress_policy", lambda: None)
     monkeypatch.setattr(author_batch_mod, "_wait_for_author_rate_slot", no_rate_slot)
+    # The rescue's simplified attempt takes the single-slide lane, which
+    # resolves its own client/config/model. Stub the same seams there.
+    single = SingleSlideStub(provider)
+    monkeypatch.setattr(author_slide_mod, "get_client", lambda **_kwargs: single)
+    monkeypatch.setattr(author_slide_mod, "get_llm_config", lambda: {})
+    monkeypatch.setattr(author_slide_mod, "get_model", lambda: _STUB_MODEL)
+    monkeypatch.setattr(author_slide_mod, "get_llm_provider", lambda: LLMProvider.CODEX)
+    monkeypatch.setattr(author_slide_mod, "enforce_llm_egress_policy", lambda: None)
+    monkeypatch.setattr(author_slide_mod, "_wait_for_author_rate_slot", no_rate_slot)
     monkeypatch.setattr(llm_provider, "get_llm_provider", lambda *a, **k: LLMProvider.CODEX)
     monkeypatch.setattr(llm_provider, "get_model", lambda *a, **k: _STUB_MODEL)
 

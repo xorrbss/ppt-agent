@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_PUBLISHED,
     PRESENTATION_LIFECYCLE_STAGING,
@@ -69,14 +67,6 @@ def test_persistent_renderer_policy_violation_fails_the_deck_when_flag_publishin
     assert not list((tmp_path / "app-data" / "exports").glob("*.pptx"))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "pending: the author-stage rescue (services/authored_author_stage_rescue.py, "
-        "reason author:attempts_exhausted) is wired into process_slide only; the "
-        "batch wave path in _preauthor_missing_slides still fails the deck"
-    ),
-)
 def test_persistent_author_failure_publishes_a_flagged_placeholder_when_enabled(
     tmp_path, monkeypatch
 ):

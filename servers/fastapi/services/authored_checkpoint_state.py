@@ -3,17 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from contextlib import asynccontextmanager
 from typing import Any, Mapping
 import uuid
 
-from sqlalchemy import func, select, update
-from sqlalchemy.exc import OperationalError
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
-from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import WorkspaceOperation
 from services.authored_checkpoint_artifacts import (
     atomic_write,
@@ -26,6 +23,18 @@ from services.authored_checkpoint_artifacts import (
 )
 from services.artifact_store import configured_public_artifact_service
 from services.authored_checkpoint_errors import AuthoredStageError
+from services.authored_checkpoint_fence import (
+    checkpoint_mutation_session as _checkpoint_mutation_session,
+    completed_count as _completed_count,
+    load_checkpoint as _checkpoint,
+    owned_job as _owned_job,
+    public_checkpoint_binding as _public_checkpoint_binding,
+)
+from services.authored_checkpoint_stage_batch import (
+    begin_author_stage,  # noqa: F401 -- re-exported entry point for callers
+    complete_render_stage_batched as _complete_render_stage_batched,
+    store_downstream_html as _store_downstream_html,
+)
 from services.authored_slide_checkpoint_bundle import (
     SlideCheckpointBundle,
     SlideCheckpointConflict,
@@ -33,34 +42,11 @@ from services.authored_slide_checkpoint_bundle import (
 from services.authored_generation_observability import log_authored_slide_failure_observation
 from services.database import async_session_maker
 from utils.datetime_utils import get_current_utc_datetime
+from utils.get_env_programme import is_authored_checkpoint_batching_enabled
 
 
 STAGES = ("author", "illustrate", "render", "persist")
 _STATUS_FIELD = {stage: f"{stage}_status" for stage in STAGES}
-
-
-async def _lock_public_admission_if_available(
-    session: AsyncSession,
-    operation_id: uuid.UUID,
-) -> PublicOperationAdmission | None:
-    try:
-        async with session.begin_nested():
-            return await session.scalar(
-                select(PublicOperationAdmission)
-                .where(PublicOperationAdmission.operation_id == operation_id)
-                .with_for_update()
-            )
-    except OperationalError:
-        return None
-
-
-@asynccontextmanager
-async def _checkpoint_mutation_session(session: AsyncSession | None):
-    if session is not None:
-        yield session, False
-        return
-    async with async_session_maker() as owned_session:
-        yield owned_session, True
 
 
 async def initialize_checkpoints(
@@ -320,6 +306,23 @@ async def complete_stage(
     has_evidence = stage == "render" and html is not None and browser_metrics is not None
     if has_evidence and png is None:
         raise ValueError("checkpoint_evidence_requires_png")
+    if (
+        stage == "render"
+        and png is not None
+        and is_authored_checkpoint_batching_enabled()
+    ):
+        return await _complete_render_stage_batched(
+            job_id=job_id,
+            slide_index=slide_index,
+            attempt_token=attempt_token,
+            html=html,
+            png=png,
+            browser_metrics=browser_metrics,
+            checkpoint_revision=checkpoint_revision,
+            skipped=skipped,
+            fencing_token=fencing_token,
+            session=session,
+        )
     if png is not None:
         prior = None
         if has_evidence:
@@ -423,10 +426,8 @@ async def complete_stage(
         setattr(checkpoint, f"{stage}_completed_at", get_current_utc_datetime())
         if stage == "author" and html is not None:
             checkpoint.author_html = html
-        if stage == "illustrate" and html is not None:
-            checkpoint.illustrated_html = html
-        if stage == "render" and html is not None:
-            checkpoint.illustrated_html = html
+        if stage in ("illustrate", "render") and html is not None:
+            _store_downstream_html(checkpoint, html)
         if render_path is not None:
             checkpoint.render_path = render_path
             checkpoint.render_sha256 = render_sha256
@@ -614,180 +615,6 @@ def should_inject_failure(
         checkpoint.error and checkpoint.error.get("code") == "authored_injected_failure"
     )
     return target_slide == slide_index + 1 and target_stage == stage and not already_injected
-
-
-async def _owned_job(
-    session: AsyncSession,
-    job_id: uuid.UUID,
-    attempt_token: str,
-    *,
-    fencing_token: int | None = None,
-) -> PresentationGenerationJob:
-    # Fence every checkpoint transaction, not just final publication.  A plain
-    # SELECT leaves a race where cancellation/lease takeover can happen before
-    # the checkpoint UPDATE commits.  This conditional no-op UPDATE acquires the
-    # job-row write lock and is rechecked by the database before any stage data
-    # is made visible.
-    job = await session.get(PresentationGenerationJob, job_id)
-    if job is None:
-        await session.rollback()
-        raise AuthoredStageError(
-            slide_index=0,
-            stage="persist",
-            code="authored_attempt_lost",
-            retryable=True,
-        )
-    now = get_current_utc_datetime()
-    if job.workspace_operation_id is not None:
-        if isinstance(fencing_token, bool) or not isinstance(fencing_token, int):
-            await session.rollback()
-            raise AuthoredStageError(
-                slide_index=0,
-                stage="persist",
-                code="authored_workspace_operation_fencing_token_required",
-                retryable=True,
-            )
-        admission = await _lock_public_admission_if_available(
-            session,
-            job.workspace_operation_id,
-        )
-        operation_result = await session.execute(
-            update(WorkspaceOperation)
-            .where(
-                WorkspaceOperation.id == job.workspace_operation_id,
-                WorkspaceOperation.state == "running",
-                WorkspaceOperation.attempt_token == attempt_token,
-                WorkspaceOperation.fencing_token == fencing_token,
-            )
-            .values(heartbeat_at=now, updated_at=now)
-        )
-        if operation_result.rowcount != 1:
-            await session.rollback()
-            raise AuthoredStageError(
-                slide_index=0,
-                stage="persist",
-                code="authored_workspace_operation_fence_lost",
-                retryable=True,
-            )
-        operation_contract = await session.scalar(
-            select(WorkspaceOperation.contract_version).where(
-                WorkspaceOperation.id == job.workspace_operation_id
-            )
-        )
-        if operation_contract == "public-operation/v2" and (
-            admission is None
-            or admission.operation_kind != "generation"
-            or admission.state != "active"
-            or admission.fence != fencing_token
-        ):
-            await session.rollback()
-            raise AuthoredStageError(
-                slide_index=0,
-                stage="persist",
-                code="authored_workspace_operation_fence_lost",
-                retryable=True,
-            )
-        result = await session.execute(
-            update(PresentationGenerationJob)
-            .where(
-                PresentationGenerationJob.id == job_id,
-                PresentationGenerationJob.state.in_(("running", "staging")),
-            )
-            .values(heartbeat_at=now, updated_at=now)
-        )
-    else:
-        result = await session.execute(
-            update(PresentationGenerationJob)
-            .where(
-                PresentationGenerationJob.id == job_id,
-                PresentationGenerationJob.attempt_token == attempt_token,
-                PresentationGenerationJob.state.in_(("running", "staging")),
-            )
-            .values(heartbeat_at=now, updated_at=now)
-        )
-    if result.rowcount != 1:
-        await session.rollback()
-        raise AuthoredStageError(
-            slide_index=0,
-            stage="persist",
-            code="authored_attempt_lost",
-            retryable=True,
-        )
-    job = await session.get(PresentationGenerationJob, job_id)
-    if job is None:  # Defensive: the fenced row cannot normally disappear.
-        await session.rollback()
-        raise AuthoredStageError(
-            slide_index=0,
-            stage="persist",
-            code="authored_attempt_lost",
-            retryable=True,
-        )
-    return job
-
-
-async def _public_checkpoint_binding(
-    job_id: uuid.UUID,
-    attempt_token: str,
-    *,
-    fencing_token: int | None,
-) -> tuple[uuid.UUID, str, uuid.UUID] | None:
-    """Resolve a public generation's owner/tenant only from durable admission."""
-
-    async with async_session_maker() as session:
-        binding = (
-            await session.execute(
-                select(
-                    PublicOperationAdmission.owner_id,
-                    PublicOperationAdmission.tenant_id,
-                    PublicOperationAdmission.operation_id,
-                )
-                .join(
-                    PresentationGenerationJob,
-                    PresentationGenerationJob.workspace_operation_id
-                    == PublicOperationAdmission.operation_id,
-                )
-                .join(
-                    WorkspaceOperation,
-                    WorkspaceOperation.id
-                    == PresentationGenerationJob.workspace_operation_id,
-                )
-                .where(
-                    PresentationGenerationJob.id == job_id,
-                    PresentationGenerationJob.state.in_(("running", "staging")),
-                    WorkspaceOperation.state == "running",
-                    WorkspaceOperation.attempt_token == attempt_token,
-                    WorkspaceOperation.fencing_token == fencing_token,
-                    PublicOperationAdmission.operation_kind == "generation",
-                    PublicOperationAdmission.state == "active",
-                )
-            )
-        ).one_or_none()
-    if binding is None:
-        return None
-    return binding.owner_id, binding.tenant_id, binding.operation_id
-
-
-async def _checkpoint(session, job_id: uuid.UUID, slide_index: int) -> AuthoredSlideCheckpoint:
-    return (
-        await session.execute(
-            select(AuthoredSlideCheckpoint).where(
-                AuthoredSlideCheckpoint.job_id == job_id,
-                AuthoredSlideCheckpoint.slide_index == slide_index,
-            )
-        )
-    ).scalar_one()
-
-
-async def _completed_count(session, job_id: uuid.UUID) -> int:
-    return int(
-        await session.scalar(
-            select(func.count()).select_from(AuthoredSlideCheckpoint).where(
-                AuthoredSlideCheckpoint.job_id == job_id,
-                AuthoredSlideCheckpoint.persist_status == "completed",
-            )
-        )
-        or 0
-    )
 
 
 def _require_stage(stage: str) -> None:

@@ -16,6 +16,12 @@ from models.authored_infographic_plan import AuthoredInfographicPlan
 from models.presentation_outline_model import PresentationOutlineModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services.authored_checkpoint_state import provider_attempt_count_in_epoch
+from services.authored_author_stage_deferral import (
+    DeferredAuthorBudgetExhausted,
+    author_stage_failure as _author_stage_failure,
+    defer_rescuable_author_failures,
+    deferred_author_budget_error,
+)
 from services.authored_author_stage_rescue import rescue_author_stage
 from services.authored_checkpoint_service import (
     AuthoredStageError,
@@ -27,18 +33,11 @@ from services.authored_checkpoint_service import (
     should_inject_failure,
     start_stage,
 )
-from services.authored_checkpoint_artifacts import (
-    read_valid_evidence_artifact,
-    read_valid_render_artifact,
-)
-from services.authored_presentation_artifacts import (
-    _complete_stage_after_external_success,
-)
+from services.authored_checkpoint_artifacts import read_valid_evidence_artifact, read_valid_render_artifact
+from services.authored_checkpoint_html import checkpoint_stage_html
+from services.authored_presentation_artifacts import _complete_stage_after_external_success
 from services.authored_illustration_stage import illustrate_slide
-from services.authored_infographic_assets import (
-    build_infographic_asset_context,
-    deck_has_picture_source,
-)
+from services.authored_infographic_assets import build_infographic_asset_context, deck_has_picture_source
 from services.authored_quality_loop_stage import apply_slide_quality_loop
 from services.authored_presentation_contracts import AuthoredGenerationPipelineResult
 from services.authored_evidence_ledger import DeckEvidenceLedger
@@ -53,10 +52,7 @@ from services.authored_composition_policy import (
     ensure_authored_semantic_roles,
 )
 from services.authored_quality_receipt_v2 import public_attempt_id
-from services.authored_vnext.generation.scene_checkpoint import (
-    persist_scene_envelope,
-    read_scene_checkpoint_state,
-)
+from services.authored_vnext.generation.scene_checkpoint import persist_scene_envelope, read_scene_checkpoint_state
 from services.authored_vnext.generation.scene_envelope import (
     AuthoredSlideSceneEnvelope,
     seal_deck_scene_envelope,
@@ -65,28 +61,30 @@ from services.authored_vnext.generation.scene_envelope import (
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
 from services.authored_generation_performance import authored_provider_concurrency
 from services.authored_slide_worker_pool import run_slide_worker_pool
-from services.authored_batch_policy import (
-    advance_authored_batch_policy,
-    new_authored_batch_policy_state,
-    plan_authored_batch_wave,
-    plan_authored_recovery_batches,
+from services.authored_batch_policy import new_authored_batch_policy_state
+from services.authored_tail_streaming import (
+    AuthoredTailStreamCoordinator,
+    run_authored_recovery_pass,
+    run_streamed_slide_tail,
 )
+from services.authored_preauthor_scan import report_unresolved_slides, scan_preauthor_checkpoints
+from services.authored_style_anchor_stage import (
+    accepts_style_anchor, anchor_blocking_defects, resolve_direct_lane_anchor, resolve_style_anchor,
+)
+from services.authored_wave_scheduler import AuthoredWaveSchedule, run_initial_authoring
 from services.source_images.models import SourceImageCandidate
 from services.source_content.browser_readback import BrowserSourceReadbackError
 from services.source_content.header_pages import header_absent_pages
 from services.source_content.text_stamping import stamp_source_blocks
 from utils.asset_directory_utils import get_images_directory
 from utils.authored_illustrations import (
-    enforce_strict_source_image_size_floor,
-    validate_bound_source_images,
-    validate_visible_source_images,
+    enforce_strict_source_image_size_floor, validate_bound_source_images, validate_visible_source_images,
 )
 from utils.authored_font_policy import enforce_authored_font_floor
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
 from utils.llm_calls.author_deck import (
     author_correction_from_stored_failure,
     AuthoredBatchFailure,
-    AuthoredProviderBudgetExhausted,
     AuthoredDeckResult,
     AuthoredPlannedBatchResult,
     author_planned_batch,
@@ -104,16 +102,13 @@ from utils.llm_calls.author_slide import (
     validate_authored_slide_html,
 )
 from utils.renderer_isolation import RendererPolicyError
+from utils.get_env_programme import is_authored_tail_streaming_enabled
+from utils.llm_calls.author_prompt_cache_key import deck_prompt_cache_key, set_prompt_cache_key
+from utils.slide_capture_deck_scope import set_render_deck_scope
 from utils.llm_provider import get_llm_provider
-from utils.slide_capture import (
-    _placeholder_png,
-    ensure_browser_metrics,
-    get_cached_browser_metrics,
-    render_html_to_png,
-)
+from utils.slide_capture import _placeholder_png, ensure_browser_metrics, get_cached_browser_metrics, render_html_to_png
 
 LOGGER = logging.getLogger(__name__)
-
 
 
 # Provider authoring consumes one selected-provider policy shared with the
@@ -133,59 +128,6 @@ _AUTHORED_RENDER_WORKERS = max(
 )
 _AUTHORED_SLIDE_WORKERS = _AUTHORED_AUTHOR_WORKERS + _AUTHORED_RENDER_WORKERS
 _DEFAULT_AUTHOR_PLANNED_SLIDE = author_planned_slide
-
-
-def _author_failure_retryable(error: BaseException) -> bool:
-    """Keep deterministic slide-budget exhaustion out of operation retries."""
-
-    if isinstance(error, AuthoredProviderBudgetExhausted):
-        return False
-    if _terminal_provider_code(error) is not None:
-        return False
-    explicit_retryable = getattr(error, "retryable", None)
-    if isinstance(explicit_retryable, bool):
-        return explicit_retryable
-    return is_retryable_exception(error)
-
-
-def _terminal_provider_code(error: BaseException) -> str | None:
-    """Recover a non-retryable public admission cause through safe wrappers."""
-
-    current: BaseException | None = error
-    visited: set[int] = set()
-    for _ in range(6):
-        if current is None or id(current) in visited:
-            break
-        visited.add(id(current))
-        code = getattr(current, "code", None)
-        if (
-            isinstance(code, str)
-            and code.startswith("public_provider_")
-            and getattr(current, "retryable", None) is False
-        ):
-            return code
-        nested = getattr(current, "cause", None) or getattr(current, "__cause__", None)
-        current = nested if isinstance(nested, BaseException) else None
-    return None
-
-
-def _author_stage_failure(
-    slide_index: int,
-    error: BaseException,
-    *,
-    provider_attempt_count: int | None = None,
-) -> AuthoredStageError:
-    """Build the exact author-stage envelope consumed by operation retry policy."""
-
-    code = _terminal_provider_code(error) or "authored_slide_author_failed"
-    return AuthoredStageError(
-        slide_index=slide_index,
-        stage="author",
-        code=code,
-        cause=error,
-        retryable=_author_failure_retryable(error),
-        provider_attempt_count=provider_attempt_count,
-    )
 
 
 def _evaluate_slide_quality(
@@ -412,6 +354,33 @@ async def _author_illustrate_render_pipeline(
     preauthored_htmls: dict[int, str] = {}
     preauthored_attempt_counts: dict[int, int] = {}
     preauthored_author_work: dict[int, float] = {}
+    # Slides the pre-authoring pass could not author and handed to the tail's
+    # author-stage rescue instead of failing the deck, keyed by slide index.
+    author_rescue_deferrals: dict[int, DeferredAuthorBudgetExhausted] = {}
+    # G0: the deck's style anchor, once one slide has been authored and gated.
+    # ``None`` keeps every later prompt byte-identical to today's.
+    style_anchor: Any | None = None
+    # F3: seconds this attempt spent waiting out a provider cooldown before an
+    # admission. A single-element list so the nested stages can write to it.
+    authoring_cooldown_wait_seconds = [0.0]
+    # Phase 3: with the tail streamed, a slide's illustrate/render/quality/
+    # checkpoint tail starts as its own authoring lands instead of waiting out
+    # the whole pre-authoring pass. ``None`` keeps the phase barrier: the pass
+    # completes, then the pool runs, in exactly today's order.
+    tail_stream = (
+        AuthoredTailStreamCoordinator(len(plan.contents))
+        if generation_job is not None
+        and author_planned_slide is _DEFAULT_AUTHOR_PLANNED_SLIDE
+        and is_authored_tail_streaming_enabled()
+        else None
+    )
+
+    def _anchor_blocking_defects(html: str) -> tuple[Any, ...]:
+        return anchor_blocking_defects(
+            html,
+            composition_profile=composition_profile,
+            reference_mode=plan_reference_mode,
+        )
 
     def _checkpoint_provider_attempt_count(checkpoint: object | None) -> int:
         """Provider calls this slide has already spent in *this* attempt.
@@ -462,6 +431,7 @@ async def _author_illustrate_render_pipeline(
         *,
         recovery: bool,
         prior_failures: Mapping[int, AuthoredBatchFailure],
+        style_anchor: Any | None = None,
     ):
         selected = tuple(indexes)
         attempt_observers: dict[int, Any] = {}
@@ -528,6 +498,11 @@ async def _author_illustrate_render_pipeline(
                 attempt_number=(generation_job.attempt_number if generation_job else 0),
                 slide_index=None,
             ):
+                batch_kwargs: dict[str, Any] = {}
+                if style_anchor is not None and accepts_style_anchor(
+                    author_planned_batch
+                ):
+                    batch_kwargs["style_anchor"] = style_anchor
                 result = await author_planned_batch(
                     plan,
                     selected,
@@ -538,6 +513,7 @@ async def _author_illustrate_render_pipeline(
                     raise_on_failure=generation_job is not None,
                     attempt_observers=attempt_observers,
                     attempt_reservers=attempt_reservers,
+                    **batch_kwargs,
                 )
             persisted_htmls: dict[int, str] = {}
             persisted_failures = dict(result.failures)
@@ -581,190 +557,171 @@ async def _author_illustrate_render_pipeline(
             return
         if author_planned_slide is not _DEFAULT_AUTHOR_PLANNED_SLIDE:
             return
-        initial: list[int] = []
-        resumed_recovery: list[int] = []
-        failures: dict[int, AuthoredBatchFailure] = {}
-        successful: set[int] = set()
-        # Why an earlier attempt of this operation rejected a slide. A retry
-        # exists to redo exactly those slides, and re-sending the prompt that
-        # already failed reproduces the same rejection, so the reason travels
-        # with the slide as its correction.
-        carried_failures: dict[int, AuthoredBatchFailure] = {}
-        for index in range(len(plan.contents)):
-            checkpoint = (
-                await get_checkpoint(
-                    generation_job.id,
-                    index,
-                    attempt_token=attempt_token,
-                    fencing_token=fencing_token,
-                )
-                if generation_job is not None
-                else None
-            )
-            if (
-                checkpoint is not None
-                and checkpoint.author_status == "completed"
-                and checkpoint.author_html
-            ):
-                successful.add(index)
-                continue
-            prior = _checkpoint_provider_attempt_count(checkpoint)
-            preauthored_attempt_counts[index] = prior
-            carried_hint = author_correction_from_stored_failure(
-                getattr(checkpoint, "error", None)
-            )
-            if carried_hint:
-                carried_failures[index] = AuthoredBatchFailure(
-                    RuntimeError("authored_prior_attempt_failed"), carried_hint
-                )
-            if prior >= 2:
-                prior_error = (
-                    checkpoint.error
-                    if checkpoint is not None
-                    and isinstance(checkpoint.error, Mapping)
-                    else None
-                )
-                prior_code = str((prior_error or {}).get("code") or "")
-                error = AuthoredStageError(
-                    slide_index=index,
-                    stage="author",
-                    code=(
-                        prior_code
-                        if prior_code.startswith("public_provider_")
-                        else "authored_provider_attempt_budget_exhausted"
-                    ),
-                    retryable=False,
-                    provider_attempt_count=prior,
-                    # Without this the retry records only that the slide ran out
-                    # of calls, replacing the first attempt's record of why it
-                    # failed -- the only thing that says where to look.
-                    prior_failure=prior_error,
-                )
-                failures[index] = AuthoredBatchFailure(error, str(error))
-            elif prior == 1:
-                resumed_recovery.append(index)
-                failures[index] = carried_failures.get(
-                    index,
-                    AuthoredBatchFailure(
-                        RuntimeError("authored_prior_attempt_failed"),
-                        "Regenerate this slide while obeying every original contract.",
-                    ),
-                )
-            else:
-                initial.append(index)
-
-        policy = new_authored_batch_policy_state()
-        pending = list(initial)
-        while pending:
-            wave = plan_authored_batch_wave(pending, policy)
-            outcomes = await asyncio.gather(
-                *(
-                    _run_author_batch(
-                        batch.slide_indices,
-                        recovery=False,
-                        prior_failures=carried_failures,
-                    )
-                    for batch in wave.batches
-                ),
-                return_exceptions=True,
-            )
-            consumed: set[int] = set()
-            for batch, outcome in zip(wave.batches, outcomes, strict=True):
-                consumed.update(batch.slide_indices)
-                if isinstance(outcome, BaseException):
-                    policy = advance_authored_batch_policy(
-                        policy, succeeded=False, error=outcome
-                    )
-                    failures.update(
-                        {
-                            index: AuthoredBatchFailure(outcome, str(outcome))
-                            for index in batch.slide_indices
-                        }
-                    )
-                    continue
-                policy = advance_authored_batch_policy(
-                    policy, succeeded=bool(outcome.htmls)
-                )
-                successful.update(outcome.htmls)
-                failures.update(outcome.failures)
-            pending = [index for index in pending if index not in consumed]
-
-        failed_for_recovery = [
-            index
-            for index in [*initial, *resumed_recovery]
-            if index in failures and preauthored_attempt_counts.get(index, 0) < 2
-        ]
-        recovery_batches = plan_authored_recovery_batches(
-            failed_for_recovery,
-            successful_slide_indices=successful,
-            profile=policy.profile,
+        scan = await scan_preauthor_checkpoints(
+            len(plan.contents),
+            read_checkpoint=lambda index: get_checkpoint(
+                generation_job.id,
+                index,
+                attempt_token=attempt_token,
+                fencing_token=fencing_token,
+            ),
+            attempt_count=_checkpoint_provider_attempt_count,
         )
-        for offset in range(0, len(recovery_batches), policy.concurrency):
-            window = recovery_batches[offset : offset + policy.concurrency]
-            outcomes = await asyncio.gather(
-                *(
-                    _run_author_batch(
-                        batch.slide_indices,
-                        recovery=True,
-                        prior_failures=failures,
+        initial, failures = scan.initial, scan.failures
+        successful, carried_failures = scan.successful, scan.carried_failures
+        preauthored_attempt_counts.update(scan.attempt_counts)
+
+        nonlocal style_anchor
+        schedule = AuthoredWaveSchedule(new_authored_batch_policy_state())
+        pending = list(initial)
+
+        def _record_initial(indexes: tuple[int, ...], outcome: Any) -> bool:
+            if isinstance(outcome, BaseException):
+                failures.update(
+                    {
+                        index: AuthoredBatchFailure(outcome, str(outcome))
+                        for index in indexes
+                    }
+                )
+                return False
+            successful.update(outcome.htmls)
+            failures.update(outcome.failures)
+            if tail_stream is not None:
+                # Persisted by ``_persist_batch_success`` already, so the pool
+                # finds this slide's HTML and spends no call of its own on it.
+                tail_stream.publish_many(outcome.htmls)
+            return bool(outcome.htmls)
+
+        async def _author_anchor(
+            _plan: Any, index: int, *, prior_failure_hint: str | None = None
+        ) -> str:
+            # G0: the anchor is authored through the ordinary batch path, so it
+            # is checkpointed, admitted and counted exactly like any slide.
+            prior = (
+                {
+                    index: AuthoredBatchFailure(
+                        RuntimeError("authored_anchor_defective"), prior_failure_hint
                     )
-                    for batch in window
-                ),
-                return_exceptions=True,
+                }
+                if prior_failure_hint
+                else carried_failures
             )
-            for batch, outcome in zip(window, outcomes, strict=True):
-                if isinstance(outcome, BaseException):
-                    policy = advance_authored_batch_policy(
-                        policy, succeeded=False, error=outcome
-                    )
-                    for index in batch.slide_indices:
-                        failures[index] = AuthoredBatchFailure(outcome, str(outcome))
-                    continue
-                policy = advance_authored_batch_policy(
-                    policy, succeeded=bool(outcome.htmls)
+            try:
+                outcome = await _run_author_batch(
+                    (index,),
+                    recovery=bool(prior_failure_hint),
+                    prior_failures=prior,
                 )
-                successful.update(outcome.htmls)
-                for index in outcome.htmls:
-                    failures.pop(index, None)
-                failures.update(outcome.failures)
+            except BaseException as error:
+                schedule.advance(error, succeeded=_record_initial((index,), error))
+                raise
+            schedule.advance(outcome, succeeded=_record_initial((index,), outcome))
+            if index in outcome.htmls:
+                failures.pop(index, None)
+            return preauthored_htmls.get(index, "")
 
-        unresolved = [
-            index for index in range(len(plan.contents))
-            if index not in successful and index in failures
-        ]
-        if unresolved:
-            for index in unresolved:
-                error = failures[index].error
-                stage_error = (
-                    error
-                    if isinstance(error, AuthoredStageError)
-                    else _author_stage_failure(
-                        index,
-                        error,
-                        provider_attempt_count=preauthored_attempt_counts.get(index),
-                    )
+        async def _render_anchor(html: str) -> None:
+            async with render_gate, set_render_deck_scope(render_deck_scope):
+                await render_html_to_png(html)
+
+        if pending:
+            style_anchor, _anchor_html, anchor_index = await resolve_style_anchor(
+                plan,
+                author=_author_anchor,
+                render=_render_anchor,
+                inspect_blocking=_anchor_blocking_defects,
+                remaining_calls=2,
+                eligible=pending,
+            )
+            pending = [index for index in pending if index != anchor_index]
+        if tail_stream is not None:
+            # The anchor's own result may still be replaced by its remake, so
+            # nothing reaches the pool until this stage is over. Slides resumed
+            # from an earlier attempt need no call and go straight through.
+            tail_stream.resume()
+            tail_stream.publish_many(successful)
+
+        await run_initial_authoring(
+            pending,
+            schedule,
+            run_batch=lambda indexes: _run_author_batch(
+                indexes,
+                recovery=False,
+                prior_failures=carried_failures,
+                style_anchor=style_anchor,
+            ),
+            record=_record_initial,
+        )
+        # A slide whose first call failed reaches the tail only once its one
+        # recovery call has persisted HTML; a slide that fails both is never
+        # published and fails the deck below.
+        await run_authored_recovery_pass(
+            [
+                index
+                for index in [*initial, *scan.resumed_recovery]
+                if index in failures and preauthored_attempt_counts.get(index, 0) < 2
+            ],
+            schedule=schedule,
+            run_batch=lambda indexes: _run_author_batch(
+                indexes,
+                recovery=True,
+                prior_failures=failures,
+                style_anchor=style_anchor,
+            ),
+            successful=successful,
+            failures=failures,
+            publish=tail_stream,
+        )
+        authoring_cooldown_wait_seconds[0] = schedule.cooldown_wait_seconds
+
+        # D7 at the author stage: a slide this pass could not author is the
+        # tail's rescue to answer, not a reason to kill the deck. Deferred
+        # slides are neither failed nor raised here; the pool claims them and
+        # ``process_slide`` spends their one simplified attempt.
+        deferred = defer_rescuable_author_failures(
+            len(plan.contents),
+            successful=successful,
+            failures=failures,
+            attempt_counts=preauthored_attempt_counts,
+            profile=composition_profile,
+            reference_mode=plan_reference_mode,
+            source_reflow=source_reflow,
+        )
+        author_rescue_deferrals.update(deferred)
+        if tail_stream is not None and deferred:
+            tail_stream.publish_many(deferred)
+        await report_unresolved_slides(
+            len(plan.contents),
+            successful=successful,
+            failures={
+                index: failure
+                for index, failure in failures.items()
+                if index not in deferred
+            },
+            attempt_counts=preauthored_attempt_counts,
+            stage_failure=_author_stage_failure,
+            generation_job=generation_job,
+            attempt_token=attempt_token,
+            fencing_token=fencing_token,
+        )
+
+    # G8: every authoring call of this deck shares one provider cache lane,
+    # keyed by the deck-invariant prompt prefix rather than by any slide.
+    deck_cache_key = deck_prompt_cache_key(getattr(plan, "design_system", None))
+    # Every render of this deck shares one renderer-lease scope; tasks copy the
+    # context at creation, so binding it around task creation covers their renders.
+    render_deck_scope = str(getattr(generation_job, "presentation_id", None) or evidence_attempt_id)
+    if tail_stream is None:
+        with set_prompt_cache_key(deck_cache_key), set_render_deck_scope(render_deck_scope):
+            await _preauthor_missing_slides()
+
+            if generation_job is None:
+                style_anchor = await resolve_direct_lane_anchor(
+                    plan,
+                    author_planned_slide=author_planned_slide,
+                    authored_htmls=preauthored_htmls,
+                    attempt_counts=preauthored_attempt_counts,
                 )
-                if generation_job is not None:
-                    await fail_stage(
-                        job_id=generation_job.id,
-                        slide_index=index,
-                        stage="author",
-                        attempt_token=attempt_token,
-                        fencing_token=fencing_token,
-                        error=stage_error,
-                        request_id=generation_job.request_id,
-                    )
-            first = unresolved[0]
-            error = failures[first].error
-            if isinstance(error, AuthoredStageError):
-                raise error
-            raise _author_stage_failure(
-                first,
-                error,
-                provider_attempt_count=preauthored_attempt_counts.get(first),
-            ) from error
-
-    await _preauthor_missing_slides()
 
     async def process_slide(
         index: int,
@@ -823,7 +780,7 @@ async def _author_illustrate_render_pipeline(
                 ) from exc
             if durable_evidence is not None:
                 browser_metrics = durable_evidence.metrics
-                if durable_evidence.html == getattr(checkpoint, "illustrated_html", None):
+                if durable_evidence.html == checkpoint_stage_html(checkpoint):
                     evidence_ledger.hydrate_slide(
                         attempt_id=evidence_attempt_id,
                         slide_index=index,
@@ -863,8 +820,22 @@ async def _author_illustrate_render_pipeline(
                     )
                 )
             )
+            # A spent author budget the rescue may still answer; the ordinary
+            # authoring call below is skipped and its third, simplified attempt
+            # runs in its place.
+            spent_budget: DeferredAuthorBudgetExhausted | None = None
             if not author_completed:
                 if author_provider_attempt_count >= 2:
+                    spent_budget = deferred_author_budget_error(
+                        index,
+                        checkpoint=checkpoint,
+                        deferrals=author_rescue_deferrals,
+                        provider_attempt_count=author_provider_attempt_count,
+                        profile=composition_profile,
+                        reference_mode=plan_reference_mode,
+                        source_reflow=source_reflow,
+                    )
+                if author_provider_attempt_count >= 2 and spent_budget is None:
                     prior_code = (
                         str(checkpoint.error.get("code") or "")
                         if checkpoint is not None
@@ -948,6 +919,10 @@ async def _author_illustrate_render_pipeline(
                                 author_kwargs["provider_attempt_offset"] = (
                                     prior_provider_attempt_count
                                 )
+                            if style_anchor is not None and accepts_style_anchor(
+                                author_planned_slide
+                            ):
+                                author_kwargs["style_anchor"] = style_anchor
                             carried_hint = author_correction_from_stored_failure(
                                 getattr(checkpoint, "error", None)
                             )
@@ -974,6 +949,11 @@ async def _author_illustrate_render_pipeline(
                                     reserve_author_attempt
                                 )
                             try:
+                                if spent_budget is not None:
+                                    # Both ordinary calls are already spent, so
+                                    # asking for a third here would only hit the
+                                    # budget guard. Go straight to the rescue.
+                                    raise spent_budget
                                 html = await author_planned_slide(
                                     plan, index, **author_kwargs
                                 )
@@ -1250,8 +1230,8 @@ async def _author_illustrate_render_pipeline(
             png = await read_valid_render_artifact(checkpoint) if checkpoint else None
             html_changed = bool(
                 checkpoint is not None
-                and checkpoint.illustrated_html
-                and checkpoint.illustrated_html != illustrated_html
+                and checkpoint_stage_html(checkpoint)
+                and checkpoint_stage_html(checkpoint) != illustrated_html
             )
             if png is None or checkpoint.render_status != "completed" or html_changed:
                 if html_changed:
@@ -1353,7 +1333,7 @@ async def _author_illustrate_render_pipeline(
                 generation_job is not None
                 and (
                     checkpoint.render_status != "completed"
-                    or checkpoint.illustrated_html != illustrated_html
+                    or checkpoint_stage_html(checkpoint) != illustrated_html
                 )
             ):
                 checkpoint = await _complete_stage_after_external_success(
@@ -1450,11 +1430,22 @@ async def _author_illustrate_render_pipeline(
                 )
             raise
 
-    completed_results = await run_slide_worker_pool(
-        process_slide,
-        slide_count=len(plan.contents),
-        worker_count=_AUTHORED_SLIDE_WORKERS,
-    )
+    with set_prompt_cache_key(deck_cache_key), set_render_deck_scope(render_deck_scope):
+        completed_results = (
+            await run_slide_worker_pool(
+                process_slide,
+                slide_count=len(plan.contents),
+                worker_count=_AUTHORED_SLIDE_WORKERS,
+            )
+            if tail_stream is None
+            else await run_streamed_slide_tail(
+                process_slide,
+                author_pass=_preauthor_missing_slides,
+                coordinator=tail_stream,
+                slide_count=len(plan.contents),
+                worker_count=_AUTHORED_SLIDE_WORKERS,
+            )
+        )
     htmls = [result[1] for result in completed_results]
     pngs = [result[2] for result in completed_results]
     quality_gate_reports = [
@@ -1489,6 +1480,7 @@ async def _author_illustrate_render_pipeline(
         author_flagged_slides=tuple(
             author_flagged_slides[index] for index in sorted(author_flagged_slides)
         ),
+        cooldown_wait_seconds=authoring_cooldown_wait_seconds[0],
         # Slides are authored in parallel child tasks, so the quality loop's
         # per-slide choice has no ambient way back to the measurement stage.
         # It travels with the slide's own result instead. E4: the same result

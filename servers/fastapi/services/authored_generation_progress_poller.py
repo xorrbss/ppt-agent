@@ -28,11 +28,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from services.database import async_session_maker
+from services.workspace_poll_backoff import next_poll_delay
 from utils.datetime_utils import get_current_utc_datetime
 
 LOGGER = logging.getLogger(__name__)
 
 _POLL_INTERVAL_SECONDS = 3.0
+# Nothing waits on narration, so an unchanging deck relaxes to this interval.
+_IDLE_CEILING_SECONDS = 10.0
 # The band this poller owns. `generation_started` has already been reported at
 # the floor, and publication reports completion at 100.
 _PROGRESS_FLOOR = 5
@@ -219,15 +222,28 @@ async def stream_authored_generation_progress(
     """Poll job counters until cancelled, reporting each distinct change."""
 
     last_reported: tuple[str, int, str] | None = None
+    # Narration is advisory, so an unchanging deck must not keep paying for
+    # reads that contend with the generation lane's own writes.  Any change
+    # resets the interval to the base cadence.
+    idle_ticks = 0
+    ceiling = max(interval_seconds, _IDLE_CEILING_SECONDS)
     try:
         while True:
-            await asyncio.sleep(interval_seconds)
+            await asyncio.sleep(
+                min(
+                    ceiling,
+                    next_poll_delay(
+                        idle_ticks, base=interval_seconds, ceiling=ceiling
+                    ),
+                )
+            )
             try:
                 counters = await _read_job_counters(session_factory, job_id)
             except Exception:
                 LOGGER.debug(
                     "Authored progress read failed for job %s", job_id, exc_info=True
                 )
+                idle_ticks += 1
                 continue
             if counters is None:
                 return
@@ -236,7 +252,9 @@ async def stream_authored_generation_progress(
                 update, last_reported, counters[2]
             )
             if update == last_reported:
+                idle_ticks += 1
                 continue
+            idle_ticks = 0
             last_reported = update
             stage, percent, message = update
             completed, total, _ = counters

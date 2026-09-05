@@ -1078,7 +1078,12 @@ def test_design_system_prohibits_external_fonts_and_documents_local_fallbacks():
     assert "never ::before/::after pseudo-elements" in design_system
     assert "Do not use inline SVG for simple decoration" in design_system
     assert "text-shadow, filter, backdrop-filter, or mix-blend-mode" in design_system
-    assert "no asymmetric or percentage radii" in design_system
+    # 2026-09-05 (design section G5): "one uniform pixel value, no asymmetric
+    # radii" flatly contradicted the styles whose signature shape is a folder
+    # tab. The rule is now one radius family per deck, with per-corner radii
+    # allowed exactly where the style names such a shape.
+    assert "ONE radius family for the whole deck" in design_system
+    assert "No percentage radii" in design_system
     assert "linear-gradient backgrounds, layered box-shadow, and raster images" in design_system
 
 

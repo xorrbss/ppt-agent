@@ -366,7 +366,9 @@ def test_batch_author_returns_three_slides_from_one_provider_call(monkeypatch) -
     assert len(calls) == 1
     assert sorted(result.htmls) == [0, 1, 2]
     assert result.errors == {}
-    assert calls[0]["max_tokens"] == 24_000
+    # G9/D18: the fast roles carry the full 16k budget each, and the batch cap
+    # is AUTHOR_MAX_TOKENS x MAX_BATCH_SLIDES, so the two meet at 48k.
+    assert calls[0]["max_tokens"] == 48_000
     request_parts = calls[0]["messages"][1].content
     assert sum(
         1

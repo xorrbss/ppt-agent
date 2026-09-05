@@ -27,11 +27,18 @@ async def run_slide_worker_pool(
     *,
     slide_count: int,
     worker_count: int,
+    index_source: Callable[[], Awaitable[int | None]] | None = None,
 ) -> list[Any]:
     """Process every slide index once and return results in slide order.
 
     Raises the first worker failure after the remaining workers have drained,
     or ``RuntimeError`` if a worker exited without producing every slide.
+
+    ``index_source`` streams the indexes instead of producing ``range()``: it
+    is awaited for the next slide whose authoring has landed and returns
+    ``None`` at the end of the deck (see ``services.authored_tail_streaming``).
+    Results stay in slide order either way, because a worker stores its result
+    at the index it was handed.
     """
 
     if slide_count <= 0:
@@ -54,12 +61,40 @@ async def run_slide_worker_pool(
                 return
             queue.task_done()
 
-    async def producer() -> None:
+    async def next_streamed_index() -> int | None:
+        """The next streamed index, or ``None`` once the workers have stopped.
+
+        A streamed producer has no finite range to run out of: without racing
+        the stop signal here, a worker failure would leave the producer waiting
+        for an index that will never come and the surviving workers waiting for
+        a sentinel the producer can only send after that.
+        """
+
+        pull = asyncio.ensure_future(index_source())
+        stop = asyncio.ensure_future(stop_workers.wait())
         try:
+            await asyncio.wait({pull, stop}, return_when=asyncio.FIRST_COMPLETED)
+            return pull.result() if pull.done() else None
+        finally:
+            pull.cancel()
+            stop.cancel()
+
+    async def produce_indexes() -> None:
+        if index_source is None:
             for index in range(slide_count):
                 if stop_workers.is_set():
                     break
                 await queue.put(index)
+            return
+        while not stop_workers.is_set():
+            index = await next_streamed_index()
+            if index is None:
+                break
+            await queue.put(int(index))
+
+    async def producer() -> None:
+        try:
+            await produce_indexes()
         finally:
             if stop_workers.is_set():
                 # Workers are draining or already gone, so nothing guarantees

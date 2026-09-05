@@ -14,6 +14,8 @@ from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_DELETED,
     PresentationModel,
 )
+from models.sql.account_deletion_request import AccountDeletionRequest
+from models.sql.public_admission import PublicOperationAdmission
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceConversation,
@@ -50,6 +52,10 @@ RUNNER_TABLES = [
     WorkspaceOperation.__table__,
     WorkspaceOperationEvent.__table__,
     WorkspaceOutbox.__table__,
+    # The runner reads the public admission row when it fences a finished or
+    # recovered operation, so the scratch schema has to carry that table too.
+    PublicOperationAdmission.__table__,
+    AccountDeletionRequest.__table__,
 ]
 
 

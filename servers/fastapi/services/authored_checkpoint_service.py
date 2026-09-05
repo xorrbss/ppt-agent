@@ -2,27 +2,21 @@ from __future__ import annotations
 
 import shutil as _shutil
 import time
-from datetime import timedelta
 from typing import Any, Mapping
 import uuid
 
-from sqlalchemy import select, update
-from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
-from models.sql.presentation_generation_job import PresentationGenerationJob
-from models.sql.public_admission import PublicOperationAdmission
-from models.sql.workspace import WorkspaceOperation
 
 from services import authored_checkpoint_artifacts as _artifacts
+from services import authored_checkpoint_fence as _fence
 from services import authored_checkpoint_state as _state
 from services.authored_checkpoint_artifacts import (
     _artifact_sweep_batch_size,
     _artifact_sweep_max_bytes,
     _artifact_sweep_max_files,
     _artifact_ttl_seconds,
-    _configured_positive_int,
     _failed_artifact_ttl_seconds,
     _published_artifact_ttl_seconds,
     atomic_write,
@@ -39,12 +33,14 @@ from services.authored_checkpoint_artifacts import (
     write_detached_deck_ir_checkpoint,
 )
 from services.authored_checkpoint_errors import (
-    _PUBLISH_FENCE_SECONDS,
     AuthoredStageError,
-    begin_publish as _begin_publish,
-    complete_publish as _complete_publish,
     is_retryable_exception,
     sanitize_exception_message,
+)
+from services.authored_checkpoint_sweep_budget import _configured_positive_int
+from services.authored_checkpoint_publish_fence import (
+    begin_publish,
+    complete_publish,
 )
 from services.authored_checkpoint_state import (
     STAGES,
@@ -69,94 +65,10 @@ shutil = _shutil
 def _sync_session_maker() -> None:
     _artifacts.async_session_maker = async_session_maker
     _state.async_session_maker = async_session_maker
-
-
-async def _lock_public_admission_if_available(
-    session: AsyncSession,
-    operation_id: uuid.UUID,
-) -> PublicOperationAdmission | None:
-    """Keep legacy/rolling schemas readable while public-v2 fails closed later."""
-
-    try:
-        async with session.begin_nested():
-            return await session.scalar(
-                select(PublicOperationAdmission)
-                .where(PublicOperationAdmission.operation_id == operation_id)
-                .with_for_update()
-            )
-    except OperationalError:
-        return None
-
-
-async def _require_workspace_operation_fence(
-    session: AsyncSession,
-    *,
-    job_id: uuid.UUID,
-    attempt_token: str,
-    fencing_token: int | None,
-) -> bool:
-    """CAS-fence a linked authored write against its workspace operation.
-
-    Legacy generation jobs are intentionally unlinked and retain the historical
-    generation-job attempt fence.  Once a job is linked, its own attempt token
-    is only an identifier: the running workspace operation is authoritative.
-    The conditional no-op update acquires the operation row write lock and the
-    database rechecks state, attempt and fence before a caller may write.
-    """
-
-    job = await session.get(PresentationGenerationJob, job_id)
-    if job is None or job.workspace_operation_id is None:
-        return False
-    if isinstance(fencing_token, bool) or not isinstance(fencing_token, int):
-        await session.rollback()
-        raise AuthoredStageError(
-            slide_index=0,
-            stage="persist",
-            code="authored_workspace_operation_fencing_token_required",
-            retryable=True,
-        )
-    admission = await _lock_public_admission_if_available(
-        session,
-        job.workspace_operation_id,
-    )
-    now = get_current_utc_datetime()
-    result = await session.execute(
-        update(WorkspaceOperation)
-        .where(
-            WorkspaceOperation.id == job.workspace_operation_id,
-            WorkspaceOperation.state == "running",
-            WorkspaceOperation.attempt_token == attempt_token,
-            WorkspaceOperation.fencing_token == fencing_token,
-        )
-        .values(heartbeat_at=now, updated_at=now)
-    )
-    if result.rowcount != 1:
-        await session.rollback()
-        raise AuthoredStageError(
-            slide_index=0,
-            stage="persist",
-            code="authored_workspace_operation_fence_lost",
-            retryable=True,
-        )
-    operation_contract = await session.scalar(
-        select(WorkspaceOperation.contract_version).where(
-            WorkspaceOperation.id == job.workspace_operation_id
-        )
-    )
-    if operation_contract == "public-operation/v2" and (
-        admission is None
-        or admission.operation_kind != "generation"
-        or admission.state != "active"
-        or admission.fence != fencing_token
-    ):
-        await session.rollback()
-        raise AuthoredStageError(
-            slide_index=0,
-            stage="persist",
-            code="authored_workspace_operation_fence_lost",
-            retryable=True,
-        )
-    return True
+    # The shared fencing primitives moved out of ``_state``; they open their own
+    # sessions on the paths that do not receive one, so they follow the same
+    # redirection (tests point this facade at a scratch database).
+    _fence.async_session_maker = async_session_maker
 
 
 async def _checkpoint_mutation(
@@ -293,6 +205,27 @@ async def start_stage(
     )
 
 
+async def begin_author_stage(
+    *,
+    job_id: uuid.UUID,
+    slide_index: int,
+    attempt_token: str,
+    ordinal: int,
+    fencing_token: int | None = None,
+) -> AuthoredSlideCheckpoint:
+    """``start_stage("author")`` and ``reserve_provider_attempt`` in one commit."""
+
+    _sync_session_maker()
+    return await _checkpoint_mutation(
+        _state.begin_author_stage,
+        job_id=job_id,
+        attempt_token=attempt_token,
+        fencing_token=fencing_token,
+        slide_index=slide_index,
+        ordinal=ordinal,
+    )
+
+
 async def reserve_provider_attempt(
     *,
     job_id: uuid.UUID,
@@ -361,92 +294,6 @@ async def fail_stage(
     )
 
 
-async def begin_publish(
-    session: AsyncSession,
-    *,
-    job_id: uuid.UUID,
-    attempt_token: str,
-    fencing_token: int | None = None,
-) -> None:
-    linked = await _require_workspace_operation_fence(
-        session,
-        job_id=job_id,
-        attempt_token=attempt_token,
-        fencing_token=fencing_token,
-    )
-    if not linked:
-        await _begin_publish(session, job_id=job_id, attempt_token=attempt_token)
-        return
-    now = get_current_utc_datetime()
-    result = await session.execute(
-        update(PresentationGenerationJob)
-        .where(
-            PresentationGenerationJob.id == job_id,
-            PresentationGenerationJob.state.in_(("running", "staging")),
-        )
-        .values(
-            state="staging",
-            current_stage="publish",
-            lease_expires_at=now + timedelta(seconds=_PUBLISH_FENCE_SECONDS),
-            heartbeat_at=now,
-            updated_at=now,
-        )
-    )
-    if result.rowcount != 1:
-        await session.rollback()
-        raise AuthoredStageError(
-            slide_index=0,
-            stage="persist",
-            code="authored_attempt_lost",
-            retryable=True,
-        )
-
-
-async def complete_publish(
-    session: AsyncSession,
-    *,
-    job_id: uuid.UUID,
-    attempt_token: str,
-    fencing_token: int | None = None,
-) -> None:
-    linked = await _require_workspace_operation_fence(
-        session,
-        job_id=job_id,
-        attempt_token=attempt_token,
-        fencing_token=fencing_token,
-    )
-    if not linked:
-        await _complete_publish(session, job_id=job_id, attempt_token=attempt_token)
-        return
-    now = get_current_utc_datetime()
-    result = await session.execute(
-        update(PresentationGenerationJob)
-        .where(
-            PresentationGenerationJob.id == job_id,
-            PresentationGenerationJob.state == "staging",
-        )
-        .values(
-            state="published",
-            attempt_token=None,
-            lease_expires_at=None,
-            heartbeat_at=now,
-            current_stage="completed",
-            last_error=None,
-            resume_allowed=False,
-            published_at=now,
-            updated_at=now,
-        )
-    )
-    if result.rowcount != 1:
-        await session.rollback()
-        raise AuthoredStageError(
-            slide_index=0,
-            stage="persist",
-            code="authored_attempt_lost",
-            retryable=True,
-        )
-
-
 async def progress_for_task(
     task_id: str,
     session: AsyncSession | None = None,
@@ -469,6 +316,7 @@ __all__ = [
     "SlideCheckpointCorrupt",
     "STAGES",
     "atomic_write",
+    "begin_author_stage",
     "begin_publish",
     "checkpoint_root",
     "cleanup_checkpoint_artifacts",

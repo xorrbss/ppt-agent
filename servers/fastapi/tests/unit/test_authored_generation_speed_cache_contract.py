@@ -5,6 +5,7 @@ import uuid
 
 import pytest
 
+from models.authored_illustration_plan import AuthoredIllustrationPlan
 from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
 from services import authored_deck_plans
 from services.authored_generation_performance import authored_provider_concurrency
@@ -17,6 +18,7 @@ from utils.llm_calls.author_slide import (
     _authoring_output_profile,
 )
 from utils.llm_calls import author_slide as author_slide_mod
+from utils.provider_idempotency import ProviderOutcomeError
 
 
 def test_provider_cap_and_role_profiles_preserve_strict_authoring(monkeypatch) -> None:
@@ -31,30 +33,83 @@ def test_provider_cap_and_role_profiles_preserve_strict_authoring(monkeypatch) -
     assert authored_provider_concurrency("openai") == 6
     assert authored_provider_concurrency("anthropic") == 16
 
+    # G9/D18: the fast roles keep the full output budget -- a truncated cover is
+    # a broken slide -- and author at the model's LOWEST SUPPORTED effort rather
+    # than at the literal "minimal", which gpt-6-astra and gpt-5.6-sol reject.
     assert _authoring_output_profile(
         role="COVER",
         reference_mode="style_reference",
         structured_context=None,
         correction_hint=None,
-    ) == (10_000, "minimal")
+        model="gpt-6-astra",
+    ) == (AUTHOR_MAX_TOKENS, "low")
+    assert _authoring_output_profile(
+        role="COVER",
+        reference_mode="style_reference",
+        structured_context=None,
+        correction_hint=None,
+        model="gpt-5.6-sol",
+    ) == (AUTHOR_MAX_TOKENS, "none")
+    assert _authoring_output_profile(
+        role="COVER",
+        reference_mode="style_reference",
+        structured_context=None,
+        correction_hint=None,
+        model="gpt-5.4",
+    ) == (AUTHOR_MAX_TOKENS, "minimal")
     assert _authoring_output_profile(
         role="CLOSING",
         reference_mode=EXACT_RECONSTRUCTION,
         structured_context=None,
         correction_hint=None,
+        model="gpt-6-astra",
     ) == (AUTHOR_MAX_TOKENS, "low")
     assert _authoring_output_profile(
         role="SECTION",
         reference_mode="style_reference",
         structured_context={"zones": []},
         correction_hint=None,
+        model="gpt-6-astra",
     ) == (AUTHOR_MAX_TOKENS, "low")
     assert _authoring_output_profile(
         role="AGENDA",
         reference_mode="style_reference",
         structured_context=None,
         correction_hint="repair",
+        model="gpt-6-astra",
     ) == (AUTHOR_MAX_TOKENS, "low")
+
+
+def test_role_profile_effort_beats_the_authored_reasoning_effort_env(monkeypatch) -> None:
+    """The role profile is passed as the explicit effort, so it wins over the env.
+
+    This is the behaviour the bench compares runs on; changing it silently would
+    make every historical AUTHORED_REASONING_EFFORT comparison meaningless.
+    """
+
+    monkeypatch.setenv("AUTHORED_REASONING_EFFORT", "high")
+    monkeypatch.setattr(author_slide_mod, "is_codex_selected", lambda: True)
+
+    # An ordinary content slide still authors at the profile's own "low"...
+    budget, effort = _authoring_output_profile(
+        role="CONTENT",
+        reference_mode="style_reference",
+        structured_context=None,
+        correction_hint=None,
+        model="gpt-6-astra",
+    )
+    assert (budget, effort) == (AUTHOR_MAX_TOKENS, "low")
+    assert author_slide_mod._authoring_extra_body(effort, model="gpt-6-astra") == {
+        "reasoning": {"effort": "low"}
+    }
+    # ...while a caller that supplies no effort at all still reads the env.
+    assert author_slide_mod._authoring_extra_body(None, model="gpt-6-astra") == {
+        "reasoning": {"effort": "high"}
+    }
+    monkeypatch.setenv("AUTHORED_REASONING_EFFORT", "off")
+    assert author_slide_mod._authoring_extra_body(None, model="gpt-6-astra") is None
+    monkeypatch.setenv("AUTHORED_REASONING_EFFORT", "nonsense")
+    assert author_slide_mod._authoring_extra_body(None, model="gpt-6-astra") is None
 
 
 def test_codex_model_reasoning_capability_normalizes_once_at_author_egress(
@@ -94,7 +149,10 @@ def test_codex_model_reasoning_capability_normalizes_once_at_author_egress(
     reference_image = tmp_path / "reference.png"
     reference_image.write_bytes(b"\x89PNG\r\n\x1a\nreference")
 
-    with pytest.raises(RuntimeError, match="provider unavailable"):
+    # The raw provider exception is wrapped by utils/provider_idempotency.py
+    # into the content-free authored outcome; the original cause is kept on the
+    # chain, which is what the operation layer reads.
+    with pytest.raises(ProviderOutcomeError) as raised:
         asyncio.run(
             author_slide_mod.author_slide_html(
                 "content",
@@ -110,8 +168,12 @@ def test_codex_model_reasoning_capability_normalizes_once_at_author_egress(
             )
         )
 
+    assert raised.value.code == "public_provider_bridge_exception"
+    assert "provider unavailable" in str(raised.value.__cause__)
     assert len(calls) == 1
-    assert calls[0]["max_tokens"] == 10_000
+    # G9/D18: the cover keeps the full budget and the model's lowest supported
+    # level; gpt-5.6-sol rejects "minimal", so "none" is what leaves the process.
+    assert calls[0]["max_tokens"] == AUTHOR_MAX_TOKENS
     assert calls[0]["extra_body"] == {"reasoning": {"effort": "none"}}
     assert len(receipts) == 1
     assert receipts[0]["retry_class"] == "recovery"
@@ -123,7 +185,7 @@ def test_author_slide_preserves_nonretryable_public_provider_budget_limit(monkey
             raise AssertionError("provider call must not bypass public admission")
 
     @asynccontextmanager
-    async def reject_public_admission(*, is_retry: bool):
+    async def reject_public_admission(*, is_retry: bool, **_kwargs):
         assert is_retry is False
         raise PublicAdmissionRejected("public_provider_retry_limit_exceeded")
         yield
@@ -194,7 +256,12 @@ def test_final_outline_infographic_resolver_is_separate_from_outline_expansion(
     )
     assert plans.outline is outline
     assert plans.infographic_plan is None
-    assert plans.illustration_plan is None
+    # A deck with no figure plan no longer means "no picture decision at all"
+    # (2026-09-05, design section G4): free composition takes a deterministic
+    # per-deck share budget instead. This deck's only content slide is its
+    # style anchor, which is deliberately never illustrated, so the budget is
+    # an EMPTY plan — a decision, not the absent plan it used to be.
+    assert plans.illustration_plan == AuthoredIllustrationPlan(slide_indices=())
     assert asyncio.run(
         authored_deck_plans.resolve_final_outline_infographic_plan(
             request, plans.outline, sentinel, style, ["CONTENT"]
