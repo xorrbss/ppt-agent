@@ -216,9 +216,9 @@ describe("<TextProvider />", () => {
     cy.get('button[title="로그아웃"]').should("be.visible");
 
     cy.contains("label", "GPT 모델 선택").should("be.visible");
-    cy.contains('button[role="combobox"]', "GPT-5.6 Sol").should("be.visible");
+    cy.contains('button[role="combobox"]', "GPT-6.0 Astra").should("be.visible");
 
-    cy.contains('button[role="combobox"]', "GPT-5.6 Sol").click();
+    cy.contains('button[role="combobox"]', "GPT-6.0 Astra").click();
     cy.get("[cmdk-item]").contains("GPT-5.4 mini").click();
     cy.contains('button[role="combobox"]', "GPT-5.4 mini").should("be.visible");
   });
