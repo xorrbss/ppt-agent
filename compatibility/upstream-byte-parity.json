@@ -7164,7 +7164,6 @@
       "servers/fastapi/services/source_locked/restoration.py",
       "servers/fastapi/services/source_locked/seal.py",
       "servers/fastapi/services/template_v2_generation_contracts.py",
-      "servers/fastapi/services/template_v2_generation_observability.py",
       "servers/fastapi/services/template_v2_generation_service.py",
       "servers/fastapi/services/template_v2_native_storage.py",
       "servers/fastapi/services/template_v2_pptx_analysis_service.py",
@@ -7297,12 +7296,10 @@
       "servers/fastapi/templates/v2/pptx/style_graph.py",
       "servers/fastapi/templates/v2/pptx/vision_adapter.py",
       "servers/fastapi/templates/v2/publication.py",
-      "servers/fastapi/templates/v2/quality.py",
       "servers/fastapi/templates/v2/schema_common.py",
       "servers/fastapi/templates/v2/schema_component.py",
       "servers/fastapi/templates/v2/schema_content.py",
       "servers/fastapi/templates/v2/schema_layout.py",
-      "servers/fastapi/templates/v2/slide_variants.py",
       "servers/fastapi/templates/v2/strategies.py",
       "servers/fastapi/templates/v2/wire_codec.py",
       "servers/fastapi/tests/authored_subprocess_app.py",
@@ -7756,7 +7753,6 @@
       "servers/fastapi/tests/unit/test_template_v2_contract_codegen.py",
       "servers/fastapi/tests/unit/test_template_v2_default_authority.py",
       "servers/fastapi/tests/unit/test_template_v2_generation_entrypoint.py",
-      "servers/fastapi/tests/unit/test_template_v2_generation_observability.py",
       "servers/fastapi/tests/unit/test_template_v2_local_assets.py",
       "servers/fastapi/tests/unit/test_template_v2_local_state_migration.py",
       "servers/fastapi/tests/unit/test_template_v2_native_clone.py",
@@ -7789,12 +7785,10 @@
       "servers/fastapi/tests/unit/test_template_v2_pptx_worker.py",
       "servers/fastapi/tests/unit/test_template_v2_prompted_layout.py",
       "servers/fastapi/tests/unit/test_template_v2_publication.py",
-      "servers/fastapi/tests/unit/test_template_v2_quality.py",
       "servers/fastapi/tests/unit/test_template_v2_repeat_suggestions.py",
       "servers/fastapi/tests/unit/test_template_v2_revision_service.py",
       "servers/fastapi/tests/unit/test_template_v2_runtime_import_hardening.py",
       "servers/fastapi/tests/unit/test_template_v2_schema_contract.py",
-      "servers/fastapi/tests/unit/test_template_v2_slide_variants.py",
       "servers/fastapi/tests/unit/test_template_v2_strategies.py",
       "servers/fastapi/tests/unit/test_template_v2_wire_codec.py",
       "servers/fastapi/tests/unit/test_templates_v2_content.py",
@@ -9132,8 +9126,8 @@
       "upstreamOwned": 10163,
       "identical": 9399,
       "exceptions": 764,
-      "localOnly": 3754
+      "localOnly": 3748
     },
-    "policySha256": "f954de3e839c8045087078c7500dae1613287e701140e3c9eca06b3d1f7107ca"
+    "policySha256": "22f98b19fa23b58de76d66a1b64fd5f47ae42486f4f15deccfa7c64f6fd36f0d"
   }
 }
