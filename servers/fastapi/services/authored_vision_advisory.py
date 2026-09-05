@@ -30,58 +30,21 @@ import time
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from services.authored_vision_advisory_prompt import (
+    ADVISORY_MAX_OUTPUT_TOKENS,
+    ADVISORY_PROMPT_VERSION,
+    ADVISORY_REASONING_EFFORT,
+    ISSUE_ALIASES,
+    ISSUE_VOCABULARY,
+    advisory_json_schema,
+    build_advisory_messages,
+)
 from services.authored_vision_contact_sheet import compose_contact_sheet
+from utils.provider_idempotency import ProviderOutcomeError
 
 LOGGER = logging.getLogger(__name__)
 
-ADVISORY_MAX_OUTPUT_TOKENS = 1200
-ADVISORY_REASONING_EFFORT = "low"
-ADVISORY_PROMPT_VERSION = "authored-vision-advisory-v1"
-#: An advisory whose vocabulary drifts cannot be compared across bench runs, so
-#: the model is given a closed list and anything else it invents is dropped.
-ISSUE_VOCABULARY: tuple[str, ...] = (
-    "empty_band",
-    "cramped",
-    "unbalanced",
-    "illegible",
-    "off_palette",
-    "broken_figure",
-    "inconsistent_with_deck",
-)
-#: The spellings a model reaches for instead of the token. Mapped, not dropped,
-#: because "off-palette" is the same finding as ``off_palette``.
-_ISSUE_ALIASES: dict[str, str] = {
-    "emptyband": "empty_band",
-    "emptyspace": "empty_band",
-    "deadband": "empty_band",
-    "crowded": "cramped",
-    "unbalancedlayout": "unbalanced",
-    "unreadable": "illegible",
-    "lowcontrast": "illegible",
-    "offpalette": "off_palette",
-    "wrongpalette": "off_palette",
-    "brokenfigure": "broken_figure",
-    "brokenimage": "broken_figure",
-    "inconsistentwithdeck": "inconsistent_with_deck",
-    "inconsistent": "inconsistent_with_deck",
-}
 _MAX_ISSUES_PER_SLIDE = 4
-
-_SYSTEM = (
-    "You are a presentation design reviewer looking at a contact sheet of one "
-    "deck. Each thumbnail is one slide and carries its slide number in the top "
-    "left corner. Report only what a reader would notice at a glance, using "
-    "ONLY these issue words: " + ", ".join(ISSUE_VOCABULARY) + ". "
-    "empty_band: a large dead area the page never fills. cramped: content "
-    "packed with no breathing room. unbalanced: weight pooled on one side or "
-    "corner. illegible: type too small or too low in contrast to read. "
-    "off_palette: colours that disagree with the rest of the deck. "
-    "broken_figure: a chart, table, icon or image that rendered wrong. "
-    "inconsistent_with_deck: this page's visual language differs from its "
-    "neighbours. Omit a slide entirely when it looks fine. Invent nothing, "
-    "explain nothing, and use no other word. Answer as strict JSON: "
-    '{"slides":[{"index":<slide number>,"issues":["<issue word>"]}]}'
-)
 
 
 def _normalize_issue(value: object) -> str | None:
@@ -93,7 +56,7 @@ def _normalize_issue(value: object) -> str | None:
     canonical = re.sub(r"[^a-z]+", "_", text).strip("_")
     if canonical in ISSUE_VOCABULARY:
         return canonical
-    return _ISSUE_ALIASES.get(canonical.replace("_", ""))
+    return ISSUE_ALIASES.get(canonical.replace("_", ""))
 
 
 def parse_advisory_payload(payload: object, *, slide_count: int) -> list[dict[str, Any]]:
@@ -164,13 +127,7 @@ async def _request_advisory(sheet: bytes, *, slide_count: int) -> tuple[str, obj
     every other authored provider call uses."""
 
     from llmai import get_client
-    from llmai.shared import (
-        ImageContentPart,
-        JSONSchemaResponse,
-        SystemMessage,
-        TextContentPart,
-        UserMessage,
-    )
+    from llmai.shared import JSONSchemaResponse
 
     from services.provider_usage_instrumentation import (
         ProviderCallTimer,
@@ -188,42 +145,8 @@ async def _request_advisory(sheet: bytes, *, slide_count: int) -> tuple[str, obj
 
     client = get_client(config=get_llm_config())
     model = str(get_model() or "")
-    schema = {
-        "type": "object",
-        "additionalProperties": False,
-        "required": ["slides"],
-        "properties": {
-            "slides": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "required": ["index", "issues"],
-                    "properties": {
-                        "index": {"type": "integer"},
-                        "issues": {
-                            "type": "array",
-                            "items": {"type": "string", "enum": list(ISSUE_VOCABULARY)},
-                        },
-                    },
-                },
-            }
-        },
-    }
-    messages = [
-        SystemMessage(content=_SYSTEM),
-        UserMessage(
-            content=[
-                TextContentPart(
-                    text=(
-                        f"This deck has {slide_count} slides, numbered 1 to "
-                        f"{slide_count} in reading order across the sheet."
-                    )
-                ),
-                ImageContentPart(data=sheet, mime_type="image/jpeg"),
-            ]
-        ),
-    ]
+    schema = advisory_json_schema()
+    messages = build_advisory_messages(sheet, slide_count=slide_count)
     kwargs = get_generate_kwargs(
         model=model,
         messages=messages,
@@ -304,7 +227,22 @@ async def run_vision_advisory(
             return {"skipped": "contact_sheet_failed"}
         if not sheet:
             return {"skipped": "contact_sheet_unavailable"}
-        model, payload = await _request_advisory(sheet, slide_count=len(renders))
+        # What the provider was actually handed, so an empty answer next time
+        # can be read against the image that produced it.
+        LOGGER.info(
+            "[authored] vision advisory request sheet_bytes=%d slides=%d prompt=%s",
+            len(sheet),
+            len(renders),
+            ADVISORY_PROMPT_VERSION,
+        )
+        try:
+            model, payload = await _request_advisory(sheet, slide_count=len(renders))
+        except ProviderOutcomeError as error:
+            # A model that answered with no text at all is a distinct outcome
+            # from a transport failure, and the one bench run 30 hit; keep them
+            # apart in the receipt so the next run can tell them apart.
+            LOGGER.warning("[authored] vision advisory outcome=%s", error.code)
+            return {"skipped": f"provider_outcome:{error.code}"}
         if payload is None:
             return {"skipped": "unparseable_response"}
         slides = parse_advisory_payload(payload, slide_count=len(renders))
@@ -330,7 +268,10 @@ async def run_vision_advisory(
 
 
 __all__ = [
+    "ADVISORY_MAX_OUTPUT_TOKENS",
+    "ADVISORY_PROMPT_VERSION",
     "ISSUE_VOCABULARY",
+    "build_advisory_messages",
     "compose_contact_sheet",
     "parse_advisory_payload",
     "run_vision_advisory",

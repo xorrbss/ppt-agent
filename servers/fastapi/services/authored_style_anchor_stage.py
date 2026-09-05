@@ -137,7 +137,9 @@ async def resolve_style_anchor(
         logger.warning("anchor_unavailable slide=%d author failed", index, exc_info=True)
         return None, None, index
     remaining_calls -= 1
-    defects = await _blocking_defects(html, render=render, inspect_blocking=inspect_blocking)
+    defects, gated = await _blocking_defects(
+        html, render=render, inspect_blocking=inspect_blocking
+    )
     if defects and remaining_calls > 0:
         logger.info(
             "anchor_remake slide=%d defects=%d",
@@ -155,7 +157,7 @@ async def resolve_style_anchor(
             remade = None
         if remade:
             html = remade
-            defects = await _blocking_defects(
+            defects, gated = await _blocking_defects(
                 html, render=render, inspect_blocking=inspect_blocking
             )
     if defects:
@@ -172,6 +174,10 @@ async def resolve_style_anchor(
         return None, html, index
     if anchor is None:
         logger.info("anchor_unavailable slide=%d has no stylesheet to inherit", index)
+    else:
+        # The only positive evidence a run leaves that the deck inherited one
+        # visual language, and whether that anchor was gated or merely trusted.
+        logger.info("anchor_ready slide=%d gated=%s", index, gated)
     return anchor, html, index
 
 
@@ -214,6 +220,32 @@ def anchor_blocking_defects(
     return blocking_safety_issues(report)
 
 
+def anchor_render_step(
+    render_gate: Any,
+    *,
+    deck_scope: str | None,
+    render_html: Callable[[str], Awaitable[Any]],
+) -> Callable[[str], Awaitable[None]]:
+    """The job lane's anchor render: one render under the deck's gate and scope.
+
+    ``set_render_deck_scope`` is a *synchronous* context manager, so it has to
+    be entered with ``with`` inside the ``async with`` that holds the render
+    gate. Naming both in a single ``async with`` raises ``TypeError`` before the
+    render is even attempted, which silently skipped the anchor gate on every
+    deck of the job lane (``anchor_gate_skipped render unavailable``, bench run
+    30 on 2026-09-06). Building the step here keeps that one line under test.
+    """
+
+    from utils.slide_capture_deck_scope import set_render_deck_scope
+
+    async def render_anchor(html: str) -> None:
+        async with render_gate:
+            with set_render_deck_scope(deck_scope):
+                await render_html(html)
+
+    return render_anchor
+
+
 async def resolve_direct_lane_anchor(
     plan: Any,
     *,
@@ -254,26 +286,28 @@ async def _blocking_defects(
     *,
     render: Callable[[str], Awaitable[Any]],
     inspect_blocking: Callable[[str], Sequence[Any]],
-) -> tuple[Any, ...]:
+) -> tuple[tuple[Any, ...], bool]:
     """Render the anchor once and return its blocking DOM defects.
 
-    A render or inspection that cannot run is not a defect: the gate is skipped
-    (``anchor_gate_skipped``) rather than turned into a reason to drop an
-    otherwise usable anchor.
+    Returns ``(defects, gated)``; ``gated`` is False when the gate could not
+    run at all. A render or inspection that cannot run is not a defect: the
+    gate is skipped (``anchor_gate_skipped``) and the anchor is still used,
+    rather than dropping an otherwise usable anchor. A bad anchor is a smaller
+    risk than no anchor, and the remake round still catches its defects.
     """
 
     if not html:
-        return ()
+        return (), False
     try:
         await render(html)
     except Exception:  # noqa: BLE001
         logger.info("anchor_gate_skipped render unavailable", exc_info=True)
-        return ()
+        return (), False
     try:
-        return tuple(inspect_blocking(html) or ())
+        return tuple(inspect_blocking(html) or ()), True
     except Exception:  # noqa: BLE001
         logger.info("anchor_gate_skipped inspection unavailable", exc_info=True)
-        return ()
+        return (), False
 
 
 __all__ = [
@@ -282,6 +316,7 @@ __all__ = [
     "accepts_style_anchor",
     "anchor_blocking_defects",
     "anchor_correction_hint",
+    "anchor_render_step",
     "anchor_slide_index",
     "resolve_direct_lane_anchor",
     "resolve_style_anchor",

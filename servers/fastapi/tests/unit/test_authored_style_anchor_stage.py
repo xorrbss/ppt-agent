@@ -5,9 +5,13 @@ from types import SimpleNamespace
 
 import pytest
 
+from services import authored_presentation_pipeline as pipeline
 from services import authored_presentation_service as authored_service
 from services import authored_style_anchor_stage as stage
+from tests.unit import test_authored_tail_streaming as tail_lane
+from utils.llm_calls.author_deck import AuthoredPlannedBatchResult
 from utils.llm_calls.author_style_anchor import StyleAnchor
+from utils.slide_capture_deck_scope import current_render_deck_scope
 
 
 _STYLED = (
@@ -345,3 +349,154 @@ def test_a_deck_without_the_strict_dom_gate_skips_the_anchor_gate(profile):
         )
         == ()
     )
+
+
+# --- the job lane: the anchor is rendered under the deck's gate and scope -----
+
+
+def test_the_job_lane_render_step_holds_the_gate_and_binds_the_deck_scope():
+    """The exact line bench run 30 tripped over.
+
+    ``set_render_deck_scope`` is synchronous, so naming it in the same
+    ``async with`` as the render gate raised ``TypeError`` before the render
+    started and skipped the anchor gate on every deck.
+    """
+
+    gate = asyncio.Semaphore(1)
+    seen: dict[str, object] = {}
+
+    async def render_html(html):
+        seen["html"] = html
+        seen["scope"] = current_render_deck_scope()
+        seen["gate_held"] = gate.locked()
+        return b"png"
+
+    step = stage.anchor_render_step(gate, deck_scope="deck-7", render_html=render_html)
+    _run(step(_STYLED))
+
+    assert seen == {"html": _STYLED, "scope": "deck-7", "gate_held": True}
+    assert not gate.locked()
+    assert current_render_deck_scope() is None
+
+
+def test_the_job_lane_render_step_lets_a_render_failure_reach_the_caller():
+    gate = asyncio.Semaphore(1)
+
+    async def render_html(_html):
+        raise RuntimeError("no chromium here")
+
+    step = stage.anchor_render_step(gate, deck_scope=None, render_html=render_html)
+
+    with pytest.raises(RuntimeError):
+        _run(step(_STYLED))
+    # The gate is released even when the render fails, or the deck's tail would
+    # render one slide fewer at a time for the rest of the attempt.
+    assert not gate.locked()
+
+
+_ANCHORED_SLIDE = (
+    "<!DOCTYPE html><html><head><style>body{background:#0B1F3A}"
+    ".card{border-radius:12px}</style></head><body>"
+    "<h1 data-qid='slide-{index}.title'>slide-{index}</h1>"
+    "</body></html>"
+)
+
+
+def _job_lane_deck(tmp_path, monkeypatch, *, render, slide_count=4):
+    """Drive the real job-lane pipeline; return (result, order, gate_calls, anchors)."""
+
+    monkeypatch.setenv("AUTHORED_STYLE_ANCHOR_ENABLED", "true")
+    monkeypatch.setenv("AUTHORED_TAIL_STREAMING_ENABLED", "false")
+    order: list[str] = []
+    gate_calls: list[str] = []
+    anchors: list[object] = []
+
+    async def batch(_plan, indexes, **kwargs):
+        selected = tuple(indexes)
+        order.extend(f"author-{index}" for index in selected)
+        anchors.append(kwargs.get("style_anchor"))
+        return AuthoredPlannedBatchResult(
+            htmls={
+                index: _ANCHORED_SLIDE.replace("{index}", str(index))
+                for index in selected
+            },
+            failures={},
+        )
+
+    async def recording_render(html):
+        order.append("render")
+        return await render(html)
+
+    def anchor_gate(html, **_kwargs):
+        gate_calls.append(html)
+        return ()
+
+    async def scenario():
+        engine, maker = await tail_lane._checkpoint_database(tmp_path, monkeypatch)
+        tail_lane._install_pipeline_fakes(
+            monkeypatch,
+            slide_count=slide_count,
+            batch=batch,
+            render=recording_render,
+        )
+        monkeypatch.setattr(pipeline, "anchor_blocking_defects", anchor_gate)
+        try:
+            job = await tail_lane._running_authored_job(
+                maker, total_slides=slide_count
+            )
+            return await tail_lane._drive_pipeline(job)
+        finally:
+            await engine.dispose()
+
+    return _run(scenario()), order, gate_calls, anchors
+
+
+def test_the_job_lane_renders_gates_and_hands_on_its_anchor(tmp_path, monkeypatch):
+    """G0 end to end on the lane the UI uses: render, gate, then inherit."""
+
+    async def render(_html):
+        return b"png"
+
+    result, order, gate_calls, anchors = _job_lane_deck(
+        tmp_path, monkeypatch, render=render
+    )
+
+    assert len(result.pngs) == 4
+    # The anchor slide is authored alone and rendered before anything else is
+    # authored: with the gate skipped this render never happened at all.
+    assert order[:3] == ["author-1", "render", "author-0"] or order[:2] == [
+        "author-1",
+        "render",
+    ]
+    assert len(gate_calls) == 1
+    assert "slide-1" in gate_calls[0]
+    # The anchor's own call carries no anchor; every later call inherits it.
+    assert anchors[0] is None
+    assert all(isinstance(anchor, StyleAnchor) for anchor in anchors[1:])
+    assert anchors[1:]
+
+
+def test_a_job_lane_render_failure_still_hands_the_deck_its_anchor(
+    tmp_path, monkeypatch
+):
+    """No anchor at all is worse than an ungated one; the remake round remains."""
+
+    renders = {"count": 0}
+
+    async def render(_html):
+        renders["count"] += 1
+        if renders["count"] == 1:
+            raise RuntimeError("renderer lease unavailable")
+        return b"png"
+
+    result, _order, gate_calls, anchors = _job_lane_deck(
+        tmp_path, monkeypatch, render=render
+    )
+
+    assert len(result.pngs) == 4
+    # The gate could not run without a render...
+    assert gate_calls == []
+    # ...and the deck still authored every later slide against the anchor.
+    assert anchors[0] is None
+    assert all(isinstance(anchor, StyleAnchor) for anchor in anchors[1:])
+    assert anchors[1:]

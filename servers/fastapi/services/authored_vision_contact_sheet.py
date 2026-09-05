@@ -18,13 +18,19 @@ import math
 from collections.abc import Sequence
 
 #: Thumbnails per row, and the sheet's pixel envelope. Four columns of a 16:9
-#: slide at 512 px is the widest grid that keeps a 1280 px render legible to a
-#: vision model without exceeding a typical image budget.
+#: slide at 400 px keeps a 1280 px render legible to a vision model while
+#: staying inside the image budget a multimodal request is given: a sheet the
+#: provider has to downscale or reject buys the advisory nothing.
 SHEET_COLUMNS = 4
-SHEET_MAX_WIDTH_PX = 2048
+SHEET_MAX_WIDTH_PX = 1600
 SHEET_MAX_HEIGHT_PX = 4096
 SHEET_JPEG_QUALITY = 80
 SHEET_LABEL_HEIGHT_PX = 18
+#: Encoded-byte ceiling. Quality is spent first, then pixels, so a long deck
+#: loses sharpness before it loses the thumbnails that carry the numbering.
+SHEET_MAX_BYTES = 1_500_000
+_SHEET_MIN_QUALITY = 40
+_SHEET_MIN_WIDTH_PX = 640
 
 
 def _font(size: int):
@@ -87,9 +93,28 @@ def compose_contact_sheet_sync(
             frame.resize((thumb_width, height)), (left, top + SHEET_LABEL_HEIGHT_PX)
         )
         frame.close()
+    return _encode_within_budget(sheet, quality=quality)
+
+
+def _encode_jpeg(sheet, *, quality: int) -> bytes:
     buffer = io.BytesIO()
     sheet.save(buffer, format="JPEG", quality=quality, optimize=True)
     return buffer.getvalue()
+
+
+def _encode_within_budget(sheet, *, quality: int) -> bytes:
+    """Encode the sheet, spending quality and then pixels to fit the budget."""
+
+    data = _encode_jpeg(sheet, quality=quality)
+    while len(data) > SHEET_MAX_BYTES and quality > _SHEET_MIN_QUALITY:
+        quality = max(_SHEET_MIN_QUALITY, quality - 15)
+        data = _encode_jpeg(sheet, quality=quality)
+    while len(data) > SHEET_MAX_BYTES and sheet.width > _SHEET_MIN_WIDTH_PX:
+        width = max(_SHEET_MIN_WIDTH_PX, (sheet.width * 3) // 4)
+        height = max(1, round(sheet.height * width / sheet.width))
+        sheet = sheet.resize((width, height))
+        data = _encode_jpeg(sheet, quality=quality)
+    return data
 
 
 async def compose_contact_sheet(pngs: Sequence[bytes]) -> bytes | None:
@@ -101,6 +126,7 @@ async def compose_contact_sheet(pngs: Sequence[bytes]) -> bytes | None:
 __all__ = [
     "SHEET_COLUMNS",
     "SHEET_JPEG_QUALITY",
+    "SHEET_MAX_BYTES",
     "SHEET_LABEL_HEIGHT_PX",
     "SHEET_MAX_HEIGHT_PX",
     "SHEET_MAX_WIDTH_PX",

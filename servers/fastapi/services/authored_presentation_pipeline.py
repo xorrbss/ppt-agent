@@ -69,7 +69,8 @@ from services.authored_tail_streaming import (
 )
 from services.authored_preauthor_scan import report_unresolved_slides, scan_preauthor_checkpoints
 from services.authored_style_anchor_stage import (
-    accepts_style_anchor, anchor_blocking_defects, resolve_direct_lane_anchor, resolve_style_anchor,
+    accepts_style_anchor, anchor_blocking_defects, anchor_render_step,
+    resolve_direct_lane_anchor, resolve_style_anchor,
 )
 from services.authored_wave_scheduler import AuthoredWaveSchedule, run_initial_authoring
 from services.source_images.models import SourceImageCandidate
@@ -620,15 +621,15 @@ async def _author_illustrate_render_pipeline(
                 failures.pop(index, None)
             return preauthored_htmls.get(index, "")
 
-        async def _render_anchor(html: str) -> None:
-            async with render_gate, set_render_deck_scope(render_deck_scope):
-                await render_html_to_png(html)
-
         if pending:
             style_anchor, _anchor_html, anchor_index = await resolve_style_anchor(
                 plan,
                 author=_author_anchor,
-                render=_render_anchor,
+                render=anchor_render_step(
+                    render_gate,
+                    deck_scope=render_deck_scope,
+                    render_html=render_html_to_png,
+                ),
                 inspect_blocking=_anchor_blocking_defects,
                 remaining_calls=2,
                 eligible=pending,
