@@ -841,9 +841,15 @@ def _normalized_authoring_reasoning_effort(model: object, effort: str) -> str:
     )
     if capabilities is None or effort in capabilities:
         return effort
-    # The capability table is ordered nowhere; choose the explicit lowest
-    # supported level rather than relying on iteration order.
-    return "none" if "none" in capabilities else effort
+    # Fall back to the lowest level the model supports, in the provider's
+    # own order. Returning the unsupported level unchanged (the previous
+    # behaviour when "none" was also unsupported) sent "minimal" to
+    # gpt-6-astra for every fast-role page and cost the slide an attempt on
+    # a 400 that is not retried.
+    for level in ("none", "minimal", "low", "medium", "high", "xhigh", "max"):
+        if level in capabilities:
+            return level
+    return effort
 
 
 def _authoring_extra_body(
