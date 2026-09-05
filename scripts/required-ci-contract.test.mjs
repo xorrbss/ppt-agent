@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import {
   mkdir,
   mkdtemp,
@@ -1000,7 +1000,7 @@ test("the local default profile runs E2E with isolated pytest and Windows diagno
   assert.match(localRunner, /EPERM.*EACCES.*EBUSY/u);
   assert.match(localRunner, /Preserving failed local run artifacts/u);
   for (const requiredComponentSpec of [
-    "Chat.cy.tsx",
+    "ChatSurface.cy.tsx",
     "WorkspaceChatPanel.cy.tsx",
     "SharePopover.cy.tsx",
     "DashboardPage.cy.tsx",
@@ -1017,7 +1017,7 @@ test("the required component gate covers workspace stream and rollback UI", () =
   const job = workflowJob(workflow, "test-nextjs");
 
   for (const requiredComponentSpec of [
-    "Chat.cy.tsx",
+    "ChatSurface.cy.tsx",
     "WorkspaceChatPanel.cy.tsx",
     "SharePopover.cy.tsx",
     "DashboardPage.cy.tsx",
@@ -1060,10 +1060,10 @@ test("developer documentation matches the executable lint and test workflow", ()
   assert.match(rootPackage.scripts["test:next-ci"], /test:ci-node/u);
   assert.match(pyproject, /select = \["E", "F", "B", "ASYNC"\]/u);
   assert.match(nodeRunner, /const ROOTS = \["app", "components", "i18n", "lib", "scripts", "store", "tests", "utils"\]/u);
-  assert.equal(specList?.length, 26);
+  assert.equal(specList?.length, 22);
   assert.match(claude, /Ruff is locked/u);
   assert.match(claude, /tests\/?`, and `utils\//u);
-  assert.match(claude, /26 named Cypress specs/u);
+  assert.match(claude, /22 named Cypress specs/u);
   assert.doesNotMatch(claude, /There is \*\*no ruff/u);
   assert.doesNotMatch(claude, /does \*\*not\*\* include `servers\/nextjs\/tests\/`/u);
 });
@@ -1280,4 +1280,143 @@ test("every shell Logo image used during startup is prioritized for LCP", () => 
     }
     assert.ok(count > 0, `${filePath} must contain its startup Logo`);
   }
+});
+
+// The Cypress gates name specs as globs. Cypress prints an unmatched glob and
+// still exits zero, so a name that no longer resolves silently thins the gate
+// instead of failing it. These helpers re-derive the answer from the workflow
+// and from cypress.config.ts rather than keeping a second copy of the list.
+const NEXT_SERVER_DIRECTORY = new URL("../servers/nextjs/", import.meta.url);
+const SPEC_WALK_SKIP = new Set([
+  ".next",
+  ".next-build",
+  ".turbo",
+  "coverage",
+  "dist",
+  "downloads",
+  "node_modules",
+  "out",
+  "screenshots",
+  "videos",
+]);
+
+function listCypressSpecFiles(relativeDirectory = "") {
+  const found = [];
+  const entries = readdirSync(
+    new URL(relativeDirectory, NEXT_SERVER_DIRECTORY),
+    { withFileTypes: true },
+  );
+  for (const entry of entries) {
+    if (SPEC_WALK_SKIP.has(entry.name)) continue;
+    const relative = `${relativeDirectory}${entry.name}`;
+    if (entry.isDirectory()) {
+      found.push(...listCypressSpecFiles(`${relative}/`));
+    } else if (/\.cy\.[jt]sx?$/u.test(entry.name)) {
+      found.push(relative);
+    }
+  }
+  return found;
+}
+
+const escapeForRegExp = (text) =>
+  text.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
+function globToRegExp(glob) {
+  let source = "";
+  for (let index = 0; index < glob.length; index += 1) {
+    const character = glob[index];
+    if (character === "*" && glob[index + 1] === "*") {
+      // A leading `**/` matches any number of directory segments, zero included.
+      if (glob[index + 2] === "/") {
+        source += "(?:[^/]+/)*";
+        index += 2;
+      } else {
+        source += ".*";
+        index += 1;
+      }
+    } else if (character === "*") {
+      source += "[^/]*";
+    } else if (character === "?") {
+      source += "[^/]";
+    } else if (character === "{") {
+      const close = glob.indexOf("}", index);
+      assert.notEqual(close, -1, `unterminated brace in glob ${glob}`);
+      const alternatives = glob
+        .slice(index + 1, close)
+        .split(",")
+        .map(escapeForRegExp);
+      source += `(?:${alternatives.join("|")})`;
+      index = close;
+    } else {
+      source += escapeForRegExp(character);
+    }
+  }
+  return new RegExp(`^${source}$`, "u");
+}
+
+function cypressComponentSpecPatterns() {
+  const config = read("servers/nextjs/cypress.config.ts");
+  const block = config.match(/specPattern:\s*\[([^\]]*)\]/u)?.[1];
+  assert.ok(
+    block,
+    "servers/nextjs/cypress.config.ts must declare a component specPattern array",
+  );
+  const patterns = [...block.matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
+  assert.ok(
+    patterns.length > 0,
+    "the component specPattern must list at least one spec root",
+  );
+  return patterns.map(globToRegExp);
+}
+
+function assertNamedSpecsResolve(specList, sourceLabel) {
+  assert.ok(
+    Array.isArray(specList) && specList.length > 0,
+    `${sourceLabel} must name at least one Cypress spec`,
+  );
+  const reachable = cypressComponentSpecPatterns();
+  const files = listCypressSpecFiles();
+  for (const rawGlob of specList) {
+    const glob = rawGlob.trim();
+    const matcher = globToRegExp(glob);
+    const matched = files.filter((file) => matcher.test(file));
+    assert.notEqual(
+      matched.length,
+      0,
+      `${sourceLabel} names Cypress spec "${glob}", but no such file exists under servers/nextjs`,
+    );
+    const runnable = matched.filter((file) =>
+      reachable.some((pattern) => pattern.test(file)),
+    );
+    assert.notEqual(
+      runnable.length,
+      0,
+      `${sourceLabel} names Cypress spec "${glob}", which resolves to ${matched.join(", ")}, but none of those fall inside the cypress.config.ts specPattern`,
+    );
+  }
+}
+
+test("every Cypress spec named by the GitHub component gate exists and is reachable", () => {
+  const workflow = read(".github/workflows/test-all.yml");
+  const specList = workflow.match(/\bspec: "([^"]+)"/u)?.[1]?.split(",");
+  assertNamedSpecsResolve(specList, ".github/workflows/test-all.yml");
+});
+
+test("every Cypress spec named by the local CI-parity runner exists and is reachable", () => {
+  const localRunner = read("scripts/test-local.mjs");
+  const block = localRunner.match(/const cypressSpecs = \[([^\]]*)\]/u)?.[1];
+  assert.ok(
+    block,
+    "scripts/test-local.mjs must declare a cypressSpecs array",
+  );
+  const specList = [...block.matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
+  assertNamedSpecsResolve(specList, "scripts/test-local.mjs");
+});
+
+test("every Cypress spec named by the Bitbucket component gate exists and is reachable", () => {
+  const pipeline = read("bitbucket-pipelines.yml");
+  const specList = pipeline
+    .match(/--component --spec "([^"]+)"/u)?.[1]
+    ?.split(",");
+  assertNamedSpecsResolve(specList, "bitbucket-pipelines.yml");
 });

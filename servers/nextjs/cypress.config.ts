@@ -28,6 +28,11 @@ export default defineConfig({
       "cypress/component/**/*.cy.{js,jsx,ts,tsx}",
       "app/**/*.cy.{js,jsx,ts,tsx}",
       "components/**/*.cy.{js,jsx,ts,tsx}",
+      // Redux slice specs live beside the slice they exercise, the same way
+      // every other spec sits beside its subject. Without this root the CI
+      // gate could name store/slices/*.cy.ts and Cypress would silently
+      // report an unmatched glob instead of running it.
+      "store/**/*.cy.{js,jsx,ts,tsx}",
     ],
     devServer: {
       framework: "react",

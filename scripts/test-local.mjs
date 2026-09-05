@@ -471,8 +471,6 @@ runStep({
   preconditionDescription: "Node 22, npm ci, and cached Cypress binary",
 });
 const cypressSpecs = [
-  "**/ChartLeaf.cy.tsx",
-  "**/Variants.cy.tsx",
   "**/UploadPage.cy.tsx", "**/DashboardPage.cy.tsx",
   "**/ThemeComposer.cy.tsx",
   "**/TemplateSelection.cy.tsx",
@@ -481,7 +479,7 @@ const cypressSpecs = [
   "**/api/authored.cy.ts",
   "**/usePresentationGeneration.cy.tsx",
   "**/PresentationHeader.cy.tsx",
-  "**/Chat.cy.tsx",
+  "**/ChatSurface.cy.tsx",
   "**/WorkspaceChatPanel.cy.tsx",
   "**/SharePopover.cy.tsx",
   "**/TemplateV2Studio.cy.tsx",
