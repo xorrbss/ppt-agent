@@ -32,7 +32,7 @@
     "createError": "Could not create a blank slide. Please try again."
   },
   "metadata": {
-    "title": "Presenton - Open Source AI presentation generator",
+    "title": "DevAX - AI presentation generator",
     "description": "Open-source AI presentation generator with custom layouts, multi-model support, and PDF/PPTX export."
   },
   "languageSwitcher": {
@@ -274,14 +274,14 @@
       "reorder": "Reorder slide {index}"
     },
     "notFound": {
-      "metadataTitle": "Page not found | Presenton",
+      "metadataTitle": "Page not found | DevAX",
       "imageAlt": "Page not found",
       "title": "Oops! Page not found",
       "description": "It seems you've found a page that doesn't exist. But don't worry—every great presentation starts with a blank slide!"
     },
     "globalError": {
       "title": "Something went wrong",
-      "description": "Presenton could not finish loading this page.",
+      "description": "DevAX could not finish loading this page.",
       "details": "Reference: {digest}"
     },
     "initialization": {
@@ -296,7 +296,7 @@
       "missingIdDescription": "Please try again."
     },
     "admin": {
-      "metadataTitle": "Admin | Presenton",
+      "metadataTitle": "Admin | DevAX",
       "title": "Admin",
       "manageAccessTitle": "Manage access",
       "manageAccessDescription": "Create login accounts and manage admin-owned API/MCP access keys. User workspaces remain private.",
@@ -1489,7 +1489,7 @@
     },
     "community": {
       "title": "Community",
-      "metadataTitle": "Community | Presenton",
+      "metadataTitle": "Community | DevAX",
       "metadataDescription": "Explore community presentation designs and prompts.",
       "newPresentation": "New presentation",
       "heading": "Pick community designs or prompts",
@@ -1530,7 +1530,7 @@
       "images": "Images",
       "webSearch": "Web Search",
       "reference": "Reference",
-      "managed": "Presenton managed",
+      "managed": "DevAX managed",
       "prompt": "Prompt",
       "promptDescription": "Paste into the prompt field.",
       "copyPrompt": "Copy example prompt",
@@ -1721,14 +1721,14 @@
     }
   },
   "notFound": {
-    "metadataTitle": "Page not found | Presenton",
+    "metadataTitle": "Page not found | DevAX",
     "imageAlt": "Page not found",
     "title": "Oops! Page not found",
     "description": "It seems you've found a page that doesn't exist. But don't worry—every great presentation starts with a blank slide!"
   },
   "globalError": {
     "title": "Something went wrong",
-    "description": "Presenton could not finish loading this page.",
+    "description": "DevAX could not finish loading this page.",
     "details": "Reference: {digest}"
   },
   "initialization": {
@@ -1743,7 +1743,7 @@
     "missingIdDescription": "Please try again."
   },
   "admin": {
-    "metadataTitle": "Admin | Presenton",
+    "metadataTitle": "Admin | DevAX",
     "title": "Admin",
     "manageAccessTitle": "Manage access",
     "manageAccessDescription": "Create login accounts and manage admin-owned API/MCP access keys. User workspaces remain private.",
@@ -2940,7 +2940,7 @@
   },
   "community": {
     "title": "Community",
-    "metadataTitle": "Community | Presenton",
+    "metadataTitle": "Community | DevAX",
     "metadataDescription": "Explore community presentation designs and prompts.",
     "newPresentation": "New presentation",
     "heading": "Pick community designs or prompts",
@@ -2981,7 +2981,7 @@
     "images": "Images",
     "webSearch": "Web Search",
     "reference": "Reference",
-    "managed": "Presenton managed",
+    "managed": "DevAX managed",
     "prompt": "Prompt",
     "promptDescription": "Paste into the prompt field.",
     "copyPrompt": "Copy example prompt",

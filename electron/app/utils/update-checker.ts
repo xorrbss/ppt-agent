@@ -214,7 +214,7 @@ function injectUpdateBanner(
         <span style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
           <span style="font-size:18px;">✨</span>
           <span>
-            Presenton&nbsp;<strong style="color:#5141e5">${latest}</strong>&nbsp;is available
+            DevAX&nbsp;<strong style="color:#5141e5">${latest}</strong>&nbsp;is available
             &mdash;&nbsp;you have&nbsp;<strong>${CURRENT_VERSION}</strong>
           </span>
         </span>

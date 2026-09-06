@@ -49,7 +49,7 @@ test("a plain border or a solid (unblurred) shadow gets a native backing rectang
   assert.equal(withBorder.mode, "native-crop-with-backing");
   assert.equal(withBorder.backingShapes.length, 1);
   const borderShapeXml = withBorder.backingShapes[0](99);
-  assert.match(borderShapeXml, /Presenton native image border/);
+  assert.match(borderShapeXml, /DevAX native image border/);
   assert.match(borderShapeXml, /<a:solidFill><a:srgbClr val="112233">/);
 
   const withSolidShadow = planNativeImageDecoration({
@@ -68,7 +68,7 @@ test("a plain border or a solid (unblurred) shadow gets a native backing rectang
   assert.equal(withSolidShadow.mode, "native-crop-with-backing");
   assert.equal(withSolidShadow.backingShapes.length, 1);
   const shadowShapeXml = withSolidShadow.backingShapes[0](100);
-  assert.match(shadowShapeXml, /Presenton native image shadow/);
+  assert.match(shadowShapeXml, /DevAX native image shadow/);
   assert.match(shadowShapeXml, /<a:alpha val="35000"\/>/);
 
   const withBoth = planNativeImageDecoration({
@@ -87,8 +87,8 @@ test("a plain border or a solid (unblurred) shadow gets a native backing rectang
   assert.equal(withBoth.mode, "native-crop-with-backing");
   // Back-to-front: shadow paints first, border paints in front of it.
   assert.equal(withBoth.backingShapes.length, 2);
-  assert.match(withBoth.backingShapes[0](1), /Presenton native image shadow/);
-  assert.match(withBoth.backingShapes[1](2), /Presenton native image border/);
+  assert.match(withBoth.backingShapes[0](1), /DevAX native image shadow/);
+  assert.match(withBoth.backingShapes[1](2), /DevAX native image border/);
 });
 
 test("a blurred shadow or asymmetric radius always falls back to raster", () => {

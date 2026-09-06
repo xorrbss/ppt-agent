@@ -112,7 +112,7 @@ const PublicPresentationView = ({ token }: { token: string }) => {
       </div>
 
       <footer className="pb-8 text-center text-xs text-gray-400">
-        Presenton으로 제작되었습니다
+        DevAX로 제작되었습니다
       </footer>
     </div>
   );

@@ -31,7 +31,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--name",
         type=str,
-        default="Presenton API (OpenAPI)",
+        default="DevAX API (OpenAPI)",
         help="Display name for the generated MCP server",
     )
     parser.add_argument(

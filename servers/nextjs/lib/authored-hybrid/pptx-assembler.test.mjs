@@ -180,26 +180,26 @@ test("assembler sandwiches residual raster between the editable canvas and foreg
     .toString("utf8");
 
   assert.doesNotMatch(slideXml, /historical full-slide image/);
-  assert.match(slideXml, /Presenton hybrid backplate/);
+  assert.match(slideXml, /DevAX hybrid backplate/);
   assert.match(slideXml, /<a:t xml:space="preserve">편집 가능한 서울<\/a:t>/);
   assert.match(slideXml, /prst="ellipse"/);
   assert.ok(
-    slideXml.indexOf("Presenton hybrid shape editable-canvas") <
-      slideXml.indexOf("Presenton hybrid backplate")
+    slideXml.indexOf("DevAX hybrid shape editable-canvas") <
+      slideXml.indexOf("DevAX hybrid backplate")
   );
   assert.ok(
-    slideXml.indexOf("Presenton hybrid backplate") <
-      slideXml.indexOf("Presenton hybrid shape native-shape")
+    slideXml.indexOf("DevAX hybrid backplate") <
+      slideXml.indexOf("DevAX hybrid shape native-shape")
   );
   assert.ok(
-    slideXml.indexOf("Presenton hybrid backplate") <
-      slideXml.indexOf("Presenton hybrid shape editable-cjk-container")
+    slideXml.indexOf("DevAX hybrid backplate") <
+      slideXml.indexOf("DevAX hybrid shape editable-cjk-container")
   );
   assert.ok(
-    slideXml.indexOf("Presenton hybrid backplate") <
-      slideXml.indexOf("Presenton hybrid text editable-cjk")
+    slideXml.indexOf("DevAX hybrid backplate") <
+      slideXml.indexOf("DevAX hybrid text editable-cjk")
   );
-  const textOverlayStart = slideXml.indexOf("Presenton hybrid text editable-cjk");
+  const textOverlayStart = slideXml.indexOf("DevAX hybrid text editable-cjk");
   const textOverlayEnd = slideXml.indexOf("</p:sp>", textOverlayStart);
   const textOverlayXml = slideXml.slice(textOverlayStart, textOverlayEnd);
   assert.match(textOverlayXml, /<a:noFill\/>/);
@@ -233,9 +233,9 @@ test("assembler preserves audited raster-native-raster z-band order", async () =
     nativeZBandByElementId: { "middle.text": 1 },
   }]);
   const xml = readPptxArchive(pptx).get("ppt/slides/slide1.xml").toString("utf8");
-  const lower = xml.indexOf("Presenton hybrid backplate");
-  const middle = xml.indexOf("Presenton hybrid text middle.text");
-  const upper = xml.indexOf("Presenton hybrid raster z-band 1");
+  const lower = xml.indexOf("DevAX hybrid backplate");
+  const middle = xml.indexOf("DevAX hybrid text middle.text");
+  const upper = xml.indexOf("DevAX hybrid raster z-band 1");
   assert.ok(lower >= 0 && lower < middle && middle < upper);
   assert.equal((xml.match(/presenton-semantic-raster-ownership-v1:/g) ?? []).length, 2);
 });
@@ -273,8 +273,8 @@ test("assembler stores an opaque full-slide residual as the slide background", a
   const slideXml = entries.get("ppt/slides/slide1.xml").toString("utf8");
 
   assert.match(slideXml, /<p:bg><p:bgPr><a:blipFill[^>]*><a:blip r:embed="rId3"\/>/);
-  assert.doesNotMatch(slideXml, /Presenton hybrid backplate/);
-  assert.doesNotMatch(slideXml, /Presenton hybrid shape editable-canvas/);
+  assert.doesNotMatch(slideXml, /DevAX hybrid backplate/);
+  assert.doesNotMatch(slideXml, /DevAX hybrid shape editable-canvas/);
 });
 
 test("assembler preserves the exact raster semantic QID set in PowerPoint-readable ownership shapes", async () => {
@@ -296,7 +296,7 @@ test("assembler preserves the exact raster semantic QID set in PowerPoint-readab
   for (const qid of qids) {
     assert.match(
       slideXml,
-      new RegExp(`name="Presenton raster visual fragment ${qid} semantic-owner"`),
+      new RegExp(`name="DevAX raster visual fragment ${qid} semantic-owner"`),
     );
   }
   const descriptions = [...slideXml.matchAll(/\bdescr="([^"]+)"/g)]
@@ -578,9 +578,9 @@ test("assembler preserves authored breaks, bounds text safely, and never emits C
     { embeddedTypefaceFamilies: ["Noto Sans KR"] }
   );
   const slideXml = readPptxArchive(output).get("ppt/slides/slide1.xml").toString("utf8");
-  const riskyStart = slideXml.indexOf("Presenton hybrid text mixed-cjk-mono");
+  const riskyStart = slideXml.indexOf("DevAX hybrid text mixed-cjk-mono");
   const riskyXml = slideXml.slice(riskyStart, slideXml.indexOf("</p:sp>", riskyStart));
-  const stableStart = slideXml.indexOf("Presenton hybrid text embedded-cjk");
+  const stableStart = slideXml.indexOf("DevAX hybrid text embedded-cjk");
   const stableXml = slideXml.slice(stableStart, slideXml.indexOf("</p:sp>", stableStart));
 
   assert.match(riskyXml, /<a:br\/>/);
@@ -620,9 +620,9 @@ test("assembler writes provenance as valid, merge-safe PPTX custom properties", 
   const contentTypes = packaged.get("[Content_Types].xml").toString("utf8");
 
   assert.match(custom, /name="Customer\.Reference"><vt:lpwstr>keep-me<\/vt:lpwstr>/);
-  assert.match(custom, /name="Presenton\.ExportAttemptId"><vt:lpwstr>attempt-42<\/vt:lpwstr>/);
-  assert.match(custom, /name="Presenton\.PresentationRevision"><vt:i8>13<\/vt:i8>/);
-  assert.equal((custom.match(/name="Presenton\./g) ?? []).length, 4);
+  assert.match(custom, /name="DevAX\.ExportAttemptId"><vt:lpwstr>attempt-42<\/vt:lpwstr>/);
+  assert.match(custom, /name="DevAX\.PresentationRevision"><vt:i8>13<\/vt:i8>/);
+  assert.equal((custom.match(/name="DevAX\./g) ?? []).length, 4);
   assert.equal(new Set([...custom.matchAll(/\bpid="(\d+)"/g)].map((match) => match[1])).size, 5);
   assert.match(rootRelationships, /relationships\/custom-properties" Target="docProps\/custom\.xml"/);
   assert.equal((rootRelationships.match(/relationships\/custom-properties/g) ?? []).length, 1);

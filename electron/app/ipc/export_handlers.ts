@@ -65,7 +65,7 @@ export function setupExportHandlers() {
         return {
           success: false,
           message:
-            "Export requires Chromium. Restart Presenton and complete the Chromium setup step when prompted.",
+            "Export requires Chromium. Restart DevAX and complete the Chromium setup step when prompted.",
         };
       }
 

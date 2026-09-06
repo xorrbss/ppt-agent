@@ -339,15 +339,15 @@ export default function AuthGate() {
         <div className="relative z-10 w-full max-w-md">
           <div className="rounded-2xl border border-[#EDEEEF] bg-white p-8 text-center shadow-xl">
             <Image
-              src="/Logo.png"
-              alt="Presenton"
-              width={160}
+              src="/logo-with-bg.png"
+              alt="DevAX"
+              width={48}
               height={48}
-              className="mx-auto mb-5 h-12 w-auto opacity-95"
+              className="mx-auto mb-5 h-12 w-12 rounded-xl opacity-95"
               priority
             />
             <div className="mx-auto mb-4 h-1 w-16 rounded-full bg-[#7C51F8]" />
-            <h1 className="font-syne text-lg font-semibold text-black">Presenton</h1>
+            <h1 className="font-syne text-lg font-semibold text-black">DevAX</h1>
             <p className="mt-3 font-syne text-sm text-[#000000CC]">작업 공간을 준비하는 중…</p>
             <div className="mt-6 flex justify-center gap-1.5">
               <span className="h-2 w-2 animate-pulse rounded-full bg-[#5146E5]" />

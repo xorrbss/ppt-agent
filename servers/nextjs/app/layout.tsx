@@ -35,7 +35,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const { locale, t } = await getServerI18n();
 
   return {
-    metadataBase: new URL("https://presenton.ai"),
+    metadataBase: new URL(
+      process.env.NEXT_PUBLIC_URL || "http://localhost:5000"
+    ),
     title: t("metadata.title"),
     description: t("metadata.description"),
     icons: {
@@ -68,27 +70,24 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       title: t("metadata.title"),
       description: t("metadata.description"),
-      url: "https://presenton.ai",
-      siteName: "Presenton",
+      url: process.env.NEXT_PUBLIC_URL || "http://localhost:5000",
+      siteName: "DevAX",
       images: [
         {
-          url: "https://presenton.ai/presenton-feature-graphics.png",
-          width: 1200,
-          height: 630,
-          alt: "Presenton Logo",
+          url: "/dx-browser-icon-v2.png",
+          width: 512,
+          height: 512,
+          alt: "DevAX Logo",
         },
       ],
       type: "website",
       locale: locale === "ko" ? "ko_KR" : "en_US",
     },
-    alternates: {
-      canonical: "https://presenton.ai",
-    },
     twitter: {
-      card: "summary_large_image",
+      card: "summary",
       title: t("metadata.title"),
       description: t("metadata.description"),
-      images: ["https://presenton.ai/presenton-feature-graphics.png"],
+      images: ["/dx-browser-icon-v2.png"],
     },
   };
 }

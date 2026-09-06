@@ -23,9 +23,9 @@ test("validates and compares release versions without stripping prerelease seman
 test("selects only the fork-owned release asset for the active platform", () => {
   const version = "2026.7.2401";
   const downloads = {
-    windows: `https://github.com/xorrbss/ppt-agent/releases/download/electron-v${version}/Presenton-${version}.exe`,
-    mac: `https://github.com/xorrbss/ppt-agent/releases/download/electron-v${version}/Presenton-${version}.dmg`,
-    linux: `https://github.com/xorrbss/ppt-agent/releases/download/electron-v${version}/Presenton-${version}.deb`,
+    windows: `https://github.com/xorrbss/ppt-agent/releases/download/electron-v${version}/DevAX-${version}.exe`,
+    mac: `https://github.com/xorrbss/ppt-agent/releases/download/electron-v${version}/DevAX-${version}.dmg`,
+    linux: `https://github.com/xorrbss/ppt-agent/releases/download/electron-v${version}/DevAX-${version}.deb`,
   };
   assert.equal(getUpdateDownloadUrl(version, downloads, "win32"), downloads.windows);
   assert.equal(getUpdateDownloadUrl(version, downloads, "darwin"), downloads.mac);

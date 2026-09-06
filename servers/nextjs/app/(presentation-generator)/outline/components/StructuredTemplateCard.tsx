@@ -19,13 +19,13 @@ function getSourceLabel(template: StructuredTemplateSummary): string {
     const repository = template.source.repository
       .replace(/^https?:\/\//, "")
       .replace(/\/$/, "");
-    if (repository === "github.com/presenton/presenton") return "Presenton";
+    if (repository === "github.com/presenton/presenton") return "DevAX";
     return template.source.path
       ? `${repository} · ${template.source.path}`
       : repository;
   }
   return template.provenance?.source === "verified-template-package"
-    ? "Presenton"
+    ? "DevAX"
     : "로컬 카탈로그";
 }
 

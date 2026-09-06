@@ -82,7 +82,7 @@ function showSetupInstallerWindow(): Promise<void> {
       height: 600,
       resizable: false,
       center: true,
-      title: "Presenton – Setup required",
+      title: "DevAX – Setup required",
       icon: path.join(
         baseDir,
         "resources/ui/assets/images/presenton_short_filled.png"

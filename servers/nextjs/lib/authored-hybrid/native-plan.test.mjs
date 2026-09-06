@@ -1097,9 +1097,9 @@ test("raster-classified CSS panels retain editable fill and per-side borders", a
 
   const xml = serializePreparedNativeElement(prepared[0], 3);
   assert.equal((xml.match(/<p:sp>/g) ?? []).length, 3);
-  assert.match(xml, /Presenton hybrid raster panel-one/);
-  assert.match(xml, /Presenton hybrid raster panel-one top border/);
-  assert.match(xml, /Presenton hybrid raster panel-one left border/);
+  assert.match(xml, /DevAX hybrid raster panel-one/);
+  assert.match(xml, /DevAX hybrid raster panel-one top border/);
+  assert.match(xml, /DevAX hybrid raster panel-one left border/);
   assert.match(xml, /<a:srgbClr val="F3F7FF">/);
   assert.match(xml, /<a:srgbClr val="1F55D5">/);
   assert.match(xml, /<a:srgbClr val="D6E2FF">/);
@@ -1291,18 +1291,18 @@ test("outlined circular text containers retain editable outline, border, and num
   const underlay = serializePreparedNativeElementUnderlay(prepared[0], 3);
   const overlay = serializePreparedNativeElementOverlay(prepared[0], 5);
   assert.equal((underlay.match(/<p:sp>/g) ?? []).length, 2);
-  assert.match(underlay, /Presenton hybrid shape step-node-container outline/);
+  assert.match(underlay, /DevAX hybrid shape step-node-container outline/);
   assert.match(underlay, /<a:off x="942975" y="942975"\/><a:ext cx="428625" cy="428625"\/>/);
   assert.match(underlay, /<a:srgbClr val="2457D6">/);
   assert.match(underlay, /<a:off x="952500" y="952500"\/><a:ext cx="409575" cy="409575"\/>/);
   assert.match(underlay, /<a:srgbClr val="182235">/);
   assert.match(underlay, /<a:srgbClr val="F4F7F4">/);
-  assert.match(overlay, /Presenton hybrid raster step-node/);
+  assert.match(overlay, /DevAX hybrid raster step-node/);
 
   const qidOwners = [...`${underlay}${overlay}`.matchAll(/name="([^"]+)"/g)]
     .map((match) => match[1])
     .filter((name) => name.endsWith(" step-node"));
-  assert.deepEqual(qidOwners, ["Presenton hybrid raster step-node"]);
+  assert.deepEqual(qidOwners, ["DevAX hybrid raster step-node"]);
 });
 
 test("backplate decoration keeps a transparent outer box for multiline fit", async () => {

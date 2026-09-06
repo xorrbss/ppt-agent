@@ -63,7 +63,7 @@ const PrivacySettings = () => {
           사용 분석
         </h4>
         <p className="text-xs text-[#6B7280] mb-6 leading-relaxed max-w-lg">
-          익명 사용 데이터를 공유하여 Presenton 개선에 도움을 주세요. 개인 정보나 발표자료 내용은 수집되지 않습니다.
+          익명 사용 데이터를 공유하여 DevAX 개선에 도움을 주세요. 개인 정보나 발표자료 내용은 수집되지 않습니다.
         </p>
 
         <div className="flex items-center justify-between gap-4 rounded-[10px] bg-white border border-[#EDEEEF] p-4">

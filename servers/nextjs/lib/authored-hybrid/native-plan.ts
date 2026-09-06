@@ -2699,7 +2699,7 @@ function powerPointAutofitXml(): string {
 function nonVisualName(
   element: AuthoredHybridElement | AuthoredHybridNativeChartSource | AuthoredHybridNativeTableSource,
 ): string {
-  return `Presenton hybrid ${element.classification.mode === "native" ? element.classification.kind : "raster"} ${element.id}`;
+  return `DevAX hybrid ${element.classification.mode === "native" ? element.classification.kind : "raster"} ${element.id}`;
 }
 
 export function serializePreparedNativeElement(

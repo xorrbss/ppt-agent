@@ -20,7 +20,7 @@ test("structural editability inspection covers all 20 slides", () => {
     entries.set(
       `ppt/slides/slide${slideNumber}.xml`,
       Buffer.from(
-        `<p:sld><p:cSld><p:spTree><p:pic><p:nvPicPr><p:cNvPr name="Presenton hybrid backplate"/></p:nvPicPr></p:pic>${native}</p:spTree></p:cSld></p:sld>`
+        `<p:sld><p:cSld><p:spTree><p:pic><p:nvPicPr><p:cNvPr name="DevAX hybrid backplate"/></p:nvPicPr></p:pic>${native}</p:spTree></p:cSld></p:sld>`
       )
     );
   }
@@ -55,7 +55,7 @@ test("structural inspection distinguishes groups, connectors, small images, and 
       "ppt/slides/slide1.xml",
       Buffer.from(
         '<p:sld><p:cSld><p:spTree>' +
-          '<p:pic><p:nvPicPr><p:cNvPr id="2" name="Presenton hybrid backplate"/></p:nvPicPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="12192000" cy="6858000"/></a:xfrm></p:spPr></p:pic>' +
+          '<p:pic><p:nvPicPr><p:cNvPr id="2" name="DevAX hybrid backplate"/></p:nvPicPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="12192000" cy="6858000"/></a:xfrm></p:spPr></p:pic>' +
           '<p:grpSp><p:nvGrpSpPr/><p:grpSpPr/><p:sp><p:nvSpPr/><p:spPr/></p:sp></p:grpSp>' +
           '<p:cxnSp><p:nvCxnSpPr/><p:spPr/></p:cxnSp>' +
           '<p:sp><p:nvSpPr/><p:spPr/><p:txBody/></p:sp>' +
@@ -92,8 +92,8 @@ test("semantic raster ownership carriers do not inflate native shape coverage", 
       "ppt/slides/slide1.xml",
       Buffer.from(
         '<p:sld><p:cSld><p:spTree>' +
-          '<p:sp><p:nvSpPr><p:cNvPr id="3" name="Presenton raster visual fragment s01-title semantic-owner" hidden="1"/></p:nvSpPr><p:spPr/></p:sp>' +
-          '<p:sp><p:nvSpPr><p:cNvPr id="4" name="Presenton raster visual fragment s01-chart semantic-owner" hidden="1"/></p:nvSpPr><p:spPr/></p:sp>' +
+          '<p:sp><p:nvSpPr><p:cNvPr id="3" name="DevAX raster visual fragment s01-title semantic-owner" hidden="1"/></p:nvSpPr><p:spPr/></p:sp>' +
+          '<p:sp><p:nvSpPr><p:cNvPr id="4" name="DevAX raster visual fragment s01-chart semantic-owner" hidden="1"/></p:nvSpPr><p:spPr/></p:sp>' +
           '</p:spTree></p:cSld></p:sld>',
       ),
     ],

@@ -313,7 +313,7 @@ def master_contract_with_logo_payload() -> dict[str, object]:
             "sha256:689976b88fc161e4cfa9733b4bf9be5f"
             "4a8443569586256360581e584f9cb76e"
         ),
-        "altText": "Presenton logo",
+        "altText": "DevAX logo",
     }
     contract["furniture"]["logo"]["assetId"] = "asset:presenton-logo"
     return contract

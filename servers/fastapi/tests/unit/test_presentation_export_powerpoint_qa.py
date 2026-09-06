@@ -100,15 +100,15 @@ def test_release_powerpoint_qa_fails_closed_at_each_observation_boundary(
 
 
 def test_powerpoint_qid_owner_and_interactive_hwnd_contracts():
-    assert _contains_presenton_qid("Presenton hybrid text q-title", "q-title")
+    assert _contains_presenton_qid("DevAX hybrid text q-title", "q-title")
     assert _contains_presenton_qid(
-        "Presenton hybrid shape q-badge-container", "q-badge"
+        "DevAX hybrid shape q-badge-container", "q-badge"
     )
     assert _contains_presenton_qid(
-        "Presenton hybrid shape q-root top border", "q-root"
+        "DevAX hybrid shape q-root top border", "q-root"
     )
     assert not _contains_presenton_qid(
-        "Presenton raster visual fragment 5", "q-badge"
+        "DevAX raster visual fragment 5", "q-badge"
     )
     application = _Application()
     assert _powerpoint_main_hwnd(application, _WindowApi(application)) == 101
@@ -119,10 +119,10 @@ def test_powerpoint_qid_owner_and_interactive_hwnd_contracts():
 
 def test_powerpoint_qid_owners_are_slide_scoped_and_include_raster_carriers():
     snapshot = [[
-        _shape(name="Presenton hybrid text s01-title"),
-        _shape(name="Presenton raster visual fragment s01-chart semantic-owner"),
+        _shape(name="DevAX hybrid text s01-title"),
+        _shape(name="DevAX raster visual fragment s01-chart semantic-owner"),
     ], [
-        _shape(name="Presenton hybrid text s02-title"),
+        _shape(name="DevAX hybrid text s02-title"),
     ]]
     expected = frozenset({
         (1, "s01-title", "native"),
@@ -134,12 +134,12 @@ def test_powerpoint_qid_owners_are_slide_scoped_and_include_raster_carriers():
         "qid_owner_ghosting": 0,
         "qid_owner_mismatches": 0,
     }
-    moved = [snapshot[0], [_shape(name="Presenton hybrid text s01-title")]]
+    moved = [snapshot[0], [_shape(name="DevAX hybrid text s01-title")]]
     assert _qid_owner_census(moved, expected)["qid_owner_mismatches"] == 1
 
 
 def test_powerpoint_geometry_contract_uses_chromium_pixels():
-    snapshot = [[_shape(name="Presenton hybrid text s01-title")]]
+    snapshot = [[_shape(name="DevAX hybrid text s01-title")]]
     assert _geometry_contract_mismatches(
         snapshot,
         {(1, "s01-title"): (96.0, 64.0, 853.333333, 64.0)},

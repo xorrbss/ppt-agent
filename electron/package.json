@@ -1,6 +1,6 @@
 {
   "name": "presenton",
-  "productName": "Presenton Open Source",
+  "productName": "DevAX",
   "version": "2026.7.2401",
   "exportVersion": "v0.4.8",
   "main": "app_dist/main.js",

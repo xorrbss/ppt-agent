@@ -251,7 +251,7 @@ test("asymmetric-radius freeforms keep shadows raster and native paint de-duplic
   assert.equal(preparedNativeElementNonVisualIdCount(prepared[0]), 3);
   const xml = serializePreparedNativeElement(prepared[0], 3);
   assert.equal((xml.match(/<p:sp>/g) ?? []).length, 3);
-  assert.doesNotMatch(xml, /Presenton hybrid raster paint-stack shadow/);
+  assert.doesNotMatch(xml, /DevAX hybrid raster paint-stack shadow/);
   assert.doesNotMatch(xml, /<a:srgbClr val="102A56">/);
   assert.match(xml, /<a:prstDash val="dash"\/>/);
   assert.match(xml, /<a:prstDash val="dot"\/>/);
@@ -283,7 +283,7 @@ test("outline-only paint emits one editable outline without a transparent duplic
   assert.equal(preparedNativeElementNonVisualIdCount(prepared[0]), 1);
   const xml = serializePreparedNativeElement(prepared[0], 3);
   assert.equal((xml.match(/<p:sp>/g) ?? []).length, 1);
-  assert.match(xml, /Presenton hybrid raster outline-only outline/);
+  assert.match(xml, /DevAX hybrid raster outline-only outline/);
   assert.match(xml, /<a:prstDash val="dot"\/>/);
 });
 

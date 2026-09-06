@@ -455,7 +455,7 @@ def _set_shape_identity(
 def _owner_display_name(kind: str, qid: str) -> str:
     if _QID.fullmatch(qid) is None:
         raise NativeSceneError("authored_vnext_scene_qid_invalid")
-    return f"Presenton hybrid {kind} {qid}"
+    return f"DevAX hybrid {kind} {qid}"
 
 
 def _owner_tags(kind: str, qid: str) -> dict[str, str]:
@@ -2434,7 +2434,7 @@ def materialize_scene_pptx(
                 shape,
                 _RASTER_DESCRIPTION_PREFIX + canonical_json(raster_metadata),
                 island["islandId"],
-                display_name=f"Presenton raster island {island['islandId']}",
+                display_name=f"DevAX raster island {island['islandId']}",
             )
             raster_identities.append(
                 {
@@ -2905,7 +2905,7 @@ def readback_scene_pptx(content: bytes) -> dict[str, Any]:
                     or not source_owner_ids
                     or any(not isinstance(owner_id, str) for owner_id in source_owner_ids)
                     or any(owner_id in actual_raster_owner_ids for owner_id in source_owner_ids)
-                    or shape.name != f"Presenton raster island {island_id}"
+                    or shape.name != f"DevAX raster island {island_id}"
                 ):
                     raise NativeSceneError(
                         "authored_vnext_hybrid_raster_island_readback_failed"

@@ -21,7 +21,7 @@ def build_system_prompt(
         chat_memory_context,
     )
     return (
-        "You are Presenton's slide assistant. Be concise, accurate, and action-oriented.\n"
+        "You are DevAX's slide assistant. Be concise, accurate, and action-oriented.\n"
         "\n"
         "Operating priorities\n"
         "1) Complete the user's intent with the fewest reliable tool calls.\n"

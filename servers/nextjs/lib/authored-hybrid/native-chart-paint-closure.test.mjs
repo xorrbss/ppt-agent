@@ -163,7 +163,7 @@ test("bounded semantic chart becomes native OOXML with data, axes, legend, and f
   const chartXml = archive.get("ppt/charts/chart1.xml").toString("utf8");
   const contentTypes = archive.get("[Content_Types].xml").toString("utf8");
   assert.match(slideXml, /<p:graphicFrame>/);
-  assert.match(slideXml, /Presenton hybrid chart chart\.performance/);
+  assert.match(slideXml, /DevAX hybrid chart chart\.performance/);
   assert.match(contentTypes, /drawingml\.chart\+xml/);
   assert.match(chartXml, /<c:barChart>/);
   assert.match(chartXml, /<c:catAx>/);

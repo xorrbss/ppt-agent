@@ -207,7 +207,7 @@ test("v0.4.8 authored-hybrid representative fixtures preserve editable structure
 
   for (const xml of [xml1, xml2, xml3]) {
     assert.doesNotMatch(xml, /v0\.4\.2 fidelity raster/);
-    assert.match(xml, /Presenton hybrid/);
+    assert.match(xml, /DevAX hybrid/);
   }
 
   for (const text of [
@@ -347,7 +347,7 @@ test("isolated authored CSS keeps each slide's right-edge sentinel through PPTX 
   for (let slideNumber = 1; slideNumber <= layers.length; slideNumber += 1) {
     const xml = slideXml(entries, slideNumber);
     assert.ok(
-      /<p:bg>/.test(xml) || /name="Presenton hybrid backplate"/.test(xml),
+      /<p:bg>/.test(xml) || /name="DevAX hybrid backplate"/.test(xml),
       `slide ${slideNumber} has neither a slide background nor a full-slide backplate`
     );
     const mediaPath = [...entries.keys()].find((name) =>

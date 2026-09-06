@@ -110,7 +110,7 @@ const config = {
   ],
   afterPack,
   mac: {
-    artifactName: "Presenton-${version}.${ext}",
+    artifactName: "DevAX-${version}.${ext}",
     target: ["dmg"],
     category: "public.app-category.productivity",
     icon: "resources/ui/assets/images/presenton_short_filled.png",
@@ -119,7 +119,7 @@ const config = {
     entitlementsInherit: "build/entitlements.mac.plist",
   },
   linux: {
-    artifactName: "Presenton-${version}.${ext}",
+    artifactName: "DevAX-${version}.${ext}",
     target: ["AppImage", "deb"],
     icon: "build/icons",
   },
@@ -130,7 +130,7 @@ const config = {
   win: {
     target: ["nsis", "appx"],
     icon: "build/icon.ico",
-    artifactName: "Presenton-${version}.${ext}",
+    artifactName: "DevAX-${version}.${ext}",
     executableName: "Presenton",
   },
   nsis: {

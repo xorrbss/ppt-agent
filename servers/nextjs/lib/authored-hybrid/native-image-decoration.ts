@@ -117,7 +117,7 @@ function borderBackingShape(
   // own local bounds; the caller wraps it with the shared <a:xfrm> transform
   // builder used for every other native shape/picture.
   return (nonVisualId: number) =>
-    `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="Presenton native image border"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${geometryXml}<a:noFill/><a:ln w="${strokeWidthEmu}"><a:solidFill>${colorXml(border.color)}</a:solidFill></a:ln></p:spPr></p:sp>`;
+    `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="DevAX native image border"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${geometryXml}<a:noFill/><a:ln w="${strokeWidthEmu}"><a:solidFill>${colorXml(border.color)}</a:solidFill></a:ln></p:spPr></p:sp>`;
 }
 
 function shadowBackingShape(
@@ -125,7 +125,7 @@ function shadowBackingShape(
   geometryXml: string
 ): NativeImageBackingShapeFactory {
   return (nonVisualId: number) =>
-    `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="Presenton native image shadow"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${geometryXml}<a:solidFill>${colorXml(shadow.color)}</a:solidFill><a:ln><a:noFill/></a:ln></p:spPr></p:sp>`;
+    `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="DevAX native image shadow"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${geometryXml}<a:solidFill>${colorXml(shadow.color)}</a:solidFill><a:ln><a:noFill/></a:ln></p:spPr></p:sp>`;
 }
 
 /**

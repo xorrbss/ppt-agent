@@ -34,7 +34,7 @@ const DashboardSidebar = () => {
                 <Link href={`/dashboard`} className="hidden items-center gap-2 border-b border-[#E1E1E5] pb-6 sm:flex">
                     <Image
                         src="/logo-with-bg.png"
-                        alt="Presenton logo"
+                        alt="DevAX logo"
                         width={40}
                         height={40}
                         className="mx-auto h-[40px] w-[40px] cursor-pointer object-contain"

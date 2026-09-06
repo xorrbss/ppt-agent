@@ -47,6 +47,10 @@ from templates.v2.pptx.repeat_adapter import (
 
 TEMPLATE_V2_NATIVE_PPTX_SCHEMA_VERSION = "presenton.template-v2-native-pptx/v1"
 TEMPLATE_V2_NATIVE_PPTX_COMPILER_NAME = "presenton-template-v2-native-ooxml"
+# Display-only author stamped into docProps. Kept separate from the compiler
+# name above, which is a discriminator compared against persisted template
+# preflight metadata and must not change.
+TEMPLATE_V2_NATIVE_PPTX_AUTHOR_NAME = "DevAX"
 TEMPLATE_V2_NATIVE_PPTX_COMPILER_VERSION = "1"
 TEMPLATE_V2_CANVAS_WIDTH_PX = 1280
 TEMPLATE_V2_CANVAS_HEIGHT_PX = 720
@@ -910,8 +914,8 @@ def _set_stable_core_properties(presentation: PresentationType) -> None:
     core = presentation.core_properties
     core.title = "Template V2 native compilation"
     core.subject = TEMPLATE_V2_NATIVE_PPTX_SCHEMA_VERSION
-    core.author = TEMPLATE_V2_NATIVE_PPTX_COMPILER_NAME
-    core.last_modified_by = TEMPLATE_V2_NATIVE_PPTX_COMPILER_NAME
+    core.author = TEMPLATE_V2_NATIVE_PPTX_AUTHOR_NAME
+    core.last_modified_by = TEMPLATE_V2_NATIVE_PPTX_AUTHOR_NAME
     core.comments = (
         f"{TEMPLATE_V2_NATIVE_PPTX_COMPILER_NAME}/"
         f"{TEMPLATE_V2_NATIVE_PPTX_COMPILER_VERSION}"

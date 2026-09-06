@@ -30,7 +30,7 @@ test("table v1 serializes an editable DrawingML table keyed by QID", () => {
   const table = parseAuthoredNativeTablePayload({ schemaVersion: "authored-native-table/v1", headerRows: 1, fontFamily: "Batang", rows: [[{ text: "구분", fill: "#112233", bold: true, fontFamily: "Malgun Gothic", fontSizePt: 12 }, { text: "" }], [{ text: "A" }, { text: "10" }]], columnWidths: [120, 280], rowHeightsPt: [28, 36], mergedCells: [{ row: 0, column: 0, rowSpan: 1, columnSpan: 2 }], cellStyles: [[{ fill: "#1463FF", borders: { top: headerBorder, right: headerBorder, bottom: headerBorder, left: headerBorder }, horizontalAlign: "center", verticalAlign: "middle" }, {}], [{ horizontalAlign: "left", verticalAlign: "bottom" }, {}]] });
   assert.ok(table);
   const xml = serializeNativeTableFrame({ id: "table.sales", domPath: "table", tagName: "TABLE", sourceIndex: 0, zOrder: 2, cssZIndex: null, bounds: { px: { x: 10, y: 20, width: 400, height: 160 }, inches: { x: 0, y: 0, width: 1, height: 1 } }, rotationDeg: 0, opacity: 1, parentElementId: null, classification: { mode: "native", kind: "table", confidence: "safe" }, table }, 7);
-  assert.match(xml, /Presenton hybrid table table\.sales/);
+  assert.match(xml, /DevAX hybrid table table\.sales/);
   assert.equal((xml.match(/<a:tr\b/g) ?? []).length, 2);
   assert.equal((xml.match(/<a:tc\b/g) ?? []).length, 4);
   assert.match(xml, /typeface="Batang"/);

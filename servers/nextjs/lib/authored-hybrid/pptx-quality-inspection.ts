@@ -62,7 +62,7 @@ function pictureIdentity(block: string, index: number): string {
 }
 
 function isHybridBackplate(block: string): boolean {
-  return /<p:cNvPr\b[^>]*\bname="Presenton hybrid backplate"/.test(block);
+  return /<p:cNvPr\b[^>]*\bname="DevAX hybrid backplate"/.test(block);
 }
 
 export interface AuthoredHybridNativeReadbackElement extends PresentationExportNativeElementReadback {
@@ -211,7 +211,7 @@ function hybridIdentity(name: string, serializedKind: ReturnType<typeof serializ
   ) {
     return null;
   }
-  const typed = /^Presenton hybrid (?:native |raster )?(text|shape|image|table|chart) ([A-Za-z][A-Za-z0-9._:-]{0,127})$/.exec(decoded);
+  const typed = /^DevAX hybrid (?:native |raster )?(text|shape|image|table|chart) ([A-Za-z][A-Za-z0-9._:-]{0,127})$/.exec(decoded);
   if (typed) {
     return {
       kind: typed[1] as "text" | "shape" | "image" | "table" | "chart",
@@ -222,7 +222,7 @@ function hybridIdentity(name: string, serializedKind: ReturnType<typeof serializ
   // bounded editable pre-serializer proves them safe. Their historical name
   // carries the source disposition but omits the emitted OOXML kind; derive
   // that kind from the exact serialized block instead of dropping ownership.
-  const raster = /^Presenton hybrid raster ([A-Za-z][A-Za-z0-9._:-]{0,127})$/.exec(decoded);
+  const raster = /^DevAX hybrid raster ([A-Za-z][A-Za-z0-9._:-]{0,127})$/.exec(decoded);
   return raster && serializedKind
     ? { kind: serializedKind, elementId: raster[1] }
     : null;
@@ -392,7 +392,7 @@ function semanticRasterOwnerQids(xml: string): string[] {
     .map((match) => decodeXmlAttributeValue(match[1] ?? ""))
     .filter((value): value is string => value !== null)
     .map((value) => value.trim())
-    .map((name) => /^Presenton raster visual fragment ([A-Za-z][A-Za-z0-9._:-]{0,127}) semantic-owner$/.exec(name)?.[1] ?? null)
+    .map((name) => /^DevAX raster visual fragment ([A-Za-z][A-Za-z0-9._:-]{0,127}) semantic-owner$/.exec(name)?.[1] ?? null)
     .filter((qid): qid is string => qid !== null);
 }
 
@@ -668,7 +668,7 @@ export function inspectPptxNativeElementReadback(
       const chart = chartXml ? chartReadback(chartXml) : null;
       if (tagOwner) {
         const decodedName = decodeXmlAttributeValue(rawName);
-        const carrier = /^Presenton hybrid chart slide-3:chart:(line|pie)_01$/.exec(
+        const carrier = /^DevAX hybrid chart slide-3:chart:(line|pie)_01$/.exec(
           decodedName ?? "",
         );
         if (!carrier || !chart || carrier[1] !== chart.chartType) {
@@ -752,7 +752,7 @@ export function inspectPptxEditability(
       const allShapes = occurrences(xml, /<p:sp\b/g);
       const semanticOwnershipCarrierElements = occurrences(
         xml,
-        /<p:cNvPr\b[^>]*\bname="Presenton raster visual fragment [^"]+ semantic-owner"/g,
+        /<p:cNvPr\b[^>]*\bname="DevAX raster visual fragment [^"]+ semantic-owner"/g,
       );
       const connectorElements = occurrences(xml, /<p:cxnSp\b/g);
       const nativeGroupElements = occurrences(xml, /<p:grpSp\b/g);

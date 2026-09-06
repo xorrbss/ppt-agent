@@ -12,6 +12,7 @@ from pptx import Presentation
 from templates.v2.models.layouts import SlideLayout
 from templates.v2.pptx.assembler import assemble_template_v2_draft
 from templates.v2.pptx.native_compiler import (
+    TEMPLATE_V2_NATIVE_PPTX_AUTHOR_NAME,
     TEMPLATE_V2_NATIVE_PPTX_COMPILER_NAME,
     TEMPLATE_V2_NATIVE_PPTX_COMPILER_VERSION,
     TEMPLATE_V2_NATIVE_PPTX_SCHEMA_VERSION,
@@ -208,7 +209,7 @@ def test_native_pptx_keeps_text_editable_and_geometry_at_96_dpi():
         TEMPLATE_V2_NATIVE_PPTX_SCHEMA_VERSION
     )
     assert presentation.core_properties.author == (
-        TEMPLATE_V2_NATIVE_PPTX_COMPILER_NAME
+        TEMPLATE_V2_NATIVE_PPTX_AUTHOR_NAME
     )
     assert presentation.core_properties.comments == (
         f"{TEMPLATE_V2_NATIVE_PPTX_COMPILER_NAME}/"

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Presenton – Setup required</title>
+  <title>DevAX – Setup required</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -130,8 +130,8 @@
 <body>
   <div class="shell">
     <div class="logo-wrap">
-      <img src="../assets/images/presenton_logo.png" alt="Presenton" onerror="this.style.display='none'; document.getElementById('logo-fb').style.display='block';" />
-      <span id="logo-fb" class="logo-fallback" style="display:none;">Presenton</span>
+      <img src="../assets/images/presenton_logo.png" alt="DevAX" onerror="this.style.display='none'; document.getElementById('logo-fb').style.display='block';" />
+      <span id="logo-fb" class="logo-fallback" style="display:none;">DevAX</span>
     </div>
     <div class="step-badge" id="step-badge">Setup</div>
 
@@ -141,7 +141,7 @@
       <div id="state-prompt" class="state active">
         <div class="icon-wrap purple">📦</div>
         <p class="heading" id="prompt-heading">Dependencies required</p>
-        <p class="sub" id="prompt-sub">Presenton needs LibreOffice, ImageMagick, and Chromium to create and export presentations reliably. Install them now so everything works.</p>
+        <p class="sub" id="prompt-sub">DevAX needs LibreOffice, ImageMagick, and Chromium to create and export presentations reliably. Install them now so everything works.</p>
         <div class="btn-row">
           <button class="btn-primary" id="btn-install">Install</button>
           <button class="btn-ghost" id="btn-skip">Skip for now</button>
@@ -289,10 +289,10 @@
         'Chromium required';
       document.getElementById('prompt-sub').innerHTML =
         step === 'libreoffice'
-          ? '<strong>Presenton</strong> uses LibreOffice to generate custom templates from PPTX files.'
+          ? '<strong>DevAX</strong> uses LibreOffice to generate custom templates from PPTX files.'
           : step === 'imagemagick'
-            ? '<strong>Presenton</strong> uses ImageMagick for OCR/document conversion support. Linux uses apt, macOS installs Homebrew first (if needed) and then runs brew install imagemagick, and Windows downloads and installs it directly into the Presenton runtime.'
-            : '<strong>Presenton</strong> uses Chromium to render slides for PDF and PPTX export. This is a one-time download (~150–200 MB). Keep the app open until it finishes.';
+            ? '<strong>DevAX</strong> uses ImageMagick for OCR/document conversion support. Linux uses apt, macOS installs Homebrew first (if needed) and then runs brew install imagemagick, and Windows downloads and installs it directly into the DevAX runtime.'
+            : '<strong>DevAX</strong> uses Chromium to render slides for PDF and PPTX export. This is a one-time download (~150–200 MB). Keep the app open until it finishes.';
       document.getElementById('btn-install').onclick = () => startInstall(step);
       document.getElementById('btn-skip').onclick = () => handleSkip();
       showState('prompt');
@@ -301,7 +301,7 @@
     function startInstall(step) {
       if (!setupInstallerApi) {
         showState('error');
-        document.getElementById('err-msg').textContent = 'Installer bridge is unavailable. Restart Presenton and try again.';
+        document.getElementById('err-msg').textContent = 'Installer bridge is unavailable. Restart DevAX and try again.';
         return;
       }
 
@@ -314,7 +314,7 @@
         setupInstallerApi.installLibreOffice();
       } else if (step === 'imagemagick') {
         document.getElementById('dl-heading').textContent = 'Installing ImageMagick';
-        document.getElementById('dl-phase').textContent = 'Linux: apt-get | macOS: Homebrew + brew install | Windows: direct installer (Presenton runtime)';
+        document.getElementById('dl-phase').textContent = 'Linux: apt-get | macOS: Homebrew + brew install | Windows: direct installer (DevAX runtime)';
         setupInstallerApi.installImageMagick().then((installResult) => {
           if (!installResult || !installResult.ok) {
             if (currentStep !== 'imagemagick') return;
@@ -436,7 +436,7 @@
 
     if (!setupInstallerApi) {
       showState('error');
-      document.getElementById('err-msg').textContent = 'Installer bridge failed to initialize. Please restart Presenton and try again.';
+      document.getElementById('err-msg').textContent = 'Installer bridge failed to initialize. Please restart DevAX and try again.';
       document.getElementById('btn-retry').onclick = () => location.reload();
       document.getElementById('btn-skip-error').onclick = () => window.close();
       appendLog('error', 'setupInstaller API is unavailable in this renderer.');

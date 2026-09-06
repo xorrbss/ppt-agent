@@ -335,7 +335,7 @@ function Read-AuthoredOwnershipAlternativeText(
       $false
     } else {
       $ShapeName -eq
-        ("Presenton hybrid {0} {1}" -f [string]$payload.kind, [string]$payload.elementId)
+        ("DevAX hybrid {0} {1}" -f [string]$payload.kind, [string]$payload.elementId)
     }
     if (
       (
@@ -530,10 +530,10 @@ function Read-BoundedNativeNameFallback(
 ) {
   $match = [regex]::Match(
     $ShapeName,
-    '^Presenton hybrid (text|shape|image|table|chart) (s\d{2,3}-[A-Za-z0-9][A-Za-z0-9._:-]{0,127})$'
+    '^DevAX hybrid (text|shape|image|table|chart) (s\d{2,3}-[A-Za-z0-9][A-Za-z0-9._:-]{0,127})$'
   )
   if (-not $match.Success) {
-    if ($ShapeName -match '^Presenton hybrid (text|shape|image|table|chart)\b') {
+    if ($ShapeName -match '^DevAX hybrid (text|shape|image|table|chart)\b') {
       throw "Authored native shape name is malformed."
     }
     return $null
@@ -611,7 +611,7 @@ function Read-AuthoredChartTagMapOwnership(
   $role = & $decode "PRESENTON_OWNER_ROLE_V2" "R2_"
   $carrier = [regex]::Match(
     $ShapeName,
-    '^Presenton hybrid chart slide-3:chart:(line|pie)_01$'
+    '^DevAX hybrid chart slide-3:chart:(line|pie)_01$'
   )
   if (-not $carrier.Success -or $kind -ne "chart" -or
     $role -ne "native-chart-object" -or
@@ -2403,9 +2403,9 @@ try {
             $hasTable = [bool]$shape.HasTable
             $hasChart = [bool]$shape.HasChart
             $shapeName = ([string]$shape.Name).ToLowerInvariant()
-            $isBackplate = $shapeName.Contains("presenton hybrid backplate")
+            $isBackplate = $shapeName.Contains("devax hybrid backplate")
             $isSemanticOwnershipCarrier =
-              $shapeName.StartsWith("presenton raster visual fragment ") -and
+              $shapeName.StartsWith("devax raster visual fragment ") -and
               $shapeName.EndsWith(" semantic-owner")
             $shapeType = [int]$shape.Type
             $zOrderPosition = [int]$shape.ZOrderPosition

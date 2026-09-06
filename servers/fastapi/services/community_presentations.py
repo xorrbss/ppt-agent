@@ -79,7 +79,7 @@ async def _cloud_get(path: str, params: dict[str, Any] | None = None) -> Any:
                 if response.status >= 400:
                     raise HTTPException(
                         status_code=502,
-                        detail="The Presenton community service is unavailable",
+                        detail="The DevAX community service is unavailable",
                     )
                 return await response.json()
     except HTTPException:
@@ -87,7 +87,7 @@ async def _cloud_get(path: str, params: dict[str, Any] | None = None) -> Any:
     except (aiohttp.ClientError, TimeoutError, ValueError) as exc:
         raise HTTPException(
             status_code=502,
-            detail="The Presenton community service is unavailable",
+            detail="The DevAX community service is unavailable",
         ) from exc
 
 
@@ -129,7 +129,7 @@ async def list_community_presentations(
     if not isinstance(payload, dict):
         raise HTTPException(
             status_code=502,
-            detail="The Presenton community service returned invalid data",
+            detail="The DevAX community service returned invalid data",
         )
     return payload
 
@@ -141,7 +141,7 @@ async def get_community_presentation(community_id: int) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise HTTPException(
             status_code=502,
-            detail="The Presenton community service returned invalid data",
+            detail="The DevAX community service returned invalid data",
         )
     return payload
 

@@ -210,14 +210,19 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
             <UiLocaleSwitcher className="mb-5 ml-auto" />
             {/* Logo/Branding */}
             <div className="mb-6">
-              <Image
-                src="/Logo.png"
-                alt="PresentOn"
-                className="mx-auto mb-4 h-12 w-auto opacity-90"
-                width={204}
-                height={48}
-                priority
-              />
+              <div className="mb-4 flex items-center justify-center gap-3">
+                <Image
+                  src="/logo-with-bg.png"
+                  alt="DevAX"
+                  className="h-12 w-12 rounded-xl opacity-90"
+                  width={48}
+                  height={48}
+                  priority
+                />
+                <span className="font-syne text-2xl font-bold text-[#5146E5]">
+                  DevAX
+                </span>
+              </div>
               <div className="mx-auto h-1 w-16 rounded-full bg-[#7C51F8]" />
             </div>
 

@@ -29,7 +29,7 @@ export async function showFileDownloadedDialog(filePath: string): Promise<boolea
       if (!result.success) {
         await showOpenTargetErrorDialog({
           title: `Could Not Open ${targetLabel === "file" ? "File" : "Folder"}`,
-          message: `The exported file was saved, but Presenton could not open the ${targetLabel}.`,
+          message: `The exported file was saved, but DevAX could not open the ${targetLabel}.`,
           detail: `${result.message || "No application is registered to open this item."}\n\nSaved location:\n${filePath}`,
         });
       }

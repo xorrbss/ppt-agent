@@ -6,7 +6,7 @@ import { getSettingsView } from '@/utils/settingsAccess'
 import { getServerI18n } from '@/i18n/server'
 
 export const metadata = {
-  title: '설정 | Presenton',
+  title: '설정 | DevAX',
   description: '설정 페이지',
 }
 const page = async () => {

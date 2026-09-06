@@ -85,7 +85,7 @@ export function createWindowSecurityController({
         await showOpenTargetErrorDialog({
           parent,
           title: "Could Not Open Link",
-          message: "Presenton could not open this link in your browser.",
+          message: "DevAX could not open this link in your browser.",
           detail: `${result.message || "No application is registered to open this link."}\n\n${url}`,
         });
       })

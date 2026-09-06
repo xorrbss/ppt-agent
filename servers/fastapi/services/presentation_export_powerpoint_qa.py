@@ -273,7 +273,7 @@ def _chart_snapshot(shape) -> dict[str, Any]:
 
 def _chart_readback(snapshot: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
-    prefix = "Presenton hybrid chart "
+    prefix = "DevAX hybrid chart "
     for slide_number, records in enumerate(snapshot, start=1):
         for record in records:
             name = record.get("name")
@@ -351,7 +351,7 @@ def _powerpoint_deck_snapshot(deck) -> tuple[list[list[dict[str, Any]]], int]:
 
 def _contains_presenton_qid(name: str, qid: str) -> bool:
     marker = f" {qid}"
-    return name.startswith("Presenton hybrid ") and (
+    return name.startswith("DevAX hybrid ") and (
         name.endswith(marker)
         or name.endswith(f"{marker}-container")
         or f"{marker} " in name
@@ -364,7 +364,7 @@ def _native_qid_ghosting(snapshot: list[list[dict[str, Any]]], qids: frozenset[s
         max(
             0,
             sum(
-                name.startswith("Presenton hybrid ")
+                name.startswith("DevAX hybrid ")
                 and (name.endswith(f" {qid}") or name.endswith(f" {qid}-container"))
                 for name in names
             )
@@ -378,7 +378,7 @@ def _backplate_collisions(snapshot: list[list[dict[str, Any]]]) -> int:
     return sum(
         max(
             0,
-            sum(str(shape.get("name") or "") == "Presenton hybrid backplate" for shape in slide) - 1,
+            sum(str(shape.get("name") or "") == "DevAX hybrid backplate" for shape in slide) - 1,
         )
         for slide in snapshot
     )
@@ -505,7 +505,7 @@ def _qid_owner_census(
     missing = ghosting = mismatches = 0
     for expected_slide, qid, disposition in expected:
         matches: list[tuple[int, str]] = []
-        raster_name = f"Presenton raster visual fragment {qid} semantic-owner"
+        raster_name = f"DevAX raster visual fragment {qid} semantic-owner"
         for slide_number, shapes in enumerate(snapshot, start=1):
             for shape in shapes:
                 name = str(shape.get("name") or "")
@@ -916,9 +916,9 @@ def _run_powerpoint_com_qa(
                         if bool(shape.HasChart):
                             native_chart += 1
                         shape_name = str(shape.Name or "").lower()
-                        is_backplate = "presenton hybrid backplate" in shape_name
+                        is_backplate = "devax hybrid backplate" in shape_name
                         is_raster_owner = (
-                            shape_name.startswith("presenton raster visual fragment ")
+                            shape_name.startswith("devax raster visual fragment ")
                             and shape_name.endswith(" semantic-owner")
                         )
                         shape_type = int(shape.Type)

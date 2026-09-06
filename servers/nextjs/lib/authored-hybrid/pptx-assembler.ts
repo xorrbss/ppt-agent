@@ -189,8 +189,8 @@ function backplatePictureXml(
   // set on a raster picture would create a second logical owner in readback.
   const description = "";
   const name = bandIndex === 0
-    ? "Presenton hybrid backplate"
-    : `Presenton hybrid raster z-band ${bandIndex}`;
+    ? "DevAX hybrid backplate"
+    : `DevAX hybrid raster z-band ${bandIndex}`;
   return `<p:pic><p:nvPicPr><p:cNvPr id="${nonVisualId}" name="${name}"${description}/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${SLIDE_WIDTH_EMU}" cy="${SLIDE_HEIGHT_EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
 }
 
@@ -200,7 +200,7 @@ function semanticOwnershipShapeXml(
   qid: string,
 ): string {
   const name = escapeXmlAttribute(
-    `Presenton raster visual fragment ${qid} semantic-owner`,
+    `DevAX raster visual fragment ${qid} semantic-owner`,
   );
   const description = escapeXmlAttribute(
     semanticOwnershipAltText(slideNumber, [qid]),
@@ -444,24 +444,24 @@ function provenanceProperties(
   }
   const properties: PptxCustomPropertyInput[] = [];
   if (provenance.exportAttemptId !== undefined) {
-    properties.push({ name: "Presenton.ExportAttemptId", value: provenance.exportAttemptId });
+    properties.push({ name: "DevAX.ExportAttemptId", value: provenance.exportAttemptId });
   }
   if (provenance.presentationRevision !== undefined) {
-    properties.push({ name: "Presenton.PresentationRevision", value: provenance.presentationRevision });
+    properties.push({ name: "DevAX.PresentationRevision", value: provenance.presentationRevision });
   }
   if (provenance.profileId !== undefined) {
-    properties.push({ name: "Presenton.EditableHybridProfileId", value: provenance.profileId });
+    properties.push({ name: "DevAX.EditableHybridProfileId", value: provenance.profileId });
   }
   const canonicalSourceDigest = digest(
     provenance.canonicalSourceDigest,
     "canonicalSourceDigest",
   );
   if (canonicalSourceDigest !== undefined) {
-    properties.push({ name: "Presenton.CanonicalSourceDigest", value: canonicalSourceDigest });
+    properties.push({ name: "DevAX.CanonicalSourceDigest", value: canonicalSourceDigest });
   }
   const sourceDigest = digest(provenance.sourceDigest, "sourceDigest");
   if (sourceDigest !== undefined) {
-    properties.push({ name: "Presenton.SourceDigest", value: sourceDigest });
+    properties.push({ name: "DevAX.SourceDigest", value: sourceDigest });
   }
   return properties;
 }
@@ -565,7 +565,7 @@ function assembleSlide(
       if (!children) {
         throw new Error(`Hybrid group ${item.source.id} has no native children.`);
       }
-      const name = escapeXmlAttribute(`Presenton hybrid shape ${item.source.id}`);
+      const name = escapeXmlAttribute(`DevAX hybrid shape ${item.source.id}`);
       return `<p:grpSp><p:nvGrpSpPr><p:cNvPr id="${groupId}" name="${name}"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${width}" cy="${height}"/><a:chOff x="${x}" y="${y}"/><a:chExt cx="${width}" cy="${height}"/></a:xfrm></p:grpSpPr>${children}</p:grpSp>`;
     }
     let relationshipId: string | undefined;

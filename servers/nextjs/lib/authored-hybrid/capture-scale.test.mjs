@@ -152,7 +152,7 @@ async function runWorkerAndExit() {
   // keeps the comparison scoped to native shape/text geometry regardless of
   // any future backplate-picture serialization change).
   const nonBackplateXml = slideXml.replace(
-    /<p:pic>(?:(?!<\/p:pic>).)*Presenton hybrid backplate(?:(?!<\/p:pic>).)*<\/p:pic>/s,
+    /<p:pic>(?:(?!<\/p:pic>).)*DevAX hybrid backplate(?:(?!<\/p:pic>).)*<\/p:pic>/s,
     ""
   );
 

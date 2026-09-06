@@ -40,7 +40,7 @@ const transparentPng = () =>
     .toBuffer();
 
 function ownershipQidsIn(xml) {
-  return [...xml.matchAll(/name="Presenton raster visual fragment ([^"]+) semantic-owner"/g)].map(
+  return [...xml.matchAll(/name="DevAX raster visual fragment ([^"]+) semantic-owner"/g)].map(
     (match) => match[1],
   );
 }

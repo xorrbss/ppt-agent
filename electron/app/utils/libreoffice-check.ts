@@ -379,7 +379,7 @@ async function showLibreOfficeInstallerWindow(): Promise<void> {
       height: 560,
       resizable: false,
       center: true,
-      title: "Presenton – Install LibreOffice",
+      title: "DevAX – Install LibreOffice",
       icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
       webPreferences: getAppWebPreferences(
         path.join(__dirname, "../preloads/libreoffice-installer.js"),

@@ -60,7 +60,7 @@ export function SetupChip({ children }: { children: ReactNode }) {
 export function getProviderVisual(provider: string) {
   const normalized = provider.trim().toLowerCase();
   const option = LLM_PROVIDER_OPTIONS[normalized] ?? IMAGE_PROVIDER_OPTIONS[normalized] ?? WEB_SEARCH_PROVIDER_OPTIONS[normalized];
-  const label = option?.label ?? (normalized.split(/[-_\s]+/).filter(Boolean).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ") || "Presenton");
+  const label = option?.label ?? (normalized.split(/[-_\s]+/).filter(Boolean).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ") || "DevAX");
   const initials = label.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join("").toUpperCase() || "P";
   return { label, src: option?.icon, initials };
 }

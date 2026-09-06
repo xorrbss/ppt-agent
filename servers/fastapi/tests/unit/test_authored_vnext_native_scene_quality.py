@@ -743,8 +743,8 @@ def test_editable_hybrid_scene_emits_native_subset_raster_island_and_qid_tags() 
         assert "PRESENTON_QID_V2" in tag_xml
         assert "Q2_" in tag_xml
         slide_xml = package.read("ppt/slides/slide1.xml").decode("utf-8")
-        assert "Presenton hybrid text title.main" in slide_xml
-        assert "Presenton raster island island:chart" in slide_xml
+        assert "DevAX hybrid text title.main" in slide_xml
+        assert "DevAX raster island island:chart" in slide_xml
         assert "<a:normAutofit" in slide_xml
         assert "<a:t/>" in slide_xml
         assert 'typeface="Malgun Gothic"' in slide_xml

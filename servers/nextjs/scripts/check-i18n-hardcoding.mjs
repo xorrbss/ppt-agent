@@ -53,7 +53,7 @@ const MESSAGE_CALLS = new Set([
   "success",
   "warning",
 ]);
-const TECHNICAL_TOKEN = /^(?:AI|API|CSV|CSS|Ctrl|Cmd|GB|HTML|JSON|KB|Linux|LLM|MB|OCR|PDF|PNG|PPTX|Presenton|SVG|TSV|URL|Windows|macOS)(?:[\s/+|·-]*(?:AI|API|CSV|CSS|Ctrl|Cmd|GB|HTML|JSON|KB|Linux|LLM|MB|OCR|PDF|PNG|PPTX|Presenton|SVG|TSV|URL|Windows|macOS))*[.!?]?$/iu;
+const TECHNICAL_TOKEN = /^(?:AI|API|CSV|CSS|Ctrl|Cmd|DevAX|GB|HTML|JSON|KB|Linux|LLM|MB|OCR|PDF|PNG|PPTX|Presenton|SVG|TSV|URL|Windows|macOS)(?:[\s/+|·-]*(?:AI|API|CSV|CSS|Ctrl|Cmd|DevAX|GB|HTML|JSON|KB|Linux|LLM|MB|OCR|PDF|PNG|PPTX|Presenton|SVG|TSV|URL|Windows|macOS))*[.!?]?$/iu;
 
 function toPosix(value) {
   return value.split(path.sep).join("/");

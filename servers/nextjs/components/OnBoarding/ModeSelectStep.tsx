@@ -17,7 +17,7 @@ const ModeSelectStep = ({ selectedMode, setStep, setSelectedMode }: { selectedMo
                 }} className={`border font-syne rounded-[11px] p-3 flex min-w-0 items-center justify-between gap-3 cursor-pointer sm:gap-6 ${selectedMode === "presenton" ? "border-[#a49cfc]" : "border-[#EDEEEF]"}`}>
                     <div className='flex min-w-0 items-center gap-3 sm:gap-6'>
                         <div className='flex h-14 w-14 shrink-0 items-center justify-center rounded-[4px] bg-[#F4F3FF] p-2 sm:h-[74px] sm:w-[74px] sm:p-[16px]'>
-                            <Image src='/logo-with-bg.png' alt='Presenton' width={40} height={41} className='w-[40px] h-[41.4px] object-contain' />
+                            <Image src='/logo-with-bg.png' alt='DevAX' width={40} height={41} className='w-[40px] h-[41.4px] object-contain' />
                         </div>
                         <div className='min-w-0'>
                             <div className='flex flex-wrap items-center gap-2'>

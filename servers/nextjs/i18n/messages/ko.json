@@ -32,7 +32,7 @@
     "createError": "빈 슬라이드를 만들지 못했습니다. 다시 시도해 주세요."
   },
   "metadata": {
-    "title": "Presenton - 오픈소스 AI 발표자료 생성기",
+    "title": "DevAX - AI 발표자료 생성기",
     "description": "맞춤 레이아웃, 다양한 AI 모델, PDF/PPTX 내보내기를 지원하는 오픈소스 AI 발표자료 생성기입니다."
   },
   "languageSwitcher": {
@@ -274,14 +274,14 @@
       "reorder": "{index}번 슬라이드 순서 변경"
     },
     "notFound": {
-      "metadataTitle": "페이지를 찾을 수 없음 | Presenton",
+      "metadataTitle": "페이지를 찾을 수 없음 | DevAX",
       "imageAlt": "페이지를 찾을 수 없음",
       "title": "페이지를 찾을 수 없습니다",
       "description": "존재하지 않는 페이지입니다. 걱정하지 마세요. 멋진 발표자료도 빈 슬라이드 한 장에서 시작합니다."
     },
     "globalError": {
       "title": "문제가 발생했습니다",
-      "description": "Presenton에서 이 페이지를 불러오지 못했습니다.",
+      "description": "DevAX에서 이 페이지를 불러오지 못했습니다.",
       "details": "참조 번호: {digest}"
     },
     "initialization": {
@@ -296,7 +296,7 @@
       "missingIdDescription": "다시 시도해 주세요."
     },
     "admin": {
-      "metadataTitle": "관리자 | Presenton",
+      "metadataTitle": "관리자 | DevAX",
       "title": "관리자",
       "manageAccessTitle": "접근 권한 관리",
       "manageAccessDescription": "로그인 계정을 만들고 관리자가 소유한 API/MCP 접근 키를 관리합니다. 사용자 워크스페이스는 서로 공개되지 않습니다.",
@@ -1489,7 +1489,7 @@
     },
     "community": {
       "title": "Community",
-      "metadataTitle": "Community | Presenton",
+      "metadataTitle": "Community | DevAX",
       "metadataDescription": "Explore community presentation designs and prompts.",
       "newPresentation": "New presentation",
       "heading": "Pick community designs or prompts",
@@ -1530,7 +1530,7 @@
       "images": "Images",
       "webSearch": "Web Search",
       "reference": "Reference",
-      "managed": "Presenton managed",
+      "managed": "DevAX managed",
       "prompt": "Prompt",
       "promptDescription": "Paste into the prompt field.",
       "copyPrompt": "Copy example prompt",
@@ -1721,14 +1721,14 @@
     }
   },
   "notFound": {
-    "metadataTitle": "페이지를 찾을 수 없음 | Presenton",
+    "metadataTitle": "페이지를 찾을 수 없음 | DevAX",
     "imageAlt": "페이지를 찾을 수 없음",
     "title": "페이지를 찾을 수 없습니다",
     "description": "존재하지 않는 페이지입니다. 걱정하지 마세요. 멋진 발표자료도 빈 슬라이드 한 장에서 시작합니다."
   },
   "globalError": {
     "title": "문제가 발생했습니다",
-    "description": "Presenton에서 이 페이지를 불러오지 못했습니다.",
+    "description": "DevAX에서 이 페이지를 불러오지 못했습니다.",
     "details": "참조 번호: {digest}"
   },
   "initialization": {
@@ -1743,7 +1743,7 @@
     "missingIdDescription": "다시 시도해 주세요."
   },
   "admin": {
-    "metadataTitle": "관리자 | Presenton",
+    "metadataTitle": "관리자 | DevAX",
     "title": "관리자",
     "manageAccessTitle": "접근 권한 관리",
     "manageAccessDescription": "로그인 계정을 만들고 관리자가 소유한 API/MCP 접근 키를 관리합니다. 사용자 워크스페이스는 서로 공개되지 않습니다.",
@@ -2940,7 +2940,7 @@
   },
   "community": {
     "title": "Community",
-    "metadataTitle": "Community | Presenton",
+    "metadataTitle": "Community | DevAX",
     "metadataDescription": "Explore community presentation designs and prompts.",
     "newPresentation": "New presentation",
     "heading": "Pick community designs or prompts",
@@ -2981,7 +2981,7 @@
     "images": "Images",
     "webSearch": "Web Search",
     "reference": "Reference",
-    "managed": "Presenton managed",
+    "managed": "DevAX managed",
     "prompt": "Prompt",
     "promptDescription": "Paste into the prompt field.",
     "copyPrompt": "Copy example prompt",

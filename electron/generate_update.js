@@ -13,9 +13,9 @@ const update = {
   version,
   message: process.env.UPDATE_MESSAGE || existing.message || "",
   downloads: {
-    linux: `https://github.com/${releaseRepository}/releases/download/electron-v${version}/Presenton-${version}.deb`,
-    mac: `https://github.com/${releaseRepository}/releases/download/electron-v${version}/Presenton-${version}.dmg`,
-    windows: `https://github.com/${releaseRepository}/releases/download/electron-v${version}/Presenton-${version}.exe`
+    linux: `https://github.com/${releaseRepository}/releases/download/electron-v${version}/DevAX-${version}.deb`,
+    mac: `https://github.com/${releaseRepository}/releases/download/electron-v${version}/DevAX-${version}.dmg`,
+    windows: `https://github.com/${releaseRepository}/releases/download/electron-v${version}/DevAX-${version}.exe`
   }
 };
 
