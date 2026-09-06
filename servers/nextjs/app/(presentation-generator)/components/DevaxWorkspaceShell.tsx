@@ -22,7 +22,6 @@ const DEVAX_SHELL_PATHS = [
   "/theme",
   "/settings",
   "/admin",
-  "/community",
   "/template-preview",
   "/presentation",
 ] as const;
