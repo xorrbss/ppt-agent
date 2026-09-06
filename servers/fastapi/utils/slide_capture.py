@@ -1737,13 +1737,36 @@ async def _render_html_to_png_subprocess(
             return buf.getvalue()
 
 
+from utils.renderer_worker_response import RendererIsolationError
 from utils.slide_capture_deck_scope import resolve_render_deck_scope, set_render_deck_scope
-from utils.slide_capture_worker_client import (
-    RendererIsolationError,
-    _decode_worker_response,
-    _render_html_in_isolated_worker,
-    render_with_lease,
-)
+
+# The worker CLIENT (lease, dispatch, response decoding) is API-side code: it
+# reads runtime settings through utils.get_env, which reaches the provider
+# credential and database models.  Importing it here eagerly would pull that
+# subtree into the isolated renderer image, whose lock carries none of those
+# packages, and the image would die on its first request.  The names are bound
+# on first use instead; a test that sets them on this module beforehand wins.
+_WORKER_CLIENT_NAMES = ("_decode_worker_response", "_render_html_in_isolated_worker", "render_with_lease")
+_render_html_in_isolated_worker: Any = None
+render_with_lease: Any = None
+
+
+def _bind_worker_client() -> None:
+    if all(globals().get(name) is not None for name in _WORKER_CLIENT_NAMES):
+        return
+    from utils import slide_capture_worker_client as client
+
+    for name in _WORKER_CLIENT_NAMES:
+        if globals().get(name) is None:
+            globals()[name] = getattr(client, name)
+
+
+def __getattr__(name: str):
+    # ``_decode_worker_response`` is reached only as ``slide_capture.<name>``.
+    if name in _WORKER_CLIENT_NAMES:
+        _bind_worker_client()
+        return globals()[name]
+    raise AttributeError(name)
 
 
 
@@ -1764,6 +1787,7 @@ async def _render_admitted_html_in_worker(
 async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
     """Render through isolation by default; legacy file input requires two opt-ins."""
 
+    _bind_worker_client()
     ensure_renderer_enabled()
     mode = renderer_mode()
     admitted = _admit_render_source(html)
