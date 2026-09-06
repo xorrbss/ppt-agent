@@ -123,3 +123,8 @@ servers/fastapi/test*.db-wal
 
 # local review-tool scratch output
 .codex-review/
+
+# Local experiment output trees (bench runs, evidence directories, runtimes
+# copied in by a run). Untracked and regenerable, and they tripped the
+# file-size ratchet on every machine that had run an experiment.
+output/
