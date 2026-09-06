@@ -30,29 +30,17 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from utils.authored_dom_footer_zone import FOOTER_ZONE_CATEGORY, FooterZoneIntrusion
+from utils.authored_dom_footer_zone import FooterZoneIntrusion
 
 #: Category name for the issue this module feeds.  Deliberately not
 #: ``overflow``/``overlap``: the A4 text-scale rung refuses to run on an
 #: ``overlap`` slide, and this defect is precisely the one shrinking type fixes.
 TEXT_ESCAPE_CATEGORY = "text_escapes_card"
 
-#: Every category the composition policy treats as a publication blocker.  It
-#: lives here rather than inline in ``services/authored_composition_policy`` so
-#: a detector can add a blocking category without growing that audited file.
-#: ``FOOTER_ZONE_CATEGORY`` (``utils.authored_dom_footer_zone``) is a sibling
-#: detector rather than inline here to keep this file under the file-size
-#: ratchet, but registers its category through this same set.
-BLOCKING_SAFETY_CATEGORIES = frozenset(
-    {
-        "overflow",
-        "clipping",
-        "off_canvas",
-        "overlap",
-        TEXT_ESCAPE_CATEGORY,
-        FOOTER_ZONE_CATEGORY,
-    }
-)
+# A detector names its category; it does not decide whether that category
+# blocks publication.  ``utils.authored_dom_categories`` states that once, for
+# every consumer, deriving ``BLOCKING_SAFETY_CATEGORIES`` from the detected
+# geometry categories minus the ones demoted to advisory.
 
 #: Sub-pixel layout noise routinely puts a line box a fraction past its box.
 ESCAPE_TOLERANCE_PX = 2.0
@@ -317,7 +305,6 @@ def text_escape_magnitude(escape: TextEscape, *, kind: str) -> dict[str, float |
 
 
 __all__ = [
-    "BLOCKING_SAFETY_CATEGORIES",
     "ESCAPE_TOLERANCE_PX",
     "TEXT_ESCAPE_CATEGORY",
     "TextEscape",

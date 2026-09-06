@@ -3540,3 +3540,95 @@ def test_slide_pipeline_promotes_a_cover_title_the_model_marked_decoration(
     # a safety net that never has to fire: no normalization is recorded, and the
     # document the gate reads is the document that was stamped.
     assert 1 not in result.slide_quality_receipts
+
+
+# ---------------------------------------------------------------------------
+# A footer-only deck publishes without spending a remake
+#
+# ``text_intrudes_footer_zone`` is detected and recorded but advisory
+# (``utils/authored_dom_categories.py`` carries the measured reason). The
+# pipeline seam where that has to hold is ``_evaluate_slide_quality``: it is
+# what turns a DOM report into a gate FAILURE, and a gate failure is what
+# flags the slide, feeds the remake-first round and spends the deck's shared
+# remake ceiling. A footer-only slide must produce no failure at all.
+# ---------------------------------------------------------------------------
+
+
+def _footer_zone_fixture(name: str) -> dict:
+    import json
+    from pathlib import Path
+
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "fixtures"
+        / "authored_dom_text_escape"
+        / f"{name}.metrics.json"
+    )
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_footer_only_deck_publishes_without_spending_a_remake(monkeypatch):
+    from services import authored_repair_round_order as repair_round_mod
+    from services.authored_repair_round_order import remake_first_flagged_slides
+    from utils.authored_dom_quality import STYLE_REFERENCE
+
+    profile = SimpleNamespace(profile_id="ordinary", strict_dom_gate=True)
+    slides = ("run33_slide02_footer_zone", "run33_slide03_footer_zone_clean")
+
+    evaluated = [
+        authored_pipeline_mod._evaluate_slide_quality(
+            index=index,
+            html="<div></div>",
+            browser_metrics=_footer_zone_fixture(name),
+            capacity_plan=None,
+            composition_profile=profile,
+            reference_mode=STYLE_REFERENCE,
+        )
+        for index, name in enumerate(slides)
+    ]
+
+    # The intrusion really is measured on slide 1 -- this is a footer-only
+    # deck, not a clean one.
+    footer = [
+        issue
+        for issue in evaluated[0][0].issues
+        if issue.category == "text_intrudes_footer_zone"
+    ]
+    assert {issue.qids[0] for issue in footer} == {"s2-close", "s2-word"}
+
+    # And no slide produces a gate failure, so nothing is flagged.
+    gate_failures = [failure for _report, failure in evaluated if failure is not None]
+    assert gate_failures == []
+    flagged = sorted({int(item["slide_index"]) for item in gate_failures})
+    assert flagged == []
+
+    async def _must_not_run(*args, **kwargs):  # pragma: no cover
+        raise AssertionError("a footer-only deck must not spend a remake")
+
+    monkeypatch.setattr(repair_round_mod, "remake_slide_once", _must_not_run)
+    monkeypatch.setattr(repair_round_mod, "_admit_remade_slide", _must_not_run)
+
+    outcome = asyncio.run(
+        remake_first_flagged_slides(
+            flagged=flagged,
+            gate_failures=gate_failures,
+            htmls=["<div></div>", "<div></div>"],
+            pngs=[b"", b""],
+            contents=["a", "b"],
+            roles=["body", "body"],
+            brand=None,
+            design_system="",
+            style=None,
+            capacity_plan=None,
+            profile=profile,
+            reference_mode=STYLE_REFERENCE,
+            scene_envelope="sealed",
+            metrics_by_slide={},
+        )
+    )
+
+    assert outcome.remade_slide_indices == ()
+    assert outcome.remake_counts == {}
+    assert outcome.text_scaled_slide_indices == ()
+    assert outcome.remaining_flagged == []
+    assert outcome.scene_envelope == "sealed"

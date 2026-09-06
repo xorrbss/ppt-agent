@@ -7,6 +7,14 @@ readback (``utils/slide_capture.py``'s per-element shape) that give G-G3
 ("palette conformance"/"radius families") their numbers -- receipt fields a
 caller reads, never a reason to block a slide.
 
+The same surface carries the ``text_intrudes_footer_zone`` advisory record.
+That detector is deliberately not a publication blocker
+(``utils/authored_dom_categories.py`` states why, with the measured
+distributions), so its per-occurrence magnitude and qid are recorded here --
+reaching both the quality-gate receipt and the attempt-timing receipt through
+``services/authored_deck_instruments_stage.py`` -- and a later calibration can
+read the whole distribution of a stored deck without a re-render.
+
 ``SlideInstrumentInput.html`` excludes elements marked
 ``data-semantic-role="decoration"`` from the content/colour/font-size
 instruments -- a decorative rule's colour says nothing about content
@@ -24,6 +32,7 @@ from dataclasses import asdict, dataclass, replace
 from statistics import median
 from typing import Any
 
+from utils.authored_dom_footer_zone import find_footer_zone_intrusions
 from utils.authored_infographic.contracts import DEFAULT_CONTENT_BOTTOM_PX
 
 #: A slide's neutral ink/paper says nothing about deck colour discipline.
@@ -32,6 +41,10 @@ _SMALL_FONT_PX = 12.0
 _STRETCH_RATIO = 0.12
 _STRETCH_OBJECT_FITS = {"fill", "none", ""}
 _PALETTE_DELTA_E_MAX = 6.0
+#: An intrusion at or above this is the one shape the offline replay found only
+#: on the branch decks (3 of 57 occurrences, none on the deck the owner
+#: preferred).  It marks the record; it still gates nothing.
+FOOTER_INTRUSION_EXTREME_PX = 90.0
 _RADIUS_KEYS = (
     "borderTopLeftRadius",
     "borderTopRightRadius",
@@ -94,6 +107,10 @@ class SlideInstruments:
     small_font_count: int
     stretched_image_count: int
     margin_deviation_px: float = 0.0
+    #: Advisory only. One entry per text owner whose ink prints past the deck's
+    #: footer safe line: ``qid``, ``intrusion_px``, ``content_bottom_px``,
+    #: ``ink_bottom_px``, ``intersects_page_number``, ``severity``.
+    footer_intrusions: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +122,12 @@ class DeckInstruments:
     radius_family_count: int
     median_empty_band_px: float
     median_palette_conformance: float | None
+    #: Advisory footer-zone aggregates, so a calibration can compare two stored
+    #: decks without reassembling the per-slide lists first.
+    footer_intrusion_count: int = 0
+    footer_intrusion_slide_count: int = 0
+    footer_intrusion_px: tuple[float, ...] = ()
+    median_footer_intrusion_px: float | None = None
 
     def to_receipt(self) -> dict[str, Any]:
         return asdict(self)
@@ -240,9 +263,44 @@ def _content_envelope(boxes: Sequence[_Box]) -> _Box | None:
     return _Box(left, top, right - left, bottom - top)
 
 
+def _footer_intrusions(
+    elements: Sequence[Mapping[str, Any]], canvas: tuple[float, float]
+) -> tuple[dict[str, Any], ...]:
+    """The footer-zone detector's own reports, recorded rather than gated.
+
+    Reusing ``find_footer_zone_intrusions`` keeps one measurement of this
+    defect: the receipt records exactly what the DOM gate detected, which is
+    the point of keeping an advisory category detected at all.
+    """
+
+    width, height = canvas
+    try:
+        intrusions = find_footer_zone_intrusions(
+            elements, viewport_width=width, viewport_height=height
+        )
+    except Exception:  # pragma: no cover - an instrument never breaks a deck
+        return ()
+    return tuple(
+        {
+            "qid": intrusion.qid,
+            "intrusion_px": intrusion.intrusion_px,
+            "content_bottom_px": intrusion.content_bottom_px,
+            "ink_bottom_px": intrusion.ink_bottom_px,
+            "intersects_page_number": intrusion.intersects_page_number,
+            "severity": (
+                "high"
+                if intrusion.intrusion_px >= FOOTER_INTRUSION_EXTREME_PX
+                else "advisory"
+            ),
+        }
+        for intrusion in intrusions
+    )
+
+
 def _compute_slide(slide: SlideInstrumentInput, canvas: tuple[float, float]) -> SlideInstruments:
     canvas_w, canvas_h = canvas
     decoration_qids = _decoration_qids(slide.html)
+    elements = _elements(slide.metrics)
     palette_lab = [
         _rgb_to_lab(rgb)
         for colour in slide.palette
@@ -256,7 +314,7 @@ def _compute_slide(slide: SlideInstrumentInput, canvas: tuple[float, float]) -> 
     small_font_count = 0
     stretched_count = 0
 
-    for item in _elements(slide.metrics):
+    for item in elements:
         box = _box(item)
         if _is_stretched_image(item, box):
             stretched_count += 1
@@ -307,6 +365,7 @@ def _compute_slide(slide: SlideInstrumentInput, canvas: tuple[float, float]) -> 
         content_inset={side: round(value, 1) for side, value in content_inset.items()},
         small_font_count=small_font_count,
         stretched_image_count=stretched_count,
+        footer_intrusions=_footer_intrusions(elements, canvas),
     )
 
 
@@ -334,15 +393,25 @@ def compute_deck_instruments(
     )
 
     palette_scores = [s.palette_conformance for s in finalized if s.palette_conformance is not None]
+    intrusion_px = tuple(
+        float(entry["intrusion_px"])
+        for slide in finalized
+        for entry in slide.footer_intrusions
+    )
     return DeckInstruments(
         slides=finalized,
         radius_family_count=len({value for slide in finalized for value in slide.radius_families}),
         median_empty_band_px=round(median(s.empty_band_px for s in finalized), 1) if finalized else 0.0,
         median_palette_conformance=round(median(palette_scores), 4) if palette_scores else None,
+        footer_intrusion_count=len(intrusion_px),
+        footer_intrusion_slide_count=sum(1 for s in finalized if s.footer_intrusions),
+        footer_intrusion_px=tuple(sorted(intrusion_px)),
+        median_footer_intrusion_px=round(median(intrusion_px), 2) if intrusion_px else None,
     )
 
 
 __all__ = [
+    "FOOTER_INTRUSION_EXTREME_PX",
     "DeckInstruments",
     "SlideInstrumentInput",
     "SlideInstruments",

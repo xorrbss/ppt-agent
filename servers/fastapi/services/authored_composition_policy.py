@@ -26,12 +26,12 @@ from services.authored_semantic_role_policy import (
     resolve_semantic_role as _resolve_semantic_role,
 )
 from services.authored_vnext.capability_registry import AUTHORED_FONT_FLOOR_PX
+from utils.authored_dom_categories import BLOCKING_SAFETY_CATEGORIES
 from utils.authored_dom_quality import (
     build_compact_dom_map,
     ensure_authored_qids,
     normalize_browser_metrics,
 )
-from utils.authored_dom_text_escape import BLOCKING_SAFETY_CATEGORIES
 from utils.get_env import is_authored_composition_envelope_enabled
 
 
@@ -2256,8 +2256,12 @@ def blocking_safety_issues(report: Any) -> tuple[Any, ...]:
 
     Typography availability and contrast remain design-quality signals.  A
     clipped, escaped, overflowing or unintentionally overlapping object is a
-    publication blocker regardless of whether VQA was requested.  The category
-    set lives in ``utils.authored_dom_text_escape`` so a detector can add one.
+    publication blocker regardless of whether VQA was requested.  Which
+    categories those are is stated once, in ``utils.authored_dom_categories``:
+    a detector that is registered there but demoted to advisory (today
+    ``text_intrudes_footer_zone``) is still measured and still recorded, it
+    just never reaches this function's result and so never flags a slide,
+    spends a remake or holds a deck back.
     """
     return tuple(
         issue

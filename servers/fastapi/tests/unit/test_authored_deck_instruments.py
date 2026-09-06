@@ -1,12 +1,15 @@
 """Unit tests for utils.authored_deck_instruments (H4, authored-quality-speed
 programme design section 6). Every test builds synthetic per-element metrics
 matching utils/slide_capture.py's payload shape (bbox, computed_style,
-font_size, image, has_owned_text) rather than driving a real browser.
+font_size, image, has_owned_text) rather than driving a real browser -- except
+the footer-advisory tests, which replay the real bench run 33 payload.
 """
 
 import json
+from pathlib import Path
 
 from utils.authored_deck_instruments import (
+    FOOTER_INTRUSION_EXTREME_PX,
     DeckInstruments,
     SlideInstrumentInput,
     SlideInstruments,
@@ -184,3 +187,113 @@ def test_public_dataclasses_are_the_documented_shape():
     deck = compute_deck_instruments([slide_input])
     assert isinstance(deck, DeckInstruments)
     assert isinstance(deck.slides[0], SlideInstruments)
+
+
+# ---------------------------------------------------------------------------
+# The footer-zone advisory record
+#
+# ``text_intrudes_footer_zone`` is detected but does not block publication
+# (``utils/authored_dom_categories.py``), so the receipt is the only place the
+# calibration data survives. These tests pin that it gets there in px, with the
+# offending qid, from the browser payload a deck actually publishes.
+# ---------------------------------------------------------------------------
+
+_TEXT_ESCAPE_FIXTURES = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "authored_dom_text_escape"
+)
+
+
+def _bench_metrics(name: str) -> dict:
+    return json.loads(
+        (_TEXT_ESCAPE_FIXTURES / f"{name}.metrics.json").read_text(encoding="utf-8")
+    )
+
+
+def test_footer_intrusions_record_px_and_qid_from_the_run33_payload():
+    metrics = _bench_metrics("run33_slide02_footer_zone")
+    deck = compute_deck_instruments(
+        [SlideInstrumentInput(index=0, html="<div></div>", metrics=metrics)]
+    )
+
+    by_qid = {entry["qid"]: entry for entry in deck.slides[0].footer_intrusions}
+    assert set(by_qid) == {"s2-close", "s2-word"}
+    # The real 57px intrusion, in px, with the owner that caused it.
+    assert by_qid["s2-close"]["intrusion_px"] == 57.0
+    assert by_qid["s2-word"]["intrusion_px"] == 47.0
+    assert by_qid["s2-close"]["content_bottom_px"] == 648.0
+    assert by_qid["s2-close"]["intersects_page_number"] is True
+    # Below the extreme mark, so the record stays plainly advisory.
+    assert {entry["severity"] for entry in by_qid.values()} == {"advisory"}
+
+
+def test_footer_intrusion_aggregates_carry_the_deck_distribution():
+    metrics = _bench_metrics("run33_slide02_footer_zone")
+    clean = _bench_metrics("run33_slide03_footer_zone_clean")
+    deck = compute_deck_instruments(
+        [
+            SlideInstrumentInput(index=0, html="<div></div>", metrics=metrics),
+            SlideInstrumentInput(index=1, html="<div></div>", metrics=clean),
+        ]
+    )
+
+    assert deck.slides[1].footer_intrusions == ()
+    assert deck.footer_intrusion_count == 2
+    assert deck.footer_intrusion_slide_count == 1
+    # Sorted, so "the distribution on this deck" is readable straight from the
+    # stored receipt without reassembling the per-slide lists.
+    assert deck.footer_intrusion_px == (47.0, 57.0)
+    assert deck.median_footer_intrusion_px == 52.0
+
+
+def test_a_deck_with_no_footer_intrusion_records_an_empty_distribution():
+    deck = compute_deck_instruments([_slide(0, [_element("a")])])
+
+    assert deck.slides[0].footer_intrusions == ()
+    assert deck.footer_intrusion_count == 0
+    assert deck.footer_intrusion_slide_count == 0
+    assert deck.footer_intrusion_px == ()
+    assert deck.median_footer_intrusion_px is None
+
+
+def test_an_extreme_intrusion_is_marked_high_without_gating_anything():
+    """The one branch-only signal the replay found: 3 of 57 occurrences above
+    90px, none on the deck the owner preferred. It marks the record only."""
+
+    page_number = {
+        "qid": "page",
+        "tag": "div",
+        "bbox": {"x": 0.0, "y": 690.0, "width": 1280.0, "height": 16.0},
+        "font_size": 12.0,
+        "rendered_text": "03",
+        "text_fragments": [{"x": 600.0, "y": 689.0, "width": 20.0, "height": 17.0}],
+    }
+    owner = {
+        "qid": "runaway",
+        "tag": "p",
+        "bbox": {"x": 100.0, "y": 714.0, "width": 200.0, "height": 26.0},
+        "font_size": 26.0,
+        "text_fragments": [{"x": 100.0, "y": 714.0, "width": 200.0, "height": 26.0}],
+    }
+    deck = compute_deck_instruments([_slide(0, [page_number, owner])])
+
+    [entry] = deck.slides[0].footer_intrusions
+    assert entry["qid"] == "runaway"
+    assert entry["intrusion_px"] >= FOOTER_INTRUSION_EXTREME_PX
+    assert entry["severity"] == "high"
+
+
+def test_footer_intrusions_survive_the_receipt_serialization():
+    metrics = _bench_metrics("run33_slide02_footer_zone")
+    receipt = compute_deck_instruments(
+        [SlideInstrumentInput(index=0, html="<div></div>", metrics=metrics)]
+    ).to_receipt()
+
+    # ``asdict`` keeps tuples as tuples (so does ``radius_families``); JSON
+    # serializes both as arrays, which is what the stored receipt carries.
+    json.dumps(receipt)  # must not raise
+    assert list(receipt["footer_intrusion_px"]) == [47.0, 57.0]
+    assert json.loads(json.dumps(receipt))["footer_intrusion_px"] == [47.0, 57.0]
+    assert receipt["slides"][0]["footer_intrusions"][0]["qid"] in {
+        "s2-close",
+        "s2-word",
+    }

@@ -22,6 +22,14 @@ detector for a different published defect, bench run 33 (P0, ``c907f094a``,
 * ``run33_slide03_footer_zone_clean`` -- the control.  A similar bottom panel
   on the following slide stops flush with the footer line and must not trip
   the new detector.
+
+The two detectors have different STATUS, which these tests pin.
+``text_escapes_card`` blocks publication.  ``text_intrudes_footer_zone`` is
+detected and recorded but advisory: the offline replay of three stored decks
+found its distribution indistinguishable between the deck the product owner
+preferred and the ones they did not (medians 28/26/30 px), so it cannot flag a
+slide, spend a remake or hold a deck back.  See
+``utils/authored_dom_categories.py`` for the measurement.
 """
 
 from __future__ import annotations
@@ -47,8 +55,11 @@ from utils.authored_dom_footer_zone import (
     FOOTER_ZONE_CATEGORY,
     find_footer_zone_intrusions,
 )
-from utils.authored_dom_text_escape import (
+from utils.authored_dom_categories import (
+    ADVISORY_ONLY_CATEGORIES,
     BLOCKING_SAFETY_CATEGORIES,
+)
+from utils.authored_dom_text_escape import (
     TEXT_ESCAPE_CATEGORY,
     find_text_escapes,
     reconcile_footer_zone_reports,
@@ -364,11 +375,14 @@ def test_remake_brief_carries_the_measured_defects(monkeypatch):
 
 
 def test_run33_slide02_reports_both_intruding_owners():
-    report = inspect_authored_dom("<div></div>", _metrics("run33_slide02_footer_zone"))
-    blocking = blocking_safety_issues(report)
+    """Still DETECTED, with the same measurement: only its status changed."""
 
-    assert {issue.category for issue in blocking} == {FOOTER_ZONE_CATEGORY}
-    by_qid = {issue.qids[0]: issue for issue in blocking}
+    report = inspect_authored_dom("<div></div>", _metrics("run33_slide02_footer_zone"))
+    footer = [
+        issue for issue in report.issues if issue.category == FOOTER_ZONE_CATEGORY
+    ]
+
+    by_qid = {issue.qids[0]: issue for issue in footer}
     assert set(by_qid) == {"s2-close", "s2-word"}
     # Both the paragraph and the "검증" word print under the page number, so
     # both name it and both are high: the browser boxes actually overlap.
@@ -376,6 +390,23 @@ def test_run33_slide02_reports_both_intruding_owners():
         assert issue.qids == (issue.qids[0], "s2-page")
         assert issue.severity == "high"
         assert "s2-page" in issue.detail
+    # The real 57px intrusion is on the record, in px.
+    assert by_qid["s2-close"].magnitude["excess_px_y"] == pytest.approx(57.0)
+
+
+def test_run33_slide02_does_not_block_publication():
+    """The advisory demotion, at the seam every caller goes through.
+
+    ``blocking_safety_issues`` is what builds a slide's gate failure, and a
+    gate failure is what flags the slide, spends a remake and holds the deck.
+    A footer-only slide produces none of it.
+    """
+
+    report = inspect_authored_dom("<div></div>", _metrics("run33_slide02_footer_zone"))
+
+    assert blocking_safety_issues(report) == ()
+    assert FOOTER_ZONE_CATEGORY not in BLOCKING_SAFETY_CATEGORIES
+    assert FOOTER_ZONE_CATEGORY in ADVISORY_ONLY_CATEGORIES
 
 
 def test_run33_slide03_is_not_a_footer_zone_intrusion():
@@ -393,29 +424,46 @@ def test_run33_slide03_is_not_a_footer_zone_intrusion():
     )
 
 
-def test_footer_zone_intrusion_feeds_fit_summary_and_bounds_the_text_scale_rung():
+def test_footer_zone_intrusion_feeds_fit_summary_and_keeps_its_rung_wiring():
+    """The magnitude and the text-scale wiring survive the demotion intact.
+
+    The rung reads the gate failures, and those carry only
+    ``blocking_safety_issues``, so an advisory category cannot reach it today.
+    The wiring is asserted here against the issues directly, so re-promoting
+    the category stays the one-line deletion from ``ADVISORY_ONLY_CATEGORIES``.
+    """
+
     report = inspect_authored_dom("<div></div>", _metrics("run33_slide02_footer_zone"))
 
     assert report.fit_summary["worst_overflow_ratio"] > 1.0
     assert report.fit_summary["overflow_kinds"] == {"text": 2}
 
-    factor = text_scale_factor(
-        [issue.to_dict() for issue in blocking_safety_issues(report)]
-    )
+    # What the rung would be handed if the category were promoted again.
+    footer_issues = [
+        issue.to_dict()
+        for issue in report.issues
+        if issue.category == FOOTER_ZONE_CATEGORY
+    ]
+    factor = text_scale_factor(footer_issues)
     assert factor is not None
     assert TEXT_SCALE_MIN_FACTOR <= factor <= TEXT_SCALE_MAX_FACTOR
     assert factor == pytest.approx(1.0 / report.fit_summary["worst_overflow_ratio"])
 
+    # What it is actually handed today: nothing.
+    assert text_scale_factor(
+        [issue.to_dict() for issue in blocking_safety_issues(report)]
+    ) is None
 
-def test_footer_zone_category_is_a_blocking_safety_category():
-    assert FOOTER_ZONE_CATEGORY in BLOCKING_SAFETY_CATEGORIES
-    assert {
+
+def test_footer_zone_category_is_advisory_not_blocking():
+    assert ADVISORY_ONLY_CATEGORIES == {FOOTER_ZONE_CATEGORY}
+    assert BLOCKING_SAFETY_CATEGORIES == {
         "overflow",
         "clipping",
         "off_canvas",
         "overlap",
         TEXT_ESCAPE_CATEGORY,
-    } <= BLOCKING_SAFETY_CATEGORIES
+    }
 
 
 def test_run29_fixtures_are_unaffected_by_the_footer_zone_detector():
