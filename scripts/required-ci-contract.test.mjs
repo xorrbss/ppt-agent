@@ -1260,7 +1260,14 @@ test("presentation creation and outline generation retain one stable deck identi
   );
 });
 
-test("every shell Logo image used during startup is prioritized for LCP", () => {
+// The startup shells render the product mark before anything else, so it is
+// the LCP element and must be preloaded. The mark is /logo-with-bg.png; the
+// retired /Logo.png wordmark is now only a test asset. A shell may also place
+// the same file decoratively further down the page (AuthGate does, with an
+// empty alt), and those copies must NOT be prioritized, so this requires one
+// prioritized occurrence rather than demanding it of every occurrence.
+test("every shell mark rendered during startup is prioritized for LCP", () => {
+  const shellMark = 'src="/logo-with-bg.png"';
   for (const filePath of [
     "servers/nextjs/app/ConfigurationInitializer.tsx",
     "servers/nextjs/components/Auth/AuthGate.tsx",
@@ -1269,16 +1276,17 @@ test("every shell Logo image used during startup is prioritized for LCP", () => 
     const source = read(filePath);
     let cursor = 0;
     let count = 0;
-    while ((cursor = source.indexOf('src="/Logo.png"', cursor)) !== -1) {
+    let prioritized = 0;
+    while ((cursor = source.indexOf(shellMark, cursor)) !== -1) {
       count += 1;
-      assert.match(
-        source.slice(cursor, cursor + 320),
-        /priority/u,
-        `${filePath} Logo must be priority`,
-      );
+      if (/priority/u.test(source.slice(cursor, cursor + 320))) prioritized += 1;
       cursor += 1;
     }
-    assert.ok(count > 0, `${filePath} must contain its startup Logo`);
+    assert.ok(count > 0, `${filePath} must render the shell mark`);
+    assert.ok(
+      prioritized > 0,
+      `${filePath} startup mark must be priority`,
+    );
   }
 });
 
