@@ -27,6 +27,11 @@ class AuthoredGenerationPipelineResult:
     slide_quality_receipts: Mapping[int, dict[str, Any]] = field(
         default_factory=dict
     )
+    # Per-slide in-render-fit report (``docs/authored-in-render-fit-design-
+    # 20260906.md`` section 4), keyed by final outline index. Only slides the
+    # fitter actually touched during the draft render carry an entry; the
+    # remake/rung admission path does not report here (v1 scope).
+    slide_fit_reports: Mapping[int, dict[str, Any]] = field(default_factory=dict)
     quality_gate_reports: tuple[Any, ...] = ()
     quality_gate_failed_indices: tuple[int, ...] = ()
     # JSON-safe form consumed by the generation repair boundary.

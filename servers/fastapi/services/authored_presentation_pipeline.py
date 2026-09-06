@@ -104,11 +104,20 @@ from utils.llm_calls.author_slide import (
     validate_authored_slide_html,
 )
 from utils.renderer_isolation import RendererPolicyError
-from utils.get_env_programme import is_authored_tail_streaming_enabled
+from utils.get_env_programme import (
+    is_authored_in_render_fit_enabled,
+    is_authored_tail_streaming_enabled,
+)
 from utils.llm_calls.author_prompt_cache_key import deck_prompt_cache_key, set_prompt_cache_key
 from utils.slide_capture_deck_scope import set_render_deck_scope
 from utils.llm_provider import get_llm_provider
-from utils.slide_capture import _placeholder_png, ensure_browser_metrics, get_cached_browser_metrics, render_html_to_png
+from utils.slide_capture import (
+    _placeholder_png,
+    ensure_browser_metrics,
+    get_cached_browser_metrics,
+    render_html_to_png,
+    render_html_to_png_with_metrics,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -738,6 +747,7 @@ async def _author_illustrate_render_pipeline(
         render_work = 0.0
         quality_work = 0.0
         browser_metrics = None
+        fit_report = None
         quality_report = None
         quality_failure = None
         author_provider_attempt_count = preauthored_attempt_counts.get(index, 0)
@@ -1258,24 +1268,21 @@ async def _author_illustrate_render_pipeline(
                     # rendered, checked, and checkpointed.
                     async with render_gate:
                         with provider_usage_scope(
-                            job_id=(
-                                generation_job.id
-                                if generation_job is not None
-                                else None
-                            ),
+                            job_id=(generation_job.id if generation_job is not None else None),
                             operation="authored_generation",
                             stage="render",
-                            attempt_number=(
-                                generation_job.attempt_number
-                                if generation_job
-                                else 0
-                            ),
+                            attempt_number=(generation_job.attempt_number if generation_job else 0),
                             slide_index=index,
                         ):
-                            png = await render_html_to_png(illustrated_html)
-                            browser_metrics = get_cached_browser_metrics(
-                                illustrated_html
-                            )
+                            if is_authored_in_render_fit_enabled():
+                                capture = await render_html_to_png_with_metrics(illustrated_html, fit=True)
+                                fitted = getattr(capture, "fitted_html", None)
+                                illustrated_html = fitted if fitted is not None else illustrated_html
+                                png, browser_metrics = capture.png, capture.browser_metrics
+                                fit_report = getattr(capture, "fit_report", None)
+                            else:
+                                png = await render_html_to_png(illustrated_html)
+                                browser_metrics = get_cached_browser_metrics(illustrated_html)
                             if png == _placeholder_png():
                                 raise RuntimeError("renderer returned a placeholder")
                 except Exception as exc:
@@ -1414,6 +1421,7 @@ async def _author_illustrate_render_pipeline(
                 author_provider_attempt_count,
                 quality_loop_receipt,
                 normalization_receipt,
+                fit_report,
             )
         except AuthoredStageError as exc:
             if generation_job is not None:
@@ -1458,6 +1466,7 @@ async def _author_illustrate_render_pipeline(
     scene_envelope = seal_deck_scene_envelope(
         result[9] for result in completed_results
     )
+    slide_fit_reports = {int(r[0]): r[13] for r in completed_results if isinstance(r[13], Mapping)}
     return AuthoredGenerationPipelineResult(
         deck=AuthoredDeckResult(htmls=htmls, design_system=plan.design_system),
         pngs=pngs,
@@ -1491,4 +1500,5 @@ async def _author_illustrate_render_pipeline(
             for result in completed_results
             if (isinstance(result[11], dict) and result[11]) or result[12]
         },
+        slide_fit_reports=slide_fit_reports,
     )

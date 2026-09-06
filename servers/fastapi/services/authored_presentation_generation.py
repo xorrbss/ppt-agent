@@ -2956,11 +2956,26 @@ async def _generate_authored_presentation(
         quality_gate_receipt["flaggedSlides"] = flagged_slides
     if source_readback_receipt is not None:
         quality_gate_receipt["sourceReadback"] = source_readback_receipt.as_dict()
+    # In-render fit (docs/authored-in-render-fit-design-20260906.md section
+    # 6): a slide is "fitted" only when the draft render's fit pass actually
+    # edited it, not merely attempted -- an unfixable/errored/no-op report
+    # carries no edits and is left out of the count.
+    fitted_slide_indices = sorted(
+        index for index, report in pipeline.slide_fit_reports.items()
+        if isinstance(report, Mapping) and report.get("edits")
+    )
+    if fitted_slide_indices:
+        quality_gate_receipt["fittedSlideIndices"] = fitted_slide_indices
+        quality_gate_receipt["fitEditCount"] = sum(
+            len(pipeline.slide_fit_reports[i].get("edits") or ())
+            for i in fitted_slide_indices
+        )
     # H4/H6 evidence: deck instruments and the one vision advisory pass. Both
     # are receipt-only and knob-gated; neither can change what is published.
     await attach_deck_receipt_extras(
         quality_gate_receipt, htmls=htmls, pngs=pngs,
         metrics=list(final_browser_metrics), style=style, brand=brand,
+        fit_reports=pipeline.slide_fit_reports,
     )
     # Stashed on the request so the attempt-timing receipt (a separate,
     # digest-bound file the bench reads without a DB dependency; see

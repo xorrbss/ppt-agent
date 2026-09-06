@@ -52,6 +52,7 @@ from utils.asset_directory_utils import get_images_directory
 from utils.authored_dom_quality import inspect_authored_dom
 from utils.llm_calls.author_vision_qa import revise_authored_deck
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
+from utils.get_env_programme import is_authored_in_render_fit_enabled
 from utils.slide_capture import (
     _placeholder_png,
     get_cached_browser_metrics,
@@ -261,17 +262,20 @@ async def _admit_remade_slide(
     """Bind fresh pixels/telemetry and admit only a candidate that clears both gates."""
 
     canonical = canonicalize_authored_roles(candidate_html)
-    capture = await render_html_to_png_with_metrics(canonical)
+    fit_on = is_authored_in_render_fit_enabled()  # no ``fit=`` kwarg at all when off
+    capture = await (
+        render_html_to_png_with_metrics(canonical, fit=True)
+        if fit_on else render_html_to_png_with_metrics(canonical)
+    )
     metrics = capture.browser_metrics
     if metrics is None or capture.png == _placeholder_png():
         return None
-    if capacity_violations(canonical, metrics, capacity):
+    candidate = getattr(capture, "fitted_html", None) or canonical
+    if capacity_violations(candidate, metrics, capacity):
         return None
-    if _blocking_defects(
-        html=canonical, metrics=metrics, profile=profile, reference_mode=reference_mode
-    ):
+    if _blocking_defects(html=candidate, metrics=metrics, profile=profile, reference_mode=reference_mode):
         return None
-    return canonical, capture.png, metrics
+    return candidate, capture.png, metrics
 
 
 async def remake_slide_once(
