@@ -125,6 +125,15 @@ describe("WorkspaceBatchRemakeDialog", () => {
     cy.wait("@startBatch")
       .its("request.body")
       .should("deep.equal", { slide_indexes: [4, 7, 9], instruction: null });
+    // The polling loop schedules its first poll only after the start request
+    // settles. Ticking before that boundary fires nothing, and the loop then
+    // waits on a frozen clock that never advances again, so no status request
+    // is ever made. Wait for the started batch to reach the DOM first.
+    cy.get('[data-testid="batch-remake-dialog"]').should(
+      "have.attr",
+      "data-batch-task-id",
+      "batch-task-1",
+    );
     cy.tick(2_000);
     cy.wait("@batchStatus");
 
@@ -166,6 +175,15 @@ describe("WorkspaceBatchRemakeDialog", () => {
     mountDialog({ slideIndexes: [4, 7] });
 
     cy.wait("@startBatch");
+    // The polling loop schedules its first poll only after the start request
+    // settles. Ticking before that boundary fires nothing, and the loop then
+    // waits on a frozen clock that never advances again, so no status request
+    // is ever made. Wait for the started batch to reach the DOM first.
+    cy.get('[data-testid="batch-remake-dialog"]').should(
+      "have.attr",
+      "data-batch-task-id",
+      "batch-task-1",
+    );
     cy.tick(2_000);
     cy.wait("@batchStatus");
 
@@ -193,6 +211,15 @@ describe("WorkspaceBatchRemakeDialog", () => {
     mountDialog({ slideIndexes: [4, 7] });
 
     cy.wait("@startBatch");
+    // The polling loop schedules its first poll only after the start request
+    // settles. Ticking before that boundary fires nothing, and the loop then
+    // waits on a frozen clock that never advances again, so no status request
+    // is ever made. Wait for the started batch to reach the DOM first.
+    cy.get('[data-testid="batch-remake-dialog"]').should(
+      "have.attr",
+      "data-batch-task-id",
+      "batch-task-1",
+    );
     cy.tick(2_000);
     cy.wait("@batchStatus");
 
@@ -221,6 +248,15 @@ describe("WorkspaceBatchRemakeDialog", () => {
 
     cy.mount(<UnmountableHost />);
     cy.wait("@startBatch");
+    // The polling loop schedules its first poll only after the start request
+    // settles. Ticking before that boundary fires nothing, and the loop then
+    // waits on a frozen clock that never advances again, so no status request
+    // is ever made. Wait for the started batch to reach the DOM first.
+    cy.get('[data-testid="batch-remake-dialog"]').should(
+      "have.attr",
+      "data-batch-task-id",
+      "batch-task-1",
+    );
     cy.tick(2_000);
     cy.wait("@batchStatus");
     cy.get('[data-testid="batch-remake-dialog"]').should("exist");
@@ -249,6 +285,15 @@ describe("WorkspaceBatchRemakeDialog", () => {
     mountDialog({ slideIndexes: [4] }, true);
 
     cy.wait("@startBatch");
+    // The polling loop schedules its first poll only after the start request
+    // settles. Ticking before that boundary fires nothing, and the loop then
+    // waits on a frozen clock that never advances again, so no status request
+    // is ever made. Wait for the started batch to reach the DOM first.
+    cy.get('[data-testid="batch-remake-dialog"]').should(
+      "have.attr",
+      "data-batch-task-id",
+      "batch-task-1",
+    );
     cy.tick(2_000);
     cy.wait("@batchStatus");
 

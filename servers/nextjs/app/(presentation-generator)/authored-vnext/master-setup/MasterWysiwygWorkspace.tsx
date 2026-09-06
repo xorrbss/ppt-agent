@@ -77,7 +77,7 @@ export default function MasterWysiwygWorkspace(
   const [uploadMode, setUploadMode] = useState<"replace" | "sharedLogo" | null>(
     null,
   );
-  const [sharedLogoScope, setSharedLogoScope] = useState<SharedLogoScope>("current");
+  const [sharedLogoScope, setSharedLogoScope] = useState<SharedLogoScope>("allBody"); // the option the picker marks recommended: the insert replaces the deck-wide legacy logo, so one layout is the wrong default
   const [sharedLogoAnchor, setSharedLogoAnchor] = useState<SharedLogoAnchor>("bottomRight");
   const [selectedLogoLayoutIds, setSelectedLogoLayoutIds] = useState<string[]>([]);
   const [selectedLogoRoles, setSelectedLogoRoles] = useState<LayoutRole[]>(["body"]);

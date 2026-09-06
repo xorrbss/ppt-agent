@@ -13,6 +13,11 @@ import MasterCatalogDialog from "./MasterCatalogDialog";
 
 const SOURCE_DIGEST = `sha256:${"a".repeat(64)}` as const;
 
+// The button carries no test handle, so read its label from the same catalogue
+// the component renders it from; a copy change then moves both together.
+const BACK_TO_CATALOG_LABEL =
+  enMessages.authoredVnext.master.catalog.backToCatalog;
+
 type Deferred<T> = {
   promise: Promise<T>;
   resolve: (value: T) => void;
@@ -191,7 +196,7 @@ describe("MasterCatalogDialog recalculation feedback", () => {
     );
 
     cy.get('[data-testid="ppt-ai-analysis-review"]').should("be.visible");
-    cy.contains("button", "Back to catalog").click();
+    cy.contains("button", BACK_TO_CATALOG_LABEL).click();
     cy.contains("article", "Different Master").within(() => {
       cy.contains("button", "Edit").click();
     });
