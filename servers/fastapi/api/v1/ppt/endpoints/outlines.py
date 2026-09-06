@@ -48,6 +48,10 @@ from utils.llm_calls.generate_presentation_outlines import (
     get_messages as get_outline_messages,
 )
 from utils.outline_citations import strip_outline_citations
+from utils.sse_heartbeat import (
+    get_sse_heartbeat_interval_seconds,
+    with_sse_heartbeat,
+)
 
 OUTLINES_ROUTER = APIRouter(prefix="/outlines", tags=["Outlines"])
 LOGGER = logging.getLogger(__name__)
@@ -330,4 +334,17 @@ async def stream_outlines(
             ),
         ).to_string()
 
-    return StreamingResponse(inner(), media_type="text/event-stream")
+    # The content brief and the wait for the outline call's first token both
+    # routinely outlast the 300s idle timeout of the proxies in front of this
+    # response, so the whole generator is heartbeated with SSE comment frames.
+    return StreamingResponse(
+        with_sse_heartbeat(
+            inner(), interval_seconds=get_sse_heartbeat_interval_seconds()
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
