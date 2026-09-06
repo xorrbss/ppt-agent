@@ -13,6 +13,7 @@ from typing import Any
 import urllib.parse
 
 import aiohttp
+from utils.slide_capture_fit import fit_marker_poll_js
 from utils.slide_capture_glyph_probe import probe_glyph_clipping_async
 
 SLIDE_W = 1280
@@ -96,8 +97,7 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                         "expression": f"""(async () => {{
                           if (document.fonts && document.fonts.ready) await document.fonts.ready;
                           await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-                          const marker = document.getElementById('{metrics_element_id}');
-                          return marker ? marker.getAttribute('content') : null;
+{fit_marker_poll_js(metrics_element_id, indent='                          ')}
                         }})()""",
                         "awaitPromise": True,
                         "returnByValue": True,
