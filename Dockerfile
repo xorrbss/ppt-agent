@@ -162,6 +162,11 @@ RUN mkdir -p /app/document-extraction-liteparse \
 COPY electron/resources/document-extraction/liteparse_runner.mjs /app/document-extraction-liteparse/liteparse_runner.mjs
 COPY scripts/sync-presentation-export.cjs /app/scripts/sync-presentation-export.cjs
 COPY scripts/lib/presentation-export-readiness.cjs /app/scripts/lib/presentation-export-readiness.cjs
+# The sync requires this module (sync-presentation-export.cjs:29) and reads the
+# checksum manifest from <repoRoot>/compatibility (:46). Both were missing, so
+# `docker build --target assets-builder` failed on the RUN below.
+COPY scripts/lib/presentation-export-assets.cjs /app/scripts/lib/presentation-export-assets.cjs
+COPY compatibility/upstream-compatibility.json /app/compatibility/upstream-compatibility.json
 # The sync installs the matching sharp native addon before recording its version marker.
 RUN rm -rf /app/presentation-export \
     && node /app/scripts/sync-presentation-export.cjs --force \
