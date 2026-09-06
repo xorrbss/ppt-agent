@@ -51,6 +51,7 @@ from utils.authored_dom_text_escape import (
     BLOCKING_SAFETY_CATEGORIES,
     TEXT_ESCAPE_CATEGORY,
     find_text_escapes,
+    reconcile_footer_zone_reports,
     text_escape_detail,
 )
 
@@ -556,3 +557,72 @@ def test_a_narrow_box_is_not_mistaken_for_the_page_number():
     assert result[0].qid == "page"
     assert result[0].page_number_qid == ""
     assert result[0].content_bottom_px == pytest.approx(688.0)
+
+
+# ---------------------------------------------------------------------------
+# One element, one report
+# ---------------------------------------------------------------------------
+
+
+def _reconciled(elements: list[dict]):
+    return reconcile_footer_zone_reports(
+        find_text_escapes(elements),
+        find_footer_zone_intrusions(
+            elements, viewport_width=1280.0, viewport_height=720.0
+        ),
+    )
+
+
+def test_a_legal_card_wins_over_the_footer_line_for_the_same_owner():
+    """Bench run 36 double-reported 6 owners across 3 of its 20 slides.
+
+    ``s10-integration`` escaped its card by 25px and crossed the 648px line by
+    exactly the same 25px, because the card's own bottom edge sits on the line.
+    Putting the copy back inside the card is the whole fix, so the card escape
+    is the report that survives.
+    """
+
+    card = _card("card", y=400.0, height=240.0)  # bottom 640: above the line
+    text = _text("copy", parent="card", lines=[(10.0, 674.0, 100.0, 18.0)], font_size=18.0)
+
+    escapes, intrusions = _reconciled([_page_number(), card, text])
+
+    assert [escape.qid for escape in escapes] == ["copy"]
+    assert escapes[0].card_bottom_px == pytest.approx(640.0)
+    assert intrusions == ()
+
+
+def test_a_card_below_the_footer_line_keeps_the_footer_report():
+    """When the card itself is illegal, fitting the copy into it is not a fix."""
+
+    card = _card("card", y=560.0, height=140.0)  # bottom 700: below the line
+    text = _text("copy", parent="card", lines=[(10.0, 692.0, 100.0, 18.0)], font_size=18.0)
+
+    escapes, intrusions = _reconciled([_page_number(), card, text])
+
+    assert escapes == ()
+    assert [intrusion.qid for intrusion in intrusions] == ["copy"]
+    assert intrusions[0].intrusion_px == pytest.approx(62.0)
+
+
+def test_reconciliation_leaves_unrelated_reports_alone():
+    """Two different owners keep two different reports."""
+
+    card = _card("card", y=400.0, height=240.0)
+    escaping = _text("copy", parent="card", lines=[(10.0, 674.0, 100.0, 18.0)])
+    low = _text_owner("other", bottom=700.0, x=600.0)
+
+    escapes, intrusions = _reconciled([_page_number(), card, escaping, low])
+
+    assert [escape.qid for escape in escapes] == ["copy"]
+    assert [intrusion.qid for intrusion in intrusions] == ["other"]
+
+
+def test_run33_slide02_is_untouched_by_the_reconciliation():
+    """Its two owners' ink stays inside their cards, so nothing is suppressed."""
+
+    elements = normalize_browser_metrics(_metrics("run33_slide02_footer_zone"))["elements"]
+    escapes, intrusions = _reconciled(elements)
+
+    assert escapes == ()
+    assert sorted(intrusion.qid for intrusion in intrusions) == ["s2-close", "s2-word"]

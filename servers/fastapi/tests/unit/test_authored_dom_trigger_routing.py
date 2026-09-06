@@ -26,7 +26,10 @@ def test_high_dom_clipping_triggers_repair_when_vqa_says_clean() -> None:
 
     assert merged is not None
     assert merged.needs_fix is True
-    assert merged.issues[0].type == "other"
+    # One registry decides the critique type (``utils.authored_dom_categories``):
+    # a clipped element is a fit defect, not the "other" bucket it used to fall
+    # into whenever a category was neither ``overflow`` nor ``overlap``.
+    assert merged.issues[0].type == "overflow"
     assert merged.issues[0].detail.startswith("DOM_CLIPPING:")
 
 

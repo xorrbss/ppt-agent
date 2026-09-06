@@ -30,7 +30,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from utils.authored_dom_footer_zone import FOOTER_ZONE_CATEGORY
+from utils.authored_dom_footer_zone import FOOTER_ZONE_CATEGORY, FooterZoneIntrusion
 
 #: Category name for the issue this module feeds.  Deliberately not
 #: ``overflow``/``overlap``: the A4 text-scale rung refuses to run on an
@@ -72,6 +72,9 @@ class TextEscape:
     ratio_x: float
     ratio_y: float
     collides_with: tuple[str, ...] = ()
+    #: The card's own bottom edge, which decides whether returning the copy to
+    #: it is enough (``reconcile_footer_zone_reports``).
+    card_bottom_px: float = 0.0
 
 
 def _number(value: object, default: float = 0.0) -> float:
@@ -245,9 +248,45 @@ def find_text_escapes(elements: Iterable[Mapping[str, Any]]) -> tuple[TextEscape
                 ratio_x=round(max(1.0, (right - card_left) / (card_right - card_left)), 4),
                 ratio_y=round(max(1.0, (bottom - card_top) / (card_bottom - card_top)), 4),
                 collides_with=_collision_qids(item, ancestors, item_by_qid, bottom),
+                card_bottom_px=round(card_bottom, 2),
             )
         )
     return tuple(escapes)
+
+
+def reconcile_footer_zone_reports(
+    escapes: Sequence[TextEscape], intrusions: Sequence[FooterZoneIntrusion]
+) -> tuple[tuple[TextEscape, ...], tuple[FooterZoneIntrusion, ...]]:
+    """One element, one report: keep only the boundary that actually binds it.
+
+    A paragraph that runs out of the bottom of its card usually crosses the
+    footer safe line on the way, so both detectors describe the same defect.
+    Bench run 36 measured that on 6 owners across 3 of 20 slides (``s7-auth-
+    check``, ``s10-integration``, ``s14-proof``/``s14-devax``/``s14-network``),
+    which spends two of the remake brief's eight issue slots on one problem and
+    counts it twice in every receipt.
+
+    The binding boundary is the card's when the card itself is legal -- putting
+    the copy back inside it also puts the copy above the footer line -- and the
+    footer line's when the card hangs below it, because then a copy obediently
+    fitted into its card is still printed under the page number.
+    """
+
+    escape_by_qid = {escape.qid: escape for escape in escapes}
+    dropped_escapes: set[str] = set()
+    kept_intrusions: list[FooterZoneIntrusion] = []
+    for intrusion in intrusions:
+        escape = escape_by_qid.get(intrusion.qid)
+        if escape is None:
+            kept_intrusions.append(intrusion)
+            continue
+        if escape.card_bottom_px > intrusion.content_bottom_px:
+            dropped_escapes.add(escape.qid)
+            kept_intrusions.append(intrusion)
+    return (
+        tuple(escape for escape in escapes if escape.qid not in dropped_escapes),
+        tuple(kept_intrusions),
+    )
 
 
 def text_escape_detail(escape: TextEscape) -> str:
@@ -283,6 +322,7 @@ __all__ = [
     "TEXT_ESCAPE_CATEGORY",
     "TextEscape",
     "find_text_escapes",
+    "reconcile_footer_zone_reports",
     "text_escape_detail",
     "text_escape_magnitude",
 ]

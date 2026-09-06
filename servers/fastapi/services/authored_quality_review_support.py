@@ -3,7 +3,10 @@
 from sqlalchemy import inspect
 
 from services import authored_quality_review_service as _service
-from utils.authored_dom_text_escape import BLOCKING_SAFETY_CATEGORIES
+from utils.authored_dom_categories import (
+    BLOCKING_SAFETY_CATEGORIES,
+    critique_type_for_category,
+)
 
 
 def _merge_dom_repair_triggers(
@@ -31,7 +34,10 @@ def _merge_dom_repair_triggers(
         existing = list(critique.issues) if critique is not None else []
         existing_keys = {(issue.type, issue.severity, issue.detail) for issue in existing}
         for issue in promoted:
-            issue_type = issue.category if issue.category in {"overflow", "overlap"} else "other"
+            # One registry decides this (``utils.authored_dom_categories``), so
+            # a category a detector adds is projected here too instead of being
+            # silently filed as "other" -- or, as in bench run 36, raising.
+            issue_type = critique_type_for_category(issue.category)
             detail = f"DOM_{issue.category.upper()}: {issue.detail}"[:200]
             key = (issue_type, issue.severity, detail)
             if key in existing_keys:

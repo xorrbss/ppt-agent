@@ -11,9 +11,10 @@ Reused rather than reimplemented, per the task brief:
   from ``utils.authored_dom_quality.inspect_authored_dom`` -- the union area
   of owned-content bounding boxes (clipped to the 1280x720 canvas) divided by
   canvas area.
-* ``geometry_defects`` counts ``inspect_authored_dom`` issues in the four
-  geometry categories (``overlap``/``overflow``/``off_canvas``/``clipping``),
-  broken down by category and by severity.
+* ``geometry_defects`` counts ``inspect_authored_dom`` issues in the geometry
+  categories the composition gate blocks on, read from
+  ``utils.authored_dom_categories`` rather than restated here so a detector
+  added later is measured too, broken down by category and by severity.
 
 ``bottom_dead_band`` and the browser-metrics ``distinct_block_count`` /
 ``max_nesting_depth`` are not exposed anywhere upstream, so they are computed
@@ -43,6 +44,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from utils.authored_dom_categories import (
+    BLOCKING_SAFETY_CATEGORIES,
+    DOM_QUALITY_CATEGORIES,
+)
 from utils.authored_dom_quality import (
     STYLE_REFERENCE,
     DomQualityIssue,
@@ -50,7 +55,11 @@ from utils.authored_dom_quality import (
     normalize_browser_metrics,
 )
 
-_GEOMETRY_CATEGORIES = ("overlap", "overflow", "off_canvas", "clipping")
+_GEOMETRY_CATEGORIES = tuple(
+    category
+    for category in DOM_QUALITY_CATEGORIES
+    if category in BLOCKING_SAFETY_CATEGORIES
+)
 _OWNED_CONTENT_TAGS = frozenset({"img", "picture", "svg", "video"})
 
 

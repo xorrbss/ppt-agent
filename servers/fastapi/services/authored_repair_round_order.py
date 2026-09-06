@@ -55,6 +55,7 @@ from services.authored_terminal_slide_fallback import (
     # second, independently written admission is how the two rounds drift.
     _admit_remade_slide,
 )
+from utils.authored_dom_categories import TEXT_SCALE_UNFIXABLE_CATEGORIES
 from utils.authored_dom_fit_magnitude import build_fit_summary
 from utils.authored_text_scale import scale_authored_text
 from utils.get_env_programme import is_authored_text_scale_rung_enabled
@@ -157,12 +158,17 @@ def text_scale_factor(issues: Sequence[Mapping[str, object]]) -> float | None:
     no ratio to bound the scale with (a clipping-only slide). Otherwise the
     factor is ``1 / worst_overflow_ratio``, which is exactly enough to bring the
     worst element inside its box, clamped to the rung's range.
+
+    The declining set is derived in ``utils.authored_dom_categories`` from the
+    blocking categories minus the shrinkable ones, so a blocking category a new
+    detector registers without declaring it shrinkable declines this rung by
+    default instead of spending a render on a defect it cannot fix.
     """
 
     views: list[_IssueView] = []
     for issue in issues:
         category = _issue_field(issue, "category")
-        if category in {"overlap", "off_canvas"}:
+        if category in TEXT_SCALE_UNFIXABLE_CATEGORIES:
             return None
         magnitude = issue.get("magnitude") if isinstance(issue, Mapping) else None
         views.append(

@@ -12,6 +12,13 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
+from utils.authored_dom_categories import (
+    BLOCKING_SAFETY_CATEGORIES,
+    RATIO_MAGNITUDE_CATEGORIES,
+    DOM_QUALITY_CATEGORIES,
+    blocking_categories_in_order,
+)
+
 #: Overflow element kinds a uniform text scale-down cannot fix (design 5.2).
 NON_TEXT_KINDS = frozenset({"figure", "figure_part", "container", "image"})
 
@@ -80,8 +87,9 @@ def _magnitude_number(magnitude: Mapping[str, object], key: str) -> float:
 def worst_geometry_kind(issues: Iterable[Mapping[str, object]]) -> str | None:
     """Return the element kind of the slide's worst geometry defect.
 
-    The design names this "the worst overflow kind at 1.0". Overflow decides
-    it whenever an overflow issue exists. A slide whose only geometry defect
+    The design names this "the worst overflow kind at 1.0". Any ratio-carrying
+    category decides it -- overflow, or the card-escape/footer-zone detectors
+    that report the same ratio shape -- whenever one of those issues exists. A slide whose only geometry defect
     is an escaped or clipped element has no overflow ratio at all, so the
     worst off-canvas overshoot (then the worst clipped fraction) stands in;
     otherwise such a slide would be filed as a text problem it is not.
@@ -90,7 +98,7 @@ def worst_geometry_kind(issues: Iterable[Mapping[str, object]]) -> str | None:
     best_kind: str | None = None
     best_ratio = 0.0
     for issue in issues:
-        if issue.get("category") != "overflow":
+        if issue.get("category") not in RATIO_MAGNITUDE_CATEGORIES:
             continue
         magnitude = issue.get("magnitude")
         if not isinstance(magnitude, Mapping):
@@ -122,21 +130,22 @@ def worst_geometry_kind(issues: Iterable[Mapping[str, object]]) -> str | None:
     return None
 
 
-#: The categories ``blocking_safety_issues`` treats as publication blockers.
-BLOCKING_CATEGORIES = (
-    "overflow",
-    "clipping",
-    "off_canvas",
-    "overlap",
-    "text_escapes_card",
+#: The categories ``blocking_safety_issues`` treats as publication blockers,
+#: read from the registry rather than restated: a replay that silently dropped
+#: a category a detector added would report a cleaner deck than the gate saw.
+BLOCKING_CATEGORIES = tuple(
+    category
+    for category in DOM_QUALITY_CATEGORIES
+    if category in BLOCKING_SAFETY_CATEGORIES
 )
 
 
 def blocking_categories(issues: Iterable[Mapping[str, object]]) -> list[str]:
     """The blocking geometry categories this slide raised, in a stable order."""
 
-    raised = {str(issue.get("category")) for issue in issues}
-    return [category for category in BLOCKING_CATEGORIES if category in raised]
+    return blocking_categories_in_order(
+        str(issue.get("category")) for issue in issues
+    )
 
 
 def kind_label(row: Mapping[str, object]) -> str:

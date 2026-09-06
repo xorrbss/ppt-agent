@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from typing import Any
 
+from utils.authored_dom_categories import RATIO_MAGNITUDE_CATEGORIES
 from utils.authored_dom_footer_zone import FOOTER_ZONE_CATEGORY
 from utils.authored_dom_text_escape import TEXT_ESCAPE_CATEGORY
 
@@ -391,7 +392,7 @@ def build_fit_summary(
             continue
         kind = str(magnitude.get("element_kind", "container"))
         kinds[kind] = kinds.get(kind, 0) + 1
-        if category in {"overflow", TEXT_ESCAPE_CATEGORY, FOOTER_ZONE_CATEGORY}:
+        if category in RATIO_MAGNITUDE_CATEGORIES:
             worst_ratio = max(
                 worst_ratio,
                 _number(magnitude.get("ratio_x"), 1.0),

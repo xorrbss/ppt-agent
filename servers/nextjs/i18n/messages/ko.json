@@ -1716,6 +1716,8 @@
       "clipping": "내용 잘림",
       "offCanvas": "슬라이드 밖으로 벗어남",
       "overlap": "요소 겹침",
+      "textEscapesCard": "글이 카드 밖으로 삐져나옴",
+      "textIntrudesFooterZone": "글이 쪽번호 여백을 침범함",
       "repairBudgetExhausted": "복구 예산 소진",
       "gateRepairNotAdmitted": "복구 미승인"
     }

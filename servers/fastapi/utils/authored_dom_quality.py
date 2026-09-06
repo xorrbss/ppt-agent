@@ -49,6 +49,7 @@ from utils.authored_dom_tags import (
 from utils.authored_dom_text_escape import (
     TEXT_ESCAPE_CATEGORY,
     find_text_escapes,
+    reconcile_footer_zone_reports,
     text_escape_detail,
     text_escape_magnitude,
 )
@@ -1585,7 +1586,18 @@ def inspect_authored_dom(
     # ``utils/authored_dom_text_escape`` for why none of the checks above can
     # see this: it is the only one that compares an owner's line rects with the
     # box of its nearest painted ancestor.
-    for escape in find_text_escapes(elements):
+    # One element, one report: a paragraph that leaves its card usually crosses
+    # the footer safe line on the way, and both detectors would then describe
+    # the same defect. ``reconcile_footer_zone_reports`` keeps the boundary that
+    # actually binds -- the card's when the card is itself legal, the footer
+    # line's when the card hangs below it.
+    escapes, intrusions = reconcile_footer_zone_reports(
+        find_text_escapes(elements),
+        find_footer_zone_intrusions(
+            elements, viewport_width=width, viewport_height=height
+        ),
+    )
+    for escape in escapes:
         owner = item_by_qid.get(escape.qid, {})
         if mode == EXACT_RECONSTRUCTION and not bool(owner.get("unintentional", False)):
             continue
@@ -1602,9 +1614,7 @@ def inspect_authored_dom(
     # Copy that prints past the deck's own footer safe line, independent of any
     # card containment.  See ``utils.authored_dom_footer_zone`` for why the
     # page-number mode cannot be threaded in here and geometry is used instead.
-    for intrusion in find_footer_zone_intrusions(
-        elements, viewport_width=width, viewport_height=height
-    ):
+    for intrusion in intrusions:
         owner = item_by_qid.get(intrusion.qid, {})
         if mode == EXACT_RECONSTRUCTION and not bool(owner.get("unintentional", False)):
             continue

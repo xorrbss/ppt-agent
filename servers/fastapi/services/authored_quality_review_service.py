@@ -163,6 +163,10 @@ _ANALYZE_AND_FIX_LOCKS: weakref.WeakValueDictionary[uuid.UUID, asyncio.Lock] = (
     weakref.WeakValueDictionary()
 )
 
+# Categories that justify paying for slide OCR: each one can mean the reader
+# lost text. Deliberately not every blocking category -- ``overlap``,
+# ``text_escapes_card`` and ``text_intrudes_footer_zone`` misplace copy that OCR
+# would still read back intact, so OCR adds cost and no evidence there.
 _OCR_DOM_CATEGORIES = {"content", "overflow", "clipping", "off_canvas"}
 _OCR_DETAIL_SIGNAL = re.compile(
     r"(?:text|title|label|number|numeric|digit|symbol|character|glyph|word|"

@@ -1716,6 +1716,8 @@
       "clipping": "clipped content",
       "offCanvas": "content off the slide",
       "overlap": "overlapping elements",
+      "textEscapesCard": "text printed outside its card",
+      "textIntrudesFooterZone": "text in the page-number margin",
       "repairBudgetExhausted": "repair budget exhausted",
       "gateRepairNotAdmitted": "repair not admitted"
     }

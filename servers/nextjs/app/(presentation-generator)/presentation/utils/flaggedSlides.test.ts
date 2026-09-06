@@ -278,3 +278,42 @@ test("describeFlaggedSlideReason describes every reason when a slide was flagged
   assert.ok(text.includes("reason.author"));
   assert.ok(text.includes("gate:overlapping elements"));
 });
+
+test("every category the backend gate can emit has a localized label", () => {
+  // Mirrors ``utils/authored_dom_categories.BLOCKING_SAFETY_CATEGORIES`` plus
+  // the two whole-reason tokens ``authored_terminal_slide_policy`` emits. Bench
+  // run 36 (2026-09-05) is why this list is asserted rather than assumed: two
+  // detectors were registered backend-side and every consumer that mapped a
+  // category -- this one included -- was left behind.
+  const emitted = [
+    "overflow",
+    "clipping",
+    "off_canvas",
+    "overlap",
+    "text_escapes_card",
+    "text_intrudes_footer_zone",
+    "repair_budget_exhausted",
+    "gate_repair_not_admitted",
+  ];
+  const seen: string[] = [];
+  const t = (key: string) => {
+    seen.push(key);
+    return key;
+  };
+
+  for (const category of emitted) {
+    const badge = deriveFlaggedSlideMap(
+      deck([{ index: 1, slideId: "s-b", reason: `composition_safety:${category}` }]),
+    )["s-b"];
+    describeFlaggedSlideReason(t, badge);
+  }
+
+  // A category with no label would come back as the raw token instead of a
+  // ``category.*`` key.
+  assert.equal(
+    seen.filter((key) => key.startsWith("category.")).length,
+    emitted.length,
+  );
+  assert.ok(seen.includes("category.textEscapesCard"));
+  assert.ok(seen.includes("category.textIntrudesFooterZone"));
+});

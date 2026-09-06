@@ -64,7 +64,9 @@ const GATE_REASON_PREFIX = "composition_safety:";
 /**
  * Raw category tokens the backend can put after ``composition_safety:``.
  * ``services/authored_composition_policy.py``'s ``blocking_safety_issues``
- * emits ``overflow``/``clipping``/``off_canvas``/``overlap``;
+ * emits every category in ``utils/authored_dom_categories.py``'s
+ * ``BLOCKING_SAFETY_CATEGORIES`` (``overflow``/``clipping``/``off_canvas``/
+ * ``overlap``/``text_escapes_card``/``text_intrudes_footer_zone``);
  * ``services/authored_terminal_slide_policy.py`` emits
  * ``repair_budget_exhausted``/``gate_repair_not_admitted`` as the whole
  * category. This is every value either module produces -- do not add a
@@ -75,6 +77,8 @@ const CATEGORY_LABEL_KEYS: Record<string, FlaggedSlideCategoryKey> = {
   clipping: "category.clipping",
   off_canvas: "category.offCanvas",
   overlap: "category.overlap",
+  text_escapes_card: "category.textEscapesCard",
+  text_intrudes_footer_zone: "category.textIntrudesFooterZone",
   repair_budget_exhausted: "category.repairBudgetExhausted",
   gate_repair_not_admitted: "category.gateRepairNotAdmitted",
 };
@@ -196,6 +200,8 @@ type FlaggedSlideCategoryKey =
   | "category.clipping"
   | "category.offCanvas"
   | "category.overlap"
+  | "category.textEscapesCard"
+  | "category.textIntrudesFooterZone"
   | "category.repairBudgetExhausted"
   | "category.gateRepairNotAdmitted";
 

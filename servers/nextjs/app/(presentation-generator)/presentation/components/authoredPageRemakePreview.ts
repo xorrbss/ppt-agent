@@ -77,6 +77,8 @@ const ISSUE_CATEGORY_LABELS: Record<string, string> = {
   clipping: "잘림",
   off_canvas: "화면 벗어남",
   overflow: "넘침",
+  text_escapes_card: "카드 밖 텍스트",
+  text_intrudes_footer_zone: "쪽번호 여백 침범",
   font: "글꼴·가독성",
   image: "이미지",
   content: "내용",
@@ -90,6 +92,10 @@ const ISSUE_CATEGORY_DESCRIPTIONS: Record<string, string> = {
   clipping: "내용이 영역 밖으로 넘쳐 잘려 보입니다.",
   off_canvas: "요소가 슬라이드 영역을 벗어나 화면에 보이지 않습니다.",
   overflow: "글이나 요소가 들어갈 공간보다 많아 넘칩니다.",
+  text_escapes_card:
+    "글자가 자기 카드(배경 상자) 밖으로 인쇄되어 다른 요소 위에 겹쳐 보일 수 있습니다.",
+  text_intrudes_footer_zone:
+    "글자가 슬라이드 하단의 쪽번호 여백까지 내려와 쪽번호와 겹쳐 보일 수 있습니다.",
   font: "글자가 너무 작거나 줄 간격이 좁아 읽기 어려울 수 있습니다.",
   image: "이미지가 비어 있거나 비율이 깨졌을 수 있습니다.",
   content: "원본에 있던 문구나 숫자가 빠졌을 수 있습니다.",

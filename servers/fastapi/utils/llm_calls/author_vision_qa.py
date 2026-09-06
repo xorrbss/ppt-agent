@@ -23,6 +23,7 @@ from services.authored_infographic_assets import (
     fill_scene_cutout,
     substitute_figure_icons,
 )
+from utils.authored_dom_categories import RESIDUAL_BLOCKING_CATEGORIES, critique_type_for_category
 from utils.authored_dom_quality import (
     build_compact_dom_map,
     ensure_authored_qids,
@@ -543,6 +544,39 @@ async def critique_authored(
     return list(await asyncio.gather(*[review(i, p) for i, p in enumerate(pngs)]))
 
 
+_SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
+
+
+def deterministic_dom_critique(report: Any) -> SlideCritique | None:
+    """Project a measured DOM report into the critique the repair round reads.
+
+    Bench run 36 (2026-09-05) lost a whole deck here: a dict literal mapped the
+    category, and the two detectors ``f0d2b126c`` registered were not in it, so
+    slides 3..17 raised ``KeyError`` instead of getting a brief.  Both lookups
+    are total now (``utils.authored_dom_categories``).
+    """
+
+    if report.telemetry_status != "available" or not report.issues:
+        return None
+    ranked = sorted(
+        report.issues, key=lambda item: _SEVERITY_RANK.get(item.severity, 1)
+    )[:8]
+    return SlideCritique(
+        needs_fix=True,
+        issues=[
+            CritiqueIssue(
+                type=critique_type_for_category(item.category),
+                severity=item.severity if item.severity in _SEVERITY_RANK else "medium",
+                detail=(
+                    f"DOM {item.category}: {item.detail}; targets: "
+                    f"{', '.join(item.qids) or 'slide'}"
+                )[:200],
+            )
+            for item in ranked
+        ],
+    )
+
+
 async def revise_authored_deck(
     htmls: List[str],
     pngs: List[bytes],
@@ -690,37 +724,7 @@ async def revise_authored_deck(
     def deterministic_critique(
         html: str, metrics: Mapping[str, Any] | None
     ) -> SlideCritique | None:
-        report = local_report(html, metrics)
-        if report.telemetry_status != "available" or not report.issues:
-            return None
-        issue_type = {
-            "overflow": "overflow",
-            "clipping": "overflow",
-            "off_canvas": "overflow",
-            "overlap": "overlap",
-            "contrast": "low-contrast",
-            "font": "overflow",
-            "image": "other",
-            "content": "other",
-        }
-        ranked = sorted(
-            report.issues,
-            key=lambda item: {"high": 0, "medium": 1, "low": 2}[item.severity],
-        )[:8]
-        return SlideCritique(
-            needs_fix=True,
-            issues=[
-                CritiqueIssue(
-                    type=issue_type[item.category],
-                    severity=item.severity,
-                    detail=(
-                        f"DOM {item.category}: {item.detail}; targets: "
-                        f"{', '.join(item.qids) or 'slide'}"
-                    )[:200],
-                )
-                for item in ranked
-            ],
-        )
+        return deterministic_dom_critique(local_report(html, metrics))
 
     async def full_reauthor(
         i: int, current_html: str, critique: SlideCritique
@@ -1224,13 +1228,7 @@ async def revise_authored_deck(
         repair_details_sink.extend(repair_details)
 
     if fail_on_residual_dom_issues:
-        blocking_categories = {
-            "image",
-            "off_canvas",
-            "clipping",
-            "overflow",
-            "overlap",
-        }
+        blocking_categories = RESIDUAL_BLOCKING_CATEGORIES
         residual = [
             (index, report)
             for index, report in enumerate(final_reports)
