@@ -14,6 +14,7 @@ from typing import Any
 import urllib.parse
 
 from utils.renderer_isolation import AdmittedHtml
+from utils.slide_capture_fit import fit_marker_poll_js
 from utils.slide_capture_glyph_probe import probe_glyph_clipping_sync
 
 SLIDE_W = 1280
@@ -166,8 +167,7 @@ def render_admitted_htmls_over_pipe(
                     }});
                   }}));
                   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-                  const marker = document.getElementById('{METRICS_ELEMENT_ID}');
-                  return marker ? marker.getAttribute('content') : null;
+{fit_marker_poll_js(METRICS_ELEMENT_ID, indent='                  ')}
                 }})()""",
                 "awaitPromise": True,
                 "returnByValue": True,
