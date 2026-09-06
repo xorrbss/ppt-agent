@@ -12,6 +12,7 @@ class must measure the same boxes and raise no escape.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -70,8 +71,11 @@ async def _fit(name: str):
     return html, capture
 
 
-@pytest.mark.asyncio
-async def test_original_fixtures_still_escape():
+def test_original_fixtures_still_escape():
+    asyncio.run(_test_original_fixtures_still_escape())
+
+
+async def _test_original_fixtures_still_escape():
     """Guard the fixtures themselves: without the fit both slides escape."""
     for name, expected_px in (("run42-s12.html", 21.0), ("run42-s20.html", 52.0)):
         html = canonicalize_authored_roles(_fixture(name))
@@ -85,8 +89,11 @@ async def test_original_fixtures_still_escape():
         assert capture.browser_metrics["fit"]["requested"] is False
 
 
-@pytest.mark.asyncio
-async def test_slide_13_is_grown_not_shrunk():
+def test_slide_13_is_grown_not_shrunk():
+    asyncio.run(_test_slide_13_is_grown_not_shrunk())
+
+
+async def _test_slide_13_is_grown_not_shrunk():
     html, capture = await _fit("run42-s12.html")
     report = capture.fit_report
     assert report is not None and report["fit_state"] == "final" and report["error"] is None
@@ -98,8 +105,11 @@ async def test_slide_13_is_grown_not_shrunk():
     assert not _escapes(capture.fitted_html, capture.browser_metrics)
 
 
-@pytest.mark.asyncio
-async def test_slide_21_is_shrunk_within_the_floor():
+def test_slide_21_is_shrunk_within_the_floor():
+    asyncio.run(_test_slide_21_is_shrunk_within_the_floor())
+
+
+async def _test_slide_21_is_shrunk_within_the_floor():
     html, capture = await _fit("run42-s20.html")
     report = capture.fit_report
     assert report is not None and report["fit_state"] == "final" and report["error"] is None
@@ -113,9 +123,12 @@ async def test_slide_21_is_shrunk_within_the_floor():
     assert _blocking(capture.fitted_html, capture.browser_metrics) == set()
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("name", ["run42-s12.html", "run42-s20.html"])
-async def test_reconstruction_measures_the_same(name: str):
+def test_reconstruction_measures_the_same(name: str):
+    asyncio.run(_test_reconstruction_measures_the_same(name))
+
+
+async def _test_reconstruction_measures_the_same(name: str):
     html, capture = await _fit(name)
     assert capture.fitted_html is not None
     assert FIT_CLASS not in capture.fitted_html
@@ -134,8 +147,11 @@ async def test_reconstruction_measures_the_same(name: str):
     assert worst <= BBOX_TOLERANCE_PX, worst
 
 
-@pytest.mark.asyncio
-async def test_apply_is_idempotent_across_the_two_probe_passes():
+def test_apply_is_idempotent_across_the_two_probe_passes():
+    asyncio.run(_test_apply_is_idempotent_across_the_two_probe_passes())
+
+
+async def _test_apply_is_idempotent_across_the_two_probe_passes():
     """The final report must not compound the provisional pass's edits."""
     _, capture = await _fit("run42-s20.html")
     declarations = [e["declarations"] for e in capture.fit_report["edits"]]
@@ -144,8 +160,11 @@ async def test_apply_is_idempotent_across_the_two_probe_passes():
         assert edit["declarations"].count("font-size:") <= 1, edit
 
 
-@pytest.mark.asyncio
-async def test_margin_is_respected():
+def test_margin_is_respected():
+    asyncio.run(_test_margin_is_respected())
+
+
+async def _test_margin_is_respected():
     """The fitted copy sits at least FIT_MARGIN_PX - tolerance inside its card."""
     _, capture = await _fit("run42-s20.html")
     boxes = _boxes(capture.browser_metrics)
