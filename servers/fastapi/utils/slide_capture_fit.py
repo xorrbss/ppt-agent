@@ -148,27 +148,34 @@ def fit_capture_fields(
     *,
     fit: bool,
     digest: str,
-    cache_metrics: Callable[[str, Mapping[str, Any]], None],
-) -> tuple[str, str | None, Mapping[str, Any] | None]:
-    """Return ``(html_digest, fitted_html, fit_report)`` for one capture.
+    cache_metrics: Callable[[str, Mapping[str, Any]], Mapping[str, Any]],
+) -> tuple[str, str | None, Mapping[str, Any] | None, Mapping[str, Any] | None]:
+    """Return ``(html_digest, fitted_html, fit_report, metrics)`` for one capture.
 
     Without ``fit`` this is the identity.  With ``fit`` and no edits the measured
     DOM *is* the source DOM, so the metrics are keyed by the unmarked source (the
     render itself keyed them by the class-bearing request copy).  With edits the
     fitted string becomes the HTML of record.
+
+    The metrics come back rebound to whichever string this capture is keyed by.
+    The renderer measured them from the class-bearing request copy, so their
+    ``source_digest`` names a document nothing else ever holds; the evidence
+    ledger, the final-metrics readback and the composition gate all compare that
+    digest against the HTML they carry, and an unbound mapping makes every
+    fitted slide look stale (bench run 45 re-rendered all 24).
     """
     if not fit:
-        return digest, None, None
+        return digest, None, None, metrics
     report = fit_report_of(metrics)
     edits = _report_edits(report)
     if not edits:
         if metrics is not None:
-            cache_metrics(html, metrics)
-        return digest, None, report
+            metrics = cache_metrics(html, metrics)
+        return digest, None, report, metrics
     fitted_html = apply_fit_edits(html, edits)
     if metrics is not None:
-        cache_metrics(fitted_html, metrics)
-    return html_digest(fitted_html), fitted_html, report
+        metrics = cache_metrics(fitted_html, metrics)
+    return html_digest(fitted_html), fitted_html, report, metrics
 
 
 __all__ = [

@@ -988,7 +988,7 @@ def get_cached_browser_metrics(html: str) -> Mapping[str, Any] | None:
     return metrics
 
 
-def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> None:
+def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> Mapping[str, Any]:
     """Store metrics under the same authored HTML identity as its rendered PNG."""
     # The in-page probe runs over nonce-bearing admitted HTML, but its source
     # identity is the exact pre-admission render request (the same contract as
@@ -1006,6 +1006,10 @@ def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> None:
     except Exception:
         metric_bytes = 0
     _count_runtime("metrics_cache_bytes", metric_bytes)
+    # The rebound mapping is what identifies this HTML: callers that keep the
+    # metrics (the fitted capture) must carry these, not the ones the renderer
+    # measured from its own request copy.
+    return metrics
     max_entries, max_bytes = _dom_metrics_cache_limits()
     while (
         len(_browser_metrics_cache) > max_entries
@@ -1130,7 +1134,7 @@ async def render_html_to_png_with_metrics(
     _count_runtime("capture_png_bytes", len(png))
     if metrics is not None:
         _count_runtime("capture_metric_results")
-    digest, fitted_html, fit_report = fit_capture_fields(
+    digest, fitted_html, fit_report, metrics = fit_capture_fields(
         html, metrics, fit=fit, digest=html_digest, cache_metrics=_cache_browser_metrics,
     )
     capture = RenderCapture.from_payload(

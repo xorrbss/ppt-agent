@@ -80,6 +80,19 @@ def test_qid_incomplete_html_is_refused():
 # --- capture assembly ------------------------------------------------------
 
 
+def _recording_cache(cached):
+    """Behave like ``_cache_browser_metrics``: rebind ``source_digest`` to the key
+    it stores under and hand the rebound mapping back to the caller."""
+
+    def cache(key, metrics):
+        rebound = {**dict(metrics), "source_digest": _digest(key)}
+        cached.append((key, rebound))
+        return rebound
+
+    return cache
+
+
+
 def test_without_fit_the_capture_fields_are_the_identity():
     cached: list[tuple[str, dict]] = []
     fields = fit_capture_fields(
@@ -87,9 +100,9 @@ def test_without_fit_the_capture_fields_are_the_identity():
         {"fit": {"edits": [{"qid": "card", "declarations": "height:1px"}]}},
         fit=False,
         digest=_digest(QID_COMPLETE),
-        cache_metrics=lambda key, metrics: cached.append((key, metrics)),
+        cache_metrics=_recording_cache(cached),
     )
-    assert fields == (_digest(QID_COMPLETE), None, None)
+    assert fields[:3] == (_digest(QID_COMPLETE), None, None)
     assert cached == []
 
 
@@ -97,12 +110,12 @@ def test_edits_key_the_metrics_under_the_fitted_string_and_nothing_else():
     report = {"edits": [{"qid": "card", "declarations": "height:471px"}]}
     metrics = {"fit": report, "elements": []}
     cached: list[tuple[str, dict]] = []
-    digest, fitted_html, fit_report = fit_capture_fields(
+    digest, fitted_html, fit_report, bound = fit_capture_fields(
         QID_COMPLETE,
         metrics,
         fit=True,
         digest=_digest(QID_COMPLETE),
-        cache_metrics=lambda key, value: cached.append((key, value)),
+        cache_metrics=_recording_cache(cached),
     )
     assert fitted_html == (
         '<html><body><div data-qid="card" style="height:471px">x</div></body></html>'
@@ -110,6 +123,9 @@ def test_edits_key_the_metrics_under_the_fitted_string_and_nothing_else():
     assert digest == _digest(fitted_html) != _digest(QID_COMPLETE)
     assert fit_report is report
     assert [key for key, _ in cached] == [fitted_html]
+    # The capture must carry metrics that identify the fitted document, or the
+    # ledger and the gate cannot recognise it (bench run 45).
+    assert bound["source_digest"] == _digest(fitted_html)
 
 
 def test_a_fit_render_without_edits_keys_the_metrics_under_the_source():
@@ -118,24 +134,25 @@ def test_a_fit_render_without_edits_keys_the_metrics_under_the_source():
     # later cache read uses.
     report = {"requested": True, "fit_state": "final", "edits": []}
     cached: list[tuple[str, dict]] = []
-    digest, fitted_html, fit_report = fit_capture_fields(
+    digest, fitted_html, fit_report, bound = fit_capture_fields(
         QID_COMPLETE,
         {"fit": report},
         fit=True,
         digest=_digest(QID_COMPLETE),
-        cache_metrics=lambda key, value: cached.append((key, value)),
+        cache_metrics=_recording_cache(cached),
     )
     assert (digest, fitted_html, fit_report) == (_digest(QID_COMPLETE), None, report)
     assert [key for key, _ in cached] == [QID_COMPLETE]
+    assert bound["source_digest"] == _digest(QID_COMPLETE)
 
 
 def test_a_render_with_no_report_at_all_is_not_a_failure():
     cached: list[tuple[str, dict]] = []
     fields = fit_capture_fields(
         QID_COMPLETE, {"elements": []}, fit=True, digest=_digest(QID_COMPLETE),
-        cache_metrics=lambda key, value: cached.append((key, value)),
+        cache_metrics=_recording_cache(cached),
     )
-    assert fields == (_digest(QID_COMPLETE), None, None)
+    assert fields[:3] == (_digest(QID_COMPLETE), None, None)
     assert [key for key, _ in cached] == [QID_COMPLETE]
 
 
