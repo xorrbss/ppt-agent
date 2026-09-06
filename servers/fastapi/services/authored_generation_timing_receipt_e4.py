@@ -40,6 +40,16 @@ Fields covered:
   benchmark can tell a clean publish from a flagged one. A clean publish has
   no entries and the key is absent.
 
+* ``instruments.deck`` / ``advisory.vision`` -- the quality/speed programme's
+  H4 deck instruments (``utils/authored_deck_instruments.py``) and H6 vision
+  advisory (``services/authored_vision_advisory.py``). Both are pure
+  evidence, never a gate, so this module accepts any JSON-safe mapping rather
+  than enumerating every geometry/vocabulary field: a new instrument or
+  advisory field lands in the receipt without a matching allowlist edit here.
+  Absent when the generating knob was off (``instruments``) or the deck had
+  nothing to attach (``advisory``, which is otherwise always present -- even
+  a failed provider call is recorded as ``{"skipped": <reason>}``).
+
 ``fitLadder.trail`` (A4, the deterministic fit ladder) is a RESERVED key:
 no field or validator exists for it anywhere in this pair of modules on
 purpose, so a receipt never fabricates a ladder trail before A4 lands. Add
@@ -347,6 +357,44 @@ def flagged_slide_entries(value: object) -> tuple[dict[str, object], ...]:
     return tuple(output)
 
 
+def _is_json_safe(value: object) -> bool:
+    """Whether ``value`` serializes without loss and hashes deterministically.
+
+    The instruments/advisory payloads below are receipt evidence, not receipt
+    contract: they are accepted as any mapping this holds for, rather than a
+    per-field allowlist, so a stricter check here would just re-litigate what
+    ``utils/authored_deck_instruments.py`` and ``authored_vision_advisory.py``
+    already produce.
+    """
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return True
+    if isinstance(value, Mapping):
+        return all(
+            isinstance(key, str) and _is_json_safe(item) for key, item in value.items()
+        )
+    if isinstance(value, (list, tuple)):
+        return all(_is_json_safe(item) for item in value)
+    return False
+
+
+def deck_instruments_field(value: object) -> dict[str, object] | None:
+    """Validate H4's ``instruments.deck`` payload, or ``None`` when absent."""
+    if value is None:
+        return None
+    if not isinstance(value, Mapping) or not _is_json_safe(value):
+        raise ValueError("generation_attempt_v2_deck_instruments_invalid")
+    return dict(value)
+
+
+def vision_advisory_field(value: object) -> dict[str, object] | None:
+    """Validate H6's ``advisory.vision`` payload, or ``None`` when absent."""
+    if value is None:
+        return None
+    if not isinstance(value, Mapping) or not _is_json_safe(value):
+        raise ValueError("generation_attempt_v2_vision_advisory_invalid")
+    return dict(value)
+
+
 def optional_top_level_fields(
     *,
     provider_rate_profile: str | None,
@@ -355,6 +403,8 @@ def optional_top_level_fields(
     flagged_slides: Sequence[Mapping[str, object]] = (),
     fit_summaries: Sequence[Mapping[str, object]] = (),
     provider_call_timing: Mapping[str, object] | None = None,
+    deck_instruments: Mapping[str, object] | None = None,
+    vision_advisory: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """The receipt-level keys to splice into ``to_dict()``, only when set."""
     fields: dict[str, object] = {}
@@ -372,12 +422,17 @@ def optional_top_level_fields(
         fields["flaggedSlides"] = [dict(entry) for entry in flagged_slides]
     if fit_summaries:
         fields["fitSummary"] = [dict(entry) for entry in fit_summaries]
+    if deck_instruments is not None:
+        fields["instruments"] = {"deck": dict(deck_instruments)}
+    if vision_advisory is not None:
+        fields["advisory"] = {"vision": dict(vision_advisory)}
     return fields
 
 
 __all__ = [
     "STAGE_COOLDOWN_WAIT_KEY",
     "STAGE_WALL_KEY",
+    "deck_instruments_field",
     "fit_summary_entries",
     "flagged_slide_entries",
     "merged_stage_wall_millis",
@@ -389,4 +444,5 @@ __all__ = [
     "stage_has_wall",
     "stage_optional_keys",
     "stage_wall_millis",
+    "vision_advisory_field",
 ]

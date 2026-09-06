@@ -186,6 +186,11 @@ async def _persist_terminal_attempt_timing(
             authoring_cooldown_wait_seconds=getattr(
                 request, "_authored_cooldown_wait_seconds", None
             ),
+            # H4/H6: the deck instruments and the one vision advisory pass,
+            # stashed on the same request channel as flagged_slides/
+            # fit_summaries above (services/authored_deck_instruments_stage.py).
+            deck_instruments=getattr(request, "_authored_deck_instruments", None),
+            vision_advisory=getattr(request, "_authored_vision_advisory", None),
         )
         return receipt.to_dict()
     except (OSError, TypeError, ValueError):

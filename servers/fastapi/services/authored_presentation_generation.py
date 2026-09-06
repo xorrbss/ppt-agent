@@ -2962,6 +2962,20 @@ async def _generate_authored_presentation(
         quality_gate_receipt, htmls=htmls, pngs=pngs,
         metrics=list(final_browser_metrics), style=style, brand=brand,
     )
+    # Stashed on the request so the attempt-timing receipt (a separate,
+    # digest-bound file the bench reads without a DB dependency; see
+    # services/presentation_generation_attempt_timing.py) can carry the same
+    # H4/H6 evidence the quality-gate receipt above just received.
+    object.__setattr__(
+        request,
+        "_authored_deck_instruments",
+        (quality_gate_receipt.get("instruments") or {}).get("deck"),
+    )
+    object.__setattr__(
+        request,
+        "_authored_vision_advisory",
+        (quality_gate_receipt.get("advisory") or {}).get("vision"),
+    )
 
     quality_receipt_v2 = None
     if evidence_ledger is not None and evidence_attempt_id is not None:

@@ -1283,3 +1283,165 @@ def test_flagged_entries_still_reject_an_unknown_key():
                 }
             ]
         )
+
+
+# ---------------------------------------------------------------------------
+# H4/H6: the deck instruments and vision advisory reach the attempt-timing
+# receipt (the file the bench reads without a DB dependency; the DB-side
+# quality-gate receipt already carried these via ``attach_deck_receipt_extras``
+# -- see tests/unit/test_authored_deck_receipt_extras.py).
+# ---------------------------------------------------------------------------
+
+
+def test_v2_receipt_carries_the_deck_instruments_and_vision_advisory(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path))
+    job_id = uuid.uuid4()
+    deck_instruments = {"medianEmptyBandPx": 42.0, "radiusFamilyCount": 1}
+    # A failed advisory call is still recorded as its skip reason -- never
+    # absent -- so the receipt can tell "off" apart from "asked and failed".
+    vision_advisory = {"skipped": "provider_outcome:public_provider_empty_output"}
+    receipt = create_generation_attempt_timing_receipt_v2(
+        job_id=job_id,
+        attempt_id="private-instruments-advisory-attempt",
+        attempt_number=1,
+        revision=0,
+        outcome="succeeded",
+        stage_observations={
+            "outline": {"startMillis": 0, "endMillis": 5, "durationMillis": 5},
+        },
+        executed_stages=("outline",),
+        queue_wait_ms=0,
+        wall_ms=5,
+        provider_usage=_v2_usage(),
+        retry_reason=None,
+        worker="workspace-generation-worker",
+        terminal_error=None,
+        deck_instruments=deck_instruments,
+        vision_advisory=vision_advisory,
+    )
+    payload = receipt.to_dict()
+    assert payload["instruments"] == {"deck": deck_instruments}
+    assert payload["advisory"] == {"vision": vision_advisory}
+    assert load_generation_attempt_timing_receipts(job_id)[-1].to_dict() == payload
+    round_tripped = _attempt_receipt_v2_from_dict(payload)
+    assert round_tripped.deck_instruments == deck_instruments
+    assert round_tripped.vision_advisory == vision_advisory
+
+
+def test_v2_deck_instruments_and_advisory_reject_a_non_mapping():
+    with pytest.raises(
+        ValueError, match="generation_attempt_v2_deck_instruments_invalid"
+    ):
+        create_generation_attempt_timing_receipt_v2(
+            job_id=uuid.uuid4(),
+            attempt_id="private-bad-instruments",
+            attempt_number=1,
+            revision=0,
+            outcome="succeeded",
+            stage_observations={
+                "outline": {"startMillis": 0, "endMillis": 1, "durationMillis": 1},
+            },
+            executed_stages=("outline",),
+            queue_wait_ms=0,
+            wall_ms=1,
+            provider_usage=_v2_usage(),
+            retry_reason=None,
+            worker="w",
+            terminal_error=None,
+            deck_instruments="not-a-mapping",
+        )
+    with pytest.raises(
+        ValueError, match="generation_attempt_v2_vision_advisory_invalid"
+    ):
+        create_generation_attempt_timing_receipt_v2(
+            job_id=uuid.uuid4(),
+            attempt_id="private-bad-advisory",
+            attempt_number=1,
+            revision=0,
+            outcome="succeeded",
+            stage_observations={
+                "outline": {"startMillis": 0, "endMillis": 1, "durationMillis": 1},
+            },
+            executed_stages=("outline",),
+            queue_wait_ms=0,
+            wall_ms=1,
+            provider_usage=_v2_usage(),
+            retry_reason=None,
+            worker="w",
+            terminal_error=None,
+            vision_advisory=[1, 2, 3],
+        )
+
+
+def test_v2_legacy_receipt_without_instruments_or_advisory_still_loads() -> None:
+    """A receipt sealed before H4/H6 landed has neither key -- still loads,
+    and its digest is unaffected by the new (absent) fields."""
+    stages = {
+        "outline": {"state": "observed", "startMillis": 0, "endMillis": 5, "durationMillis": 5},
+        "provider": {"state": "not_started"},
+        "authoring": {"state": "observed", "startMillis": 0, "endMillis": 5, "durationMillis": 5},
+        "repair": {"state": "not_started"},
+        "chromiumReview": {"state": "observed", "startMillis": 5, "endMillis": 10, "durationMillis": 5},
+        "publication": {"state": "observed", "startMillis": 10, "endMillis": 11, "durationMillis": 1},
+    }
+    payload = _v2_receipt_dict(stages, "private-legacy-instruments-advisory")
+    receipt = _attempt_receipt_v2_from_dict(payload)
+    assert receipt.deck_instruments is None
+    assert receipt.vision_advisory is None
+    assert "instruments" not in receipt.to_dict()
+    assert "advisory" not in receipt.to_dict()
+    assert receipt.to_dict() == payload
+
+
+def test_persist_terminal_attempt_timing_reads_the_stashed_deck_evidence(
+    tmp_path, monkeypatch
+) -> None:
+    """The generation tail stashes H4/H6's evidence on the request the same
+    way it stashes flagged slides and fit summaries; the handler must read it
+    back onto the persisted attempt-timing receipt."""
+    monkeypatch.setenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path))
+    job_id = uuid.uuid4()
+    request = SimpleNamespace(
+        template="authored",
+        _authored_deck_instruments={"medianEmptyBandPx": 7.0},
+        _authored_vision_advisory={"skipped": "no_renders"},
+    )
+    usage = {
+        "totals": {
+            "logicalCalls": 0, "physicalCalls": 0, "retryCalls": 0,
+            "reportedUsageCalls": 0, "unavailableUsageCalls": 0, "pricedCalls": 0,
+            "latencyMs": 0, "inputTokens": 0, "outputTokens": 0, "cachedTokens": 0,
+            "actualCostMicrounits": 0, "estimatedCostMicrounits": 0,
+        },
+        "stages": {},
+    }
+    provider_usage = SimpleNamespace(snapshot=lambda: usage)
+    recorder = GenerationTimingRecorder()
+    for stage in ("outline", "author", "repair", "render", "quality", "publication"):
+        recorder.record_stage_ms(stage, 1)
+    context = SimpleNamespace(
+        claim=SimpleNamespace(
+            operation_id=uuid.uuid4(),
+            attempt_token="private-stashed-evidence-attempt",
+            attempt_number=1,
+            expected_revision=0,
+            fencing_token=1,
+        )
+    )
+    receipt_payload = asyncio.run(
+        _persist_terminal_attempt_timing(
+            job_id=job_id,
+            context=context,
+            recorder=recorder,
+            provider_usage=provider_usage,
+            queue_wait_ms=0,
+            outcome="succeeded",
+            retry_reason=None,
+            terminal_error=None,
+            request=request,
+        )
+    )
+    assert receipt_payload["instruments"] == {"deck": {"medianEmptyBandPx": 7.0}}
+    assert receipt_payload["advisory"] == {"vision": {"skipped": "no_renders"}}

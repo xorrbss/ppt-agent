@@ -13,6 +13,7 @@ from pathlib import Path
 from time import monotonic
 
 from services.authored_generation_timing_receipt_e4 import (
+    deck_instruments_field,
     fit_summary_entries,
     flagged_slide_entries,
     merged_stage_wall_millis,
@@ -24,6 +25,7 @@ from services.authored_generation_timing_receipt_e4 import (
     stage_cooldown_wait_seconds,
     stage_optional_keys,
     stage_wall_millis,
+    vision_advisory_field,
 )
 from services.authored_generation_observability_metrics import (
     # Redundant alias: this module stays the published import surface for the
@@ -547,6 +549,13 @@ class GenerationAttemptTimingReceiptV2:
     #: SPEED-12: per-stage admission/executor/provider split of every provider
     #: call (``services/provider_call_timing.py``); absent when no call ran.
     provider_call_timing: dict[str, object] | None = None
+    #: H4: deck-level geometry/colour instruments (``utils/authored_deck_
+    #: instruments.py``); absent when the knob was off.
+    deck_instruments: dict[str, object] | None = None
+    #: H6: the one advisory vision pass over the finished deck (``services/
+    #: authored_vision_advisory.py``); absent when the knob was off, otherwise
+    #: always present -- a failed call is still recorded as its skip reason.
+    vision_advisory: dict[str, object] | None = None
     receipt_digest: str = ""
 
     def to_dict(self) -> dict[str, object]:
@@ -575,6 +584,8 @@ class GenerationAttemptTimingReceiptV2:
                 flagged_slides=self.flagged_slides,
                 fit_summaries=self.fit_summaries,
                 provider_call_timing=self.provider_call_timing,
+                deck_instruments=self.deck_instruments,
+                vision_advisory=self.vision_advisory,
             ),
             "receiptDigest": self.receipt_digest,
         }
@@ -682,6 +693,13 @@ def _optional_reason(value: object, field_name: str) -> str | None:
     return value.strip()
 
 
+def _nested(value: object, key: str) -> object:
+    """Read ``value[key]`` for the ``{"instruments": {"deck": ...}}`` /
+    ``{"advisory": {"vision": ...}}`` wrapper shapes, or ``None`` when the
+    outer key is absent or not a mapping."""
+    return value.get(key) if isinstance(value, Mapping) else None
+
+
 def _attempt_receipt_v2_from_dict(
     value: object,
 ) -> GenerationAttemptTimingReceiptV2:
@@ -752,6 +770,8 @@ def _attempt_receipt_v2_from_dict(
         flagged_slides=flagged_slide_entries(value.get("flaggedSlides")),
         fit_summaries=fit_summary_entries(value.get("fitSummary")),
         provider_call_timing=provider_call_timing_field(value.get("providerCallTiming")),
+        deck_instruments=deck_instruments_field(_nested(value.get("instruments"), "deck")),
+        vision_advisory=vision_advisory_field(_nested(value.get("advisory"), "vision")),
         receipt_digest=_required_sha256(value.get("receiptDigest"), "receipt_digest"),
     )
     if receipt.receipt_digest != _attempt_receipt_v2_digest(receipt):
@@ -965,6 +985,8 @@ def create_generation_attempt_timing_receipt_v2(
     fit_summaries: Sequence[Mapping[str, object]] | Mapping[object, object] = (),
     provider_call_timing: Mapping[str, object] | None = None,
     authoring_cooldown_wait_seconds: float | int | None = None,
+    deck_instruments: Mapping[str, object] | None = None,
+    vision_advisory: Mapping[str, object] | None = None,
 ) -> GenerationAttemptTimingReceiptV2:
     """Seal one v2 terminal receipt without prompt, content, or provider traces.
 
@@ -1108,6 +1130,8 @@ def create_generation_attempt_timing_receipt_v2(
         flagged_slides=flagged_slide_entries(flagged_slides),
         fit_summaries=fit_summary_entries(fit_summaries),
         provider_call_timing=provider_call_timing_field(provider_call_timing),
+        deck_instruments=deck_instruments_field(deck_instruments),
+        vision_advisory=vision_advisory_field(vision_advisory),
     )
     if (outcome == "succeeded") != (receipt.terminal_error is None):
         raise ValueError("generation_attempt_timing_receipt_v2_invalid")
