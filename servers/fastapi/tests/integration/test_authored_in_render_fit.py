@@ -30,9 +30,6 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "authored_fit"
 FLOOR_PX = 12.0
 BBOX_TOLERANCE_PX = 0.5
 
-pytestmark = pytest.mark.integration
-
-
 def _fixture(name: str) -> str:
     return (FIXTURES / name).read_text(encoding="utf-8")
 
