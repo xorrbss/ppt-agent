@@ -139,6 +139,7 @@ class DeckInstruments:
     fit_cards_grown: int = 0
     fit_cards_shrunk: int = 0
     fit_cards_unfixable: int = 0
+    fit_cards_skipped: int = 0
     fit_errors: int = 0
     fit_reconstruction_mismatches: int = 0
     fit_factor_min: float | None = None
@@ -321,13 +322,12 @@ def _footer_intrusions(
 def _fit_aggregates(reports: Sequence[Mapping[str, Any] | None]) -> dict[str, Any]:
     """Deck-wide in-render-fit aggregates from each slide's ``fit_report``.
 
-    Mirrors ``_footer_intrusions``: reads exactly what the fitter already
-    reported (``docs/authored-in-render-fit-design-20260906.md`` section 4)
-    rather than re-deriving it, and never raises -- a malformed report is
-    skipped, not a reason to lose the rest of the deck's instruments.
+    Mirrors ``_footer_intrusions``: reads what the fitter already reported
+    (``docs/authored-in-render-fit-design-20260906.md`` section 4) rather than
+    re-deriving it, and never raises -- a malformed report is skipped.
     """
 
-    grown = shrunk = unfixable = errors = mismatches = 0
+    grown = shrunk = unfixable = skipped = errors = mismatches = 0
     provisional_slides = partial_slides = 0
     factors: list[float] = []
     escapes: list[float] = []
@@ -345,13 +345,17 @@ def _fit_aggregates(reports: Sequence[Mapping[str, Any] | None]) -> dict[str, An
         for card in report.get("cards") or ():
             if not isinstance(card, Mapping):
                 continue
+            # ``grown_and_shrunk`` is the common outcome, so each counter
+            # answers its own question rather than partitioning the vocabulary.
             outcome = str(card.get("outcome", ""))
-            if outcome == "grown":
+            if "grown" in outcome:
                 grown += 1
-            elif outcome == "shrunk":
+            if "shrunk" in outcome:
                 shrunk += 1
-            elif outcome.startswith("unfixable"):
+            if outcome.startswith("unfixable"):
                 unfixable += 1
+            elif outcome.startswith("skipped"):
+                skipped += 1
             factor = _maybe_float(card.get("factor"))
             if factor is not None:
                 factors.append(factor)
@@ -362,6 +366,7 @@ def _fit_aggregates(reports: Sequence[Mapping[str, Any] | None]) -> dict[str, An
         "fit_cards_grown": grown,
         "fit_cards_shrunk": shrunk,
         "fit_cards_unfixable": unfixable,
+        "fit_cards_skipped": skipped,
         "fit_errors": errors,
         "fit_reconstruction_mismatches": mismatches,
         "fit_factor_min": round(min(factors), 4) if factors else None,

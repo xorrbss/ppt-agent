@@ -339,6 +339,29 @@ def test_fit_aggregates_count_outcomes_across_the_deck():
     assert deck.fit_escape_px == (5.0, 21.0, 52.0)
 
 
+def test_fit_aggregates_count_a_card_that_grew_and_shrank_under_both():
+    """Bench run 46 outcome: both fitted cards grew into their slack and then
+    shrank the remainder, and the deck counters read zero because neither
+    equalled ``grown`` or ``shrunk``.  Each counter answers its own question."""
+    report = {
+        "error": None,
+        "partial": True,
+        "cards": [
+            {"qid": "s7-a", "outcome": "grown_and_shrunk", "factor": 0.9453, "escape_px": 29.0},
+            {"qid": "s7-b", "outcome": "skipped:budget", "factor": 1.0, "escape_px": None},
+        ],
+    }
+    deck = compute_deck_instruments([_fit_slide(0, report)])
+
+    assert deck.fit_cards_grown == 1
+    assert deck.fit_cards_shrunk == 1
+    assert deck.fit_cards_skipped == 1
+    assert deck.fit_cards_unfixable == 0
+    assert deck.fit_partial_slides == 1
+    assert deck.fit_factor_min == 0.9453
+    assert deck.fit_escape_px == (29.0,)
+
+
 def test_fit_aggregates_count_an_error_and_stay_zero_with_no_reports():
     deck_with_error = compute_deck_instruments(
         [_fit_slide(0, {"error": "TypeError: boom", "cards": []})]
