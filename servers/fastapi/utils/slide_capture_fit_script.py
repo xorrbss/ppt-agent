@@ -1,12 +1,11 @@
 """The in-page card fit fragment the authored renderer probe splices into itself.
 
-Design: ``docs/authored-in-render-fit-design-20260906.md`` (sections 3, 4, 7).  A card
-carries an authored pixel height and copy whose wrapped height the model cannot measure,
-so the copy prints outside it; in the page the fix is a few synchronous layouts.  Every
-constant is interpolated from the Python detector that defines it, so the fitter and the
-detectors cannot drift, and every edit is a plain string append onto the element's own
-``style`` attribute, so the attribute the browser measured is the one the API rebuilds.
-The caller's rf-string does the brace escaping; this text is plain JavaScript.
+Design: ``docs/authored-in-render-fit-design-20260906.md`` (sections 3, 4, 7).  A card carries an authored
+pixel height and copy whose wrapped height the model cannot measure, so the copy prints outside it; in the
+page the fix is a few synchronous layouts.  Every constant is interpolated from the Python detector that
+defines it, so fitter and detectors cannot drift, and every edit is a plain string append onto the element's
+own ``style`` attribute, so the attribute the browser measured is the one the API rebuilds.  The brace
+escaping is the caller's rf-string; this text is plain JavaScript.
 """
 
 from __future__ import annotations
@@ -42,12 +41,10 @@ def fit_constants() -> dict[str, object]:
     return {
         "version": FIT_VERSION, "fit_class": FIT_CLASS, "margin_px": FIT_MARGIN_PX,
         "tolerance_px": ESCAPE_TOLERANCE_PX, "font_floor_px": AUTHORED_FONT_FLOOR_PX,
-        "numbered_content_bottom_px": NUMBERED_CONTENT_BOTTOM_PX,
-        "unnumbered_content_bottom_px": UNNUMBERED_CONTENT_BOTTOM_PX,
-        "max_cards": MAX_FIT_CARDS, "max_layouts": MAX_FIT_LAYOUTS,
+        "numbered_content_bottom_px": NUMBERED_CONTENT_BOTTOM_PX, "max_cards": MAX_FIT_CARDS,
+        "unnumbered_content_bottom_px": UNNUMBERED_CONTENT_BOTTOM_PX, "max_layouts": MAX_FIT_LAYOUTS,
         "time_budget_fraction": FIT_TIME_BUDGET_FRACTION, "bisection_steps": FIT_BISECTION_STEPS,
-        "default_timeout_ms": DEFAULT_FIT_TIMEOUT_MS,
-        "page_number_max_font_px": _PAGE_NUMBER_MAX_FONT_PX,
+        "default_timeout_ms": DEFAULT_FIT_TIMEOUT_MS, "page_number_max_font_px": _PAGE_NUMBER_MAX_FONT_PX,
         "page_number_max_distance_px": _PAGE_NUMBER_MAX_DISTANCE_FROM_BOTTOM_PX,
         "page_number_min_top_fraction": _PAGE_NUMBER_MIN_TOP_FRACTION,
         "transparent_backgrounds": sorted(_TRANSPARENT), "painted_tags": sorted(_PAINTED_TAGS),
@@ -137,12 +134,15 @@ const __codexFit = {
         (corner) => this._cssPx(style['border' + corner + 'Radius']) > 0) ||
       ['Top', 'Right', 'Bottom', 'Left'].every((side) => this._cssPx(style['border' + side + 'Width']) > 0);
   },
-  _escape(card, leaves, margin) {
+  // A footerLine mirrors reconcile_footer_zone_reports: with the card itself below that line, a
+  // leaf whose ink also passes it is reported as a footer intrusion, not as an escape from here.
+  _escape(card, leaves, margin, footerLine) {
     this._layouts += 1;
     const style = getComputedStyle(card), rect = card.getBoundingClientRect();
     const right = rect.right - this._cssPx(style.borderRightWidth) - margin;
     const bottom = rect.bottom - this._cssPx(style.borderBottomWidth) - margin;
-    return leaves.map((leaf) => this._ink(leaf)).filter(Boolean).reduce(
+    const bound = footerLine > 0 && rect.bottom > footerLine ? footerLine : Infinity;
+    return leaves.map((leaf) => this._ink(leaf)).filter((ink) => ink && ink.bottom <= bound).reduce(
       (escape, ink) => Math.max(escape, ink.bottom - bottom, ink.right - right), 0);
   },
   // Growable only when the height is authored: an inline or matched px height.
@@ -239,9 +239,13 @@ const __codexFit = {
       (node) => this._eligible(node) && this._ownedTextNodes(node).length > 0);
     if (!leaves.length) return false;
     const start = this._layouts;
+    // Entry is the detector's question, the target is the fitter's: engage only a card the
+    // detector would flag -- ink more than the tolerance past the inner edge, not reconciled
+    // away as a footer intrusion.  The price: a card escaping by 1px keeps no export headroom.
+    const escapePx = this._escape(card, leaves, 0, contentLine);
+    if (escapePx <= this.C.tolerance_px) return false;
     let escape = this._escape(card, leaves, this.C.margin_px);
-    if (escape <= 0) return false;
-    const record = {qid: card.getAttribute('data-qid'), escape_px: this._round(this._escape(card, leaves, 0), 2),
+    const record = {qid: card.getAttribute('data-qid'), escape_px: this._round(escapePx, 2),
       grow_px: 0, factor: 1, outcome: 'unfixable:floor', layouts: 0};
     this._last.cards.push(record);
     const done = (o) => { if (o) record.outcome = o; record.layouts = this._layouts - start; return true; };
@@ -329,12 +333,8 @@ const __codexFit = {
 
 
 def fit_script_fragment(width: int = 104) -> str:
-    """The fragment the probe splices into its IIFE scope, constants interpolated.
-
-    The constants become one object literal wrapped only between key/value pairs, so
-    every interpolated number stays greppable on a line of its own.
-    """
-
+    """The fragment the probe splices into its IIFE scope, with the constants interpolated
+    as one object literal wrapped only between pairs, so every number stays greppable."""
     groups: list[str] = []
     for key, value in sorted(fit_constants().items()):
         pair = f"{json.dumps(key)}: {json.dumps(value)}"

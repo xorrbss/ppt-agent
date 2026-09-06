@@ -6,6 +6,9 @@ places they changed are marked "rev 2"). Revision 3: a second review against
 main at `934886512` found that the renderer image this design builds on cannot
 import its own worker (section 7, "prerequisite"), and added the poll bounds,
 the verification rollout and the fixture custody rules (marked "rev 3").
+Revision 4: a bench replay of the implemented fitter found it engaging cards
+the detector does not flag, and separated the entry test from the fit target
+(section 4, "rev 4"; the non-goal it settles is in section 2).
 Predecessors: `authored-fit-magnitude-measurement-design-20260904.md` (the A4
 fit ladder and the M1 magnitudes), `authored-quality-speed-programme-design-20260905.md`
 (section 17.2 open items), `generation-programme-master-design-20260904.md`
@@ -69,6 +72,9 @@ attribute allowlist. Rev 2: it does not scale paddings, margins or gaps; a
 card whose escape is caused by fixed-height rows rather than copy reaches the
 font floor and is reported unfixable (section 4, step 5). Extending the lever
 to vertical spacing is a v2 item because it widens the reconstruction surface.
+Rev 4: it never modifies a card the detector would not flag. A slide with no
+`text_escapes_card` defect leaves the fitter byte-identical -- no grow, no
+shrink, no inline declaration, and no entry in the report's `cards` or `edits`.
 
 ## 3. Where it runs
 
@@ -155,6 +161,39 @@ fits to `FIT_MARGIN_PX = 6` *inside* the card's inner edge, so a slide that
 passes here still passes when the exported deck is measured by a different
 Chromium on a different OS with a different Korean fallback font. The
 detector's 2 px tolerance is the floor of acceptance, not the target.
+
+Rev 4, entry is not the target. Rev 2 used one test for both questions: a card
+was engaged whenever its ink came within `FIT_MARGIN_PX` of the inner edge,
+which is 4 px stricter than the detector that defines the defect, so the
+fitter changed slides that have no defect. Replaying both bench decks (44
+slides of published HTML, real Chromium) measured the collateral: run 42 slide
+7 (`s7-test`) had no escape before or after and was shrunk to factor 0.9016,
+dropping 6 text elements a mean of 2.10 px (22 -> 19.8, 20 -> 18, 18 -> 16.2);
+run 41 slide 15 had no escape and was shrunk to 0.9401 across 4 elements; run
+42 slide 2 grew a card by 7 px and slide 15 by 3 px, both with no escape and no
+font change. The harm is not smaller type as such -- it is that one card ends up at
+15.4 px while visually identical cards on other slides stay at 18 px.
+
+Entry is therefore the detector's question and only the target is the
+fitter's. A card is engaged only when its ink passes the card's inner edge
+(padding box, margin 0) by more than `ESCAPE_TOLERANCE_PX` -- exactly when
+`text_escapes_card` would fire for it. "Would fire" is the *reported*
+category, so entry also mirrors `reconcile_footer_zone_reports`: a leaf whose
+ink passes the footer content line while the card itself hangs below that line
+is reported as `text_intrudes_footer_zone`, not as an escape, and it does not
+engage the card. That reconciliation, not the target margin, is what run 42
+slide 7 (card bottom 686, escape 8 px, content line 648) and run 41 slide 15
+(card bottom 651, escape 4 px) tripped: both escapes are real and both are the
+footer line's business, because returning that copy to its card would still
+leave it printed under the page number. Once engaged nothing else changes: it is
+still fitted to `FIT_MARGIN_PX` inside that edge (step 2), so the export
+renderer's different font metrics keep their headroom, and `escape_px` in the
+report stays the margin-0 escape over the leaves the detector counts (22 px on
+run 42 slide 12, unchanged by this revision). A card within
+tolerance is left completely untouched: no grow, no shrink, no inline style, no
+`edits` entry, no `cards` entry. The tradeoff accepted: a card that passes the
+detector by 1 px now gets no export headroom at all. That is the deliberate
+price of never touching a slide the detector passes.
 
 0. **Snapshot.** Before any edit, record for every candidate element its
    `style` attribute string and its computed `font-size` and `line-height`.
