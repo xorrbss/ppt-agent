@@ -623,3 +623,65 @@ rating judged.
 scale and asks only for structure — the parent's own pages carry rails, flows
 and sidebars at 13-16px, which the 18px floor priced out. That is a separate
 experiment, and it needs its own paired round before it becomes a default.
+
+## 17. Closing measurement (2026-09-06, bench runs 18-42)
+
+Shipping configuration is the prompt bundle OFF with the speed work on:
+`AUTHORED_BATCH_WAVE_CONCURRENCY=5`, wave barrier disabled, tail streaming on,
+anchor/exemplar/illustration-share at their defaults, advisory off, effort medium.
+Both fixtures publish in one attempt.
+
+| | 24-slide prompt fixture | | 20-slide document fixture | |
+|---|---|---|---|---|
+| | parent (run 22) | shipping (run 42) | parent (run 23) | shipping (run 41) |
+| authoring wall | 1844 s | **995 s** | 1492 s | **973 s** |
+| total wall | 2579 s | **1979 s** | 2370 s | **2099 s** |
+| flagged slides | 4 | 2 | 4 | 1 |
+| published flagged | 0 | 2 | 0 | 0 |
+| chars/slide | 527 | ~540 | 445 | 480 |
+
+Authoring is 54 % and 65 % of the parent's on the two fixtures; the wall gain is
+smaller than the authoring gain because repair and Chromium review grew with the
+new detectors and are not fully recovered even after the demotion (§16.1).
+
+### 17.1 What the detector demotion bought
+
+Measured by running the identical configuration on the two shas either side of
+`306391ea6`:
+
+| document fixture | blocking (run 40) | advisory (run 41) |
+|---|---|---|
+| flagged slides | 18 | 6 in-round, **1** at publish |
+| published flagged | 13 | **0** |
+| repair wall | 1106 s | 747 s (−32 %) |
+| chromiumReview | 1133 s | 769 s (−32 %) |
+| total wall | 2150 s | 2099 s |
+
+The intrusions did not go away — that deck still records 23 of them, median
+43 px — they simply stopped spending the remake budget, which freed it for the
+defects that repair successfully. On the prompt fixture the same change moved
+repair only ~5 %, because footer was not the dominant reason there; the two
+remaining flags are both `text_escapes_card`, the category deliberately kept
+blocking, and it fired more than once in a deck for the first time.
+
+### 17.2 Open, with evidence, deliberately not fixed here
+
+- **`contrast` suppresses the vision-QA fallback.** It fires on essentially every
+  slide of every deck (24/23/24 across three measured decks), so
+  `deterministic_critique` never returns `None` and the `critique_authored` model
+  call in `revise_authored_deck`'s repair loop is unreachable. Pre-existing.
+  Consequence for the record: no run in bench series 18-42 exercised that path,
+  and the "VQA fixed N slides" figures from runs 10-16 measured the deterministic
+  path instead. Turning it on is a cost decision, not a bug fix.
+- **`contrast` in the deck-IR product adapter** (`services/authored_vnext/deck_ir/
+  product_adapter.py`) is in `BROWSER_REQUIRED_CHECKS` and maps every high/medium
+  issue to a blocking P1, so on the measured contrast rate that path would reject
+  every deck. It has no live callers today; it is a landmine if it is switched on.
+- **The vision advisory returns empty output** from the provider on every attempt
+  (`public_provider_empty_output`), with the request shape pinned equal to the
+  working critique path by test. Advisory-only, default off, reason now recorded
+  in the receipt.
+- **The multimodal → text-only fallback** is unreachable for authored decks
+  (`provider_idempotency` wraps the client error, the guard above the fallback
+  re-raises it), so a transient picture failure costs a slide an attempt. Product
+  decision: keep the fallback and pay a second call, or retire it and its tests.
