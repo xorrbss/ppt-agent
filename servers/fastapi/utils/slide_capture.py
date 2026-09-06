@@ -34,6 +34,7 @@ from services.authored_vnext.capability_registry import (
     capability_metadata,
 )
 from utils.authored_dom_quality import ensure_authored_qids
+from utils.process_kill_on_parent_death import bind_to_parent_lifetime
 from utils.slide_capture_hit_test import THIN_VIEWPORT_HIT_TEST_JS
 from utils.slide_capture_polygon_paint import POLYGON_PAINT_DOMAIN_JS
 from utils.slide_capture_rounded_paint import ROUNDED_PAINT_DOMAIN_JS
@@ -155,6 +156,9 @@ def _run_chrome_screenshot(args: List[str], timeout: int) -> bytes:
     else:
         popen_kwargs["start_new_session"] = True
     proc = subprocess.Popen(args, **popen_kwargs)
+    # A force-killed parent runs no atexit hook, so ask the OS to reap this
+    # chrome with us. No-op off Windows; never fatal.
+    bind_to_parent_lifetime(proc)
     try:
         stdout, _ = proc.communicate(timeout=timeout)
         return stdout or b""
@@ -1442,6 +1446,9 @@ def _launch_reusable_chrome() -> _ReusableChromeRuntime:
     else:
         kwargs["start_new_session"] = True
     process = subprocess.Popen(args, **kwargs)
+    # This is the long-lived tree that leaks when the owner is force-killed:
+    # bind it to this process's lifetime so the OS reaps it either way.
+    bind_to_parent_lifetime(process)
     port_file = profile_path / "DevToolsActivePort"
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
