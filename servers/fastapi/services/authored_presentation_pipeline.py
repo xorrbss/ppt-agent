@@ -68,6 +68,7 @@ from services.authored_tail_streaming import (
     run_streamed_slide_tail,
 )
 from services.authored_preauthor_scan import report_unresolved_slides, scan_preauthor_checkpoints
+from services.authored_slide_ledger import assert_authored_ledger_disjoint, batch_recorder
 from services.authored_style_anchor_stage import (
     accepts_style_anchor, anchor_blocking_defects, anchor_render_step,
     resolve_direct_lane_anchor, resolve_style_anchor,
@@ -576,22 +577,11 @@ async def _author_illustrate_render_pipeline(
         schedule = AuthoredWaveSchedule(new_authored_batch_policy_state())
         pending = list(initial)
 
-        def _record_initial(indexes: tuple[int, ...], outcome: Any) -> bool:
-            if isinstance(outcome, BaseException):
-                failures.update(
-                    {
-                        index: AuthoredBatchFailure(outcome, str(outcome))
-                        for index in indexes
-                    }
-                )
-                return False
-            successful.update(outcome.htmls)
-            failures.update(outcome.failures)
-            if tail_stream is not None:
-                # Persisted by ``_persist_batch_success`` already, so the pool
-                # finds this slide's HTML and spends no call of its own on it.
-                tail_stream.publish_many(outcome.htmls)
-            return bool(outcome.htmls)
+        # One ledger: a slide this call persisted stops being a failure, and a
+        # slide already accepted never becomes one again.
+        _record_initial = batch_recorder(
+            successful=successful, failures=failures, publish=tail_stream
+        )
 
         async def _author_anchor(
             _plan: Any, index: int, *, prior_failure_hint: str | None = None
@@ -616,9 +606,10 @@ async def _author_illustrate_render_pipeline(
             except BaseException as error:
                 schedule.advance(error, succeeded=_record_initial((index,), error))
                 raise
+            # ``_record_initial`` owns both containers: this call's HTML clears
+            # the slide's failure entry, and a remake that fails after the
+            # anchor's first call was accepted never re-opens one.
             schedule.advance(outcome, succeeded=_record_initial((index,), outcome))
-            if index in outcome.htmls:
-                failures.pop(index, None)
             return preauthored_htmls.get(index, "")
 
         if pending:
@@ -656,6 +647,9 @@ async def _author_illustrate_render_pipeline(
         # A slide whose first call failed reaches the tail only once its one
         # recovery call has persisted HTML; a slide that fails both is never
         # published and fails the deck below.
+        assert_authored_ledger_disjoint(
+            successful, failures, stage="authored_recovery_planning"
+        )
         await run_authored_recovery_pass(
             [
                 index

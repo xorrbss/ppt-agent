@@ -31,9 +31,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Awaitable, Callable, Iterable, Mapping, MutableMapping, Sequence
+from typing import Any, Awaitable, Callable, Iterable, MutableMapping, Sequence
 
 from services.authored_batch_policy import plan_authored_recovery_batches
+from services.authored_slide_ledger import (
+    assert_authored_ledger_disjoint,
+    batch_recorder,
+)
 from services.authored_slide_worker_pool import run_slide_worker_pool
 from utils.llm_calls.author_deck import AuthoredBatchFailure
 
@@ -197,6 +201,15 @@ async def run_authored_recovery_pass(
     fires -- on HTML this call persisted.
     """
 
+    assert_authored_ledger_disjoint(
+        successful, failures, stage="authored_recovery_pass"
+    )
+    # The same booking rule as the initial pass, including its publish point:
+    # a slide is published on the HTML this call persisted, and a call that
+    # fails for a slide the deck already accepted leaves it accepted.
+    record = batch_recorder(
+        successful=successful, failures=failures, publish=publish
+    )
     recovery_batches = plan_authored_recovery_batches(
         failed_for_recovery,
         successful_slide_indices=successful,
@@ -210,27 +223,7 @@ async def run_authored_recovery_pass(
             return_exceptions=True,
         )
         for batch, outcome in zip(window, outcomes, strict=True):
-            if isinstance(outcome, BaseException):
-                schedule.advance(outcome, succeeded=False)
-                for index in batch.slide_indices:
-                    failures[index] = AuthoredBatchFailure(outcome, str(outcome))
-                continue
-            schedule.advance(outcome, succeeded=bool(outcome.htmls))
-            _merge_recovered(outcome.htmls, successful=successful, failures=failures)
-            failures.update(outcome.failures)
-            if publish is not None:
-                publish.publish_many(outcome.htmls)
-
-
-def _merge_recovered(
-    htmls: Mapping[int, str],
-    *,
-    successful: MutableMapping[int, str] | set,
-    failures: MutableMapping[int, AuthoredBatchFailure],
-) -> None:
-    successful.update(htmls)
-    for index in htmls:
-        failures.pop(index, None)
+            schedule.advance(outcome, succeeded=record(batch.slide_indices, outcome))
 
 
 __all__ = [

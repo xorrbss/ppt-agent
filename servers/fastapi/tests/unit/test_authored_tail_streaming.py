@@ -30,8 +30,12 @@ from services import authored_checkpoint_service as checkpoints
 from services.authored_checkpoint_html import checkpoint_stage_html
 from services import authored_presentation_pipeline as pipeline
 from services.authored_composition_policy import ensure_authored_semantic_roles
+from services.authored_batch_policy import new_authored_batch_policy_state
+from services.authored_preauthor_scan import scan_preauthor_checkpoints
+from services.authored_slide_ledger import assert_authored_ledger_disjoint
 from services.authored_tail_streaming import (
     AuthoredTailStreamCoordinator,
+    run_authored_recovery_pass,
     run_streamed_slide_tail,
 )
 from utils.authored_dom_quality import ensure_authored_qids
@@ -559,3 +563,141 @@ def test_one_title_owner_reaches_the_checkpoint_the_ledger_and_the_gate(
     # pre-gate demotion, so the published deck disagreed with the gated one.
     assert canonicalize_authored_roles(gated) == gated
     assert ensure_authored_semantic_roles(ensure_authored_qids(gated)) == gated
+
+
+# --- the ledger the recovery pass plans from ----------------------------------
+
+
+class _Schedule:
+    """The two attributes ``run_authored_recovery_pass`` reads off a schedule."""
+
+    def __init__(self):
+        self.policy = new_authored_batch_policy_state()
+        self.advanced: list[bool] = []
+
+    async def wait_out_cooldown(self, _label):
+        return 0.0
+
+    def advance(self, _outcome, *, succeeded):
+        self.advanced.append(succeeded)
+
+
+def test_a_resumed_slide_recovered_by_its_one_call_leaves_the_ledger_disjoint():
+    """The resumed-job lane: ``scan.resumed_recovery`` is failed, never both."""
+
+    successful = {0}
+    failures = {
+        1: AuthoredBatchFailure(ValueError("prior attempt rejected slide 1"), "redo"),
+        2: AuthoredBatchFailure(ValueError("prior attempt rejected slide 2"), "redo"),
+    }
+
+    async def run_batch(indexes):
+        if indexes == (2,):
+            raise RuntimeError("provider unavailable")
+        return AuthoredPlannedBatchResult(
+            htmls={index: _VALID_SLIDE.format(index=index) for index in indexes},
+            failures={},
+        )
+
+    _run(
+        run_authored_recovery_pass(
+            [1, 2],
+            schedule=_Schedule(),
+            run_batch=run_batch,
+            successful=successful,
+            failures=failures,
+        )
+    )
+
+    assert successful == {0, 1}
+    assert set(failures) == {2}
+    assert_authored_ledger_disjoint(successful, failures, stage="test")
+
+
+def test_a_recovery_batch_never_re_fails_a_slide_the_pass_accepted():
+    """A late rejection of an accepted slide costs the deck nothing."""
+
+    successful = {0}
+    failures = {2: AuthoredBatchFailure(ValueError("slide 2 rejected"), "redo")}
+
+    async def run_batch(indexes):
+        return AuthoredPlannedBatchResult(
+            htmls={index: _VALID_SLIDE.format(index=index) for index in indexes},
+            # The batch reports slide 0 as failed although its HTML is already
+            # persisted -- the shape the anchor's failed remake produces.
+            failures={0: AuthoredBatchFailure(ValueError("late"), "redo")},
+        )
+
+    _run(
+        run_authored_recovery_pass(
+            [2],
+            schedule=_Schedule(),
+            run_batch=run_batch,
+            successful=successful,
+            failures=failures,
+        )
+    )
+
+    assert successful == {0, 2}
+    assert failures == {}
+
+
+def test_the_recovery_pass_refuses_a_ledger_that_already_drifted():
+    """The drift is named where it happened, not inside the batch planner."""
+
+    successful = {0, 1}
+    failures = {1: AuthoredBatchFailure(ValueError("stale"), "redo")}
+
+    async def run_batch(_indexes):
+        raise AssertionError("no call may be planned from a drifted ledger")
+
+    with pytest.raises(ValueError, match="authored slide ledger drifted"):
+        _run(
+            run_authored_recovery_pass(
+                [1],
+                schedule=_Schedule(),
+                run_batch=run_batch,
+                successful=successful,
+                failures=failures,
+            )
+        )
+
+
+def test_the_resumed_scan_never_classifies_a_slide_as_both():
+    """A resumed job's own classification is the recovery pass's first input."""
+
+    rows = {
+        0: SimpleNamespace(author_status="completed", author_html="<html></html>", error=None),
+        1: SimpleNamespace(
+            author_status="failed",
+            author_html=None,
+            error={"provider_attempt_count": 1, "code": "authored_slide_author_failed"},
+        ),
+        2: SimpleNamespace(
+            author_status="failed",
+            author_html=None,
+            error={"provider_attempt_count": 2},
+        ),
+        3: None,
+    }
+
+    async def read_checkpoint(index):
+        return rows[index]
+
+    scan = _run(
+        scan_preauthor_checkpoints(
+            4,
+            read_checkpoint=read_checkpoint,
+            attempt_count=lambda checkpoint: int(
+                (getattr(checkpoint, "error", None) or {}).get(
+                    "provider_attempt_count", 0
+                )
+            ),
+        )
+    )
+
+    assert scan.successful == {0}
+    assert scan.initial == [3]
+    assert scan.resumed_recovery == [1]
+    assert set(scan.failures) == {1, 2}
+    assert_authored_ledger_disjoint(scan.successful, scan.failures, stage="scan")

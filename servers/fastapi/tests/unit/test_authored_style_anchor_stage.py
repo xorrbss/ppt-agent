@@ -8,6 +8,7 @@ import pytest
 from services import authored_presentation_pipeline as pipeline
 from services import authored_presentation_service as authored_service
 from services import authored_style_anchor_stage as stage
+from services import authored_tail_streaming as tail_streaming
 from tests.unit import test_authored_tail_streaming as tail_lane
 from utils.llm_calls.author_deck import AuthoredPlannedBatchResult
 from utils.llm_calls.author_style_anchor import StyleAnchor
@@ -500,3 +501,123 @@ def test_a_job_lane_render_failure_still_hands_the_deck_its_anchor(
     assert anchors[0] is None
     assert all(isinstance(anchor, StyleAnchor) for anchor in anchors[1:])
     assert anchors[1:]
+
+
+# --- the anchor's own bookkeeping ---------------------------------------------
+
+
+_LANES = {
+    # (AUTHORED_TAIL_STREAMING_ENABLED, AUTHORED_WAVE_BARRIER_DISABLED)
+    "streamed": ("true", "true"),
+    "barrier": ("false", "false"),
+}
+
+
+@pytest.mark.parametrize("lane", sorted(_LANES))
+def test_a_slide_the_anchor_stage_rescued_is_not_still_a_failure(
+    tmp_path, monkeypatch, lane
+):
+    """Bench run 35: a failed remake re-failed a slide the deck had accepted.
+
+    The anchor's first call authored slide 1, which the pass booked as
+    successful and published to the tail.  Its gate then found blocking defects
+    and asked for one remake, whose provider-attempt reservation raised --
+    ``complete_stage`` clears the slide's attempt metadata, so ordinal 2
+    conflicts with the stored count of zero.  The pass booked that raise as a
+    failure of slide 1 and the recovery planner then refused the deck with
+    ``failed_slide_indices must not include successful slides: [1]``.
+    """
+
+    streaming, barrier_disabled = _LANES[lane]
+    monkeypatch.setenv("AUTHORED_STYLE_ANCHOR_ENABLED", "true")
+    monkeypatch.setenv("AUTHORED_TAIL_STREAMING_ENABLED", streaming)
+    monkeypatch.setenv("AUTHORED_WAVE_BARRIER_DISABLED", barrier_disabled)
+    slide_count = 4
+    gate_calls: list[str] = []
+    recovery_calls: list[tuple[int, ...]] = []
+    planned_recoveries: list[list[int]] = []
+
+    async def batch(
+        _plan,
+        indexes,
+        *,
+        recovery=False,
+        attempt_reservers=None,
+        attempt_observers=None,
+        **_kwargs,
+    ):
+        # Reserve each slide's provider ordinal exactly as the real
+        # ``author_planned_batch`` does: the anchor's remake is refused here,
+        # because completing the author stage cleared the slide's attempt
+        # metadata and ordinal 2 no longer follows the stored count.
+        selected = tuple(indexes)
+        ordinal = 2 if recovery else 1
+        for index in selected:
+            reserver = (attempt_reservers or {}).get(index)
+            if reserver is not None:
+                await reserver(ordinal)
+            observer = (attempt_observers or {}).get(index)
+            if observer is not None:
+                observer(ordinal)
+        if recovery:
+            recovery_calls.append(selected)
+        return AuthoredPlannedBatchResult(
+            htmls={
+                index: _ANCHORED_SLIDE.replace("{index}", str(index))
+                for index in selected
+            },
+            failures={},
+        )
+
+    async def render(_html):
+        return b"png"
+
+    def anchor_gate(html, **_kwargs):
+        gate_calls.append(html)
+        # The anchor's first render is defective, so the stage spends its one
+        # remake -- the call whose reservation raises against a completed
+        # author stage.
+        return (
+            (SimpleNamespace(category="overflow", message="the card clips"),)
+            if len(gate_calls) == 1
+            else ()
+        )
+
+    real_plan_recovery = tail_streaming.plan_authored_recovery_batches
+
+    def recording_plan_recovery(failed, **kwargs):
+        planned_recoveries.append(list(failed))
+        return real_plan_recovery(failed, **kwargs)
+
+    async def scenario():
+        engine, maker = await tail_lane._checkpoint_database(tmp_path, monkeypatch)
+        tail_lane._install_pipeline_fakes(
+            monkeypatch, slide_count=slide_count, batch=batch, render=render
+        )
+        monkeypatch.setattr(pipeline, "anchor_blocking_defects", anchor_gate)
+        monkeypatch.setattr(
+            tail_streaming,
+            "plan_authored_recovery_batches",
+            recording_plan_recovery,
+        )
+        try:
+            job = await tail_lane._running_authored_job(
+                maker, total_slides=slide_count
+            )
+            return await tail_lane._drive_pipeline(job)
+        finally:
+            await engine.dispose()
+
+    result = _run(scenario())
+
+    # The deck publishes: the anchor slide is authored exactly once and its
+    # failed remake costs it nothing.
+    assert len(result.pngs) == slide_count
+    assert sum("slide-1" in html for html in result.deck.htmls) == 1
+    # The remake never reached the provider -- its reservation raised first --
+    # and the recovery planner was never offered the anchor's index.
+    assert recovery_calls == []
+    assert planned_recoveries == [[]]
+    # The gate ran once: the remake never produced HTML to re-inspect, so the
+    # deck simply authored on without an anchor.
+    assert len(gate_calls) == 1
