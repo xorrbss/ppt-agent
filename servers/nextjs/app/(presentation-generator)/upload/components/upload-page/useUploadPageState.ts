@@ -396,6 +396,19 @@ export const useUploadPageState = ({
     const selectedFileIdentity = fileIdentityOf(selectedFiles);
     if (!validateConfiguration(selectedFiles)) return;
     startInFlightRef.current = true;
+    // The analysis raises the progress overlay and the generation keeps it up,
+    // so every path that gives up in between has to lower it again. Going
+    // through one helper is what keeps a new early return from stranding the
+    // screen on "analysing" forever.
+    const abandonRun = () => {
+      setLoadingState({
+        isLoading: false,
+        message: "",
+        duration: 0,
+        showProgress: false,
+      });
+      startInFlightRef.current = false;
+    };
     // One click carries the source-content run all the way through: analyse,
     // then generate. The analysis is still a gate, but it only stops the run
     // when it found something the user would not want to lose silently --
@@ -413,27 +426,21 @@ export const useUploadPageState = ({
         return;
       }
       if (!admitted) {
-        startInFlightRef.current = false;
+        abandonRun();
         return;
       }
     }
     if (admitted && !(await sourceContentGate.confirmLosses(admitted.analysis.summary))) {
-      setLoadingState({
-        isLoading: false,
-        message: "",
-        duration: 0,
-        showProgress: false,
-      });
-      startInFlightRef.current = false;
+      abandonRun();
       return;
     }
     if (sourceContentMode && !(await ensureSourceContentAuthoredStyle())) {
-      startInFlightRef.current = false;
+      abandonRun();
       return;
     }
     const resolvedMaster = await resolveMasterForGeneration();
     if (resolvedMaster === null) {
-      startInFlightRef.current = false;
+      abandonRun();
       return;
     }
     trackEvent(
@@ -445,7 +452,7 @@ export const useUploadPageState = ({
     const isStockProviderReady = sourceContentMode || await ensureStockImageProviderReady();
     if (!isStockProviderReady) {
       trackUploadValidationFailure("stock_image_provider_unreachable");
-      startInFlightRef.current = false;
+      abandonRun();
       return;
     }
 
