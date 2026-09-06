@@ -295,12 +295,18 @@ describe("PresentationHeader workspace controls", () => {
       .should("contain.text", "Fidelity PPTX")
       .and("contain.text", "1280×720 raster")
       .and("contain.text", "접근 가능한 텍스트·개체 편집은 제공하지 않으며");
+    // The visible headline and the aria-label are the durable contract here.
+    // The explanatory note under each option is marketing prose that has been
+    // reworded three times (5218198f3, 2800b3cf1, 8e597e2a9), and asserting on
+    // it made this test fail on wording rather than on behaviour.
     cy.get('[data-testid="authored-export-hybrid"]')
       .should("contain.text", "raster fallback (기본)")
-      .and("contain.text", "글꼴 포함 결과만 검증");
+      .and("have.attr", "aria-label")
+      .and("contain", "글꼴 포함 기본값");
     cy.get('[data-testid="authored-export-hybrid-compatibility"]')
       .should("contain.text", "raster fallback 호환 모드")
-      .and("contain.text", "글꼴 미포함 호환 모드");
+      .and("have.attr", "aria-label")
+      .and("contain", "글꼴 미포함");
   });
 
   it("withholds Hybrid and keeps Fidelity when the capability projection is unavailable", () => {
