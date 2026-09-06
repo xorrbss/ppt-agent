@@ -1,5 +1,4 @@
-import { createHash } from "node:crypto";
-
+import { decodeBase64, encodeBase64, sha256Hex } from "./isomorphic-sha256.ts";
 import type {
   RenderArtifact,
   RenderAssetDependency,
@@ -108,11 +107,12 @@ function canonicalSceneAssets(
       if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) {
         throw new RenderPolicyError("render_scene_asset_manifest_invalid");
       }
-      const bytes = Buffer.from(encoded, "base64");
+      const bytes = decodeBase64(encoded);
       if (
+        bytes === null ||
         bytes.length !== sizeBytes ||
-        bytes.toString("base64") !== encoded ||
-        createHash("sha256").update(bytes).digest("hex") !== digest
+        encodeBase64(bytes) !== encoded ||
+        sha256Hex(bytes) !== digest
       ) {
         throw new RenderPolicyError("render_scene_asset_manifest_invalid");
       }
