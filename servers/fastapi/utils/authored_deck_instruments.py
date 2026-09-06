@@ -143,6 +143,12 @@ class DeckInstruments:
     fit_reconstruction_mismatches: int = 0
     fit_factor_min: float | None = None
     fit_escape_px: tuple[float, ...] = ()
+    #: Slides whose fit was requested but never reached ``fit_state: final``
+    #: (fonts had not settled by the poll bound) or whose report says
+    #: ``partial`` (a card or layout budget stopped the fitter early).
+    #: A report with ``requested: false`` is not a fit and counts in neither.
+    fit_provisional_slides: int = 0
+    fit_partial_slides: int = 0
 
     def to_receipt(self) -> dict[str, Any]:
         return asdict(self)
@@ -322,6 +328,7 @@ def _fit_aggregates(reports: Sequence[Mapping[str, Any] | None]) -> dict[str, An
     """
 
     grown = shrunk = unfixable = errors = mismatches = 0
+    provisional_slides = partial_slides = 0
     factors: list[float] = []
     escapes: list[float] = []
     for report in reports:
@@ -331,6 +338,10 @@ def _fit_aggregates(reports: Sequence[Mapping[str, Any] | None]) -> dict[str, An
             errors += 1
         if report.get("reconstruction_mismatch"):
             mismatches += 1
+        if report.get("requested") and report.get("fit_state") != "final":
+            provisional_slides += 1
+        if report.get("partial"):
+            partial_slides += 1
         for card in report.get("cards") or ():
             if not isinstance(card, Mapping):
                 continue
@@ -355,6 +366,8 @@ def _fit_aggregates(reports: Sequence[Mapping[str, Any] | None]) -> dict[str, An
         "fit_reconstruction_mismatches": mismatches,
         "fit_factor_min": round(min(factors), 4) if factors else None,
         "fit_escape_px": tuple(sorted(escapes)),
+        "fit_provisional_slides": provisional_slides,
+        "fit_partial_slides": partial_slides,
     }
 
 
