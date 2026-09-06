@@ -142,6 +142,16 @@ function main() {
     workspaceRoot: path.join(__dirname, ".."),
   });
 
+  // The LiteParse runner now lives at the repository root so Docker and the
+  // web backend can reach it without the Electron tree. Copy it into the
+  // bundle next to the OCR data, which LiteParseService resolves as
+  // <runner_dir>/tessdata at runtime.
+  const runnerSrc = path.join(__dirname, "..", "resources", "document-extraction", "liteparse_runner.mjs");
+  const runnerDest = path.join(__dirname, "resources", "document-extraction", "liteparse_runner.mjs");
+  fs.mkdirSync(path.dirname(runnerDest), { recursive: true });
+  console.log(`[fastapi-assets] Copying LiteParse runner -> ${runnerDest}`);
+  fs.copyFileSync(runnerSrc, runnerDest);
+
   // OCR language data (eng/kor) for offline LiteParse/tesseract.js. Placed next
   // to the runner so LiteParseService resolves <runner_dir>/tessdata at runtime.
   // Optional: without it OCR falls back to downloading models from a CDN.

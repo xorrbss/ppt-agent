@@ -533,7 +533,7 @@
         "path": "electron/resources/document-extraction/liteparse_runner.mjs",
         "upstreamMode": "100644",
         "upstreamBlob": "bf4e3e93350a4d40a6cbe36426340a7db2a8d356",
-        "localState": "modified",
+        "localState": "deleted",
         "reasonCode": "authored-export-runtime"
       },
       {
@@ -6253,7 +6253,6 @@
       "electron/scripts/materialize-workspace-worker.test.cjs",
       "electron/scripts/next-runtime-dependencies.cjs",
       "electron/scripts/next-runtime-dependencies.test.cjs",
-      "electron/scripts/next-standalone-symlink-fallback.cjs",
       "electron/scripts/notarize-macos.cjs",
       "electron/scripts/release-compliance.cjs",
       "electron/scripts/release-version-contract.cjs",
@@ -6284,6 +6283,7 @@
       "electron/tests/standalone-copy.test.cjs",
       "electron/tests/template-workspace-trust-boundary.test.cjs",
       "electron/tests/update-channel.test.cjs",
+      "resources/document-extraction/liteparse_runner.mjs",
       "scripts/authored-bounded-gate-minus1/dialog-watcher.ps1",
       "scripts/authored-bounded-gate-minus1/gate-minus1-authority.mjs",
       "scripts/authored-bounded-gate-minus1/gate-minus1-authority.test.mjs",
@@ -8955,6 +8955,7 @@
       "servers/nextjs/scripts/lib/template-v2-pdf-golden-runtime.mjs",
       "servers/nextjs/scripts/lib/template-v2-pdf-golden.mjs",
       "servers/nextjs/scripts/lib/template-v2-pdf-golden.test.mjs",
+      "servers/nextjs/scripts/next-standalone-symlink-fallback.cjs",
       "servers/nextjs/scripts/node-test-resolver.mjs",
       "servers/nextjs/scripts/powerpoint-desktop-calibration.ps1",
       "servers/nextjs/scripts/public-hybrid-export-worker.mjs",
@@ -9324,8 +9325,8 @@
       "upstreamOwned": 10163,
       "identical": 9393,
       "exceptions": 770,
-      "localOnly": 3904
+      "localOnly": 3905
     },
-    "policySha256": "da79c05128e69640ac660d3ee0d45c68f32225f38e005479fd5132e5f1d06e9b"
+    "policySha256": "5c7df12c5ebef04d46267bef270f45d9b5af56b566cb6171ab79250431554607"
   }
 }

@@ -43,3 +43,4 @@ resources/export/
 # Agent skill artifacts
 .agents/
 skills-lock.json
+resources/document-extraction/liteparse_runner.mjs

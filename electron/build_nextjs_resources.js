@@ -20,7 +20,7 @@ const outDir = path.join(electronRoot, "resources", "nextjs")
 const nextBuildDir = path.join(nextjsDir, ".next-build")
 const standaloneDir = path.join(nextBuildDir, "standalone")
 const standaloneSymlinkFallback = path.join(
-  electronRoot,
+  nextjsDir,
   "scripts",
   "next-standalone-symlink-fallback.cjs"
 )

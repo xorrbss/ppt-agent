@@ -14,7 +14,6 @@ const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const runnerPath = path.join(
   repoRoot,
-  "electron",
   "resources",
   "document-extraction",
   "liteparse_runner.mjs"

@@ -16,7 +16,7 @@ const {
 } = require("../scripts/standalone-copy.cjs")
 const {
   installWindowsSymlinkFallback,
-} = require("../scripts/next-standalone-symlink-fallback.cjs")
+} = require("../../servers/nextjs/scripts/next-standalone-symlink-fallback.cjs")
 
 test("Next standalone fallback converts a relative package link EPERM into a junction", async () => {
   const calls = []

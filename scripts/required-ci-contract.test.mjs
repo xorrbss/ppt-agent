@@ -1074,7 +1074,7 @@ test("Windows PR packaging preflights symlink policy and validates a link-free r
   const builder = read("electron/build_nextjs_resources.js");
   const copy = read("electron/scripts/standalone-copy.cjs");
   const buildFallback = read(
-    "electron/scripts/next-standalone-symlink-fallback.cjs",
+    "servers/nextjs/scripts/next-standalone-symlink-fallback.cjs",
   );
 
   assert.match(workflow, /push:\s*\n\s*branches: \[main\]/u);

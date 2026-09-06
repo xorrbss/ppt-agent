@@ -59,8 +59,7 @@ if (process.platform === "win32") {
   const distDirectory =
     process.env.PRESENTON_TEST_NEXT_DIST_DIR || ".next-build";
   const fallbackModule = path.join(
-    repositoryDirectory,
-    "electron",
+    nextjsDirectory,
     "scripts",
     "next-standalone-symlink-fallback.cjs",
   );
