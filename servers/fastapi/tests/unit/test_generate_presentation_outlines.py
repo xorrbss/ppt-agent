@@ -196,7 +196,9 @@ def test_slide_text_has_a_content_floor_per_verbosity(verbosity, floor, bullets)
     ("verbosity", "expected_body_px"),
     [("concise", 20), ("standard", 18), ("text-heavy", 16), (None, 18)],
 )
-def test_authored_type_scale_follows_deck_verbosity(verbosity, expected_body_px):
+def test_authored_type_scale_follows_deck_verbosity(
+    monkeypatch, verbosity, expected_body_px
+):
     """A deck that carries less text per slide may set that text larger.
 
     Verbosity reaches the authoring prompt only through Brand, so a deck that
@@ -204,19 +206,22 @@ def test_authored_type_scale_follows_deck_verbosity(verbosity, expected_body_px)
 
     Updated 2026-09-05 (design section G2): each verbosity now states a RAMP
     rather than one "N px or larger" floor, so the assertion moved from the
-    floor sentence to the ramp's body tier.
+    floor sentence to the ramp's body tier. The ramp is the switchable half of
+    the prompt bundle, so this test states the knob it is measuring.
     """
     from utils.llm_calls.author_slide import Brand, build_design_system
 
+    monkeypatch.setenv("AUTHORED_PROMPT_BUNDLE_ENABLED", "true")
     brand = Brand(topic="t", verbosity=verbosity or "standard")
 
     assert f"body copy and bullets {expected_body_px}px" in build_design_system(brand)
 
 
-def test_concise_type_scale_leaves_the_page_number_specification_alone():
+def test_concise_type_scale_leaves_the_page_number_specification_alone(monkeypatch):
     """The page number is furniture, so it keeps its own 12px size."""
     from utils.llm_calls.author_slide import Brand, build_design_system
 
+    monkeypatch.setenv("AUTHORED_PROMPT_BUNDLE_ENABLED", "true")
     design_system = build_design_system(Brand(topic="t", verbosity="concise"))
 
     assert "12px type (9pt equivalent)" in design_system

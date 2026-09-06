@@ -5,6 +5,7 @@ wording that carries it: the ORDER the prompt is assembled in, WHICH blocks are
 paid for on a given deck, and that a number stated twice comes from one source.
 """
 
+import difflib
 from types import SimpleNamespace
 
 import pytest
@@ -27,6 +28,8 @@ from utils.llm_calls.author_deck_tokens import deck_tokens, deck_tokens_block
 from utils.llm_calls.author_slide import Brand, build_design_system
 from utils.llm_calls.author_slide_brief import (
     CONTENT_FONT_FLOOR_PX,
+    PRE_BUNDLE_TYPE_SCALES,
+    SEMANTIC_ROLE_RULES,
     SHARED_UNIVERSALS,
     composition_intent_block,
     type_ramp,
@@ -35,6 +38,20 @@ from utils.llm_calls.author_slide_brief import (
 from utils.llm_calls.author_slide_prompt import author_prompt
 from utils.llm_calls.author_slide_rules import DEFAULT_STYLE_BRIEF, type_scale_rules
 from utils.renderer_isolation import admit_authored_html
+
+#: The composition-shaping half of the 2026-09-05 bundle is switchable and OFF
+#: by default, so every test that reads it states which state it is testing.
+BUNDLE_KNOB = "AUTHORED_PROMPT_BUNDLE_ENABLED"
+
+
+@pytest.fixture(autouse=True)
+def _bundle_off_unless_a_test_says_otherwise(monkeypatch):
+    """No test inherits an operator's knob from the environment."""
+    monkeypatch.delenv(BUNDLE_KNOB, raising=False)
+
+
+def _bundle(monkeypatch, enabled: bool) -> None:
+    monkeypatch.setenv(BUNDLE_KNOB, "true" if enabled else "false")
 
 
 class _FakeAnchor:
@@ -128,10 +145,11 @@ def test_the_qid_contract_covers_text_owners_rather_than_every_shape():
     assert "meaningful grouping element" not in prompt
 
 
-# --- G1: composition intent ---------------------------------------------------
+# --- G1: composition intent, and the knob that switches it off ----------------
 
 
-def test_the_composition_intent_states_the_bottom_line_from_one_source():
+def test_the_composition_intent_states_the_bottom_line_from_one_source(monkeypatch):
+    _bundle(monkeypatch, True)
     block = composition_intent_block()
 
     assert f"y={content_bottom_px('template')}px" in block
@@ -141,38 +159,111 @@ def test_the_composition_intent_states_the_bottom_line_from_one_source():
     assert "labelled HTML/CSS bar or column chart" in block
 
 
-def test_the_composition_intent_teaches_the_semantic_role_vocabulary():
+def test_the_shaping_half_of_the_bundle_is_off_unless_an_operator_asks():
+    """The blind paired rating went 13 parent / 7 bundle / 4 tie over 24 slides.
+
+    So the default deck reads the parent's pre-bundle type scale and carries no
+    COMPOSITION INTENT block at all.
+    """
+    assert composition_intent_block() == ""
+
+    design_system = build_design_system(_brand())
+    assert "COMPOSITION INTENT" not in design_system
+    assert PRE_BUNDLE_TYPE_SCALES["standard"] in design_system
+    assert "a ramp, not a floor" not in design_system
+
+
+def test_the_mechanical_half_of_the_bundle_ships_in_either_state(monkeypatch):
+    """These are corrections, not taste, so the knob must not reach them.
+
+    The semantic-role vocabulary feeds the role repair and the capacity gate,
+    the universals were rescued from a style brief 37 of 38 presets replace,
+    and the ROLE bridge is what makes a style's archetypes reachable.
+    """
+    for enabled in (False, True):
+        _bundle(monkeypatch, enabled)
+        design_system = build_design_system(_brand(), _style())
+
+        assert SEMANTIC_ROLE_RULES in design_system
+        assert 'exactly ONE element per slide `data-semantic-role="title"`' in design_system
+        assert "SHARED UNIVERSALS" in design_system
+        assert "ONE accent hue per slide" in design_system
+        assert "INLINE SVG CONTRACT" in design_system
+        # G5 contradiction fixes.
+        assert "ONE radius family for the whole deck" in design_system
+        assert "`word-break: keep-all`" in design_system
+        assert "those are fixed furniture and are meant to be pinned" in design_system
+        # G10 deck tokens.
+        assert "any other hue is an error" in design_system
+
+        prompt = author_prompt("CONTENT", design_system, _brand(), "ROADMAP", 2, 9)
+        assert 'ROLE: ROADMAP ⇒ compose it with the style\'s "timeline" archetype' in prompt
+
+
+def test_the_knob_moves_exactly_the_intent_block_and_the_type_scale(monkeypatch):
+    """Nothing else in the design system may depend on the knob."""
+    _bundle(monkeypatch, False)
+    off = build_design_system(_brand()).splitlines(keepends=True)
+    _bundle(monkeypatch, True)
+    on = build_design_system(_brand()).splitlines(keepends=True)
+
+    delta = _delta(off, on)
+    added = [line[2:] for line in delta if line.startswith("+ ")]
+    removed = [line[2:] for line in delta if line.startswith("- ")]
+
+    _bundle(monkeypatch, True)
+    assert "".join(added) == (
+        composition_intent_block() + "\n" + type_scale_text("standard") + "\n"
+    )
+    _bundle(monkeypatch, False)
+    assert "".join(removed) == PRE_BUNDLE_TYPE_SCALES["standard"] + "\n"
+
+
+def _delta(off: list[str], on: list[str]) -> list[str]:
+    """The ndiff lines that actually changed, hint lines ('? ...') dropped."""
+    return [
+        line for line in difflib.ndiff(off, on) if line.startswith(("+ ", "- "))
+    ]
+
+
+def test_the_semantic_role_vocabulary_survives_the_knob_being_off():
     """Bench run 26: nothing ever told the model what data-semantic-role means.
 
     The gate requires exactly one title text owner per slide and blocks the
-    whole deck without it, so the vocabulary has to be stated in the brief.
+    whole deck without it, so the vocabulary is stated whatever the knob says —
+    which is why it was lifted out of ``composition_intent_block``.
     """
-    block = composition_intent_block()
+    block = SEMANTIC_ROLE_RULES
 
     assert "data-semantic-role" in block
     assert "title, body, supporting" in block
     assert 'exactly ONE element per slide `data-semantic-role="title"`' in block
     assert "never `decoration`" in block
+    assert block in build_design_system(_brand())
 
 
-def test_the_composition_intent_distinguishes_body_from_supporting() -> None:
+def test_the_semantic_role_vocabulary_distinguishes_body_from_supporting() -> None:
     """Bench run 30, pass B: the model filed 14 owners as `supporting` and
     none as `body`, so the gate blocked the whole deck on a missing body
     owner even though a title was correctly marked.
     """
-    block = composition_intent_block()
+    block = SEMANTIC_ROLE_RULES
 
     assert "`body` is the slide's readable content" in block
     assert "`supporting` is short structural text only" in block
     assert "A content slide must have body owners." in block
 
 
-def test_every_role_including_the_cover_is_told_how_to_mark_its_title():
+@pytest.mark.parametrize("bundle_enabled", [False, True])
+def test_every_role_including_the_cover_is_told_how_to_mark_its_title(
+    monkeypatch, bundle_enabled: bool
+):
     """One prompt builder serves every lane, so every role gets one sentence.
 
     The cover is excluded from the header contract (``DEFAULT_EXCLUDED_ROLES``),
     which used to leave it with no structural title marker at all.
     """
+    _bundle(monkeypatch, bundle_enabled)
     design_system = build_design_system(_brand())
     for role in ("COVER", "AGENDA", "PILLARS", "SECTION", "CLOSING"):
         prompt = author_prompt("CONTENT", design_system, _brand(), role, 0, 9)
@@ -199,7 +290,8 @@ def test_the_lane_knobs_do_not_change_what_the_cover_is_told(monkeypatch):
     assert 'data-semantic-role="title"' in prompts[0]
 
 
-def test_the_composition_intent_reaches_every_deck_including_a_preset_one():
+def test_the_composition_intent_reaches_every_deck_including_a_preset_one(monkeypatch):
+    _bundle(monkeypatch, True)
     for design_system in (
         build_design_system(_brand()),
         build_design_system(_brand(), _style()),
@@ -211,7 +303,10 @@ def test_the_composition_intent_reaches_every_deck_including_a_preset_one():
 
 
 @pytest.mark.parametrize("verbosity", ["concise", "standard", "text-heavy"])
-def test_every_verbosity_states_a_ramp_and_the_same_single_floor(verbosity: str):
+def test_every_verbosity_states_a_ramp_and_the_same_single_floor(
+    monkeypatch, verbosity: str
+):
+    _bundle(monkeypatch, True)
     text = type_scale_rules(verbosity)
     ramp = type_ramp(verbosity)
 
@@ -224,6 +319,17 @@ def test_every_verbosity_states_a_ramp_and_the_same_single_floor(verbosity: str)
     # The three scales previously stated three different floors (15/13/12).
     for stale_floor in ("below 15px", "below 13px"):
         assert stale_floor not in text
+
+
+@pytest.mark.parametrize("verbosity", ["concise", "standard", "text-heavy"])
+def test_the_knob_off_restores_the_parent_floor_wording_verbatim(verbosity: str):
+    """The pre-bundle text is a parent baseline, not a paraphrase of it."""
+    text = type_scale_rules(verbosity)
+
+    assert text == PRE_BUNDLE_TYPE_SCALES[verbosity]
+    assert text != type_scale_text(verbosity)
+    assert "a ramp, not a floor" not in text
+    assert "claim or sub-heading" not in text
 
 
 def test_a_concise_deck_writes_larger_than_a_text_heavy_one():

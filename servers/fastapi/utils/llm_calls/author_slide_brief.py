@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from utils.authored_infographic.contracts import content_bottom_px
+from utils.get_env_programme import is_authored_prompt_bundle_enabled
 
 
 #: The floor below which nothing that communicates slide content may compute.
@@ -39,6 +40,24 @@ CONTENT_FONT_FLOOR_PT = CONTENT_FONT_FLOOR_PX * 3 // 4
 FILL_TARGET_MARGIN_PX = 28
 
 
+#: The ``data-semantic-role`` vocabulary. It reads like composition guidance,
+#: but it is a contract with two other components: the semantic-role repair
+#: pass and the v2 capacity gate both key off these values, and a deck whose
+#: title owner is unmarked is blocked outright. It therefore ships whatever
+#: ``AUTHORED_PROMPT_BUNDLE_ENABLED`` is set to, which is why it was lifted out
+#: of ``composition_intent_block`` into its own always-on block.
+SEMANTIC_ROLE_RULES = """\
+- SEMANTIC ROLES (the repair pass and the capacity gate read these marks):
+  - Mark every text element with `data-semantic-role`, one of: title, body, supporting,
+    decoration, image. Mark exactly ONE element per slide `data-semantic-role="title"` —
+    the slide's title, on a cover the main title — on the element that directly contains
+    that text, never `decoration`. `body` is the slide's readable content — sentences,
+    bullets, descriptions, table text, card copy (most text owners on a content slide are
+    `body`); `supporting` is short structural text only — sub-headings, eyebrows, labels,
+    numbers with units, captions. A content slide must have body owners. Empty shapes and
+    rules are `decoration`."""
+
+
 def composition_intent_block() -> str:
     """G1 — what the page is FOR, stated before any of the fit constraints.
 
@@ -47,7 +66,14 @@ def composition_intent_block() -> str:
     off there was no sentence at all asking the page to carry its argument.
     The fill sentence deliberately states a DIRECTION; the geometry brief
     states the same line as a BOUND. Neither repeats the other's job.
+
+    Gated by ``AUTHORED_PROMPT_BUNDLE_ENABLED`` and therefore empty by default:
+    a blind paired rating of 24 slides preferred the pre-bundle parent 13 / 7
+    with 4 ties, and bench run 37 flagged 17 of 24 slides for footer/card
+    intrusion, so this half of the bundle only ships when asked for.
     """
+    if not is_authored_prompt_bundle_enabled():
+        return ""
     numbered = content_bottom_px("template")
     unnumbered = content_bottom_px("none")
     # Aim a band ABOVE the boundary, never at it. The 2026-09-05 wording told the
@@ -63,14 +89,6 @@ def composition_intent_block() -> str:
     scale. Do not pad, and do not summarise the CONTENT into a caption.
   - Make ONE element dominant per slide (a figure, a number, a headline, a diagram);
     everything else is subordinate to it.
-  - Mark every text element with `data-semantic-role`, one of: title, body, supporting,
-    decoration, image. Mark exactly ONE element per slide `data-semantic-role="title"` —
-    the slide's title, on a cover the main title — on the element that directly contains
-    that text, never `decoration`. `body` is the slide's readable content — sentences,
-    bullets, descriptions, table text, card copy (most text owners on a content slide are
-    `body`); `supporting` is short structural text only — sub-headings, eyebrows, labels,
-    numbers with units, captions. A content slide must have body owners. Empty shapes and
-    rules are `decoration`.
   - When CONTENT states three or more comparable numbers sharing a unit, draw them as a
     labelled HTML/CSS bar or column chart with one explicit takeaway; every value and
     unit verbatim, no invented series.
@@ -164,6 +182,39 @@ section lead {ramp.lead - 2}-{ramp.lead + 2}px,
 #: ``author_slide_rules._TYPE_SCALES`` has always been keyed.
 TYPE_SCALES = {name: type_scale_text(name) for name in _TYPE_RAMPS}
 
+
+#: The pre-bundle type scale, restored VERBATIM from
+#: ``git show 85f915eff:servers/fastapi/utils/llm_calls/author_slide_rules.py``
+#: (its ``_TYPE_SCALES``). This is what a deck reads while
+#: ``AUTHORED_PROMPT_BUNDLE_ENABLED`` is false: a floor per verbosity rather
+#: than a ramp. The ramp above asks for 18px body copy on a 1280x720 page while
+#: the composition intent asks the same page to render claim and evidence in
+#: full, and the two together overflowed the card and the footer band on 17 of
+#: 24 slides in bench run 37. Do not edit this text: it is a parent baseline,
+#: kept so the knob can restore the wording the blind rating actually preferred.
+PRE_BUNDLE_TYPE_SCALES = {
+    "concise": """- TYPE SCALE: this deck is written concise, so every slide carries little text and has room to
+  read well. In ordinary authored generation and style-reference mode, set body copy, bullets,
+  labels, and table cells at 22px or larger, the slide's own title between 40px and 56px, and
+  keep no visible content text (headings, body, bullets, tables, chart labels, metrics,
+  callouts, captions, footnotes) below 15px (11pt equivalent). Express text sizes with
+  `font-size` in px; do not use CSS `font` shorthand or relative units to evade this floor.
+  Spare room on a slide goes into a larger type scale and more generous leading, not into one
+  large empty band.""",
+    "standard": """- TYPE SCALE: in ordinary authored generation and style-reference mode, set body copy, bullets,
+  labels, and table cells at 18px or larger, and keep no visible content text (headings, body,
+  bullets, tables, chart labels, metrics, callouts, captions, footnotes) below 13px (10pt
+  equivalent). Express text sizes with `font-size` in px; do not use CSS `font` shorthand or
+  relative units to evade this floor. Spare room on a slide goes into a larger type scale and
+  more generous leading, not into one large empty band. If content does not fit, shorten it or
+  allocate more space instead of shrinking it until it becomes unnecessarily hard to read.""",
+    "text-heavy": """- READABILITY FLOOR: in ordinary authored generation and style-reference mode, every visible
+  text element that communicates slide content (headings, body, bullets, tables, chart labels,
+  metrics, callouts, captions, and footnotes) must be at least 12px (9pt equivalent). Express
+  text sizes with `font-size` in px; do not use CSS `font` shorthand or relative units to evade
+  this floor. If content does not fit, shorten it or allocate more space instead of shrinking it
+  until it becomes unnecessarily hard-to-read.""",
+}
 
 #: G4 — the SVG contract, four lines instead of the previous 1 560 characters.
 #: The exhaustive element/attribute enumeration moved to the validator: it is
@@ -302,8 +353,10 @@ __all__ = [
     "CONTENT_FONT_FLOOR_PT",
     "CONTENT_FONT_FLOOR_PX",
     "INLINE_SVG_CONTRACT",
+    "PRE_BUNDLE_TYPE_SCALES",
     "REQUIREMENT_IDENTIFIER_RULES",
     "SECTION_STRUCTURE_BRIEF",
+    "SEMANTIC_ROLE_RULES",
     "SHARED_UNIVERSALS",
     "SOURCE_IMAGE_RULES",
     "STORY_RULES",

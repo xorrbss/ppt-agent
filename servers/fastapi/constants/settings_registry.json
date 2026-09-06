@@ -1396,6 +1396,15 @@
       "targets": ["fastapi.runtime"],
       "group": "webhook",
       "description": "Comma-separated hostnames (exact or *.suffix wildcard), IP addresses, or CIDR ranges exempted from the webhook outbound URL guard's private/loopback/link-local rejection. Empty by default: no internal webhook target is admitted until the operator explicitly lists it here."
+    },
+    {
+      "key": "AUTHORED_PROMPT_BUNDLE_ENABLED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Ship the 2026-09-05 composition-shaping prompt bundle: the COMPOSITION INTENT block and the type ramp. Off because a blind paired rating of 24 slides preferred the pre-bundle parent 13 to 7 with 4 ties, and the bundle's 18px body floor plus its fill-the-page direction overflowed the card and footer band on 17 of 24 bench slides. With it off a deck reads the parent's pre-bundle type-scale wording and no intent block; the bundle's mechanical half (semantic-role vocabulary, SVG contract, shared universals, deck tokens) ships either way."
     }
   ]
 }

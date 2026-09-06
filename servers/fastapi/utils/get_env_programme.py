@@ -213,6 +213,20 @@ def is_authored_prompt_cache_key_enabled(
     return _bool_setting("AUTHORED_PROMPT_CACHE_KEY_ENABLED", True, settings)
 
 
+def is_authored_prompt_bundle_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Ship the 2026-09-05 composition-shaping prompt bundle.
+
+    Off by default. The bundle's mechanical half (the semantic-role vocabulary,
+    the G5 contradiction fixes, the compressed SVG contract, the shared
+    universals and the deck-token block) ships either way; this knob only
+    decides between the bundle's COMPOSITION INTENT block plus type ramp and
+    the parent's pre-bundle type-scale wording with no intent block.
+    """
+    return _bool_setting("AUTHORED_PROMPT_BUNDLE_ENABLED", False, settings)
+
+
 __all__ = [
     "get_authored_illustration_share",
     "get_authored_metrics_cache_entries",
@@ -235,6 +249,7 @@ __all__ = [
     "is_authored_renderer_framed_protocol_enabled",
     "is_authored_renderer_lease_enabled",
     "is_authored_renderer_warmup_enabled",
+    "is_authored_prompt_bundle_enabled",
     "is_authored_prompt_cache_key_enabled",
     "is_authored_prompt_system_hoist_enabled",
     "is_authored_style_anchor_enabled",

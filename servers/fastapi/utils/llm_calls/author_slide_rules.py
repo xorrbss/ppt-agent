@@ -9,7 +9,8 @@ names, so external importers are unaffected.
 
 from typing import Optional
 
-from utils.llm_calls.author_slide_brief import TYPE_SCALES
+from utils.get_env_programme import is_authored_prompt_bundle_enabled
+from utils.llm_calls.author_slide_brief import PRE_BUNDLE_TYPE_SCALES, TYPE_SCALES
 
 # Appendix A — design-system brief (the crux IP). The non-negotiable rendering,
 # fit, language and output constraints stay in this common template. The visual
@@ -97,7 +98,7 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
   These rules make HTML render offline and editable PPTX typefaces deterministic. They do NOT
   mean that fonts are embedded in the PPTX; font embedding is outside this authoring workflow.
 {style_brief}
-{composition_intent}
+{composition_intent}{semantic_roles}
 {shared_universals}
 - PPTX-NATIVE SAFETY (keeps exported objects editable):
   - Draw decorative ticks, underlines, badges, and divider lines as real <span>/<div> DOM
@@ -238,12 +239,16 @@ ILLUSTRATION_SLOT_RULES = """\
 #:
 #: The page-number element keeps its own 12px specification from the
 #: PAGE-NUMBER SYSTEM rules; it is furniture, not slide content.
+#: The ramp is the bundle's half of this decision, so it is switchable: with
+#: ``AUTHORED_PROMPT_BUNDLE_ENABLED`` false the deck reads the pre-bundle floor
+#: text instead (see ``author_slide_brief.PRE_BUNDLE_TYPE_SCALES``).
 _TYPE_SCALES = TYPE_SCALES
 
 
 def type_scale_rules(verbosity: Optional[str]) -> str:
     """The type-scale brief for a deck's verbosity, defaulting to standard."""
-    return _TYPE_SCALES.get(verbosity or "standard", _TYPE_SCALES["standard"])
+    scales = _TYPE_SCALES if is_authored_prompt_bundle_enabled() else PRE_BUNDLE_TYPE_SCALES
+    return scales.get(verbosity or "standard", scales["standard"])
 
 
 SYSTEM_PROMPT = (

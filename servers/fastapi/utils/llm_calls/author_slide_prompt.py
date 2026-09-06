@@ -19,6 +19,7 @@ from utils.llm_calls.author_slide_brief import (
     INLINE_SVG_CONTRACT,
     REQUIREMENT_IDENTIFIER_RULES,
     SECTION_STRUCTURE_BRIEF,
+    SEMANTIC_ROLE_RULES,
     SHARED_UNIVERSALS,
     SOURCE_IMAGE_RULES,
     STORY_RULES,
@@ -130,12 +131,17 @@ def build_design_system(
             and get_authored_illustration_share() > 0
         ):
             style_brief = f"{style_brief}\n{illustration_slot_rules}"
+    # Empty when the composition bundle is off; the always-on semantic-role
+    # block that follows it supplies its own separator, so the design system
+    # never carries a blank line where the intent block used to be.
+    intent_block = composition_intent_block()
     rules = design_system_rules.format(
         primary=brand.primary or "#2563EB",
         fonts=brand.fonts or "Noto Sans KR",
         language=brand.language or "Korean",
         style_brief=style_brief,
-        composition_intent=composition_intent_block(),
+        composition_intent=f"{intent_block}\n" if intent_block else "",
+        semantic_roles=SEMANTIC_ROLE_RULES,
         shared_universals=SHARED_UNIVERSALS,
         inline_svg_contract=INLINE_SVG_CONTRACT,
         # Empty when the deck has no header contract, which keeps the prompt
