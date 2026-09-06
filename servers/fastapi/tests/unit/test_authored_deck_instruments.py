@@ -368,3 +368,75 @@ def test_fit_aggregates_survive_the_receipt_serialization():
     json.dumps(receipt)  # must not raise
     assert receipt["fit_cards_shrunk"] == 1
     assert list(receipt["fit_escape_px"]) == [3.0]
+
+
+# --------------------------------------------------------------------------
+# Provisional and partial fit counters (docs/authored-in-render-fit-design-
+# 20260906.md sections 3 and 6): a report can reach the deck instruments
+# with fit_state stuck at "provisional" (fonts never settled within the
+# poll bound) or partial=True (a card/layout budget stopped the fitter
+# early). Neither state blocks publication today, so nothing counted them
+# until now. A report with requested=False is not a fit and must not be
+# counted in either counter.
+# --------------------------------------------------------------------------
+
+
+def test_fit_provisional_and_partial_slides_are_counted_and_dont_shift_other_counters():
+    report_final = {
+        "requested": True,
+        "fit_state": "final",
+        "partial": False,
+        "error": None,
+        "cards": [{"qid": "a", "outcome": "grown", "factor": 1.0, "escape_px": 1.0}],
+    }
+    report_provisional = {
+        "requested": True,
+        "fit_state": "provisional",
+        "partial": False,
+        "error": None,
+        "cards": [],
+    }
+    report_partial = {
+        "requested": True,
+        "fit_state": "final",
+        "partial": True,
+        "error": None,
+        "cards": [],
+    }
+    report_not_requested = {
+        "requested": False,
+        "fit_state": "provisional",
+        "partial": False,
+        "error": None,
+        "cards": [],
+    }
+
+    deck = compute_deck_instruments(
+        [
+            _fit_slide(0, report_final),
+            _fit_slide(1, report_provisional),
+            _fit_slide(2, report_partial),
+            _fit_slide(3, report_not_requested),
+            _fit_slide(4, None),
+        ]
+    )
+
+    assert deck.fit_provisional_slides == 1
+    assert deck.fit_partial_slides == 1
+    # Existing counters are unaffected by the new fields.
+    assert deck.fit_cards_grown == 1
+    assert deck.fit_cards_shrunk == 0
+    assert deck.fit_cards_unfixable == 0
+    assert deck.fit_errors == 0
+    assert deck.fit_reconstruction_mismatches == 0
+    assert deck.fit_factor_min == 1.0
+    assert deck.fit_escape_px == (1.0,)
+
+
+def test_fit_provisional_and_partial_slides_survive_the_receipt_serialization():
+    report = {"requested": True, "fit_state": "provisional", "partial": True, "cards": []}
+    receipt = compute_deck_instruments([_fit_slide(0, report)]).to_receipt()
+
+    json.dumps(receipt)  # must not raise
+    assert receipt["fit_provisional_slides"] == 1
+    assert receipt["fit_partial_slides"] == 1
