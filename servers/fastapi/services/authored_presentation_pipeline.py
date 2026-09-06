@@ -52,6 +52,7 @@ from services.authored_composition_policy import (
 )
 from services.authored_quality_receipt_v2 import public_attempt_id
 from utils.authored_semantic_role_repair import canonicalize_authored_roles, plan_slide_role
+from services.authored_fit_envelope import reseal_scene_envelope_after_fit
 from services.authored_vnext.generation.scene_checkpoint import persist_scene_envelope, read_scene_checkpoint_state
 from services.authored_vnext.generation.scene_envelope import (
     AuthoredSlideSceneEnvelope,
@@ -104,20 +105,12 @@ from utils.llm_calls.author_slide import (
     validate_authored_slide_html,
 )
 from utils.renderer_isolation import RendererPolicyError
-from utils.get_env_programme import (
-    is_authored_in_render_fit_enabled,
-    is_authored_tail_streaming_enabled,
-)
+from utils.get_env_programme import is_authored_in_render_fit_enabled, is_authored_tail_streaming_enabled
 from utils.llm_calls.author_prompt_cache_key import deck_prompt_cache_key, set_prompt_cache_key
 from utils.slide_capture_deck_scope import set_render_deck_scope
 from utils.llm_provider import get_llm_provider
-from utils.slide_capture import (
-    _placeholder_png,
-    ensure_browser_metrics,
-    get_cached_browser_metrics,
-    render_html_to_png,
-    render_html_to_png_with_metrics,
-)
+from utils.slide_capture import _placeholder_png, ensure_browser_metrics, get_cached_browser_metrics, render_html_to_png
+from utils.slide_capture import render_html_to_png_with_metrics
 
 LOGGER = logging.getLogger(__name__)
 
@@ -748,6 +741,7 @@ async def _author_illustrate_render_pipeline(
         quality_work = 0.0
         browser_metrics = None
         fit_report = None
+        fitted_html = None
         quality_report = None
         quality_failure = None
         author_provider_attempt_count = preauthored_attempt_counts.get(index, 0)
@@ -1276,8 +1270,8 @@ async def _author_illustrate_render_pipeline(
                         ):
                             if is_authored_in_render_fit_enabled():
                                 capture = await render_html_to_png_with_metrics(illustrated_html, fit=True)
-                                fitted = getattr(capture, "fitted_html", None)
-                                illustrated_html = fitted if fitted is not None else illustrated_html
+                                fitted_html = getattr(capture, "fitted_html", None)
+                                illustrated_html = fitted_html if fitted_html is not None else illustrated_html
                                 png, browser_metrics = capture.png, capture.browser_metrics
                                 fit_report = getattr(capture, "fit_report", None)
                             else:
@@ -1296,6 +1290,11 @@ async def _author_illustrate_render_pipeline(
                 finally:
                     render_work = time.monotonic() - render_started
                     await record_local_stage(latency_ms=render_work * 1000)
+            scene_envelope = reseal_scene_envelope_after_fit(
+                fitted_html=fitted_html, scene_envelope=scene_envelope, slide_index=index,
+                generation_job_id=(generation_job.id if generation_job is not None else None),
+            )
+            illustrated_html = scene_envelope.html_projection
             if require_all_source_images:
                 try:
                     if browser_metrics is None:

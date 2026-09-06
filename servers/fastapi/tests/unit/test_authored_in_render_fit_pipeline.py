@@ -105,12 +105,23 @@ async def _render_one_slide(tmp_path, monkeypatch, *, capture):
         await engine.dispose()
 
 
+def _fitted_document() -> str:
+    """A fitted variant of the resumable slide: the same document with the
+    fitter's inline declaration appended, stamped and canonicalized the way the
+    pipeline stamps the draft, so the scene envelope can be resealed over it."""
+    from utils.authored_dom_quality import ensure_authored_qids
+    from utils.authored_semantic_role_repair import canonicalize_authored_roles
+
+    variant = _RESUMABLE_HTML.replace("<main>", '<main style="font-size:15px">', 1)
+    return canonicalize_authored_roles(ensure_authored_qids(variant))
+
+
 def test_the_fitted_html_becomes_the_string_of_record(tmp_path, monkeypatch):
     monkeypatch.setenv("AUTHORED_IN_RENDER_FIT_ENABLED", "true")
     capture = SimpleNamespace(
         png=b"fitted-png",
         browser_metrics={"fit": {"edits": ["font-size:15px"]}},
-        fitted_html="<!doctype html><html><body><main>fitted</main></body></html>",
+        fitted_html=_fitted_document(),
         fit_report={"edits": ["font-size:15px"]},
     )
 
@@ -121,6 +132,9 @@ def test_the_fitted_html_becomes_the_string_of_record(tmp_path, monkeypatch):
     assert result.deck.htmls == [capture.fitted_html]
     assert result.pngs == [b"fitted-png"]
     assert result.slide_fit_reports == {0: {"edits": ["font-size:15px"]}}
+    # The scene envelope must follow the fitted document, or the final metrics
+    # readback compares fitted metrics against the pre-fit projection (run 43).
+    assert result.scene_envelope.html_projections == (capture.fitted_html,)
 
 
 def test_a_fit_report_with_no_edits_keeps_the_authored_html(tmp_path, monkeypatch):
