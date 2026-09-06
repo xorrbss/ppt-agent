@@ -83,6 +83,25 @@ def is_authored_text_scale_rung_enabled(
     return _bool_setting("AUTHORED_TEXT_SCALE_RUNG_ENABLED", True, settings)
 
 
+def is_authored_in_render_fit_enabled(settings: RuntimeSettings | None = None) -> bool:
+    """Fit card copy inside its card during the first render (grow then shrink)."""
+    return _bool_setting("AUTHORED_IN_RENDER_FIT_ENABLED", False, settings)
+
+
+def get_authored_in_render_fit_verify_sample(
+    settings: RuntimeSettings | None = None,
+) -> float:
+    """Fraction (0..1) of fitted slides re-rendered without the fit to verify."""
+    raw = (get_setting_env("AUTHORED_IN_RENDER_FIT_VERIFY_SAMPLE", settings) or "").strip()
+    if not raw:
+        return 0.0
+    try:
+        value = float(raw)
+    except ValueError:
+        return 0.0
+    return max(0.0, min(1.0, value))
+
+
 def is_authored_deck_instruments_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:
@@ -229,6 +248,7 @@ def is_authored_prompt_bundle_enabled(
 
 __all__ = [
     "get_authored_illustration_share",
+    "get_authored_in_render_fit_verify_sample",
     "get_authored_metrics_cache_entries",
     "get_authored_metrics_cache_mb",
     "get_authored_renderer_lease_idle_seconds",
@@ -246,6 +266,7 @@ __all__ = [
     "is_authored_local_stage_async_enabled",
     "is_authored_exemplar_enabled",
     "is_authored_header_deterministic_repair_enabled",
+    "is_authored_in_render_fit_enabled",
     "is_authored_renderer_framed_protocol_enabled",
     "is_authored_renderer_lease_enabled",
     "is_authored_renderer_warmup_enabled",

@@ -37,13 +37,17 @@ def _log_missing_once(reason: str) -> None:
 def collect_deck_instruments(
     slides: Sequence[tuple[int, str, Mapping[str, Any]]],
     palette: Sequence[str] = (),
+    fit_reports: Mapping[int, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     """Measure one finished deck, or ``None`` when it cannot be measured.
 
     ``slides`` is ``(index, html, browser_metrics)`` per published slide, in
     deck order. ``palette`` is the deck's own colour list; an empty palette is
     passed through unchanged so the instrument reports palette conformance as
-    null rather than inventing a reference.
+    null rather than inventing a reference. ``fit_reports`` is the deck's
+    in-render-fit reports keyed by slide index (``docs/authored-in-render-
+    fit-design-20260906.md`` section 6); a slide absent from it simply
+    reports no fit.
     """
 
     try:
@@ -59,12 +63,14 @@ def collect_deck_instruments(
         colours = tuple(
             str(colour).strip() for colour in palette if str(colour or "").strip()
         )
+        reports = fit_reports or {}
         inputs = [
             SlideInstrumentInput(
                 index=int(index),
                 html=str(html or ""),
                 metrics=metrics if isinstance(metrics, Mapping) else {},
                 palette=colours,
+                fit_report=reports.get(int(index)),
             )
             for index, html, metrics in slides
         ]
@@ -103,13 +109,16 @@ async def attach_deck_receipt_extras(
     metrics: Sequence[Any],
     style: Any = None,
     brand: Any = None,
+    fit_reports: Mapping[int, Mapping[str, Any]] | None = None,
 ) -> None:
     """Write H4's ``instruments.deck`` and H6's ``advisory.vision`` into the receipt.
 
     One hook for the generation tail so the two phase-1 evidence surfaces are
     added, gated and failure-isolated in one place. Both are advisory: this
     function mutates nothing but the receipt, and swallows every failure, so a
-    deck's publication outcome is identical with and without it.
+    deck's publication outcome is identical with and without it. ``fit_reports``
+    carries the draft render's in-render-fit reports through to the deck
+    instruments; see ``collect_deck_instruments``.
     """
 
     from utils.get_env_programme import (
@@ -124,6 +133,7 @@ async def attach_deck_receipt_extras(
                 for index, html in enumerate(htmls)
             ],
             deck_palette(style, brand),
+            fit_reports,
         )
         if instruments is not None:
             receipt["instruments"] = {**(receipt.get("instruments") or {}), "deck": instruments}

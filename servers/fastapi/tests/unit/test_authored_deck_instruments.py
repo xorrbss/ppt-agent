@@ -297,3 +297,74 @@ def test_footer_intrusions_survive_the_receipt_serialization():
         "s2-close",
         "s2-word",
     }
+
+
+# --------------------------------------------------------------------------
+# In-render fit aggregates (docs/authored-in-render-fit-design-20260906.md
+# section 6). Two synthetic reports shaped like the fitter's own report
+# (section 4): one card grown, one shrunk, one unfixable, plus a top-level
+# error and a reconstruction mismatch on the other slide.
+# --------------------------------------------------------------------------
+
+
+def _fit_slide(index: int, fit_report) -> SlideInstrumentInput:
+    return SlideInstrumentInput(
+        index=index, html="<html></html>", metrics={"elements": []}, fit_report=fit_report
+    )
+
+
+def test_fit_aggregates_count_outcomes_across_the_deck():
+    report_a = {
+        "error": None,
+        "cards": [
+            {"qid": "s1-a", "outcome": "grown", "factor": 1.0, "escape_px": 21.0},
+            {"qid": "s1-b", "outcome": "shrunk", "factor": 0.833, "escape_px": 52.0},
+        ],
+    }
+    report_b = {
+        "error": None,
+        "reconstruction_mismatch": True,
+        "cards": [
+            {"qid": "s2-a", "outcome": "unfixable:floor", "factor": 0.75, "escape_px": 5.0},
+        ],
+    }
+    deck = compute_deck_instruments([_fit_slide(0, report_a), _fit_slide(1, report_b)])
+
+    assert deck.fit_cards_grown == 1
+    assert deck.fit_cards_shrunk == 1
+    assert deck.fit_cards_unfixable == 1
+    assert deck.fit_errors == 0
+    assert deck.fit_reconstruction_mismatches == 1
+    assert deck.fit_factor_min == 0.75
+    assert deck.fit_escape_px == (5.0, 21.0, 52.0)
+
+
+def test_fit_aggregates_count_an_error_and_stay_zero_with_no_reports():
+    deck_with_error = compute_deck_instruments(
+        [_fit_slide(0, {"error": "TypeError: boom", "cards": []})]
+    )
+    assert deck_with_error.fit_errors == 1
+    assert deck_with_error.fit_cards_grown == 0
+    assert deck_with_error.fit_factor_min is None
+    assert deck_with_error.fit_escape_px == ()
+
+    deck_with_none = compute_deck_instruments([_slide(0, [_element("a")])])
+    assert deck_with_none.fit_cards_grown == 0
+    assert deck_with_none.fit_cards_shrunk == 0
+    assert deck_with_none.fit_cards_unfixable == 0
+    assert deck_with_none.fit_errors == 0
+    assert deck_with_none.fit_reconstruction_mismatches == 0
+    assert deck_with_none.fit_factor_min is None
+    assert deck_with_none.fit_escape_px == ()
+
+
+def test_fit_aggregates_survive_the_receipt_serialization():
+    report = {
+        "error": None,
+        "cards": [{"qid": "a", "outcome": "shrunk", "factor": 0.9, "escape_px": 3.0}],
+    }
+    receipt = compute_deck_instruments([_fit_slide(0, report)]).to_receipt()
+
+    json.dumps(receipt)  # must not raise
+    assert receipt["fit_cards_shrunk"] == 1
+    assert list(receipt["fit_escape_px"]) == [3.0]

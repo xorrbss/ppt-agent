@@ -126,7 +126,7 @@ def test_the_instruments_land_under_instruments_deck(monkeypatch):
     monkeypatch.setenv("AUTHORED_VISION_ADVISORY_ENABLED", "false")
     seen: dict = {}
 
-    def fake_collect(slides, palette):
+    def fake_collect(slides, palette, fit_reports=None):
         seen["slides"] = list(slides)
         seen["palette"] = tuple(palette)
         return {"largestEmptyRectPx": 42}
@@ -158,7 +158,7 @@ def test_missing_metrics_do_not_stop_the_instruments(monkeypatch):
     monkeypatch.setenv("AUTHORED_VISION_ADVISORY_ENABLED", "false")
     seen: dict = {}
 
-    def fake_collect(slides, palette):
+    def fake_collect(slides, palette, fit_reports=None):
         seen["slides"] = list(slides)
         return {"ok": True}
 

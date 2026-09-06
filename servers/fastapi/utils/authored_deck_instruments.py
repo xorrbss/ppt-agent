@@ -76,6 +76,10 @@ class SlideInstrumentInput:
     html: str
     metrics: Mapping[str, Any]
     palette: Sequence[str] = ()
+    #: The in-render-fit report (``docs/authored-in-render-fit-design-
+    #: 20260906.md`` section 4) for this slide's draft render, or ``None``
+    #: when the fit did not run for it.
+    fit_report: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +132,17 @@ class DeckInstruments:
     footer_intrusion_slide_count: int = 0
     footer_intrusion_px: tuple[float, ...] = ()
     median_footer_intrusion_px: float | None = None
+    #: In-render-fit aggregates (``docs/authored-in-render-fit-design-
+    #: 20260906.md`` section 6), from every slide's ``fit_report`` card list.
+    #: Zero/empty on a deck where the fit never ran, same as the footer
+    #: instruments above on a deck with no intrusions.
+    fit_cards_grown: int = 0
+    fit_cards_shrunk: int = 0
+    fit_cards_unfixable: int = 0
+    fit_errors: int = 0
+    fit_reconstruction_mismatches: int = 0
+    fit_factor_min: float | None = None
+    fit_escape_px: tuple[float, ...] = ()
 
     def to_receipt(self) -> dict[str, Any]:
         return asdict(self)
@@ -297,6 +312,52 @@ def _footer_intrusions(
     )
 
 
+def _fit_aggregates(reports: Sequence[Mapping[str, Any] | None]) -> dict[str, Any]:
+    """Deck-wide in-render-fit aggregates from each slide's ``fit_report``.
+
+    Mirrors ``_footer_intrusions``: reads exactly what the fitter already
+    reported (``docs/authored-in-render-fit-design-20260906.md`` section 4)
+    rather than re-deriving it, and never raises -- a malformed report is
+    skipped, not a reason to lose the rest of the deck's instruments.
+    """
+
+    grown = shrunk = unfixable = errors = mismatches = 0
+    factors: list[float] = []
+    escapes: list[float] = []
+    for report in reports:
+        if not isinstance(report, Mapping):
+            continue
+        if report.get("error"):
+            errors += 1
+        if report.get("reconstruction_mismatch"):
+            mismatches += 1
+        for card in report.get("cards") or ():
+            if not isinstance(card, Mapping):
+                continue
+            outcome = str(card.get("outcome", ""))
+            if outcome == "grown":
+                grown += 1
+            elif outcome == "shrunk":
+                shrunk += 1
+            elif outcome.startswith("unfixable"):
+                unfixable += 1
+            factor = _maybe_float(card.get("factor"))
+            if factor is not None:
+                factors.append(factor)
+            escape = _maybe_float(card.get("escape_px"))
+            if escape is not None:
+                escapes.append(escape)
+    return {
+        "fit_cards_grown": grown,
+        "fit_cards_shrunk": shrunk,
+        "fit_cards_unfixable": unfixable,
+        "fit_errors": errors,
+        "fit_reconstruction_mismatches": mismatches,
+        "fit_factor_min": round(min(factors), 4) if factors else None,
+        "fit_escape_px": tuple(sorted(escapes)),
+    }
+
+
 def _compute_slide(slide: SlideInstrumentInput, canvas: tuple[float, float]) -> SlideInstruments:
     canvas_w, canvas_h = canvas
     decoration_qids = _decoration_qids(slide.html)
@@ -407,6 +468,7 @@ def compute_deck_instruments(
         footer_intrusion_slide_count=sum(1 for s in finalized if s.footer_intrusions),
         footer_intrusion_px=tuple(sorted(intrusion_px)),
         median_footer_intrusion_px=round(median(intrusion_px), 2) if intrusion_px else None,
+        **_fit_aggregates([slide.fit_report for slide in slides]),
     )
 
 
