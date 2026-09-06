@@ -22,6 +22,15 @@ const DURABLE_TASK_STORAGE_KEY = "presenton:durable-generation-tasks:v1";
 const SOURCE_PRESENTATION_ID = "outline-shell-resume-banner";
 const RESUME_IDEMPOTENCY_KEY = "ppt-generation-resume-banner";
 
+// The banner copy is owned by the message catalogue, so the expectations are
+// derived from it rather than transcribed: a reworded string is a translation
+// change, not a behaviour change, and must not fail this suite.
+const generationMessages = koMessages.generation as Record<string, string>;
+const message = (key: string, values: Record<string, string | number> = {}) =>
+  generationMessages[key].replace(/\{(\w+)\}/g, (_match, name: string) =>
+    String(values[name])
+  );
+
 const router = {
   push: () => undefined,
   back: () => undefined,
@@ -57,9 +66,13 @@ const seedRetryableTask = (
   });
 };
 
+// `auto` is the one-shot compose bridge: it renders a progress overlay only and
+// exposes no controls. The review surface is the same route without auto=1, and
+// an interrupted run is redirected onto it, so the resume cases mount it there.
 const mountOutlinePage = (
   pageStore = store,
   initialPresentationId?: string,
+  auto = true,
 ) =>
   mount(
     <NextIntlClientProvider
@@ -70,7 +83,7 @@ const mountOutlinePage = (
       <AppRouterContext.Provider value={router as any}>
         <Provider store={pageStore}>
           <OutlinePage
-            auto={true}
+            auto={auto}
             initialPresentationId={initialPresentationId}
           />
         </Provider>
@@ -108,16 +121,18 @@ describe("<OutlinePage /> resume banner", () => {
       status: "running",
     } as any);
 
-    mountOutlinePage();
+    mountOutlinePage(store, undefined, false);
 
     cy.get('[data-cy="resume-generation-banner"]')
       .should("be.visible")
       .and(
         "contain.text",
-        "이전 생성이 슬라이드 46/90에서 중단되었습니다. 이어서 생성할 수 있습니다."
+        message("resumeBannerProgress", { completed: 46, total: 90 })
       );
 
-    cy.contains("button", "이어서 생성").click();
+    cy.get('[data-cy="resume-generation-submit"]')
+      .should("have.text", message("resumeBannerAction"))
+      .click();
 
     cy.get("@generateAuthored").should(
       "have.been.calledOnceWith",
@@ -129,14 +144,11 @@ describe("<OutlinePage /> resume banner", () => {
   it("shows the banner without slide counts when no progress was stored", () => {
     seedRetryableTask();
 
-    mountOutlinePage();
+    mountOutlinePage(store, undefined, false);
 
     cy.get('[data-cy="resume-generation-banner"]')
       .should("be.visible")
-      .and(
-        "contain.text",
-        "이전 생성이 중단되었습니다. 이어서 생성할 수 있습니다."
-      );
+      .and("contain.text", message("resumeBannerDescription"));
   });
 });
 
@@ -325,19 +337,19 @@ describe("<OutlinePage /> reload recovery", () => {
       status: "running",
     } as any);
 
-    mountOutlinePage(makeStore());
+    mountOutlinePage(makeStore(), undefined, false);
 
     cy.get('[data-cy="resume-generation-banner"]')
       .should("be.visible")
       .and(
         "contain.text",
-        "이전 생성이 슬라이드 46/90에서 중단되었습니다. 이어서 생성할 수 있습니다."
+        message("resumeBannerProgress", { completed: 46, total: 90 })
       );
     // The rehydrated mount must never auto-fire generation (the auto-bridge is
     // for a compose-flow stream only); resuming stays an explicit user action.
     cy.get("@generateAuthored").should("not.have.been.called");
 
-    cy.contains("button", "이어서 생성").click();
+    cy.get('[data-cy="resume-generation-submit"]').click();
 
     // The re-POST must reuse the stored key AND the compose-time settings the
     // reload wiped from Redux — the server 409s a drifted same-key payload.

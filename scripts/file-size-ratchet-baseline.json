@@ -187,7 +187,6 @@
     "servers/nextjs/app/(presentation-generator)/authored-vnext/master-setup/MasterCatalogDialog.tsx": 756,
     "servers/nextjs/app/(presentation-generator)/authored-vnext/master-setup/MasterSetupGate.tsx": 581,
     "servers/nextjs/app/(presentation-generator)/authored-vnext/master-setup/MasterWysiwygWorkspace.tsx": 1058,
-    "servers/nextjs/app/(presentation-generator)/outline/components/OutlinePage.tsx": 507,
     "servers/nextjs/app/(presentation-generator)/presentation/components/AuthoredElementEditor.tsx": 625,
     "servers/nextjs/app/(presentation-generator)/presentation/components/AuthoredTemplateChanger.tsx": 725,
     "servers/nextjs/app/(presentation-generator)/presentation/components/PresentationHeader.tsx": 505,

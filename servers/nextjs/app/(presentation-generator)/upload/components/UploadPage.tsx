@@ -109,8 +109,11 @@ const UploadPage = ({
   const analysisSourceSignature = analysisSourceFile
     ? `${analysisSourceFile.name}:${analysisSourceFile.size}:${analysisSourceFile.lastModified}`
     : null;
+  // A remembered analysis may only be restored while the PPTX it was produced
+  // from is still staged here. Without that guard, "create from PPT" silently
+  // reopens an unrelated analysis left over from an earlier document.
   const resumeAnalysisId =
-    !analysisSourceFile || analyzedSourceSignature === analysisSourceSignature
+    analysisSourceFile && analyzedSourceSignature === analysisSourceSignature
       ? lastAnalysisId
       : null;
 
@@ -140,6 +143,14 @@ const UploadPage = ({
 
   const openMasterCatalog = useCallback(() => {
     setMasterCatalogEntryMode("catalog");
+    setMasterCatalogOpen(true);
+  }, []);
+
+  // The catalog lists published masters and opens the blank designer; the only
+  // way into the PPTX analysis is this entry mode, so without this control the
+  // whole AI-import flow is unreachable from the app.
+  const openAiMasterImport = useCallback(() => {
+    setMasterCatalogEntryMode("ai-import");
     setMasterCatalogOpen(true);
   }, []);
 
@@ -415,6 +426,14 @@ const UploadPage = ({
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={openAiMasterImport}
+                  data-testid="ppt-ai-master-create"
+                >
+                  {t("master.aiCreate")}
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
