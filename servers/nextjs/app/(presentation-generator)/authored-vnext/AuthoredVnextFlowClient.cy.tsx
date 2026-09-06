@@ -1,9 +1,23 @@
 import React from "react";
 import { mount } from "cypress/react";
+import { NextIntlClientProvider } from "next-intl";
 
+import koMessages from "@/i18n/messages/ko.json";
 import { DEFAULT_MASTER_CONTRACT } from "@/lib/authored-vnext/master/fixtures";
 
 import AuthoredVnextFlowClient from "./AuthoredVnextFlowClient";
+
+// The component reads the active UI locale via useTranslations,
+// exactly as it does in the app under the root provider. cy.mount
+// (registered in cypress/support/component.ts) wraps nothing, so every mount
+// here goes through this local helper instead of cy.mount directly.
+function mountWithIntl(ui: React.ReactElement) {
+  mount(
+    <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 const digestA = `sha256:${"a".repeat(64)}`;
 const digestB = `sha256:${"b".repeat(64)}`;
@@ -90,7 +104,7 @@ describe("AuthoredVnextFlowClient", () => {
       },
     }).as("deck");
 
-    mount(<AuthoredVnextFlowClient />);
+    mountWithIntl(<AuthoredVnextFlowClient />);
     cy.get('textarea[aria-label="발표 자료"]').type("접근 가능한 Authored 흐름");
     cy.contains("button", "자료 확인 · Master 설정으로").click();
     cy.contains("button", "1. 새 Draft 생성").click();
