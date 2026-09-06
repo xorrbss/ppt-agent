@@ -798,6 +798,16 @@ async def admit_public_operation(
     if operation_kind not in {"generation", "export"}:
         raise ValueError("public_operation_kind_invalid")
     policy = await load_public_policy(session, policy_version)
+    # ``load_public_policy`` may answer the current default with the previous
+    # default's row while the code is ahead of its migration. Everything after
+    # this point must use the version of the row that was actually resolved:
+    # the quota counters and the admission row carry a foreign key onto
+    # ``public_policy_profiles``, so writing the requested version while
+    # applying the resolved row's limits makes the database reject the insert
+    # with ``public_policy_authority_unavailable`` -- turning the seam that
+    # exists to keep generation working during that window into a 500 on every
+    # deck instead.
+    policy_version = policy.version
     if operation_kind == "generation":
         if request_plan is None:
             raise PublicAdmissionRejected("provider_request_plan_required")
@@ -932,6 +942,17 @@ async def _admit_public_operation_v2(
     principal = _principal(principal)
     if operation_kind not in {"generation", "export"}:
         raise ValueError("public_operation_kind_invalid")
+    policy = await load_public_policy(session, policy_version)
+    # ``load_public_policy`` may answer the current default with the previous
+    # default's row while the code is ahead of its migration. Everything after
+    # this point must use the version of the row that was actually resolved:
+    # the quota counters and the admission row carry a foreign key onto
+    # ``public_policy_profiles``, so writing the requested version while
+    # applying the resolved row's limits makes the database reject the insert
+    # with ``public_policy_authority_unavailable`` -- turning the seam that
+    # exists to keep generation working during that window into a 500 on every
+    # deck instead.
+    policy_version = policy.version
     lease_model = await _resolved_phase2_authority(
         session,
         allow_sqlite_compat=_allow_sqlite_compat,
@@ -966,7 +987,6 @@ async def _admit_public_operation_v2(
             raise PublicAdmissionRejected("public_operation_identity_conflict")
         _assert_deadline_remaining(existing.deadline_at, now=get_current_utc_datetime())
         return existing
-    policy = await load_public_policy(session, policy_version)
     now = get_current_utc_datetime()
     deadline = _absolute_deadline(
         now=now,
