@@ -579,3 +579,47 @@ after the pipeline site lose the demotion until then.
 | 29 (A-med) | The gate admitted a remade slide whose card copy still overflowed: the escaping paragraph sat in an `overflow:visible` card, and the pairwise overlap check collapsed the paragraph×next-card pair to the two non-overlapping cards. The remake brief had never carried the measured defects either (`LOWER_DENSITY_HINT` was 203 chars against a 200-char detail cap). | `3881426ed`: `utils/authored_dom_text_escape.py` blocks glyph ink that leaves its nearest card-like ancestor (`text_escapes_card`), feeds the text-scale rung, and the measured defects now travel first in the remake brief. |
 | 29 (A-med) | The attempt timing receipt was silently absent from one operation result: a single-shot CAS amend lost a version race under SQLite lock contention and returned without logging. | `8172fce55`: retry ×3 against a re-read row; on final loss log ERROR and write `timingReceiptError`. |
 | 30 (B) | Slide 1 authored with `body=0` (everything `supporting`) → `body:semantic_role_missing` ended the deck. The anchor stage's gate never ran (sync context manager inside `async with` → TypeError swallowed as "render unavailable"; the anchor was inherited ungated). The vision advisory returned empty output. | `24636f954`: body-role mirror of the title repair + prompt teaches body vs supporting. `07db1d4a8`: anchor rendered and gated on the job lane with an `anchor_ready … gated=` log; advisory sheet ≤ 1600 px / 1.5 MB and the failure reason named in the receipt (still advisory; the empty output is a provider-side behaviour on image input, unverified). |
+
+## 16. The blind rating, and why the composition bundle ships off (2026-09-06)
+
+D19/D25 asked for the product owner's paired judgement before the prompt bundle
+became a default. Two rounds were run, each 24 paired slides of the same
+24-slide fixture, sides randomised per slide, the key hidden until the slide was
+rated, ratings stored server-side:
+
+| round | code under test | parent | new | tie | non-tie | one-sided p |
+|---|---|---|---|---|---|---|
+| 1 | run 27 (c3164852a — before every gate fix and the fill rewording) | 13 | 7 | 4 | 7/20 | ≈0.13 |
+| 2 | run 37 (af12def2e — every fix in) | 12 | 3 | 9 | 3/15 | ≈0.018 |
+
+No side bias in either round (round 2: the new deck won 1 of 10 when it sat on
+the left and 2 of 14 when it sat on the right). The rise in ties from 4 to 9 is
+the gate work landing — visible defects fell — and what survives it still
+favours the parent, so the remaining difference is composition, not defects.
+
+**Mechanism.** The bundle is over-constrained for a 1280×720 page: G2 sets a
+18px floor on body copy while G1 asks the page to render the claim and its
+evidence in full and to fill down the page. Run 37 measures the result — median
+declared font 18px against the parent's 12px, 34 text elements against 40, 26.5
+owners against 33 — and 17 of its 24 slides tripped `text_intrudes_footer_zone`
+or `text_escapes_card`, exhausting the remake budget and publishing 9 slides
+flagged. Rewording the fill target from y=648 to y=620 (222218f4b) did not move
+that rate, which is what ruled the fill directive out as the primary cause.
+For this product — dense Korean business proposals — the parent's smaller type
+and higher part count is the better deck.
+
+**Decision (D27).** `AUTHORED_PROMPT_BUNDLE_ENABLED`, default **false**
+(`84c7f4443`). Off restores the 85f915eff type scale verbatim and drops the
+COMPOSITION INTENT block; a test ndiffs the two rendered design systems and
+pins that the delta is exactly those two hunks. Unconditional, because they are
+corrections rather than taste: the `data-semantic-role` vocabulary (the role
+repair and the v2 capacity gate read those marks), the G5 contradiction fixes,
+the compressed SVG contract, the shared universals, the deck tokens, and the
+ROLE→archetype bridge. Everything in workstreams F, H, I, K and the phase-3
+items is unaffected — the speed work and the detectors were never what the
+rating judged.
+
+**What would justify turning it on.** A version that keeps the parent's type
+scale and asks only for structure — the parent's own pages carry rails, flows
+and sidebars at 13-16px, which the 18px floor priced out. That is a separate
+experiment, and it needs its own paired round before it becomes a default.
