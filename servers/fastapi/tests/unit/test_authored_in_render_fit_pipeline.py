@@ -180,7 +180,7 @@ def test_the_knob_off_path_is_byte_identical_to_before(tmp_path, monkeypatch):
     """With the knob off, the render call must go through the pre-fit pair,
     not through ``render_html_to_png_with_metrics`` at all."""
 
-    monkeypatch.delenv("AUTHORED_IN_RENDER_FIT_ENABLED", raising=False)
+    monkeypatch.setenv("AUTHORED_IN_RENDER_FIT_ENABLED", "false")
     rendered: list[str] = []
 
     async def scenario():

@@ -1210,16 +1210,16 @@
     {
       "key": "AUTHORED_IN_RENDER_FIT_ENABLED",
       "type": "boolean",
-      "default": false,
+      "default": true,
       "secret": false,
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
-      "description": "Fit card copy inside its card during the first render: grow into slack, then shrink that card's text to a 12px floor. Off until the bench passes."
+      "description": "Fit card copy inside its card during the first render: grow into slack, then shrink that card's text to a 12px floor. On by default since bench runs 46 and 47 published zero flagged slides."
     },
     {
       "key": "AUTHORED_IN_RENDER_FIT_VERIFY_SAMPLE",
       "type": "string",
-      "default": "0",
+      "default": "0.05",
       "secret": false,
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",

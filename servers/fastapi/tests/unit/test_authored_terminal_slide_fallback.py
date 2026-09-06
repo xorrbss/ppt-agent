@@ -237,8 +237,15 @@ def _install_deck_stubs(monkeypatch, tmp_path, htmls):
     monkeypatch.setattr(terminal_mod, "deck_has_picture_source", lambda _style: False)
     monkeypatch.setattr(terminal_mod, "_placeholder_png", lambda: b"placeholder")
 
-    async def fake_capture(html):
-        return SimpleNamespace(png=b"remade-png", browser_metrics={"telemetry": "ok"})
+    async def fake_capture(html, *, fit=False, **_kwargs):
+        """Shaped like the real capture on both sides of the fit knob: it takes
+        ``fit=`` because the knob defaults on, and reports nothing fitted, which
+        is what a slide with no escaping card produces."""
+
+        return SimpleNamespace(
+            png=b"remade-png", browser_metrics={"telemetry": "ok"},
+            fitted_html=None, fit_report=None,
+        )
 
     monkeypatch.setattr(terminal_mod, "render_html_to_png_with_metrics", fake_capture)
 

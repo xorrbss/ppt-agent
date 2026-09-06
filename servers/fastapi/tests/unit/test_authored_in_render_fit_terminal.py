@@ -37,7 +37,7 @@ def _admit(monkeypatch, candidate_html: str):
 
 
 def test_knob_off_calls_with_no_fit_keyword_and_keeps_the_candidate(monkeypatch):
-    monkeypatch.delenv("AUTHORED_IN_RENDER_FIT_ENABLED", raising=False)
+    monkeypatch.setenv("AUTHORED_IN_RENDER_FIT_ENABLED", "false")
     _permissive(monkeypatch)
 
     async def fake_capture(html):
@@ -110,10 +110,14 @@ def test_knob_on_against_a_capture_missing_the_new_fields_keeps_the_candidate(
 
 
 def test_a_missing_metrics_or_placeholder_render_still_refuses_admission(monkeypatch):
+    """The refusal is the knob's business either way, so exercise it on the
+    default (on) path -- a placeholder png must not be admitted just because
+    the fit was asked for."""
+
     monkeypatch.delenv("AUTHORED_IN_RENDER_FIT_ENABLED", raising=False)
     _permissive(monkeypatch)
 
-    async def fake_capture(html):
+    async def fake_capture(html, *, fit=False, **_kwargs):
         return SimpleNamespace(png=terminal_mod._placeholder_png(), browser_metrics=None)
 
     monkeypatch.setattr(terminal_mod, "render_html_to_png_with_metrics", fake_capture)

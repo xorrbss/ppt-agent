@@ -2868,6 +2868,26 @@ def test_authored_service_validates_exact_mapping_before_pipeline(monkeypatch):
     assert calls == {"pipeline": 0, "validation": 1}
 
 
+def _patch_slide_render(monkeypatch, module, plain):
+    """Patch both render entry points with one behaviour.
+
+    The pipeline picks between ``render_html_to_png`` and
+    ``render_html_to_png_with_metrics(fit=True)`` on the in-render fit knob,
+    which defaults on.  A test about authoring order or worker bounds should
+    hold on whichever call the knob selects, so it stubs both on the service
+    module and lets ``_sync_runtime_dependencies`` carry them to the pipeline.
+    """
+
+    async def with_metrics(html, *, fit=False, **_kwargs):
+        png = await plain(html)
+        return SimpleNamespace(
+            png=png, browser_metrics=None, fitted_html=None, fit_report=None
+        )
+
+    monkeypatch.setattr(module, "render_html_to_png", plain)
+    monkeypatch.setattr(module, "render_html_to_png_with_metrics", with_metrics)
+
+
 def test_slide_pipeline_renders_fast_slide_before_slowest_author_finishes(monkeypatch):
     """A slide must advance immediately; deck-wide author/render barriers regress this."""
 
@@ -2896,7 +2916,7 @@ def test_slide_pipeline_renders_fast_slide_before_slowest_author_finishes(monkey
             authored_service, "prepare_authored_deck", lambda *args, **kwargs: plan
         )
         monkeypatch.setattr(authored_service, "author_planned_slide", fake_author)
-        monkeypatch.setattr(authored_service, "render_html_to_png", fake_render)
+        _patch_slide_render(monkeypatch, authored_service, fake_render)
 
         return await asyncio.wait_for(
             authored_service._author_illustrate_render_pipeline(
@@ -3029,7 +3049,7 @@ def test_ninety_slide_pipeline_keeps_worker_concurrency_bounded(monkeypatch):
             authored_service, "prepare_authored_deck", lambda *args, **kwargs: plan
         )
         monkeypatch.setattr(authored_service, "author_planned_slide", fake_author)
-        monkeypatch.setattr(authored_service, "render_html_to_png", fake_render)
+        _patch_slide_render(monkeypatch, authored_service, fake_render)
 
         result = await authored_service._author_illustrate_render_pipeline(
             _outline(90),

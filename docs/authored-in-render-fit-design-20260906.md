@@ -9,6 +9,8 @@ the verification rollout and the fixture custody rules (marked "rev 3").
 Revision 4: a bench replay of the implemented fitter found it engaging cards
 the detector does not flag, and separated the entry test from the fit target
 (section 4, "rev 4"; the non-goal it settles is in section 2).
+Revision 5: bench runs 46 and 47 closed the acceptance table, so the knob is on
+by default and the verify sample sits at the rollout value (section 8, "rev 5").
 Predecessors: `authored-fit-magnitude-measurement-design-20260904.md` (the A4
 fit ladder and the M1 magnitudes), `authored-quality-speed-programme-design-20260905.md`
 (section 17.2 open items), `generation-programme-master-design-20260904.md`
@@ -441,8 +443,19 @@ is part of the security boundary.
 
 | key | default | meaning |
 |---|---|---|
-| `AUTHORED_IN_RENDER_FIT_ENABLED` | `false` until the bench passes, then `true` | request the fit pass on draft and remake renders |
-| `AUTHORED_IN_RENDER_FIT_VERIFY_SAMPLE` | `0.05` at first production enablement, `0` after two weeks | fraction of fitted slides re-rendered for the reconstruction check |
+| `AUTHORED_IN_RENDER_FIT_ENABLED` | `true` (rev 5; `false` until the bench passed) | request the fit pass on draft and remake renders |
+| `AUTHORED_IN_RENDER_FIT_VERIFY_SAMPLE` | `0.05`, `0` after two weeks at zero mismatches | fraction of fitted slides re-rendered for the reconstruction check |
+
+Rev 5, the default is on. Both bench pairs are in: document runs 41 (off) and
+46 (on), prompt runs 42 (off) and 47 (on). Across the four published decks the
+offline detector counts three blocking slides before and none after (run 41
+s11 `clipping`/`off_canvas`, run 42 s12 and s20 `text_escapes_card` at 21 px
+and 52 px), with no slide fitted that the detector would not have flagged, no
+reconstruction mismatch, and no provisional, partial or errored report. Run 47
+fixed both of its cards by growing the card alone (`fit_factor_min` 1.0) and
+run 46 needed 0.8609, so both arms of section 4's grow-then-shrink order are
+exercised on real decks. An unparseable verify sample now falls back to 0.05
+rather than 0, so a typo cannot silently disable the reconstruction check.
 
 Rev 2: the card and layout budgets, the margin, the floor and the tolerances
 are constants, not knobs. The registry already carries more than 130 keys and
@@ -556,5 +569,5 @@ and repair (prerequisite, coordinated with the renderer-security gate change
 another session has announced for `contracts/authored-renderer/`; whichever
 lands first carries the check); fixtures; fragment + unit tests; probe + API
 reconstruction behind the knob (off); callers; add the one new module to the
-image; integration test; bench at verify sample 1; production at 0.05; flip
-the default; sample to 0 after two weeks at zero mismatches.
+image; integration test; bench at verify sample 1; flip the default with the
+sample at 0.05 (done, rev 5); sample to 0 after two weeks at zero mismatches.

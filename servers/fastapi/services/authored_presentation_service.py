@@ -46,7 +46,7 @@ from utils.authored_dom_quality import ensure_authored_qids
 from utils.llm_calls.author_deck import author_planned_slide, prepare_authored_deck
 from utils.llm_calls.author_slide import is_fallback_slide_html
 from utils.llm_calls.author_vision_qa import revise_authored_deck
-from utils.slide_capture import find_chrome, render_html_to_png
+from utils.slide_capture import find_chrome, render_html_to_png, render_html_to_png_with_metrics
 
 
 _AUTHORED_JOB_SEMAPHORE = asyncio.Semaphore(
@@ -63,6 +63,7 @@ def _sync_runtime_dependencies() -> None:
     _pipeline.is_fallback_slide_html = is_fallback_slide_html
     _pipeline.prepare_authored_deck = prepare_authored_deck
     _pipeline.render_html_to_png = render_html_to_png
+    _pipeline.render_html_to_png_with_metrics = render_html_to_png_with_metrics
     _generation._author_illustrate_render_pipeline = _author_illustrate_render_pipeline
     _generation._build_authored_export = _build_authored_export
     _generation._cleanup_published_checkpoints = _cleanup_published_checkpoints
