@@ -134,6 +134,9 @@ COPY servers/fastapi/utils/slide_capture_polygon_paint.py /app/servers/fastapi/u
 COPY servers/fastapi/utils/slide_capture_reusable_render.py /app/servers/fastapi/utils/slide_capture_reusable_render.py
 COPY servers/fastapi/utils/slide_capture_rounded_paint.py /app/servers/fastapi/utils/slide_capture_rounded_paint.py
 COPY servers/fastapi/utils/slide_capture_worker_client.py /app/servers/fastapi/utils/slide_capture_worker_client.py
+COPY servers/fastapi/utils/authored_fit_edits.py /app/servers/fastapi/utils/authored_fit_edits.py
+COPY servers/fastapi/utils/slide_capture_fit.py /app/servers/fastapi/utils/slide_capture_fit.py
+COPY servers/fastapi/utils/slide_capture_fit_script.py /app/servers/fastapi/utils/slide_capture_fit_script.py
 COPY servers/fastapi/utils/slide_capture_worker_lease.py /app/servers/fastapi/utils/slide_capture_worker_lease.py
 COPY servers/fastapi/utils/slide_capture_worker_session.py /app/servers/fastapi/utils/slide_capture_worker_session.py
 COPY servers/fastapi/services/__init__.py /app/servers/fastapi/services/__init__.py
