@@ -114,6 +114,30 @@ def test_fragment_parses_as_javascript() -> None:
     assert result.returncode == 0, result.stderr
 
 
+def test_entry_is_the_detector_threshold_and_the_target_is_the_margin() -> None:
+    """Rev 4: engage only a card the detector would flag, then fit to the margin.
+
+    The fragment is JavaScript, so this is a source-level assertion: the entry test
+    must read the interpolated ``ESCAPE_TOLERANCE_PX`` against the margin-0 escape,
+    measured with the footer line so an escape ``reconcile_footer_zone_reports``
+    would hand to the footer detector does not engage the card either, and the old
+    margin-based entry (``if (escape <= 0) return false``) must be gone, or the
+    fitter would go on shrinking cards no detector complains about.
+    """
+
+    fragment = fit_script_fragment()
+    assert f'"tolerance_px": {json.dumps(ESCAPE_TOLERANCE_PX)}' in fragment
+    assert "const escapePx = this._escape(card, leaves, 0, contentLine);" in fragment
+    assert "if (escapePx <= this.C.tolerance_px) return false;" in fragment
+    assert "const bound = footerLine > 0 && rect.bottom > footerLine ? footerLine : Infinity;" in fragment
+    # The target stays the margin, measured over every leaf: entry and target are
+    # separate questions, and only entry is the detector's.
+    assert "let escape = this._escape(card, leaves, this.C.margin_px);" in fragment
+    assert "if (escape <= 0) return false;" not in fragment
+    # The report still carries the raw, detector-measured escape.
+    assert "escape_px: this._round(escapePx, 2)" in fragment
+
+
 def test_styles_are_appended_as_strings_never_through_cssom() -> None:
     fragment = fit_script_fragment()
     assert "setAttribute('style'" in fragment
