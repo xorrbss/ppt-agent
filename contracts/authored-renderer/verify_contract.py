@@ -67,6 +67,11 @@ def verify() -> list[dict[str, Any]]:
         "slide_capture_reusable_render.py",
         "slide_capture_worker_client.py",
     )
+    # The response wire constant was extracted to its own module in
+    # 8e597e2a9; the capture path imports it instead of holding the literal.
+    worker_response_source = (
+        fastapi_utils / "renderer_worker_response.py"
+    ).read_text(encoding="utf-8")
     slide_capture_source = "\n".join(
         (fastapi_utils / name).read_text(encoding="utf-8")
         for name in slide_capture_files
@@ -181,7 +186,11 @@ def verify() -> list[dict[str, Any]]:
     ))
     check("next-production-attestation-fail-closed", all(
         token in next_isolation_source for token in (
-            'process.env.NODE_ENV === "production"',
+            # The policy takes the environment as a parameter for tests, so pin
+            # the default binding as well: production is decided from the real
+            # process environment, not from whatever a caller hands in.
+            "environment: NodeJS.ProcessEnv = process.env",
+            'environment.NODE_ENV === "production"',
             "AUTHORED_RENDERER_OS_ISOLATION",
             "nonroot-readonly-tmpfs-network-none",
             "throw new Error",
@@ -190,11 +199,16 @@ def verify() -> list[dict[str, Any]]:
     check("next-production-direct-chrome-forbidden", all(
         token in next_isolation_source for token in (
             "AUTHORED_RENDERER_EXECUTION_BOUNDARY", '"external-worker"',
-            "direct local Chrome is forbidden", "!production",
+            "direct local Chrome is forbidden",
+            # Production may drive Chrome only under the single-user local
+            # native profile, whose declared name states it is unattested.
+            # Both tokens are pinned so widening that exemption fails here.
+            "production && !localNative",
+            '"local-native-unattested"',
         )
     ))
     check("next-renderer-default-off", (
-        'booleanEnvironment("AUTHORED_VNEXT_RENDERER_ENABLED", false)'
+        'booleanEnvironment("AUTHORED_VNEXT_RENDERER_ENABLED", false, environment)'
         in next_isolation_source
     ))
     check("dynamic-release-gate-explicit-enable", all(
@@ -224,7 +238,9 @@ def verify() -> list[dict[str, Any]]:
             isolation_source, worker_source, launcher
         ))
         and all("authored-render-response/v1" in source for source in (
-            worker_source, slide_capture_source, launcher
+            worker_source,
+            slide_capture_source + worker_response_source,
+            launcher,
         ))
     ))
     check("product-browser-control-pipe", (
