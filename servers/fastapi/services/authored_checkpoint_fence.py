@@ -18,6 +18,7 @@ writer can change the answer before the commit.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from contextlib import asynccontextmanager
 import uuid
 
@@ -35,6 +36,45 @@ from utils.datetime_utils import get_current_utc_datetime
 
 
 _FENCED_SESSION_KEY = "authored_checkpoint_fenced"
+
+#: The slide-local provider-ordinal bookkeeping ``reserve_provider_attempt``
+#: maintains. It lives in the checkpoint's ``error`` JSON column for want of a
+#: dedicated one, but it is not error state: it is the durable fence that stops
+#: a resumed worker from buying a provider call the deck has already paid for.
+_PROVIDER_ATTEMPT_FENCE_KEYS = (
+    "provider_attempt_count",
+    "provider_attempt_epoch",
+    "provider_attempt_total",
+)
+
+
+def retained_provider_attempt_fence(error: object) -> dict[str, int] | None:
+    """The provider-ordinal fence to carry across a cleared checkpoint error.
+
+    A completed or recovered stage clears ``error`` because the slide no longer
+    carries a failure.  Clearing the whole payload also destroyed the fence, so
+    the counter could only count downwards: a slide whose author stage had
+    completed was back at zero, and the next ordinal anyone asked for on it was
+    refused as ``authored_provider_attempt_checkpoint_conflict``.  The style
+    anchor's one remake is exactly that caller, and until now it could never
+    run (bench run 35, 2026-09-05).
+
+    Only the integer counters survive.  Every reader of a checkpoint error keys
+    off ``code``, ``retryable``, ``exception_type``, ``cause`` or ``message``,
+    none of which are copied, so a cleared checkpoint still reads as a slide
+    with no failure and carries no stale correction hint.  ``None`` is returned
+    when there is no fence to keep, so a slide that never bought a provider
+    call still ends with ``error`` set to ``None``.
+    """
+
+    if not isinstance(error, Mapping):
+        return None
+    kept: dict[str, int] = {}
+    for key in _PROVIDER_ATTEMPT_FENCE_KEYS:
+        value = error.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            kept[key] = value
+    return kept or None
 
 
 async def lock_public_admission_if_available(
@@ -333,5 +373,6 @@ __all__ = [
     "owned_job",
     "public_checkpoint_binding",
     "refence_job",
+    "retained_provider_attempt_fence",
     "session_is_fenced",
 ]

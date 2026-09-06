@@ -35,6 +35,7 @@ from services.authored_checkpoint_fence import (
     load_checkpoint,
     owned_job,
     refence_job,
+    retained_provider_attempt_fence,
 )
 from services.authored_checkpoint_html import collapses_to_author_html
 from services.authored_checkpoint_render_artifacts import (
@@ -238,7 +239,7 @@ async def complete_render_stage_batched(
             checkpoint.render_sha256 = render_sha256
             checkpoint.artifact_refs = artifact_refs
         checkpoint.failed_stage = None
-        checkpoint.error = None
+        checkpoint.error = retained_provider_attempt_fence(checkpoint.error)
         checkpoint.attempt_token = attempt_token
         checkpoint.updated_at = get_current_utc_datetime()
         job.current_stage = "render"

@@ -29,6 +29,7 @@ from services.authored_checkpoint_fence import (
     load_checkpoint as _checkpoint,
     owned_job as _owned_job,
     public_checkpoint_binding as _public_checkpoint_binding,
+    retained_provider_attempt_fence,
 )
 from services.authored_checkpoint_stage_batch import (
     begin_author_stage,  # noqa: F401 -- re-exported entry point for callers
@@ -122,7 +123,9 @@ async def get_checkpoint(
             checkpoint.render_completed_at = checkpoint.render_completed_at or now
             if checkpoint.failed_stage == "render":
                 checkpoint.failed_stage = None
-                checkpoint.error = None
+                checkpoint.error = retained_provider_attempt_fence(
+                    checkpoint.error
+                )
             checkpoint.updated_at = now
             session.add(checkpoint)
             await session.commit()
@@ -437,7 +440,11 @@ async def complete_stage(
             checkpoint.render_sha256 = render_sha256
             checkpoint.artifact_refs = artifact_refs
         checkpoint.failed_stage = None
-        checkpoint.error = None
+        # The slide no longer carries a failure, but it still carries every
+        # provider ordinal it has bought: an extra call on an already
+        # complete stage -- the style anchor's one remake -- must follow the
+        # stored count rather than restart under it.
+        checkpoint.error = retained_provider_attempt_fence(checkpoint.error)
         checkpoint.attempt_token = attempt_token
         checkpoint.updated_at = get_current_utc_datetime()
         if stage == "persist":
