@@ -1237,14 +1237,22 @@ describe("WorkspaceChatPanel", () => {
 
     mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@timeline");
-    cy.get('input[aria-label="첨부할 파일 선택"]').selectFile(
-      {
-        contents: Cypress.Buffer.from("evidence"),
-        fileName: "evidence.pdf",
-        mimeType: "application/pdf",
-      },
-      { force: true },
-    );
+    // The composer disables this input while the panel is still loading
+    // (WorkspaceComposer: disabled={disabled || uploading}). Waiting on the
+    // timeline response only proves the network settled, not that React has
+    // re-rendered, and `force: true` - needed because the input is sr-only -
+    // skips the disabled check, so attaching too early fires no change event
+    // and no upload ever starts. Wait for the enabled state, which retries.
+    cy.get('input[aria-label="첨부할 파일 선택"]')
+      .should("not.be.disabled")
+      .selectFile(
+        {
+          contents: Cypress.Buffer.from("evidence"),
+          fileName: "evidence.pdf",
+          mimeType: "application/pdf",
+        },
+        { force: true },
+      );
     cy.wait("@assetUpload");
     cy.get('[aria-label="전송할 첨부 파일"]').should(
       "contain.text",
