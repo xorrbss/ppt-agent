@@ -66,12 +66,12 @@ def verify() -> list[dict[str, Any]]:
         "slide_capture_pixel_probe.py",
         "slide_capture_reusable_render.py",
         "slide_capture_worker_client.py",
+        # The response wire constant was extracted here in 8e597e2a9; the
+        # capture path imports it instead of holding the literal.  It is in
+        # the image's COPY list on the import closure's own account, so the
+        # packaging assertion above covers it like the rest.
+        "renderer_worker_response.py",
     )
-    # The response wire constant was extracted to its own module in
-    # 8e597e2a9; the capture path imports it instead of holding the literal.
-    worker_response_source = (
-        fastapi_utils / "renderer_worker_response.py"
-    ).read_text(encoding="utf-8")
     slide_capture_source = "\n".join(
         (fastapi_utils / name).read_text(encoding="utf-8")
         for name in slide_capture_files
@@ -239,7 +239,7 @@ def verify() -> list[dict[str, Any]]:
         ))
         and all("authored-render-response/v1" in source for source in (
             worker_source,
-            slide_capture_source + worker_response_source,
+            slide_capture_source,
             launcher,
         ))
     ))
