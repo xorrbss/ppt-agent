@@ -23,10 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from utils.authored_infographic.contracts import content_bottom_px
-from utils.get_env_programme import (
-    is_authored_content_lock_enabled,
-    is_authored_prompt_bundle_enabled,
-)
+from utils.get_env_programme import is_authored_prompt_bundle_enabled
 
 
 #: The floor below which nothing that communicates slide content may compute.
@@ -59,25 +56,6 @@ SEMANTIC_ROLE_RULES = """\
     `body`); `supporting` is short structural text only — sub-headings, eyebrows, labels,
     numbers with units, captions. A content slide must have body owners. Empty shapes and
     rules are `decoration`."""
-
-
-#: The content lock's prompt half, one clause beside CONTENT. Bench run 48
-#: measured a model rendering the brief at 1.2x-1.4x, the whole excess being
-#: kicker and summary sentences the brief never said; the post-render
-#: measurement (``utils/authored_content_lock.py``) is what makes this clause
-#: more than a wish.
-CONTENT_LOCK_CLAUSE = (
-    " Render CONTENT's statements as they are; you may add short labels, numbering "
-    "and captions of a few words, never sentences CONTENT does not say."
-)
-
-
-def content_lock_clause() -> str:
-    """``CONTENT_LOCK_CLAUSE`` when ``AUTHORED_CONTENT_LOCK_ENABLED`` is on, else ``""``.
-
-    Empty by default so the prompt stays byte-identical with the knob off.
-    """
-    return CONTENT_LOCK_CLAUSE if is_authored_content_lock_enabled() else ""
 
 
 def composition_intent_block() -> str:
@@ -384,9 +362,7 @@ __all__ = [
     "STORY_RULES",
     "TYPE_SCALES",
     "TypeRamp",
-    "CONTENT_LOCK_CLAUSE",
     "composition_intent_block",
-    "content_lock_clause",
     "type_ramp",
     "type_scale_text",
 ]

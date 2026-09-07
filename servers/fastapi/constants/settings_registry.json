@@ -1262,15 +1262,6 @@
       "description": "Fraction 0-1 of fitted slides re-rendered without the fit to verify the reconstructed HTML measures the same; 1 in the bench, 0.05 at first production enablement, 0 after two weeks at zero mismatches."
     },
     {
-      "key": "AUTHORED_CONTENT_LOCK_ENABLED",
-      "type": "boolean",
-      "default": false,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.quality",
-      "description": "Measure the rendered text an authored slide adds beyond its outline brief (short labels, numbering and captions exempt); a slide over max(120, 25% of the brief) added chars takes one bounded repair round like other measured defects, and the prompt asks the author to render CONTENT as it is. Never blocks publish by itself."
-    },
-    {
       "key": "AUTHORED_DECK_INSTRUMENTS_ENABLED",
       "type": "boolean",
       "default": true,

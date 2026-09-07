@@ -26,7 +26,6 @@ from services.authored_semantic_role_policy import (
     resolve_semantic_role as _resolve_semantic_role,
 )
 from services.authored_vnext.capability_registry import AUTHORED_FONT_FLOOR_PX
-from utils.authored_content_lock import content_lock_repair_instruction, is_content_lock_violation
 from utils.authored_dom_categories import BLOCKING_SAFETY_CATEGORIES
 from utils.authored_dom_quality import (
     build_compact_dom_map,
@@ -358,9 +357,7 @@ def capacity_repair_instructions(
     for raw_violation in violations:
         violation = str(raw_violation or "").strip()
         measured = re.fullmatch(r"([^:]+):(\d+)>(\d+)", violation)
-        if is_content_lock_violation(violation):
-            detail = content_lock_repair_instruction(violation, slide_role)
-        elif violation.startswith("browser_text_not_visible:"):
+        if violation.startswith("browser_text_not_visible:"):
             target = violation.partition(":")[2] or "target"
             detail = (
                 f"{slide_role} target {target} is not visible. Move it inside the "

@@ -144,7 +144,6 @@ def _evaluate_slide_quality(
     capacity_plan: AuthoredCapacityPlan | None,
     composition_profile: CompositionProfile | None,
     reference_mode: str,
-    brief: str = "",
     fit_report: Mapping[str, Any] | None = None,
 ) -> tuple[Any | None, dict[str, Any] | None]:
     """Evaluate one exact render before its durable checkpoint is advanced."""
@@ -158,12 +157,19 @@ def _evaluate_slide_quality(
     issues: list[dict[str, Any]] = []
     if capacity_plan is not None:
         issues.extend(
-            {"category": "capacity", "severity": "error", "message": violation}
-            for violation in capacity_violations(html, browser_metrics, capacity_plan.at(index))
+            {
+                "category": "capacity",
+                "severity": "error",
+                "message": violation,
+            }
+            for violation in capacity_violations(
+                html,
+                browser_metrics,
+                capacity_plan.at(index),
+            )
         )
     issues.extend(measured_gate_issues(
-        index=index, brief=brief, browser_metrics=browser_metrics,
-        capacity_plan=capacity_plan, fit_report=fit_report,
+        browser_metrics=browser_metrics, fit_report=fit_report,
     ))
     report = inspect_authored_dom(
         html,
@@ -1325,7 +1331,6 @@ async def _author_illustrate_render_pipeline(
                     capacity_plan=capacity_plan,
                     composition_profile=composition_profile,
                     reference_mode=plan_reference_mode,
-                    brief=plan.contents[index] if index < len(plan.contents) else "",
                     fit_report=fit_report,
                 )
             finally:

@@ -116,11 +116,6 @@ def is_authored_in_render_fit_enabled(settings: RuntimeSettings | None = None) -
     return _bool_setting("AUTHORED_IN_RENDER_FIT_ENABLED", True, settings)
 
 
-def is_authored_content_lock_enabled(settings: RuntimeSettings | None = None) -> bool:
-    """Flag rendered text the brief never said and send the slide through one repair round."""
-    return _bool_setting("AUTHORED_CONTENT_LOCK_ENABLED", False, settings)
-
-
 def get_authored_in_render_fit_verify_sample(
     settings: RuntimeSettings | None = None,
 ) -> float:
