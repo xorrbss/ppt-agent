@@ -43,3 +43,20 @@ def test_gate_on_raises_labels_to_the_type_floor_before_render(monkeypatch):
     assert ".chip{font-size:15px}" in clamped
     assert 'style="font-size:15px">label' in clamped
     assert 'style="font-size:18px">body' in clamped
+
+
+def test_exemplar_obeys_the_gate_floor_when_the_gate_is_on(monkeypatch):
+    """The stored exemplar carries 12-14px labels; shown beside a 15px rule it
+    must not contradict it, so the block is clamped to the same floor."""
+
+    from utils import authored_style_exemplars as exemplars
+
+    sample = '<html><body><p style="font-size:12px">chip</p><p style="font-size:18px">body</p></body></html>'
+    monkeypatch.setattr(exemplars, "load_style_exemplar", lambda style_id: sample)
+    _clear(monkeypatch)
+    monkeypatch.setenv("AUTHORED_FRAGMENTATION_GATE_ENABLED", "false")
+    assert sample in exemplars.exemplar_block("any")
+    monkeypatch.setenv("AUTHORED_FRAGMENTATION_GATE_ENABLED", "true")
+    block = exemplars.exemplar_block("any")
+    assert 'font-size:15px">chip' in block
+    assert 'font-size:18px">body' in block

@@ -23,7 +23,12 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from utils.get_env_programme import is_authored_exemplar_enabled
+from utils.authored_font_policy import enforce_authored_font_floor
+from utils.authored_fragmentation_gate import fit_font_floor_px
+from utils.get_env_programme import (
+    is_authored_exemplar_enabled,
+    is_authored_fragmentation_gate_enabled,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -87,6 +92,10 @@ def exemplar_block(style_id: str | None) -> str:
     html = load_style_exemplar(style_id)
     if html is None:
         return ""
+    if is_authored_fragmentation_gate_enabled():
+        # The example must obey the rule it sits beside: the stored exemplar
+        # carries 12-14px labels, and a model shown them writes them back.
+        html = enforce_authored_font_floor(html, minimum_px=fit_font_floor_px())
     return (
         "\nEXEMPLAR (one slide from a deck rated excellent for this style; reuse its "
         "visual language and density, never its text or layout): "
