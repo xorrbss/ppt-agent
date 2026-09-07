@@ -290,9 +290,11 @@ async def stream_outlines(
         # stored or shown. The label stays, so the citation still reads as one.
         presentation_outlines = strip_outline_citations(presentation_outlines)
 
+        # Only undershooting is fatal. Overshooting is trimmed by the slice just
+        # below, which this check used to make unreachable for that case.
         if (
             n_slides_to_generate is not None
-            and len(presentation_outlines.slides) != n_slides_to_generate
+            and len(presentation_outlines.slides) < n_slides_to_generate
         ):
             yield SSEErrorResponse(
                 detail=(

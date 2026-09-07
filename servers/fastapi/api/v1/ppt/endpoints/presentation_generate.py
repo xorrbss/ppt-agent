@@ -1162,17 +1162,21 @@ async def generate_presentation_handler(
                 **presentation_outlines_json
             )
 
-            if (
-                n_slides_to_generate is not None
-                and len(presentation_outlines.slides) != n_slides_to_generate
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        "Failed to generate presentation outlines with requested "
-                        "number of slides. Please try again."
-                    ),
-                )
+            if n_slides_to_generate is not None:
+                if len(presentation_outlines.slides) < n_slides_to_generate:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "Failed to generate presentation outlines with requested "
+                            "number of slides. Please try again."
+                        ),
+                    )
+                # Overshooting by a slide or two is common and recoverable: keep
+                # the first n and drop the rest. Only undershooting is a real
+                # failure, since there is nothing to pad the deck out with.
+                presentation_outlines.slides = presentation_outlines.slides[
+                    :n_slides_to_generate
+                ]
 
             total_outlines = len(presentation_outlines.slides)
 
