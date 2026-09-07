@@ -7,11 +7,8 @@
  * measurement pass shape glyphs with the same face the OOXML packager embeds.
  * The sanitized `htmlForPreflight` document is never modified.
  */
-import {
-  BUNDLED_FONT_FAMILIES,
-  type BundledFontFamily,
-  loadBundledBrowserFace,
-} from "./bundled-fonts.ts";
+import { loadBundledBrowserFace } from "./bundled-fonts.ts";
+import { referencedBundledFamilies } from "./bundled-fonts-manifest.ts";
 import type { PreparedGoogleFontsHtml } from "./google-fonts-collector.ts";
 import { escapeCssString, injectTrustedCss } from "./google-fonts-css.ts";
 import { getGoogleFontsCollector } from "./google-fonts-runtime.ts";
@@ -30,18 +27,13 @@ export type PreparedSlideFontsHtml = PreparedGoogleFontsHtml & {
   readonly bundled: BundledFontCollectionResult;
 };
 
-const BOLD_USAGE_PATTERN =
-  /font-weight\s*:\s*(?:[6-9]00|bold|bolder)\b|<(?:b|strong|th|h[1-6])\b|\bfont-(?:semibold|bold|extrabold|black)\b/i;
-
-function referencesFamily(html: string, family: string): boolean {
-  const escaped = family.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
-  return new RegExp(`font(?:-family)?\\s*:\\s*(?:[^;}]*[\\s,"'])?${escaped}(?=$|[\\s,"';}])`, "iu").test(html);
-}
-
 /** Families referenced by the authored document that this package can supply. */
-export function referencedBundledFamilies(html: string): BundledFontFamily[] {
-  return BUNDLED_FONT_FAMILIES.filter((family) => referencesFamily(html, family.family));
-}
+export { referencedBundledFamilies };
+
+// Weights above 500 select the bold face under the CSS matching rule the
+// manifest resolver implements (resolveBundledFontFace); keep both in step.
+const BOLD_USAGE_PATTERN =
+  /font-weight\s*:\s*(?:[6-9]\d\d|5[1-9]\d|50[1-9]|bold|bolder)\b|<(?:b|strong|th|h[1-6])\b|\bfont-(?:semibold|bold|extrabold|black)\b/i;
 
 /** True when the document needs a bold face; the regular face is always sent. */
 export function documentUsesBoldFace(html: string): boolean {

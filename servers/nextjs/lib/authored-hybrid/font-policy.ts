@@ -7,6 +7,7 @@
  * this registry. Keep CSS rewriting and native-plan serialization on these
  * helpers so the two paths cannot silently choose different substitutes.
  */
+import { HANGUL_CAPABLE_BUNDLED_FAMILY_KEYS } from "./bundled-fonts-manifest.ts";
 export interface AuthoredFontFallback {
   logical: string;
   local: string;
@@ -528,8 +529,7 @@ export interface ScriptAwareTypefaceOptions {
   readonly face?: AuthoredEmbeddedFontFace;
 }
 
-/** Authored sans-serif families that ship full Hangul coverage. */
-const HANGUL_CAPABLE_AUTHORED_FAMILIES = new Set(["pretendard"]);
+const HANGUL_CAPABLE_AUTHORED_FAMILIES = HANGUL_CAPABLE_BUNDLED_FAMILY_KEYS; // bundled manifest, not a second list
 
 function exactEmbeddedTypefaceFace(
   evidence: readonly AuthoredEmbeddedTypefaceFaceEvidence[] | undefined,

@@ -267,8 +267,9 @@ async function loadAllowlistedCandidate(
   candidate: AllowlistedCandidate,
   strategy: FontEmbeddingStrategy
 ): Promise<ResolvedEmbeddedFontFile | undefined> {
+  // Package copy first: PowerPoint must get the same bytes the browser rendered with.
   const roots = candidate.source === "bundled-open-font"
-    ? [...fontRoots(), ...bundledFontDirectories(family)]
+    ? [...bundledFontDirectories(family), ...fontRoots()]
     : fontRoots();
   for (const root of roots) {
     const expectedPath = path.resolve(root, candidate.fileName);
