@@ -11,6 +11,10 @@ from __future__ import annotations
 from utils.get_env import _int_setting, _is_truthy, get_setting_env
 from utils.runtime_settings import RuntimeSettings
 
+# Design section 8's rollout step: one fitted slide in twenty pays one extra
+# render while the reconstruction claim is watched on real decks.
+_VERIFY_SAMPLE_DEFAULT = 0.05
+
 
 def _bool_setting(key: str, default: bool, settings: RuntimeSettings | None) -> bool:
     raw = (get_setting_env(key, settings) or "").strip()
@@ -81,6 +85,31 @@ def is_authored_text_scale_rung_enabled(
 ) -> bool:
     """Try the deterministic text-scale rung before the first remake."""
     return _bool_setting("AUTHORED_TEXT_SCALE_RUNG_ENABLED", True, settings)
+
+
+def is_authored_in_render_fit_enabled(settings: RuntimeSettings | None = None) -> bool:
+    """Fit card copy inside its card during the first render (grow then shrink)."""
+    return _bool_setting("AUTHORED_IN_RENDER_FIT_ENABLED", True, settings)
+
+
+def get_authored_in_render_fit_verify_sample(
+    settings: RuntimeSettings | None = None,
+) -> float:
+    """Fraction (0..1) of fitted slides re-rendered without the fit to verify.
+
+    The default is the design's first-enablement sample, not zero: the fit is
+    on by default now, and the layout-equivalence claim is watched on real
+    decks until ``fit_reconstruction_mismatches`` has stayed at zero across
+    200+ fitted slides (design section 8).
+    """
+    raw = (get_setting_env("AUTHORED_IN_RENDER_FIT_VERIFY_SAMPLE", settings) or "").strip()
+    if not raw:
+        return _VERIFY_SAMPLE_DEFAULT
+    try:
+        value = float(raw)
+    except ValueError:
+        return _VERIFY_SAMPLE_DEFAULT
+    return max(0.0, min(1.0, value))
 
 
 def is_authored_deck_instruments_enabled(
@@ -229,6 +258,7 @@ def is_authored_prompt_bundle_enabled(
 
 __all__ = [
     "get_authored_illustration_share",
+    "get_authored_in_render_fit_verify_sample",
     "get_authored_metrics_cache_entries",
     "get_authored_metrics_cache_mb",
     "get_authored_renderer_lease_idle_seconds",
@@ -246,6 +276,7 @@ __all__ = [
     "is_authored_local_stage_async_enabled",
     "is_authored_exemplar_enabled",
     "is_authored_header_deterministic_repair_enabled",
+    "is_authored_in_render_fit_enabled",
     "is_authored_renderer_framed_protocol_enabled",
     "is_authored_renderer_lease_enabled",
     "is_authored_renderer_warmup_enabled",

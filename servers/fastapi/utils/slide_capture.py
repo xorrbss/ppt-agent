@@ -34,6 +34,7 @@ from services.authored_vnext.capability_registry import (
     capability_metadata,
 )
 from utils.authored_dom_quality import ensure_authored_qids
+from utils.slide_capture_fit import fit_capture_fields, fit_probe_prelude, fit_request_html, require_qid_complete
 from utils.slide_capture_hit_test import THIN_VIEWPORT_HIT_TEST_JS
 from utils.slide_capture_polygon_paint import POLYGON_PAINT_DOMAIN_JS
 from utils.slide_capture_rounded_paint import ROUNDED_PAINT_DOMAIN_JS
@@ -287,9 +288,15 @@ def _instrument_authored_html(
     registry_metadata = json.dumps(
         capability_metadata(consumer="chromium"), sort_keys=True, separators=(",", ":")
     )
+    # Plain JavaScript with single braces.  Interpolating it as an f-string value
+    # is safe -- a substituted value is never re-scanned -- and this template is
+    # never passed through ``str.format``.
+    fit_prelude = fit_probe_prelude()
     script = rf"""<script data-codex-dom-probe{nonce_attribute}>
 (() => {{
-  const done = () => {{
+{fit_prelude}
+  const done = (pass) => {{
+    const fit = __codexFitPass(pass === 'final' ? 'final' : 'provisional');
     const px = (value) => {{ const parsed = parseFloat(value || '0'); return Number.isFinite(parsed) ? parsed : 0; }};
     const rgba = (value) => {{
       const match = String(value || '').match(/rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)/i);
@@ -904,7 +911,7 @@ def _instrument_authored_html(
       fonts_ready: !document.fonts || document.fonts.status === 'loaded',
       capabilityRegistry: {registry_metadata},
       source_digest: '{source_digest}', render_digest: '{render_digest}',
-      dom_metrics_version: '{DOM_METRICS_VERSION}', metrics_cache_key: '{key}', elements
+      dom_metrics_version: '{DOM_METRICS_VERSION}', metrics_cache_key: '{key}', fit, elements
     }};
     let marker = document.getElementById('{_METRICS_ELEMENT_ID}');
     if (!marker) {{ marker = document.createElement('meta'); marker.id = '{_METRICS_ELEMENT_ID}'; document.head.appendChild(marker); }}
@@ -916,11 +923,12 @@ def _instrument_authored_html(
     marker.setAttribute('content', encodeURIComponent(JSON.stringify({{width: innerWidth, height: innerHeight, fonts_ready: false, elements: [], probe_error: String(error && (error.stack || error.message) || error)}})));
   }};
   const run = () => {{
-    try {{ done(); }} catch (error) {{ failed(error); }}
+    // Without web fonts the first pass already sees final glyph geometry, so its fit is the final one.
+    try {{ done(!document.fonts || document.fonts.status === 'loaded' ? 'final' : 'provisional'); }} catch (error) {{ failed(error); }}
     // Publish synchronously so --dump-dom can never race an unresolved font
     // promise.  If web fonts settle within Chrome's virtual-time budget, refresh
     // the same marker with final glyph geometry before the dump/screenshot.
-    try {{ if (document.fonts && document.fonts.ready) document.fonts.ready.then(done).catch(failed); }} catch (_) {{}}
+    try {{ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => done('final')).catch(failed); }} catch (_) {{}}
   }};
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, {{once: true}}); else run();
 }})();
@@ -980,7 +988,7 @@ def get_cached_browser_metrics(html: str) -> Mapping[str, Any] | None:
     return metrics
 
 
-def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> None:
+def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> Mapping[str, Any]:
     """Store metrics under the same authored HTML identity as its rendered PNG."""
     # The in-page probe runs over nonce-bearing admitted HTML, but its source
     # identity is the exact pre-admission render request (the same contract as
@@ -998,6 +1006,10 @@ def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> None:
     except Exception:
         metric_bytes = 0
     _count_runtime("metrics_cache_bytes", metric_bytes)
+    # The rebound mapping is what identifies this HTML: callers that keep the
+    # metrics (the fitted capture) must carry these, not the ones the renderer
+    # measured from its own request copy.
+    return metrics
     max_entries, max_bytes = _dom_metrics_cache_limits()
     while (
         len(_browser_metrics_cache) > max_entries
@@ -1075,18 +1087,26 @@ async def ensure_browser_metrics(
 
 
 async def render_html_to_png_with_metrics(
-    html: str, timeout: int = 60, *, deck_scope: str | None = None
+    html: str, timeout: int = 60, *, deck_scope: str | None = None, fit: bool = False
 ) -> "RenderCapture":
     """Render one slide and return telemetry tied to the same HTML cache identity.
 
     This is the preferred API for quality-review callers.  It preserves the legacy
     bytes-only renderer while making cache divergence explicit and recoverable.
+
+    ``fit`` requests the in-page card fit: the opt-in class rides only on the
+    render request, and an edited DOM comes back as ``fitted_html`` (the HTML of
+    record, whose digest is ``html_digest``, and the key its metrics are cached
+    under).  Callers that persist HTML must persist ``fitted_html``.
     """
     # Preserve renderer admission semantics even when the atomic result cache
     # contains a prior successful capture.
     ensure_renderer_enabled()
+    if fit:
+        require_qid_complete(html)
+    request_html = fit_request_html(html) if fit else html
     html_digest = "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
-    cached_capture = _peek_cached_capture(html, timeout)
+    cached_capture = _peek_cached_capture(request_html, timeout)
     if cached_capture is not None:
         _count_runtime("requests")
         _count_runtime("capture_cache_hits")
@@ -1098,28 +1118,31 @@ async def render_html_to_png_with_metrics(
             png=cached_capture.png,
             browser_metrics=cached_capture.browser_metrics,
             runtime_counters=get_render_runtime_counters(),
+            fitted_html=cached_capture.fitted_html,
+            fit_report=cached_capture.fit_report,
         )
     _count_runtime("capture_cache_misses")
-    cached_metrics = _peek_cached_browser_metrics(html)
-    png = await render_html_to_png(html, timeout=timeout, deck_scope=deck_scope)
-    if cached_metrics is not None:
+    metrics = _peek_cached_browser_metrics(request_html)
+    if metrics is not None:
         _count_runtime("metrics_cache_hits")
-        metrics = cached_metrics
-    else:
-        captured_metrics = _peek_cached_browser_metrics(html)
-        if captured_metrics is not None:
-            metrics = captured_metrics
-        else:
-            metrics = await ensure_browser_metrics(html, timeout=timeout)
+    png = await render_html_to_png(request_html, timeout=timeout, deck_scope=deck_scope)
+    if metrics is None:
+        metrics = _peek_cached_browser_metrics(request_html)
+        if metrics is None:
+            metrics = await ensure_browser_metrics(request_html, timeout=timeout)
     _count_runtime("capture_results")
     _count_runtime("capture_png_bytes", len(png))
     if metrics is not None:
         _count_runtime("capture_metric_results")
-    capture = RenderCapture.from_payload(
-        html_digest=html_digest, png=png, browser_metrics=metrics,
-        runtime_counters=get_render_runtime_counters(),
+    digest, fitted_html, fit_report, metrics = fit_capture_fields(
+        html, metrics, fit=fit, digest=html_digest, cache_metrics=_cache_browser_metrics,
     )
-    _cache_capture(html, timeout, capture)
+    capture = RenderCapture.from_payload(
+        html_digest=digest, png=png, browser_metrics=metrics,
+        runtime_counters=get_render_runtime_counters(),
+        fitted_html=fitted_html, fit_report=fit_report,
+    )
+    _cache_capture(request_html, timeout, capture)
     return capture
 
 
@@ -1140,6 +1163,10 @@ class RenderCapture:
     png_digest: str
     metrics_digest: str | None
     runtime_counters: Mapping[str, int]
+    # Set only by a ``fit=True`` render whose fitter edited the DOM; ``fitted_html``
+    # is then the HTML of record and ``html_digest`` is its digest.
+    fitted_html: str | None = None
+    fit_report: Mapping[str, Any] | None = None
 
     @classmethod
     def from_payload(
@@ -1149,6 +1176,8 @@ class RenderCapture:
         png: bytes,
         browser_metrics: Mapping[str, Any] | None,
         runtime_counters: Mapping[str, int],
+        fitted_html: str | None = None,
+        fit_report: Mapping[str, Any] | None = None,
     ) -> "RenderCapture":
         canonical = json.dumps(
             browser_metrics, sort_keys=True, separators=(",", ":"),
@@ -1161,6 +1190,7 @@ class RenderCapture:
             png_digest="sha256:" + hashlib.sha256(png).hexdigest(),
             metrics_digest=("sha256:" + hashlib.sha256(canonical).hexdigest()) if canonical is not None else None,
             runtime_counters=dict(runtime_counters),
+            fitted_html=fitted_html, fit_report=fit_report,
         )
 
     def __iter__(self):
@@ -1711,13 +1741,36 @@ async def _render_html_to_png_subprocess(
             return buf.getvalue()
 
 
+from utils.renderer_worker_response import RendererIsolationError
 from utils.slide_capture_deck_scope import resolve_render_deck_scope, set_render_deck_scope
-from utils.slide_capture_worker_client import (
-    RendererIsolationError,
-    _decode_worker_response,
-    _render_html_in_isolated_worker,
-    render_with_lease,
-)
+
+# The worker CLIENT (lease, dispatch, response decoding) is API-side code: it
+# reads runtime settings through utils.get_env, which reaches the provider
+# credential and database models.  Importing it here eagerly would pull that
+# subtree into the isolated renderer image, whose lock carries none of those
+# packages, and the image would die on its first request.  The names are bound
+# on first use instead; a test that sets them on this module beforehand wins.
+_WORKER_CLIENT_NAMES = ("_decode_worker_response", "_render_html_in_isolated_worker", "render_with_lease")
+_render_html_in_isolated_worker: Any = None
+render_with_lease: Any = None
+
+
+def _bind_worker_client() -> None:
+    if all(globals().get(name) is not None for name in _WORKER_CLIENT_NAMES):
+        return
+    from utils import slide_capture_worker_client as client
+
+    for name in _WORKER_CLIENT_NAMES:
+        if globals().get(name) is None:
+            globals()[name] = getattr(client, name)
+
+
+def __getattr__(name: str):
+    # ``_decode_worker_response`` is reached only as ``slide_capture.<name>``.
+    if name in _WORKER_CLIENT_NAMES:
+        _bind_worker_client()
+        return globals()[name]
+    raise AttributeError(name)
 
 
 
@@ -1738,6 +1791,7 @@ async def _render_admitted_html_in_worker(
 async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
     """Render through isolation by default; legacy file input requires two opt-ins."""
 
+    _bind_worker_client()
     ensure_renderer_enabled()
     mode = renderer_mode()
     admitted = _admit_render_source(html)

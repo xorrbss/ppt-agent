@@ -76,6 +76,10 @@ class SlideInstrumentInput:
     html: str
     metrics: Mapping[str, Any]
     palette: Sequence[str] = ()
+    #: The in-render-fit report (``docs/authored-in-render-fit-design-
+    #: 20260906.md`` section 4) for this slide's draft render, or ``None``
+    #: when the fit did not run for it.
+    fit_report: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +132,24 @@ class DeckInstruments:
     footer_intrusion_slide_count: int = 0
     footer_intrusion_px: tuple[float, ...] = ()
     median_footer_intrusion_px: float | None = None
+    #: In-render-fit aggregates (``docs/authored-in-render-fit-design-
+    #: 20260906.md`` section 6), from every slide's ``fit_report`` card list.
+    #: Zero/empty on a deck where the fit never ran, same as the footer
+    #: instruments above on a deck with no intrusions.
+    fit_cards_grown: int = 0
+    fit_cards_shrunk: int = 0
+    fit_cards_unfixable: int = 0
+    fit_cards_skipped: int = 0
+    fit_errors: int = 0
+    fit_reconstruction_mismatches: int = 0
+    fit_factor_min: float | None = None
+    fit_escape_px: tuple[float, ...] = ()
+    #: Slides whose fit was requested but never reached ``fit_state: final``
+    #: (fonts had not settled by the poll bound) or whose report says
+    #: ``partial`` (a card or layout budget stopped the fitter early).
+    #: A report with ``requested: false`` is not a fit and counts in neither.
+    fit_provisional_slides: int = 0
+    fit_partial_slides: int = 0
 
     def to_receipt(self) -> dict[str, Any]:
         return asdict(self)
@@ -297,6 +319,63 @@ def _footer_intrusions(
     )
 
 
+def _fit_aggregates(reports: Sequence[Mapping[str, Any] | None]) -> dict[str, Any]:
+    """Deck-wide in-render-fit aggregates from each slide's ``fit_report``.
+
+    Mirrors ``_footer_intrusions``: reads what the fitter already reported
+    (``docs/authored-in-render-fit-design-20260906.md`` section 4) rather than
+    re-deriving it, and never raises -- a malformed report is skipped.
+    """
+
+    grown = shrunk = unfixable = skipped = errors = mismatches = 0
+    provisional_slides = partial_slides = 0
+    factors: list[float] = []
+    escapes: list[float] = []
+    for report in reports:
+        if not isinstance(report, Mapping):
+            continue
+        if report.get("error"):
+            errors += 1
+        if report.get("reconstruction_mismatch"):
+            mismatches += 1
+        if report.get("requested") and report.get("fit_state") != "final":
+            provisional_slides += 1
+        if report.get("partial"):
+            partial_slides += 1
+        for card in report.get("cards") or ():
+            if not isinstance(card, Mapping):
+                continue
+            # ``grown_and_shrunk`` is the common outcome, so each counter
+            # answers its own question rather than partitioning the vocabulary.
+            outcome = str(card.get("outcome", ""))
+            if "grown" in outcome:
+                grown += 1
+            if "shrunk" in outcome:
+                shrunk += 1
+            if outcome.startswith("unfixable"):
+                unfixable += 1
+            elif outcome.startswith("skipped"):
+                skipped += 1
+            factor = _maybe_float(card.get("factor"))
+            if factor is not None:
+                factors.append(factor)
+            escape = _maybe_float(card.get("escape_px"))
+            if escape is not None:
+                escapes.append(escape)
+    return {
+        "fit_cards_grown": grown,
+        "fit_cards_shrunk": shrunk,
+        "fit_cards_unfixable": unfixable,
+        "fit_cards_skipped": skipped,
+        "fit_errors": errors,
+        "fit_reconstruction_mismatches": mismatches,
+        "fit_factor_min": round(min(factors), 4) if factors else None,
+        "fit_escape_px": tuple(sorted(escapes)),
+        "fit_provisional_slides": provisional_slides,
+        "fit_partial_slides": partial_slides,
+    }
+
+
 def _compute_slide(slide: SlideInstrumentInput, canvas: tuple[float, float]) -> SlideInstruments:
     canvas_w, canvas_h = canvas
     decoration_qids = _decoration_qids(slide.html)
@@ -407,6 +486,7 @@ def compute_deck_instruments(
         footer_intrusion_slide_count=sum(1 for s in finalized if s.footer_intrusions),
         footer_intrusion_px=tuple(sorted(intrusion_px)),
         median_footer_intrusion_px=round(median(intrusion_px), 2) if intrusion_px else None,
+        **_fit_aggregates([slide.fit_report for slide in slides]),
     )
 
 

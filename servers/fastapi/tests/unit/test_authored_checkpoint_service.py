@@ -112,7 +112,17 @@ def _install_one_slide_pipeline_fakes(monkeypatch, *, rendered_html):
 
     monkeypatch.setattr(pipeline, "prepare_authored_deck", lambda *_args, **_kwargs: plan)
     monkeypatch.setattr(pipeline, "author_planned_slide", unexpected_author)
+    async def render_with_metrics(html, *, fit=False, **_kwargs):
+        """The knob defaults on, so the pipeline reaches this one; it defers to
+        the plain fake above so the test observes the same calls either way."""
+
+        png = await fake_render(html)
+        return SimpleNamespace(
+            png=png, browser_metrics=None, fitted_html=None, fit_report=None
+        )
+
     monkeypatch.setattr(pipeline, "render_html_to_png", fake_render)
+    monkeypatch.setattr(pipeline, "render_html_to_png_with_metrics", render_with_metrics)
     monkeypatch.setattr(pipeline, "record_local_stage", no_recording)
 
 

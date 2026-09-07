@@ -5,11 +5,22 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent
 REPOSITORY_ROOT = ROOT.parents[1]
+
+# Both live next to this script; importing by path keeps the contract
+# verifiable as a standalone script regardless of the caller's cwd.
+sys.path.insert(0, str(ROOT))
+import attestation  # noqa: E402
+from import_closure import compute_closure  # noqa: E402
+
+WORKER_IMPORT_CLOSURE_FIRST_PARTY_ROOTS = frozenset(
+    {"utils", "services", "models", "enums", "constants"}
+)
 PROVIDER_ENV = re.compile(
     r"(?:API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|OPENAI|ANTHROPIC|GOOGLE|AZURE|"
     r"BEDROCK|VERTEX|OLLAMA|OPENROUTER|FIREWORKS|TOGETHER|CEREBRAS|LITELLM|"
@@ -55,12 +66,12 @@ def verify() -> list[dict[str, Any]]:
         "slide_capture_pixel_probe.py",
         "slide_capture_reusable_render.py",
         "slide_capture_worker_client.py",
+        # The response wire constant was extracted here in 8e597e2a9; the
+        # capture path imports it instead of holding the literal.  It is in
+        # the image's COPY list on the import closure's own account, so the
+        # packaging assertion above covers it like the rest.
+        "renderer_worker_response.py",
     )
-    # The response wire constant was extracted to its own module in
-    # 8e597e2a9; the capture path imports it instead of holding the literal.
-    worker_response_source = (
-        fastapi_utils / "renderer_worker_response.py"
-    ).read_text(encoding="utf-8")
     slide_capture_source = "\n".join(
         (fastapi_utils / name).read_text(encoding="utf-8")
         for name in slide_capture_files
@@ -77,11 +88,14 @@ def verify() -> list[dict[str, Any]]:
     worker = compose["services"][contract["worker"]["service"]]
     checks: list[dict[str, Any]] = []
 
-    def check(check_id: str, condition: Any) -> None:
+    def check(check_id: str, condition: Any, detail: str | None = None) -> None:
         passed = bool(condition)
-        checks.append({"id": check_id, "pass": passed})
+        entry: dict[str, Any] = {"id": check_id, "pass": passed}
+        if detail:
+            entry["detail"] = detail
+        checks.append(entry)
         if not passed:
-            raise AssertionError(check_id)
+            raise AssertionError(check_id if not detail else f"{check_id}: {detail}")
 
     check("worker-entrypoint", worker["entrypoint"] == [
         "/opt/venv/bin/python", "-m", contract["worker"]["module"]
@@ -225,7 +239,7 @@ def verify() -> list[dict[str, Any]]:
         ))
         and all("authored-render-response/v1" in source for source in (
             worker_source,
-            slide_capture_source + worker_response_source,
+            slide_capture_source,
             launcher,
         ))
     ))
@@ -290,6 +304,42 @@ def verify() -> list[dict[str, Any]]:
         '"--ipc", "private"', '"--user", "65532:65532"',
         'combine_observations.py', 'security_gate.py',
     )))
+
+    # The worker imports first-party modules both eagerly and lazily (a lazy
+    # import inside a request-handling function still runs inside the built
+    # image the first time it is reached), so the Dockerfile COPY list and
+    # attestation.IMAGE_SOURCES must cover the module's real, transitive
+    # first-party import closure -- not just what someone remembered to add
+    # when the worker last changed. Missing a copy fails at runtime, not at
+    # build time, because Docker never sees the absent import.
+    worker_entry = REPOSITORY_ROOT / "servers" / "fastapi" / "utils" / "authored_renderer_worker.py"
+    closure = compute_closure(
+        worker_entry,
+        REPOSITORY_ROOT / "servers" / "fastapi",
+        WORKER_IMPORT_CLOSURE_FIRST_PARTY_ROOTS,
+    )
+    runtime_stage_marker = "AS authored-renderer-runtime"
+    stage_start = dockerfile.index(runtime_stage_marker)
+    next_stage = dockerfile.find("\nFROM ", stage_start + 1)
+    runtime_stage = dockerfile[stage_start:] if next_stage == -1 else dockerfile[stage_start:next_stage]
+    image_sources = set(attestation.IMAGE_SOURCES)
+    missing_copy: list[str] = []
+    missing_attestation: list[str] = []
+    for relative in sorted(closure.files):
+        source_path = f"servers/fastapi/{relative}"
+        copy_line = f"COPY {source_path} /app/{source_path}"
+        if copy_line not in runtime_stage:
+            missing_copy.append(source_path)
+        if source_path not in image_sources:
+            missing_attestation.append(source_path)
+    check(
+        "product-image-import-closure",
+        not missing_copy and not missing_attestation,
+        detail=(
+            f"missing COPY in authored-renderer-runtime: {missing_copy}; "
+            f"missing from attestation.IMAGE_SOURCES: {missing_attestation}"
+        ) if (missing_copy or missing_attestation) else None,
+    )
     return checks
 
 
