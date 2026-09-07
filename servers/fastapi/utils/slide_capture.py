@@ -384,6 +384,20 @@ def _instrument_authored_html(
       ownedSurfaceRectCache.set(node, rects);
       return rects;
     }};
+    const descendantOwnedPaintRects = (node) => {{
+      // Every qid-bearing descendant owns its own paint under the same rule,
+      // so their rects together are exactly this element's visible ink.
+      const rects = [];
+      for (const child of node.querySelectorAll('[data-qid]')) {{
+        for (const paintRect of ownedSurfaceRects(child)) {{
+          rects.push({{paintRect, group: `descendant-surface:${{rects.length}}`}});
+        }}
+        for (const paintRect of ownedTextRects(child)) {{
+          rects.push({{paintRect, group: `descendant-text:${{rects.length}}`}});
+        }}
+      }}
+      return rects;
+    }};
     const pointInRect = (x, y, rect) =>
       x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
     const candidatePaintsAt = (candidate, x, y) => {{
@@ -601,10 +615,24 @@ def _instrument_authored_html(
       if (rect.width <= 0 || rect.height <= 0) return empty(
         {{fraction: 1, continuous: 1, step: 0, unknown: 0, covered: 0}},
         'measured', 'degenerate_target_bbox_assumed_occluded');
-      const ownedPaintRects = [
+      const ownPaintRects = [
         ...surfaceRects.map((paintRect, index) => ({{paintRect, group: `surface:${{index}}`}})),
         ...textRects.map((paintRect, index) => ({{paintRect, group: `text:${{index}}`}}))
       ];
+      // An element that paints nothing itself still has ink when its text
+      // lives in descendants that carry their own `data-qid`: `ownedTextNodes`
+      // assigns each text node to its NEAREST qid ancestor, so a bound wrapper
+      // (a card body holding one <p> per line) owns no rect at all.  Answering
+      // `not_applicable` for those made every consumer that requires a
+      // measured verdict reject a perfectly visible block -- which is what
+      // failed `source_content_browser_readback_failed` on every multi-line
+      // source block.  Sample the descendants' paint instead: it is the same
+      // ink, and it is the ink the binding is about.  Elements with no paint
+      // anywhere below them (spacers, empty wrappers) stay not applicable.
+      const ownedPaintRects = ownPaintRects.length
+        ? ownPaintRects
+        : descendantOwnedPaintRects(node);
+      const ownedPaintSource = ownPaintRects.length ? 'own' : 'descendant';
       if (!ownedPaintRects.length) return empty(
         {{fraction: 0, continuous: 0, step: 0, unknown: 0}},
         'not_applicable', 'no_owned_paint');
@@ -754,7 +782,7 @@ def _instrument_authored_html(
       const fraction = covered / known;
       return {{
         fraction, continuous: Math.max(largest, largestOwnedGroup) / known, ...common,
-        evidence: evidence('measured', null, {{sampled, known, covered, known_occluded_fraction: fraction}})
+        evidence: evidence('measured', null, {{sampled, known, covered, known_occluded_fraction: fraction, owned_paint_source: ownedPaintSource}})
       }};
     }};
     const elements = allQids.map((node, domIndex) => {{
