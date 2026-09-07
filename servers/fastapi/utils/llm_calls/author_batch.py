@@ -37,6 +37,7 @@ from utils.authored_image_slots import scan_slots, source_slot_id_for_asset
 from utils.llm_calls import author_slide_prompt, author_slide_rules
 from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
 from utils.llm_calls.author_prompt_split import (
+    invariant_prefix_source,
     is_authored_prompt_system_hoist_enabled,
     split_deck_invariant,
 )
@@ -341,11 +342,17 @@ async def author_slides_html(
     # every slide of the deck shares one cacheable prefix and a three-slide
     # batch stops repeating the same ~20k characters three times. The text is
     # unchanged: the hoisted head plus each slide text rejoin exactly.
+    # C2: every request of one batch shares the same deck-wide style anchor
+    # (``author_planned_batch`` passes it uniformly), so the warm-up knob's
+    # anchor-inclusive prefix is computed once from the first request.
+    invariant_prefix = invariant_prefix_source(
+        design_system, batch[0].style_anchor if batch else None
+    )
     hoisted = ""
     user_parts: list[object] = [TextContentPart(text=wrapper_contract)]
     for item in prepared:
         head, slide_prompt = (
-            split_deck_invariant(item.prompt, design_system)
+            split_deck_invariant(item.prompt, invariant_prefix)
             if is_authored_prompt_system_hoist_enabled()
             else ("", item.prompt)
         )

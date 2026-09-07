@@ -31,7 +31,7 @@ from utils.llm_calls.author_slide_admission import (
 from utils.llm_calls import author_slide_effort, author_slide_prompt, author_slide_rules
 from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
 from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
-from utils.llm_calls.author_prompt_split import author_messages
+from utils.llm_calls.author_prompt_split import author_messages, invariant_prefix_source
 from utils.llm_calls.author_slide_stream import is_authored_author_streaming_enabled, stream_author_call
 
 from llmai import get_client
@@ -1015,10 +1015,13 @@ async def author_slide_html(
             "object-fit:contain instead of cropping or distortion."
             + source_guidance
         )
+    # C2: once a style anchor exists, its text is deck-invariant too, so the
+    # warm-up knob folds it into the hoisted prefix (see author_prompt_split).
+    invariant_prefix = invariant_prefix_source(design_system, style_anchor)
     messages = author_messages(
         author_slide_rules.SYSTEM_PROMPT,
         prompt + reference_guidance + source_guidance if image_parts else prompt,
-        design_system,
+        invariant_prefix,
         image_parts=image_parts,
     )
     kwargs = get_generate_kwargs(model=model, messages=messages, max_tokens=output_budget)
@@ -1137,7 +1140,7 @@ async def author_slide_html(
             index + 1,
         )
         fallback_messages = author_messages(
-            author_slide_rules.SYSTEM_PROMPT, prompt, design_system
+            author_slide_rules.SYSTEM_PROMPT, prompt, invariant_prefix
         )
         fallback_kwargs = get_generate_kwargs(
             model=model, messages=fallback_messages, max_tokens=output_budget

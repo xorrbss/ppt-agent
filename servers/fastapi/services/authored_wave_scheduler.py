@@ -11,6 +11,18 @@ overload that halves ``concurrency_cap`` narrows the live scheduler too.
 
 The barrier path is kept here as well, so the pipeline holds one call site for
 both and neither implementation drifts.
+
+C2 (``docs/authored-sol-quality-first-design-20260908.md``): with
+``AUTHORED_PROMPT_CACHE_WARMUP_ENABLED`` this module also runs exactly one
+call to completion before admitting anything else of the initial-authoring
+wave -- by the time ``run_initial_authoring`` is called the style anchor, if
+any, is already resolved, so this one call already carries the deck's final,
+anchor-inclusive cacheable prefix (see ``utils.llm_calls.author_prompt_split``
+for the prefix side of this fix). Without the knob nothing here changes:
+the token profile's ``initial_wave_concurrency = 1`` already runs one call
+alone, but the api profile admits its whole steady width immediately, and
+neither guarantee survives an explicit ``AUTHORED_BATCH_WAVE_CONCURRENCY``
+override the way this explicit step does.
 """
 
 from __future__ import annotations
@@ -25,7 +37,10 @@ from services.authored_batch_policy import (
     advance_authored_batch_policy,
     plan_authored_batch_wave,
 )
-from utils.get_env_programme import is_authored_wave_barrier_disabled
+from utils.get_env_programme import (
+    is_authored_prompt_cache_warmup_enabled,
+    is_authored_wave_barrier_disabled,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -99,17 +114,33 @@ async def run_initial_authoring(
     run_batch: RunBatch,
     record: RecordBatch,
     barrier_disabled: bool | None = None,
+    cache_warmup_enabled: bool | None = None,
 ) -> None:
     """Author every pending slide exactly once, then return.
 
     ``record`` owns the caller's success/failure bookkeeping and returns whether
     the call succeeded; the batch policy is advanced here from that answer plus
     the raised exception, if any.
+
+    C2: with the warm-up knob on, the first ``slides_per_call`` indexes are
+    authored alone, to completion, before anything else is admitted -- see
+    this module's docstring. Off (the default), behaviour is unchanged.
     """
 
     indexes = tuple(pending)
     if not indexes:
         return
+    warmup = (
+        is_authored_prompt_cache_warmup_enabled()
+        if cache_warmup_enabled is None
+        else cache_warmup_enabled
+    )
+    if warmup:
+        indexes = await _run_cache_warmup_call(
+            indexes, schedule, run_batch=run_batch, record=record
+        )
+        if not indexes:
+            return
     disabled = (
         is_authored_wave_barrier_disabled()
         if barrier_disabled is None
@@ -119,6 +150,31 @@ async def run_initial_authoring(
         await _run_admission(indexes, schedule, run_batch=run_batch, record=record)
         return
     await _run_waves(indexes, schedule, run_batch=run_batch, record=record)
+
+
+async def _run_cache_warmup_call(
+    indexes: tuple[int, ...],
+    schedule: AuthoredWaveSchedule,
+    *,
+    run_batch: RunBatch,
+    record: RecordBatch,
+) -> tuple[int, ...]:
+    """Run exactly one call alone, then return the remaining indexes.
+
+    A provider's prompt-cache entry is written by whichever backend served
+    the call that warmed it; admitting a burst of concurrent calls before
+    that entry exists tends to scatter them across other, cold backends
+    instead of routing back to the warm one. Letting one call land and
+    finish first gives the rest of the wave a warm target.
+    """
+
+    size = max(1, int(schedule.policy.profile.slides_per_call))
+    batch = indexes[:size]
+    remaining = indexes[size:]
+    await schedule.wait_out_cooldown("cache-warmup")
+    (outcome,) = await asyncio.gather(run_batch(batch), return_exceptions=True)
+    schedule.advance(outcome, succeeded=record(batch, outcome))
+    return remaining
 
 
 async def _run_waves(

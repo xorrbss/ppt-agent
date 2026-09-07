@@ -266,6 +266,20 @@ def is_authored_prompt_cache_key_enabled(
     return _bool_setting("AUTHORED_PROMPT_CACHE_KEY_ENABLED", True, settings)
 
 
+def is_authored_prompt_cache_warmup_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Warm the deck's prompt-cache prefix before the authoring fan-out (C2).
+
+    Off by default. On: the deck-invariant prefix used for the hoisted system
+    message includes the style anchor block (once resolved), not only the
+    design system, and the initial-authoring scheduler runs exactly one call
+    with that final prefix to completion before admitting the rest of the
+    wave concurrently.
+    """
+    return _bool_setting("AUTHORED_PROMPT_CACHE_WARMUP_ENABLED", False, settings)
+
+
 def is_authored_prompt_bundle_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:
@@ -309,6 +323,7 @@ __all__ = [
     "is_authored_renderer_warmup_enabled",
     "is_authored_prompt_bundle_enabled",
     "is_authored_prompt_cache_key_enabled",
+    "is_authored_prompt_cache_warmup_enabled",
     "is_authored_prompt_system_hoist_enabled",
     "is_authored_style_anchor_enabled",
     "is_authored_tail_streaming_enabled",

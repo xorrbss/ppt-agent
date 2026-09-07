@@ -1434,6 +1434,15 @@
       "description": "Send a per-deck prompt_cache_key with each authoring call so the provider can reuse the deck-invariant prompt prefix across slides."
     },
     {
+      "key": "AUTHORED_PROMPT_CACHE_WARMUP_ENABLED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Fold the deck's style anchor into the hoisted cache prefix once it is resolved, and run one authoring call with that final prefix to completion before the rest of the initial-authoring wave fans out, so the prompt cache is warm for the remaining calls."
+    },
+    {
       "key": "AUTHORED_PROMPT_SYSTEM_HOIST_ENABLED",
       "type": "boolean",
       "default": true,
