@@ -34,7 +34,8 @@ from services.authored_vnext.capability_registry import (
     capability_metadata,
 )
 from utils.authored_dom_quality import ensure_authored_qids
-from utils.slide_capture_fit import fit_capture_fields, fit_probe_prelude, fit_request_html, require_qid_complete
+from utils.slide_capture_fit import (
+    fit_capture_fields, fit_font_floor_px, fit_probe_prelude, fit_request_html, require_qid_complete)
 from utils.slide_capture_hit_test import THIN_VIEWPORT_HIT_TEST_JS
 from utils.slide_capture_polygon_paint import POLYGON_PAINT_DOMAIN_JS
 from utils.slide_capture_rounded_paint import ROUNDED_PAINT_DOMAIN_JS
@@ -291,7 +292,9 @@ def _instrument_authored_html(
     # Plain JavaScript with single braces.  Interpolating it as an f-string value
     # is safe -- a substituted value is never re-scanned -- and this template is
     # never passed through ``str.format``.
-    fit_prelude = fit_probe_prelude()
+    # The shrink floor rides in the probe itself, so a worker process fits to
+    # the floor the API resolved (the fragmentation gate's when it is on).
+    fit_prelude = fit_probe_prelude(font_floor_px=fit_font_floor_px())
     script = rf"""<script data-codex-dom-probe{nonce_attribute}>
 (() => {{
 {fit_prelude}

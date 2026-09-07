@@ -35,12 +35,12 @@ FIT_BISECTION_STEPS = 7
 _CONSTANTS_MARKER = "__FIT_CONSTANTS__"
 
 
-def fit_constants() -> dict[str, object]:
-    """Every value the fragment interpolates, keyed as the JavaScript reads it."""
-
+def fit_constants(*, font_floor_px: float | None = None) -> dict[str, object]:
+    """Every value the fragment interpolates, as JavaScript reads it; ``font_floor_px`` overrides the shrink floor."""
+    floor = AUTHORED_FONT_FLOOR_PX if font_floor_px is None else float(font_floor_px)
     return {
         "version": FIT_VERSION, "fit_class": FIT_CLASS, "margin_px": FIT_MARGIN_PX,
-        "tolerance_px": ESCAPE_TOLERANCE_PX, "font_floor_px": AUTHORED_FONT_FLOOR_PX,
+        "tolerance_px": ESCAPE_TOLERANCE_PX, "font_floor_px": floor,
         "numbered_content_bottom_px": NUMBERED_CONTENT_BOTTOM_PX, "max_cards": MAX_FIT_CARDS,
         "unnumbered_content_bottom_px": UNNUMBERED_CONTENT_BOTTOM_PX, "max_layouts": MAX_FIT_LAYOUTS,
         "time_budget_fraction": FIT_TIME_BUDGET_FRACTION, "bisection_steps": FIT_BISECTION_STEPS,
@@ -332,11 +332,11 @@ const __codexFit = {
 """
 
 
-def fit_script_fragment(width: int = 104) -> str:
+def fit_script_fragment(width: int = 104, *, font_floor_px: float | None = None) -> str:
     """The fragment the probe splices into its IIFE scope, with the constants interpolated
     as one object literal wrapped only between pairs, so every number stays greppable."""
     groups: list[str] = []
-    for key, value in sorted(fit_constants().items()):
+    for key, value in sorted(fit_constants(font_floor_px=font_floor_px).items()):
         pair = f"{json.dumps(key)}: {json.dumps(value)}"
         if groups and len(groups[-1]) + len(pair) + 2 <= width:
             groups[-1] += ", " + pair

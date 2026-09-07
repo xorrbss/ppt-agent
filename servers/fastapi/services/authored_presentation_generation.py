@@ -583,7 +583,7 @@ def _capacity_gate_initial_critiques(
             message = str(issue.get("message") or issue.get("detail") or "").strip()
             if not message:
                 continue
-            if category == "capacity":
+            if category in {"capacity", "fragmentation"}:
                 instructions = capacity_repair_instructions(
                     roles[slide_index],
                     (message,),
