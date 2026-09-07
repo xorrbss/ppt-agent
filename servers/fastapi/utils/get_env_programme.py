@@ -108,7 +108,7 @@ def get_authored_fragmentation_max_text_owners(
 
 def get_authored_type_floor_px(settings: RuntimeSettings | None = None) -> int:
     """Smallest rendered body type in px the gate accepts, clamped to 12..24."""
-    return _clamped_int("AUTHORED_TYPE_FLOOR_PX", 16, 12, 24, settings)
+    return _clamped_int("AUTHORED_TYPE_FLOOR_PX", 15, 12, 24, settings)
 
 
 def is_authored_in_render_fit_enabled(settings: RuntimeSettings | None = None) -> bool:

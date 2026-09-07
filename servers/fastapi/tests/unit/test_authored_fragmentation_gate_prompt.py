@@ -41,7 +41,7 @@ def test_the_clause_is_the_only_difference_when_the_knob_is_on(monkeypatch):
     clause = fragmentation_prompt_clause()
     assert clause == (
         "\nFragmentation: use at most 50 text-owning elements on a slide; body type "
-        "never below 16px; when copy does not fit, merge boxes rather than shrinking type."
+        "never below 15px; when copy does not fit, merge boxes rather than shrinking type."
     )
     after = build_design_system(_brand())
     capability = prompt_capability_clause()

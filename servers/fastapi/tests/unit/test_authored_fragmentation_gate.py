@@ -195,7 +195,7 @@ def test_knob_defaults(monkeypatch):
     _gate_off(monkeypatch)
     assert is_authored_fragmentation_gate_enabled() is False
     assert get_authored_fragmentation_max_text_owners() == 50
-    assert get_authored_type_floor_px() == 16
+    assert get_authored_type_floor_px() == 15
 
 
 def test_knob_reads_and_clamps(monkeypatch):
@@ -223,7 +223,7 @@ def test_violations_are_silent_while_the_knob_is_off(monkeypatch):
     _gate_off(monkeypatch)
     assert fragmentation_violations(_sol_like()) == ()
     _gate_on(monkeypatch)
-    assert fragmentation_violations(_sol_like()) == ("text_owners:90>50", "type_floor:89<16")
+    assert fragmentation_violations(_sol_like()) == ("text_owners:90>50", "type_floor:89<15")
     assert fragmentation_violations(_astra_like()) == ()
     _gate_on(monkeypatch, owners="40", floor="20")
     assert fragmentation_violations(_astra_like()) == ("text_owners:46>40", "type_floor:45<20")
@@ -323,7 +323,7 @@ def test_post_render_gate_reports_fragmentation_next_to_the_envelope(monkeypatch
     assert failure["slide_index"] == 0
     assert failure["issues"] == [
         {"category": "fragmentation", "severity": "error", "message": "text_owners:90>50"},
-        {"category": "fragmentation", "severity": "error", "message": "type_floor:89<16"},
+        {"category": "fragmentation", "severity": "error", "message": "type_floor:89<15"},
         {"category": "fragmentation", "severity": "error", "message": "fit_floor:1>0"},
     ]
 
@@ -339,9 +339,9 @@ def test_fitter_floor_follows_the_gate(monkeypatch):
     assert '"font_floor_px": 12.0' in fit_probe_prelude()
 
     _gate_on(monkeypatch)
-    assert fit_font_floor_px() == 16.0
-    assert fit_constants(font_floor_px=fit_font_floor_px())["font_floor_px"] == 16.0
-    assert '"font_floor_px": 16.0' in fit_probe_prelude()
+    assert fit_font_floor_px() == 15.0
+    assert fit_constants(font_floor_px=fit_font_floor_px())["font_floor_px"] == 15.0
+    assert '"font_floor_px": 15.0' in fit_probe_prelude()
     # An explicit floor wins over the knob, and the default argument stays 12.
     assert '"font_floor_px": 12.0' in fit_probe_prelude(font_floor_px=12)
     assert fit_constants()["font_floor_px"] == 12.0
@@ -369,5 +369,5 @@ def test_the_probe_carries_the_resolved_floor(monkeypatch):
     enriched, _key = slide_capture._instrument_authored_html(
         "<html><body><p>hello</p></body></html>", issue_capability=False
     )
-    assert seen == [16.0]
-    assert '"font_floor_px": 16.0' in enriched
+    assert seen == [15.0]
+    assert '"font_floor_px": 15.0' in enriched

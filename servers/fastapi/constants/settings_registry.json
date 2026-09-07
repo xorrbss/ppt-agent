@@ -1237,7 +1237,7 @@
     {
       "key": "AUTHORED_TYPE_FLOOR_PX",
       "type": "integer",
-      "default": 16,
+      "default": 15,
       "secret": false,
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
