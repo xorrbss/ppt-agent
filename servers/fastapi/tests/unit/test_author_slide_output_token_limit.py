@@ -290,12 +290,70 @@ def test_the_failure_envelope_tells_the_operator_what_to_change():
     assert envelope.code == "authored_slide_author_failed"
     assert envelope.retryable is False
     assert envelope.safe_message == OUTPUT_TOKEN_LIMIT_GUIDANCE
-    assert "AUTHOR_MAX_TOKENS" in envelope.as_safe_dict()["message"]
+    assert "output-token ceiling" in envelope.as_safe_dict()["message"]
     # An ordinary spent budget keeps today's message.
     ordinary = author_stage_failure(
         3, AuthoredProviderBudgetExhausted("authored_invalid_html_budget_exhausted", "x")
     )
-    assert "AUTHOR_MAX_TOKENS" not in ordinary.safe_message
+    assert "output-token ceiling" not in ordinary.safe_message
+
+
+# --- the guarded (non-streaming) chatgpt path names the ceiling too -----------
+
+
+def _guard_incomplete_error():
+    from utils.provider_idempotency import ProviderOutcomeError
+
+    return ProviderOutcomeError(
+        "public_provider_response_incomplete", recovery_allowed=False
+    )
+
+
+def test_the_guard_verdict_becomes_the_ceiling_abort_only_for_a_length_outcome():
+    from utils.llm_calls.author_slide_stream import (
+        output_token_limit_from_provider_outcome,
+    )
+
+    aborted = output_token_limit_from_provider_outcome(
+        _guard_incomplete_error(), _outcome("length")
+    )
+    assert isinstance(aborted, AuthoredStreamAborted)
+    assert aborted.reason == OUTPUT_TOKEN_LIMIT_REASON
+
+    # Any other incomplete reason keeps the guard's terminal verdict.
+    assert output_token_limit_from_provider_outcome(
+        _guard_incomplete_error(), _outcome("content_filter")
+    ) is None
+    assert output_token_limit_from_provider_outcome(
+        _guard_incomplete_error(), None
+    ) is None
+    # And an unrelated provider code is never rewritten.
+    assert output_token_limit_from_provider_outcome(
+        RuntimeError("public_provider_response_failed"), _outcome("length")
+    ) is None
+
+
+def test_the_ceiling_abort_outranks_the_guard_code_it_wraps():
+    """Chained from the guard's error, the abort must still be the rescue's."""
+    from services.authored_author_stage_deferral import author_failure_is_rescuable
+
+    guard_error = _guard_incomplete_error()
+    abort = AuthoredStreamAborted(OUTPUT_TOKEN_LIMIT_REASON)
+    abort.__cause__ = guard_error
+
+    assert output_token_limit_in_cause_chain(abort)
+    assert author_failure_retryable(abort) is False
+    failure = SimpleNamespace(error=abort, rejected_html=None, correction_hint=None)
+    assert author_failure_is_rescuable(failure) is True
+
+    envelope = author_stage_failure(0, abort, provider_attempt_count=1)
+    assert envelope.code == "authored_slide_author_failed"
+    assert envelope.safe_message == OUTPUT_TOKEN_LIMIT_GUIDANCE
+
+    # The bare guard verdict, with no ceiling behind it, stays terminal.
+    bare = SimpleNamespace(error=guard_error, rejected_html=None, correction_hint=None)
+    assert author_failure_is_rescuable(bare) is False
+    assert author_stage_failure(0, guard_error).code == "public_provider_response_incomplete"
 
 
 # --- the author-stage rescue flags it by name ---------------------------------

@@ -88,10 +88,10 @@ def author_failure_retryable(error: BaseException) -> bool:
 
     if isinstance(error, AuthoredProviderBudgetExhausted):
         return False
-    if terminal_provider_code(error) is not None:
-        return False
     if output_token_limit_in_cause_chain(error):
         # Replaying the unchanged operation meets the same output ceiling.
+        return False
+    if terminal_provider_code(error) is not None:
         return False
     explicit_retryable = getattr(error, "retryable", None)
     if isinstance(explicit_retryable, bool):
@@ -107,7 +107,15 @@ def author_stage_failure(
 ) -> AuthoredStageError:
     """Build the exact author-stage envelope consumed by operation retry policy."""
 
-    code = terminal_provider_code(error) or "authored_slide_author_failed"
+    # On the chatgpt transport the ceiling abort wraps the outcome guard's
+    # ``public_provider_response_incomplete``; the more specific cause names
+    # the envelope so the operator sees the budget, not the guard.
+    token_limited = output_token_limit_in_cause_chain(error)
+    code = (
+        "authored_slide_author_failed"
+        if token_limited
+        else terminal_provider_code(error) or "authored_slide_author_failed"
+    )
     return AuthoredStageError(
         slide_index=slide_index,
         stage="author",
@@ -116,11 +124,7 @@ def author_stage_failure(
         retryable=author_failure_retryable(error),
         # The envelope's message is what the caller shows; a spent output
         # budget is the one author failure whose fix is a setting, so say so.
-        message=(
-            OUTPUT_TOKEN_LIMIT_GUIDANCE
-            if output_token_limit_in_cause_chain(error)
-            else None
-        ),
+        message=OUTPUT_TOKEN_LIMIT_GUIDANCE if token_limited else None,
         provider_attempt_count=provider_attempt_count,
     )
 
@@ -184,14 +188,16 @@ def author_failure_is_rescuable(failure: AuthoredBatchFailure) -> bool:
         return False
     if _wraps_renderer_policy_refusal(error):
         return False
-    if terminal_provider_code(error) is not None:
-        return False
     if output_token_limit_in_cause_chain(error):
         # The provider answered and ran out of output budget. The abort is
         # ``retryable`` in the stream reader's vocabulary (the slide's next
         # call may fix it), but the operation replaying the same call will
-        # not; the rescue's plainer, shorter brief is the fix.
+        # not; the rescue's plainer, shorter brief is the fix. Checked before
+        # the terminal-code walk: on the chatgpt transport the abort wraps
+        # the guard's ``public_provider_response_incomplete``.
         return True
+    if terminal_provider_code(error) is not None:
+        return False
     if getattr(error, "retryable", None) is True:
         return False
     if isinstance(error, AuthoredProviderBudgetExhausted):

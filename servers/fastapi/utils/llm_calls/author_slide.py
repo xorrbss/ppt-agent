@@ -34,6 +34,7 @@ from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
 from utils.llm_calls.author_prompt_split import author_messages
 from utils.llm_calls.author_slide_stream import (
     is_authored_author_streaming_enabled,
+    output_token_limit_from_provider_outcome,
     raise_if_output_token_limited,
     stream_author_call,
 )
@@ -1081,6 +1082,7 @@ async def author_slide_html(
         provider_call_attempt += 1
         timer = ProviderCallTimer()
         response = None
+        generate_call = None
         try:
             async with provider_call_admission(
                 is_retry=provider_call_attempt > 1,
@@ -1115,6 +1117,13 @@ async def author_slide_html(
             # A provider-declared cooldown is shared by all subsequent authored
             # calls in this process, including multimodal -> text-only fallback.
             _register_author_rate_limit(error)
+            # The chatgpt transport's outcome guard ends an incomplete stream
+            # before the call returns; when the ceiling was the reason, name it.
+            aborted = output_token_limit_from_provider_outcome(
+                error, getattr(generate_call, "terminal_outcome", None)
+            )
+            if aborted is not None:
+                raise aborted from error
             raise
         finally:
             record_call_spans(spans, response)

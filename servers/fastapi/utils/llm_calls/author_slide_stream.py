@@ -65,12 +65,19 @@ OUTPUT_TOKEN_LIMIT_CORRECTION_HINT = (
     "fewer and shorter text items, no decorative or repeated markup, no long "
     "inline SVG or data URLs, and CSS reduced to what the layout needs."
 )
-#: What an operator is told when the budget itself is the cause.
+#: What an operator is told when the budget itself is the cause. The Codex
+#: transport rejects ``max_output_tokens`` outright (verified 2026-09-07), so
+#: there the ceiling is the model's own and only the slide can get smaller;
+#: ``AUTHOR_MAX_TOKENS`` (``author_slide_effort.py``) matters only on a
+#: transport that honours it.
 OUTPUT_TOKEN_LIMIT_GUIDANCE = (
     "The provider's output-token ceiling cut the slide off before </html>. "
-    "Raise AUTHOR_MAX_TOKENS, or lower the reasoning effort or the slide "
-    "density so one slide fits the output budget."
+    "Lower the slide density or the reasoning effort so one slide fits the "
+    "output budget; on transports that honour max_output_tokens, "
+    "AUTHOR_MAX_TOKENS (author_slide_effort.py) can also be raised."
 )
+#: The authored outcome guard's code for a stream ended by ``response.incomplete``.
+_PROVIDER_RESPONSE_INCOMPLETE_CODE = "public_provider_response_incomplete"
 # How deep a cause chain is walked for the token-limit abort; the same bound
 # the authored failure classifiers use.
 _MAX_CAUSE_DEPTH = 6
@@ -237,6 +244,26 @@ def raise_if_output_token_limited(
     raise AuthoredStreamAborted(OUTPUT_TOKEN_LIMIT_REASON, chars=len(text))
 
 
+def output_token_limit_from_provider_outcome(
+    error: BaseException, outcome: ProviderTerminalOutcome | None
+) -> AuthoredStreamAborted | None:
+    """Name a guarded transport's ``response.incomplete`` when the ceiling caused it.
+
+    On the chatgpt transport the authored outcome guard raises
+    ``public_provider_response_incomplete`` for every incomplete stream before
+    the call returns, so ``raise_if_output_token_limited`` never sees the
+    document. When the recorded terminal outcome says the reason was the
+    output-token limit, that is the same truncation the stream reader names;
+    any other incomplete reason keeps the guard's terminal verdict.
+    """
+
+    if getattr(error, "code", None) != _PROVIDER_RESPONSE_INCOMPLETE_CODE:
+        return None
+    if outcome is None or not outcome.output_truncated:
+        return None
+    return AuthoredStreamAborted(OUTPUT_TOKEN_LIMIT_REASON)
+
+
 def output_token_limit_in_cause_chain(error: object) -> bool:
     """Whether this failure is, or wraps, the output-token-limit abort.
 
@@ -376,6 +403,7 @@ __all__ = [
     "StreamedAuthorResponse",
     "author_stream_char_budget",
     "is_authored_author_streaming_enabled",
+    "output_token_limit_from_provider_outcome",
     "output_token_limit_in_cause_chain",
     "raise_if_output_token_limited",
     "stream_author_call",
