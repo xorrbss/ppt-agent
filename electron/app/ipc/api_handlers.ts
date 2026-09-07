@@ -33,7 +33,9 @@ export function setupApiHandlers() {
     const cfg = getUserConfig();
     const fromConfig = cfg.DISABLE_ANONYMOUS_TRACKING;
     const fromEnv = process.env.DISABLE_ANONYMOUS_TRACKING;
-    const raw = fromConfig ?? fromEnv ?? "";
+    // Anonymous telemetry is off by default for this fork: fall back to
+    // "true" (disabled) rather than "" (enabled) when nothing is configured.
+    const raw = fromConfig ?? fromEnv ?? "true";
     const isDisabled = raw === "true" || raw === "True";
     return { telemetryEnabled: !isDisabled };
   });

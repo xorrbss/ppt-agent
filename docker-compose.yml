@@ -115,7 +115,8 @@ x-presenton-env: &presenton-env
   # or trusted signature-definition update strategy.
   WORKSPACE_ASSET_MALWARE_SCAN_MODE: ${WORKSPACE_ASSET_MALWARE_SCAN_MODE:-disabled}
   WORKSPACE_ASSET_MALWARE_SCANNER: ${WORKSPACE_ASSET_MALWARE_SCANNER:-}
-  DISABLE_ANONYMOUS_TRACKING: ${DISABLE_ANONYMOUS_TRACKING}
+  # Anonymous telemetry is off by default for this fork; set to "false" to opt in.
+  DISABLE_ANONYMOUS_TRACKING: ${DISABLE_ANONYMOUS_TRACKING:-true}
   MEM0_LLM_MODEL: ${MEM0_LLM_MODEL:-${OLLAMA_MODEL:-llama3.1:latest}}
   MEM0_LLM_API_KEY: ${MEM0_LLM_API_KEY:-ollama}
   MEM0_LLM_BASE_URL: ${MEM0_LLM_BASE_URL:-${OLLAMA_URL:-http://host.docker.internal:11434}}

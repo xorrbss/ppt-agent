@@ -184,9 +184,10 @@ async function ensureTelemetryStatus(): Promise<boolean> {
         window.__mixpanel_telemetry_enabled = enabled;
         return enabled;
       } catch {
-        // If the API call fails, default to enabling tracking
-        window.__mixpanel_telemetry_enabled = true;
-        return true;
+        // Telemetry defaults to disabled in this fork; a failed status
+        // probe must fail closed (disabled), never fail open.
+        window.__mixpanel_telemetry_enabled = false;
+        return false;
       }
     })();
   }

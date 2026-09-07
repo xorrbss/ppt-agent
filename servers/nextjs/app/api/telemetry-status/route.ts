@@ -16,14 +16,16 @@ export async function GET() {
       fileDisabled = undefined;
     }
   }
-  const envDisabled =
-    process.env.DISABLE_ANONYMOUS_TRACKING === "true" ||
-    process.env.DISABLE_ANONYMOUS_TRACKING === "True";
-  const isDisabled =
-    envDisabled ||
-    fileDisabled === "true" ||
-    fileDisabled === "True";
-  const telemetryEnabled = !isDisabled;
+  const envValue = process.env.DISABLE_ANONYMOUS_TRACKING;
+  const isTrue = (value: string | undefined) => value === "true" || value === "True";
+  const isFalse = (value: string | undefined) => value === "false" || value === "False";
+  // Anonymous telemetry is off by default for this fork. Either source saying
+  // "true" keeps it off (an operator's env is a hard off); it is on only when
+  // neither says "true" and one of them explicitly opts in with "false".
+  const telemetryEnabled =
+    !isTrue(envValue) &&
+    !isTrue(fileDisabled) &&
+    (isFalse(envValue) || isFalse(fileDisabled));
   return NextResponse.json({ telemetryEnabled });
 }
 

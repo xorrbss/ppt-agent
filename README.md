@@ -439,7 +439,9 @@ The parallel image generation option applies everywhere images are generated: in
 
 #### Telemetry
 
-- **DISABLE_ANONYMOUS_TRACKING**=[true/false]: Set to **true** to disable anonymous telemetry.
+- **DISABLE_ANONYMOUS_TRACKING**=[true/false]: Anonymous telemetry (Mixpanel) is
+  **off by default** in this fork's Docker, Windows-native, and Electron
+  deployments. Set to **false** to opt in.
 
 #### Multi-user authentication
 
