@@ -9,6 +9,9 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.provider_settings import ProviderSettings
+from services.provider_pricing_admission import (
+    reject_write_that_introduces_a_pricing_gap,
+)
 from services.provider_settings_values import (
     ProviderSettingsValidationError as ProviderSettingsValidationError,
     REDACTED_SECRET_PLACEHOLDER as REDACTED_SECRET_PLACEHOLDER,
@@ -336,6 +339,13 @@ async def save_provider_settings_record(
                 else merge_provider_settings(existing, sanitized_incoming)
             )
             merged = _prepare_for_storage(merged)
+            # The selected model and the pricing catalog are two settings with
+            # one invariant between them, and the provider call is otherwise
+            # the first place they meet. Compare them here so an unpriced
+            # selection is refused at 422 instead of failing a generation.
+            reject_write_that_introduces_a_pricing_gap(
+                existing=existing, merged=merged
+            )
             if merged == existing and seen.config == existing:
                 result = await session.execute(
                     update(table)
