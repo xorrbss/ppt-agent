@@ -14,11 +14,16 @@ from llmai.shared import (
 
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
-from utils.get_env_programme import get_outline_density_floor_chars
+from utils.get_env_programme import (
+    get_outline_density_floor_chars,
+    is_outline_density_ceiling_enabled,
+)
 from utils.llm_calls.outline_density import (
     apply_density_floor_to_text,
+    ceiling_for_verbosity,
     log_outline_density,
 )
+from utils.llm_calls.outline_density_ceiling import apply_density_ceiling_to_text
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import enable_web_grounding, get_llm_config
 from utils.llm_provider import get_model
@@ -59,6 +64,21 @@ def get_system_prompt(
             else "at least about 150 words (Korean: about 500 characters) in 4 to 6 bullets"
         )
     )
+    # OUTLINE_DENSITY_CEILING_ENABLED (2026-09-08, off by default): the floor
+    # above has no upper bound, and the slide-authoring model reproduces its
+    # outline input almost verbatim -- so a slide with nothing capping it can
+    # still overflow the page it lands on. When the knob is on, state the
+    # per-verbosity ceiling (``outline_density.ceiling_for_verbosity``) next to
+    # the floor and ask for the same trade the mechanical condense step makes:
+    # cut the least load-bearing material, don't compress every bullet into a
+    # heading. Off, this text must stay byte-identical to before the knob
+    # existed -- tests pin it.
+    ceiling_enabled = is_outline_density_ceiling_enabled()
+    if ceiling_enabled:
+        verbosity_budget = (
+            f"{verbosity_budget} and at most about "
+            f"{ceiling_for_verbosity(verbosity)} characters"
+        )
     verbosity_instruction = (
         f"Each slide's body is a bullet list of {verbosity_budget}. Every bullet is a "
         "full statement that carries one concrete fact, figure, date, named example, "
@@ -67,6 +87,12 @@ def get_system_prompt(
         "sake, no connective prose, and never padding or repetition to reach the "
         "length — when the material honestly has less to say, say less."
     )
+    if ceiling_enabled:
+        verbosity_instruction = (
+            f"{verbosity_instruction} When the source has more to say than that "
+            "budget fits, keep the load-bearing facts and drop the rest rather "
+            "than compressing every bullet into a heading."
+        )
 
     title_slide_instruction = (
         "Include presenter name in first slide."
@@ -232,17 +258,23 @@ async def generate_ppt_outline(
     # imported but never consulted — enabling it had no effect).
     use_search_tool = web_search or enable_web_grounding()
 
-    # K1 (design 20260905 section 8). Every outline is MEASURED: the density
-    # receipt is logged for each deck, floor or no floor, because the number is
-    # what the workstream exists to watch. Only a document-backed deck whose
-    # floor is on can also be EXPANDED, and an expansion has to replace text
-    # this generator has already yielded — so that case, and only that case,
-    # buffers the stream and emits the final outline in one chunk. A prompt-only
-    # deck (nothing to expand from) and OUTLINE_DENSITY_FLOOR_CHARS=0 stream
-    # exactly as before.
+    # K1 (design 20260905 section 8, ceiling addendum 20260908). Every outline
+    # is MEASURED: the density receipt is logged for each deck, floor/ceiling
+    # on or off, because the number is what the workstream exists to watch.
+    # Only a document-backed deck whose floor is on can also be EXPANDED, and
+    # only when OUTLINE_DENSITY_CEILING_ENABLED is on can an over-budget slide
+    # be CONDENSED (mechanical, no source needed). Either rewrite has to
+    # replace text this generator has already yielded — so either case, and
+    # only those cases, buffers the stream and emits the final outline in one
+    # chunk. A prompt-only deck with the ceiling off and
+    # OUTLINE_DENSITY_FLOOR_CHARS=0 streams exactly as before.
     density_floor = get_outline_density_floor_chars()
+    density_ceiling_enabled = is_outline_density_ceiling_enabled()
+    density_ceiling = ceiling_for_verbosity(verbosity) if density_ceiling_enabled else 0
     density_source = str(additional_context or "").strip()
     density_expands = density_floor > 0 and bool(density_source)
+    density_condenses = density_ceiling_enabled
+    density_buffers = density_expands or density_condenses
     collected = ""
 
     try:
@@ -289,7 +321,7 @@ async def generate_ppt_outline(
                 if chunk:
                     emitted_content = True
                     collected += chunk
-                    if not density_expands:
+                    if not density_buffers:
                         yield chunk
             elif (
                 isinstance(event, ResponseStreamCompletionChunk) and not emitted_content
@@ -297,14 +329,24 @@ async def generate_ppt_outline(
                 final_content = serialize_structured_content(event.content)
                 if final_content:
                     collected += final_content
-                    if not density_expands:
+                    if not density_buffers:
                         yield final_content
-        if collected and density_expands:
-            yield await apply_density_floor_to_text(
-                collected, source_text=density_source, floor=density_floor
-            )
+        if collected and density_buffers:
+            text = collected
+            if density_expands:
+                text = await apply_density_floor_to_text(
+                    text, source_text=density_source, floor=density_floor
+                )
+            if density_condenses:
+                text = await apply_density_ceiling_to_text(
+                    text,
+                    verbosity=verbosity,
+                    ceiling=density_ceiling,
+                    floor=density_floor,
+                )
+            yield text
         elif collected:
-            log_outline_density(collected, floor=density_floor)
+            log_outline_density(collected, floor=density_floor, ceiling=density_ceiling)
     except Exception as e:
         handled = handle_llm_client_exceptions(e)
         if isinstance(handled, HTTPException):

@@ -79,6 +79,53 @@ def test_generate_ppt_outline_streams_json_chunks_and_keeps_schema_shape():
     assert "extra_body" not in captured_kwargs
 
 
+def test_generate_ppt_outline_buffers_and_condenses_when_the_ceiling_is_on(monkeypatch):
+    """OUTLINE_DENSITY_CEILING_ENABLED buffers the stream through the ceiling seam.
+
+    Mirrors the floor's own buffering rule: a rewrite has to replace text the
+    generator already yielded, so the whole outline is emitted in one chunk
+    instead of streamed incrementally, and only the ceiling step runs when the
+    floor is off (no source document to expand from).
+    """
+    monkeypatch.setenv("OUTLINE_DENSITY_CEILING_ENABLED", "true")
+    calls: list = []
+
+    async def fake_stream_generate_events(_client, **kwargs):
+        yield content_event('{"slides": [{"content": "## Intro\\nBullet"}]}')
+
+    async def fake_apply_density_ceiling_to_text(text, **kwargs):
+        calls.append((text, kwargs))
+        return "condensed-output"
+
+    with patch.object(outline_module, "get_model", return_value="fake-model"), patch.object(
+        outline_module, "get_client", return_value=object()
+    ), patch.object(outline_module, "get_llm_config", return_value={}), patch.object(
+        outline_module,
+        "get_generate_kwargs",
+        side_effect=lambda **kwargs: kwargs,
+    ), patch.object(
+        outline_module, "stream_generate_events", side_effect=fake_stream_generate_events
+    ), patch.object(
+        outline_module,
+        "apply_density_ceiling_to_text",
+        side_effect=fake_apply_density_ceiling_to_text,
+    ):
+        chunks = _collect_async_chunks(
+            outline_module.generate_ppt_outline(
+                content="topic",
+                n_slides=1,
+                language="English",
+                verbosity="standard",
+            )
+        )
+
+    assert chunks == ["condensed-output"]
+    assert len(calls) == 1
+    text, kwargs = calls[0]
+    assert json.loads(text) == {"slides": [{"content": "## Intro\nBullet"}]}
+    assert kwargs == {"verbosity": "standard", "ceiling": 700, "floor": 350}
+
+
 def test_generate_ppt_outline_returns_http_exception_chunk_on_failure():
     async def failing_stream(_client, **_kwargs):
         raise TimeoutError("provider timed out")
@@ -190,6 +237,47 @@ def test_slide_text_has_a_content_floor_per_verbosity(verbosity, floor, bullets)
     assert "never padding or repetition to reach the length" in system
     budget_line = system.split("Each slide's body")[1].splitlines()[0]
     assert "at most" not in budget_line
+
+
+def test_the_ceiling_off_by_default_prompt_is_byte_identical_to_before_the_knob():
+    """OUTLINE_DENSITY_CEILING_ENABLED defaults off; the prompt must not move.
+
+    Pins the exact wording the pre-knob prompt used, so a future edit to the
+    ceiling branch cannot silently leak into the default (off) path.
+    """
+    system = outline_module.get_system_prompt("standard")
+
+    assert (
+        "Each slide's body is a bullet list of at least about 150 words "
+        "(Korean: about 500 characters) in 4 to 6 bullets. Every bullet is a "
+        "full statement that carries one concrete fact, figure, date, named "
+        "example, or cause-and-effect detail, not a label or a heading. The "
+        "body is those bullets and nothing else: no restatement, no "
+        "adjectives for their own sake, no connective prose, and never "
+        "padding or repetition to reach the length — when the material "
+        "honestly has less to say, say less.\n"
+    ) in system
+    assert "at most" not in system
+    assert "budget fits" not in system
+
+
+@pytest.mark.parametrize(
+    ("verbosity", "ceiling"),
+    [("concise", 400), ("standard", 700), (None, 700), ("text-heavy", 1100)],
+)
+def test_the_ceiling_on_states_the_per_verbosity_cap_and_the_trade(
+    monkeypatch, verbosity, ceiling
+):
+    monkeypatch.setenv("OUTLINE_DENSITY_CEILING_ENABLED", "true")
+
+    system = outline_module.get_system_prompt(verbosity)
+
+    assert f"and at most about {ceiling} characters" in system
+    assert (
+        "When the source has more to say than that budget fits, keep the "
+        "load-bearing facts and drop the rest rather than compressing every "
+        "bullet into a heading." in system
+    )
 
 
 @pytest.mark.parametrize(
