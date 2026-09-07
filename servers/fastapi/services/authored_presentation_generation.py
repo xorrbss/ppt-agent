@@ -142,6 +142,7 @@ from services.authored_quality_gate_diagnostics import (
     log_quality_receipt_gate_failure,
     quality_receipt_gate_failure,
 )
+from services.authored_prompt_cache_report import log_author_stage_prompt_cache_summary_safely
 from services.authored_repair_round_order import remake_first_flagged_slides
 from services.authored_terminal_slide_fallback import (
     MAX_REMAKES_PER_SLIDE,
@@ -2235,6 +2236,7 @@ async def _generate_authored_presentation(
     )
     predeclared_terminal: list[dict[str, object]] = []
     remake_counts: dict[int, int] = {}
+    await log_author_stage_prompt_cache_summary_safely(generation_job)  # C2: author-stage cache hit rate
     await mark_stage("repair")
     repair_started = time.monotonic()
     repair_claims: dict[int, object] = {}

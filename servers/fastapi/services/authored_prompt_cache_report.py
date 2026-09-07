@@ -160,12 +160,25 @@ async def log_author_stage_prompt_cache_summary(
     return log_prompt_cache_summary(calls)
 
 
+async def log_author_stage_prompt_cache_summary_safely(generation_job: object) -> None:
+    """The author stage's call-out: log the summary, never fail the deck for it."""
+
+    job_id = getattr(generation_job, "id", None)
+    if job_id is None:
+        return
+    try:
+        await log_author_stage_prompt_cache_summary(job_id)
+    except Exception:  # noqa: BLE001 -- a reporting failure must not touch generation
+        logger.warning("prompt_cache summary unavailable for job %s", job_id, exc_info=True)
+
+
 __all__ = [
     "PromptCacheCallUsage",
     "PromptCacheSummary",
     "author_stage_prompt_cache_usage",
     "format_prompt_cache_summary",
     "log_author_stage_prompt_cache_summary",
+    "log_author_stage_prompt_cache_summary_safely",
     "log_prompt_cache_summary",
     "summarize_prompt_cache_usage",
 ]
