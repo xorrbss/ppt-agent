@@ -92,6 +92,13 @@ def is_authored_text_scale_rung_enabled(
     return _bool_setting("AUTHORED_TEXT_SCALE_RUNG_ENABLED", True, settings)
 
 
+def is_authored_repair_calls_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Spend provider calls repairing a flagged slide (remake, patch, terminal remake)."""
+    return _bool_setting("AUTHORED_REPAIR_CALLS_ENABLED", True, settings)
+
+
 def is_authored_fragmentation_gate_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:
@@ -316,6 +323,7 @@ __all__ = [
     "is_authored_local_stage_async_enabled",
     "is_authored_exemplar_enabled",
     "is_authored_fragmentation_gate_enabled",
+    "is_authored_repair_calls_enabled",
     "is_authored_header_deterministic_repair_enabled",
     "is_authored_in_render_fit_enabled",
     "is_authored_renderer_framed_protocol_enabled",
