@@ -22,6 +22,11 @@ from utils.llm_config import enforce_llm_egress_policy, get_llm_config
 from utils.llm_provider import get_model
 from utils.llm_utils import generate_structured_with_schema_retries
 from utils.schema_utils import prepare_schema_for_validation
+from services.provider_usage_instrumentation import active_usage_scope_slide_index
+from utils.structured_semantic_slots import (
+    VQA_CRITIQUE_PREFIX,
+    deck_stage_slot_suffix,
+)
 
 IssueType = Literal[
     "overflow",
@@ -235,8 +240,16 @@ async def critique_slide_image(
     *,
     source_image: Optional[bytes] = None,
     reference_mode: str = STYLE_REFERENCE,
+    slide_index: Optional[int] = None,
+    slot_run: str = "",
 ) -> SlideCritique:
-    """Review a rendered slide image and return a structured critique."""
+    """Review a rendered slide image and return a structured critique.
+
+    ``slide_index`` gives this call its own admission identity when the caller
+    reviews several slides inside one deck-level usage scope, which is what the
+    ``vqa`` stage does (``utils.structured_semantic_slots``). ``slot_run``
+    separates a caller that reviews the same slide twice in that one scope.
+    """
     client = get_client(config=get_llm_config())
     model = get_model()
     schema = prepare_schema_for_validation(
@@ -261,6 +274,11 @@ async def critique_slide_image(
             json_schema=schema,
             strict=False,
             validate_schema=True,
+            semantic_slot_prefix=VQA_CRITIQUE_PREFIX,
+            semantic_slot_suffix=deck_stage_slot_suffix(
+                None if active_usage_scope_slide_index() is not None else slide_index,
+                run=slot_run,
+            ),
         )
         return SlideCritique(**content)
     except Exception as e:

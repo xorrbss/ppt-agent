@@ -12,7 +12,6 @@ import logging
 import os
 import time
 from collections import OrderedDict
-from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple
 
@@ -42,10 +41,6 @@ from utils.llm_calls.author_slide import (
     AUTHOR_CONCURRENCY,
     AuthoredStyleLike,
     Brand,
-    _append_start_tag_attribute,
-    _apply_source_replacements,
-    _remove_start_tag_attribute,
-    _source_start_tags,
     author_slide_html,
     authored_semantic_dual_output_mode,
     is_valid_slide_html,
@@ -78,78 +73,10 @@ LOGGER = logging.getLogger(__name__)
 _ORIGINAL_RENDER_HTML_TO_PNG = render_html_to_png
 
 
-class _SemanticAliasEndTagParser(HTMLParser):
-    """Collect exact end-tag spans without matching strings in raw-text nodes."""
-
-    def __init__(self, source: str) -> None:
-        super().__init__(convert_charrefs=False)
-        self._source = source
-        self._line_offsets = [0]
-        self._line_offsets.extend(
-            offset + 1 for offset, character in enumerate(source) if character == "\n"
-        )
-        self.tags: list[tuple[int, int, str]] = []
-
-    def handle_endtag(self, tag: str) -> None:
-        line, column = self.getpos()
-        start = self._line_offsets[line - 1] + column
-        end = self._source.find(">", start)
-        if end >= 0:
-            self.tags.append((start, end + 1, tag.lower()))
-
-
-def _canonicalize_full_reauthor_semantic_aliases(source: str) -> str:
-    """Map a safe semantic ``time`` alias onto the admitted phrasing surface.
-
-    The shared author-stage source parser ensures replacements touch real tags,
-    not quoted text. ``datetime`` is preserved as the span's inert ``title``
-    value because the renderer does not admit a ``datetime`` attribute on span.
-    Ambiguous attributes remain byte-for-byte unchanged so final renderer
-    admission fails closed. Active/raw-content tags are never aliases here.
-    """
-
-    replacements: list[tuple[int, int, str]] = []
-    time_tags = tuple(tag for tag in _source_start_tags(source) if tag.name == "time")
-    for tag in time_tags:
-        names = [name for name, _value in tag.attrs]
-        datetime_values = [
-            value for name, value in tag.attrs if name == "datetime"
-        ]
-        if len(names) != len(set(names)) or len(datetime_values) > 1:
-            return source
-        if datetime_values and (
-            "title" in names
-            or datetime_values[0] is None
-            or not str(datetime_values[0]).strip()
-        ):
-            return source
-        rewritten = "<span" + tag.raw[1 + len(tag.name) :]
-        if datetime_values:
-            rewritten = _remove_start_tag_attribute(rewritten, "datetime")
-            rewritten = _append_start_tag_attribute(
-                rewritten, "title", str(datetime_values[0])
-            )
-        replacements.append((tag.start, tag.end, rewritten))
-
-    end_parser = _SemanticAliasEndTagParser(source)
-    try:
-        end_parser.feed(source)
-        end_parser.close()
-    except Exception:
-        return source
-    time_end_tags = tuple(
-        (start, end) for start, end, name in end_parser.tags if name == "time"
-    )
-    non_void_time_tags = sum(
-        not tag.raw.rstrip().endswith("/>") for tag in time_tags
-    )
-    if len(time_end_tags) != non_void_time_tags:
-        return source
-    replacements.extend(
-        (start, end, "</span>")
-        for start, end in time_end_tags
-    )
-    return _apply_source_replacements(source, replacements)
+# Pure HTML text work, extracted to keep this module's growth in check.
+from utils.llm_calls.authored_semantic_alias_canonicalizer import (  # noqa: E402
+    _canonicalize_full_reauthor_semantic_aliases as _canonicalize_full_reauthor_semantic_aliases,
+)
 
 
 class _ImageServiceLike(Protocol):
@@ -270,6 +197,8 @@ async def _critique_cached(
     *,
     source_image: Optional[bytes] = None,
     reference_mode: str = STYLE_REFERENCE,
+    slide_index: Optional[int] = None,
+    slot_run: str = "",
 ) -> Optional[StyleComparisonCritique]:
     """Return one best-effort critique, caching only successful model responses."""
     mode = normalize_reference_mode(reference_mode)
@@ -284,10 +213,17 @@ async def _critique_cached(
                     slide_context=context,
                     source_image=source_image,
                     reference_mode=mode,
+                    slide_index=slide_index,
+                    slot_run=slot_run,
                 )
             # Keep the style-reference/default call byte-for-byte compatible with the
             # established render-only reviewer contract.
-            return await critique_slide_image(image, slide_context=context)
+            return await critique_slide_image(
+                image,
+                slide_context=context,
+                slide_index=slide_index,
+                slot_run=slot_run,
+            )
 
     if VQA_CACHE_SIZE <= 0:
         try:
@@ -513,9 +449,19 @@ async def critique_authored(
     *,
     source_images: Optional[List[bytes]] = None,
     reference_mode: str = STYLE_REFERENCE,
+    slide_indices: Optional[Sequence[int]] = None,
+    critique_round: str = "",
 ) -> List[Optional[SlideCritique]]:
     """Critique each rendered authored slide. None where a review failed (so one bad
-    call does not sink the pass)."""
+    call does not sink the pass).
+
+    ``slide_indices`` gives every reviewed slide its own provider-admission
+    identity. The ``vqa`` stage runs the whole deck inside one deck-level usage
+    scope, so without it the second slide onward is admitted as a replay of the
+    first (``utils.structured_semantic_slots.deck_stage_slot_suffix``). A caller
+    that reviews the same slides a second time inside that scope must separate
+    its round as well, with ``critique_round``.
+    """
     mode = normalize_reference_mode(reference_mode)
     ctx = contexts or []
     exact_sources: Optional[List[bytes]] = None
@@ -532,13 +478,18 @@ async def critique_authored(
 
     async def review(i: int, img: bytes) -> Optional[SlideCritique]:
         context = ctx[i] if i < len(ctx) else None
+        slide_index = slide_indices[i] if slide_indices is not None else None
         if mode == STYLE_REFERENCE:
-            return await _critique_cached(img, context)
+            return await _critique_cached(
+                img, context, slide_index=slide_index, slot_run=critique_round
+            )
         return await _critique_cached(
             img,
             context,
             source_image=exact_sources[i] if exact_sources is not None else None,
             reference_mode=mode,
+            slide_index=slide_index,
+            slot_run=critique_round,
         )
 
     return list(await asyncio.gather(*[review(i, p) for i, p in enumerate(pngs)]))
@@ -903,20 +854,27 @@ async def revise_authored_deck(
                 critique = initial_critiques[i]
             else:
                 review_started = time.monotonic()
+                # This re-review runs per slide AND per cycle inside the one
+                # deck-level `vqa` scope, so both have to reach the slot.
+                cycle_round = f"cycle-{cycle}"
                 if reference_mode == EXACT_RECONSTRUCTION:
                     critiques = await critique_authored(
                         [current_png],
                         contexts=[contents[i][:240]],
                         source_images=[exact_source_images[i]],
                         reference_mode=reference_mode,
+                        slide_indices=[absolute_indices[i]],
+                        critique_round=cycle_round,
                     )
                 else:
-                    # Preserve the established STYLE_REFERENCE call shape so callers
-                    # and test doubles that implement the original two-argument
-                    # contract continue to work unchanged.
+                    # The STYLE_REFERENCE call keeps its positional shape; the
+                    # two identity keywords are the only addition, and a double
+                    # that accepts **kwargs stays compatible.
                     critiques = await critique_authored(
                         [current_png],
                         contexts=[contents[i][:240]],
+                        slide_indices=[absolute_indices[i]],
+                        critique_round=cycle_round,
                     )
                 slide_critique_work += time.monotonic() - review_started
                 critique = critiques[0] if critiques else None
@@ -966,6 +924,8 @@ async def revise_authored_deck(
                             current_png,
                             compact_dom,
                             critique,
+                            slide_index=absolute_indices[i],
+                            slot_run=f"cycle-{cycle}",
                             reference_mode=reference_mode,
                             retry_invalid_model_patch=(
                                 fail_on_residual_dom_issues
