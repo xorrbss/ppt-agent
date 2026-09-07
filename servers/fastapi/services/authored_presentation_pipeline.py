@@ -39,7 +39,7 @@ from services.authored_presentation_artifacts import _complete_stage_after_exter
 from services.authored_illustration_stage import illustrate_slide
 from services.authored_infographic_assets import build_infographic_asset_context, deck_has_picture_source
 from services.authored_quality_loop_stage import apply_slide_quality_loop
-from services.authored_presentation_contracts import AuthoredGenerationPipelineResult
+from services.authored_presentation_contracts import AuthoredGenerationPipelineResult, SlideStageResult
 from services.authored_evidence_ledger import DeckEvidenceLedger
 from services.image_generation_service import ImageGenerationService
 from services.authored_source_images import plan_slide_source_images
@@ -85,6 +85,7 @@ from utils.authored_illustrations import (
     enforce_strict_source_image_size_floor, validate_bound_source_images, validate_visible_source_images,
 )
 from utils.authored_font_policy import enforce_authored_font_floor
+from utils.authored_measured_type_clamp import merge_measured_type_clamp_receipt, render_with_measured_type_clamp
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
 from utils.llm_calls.author_deck import (
     author_correction_from_stored_failure,
@@ -723,21 +724,7 @@ async def _author_illustrate_render_pipeline(
                     attempt_counts=preauthored_attempt_counts,
                 )
 
-    async def process_slide(
-        index: int,
-    ) -> tuple[
-        int,
-        str,
-        bytes,
-        float,
-        float,
-        float,
-        float,
-        Any | None,
-        dict[str, Any] | None,
-        AuthoredSlideSceneEnvelope,
-        int,
-    ]:
+    async def process_slide(index: int) -> SlideStageResult:
         author_work = preauthored_author_work.get(index, 0.0)
         illustration_work = 0.0
         render_work = 0.0
@@ -745,6 +732,7 @@ async def _author_illustrate_render_pipeline(
         browser_metrics = None
         fit_report = None
         fitted_html = None
+        type_clamp = None
         quality_report = None
         quality_failure = None
         author_provider_attempt_count = preauthored_attempt_counts.get(index, 0)
@@ -1269,7 +1257,13 @@ async def _author_illustrate_render_pipeline(
                             slide_index=index,
                         ):
                             if is_authored_in_render_fit_enabled():
-                                capture = await render_html_to_png_with_metrics(illustrated_html, fit=True)
+                                # Q2: sub-floor owners the CSS clamp missed are
+                                # raised from the DOM metrics and rendered once more.
+                                type_clamp = await render_with_measured_type_clamp(
+                                    illustrated_html, reference_mode=plan_reference_mode,
+                                    render=render_html_to_png_with_metrics,
+                                )
+                                capture = type_clamp.capture
                                 fitted_html = getattr(capture, "fitted_html", None)
                                 illustrated_html = fitted_html if fitted_html is not None else illustrated_html
                                 png, browser_metrics = capture.png, capture.browser_metrics
@@ -1407,6 +1401,7 @@ async def _author_illustrate_render_pipeline(
                     browser_metrics=browser_metrics,
                     checkpoint_revision=int(getattr(checkpoint, "revision", 0) or 0),
                 )
+            quality_loop_receipt = merge_measured_type_clamp_receipt(quality_loop_receipt, type_clamp)
             return (
                 index,
                 illustrated_html,
