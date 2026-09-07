@@ -45,6 +45,7 @@ from services.authored_infographic_assets import (
 from services.authored_presentation_artifacts import (
     _complete_stage_after_external_success,
 )
+from services.authored_measured_gates import remake_density_hint
 from services.authored_terminal_slide_policy import terminal_fallback_active
 from services.authored_vnext.generation.scene_envelope import replace_deck_scene_slide
 from services.image_generation_service import ImageGenerationService
@@ -224,9 +225,8 @@ async def _remake_candidate(
         if any(getattr(issue, "category", "") == "overlap" for issue in defects)
         else "other"
     )
-    details = ([f"Measured defects: {evidence}"] if evidence else []) + [
-        LOWER_DENSITY_HINT
-    ]
+    hint = remake_density_hint(defects, default=LOWER_DENSITY_HINT)
+    details = ([f"Measured defects: {evidence}"] if evidence else []) + [hint]
     critique = SlideCritique(
         needs_fix=True,
         issues=[

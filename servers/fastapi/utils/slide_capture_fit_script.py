@@ -35,8 +35,8 @@ FIT_BISECTION_STEPS = 7
 _CONSTANTS_MARKER = "__FIT_CONSTANTS__"
 
 
-def fit_constants(*, font_floor_px: float | None = None) -> dict[str, object]:
-    """Every value the fragment interpolates, as JavaScript reads it; ``font_floor_px`` overrides the shrink floor."""
+def fit_constants(*, font_floor_px: float | None = None, page_max_px: float | None = None) -> dict[str, object]:
+    """Every value the fragment interpolates, as JavaScript reads it; the two overrides track the gate."""
     floor = AUTHORED_FONT_FLOOR_PX if font_floor_px is None else float(font_floor_px)
     return {
         "version": FIT_VERSION, "fit_class": FIT_CLASS, "margin_px": FIT_MARGIN_PX,
@@ -44,9 +44,9 @@ def fit_constants(*, font_floor_px: float | None = None) -> dict[str, object]:
         "numbered_content_bottom_px": NUMBERED_CONTENT_BOTTOM_PX, "max_cards": MAX_FIT_CARDS,
         "unnumbered_content_bottom_px": UNNUMBERED_CONTENT_BOTTOM_PX, "max_layouts": MAX_FIT_LAYOUTS,
         "time_budget_fraction": FIT_TIME_BUDGET_FRACTION, "bisection_steps": FIT_BISECTION_STEPS,
-        "default_timeout_ms": DEFAULT_FIT_TIMEOUT_MS, "page_number_max_font_px": _PAGE_NUMBER_MAX_FONT_PX,
+        "page_number_max_font_px": float(page_max_px or _PAGE_NUMBER_MAX_FONT_PX),
         "page_number_max_distance_px": _PAGE_NUMBER_MAX_DISTANCE_FROM_BOTTOM_PX,
-        "page_number_min_top_fraction": _PAGE_NUMBER_MIN_TOP_FRACTION,
+        "default_timeout_ms": DEFAULT_FIT_TIMEOUT_MS, "page_number_min_top_fraction": _PAGE_NUMBER_MIN_TOP_FRACTION,
         "transparent_backgrounds": sorted(_TRANSPARENT), "painted_tags": sorted(_PAINTED_TAGS),
     }
 
@@ -332,11 +332,11 @@ const __codexFit = {
 """
 
 
-def fit_script_fragment(width: int = 104, *, font_floor_px: float | None = None) -> str:
+def fit_script_fragment(width=104, *, font_floor_px: float | None = None, page_max_px: float | None = None) -> str:
     """The fragment the probe splices into its IIFE scope, with the constants interpolated
     as one object literal wrapped only between pairs, so every number stays greppable."""
     groups: list[str] = []
-    for key, value in sorted(fit_constants(font_floor_px=font_floor_px).items()):
+    for key, value in sorted(fit_constants(font_floor_px=font_floor_px, page_max_px=page_max_px).items()):
         pair = f"{json.dumps(key)}: {json.dumps(value)}"
         if groups and len(groups[-1]) + len(pair) + 2 <= width:
             groups[-1] += ", " + pair

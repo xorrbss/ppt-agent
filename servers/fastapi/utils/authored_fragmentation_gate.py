@@ -28,7 +28,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from services.authored_vnext.capability_registry import AUTHORED_FONT_FLOOR_PX
-from utils.authored_dom_footer_zone import _looks_like_page_number
+from utils.authored_dom_footer_zone import _PAGE_NUMBER_MAX_FONT_PX, _looks_like_page_number
 from utils.authored_dom_quality import normalize_browser_metrics
 from utils.get_env_programme import (
     get_authored_fragmentation_max_text_owners,
@@ -110,6 +110,7 @@ def _is_furniture(item: Mapping[str, Any], role: str, viewport: Mapping[str, Any
         item,
         viewport_width=float(viewport.get("width", 1280) or 1280),
         viewport_height=float(viewport.get("height", 720) or 720),
+        max_font_px=page_number_max_font_px(),
     )
 
 
@@ -245,10 +246,20 @@ def fragmentation_prompt_clause(settings: RuntimeSettings | None = None) -> str:
     owners = get_authored_fragmentation_max_text_owners(settings)
     floor = get_authored_type_floor_px(settings)
     return (
-        f"\nFragmentation: use at most {owners} text-owning elements on a slide; body "
-        f"type never below {floor}px; when copy does not fit, merge boxes rather than "
-        "shrinking type."
+        f"\nFragmentation: use at most {owners} elements that directly hold text on a "
+        f"slide; no text below {floor}px, labels and chips included; when copy does not "
+        "fit, merge boxes rather than shrinking type."
     )
+
+
+def page_number_max_font_px(settings: RuntimeSettings | None = None) -> float:
+    """The largest type a page-number box may carry and still be furniture.
+
+    The clamp raises the 12px page number to the gate floor, so detection in
+    the footer gate, the fitter and this gate must accept that size too.
+    """
+
+    return max(_PAGE_NUMBER_MAX_FONT_PX, fit_font_floor_px(settings))
 
 
 def fit_font_floor_px(settings: RuntimeSettings | None = None) -> float:

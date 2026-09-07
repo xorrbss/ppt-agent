@@ -40,8 +40,9 @@ def test_the_clause_is_the_only_difference_when_the_knob_is_on(monkeypatch):
     monkeypatch.setenv(GATE_KNOB, "true")
     clause = fragmentation_prompt_clause()
     assert clause == (
-        "\nFragmentation: use at most 50 text-owning elements on a slide; body type "
-        "never below 15px; when copy does not fit, merge boxes rather than shrinking type."
+        "\nFragmentation: use at most 50 elements that directly hold text on a slide; "
+        "no text below 15px, labels and chips included; when copy does not fit, merge "
+        "boxes rather than shrinking type."
     )
     after = build_design_system(_brand())
     capability = prompt_capability_clause()
@@ -50,8 +51,8 @@ def test_the_clause_is_the_only_difference_when_the_knob_is_on(monkeypatch):
 
     monkeypatch.setenv(OWNERS_KNOB, "40")
     monkeypatch.setenv(FLOOR_KNOB, "18")
-    assert "at most 40 text-owning elements" in build_design_system(_brand())
-    assert "never below 18px" in build_design_system(_brand())
+    assert "at most 40 elements that directly hold text" in build_design_system(_brand())
+    assert "no text below 18px" in build_design_system(_brand())
 
 
 def test_the_frozen_type_scale_baseline_is_untouched(monkeypatch):

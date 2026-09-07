@@ -27,6 +27,7 @@ from typing import Any
 
 from utils.authored_fit_edits import apply_fit_edits
 from utils.authored_fragmentation_gate import fit_font_floor_px
+from utils.authored_fragmentation_gate import page_number_max_font_px as resolved_page_number_max_font_px
 from utils.authored_qid_namespace import ensure_authored_qids
 from utils.slide_capture_fit_script import FIT_CLASS, FIT_VERSION, fit_script_fragment
 
@@ -38,7 +39,9 @@ _CLASS_PATTERN = re.compile(
 _TAG_END_PATTERN = re.compile(r"\s*/?>\s*$")
 
 
-def fit_probe_prelude(*, font_floor_px: float | None = None) -> str:
+def fit_probe_prelude(
+    *, font_floor_px: float | None = None, page_number_max_font_px: float | None = None
+) -> str:
     """The fitter plus the wrapper the probe calls, as plain JavaScript.
 
     The fragment guarantees ``apply`` never throws, but a fitter defect must
@@ -50,7 +53,8 @@ def fit_probe_prelude(*, font_floor_px: float | None = None) -> str:
     fragmentation gate knobs (the gate floor when on, 12px otherwise).
     """
     floor = fit_font_floor_px() if font_floor_px is None else font_floor_px
-    return fit_script_fragment(font_floor_px=floor) + (
+    page_max = resolved_page_number_max_font_px() if page_number_max_font_px is None else page_number_max_font_px
+    return fit_script_fragment(font_floor_px=floor, page_max_px=page_max) + (
         "  const __codexFitPass = (pass) => {\n"
         "    try { __codexFit.reset(); return __codexFit.apply(pass); }\n"
         "    catch (error) { return {version: '" + FIT_VERSION + "', requested: false, "

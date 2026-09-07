@@ -321,11 +321,13 @@ def test_post_render_gate_reports_fragmentation_next_to_the_envelope(monkeypatch
     _report, failure = pipeline._evaluate_slide_quality(**kwargs)
     assert failure is not None
     assert failure["slide_index"] == 0
-    assert failure["issues"] == [
-        {"category": "fragmentation", "severity": "error", "message": "text_owners:90>50"},
-        {"category": "fragmentation", "severity": "error", "message": "type_floor:89<15"},
-        {"category": "fragmentation", "severity": "error", "message": "fit_floor:1>0"},
+    assert [(issue["category"], issue["severity"], issue["message"]) for issue in failure["issues"]] == [
+        ("fragmentation", "error", "text_owners:90>50"),
+        ("fragmentation", "error", "type_floor:89<15"),
+        ("fragmentation", "error", "fit_floor:1>0"),
     ]
+    # The repair instruction rides along as ``detail`` so the remake brief quotes it.
+    assert failure["issues"][0]["detail"].startswith("SLIDE has 90 text-owning elements (limit 50). Merge")
 
 
 # --- the fitter's floor ----------------------------------------------------------

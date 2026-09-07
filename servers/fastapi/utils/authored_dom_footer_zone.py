@@ -73,12 +73,20 @@ def _edges(box: object) -> tuple[float, float, float, float] | None:
     return left, top, left + width, top + height
 
 
-def _looks_like_page_number(item: Mapping[str, Any], *, viewport_width: float, viewport_height: float) -> bool:
+def _looks_like_page_number(
+    item: Mapping[str, Any], *, viewport_width: float, viewport_height: float, max_font_px: float | None = None
+) -> bool:
     """Full-width box pinned near the canvas bottom with short digit text.
 
     No qid/class names this role consistently (run 33 alone carries
     ``s2-page``, ``s4.page``, ``s7-page``, ``s18-page``, ``s06.page``).
     """
+    if max_font_px is None:
+        # Lazy: the gate module imports this one. The clamp raises the 12px
+        # page number to the gate floor, so the threshold must follow it.
+        from utils.authored_fragmentation_gate import page_number_max_font_px
+
+        max_font_px = page_number_max_font_px()
     edges = _edges(item.get("bbox"))
     if edges is None:
         return False
@@ -90,7 +98,7 @@ def _looks_like_page_number(item: Mapping[str, Any], *, viewport_width: float, v
         and right >= viewport_width - 4.0
         and 0.0 <= viewport_height - bottom <= _PAGE_NUMBER_MAX_DISTANCE_FROM_BOTTOM_PX
         and top >= viewport_height * _PAGE_NUMBER_MIN_TOP_FRACTION
-        and 0.0 < _number(item.get("font_size")) <= _PAGE_NUMBER_MAX_FONT_PX
+        and 0.0 < _number(item.get("font_size")) <= max_font_px
         and bool(_PAGE_NUMBER_TEXT.match(text))
     )
 

@@ -167,7 +167,6 @@ def _evaluate_slide_quality(
                 capacity_plan.at(index),
             )
         )
-    issues.extend(measured_gate_issues(browser_metrics=browser_metrics, fit_report=fit_report))
     report = inspect_authored_dom(
         html,
         browser_metrics,
@@ -193,6 +192,7 @@ def _evaluate_slide_quality(
         issue.to_dict() if hasattr(issue, "to_dict") else {"message": str(issue)}
         for issue in defects
     )
+    issues.extend(measured_gate_issues(browser_metrics=browser_metrics, fit_report=fit_report))  # last
     return report, ({"slide_index": index, "issues": issues} if issues else None)
 
 
