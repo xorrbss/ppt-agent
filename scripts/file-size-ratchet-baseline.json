@@ -33,7 +33,12 @@
     "servers/fastapi/api/v1/ppt/endpoints/authored_vnext/semantic/router.py": 917,
     "servers/fastapi/api/v1/ppt/endpoints/pptx_slides.py": 618,
     "servers/fastapi/api/v1/ppt/endpoints/presentation_crud.py": 771,
-    "servers/fastapi/api/v1/ppt/endpoints/presentation_generate.py": 2356,
+    "servers/fastapi/api/v1/ppt/endpoints/presentation_generate.py": {
+      "lines": 2360,
+      "rationale": "Trimming an over-generated outline instead of failing the request (0ccaa919a) added four lines to the generation entrypoint. The module is the single admission/branch point for every generation strategy, so a split has to move a strategy out, not a helper.",
+      "owner": "authored generation",
+      "removalCondition": "Move the source-content restyle admission block out of presentation_generate.py into its own module; the file returns under the 500-line limit's exception baseline of 2356 without it."
+    },
     "servers/fastapi/api/v1/ppt/endpoints/structured_templates.py": 564,
     "servers/fastapi/api/v1/ppt/endpoints/workspace.py": 832,
     "servers/fastapi/api/v2/contracts.py": 895,
@@ -122,7 +127,12 @@
     "servers/fastapi/services/provider_usage_instrumentation.py": 884,
     "servers/fastapi/services/public_export_identity.py": 1195,
     "servers/fastapi/services/public_export_operation.py": 2014,
-    "servers/fastapi/services/public_operation_admission.py": 3001,
+    "servers/fastapi/services/public_operation_admission.py": {
+      "lines": 3021,
+      "rationale": "Applying the resolved policy row's identity rather than the requested one (0afdafaea) added twenty lines, most of them the comment that records why: writing the requested version while applying the resolved row's limits makes PostgreSQL reject the insert and turns every deck into a 500.",
+      "owner": "public operation admission",
+      "removalCondition": "Extract the provider logical-call reservation surface (reserve/reconcile/fence) into its own module; it is a self-contained third of this file."
+    },
     "servers/fastapi/services/public_v2_orchestrator.py": 2448,
     "servers/fastapi/services/references/providers.py": 693,
     "servers/fastapi/services/slidespec_authored_executor.py": 3489,
@@ -176,7 +186,12 @@
     "servers/fastapi/utils/llm_calls/author_vision_qa.py": 1273,
     "servers/fastapi/utils/llm_utils.py": 1163,
     "servers/fastapi/utils/oauth/openai_codex.py": 614,
-    "servers/fastapi/utils/slide_capture.py": 2159,
+    "servers/fastapi/utils/slide_capture.py": {
+      "lines": 2177,
+      "rationale": "Two independent additions land here in one merge: the in-render fit capture on main, and the descendant-paint occlusion fallback on serve that unblocked source-restyle readback. Each stayed under the previous 2159 allowance on its own branch; only their sum exceeds it. The occlusion probe cannot follow the sibling-module pattern used by slide_capture_hit_test/_polygon_paint/_rounded_paint because it closes over the surrounding probe scope and the render digests.",
+      "owner": "authored capture",
+      "removalCondition": "Give the occlusion probe an explicit parameter object so it can move to utils/slide_capture_occlusion.py like its sibling JS fragments."
+    },
     "servers/fastapi/utils/slidespec_constraints.py": 1429,
     "servers/fastapi/utils/slidespec_core.py": 1035,
     "servers/fastapi/utils/slidespec_solver.py": 822,
