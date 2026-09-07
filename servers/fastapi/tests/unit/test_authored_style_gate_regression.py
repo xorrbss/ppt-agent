@@ -229,7 +229,7 @@ def test_style_reference_all_scope_reuses_initial_critiques_and_reviews_each_can
         comparison_calls = []
         initial = [_critique(), _clean(), _critique()]
 
-        async def fake_critique(pngs, contexts=None):
+        async def fake_critique(pngs, contexts=None, **_kwargs):
             initial_calls.append((list(pngs), list(contexts or [])))
             assert len(initial_calls) == 1
             return initial
@@ -309,7 +309,7 @@ def test_style_reference_current_nonzero_scope_keeps_absolute_position_and_final
         comparison_calls = []
         initial = [_critique()]
 
-        async def fake_critique(pngs, contexts=None):
+        async def fake_critique(pngs, contexts=None, **_kwargs):
             initial_calls.append((list(pngs), list(contexts or [])))
             assert len(initial_calls) == 1
             return initial

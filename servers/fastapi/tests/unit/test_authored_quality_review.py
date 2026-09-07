@@ -226,7 +226,7 @@ def test_unimportable_authored_deck_is_preserved_without_page_regeneration(
             async def fake_render(html):
                 return html.encode()
 
-            async def fake_critique(pngs, contexts=None):
+            async def fake_critique(pngs, contexts=None, **_kwargs):
                 nonlocal review_calls
                 review_calls += 1
                 return [

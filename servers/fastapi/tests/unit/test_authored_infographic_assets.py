@@ -344,7 +344,7 @@ def test_a_reauthored_figure_gets_its_pack_icons_again(tmp_path, monkeypatch):
     slide = _slide("process", 4)
     reauthored = _doc(slide)
 
-    async def fake_critique(pngs, contexts=None):
+    async def fake_critique(pngs, contexts=None, **_kwargs):
         return [vqa_mod.SlideCritique(needs_fix=True)]
 
     async def fake_author(*args, **kwargs):
