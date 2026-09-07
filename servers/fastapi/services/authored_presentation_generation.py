@@ -143,6 +143,7 @@ from services.authored_quality_gate_diagnostics import (
     quality_receipt_gate_failure,
 )
 from services.authored_prompt_cache_report import log_author_stage_prompt_cache_summary_safely
+from services.authored_repair_receipts import PATCH_ROUND, REMAKE_FIRST_ROUND, TERMINAL_ROUND, repair_round_receipts
 from services.authored_repair_round_order import remake_first_flagged_slides
 from services.authored_terminal_slide_fallback import (
     MAX_REMAKES_PER_SLIDE,
@@ -2289,17 +2290,18 @@ async def _generate_authored_presentation(
             # patching the failing HTML -- bench run 10 measured the patch
             # round at 0 of 6 and the remake at 4 of 8. Everything below then
             # runs only for the slides the remake did not rescue.
-            remake_first = await remake_first_flagged_slides(
-                flagged=flagged, gate_failures=gate_failures, htmls=htmls,
-                pngs=pngs, contents=contents, roles=roles, brand=brand,
-                design_system=authored_deck.design_system, style=style,
-                capacity_plan=capacity_plan, profile=composition_profile,
-                reference_mode=reference_mode, scene_envelope=scene_envelope,
-                metrics_by_slide=revised_metrics_by_slide,
-                chapter_plan=chapter_plan, illustration_plan=illustration_plan,
-                infographic_plan=infographic_plan,
-                instructions=request.instructions, generation_job=generation_job,
-            )
+            async with repair_round_receipts(generation_job, repair_round=REMAKE_FIRST_ROUND):
+                remake_first = await remake_first_flagged_slides(
+                    flagged=flagged, gate_failures=gate_failures, htmls=htmls,
+                    pngs=pngs, contents=contents, roles=roles, brand=brand,
+                    design_system=authored_deck.design_system, style=style,
+                    capacity_plan=capacity_plan, profile=composition_profile,
+                    reference_mode=reference_mode, scene_envelope=scene_envelope,
+                    metrics_by_slide=revised_metrics_by_slide,
+                    chapter_plan=chapter_plan, illustration_plan=illustration_plan,
+                    infographic_plan=infographic_plan,
+                    instructions=request.instructions, generation_job=generation_job,
+                )
             scene_envelope = remake_first.scene_envelope
             flagged = remake_first.remaining_flagged
             remake_counts.update(remake_first.remake_counts)
@@ -2440,12 +2442,7 @@ async def _generate_authored_presentation(
                 # Chromium recapture below, not a provider recovery.
                 provider_recovery_allowed[local_index] = False
         try:
-            with provider_usage_scope(
-                job_id=(generation_job.id if generation_job is not None else None),
-                operation="authored_generation",
-                stage="repair",
-                attempt_number=(generation_job.attempt_number if generation_job else 0),
-            ):
+            async with repair_round_receipts(generation_job, repair_round=PATCH_ROUND):
                 revised_htmls, fixed = await _revise_gate_repair_candidates(
                     flagged=flagged,
                     htmls=htmls,
@@ -2766,17 +2763,18 @@ async def _generate_authored_presentation(
     # D7: a slide that is still terminal after the bounded repair gets one
     # automatic lower-density remake here, before the attempt evidence is
     # sealed; whatever stays terminal is flagged instead of failing the deck.
-    terminal_fallback = await resolve_terminal_gate_slides(
-        htmls=htmls, pngs=pngs, contents=contents, roles=roles, brand=brand,
-        design_system=authored_deck.design_system, style=style,
-        capacity_plan=capacity_plan, profile=composition_profile,
-        reference_mode=reference_mode, scene_envelope=scene_envelope,
-        metrics_by_slide=revised_metrics_by_slide, source_reflow=source_reflow,
-        chapter_plan=chapter_plan, illustration_plan=illustration_plan,
-        infographic_plan=infographic_plan, instructions=request.instructions,
-        generation_job=generation_job, predeclared=predeclared_terminal,
-        remake_counts=remake_counts,
-    )
+    async with repair_round_receipts(generation_job, repair_round=TERMINAL_ROUND):
+        terminal_fallback = await resolve_terminal_gate_slides(
+            htmls=htmls, pngs=pngs, contents=contents, roles=roles, brand=brand,
+            design_system=authored_deck.design_system, style=style,
+            capacity_plan=capacity_plan, profile=composition_profile,
+            reference_mode=reference_mode, scene_envelope=scene_envelope,
+            metrics_by_slide=revised_metrics_by_slide, source_reflow=source_reflow,
+            chapter_plan=chapter_plan, illustration_plan=illustration_plan,
+            infographic_plan=infographic_plan, instructions=request.instructions,
+            generation_job=generation_job, predeclared=predeclared_terminal,
+            remake_counts=remake_counts,
+        )
     scene_envelope = terminal_fallback.scene_envelope
     flagged_slides = _merge_flagged_slide_entries(
         (*pipeline.author_flagged_slides, *terminal_fallback.flagged_slides)

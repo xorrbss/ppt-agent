@@ -1838,3 +1838,128 @@ def test_a_slide_flagged_by_both_stages_keeps_both_reasons(monkeypatch, tmp_path
             ],
         }
     ]
+
+
+# ---------------------------------------------------------------------------
+# M0 (design 2026-09-08): every provider call of the repair ladder is receipted
+# under its own stage. Bench run 48 wrote 25 ``author`` receipts and none for
+# the 7 remake calls, because both remake rounds ran outside a usage scope.
+# ---------------------------------------------------------------------------
+
+
+def _capture_provider_receipts(monkeypatch):
+    receipts: list[object] = []
+
+    async def receipt(value):
+        receipts.append(value)
+
+    monkeypatch.setattr(
+        "services.provider_usage_receipt_service.record_provider_usage_receipt_detached",
+        receipt,
+    )
+    monkeypatch.setattr(
+        "services.provider_usage_instrumentation.durable_provider_runtime_required",
+        lambda: False,
+    )
+    monkeypatch.setenv("AUTHORED_LOCAL_STAGE_ASYNC_ENABLED", "false")
+    return receipts
+
+
+async def _paid_call(*, slot, model, retry_class, input_tokens, output_tokens):
+    """One admitted provider call, filed the way the author/structured boundaries file it."""
+
+    from services.provider_usage_instrumentation import (
+        provider_call_admission,
+        record_provider_call,
+    )
+
+    async with provider_call_admission(
+        is_retry=retry_class != "initial", semantic_slot=slot, provider="codex", model=model
+    ):
+        pass
+    await record_provider_call(
+        provider="codex", model=model, latency_ms=1000, retry_class=retry_class,
+        response=SimpleNamespace(
+            usage=SimpleNamespace(input_tokens=input_tokens, output_tokens=output_tokens)
+        ),
+    )
+
+
+def test_repair_rounds_receipt_their_provider_calls_by_stage(monkeypatch, tmp_path):
+    """Remake-first, patch round and terminal remake each file their call and
+    their span; the slide remade in both rounds gets two distinct receipts."""
+
+    from utils.llm_calls.author_slide import authored_provider_semantic_slot
+
+    deck = [_REMADE_HTML, _TERMINAL_HTML]
+    _install_deck_stubs(monkeypatch, tmp_path, deck)
+    _flagged_pipeline_stub(monkeypatch, deck, 1)
+    _install_repair_round(monkeypatch, raises=None)
+    _install_job_stubs(monkeypatch)
+    receipts = _capture_provider_receipts(monkeypatch)
+
+    remake_candidates = iter([_TERMINAL_HTML, _REMADE_HTML])
+
+    async def paid_remake(htmls, pngs, contents, roles, brand, design_system, **kwargs):
+        index = int(kwargs["slide_indices"][0])
+        await _paid_call(
+            slot=authored_provider_semantic_slot(
+                receipt_retry_class="recovery", receipt_attempt_ordinal=2, slide_index=index
+            ),
+            model="gpt-5.6-sol", retry_class="recovery",
+            input_tokens=12_000, output_tokens=4_000,
+        )
+        return [[next(remake_candidates)], [b"remade-png"], [0], [{"path": "full_reauthor"}]]
+
+    async def paid_patch(htmls, pngs, contents, roles, brand, design_system, **kwargs):
+        await _paid_call(
+            slot="structured.attempt-1", model="gpt-5.6-sol", retry_class="initial",
+            input_tokens=5_000, output_tokens=600,
+        )
+        return [list(htmls), list(pngs), []]
+
+    monkeypatch.setattr(terminal_mod, "revise_authored_deck", paid_remake)
+    monkeypatch.setattr(authored_service, "revise_authored_deck", paid_patch)
+    job = _workspace_job()
+
+    async def flow():
+        # The stubbed pipeline files no author receipts; seed the one first-pass
+        # call the runtime control needs before it admits a recovery retry.
+        from services.provider_usage_instrumentation import provider_usage_scope
+
+        with provider_usage_scope(
+            job_id=job.id, operation="authored_generation", stage="author",
+            attempt_number=job.attempt_number, slide_index=1,
+        ):
+            await _paid_call(
+                slot="author.initial", model="gpt-5.6-sol", retry_class="initial",
+                input_tokens=12_700, output_tokens=4_400,
+            )
+        return await _generate_on_sqlite(
+            tmp_path, _request(), _outline(2), generation_job=job
+        )
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        result, presentation = _run(flow())
+    finally:
+        reset_current_owner_id(owner_token)
+
+    # Publication is stubbed by ``_install_job_stubs``; the receipts are the evidence.
+    assert result.path == "deck.pptx"
+    ledger = [(r.stage, r.model, r.retry_class) for r in receipts]
+    assert ledger == [
+        ("author", "gpt-5.6-sol", "initial"),  # the seeded first pass, unchanged
+        ("repair_remake", "gpt-5.6-sol", "recovery"),  # remake-first round, slide 1
+        ("repair_remake", "none", "initial"),  # its span
+        ("repair_patch", "gpt-5.6-sol", "initial"),  # the bounded patch proposal
+        ("repair_patch", "none", "initial"),
+        ("repair_remake", "gpt-5.6-sol", "recovery"),  # terminal round, slide 1 again
+        ("repair_remake", "none", "initial"),
+    ]
+    assert len({r.receipt_key_hash for r in receipts}) == len(receipts)
+    calls = [r for r in receipts if r.provider != "local"]
+    assert [(r.input_tokens, r.output_tokens) for r in calls] == [
+        (12_700, 4_400), (12_000, 4_000), (5_000, 600), (12_000, 4_000)
+    ]
+    assert all(r.operation == "authored_generation" for r in receipts)
