@@ -39,8 +39,10 @@ Provider receipts per deck (`scratchpad/receipts_by_stage.py`):
 | | Astra run 47 | Sol run 48 | Sol run 49 |
 |---|---|---|---|
 | author calls / p50 latency | 25 / 66 s | 25 / 132 s | 25 / 129 s |
-| author stage wall | 1,570 s | ~3,000 s | 3,092 s |
+| author provider-seconds (sum) | 1,570 s | 3,073 s | 3,092 s |
+| author stage wall | - | 727 s (effective concurrency ~4) | - |
 | repair stage wall | 820 s | 2,607 s | 2,970 s |
+| tail after repair (checkpoint, export, publish) | - | ~700 s | - |
 | output tokens per deck | 65k | 110k | 108k |
 | input tokens per deck | 306k | 325k | 323k |
 | deck wall | ~48 min | 72 min | 75 min |
@@ -160,15 +162,47 @@ than assumed.
   verbatim detector flags 22 of 24 Astra slides. Content fidelity is measured
   as a volume ratio instead.
 
+## Amendments after self-review (same day)
+
+Four things the first draft got wrong or missed, found by reading the run 48
+receipts call by call and the anchor stage:
+
+- **M0. Repair calls are not in the receipts.** `provider_usage_receipts` holds
+  the 25 first-pass author calls (all finished by ~1,150 s) and nothing from the
+  repair stage (1,019-3,628 s), so the 6 remakes, 1 failed remake and the patch
+  round are invisible to both the cost and the time story. The backend log has
+  no timestamps either. Before S1 can claim a gain, remake and patch calls must
+  be receipted with the same fields, and the bench log must carry timestamps.
+  This is the first implementation item.
+- **Q0. The anchor slide propagates fragmentation.** The style anchor stage
+  authors one content slide first and hands its stylesheet verbatim to every
+  later call (`services/authored_style_anchor_stage.py`, up to 6,000 chars of
+  CSS including the component class names). It is gated only on
+  publication-blocking DOM defects. A Sol anchor with 13px chip classes and
+  eight small boxes therefore becomes the deck's contract before any gate
+  sees it. Applying the fragmentation gate to the anchor, with its one remake
+  budget, costs one call and shapes the other 23 slides; it belongs ahead of
+  Q3 in the order.
+- **C2. Prompt cache hits are sporadic.** Each author call sends ~12.7k input
+  tokens of which ~9.2k are the deck-invariant prefix; only 5 of 25 calls in
+  run 48 reported cached tokens. If every call hit, input tokens per deck
+  would fall from ~325k to ~150k. Since cost is the reason for Sol, this is
+  the largest cost lever on the table and it is untested: measure hit rate
+  per run, and test warming the cache with the anchor call before the fan-out.
+- **Order.** Quality first means the quality questions come before the speed
+  steps: run 50 (gate), then run 51 Sol at `medium`, then the blind rating of
+  48 vs the better of 50/51. S1 and S2 follow only for the deck that wins the
+  rating; a faster deck that loses it is not shipped.
+
 ## Bench series (one variable per run)
 
 | run | change on top of the previous | decides |
 |---|---|---|
-| 50 | fragmentation gate on (Q1 + Q3 as merged) | owners, sub-15px labels, escaping cards, repairs, content loss vs brief |
-| 51 | + concurrent remakes (S1) | repair stage wall; identical slide outcomes expected |
-| 52 | + wave concurrency 4 (S2) | author stage wall, 429 count |
-| 53 | Sol at `medium` effort (Q4) | fragmentation numbers, repairs, call latency |
-| rating | 48 vs the best of 50-53, blind, sides randomised | whether the owner prefers it |
+| 50 | fragmentation gate on (Q1 + Q3 as merged), receipts for repair calls (M0) | owners, sub-15px labels, escaping cards, repairs, content loss vs brief, cache hit rate |
+| 51 | Sol at `medium` effort (Q4) | fragmentation numbers, repairs, call latency |
+| rating | 48 vs the better of 50/51, blind, sides randomised | which direction the owner prefers |
+| 52 | + anchor gate (Q0) and concurrent remakes (S1) on the winning arm | anchor owners, deck owners, repair stage wall |
+| 53 | + wave concurrency 4 (S2) and cache warm-up (C2) | author stage wall, 429 count, cached tokens per deck |
 
 Acceptance per run: no publish-blocking defect, page number on every numbered
 slide, visible / brief within 1.0-1.4x, and the run's own target metric moved
@@ -177,12 +211,16 @@ rejected.
 
 ## Implementation order and estimates
 
-1. S1 concurrent remakes: half a day (`authored_repair_round_order.py`, a
+1. M0 receipts for remake/patch calls and bench timestamps: half a day.
+2. Q0 fragmentation gate on the anchor slide: half a day
+   (`services/authored_style_anchor_stage.py`, reuse the gate and the remake hint).
+3. S1 concurrent remakes: half a day (`authored_repair_round_order.py`, a
    bounded gather with the wave's concurrency; tests on ordering and budget).
-2. Q3 budget split, severity order, patch skip: half a day (new module beside
+4. Q3 budget split, severity order, patch skip: half a day (new module beside
    `authored_terminal_slide_fallback.py`, which is at 499 lines).
-3. Q2 measured clamp: one day (pipeline re-render seam, cache identity carries
+5. Q2 measured clamp: one day (pipeline re-render seam, cache identity carries
    the floor, tests on `em`/`var()` cases).
-4. Q4 and S2 are configuration runs, no code.
+6. C2 cache warm-up: half a day once the hit rate is measured per run.
+7. Q4 and S2 are configuration runs, no code.
 
 Runs 50-52 can proceed as each step lands; the rating waits for the best deck.
