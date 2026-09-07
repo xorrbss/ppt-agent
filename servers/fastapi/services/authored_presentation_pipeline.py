@@ -84,6 +84,7 @@ from utils.authored_illustrations import (
     enforce_strict_source_image_size_floor, validate_bound_source_images, validate_visible_source_images,
 )
 from utils.authored_font_policy import enforce_authored_font_floor
+from utils.authored_content_lock import content_lock_gate_issue
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
 from utils.llm_calls.author_deck import (
     author_correction_from_stored_failure,
@@ -142,6 +143,7 @@ def _evaluate_slide_quality(
     capacity_plan: AuthoredCapacityPlan | None,
     composition_profile: CompositionProfile | None,
     reference_mode: str,
+    brief: str = "",
 ) -> tuple[Any | None, dict[str, Any] | None]:
     """Evaluate one exact render before its durable checkpoint is advanced."""
 
@@ -154,17 +156,15 @@ def _evaluate_slide_quality(
     issues: list[dict[str, Any]] = []
     if capacity_plan is not None:
         issues.extend(
-            {
-                "category": "capacity",
-                "severity": "error",
-                "message": violation,
-            }
-            for violation in capacity_violations(
-                html,
-                browser_metrics,
-                capacity_plan.at(index),
-            )
+            {"category": "capacity", "severity": "error", "message": violation}
+            for violation in capacity_violations(html, browser_metrics, capacity_plan.at(index))
         )
+    # Content lock: text the brief never said is one more measured defect on
+    # the capacity road (one bounded repair round, never a publish block).
+    lock_role = capacity_plan.at(index).role if capacity_plan is not None else "SLIDE"
+    lock_issue = content_lock_gate_issue(brief, browser_metrics, role=lock_role)
+    if lock_issue is not None:
+        issues.append(lock_issue)
     report = inspect_authored_dom(
         html,
         browser_metrics,
@@ -1326,6 +1326,7 @@ async def _author_illustrate_render_pipeline(
                     capacity_plan=capacity_plan,
                     composition_profile=composition_profile,
                     reference_mode=plan_reference_mode,
+                    brief=plan.contents[index] if index < len(plan.contents) else "",
                 )
             finally:
                 quality_work = time.monotonic() - quality_started

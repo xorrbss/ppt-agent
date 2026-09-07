@@ -24,6 +24,7 @@ from utils.llm_calls.author_slide_brief import (
     SOURCE_IMAGE_RULES,
     STORY_RULES,
     composition_intent_block,
+    content_lock_clause,
 )
 from services.authored_vnext.capability_registry import prompt_capability_clause
 from services.source_images.models import SourceImageCandidate
@@ -486,7 +487,7 @@ def author_prompt(
         f"{illustration_block}{visual_story_block}{figure_block}{capacity_block}"
         f"Author slide {index + 1} of {n}. Deck topic: {brand.topic}. This slide's ROLE: "
         f"{role} ⇒ compose it with the style's \"{archetype_for_role(role)}\" archetype. "
-        f"CONTENT: {content}.{wordmark}{structured_contract}\n\n"
+        f"CONTENT: {content}.{content_lock_clause()}{wordmark}{structured_contract}\n\n"
         f"{page_marker}\n\n"
         "Design THIS slide bespoke and premium within the shared system, vary the layout to "
         "suit the role. Give a unique stable data-qid to every element that owns text, and to "
