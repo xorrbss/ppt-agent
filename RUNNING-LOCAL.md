@@ -34,31 +34,41 @@ Node LTS, Python 3.11, [uv](https://docs.astral.sh/uv/). For export/parsing:
 LibreOffice + ImageMagick + a Chrome/Chromium (the Electron app installs these on
 first run; for the web flow install them yourself).
 
-## Web version (two servers + a reverse proxy)
-The browser frontend assumes a **single origin**; in Docker that is nginx. Locally,
-run the bundled dependency-free proxy that mirrors `nginx.conf`:
+## Web version (supervised local stack)
+
+The browser frontend assumes a **single origin**; in Docker that is nginx. Locally
+that is the bundled dependency-free proxy, which mirrors `nginx.conf`. The stack
+is five processes around a persistent PostgreSQL, and `scripts/start-local-stack.ps1`
+owns all of them:
 
 ```powershell
-# backend (APP_DATA_DIRECTORY + USER_CONFIG_PATH are required)
+# first time only: install dependencies
 cd servers/fastapi; uv sync
-$env:APP_DATA_DIRECTORY="..\..\app_data"; $env:USER_CONFIG_PATH="..\..\app_data\userConfig.json"
-# NEXT_INTERNAL_URL lets the backend reach Next.js /api/template and /pdf-maker.
-# Default is http://localhost (nginx :80 in Docker); without nginx, point it at
-# the single-origin proxy below or template lookup and PPTX/PDF export fail.
-$env:NEXT_INTERNAL_URL="http://localhost:5000"
-$env:MIGRATE_DATABASE_ON_STARTUP="true"
-uv run python server.py --port 8000 --reload false
+cd ../nextjs; npm install
 
-# frontend (APP_DATA_DIRECTORY + USER_CONFIG_PATH are required here too — see note below)
-cd servers/nextjs; npm install
-$env:APP_DATA_DIRECTORY="..\..\app_data"; $env:FAST_API_INTERNAL_URL="http://127.0.0.1:8000"; $env:NEXT_INTERNAL_URL="http://localhost:5000"; $env:USER_CONFIG_PATH="..\..\app_data\userConfig.json"
-# authored 편집가능 PPTX 익스포트를 쓸 때만 필요한 로컬 프로파일 (아래 절 참고)
-$env:AUTHORED_RENDERER_OS_ISOLATION="local-native-unattested"; $env:AUTHORED_RENDERER_EXECUTION_BOUNDARY="local-native"; $env:AUTHORED_VNEXT_RENDERER_ENABLED="true"
-npm run build; npm run start -- -p 3000
+# bring the whole stack up (PostgreSQL -> FastAPI -> controllers -> Next -> proxy)
+.\scripts\start-local-stack.ps1
 
-# single-origin proxy (mcp:8001 is reachable only if started separately)
-node scripts/presenton-local-proxy.mjs
+.\scripts\start-local-stack.ps1 -Status   # what is running
+.\scripts\start-local-stack.ps1 -Stop     # stop it, in reverse order
 ```
+
+The script starts each component with the environment it needs, waits for each
+one to answer before starting the next, and reports on every start how far the
+database schema is behind the code. Its environment lives in a DPAPI-protected
+store under `app_data/public-v2-local/`, seeded once with
+`-ImportEnvironment <directory>`; a stack that is already running can be handed
+over with `-Adopt`.
+
+**Do not start these processes by hand.** Doing so was how the local stack came
+to be a hybrid of this script and `start-public-v2-rc.ps1` that neither could
+restart or stop: the environment existed only inside the running processes, and
+the schema drifted six migrations behind the code without anything saying so.
+
+`start-public-v2-rc.ps1` is a different tool: it creates a throwaway PostgreSQL
+under the temp directory for RC verification, on ports 8010/3010/5110. It is not
+for daily work, and the database it makes does not survive the run.
+
 Open http://localhost:5000. First boot shows a one-time admin login (`/api/v1/auth/setup`).
 
 Startup migrations should remain enabled for normal native runs. Re-running the
@@ -185,15 +195,15 @@ the exported PPTX in PowerPoint. The default adaptive/template path is unchanged
   메타데이터만 반환하며(생성 브리프는 반환하지 않음), `--style <id>`는 이 응답의 `id`를
   `authored_style`로 전송합니다. 스타일을 생략하면 서버 기본값을 사용하고, `--style`만
   쓰고 값을 생략하면 CLI가 요청 전에 오류로 종료합니다.
-- **최신 `main` 반영 후 스택 재기동:** 실행 중인 backend/frontend/proxy 터미널에서
-  `Ctrl+C`로 각각 종료한 다음, 새 PowerShell에서 아래 순서로 최신 소스를 받고 위의
-  Web version 명령(backend → frontend → proxy)을 다시 실행합니다. 실행 중인 프로세스를
-  강제 종료하지 말고 각 터미널에서 정상 종료해야 포트와 `app_data`를 안전하게 재사용합니다.
+- **최신 `main` 반영 후 스택 재기동:**
   ```powershell
-  git fetch origin
-  git switch main
-  git pull --ff-only origin main
+  .\scripts\start-local-stack.ps1 -Stop
+  git fetch origin; git switch main; git pull --ff-only origin main
+  .\scripts\start-local-stack.ps1
   ```
+  백엔드에는 리로더가 없으므로 코드를 받은 뒤 반드시 재기동해야 반영됩니다. 기동 로그가
+  스키마가 코드보다 몇 개 밀려 있는지 알려주니, 마이그레이션이 필요한 변경을 받았는지
+  거기서 확인합니다.
 - **30종 카탈로그 확인:** web/Docker 인증이 켜진 경우 `-Credential`에 관리자 계정을
   전달합니다. 인증이 꺼진 Electron 백엔드는 `$credential` 줄과 `-Credential` 인수를
   생략합니다. 결과가 정확히 `30`이고, `strategic-navy` 같은 반환 `id`만 `--style`에

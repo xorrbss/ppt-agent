@@ -39,6 +39,7 @@ import { PromptInput } from "./PromptInput";
 import SupportingDoc, { MAX_SUPPORTED_FILES } from "./SupportingDoc";
 import { abortDocumentProcessing } from "./upload-page/abortDocumentProcessing";
 import { useSupportingFiles } from "./upload-page/useSupportingFiles";
+import SourceContentLossDialog from "./upload-page/SourceContentLossDialog";
 import { useUploadPageState } from "./upload-page/useUploadPageState";
 import UploadDesignGallery from "./UploadDesignGallery";
 
@@ -129,7 +130,8 @@ const UploadPage = ({
     masterAdmissionError,
     sourceContentSummary,
     isSourceContentAnalyzing,
-    sourceContentReady,
+    sourceContentLossPrompt,
+    resolveSourceContentLossPrompt,
   } = useUploadPageState({
     files,
     filesRef,
@@ -367,7 +369,7 @@ const UploadPage = ({
                   {loadingState.isLoading
                     ? t("generating")
                     : sourceContentMode
-                      ? (sourceContentReady ? "선택한 템플릿으로 재디자인" : "원본 콘텐츠 분석")
+                      ? "선택한 템플릿으로 재디자인"
                       : t("generate")}
                 </span>
               </Button>
@@ -465,6 +467,11 @@ const UploadPage = ({
             onClear={clearMaster}
           />
         ) : null}
+
+        <SourceContentLossDialog
+          prompt={sourceContentLossPrompt}
+          onDecide={resolveSourceContentLossPrompt}
+        />
       </main>
     </Wrapper>
   );

@@ -36,6 +36,11 @@ from utils.llm_config import get_llm_config
 from utils.llm_provider import get_model
 from utils.llm_utils import generate_structured_with_schema_retries
 from utils.schema_utils import prepare_schema_for_validation
+from services.provider_usage_instrumentation import active_usage_scope_slide_index
+from utils.structured_semantic_slots import (
+    VQA_PATCH_PREFIX,
+    deck_stage_slot_suffix,
+)
 
 LOGGER = logging.getLogger(__name__)
 PATCH_PROMPT_VERSION = "authored-local-patch-v2"
@@ -316,8 +321,17 @@ async def propose_authored_slide_patch(
     *,
     reference_mode: ReferenceMode = STYLE_REFERENCE,
     retry_invalid_model_patch: bool = False,
+    slide_index: int | None = None,
+    slot_run: str = "",
 ) -> PatchProposalResult:
-    """Request one local patch plan, failing closed into full re-author routing."""
+    """Request one local patch plan, failing closed into full re-author routing.
+
+    ``slide_index`` gives this call its own admission identity when the caller
+    patches several slides inside one deck-level usage scope, which is what the
+    ``vqa`` stage does (``utils.structured_semantic_slots``). ``slot_run``
+    separates a caller that patches the same slide more than once in that one
+    scope, which its correction cycle does.
+    """
     try:
         messages, available_qids = build_patch_messages(
             rendered_image,
@@ -329,6 +343,9 @@ async def propose_authored_slide_patch(
         return _fallback(str(error), "invalid_patch_input")
 
     model: str | None = None
+    scoped_slide_index = (
+        None if active_usage_scope_slide_index() is not None else slide_index
+    )
     try:
         client = get_client(config=get_llm_config())
         model = get_model()
@@ -347,6 +364,10 @@ async def propose_authored_slide_patch(
             strict=False,
             validate_schema=True,
             validate_schema_max_loop_count=2,
+            semantic_slot_prefix=VQA_PATCH_PREFIX,
+            semantic_slot_suffix=deck_stage_slot_suffix(
+                scoped_slide_index, run=slot_run
+            ),
         )
         try:
             plan = validate_patch_plan(
@@ -371,6 +392,11 @@ async def propose_authored_slide_patch(
                 validate_schema=True,
                 validate_schema_max_loop_count=2,
                 is_retry=True,
+                semantic_slot_prefix=VQA_PATCH_PREFIX,
+                semantic_slot_suffix=deck_stage_slot_suffix(
+                    scoped_slide_index,
+                    run=f"{slot_run}.patch-retry" if slot_run else "patch-retry",
+                ),
             )
             plan = validate_patch_plan(
                 content,

@@ -104,7 +104,8 @@ from services.workspace_runtime_profile import require_supported_workspace_runti
 from templates.packages.defaults import import_template_packages_on_startup
 from templates.packages.registry import get_template_package_registry
 from templates.v2.policy import get_structured_template_policy
-from utils.get_env import get_app_data_directory_env
+from services.provider_pricing_admission import pricing_gap_message
+from utils.get_env import get_app_data_directory_env, get_can_change_keys_env
 from utils.model_availability import (
     check_llm_and_image_provider_api_or_model_availability,
 )
@@ -254,6 +255,16 @@ async def app_lifespan(_: FastAPI):
             # the first slide of the first real deck. Never fails startup.
             await warm_up_authored_renderer()
         await bootstrap_database_admin()
+        # Settings also arrive without passing the admin route -- env, compose,
+        # a seeded secret store -- so the model/pricing invariant is compared
+        # again here. A locked configuration cannot be repaired from the UI, so
+        # it must not boot into a stack whose every provider call fails closed;
+        # a mutable one is reported and left to the operator to fix.
+        pricing_gap = pricing_gap_message()
+        if pricing_gap is not None:
+            if get_can_change_keys_env() == "false":
+                raise RuntimeError(pricing_gap)
+            logger.error("provider_pricing_selection_gap %s", pricing_gap)
         if os.getenv("PRESENTON_SKIP_PROVIDER_AVAILABILITY_CHECK") != "true":
             await check_llm_and_image_provider_api_or_model_availability()
         else:

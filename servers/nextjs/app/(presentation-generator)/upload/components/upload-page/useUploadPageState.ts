@@ -12,10 +12,8 @@ import {
 } from "../../../services/api/presentation-generation";
 import {
   SOURCE_CONTENT_POLICY,
-  SourceContentApiV1,
   sourceContentSelectionErrorMessage,
   type SourceContentAnalysisResponseV1,
-  type SourceContentAnalysisSummary,
   validateSourceContentFiles,
 } from "../../../services/api/source-content/contract";
 import { getApiErrorDisplayMessage } from "../../../services/api/api-error-handler";
@@ -30,6 +28,11 @@ import AuthoredStylesApi from "../../../services/api/authored";
 import { resolveDeckTheme } from "../applyDeckTheme";
 import { abortDocumentProcessing } from "./abortDocumentProcessing";
 import { getFileCategory } from "./fileCategory";
+import {
+  fileIdentityOf,
+  useSourceContentAdmission,
+  type SourceContentAdmission,
+} from "./useSourceContentAdmission";
 import { getSelectedImageQuality, getSelectedTextModel } from "./llmConfigSummary";
 import { LoadingState } from "./types";
 import { AuthoredVnextMasterClient } from "@/lib/authored-vnext/master/client";
@@ -47,12 +50,6 @@ const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 const masterClient = new AuthoredVnextMasterClient();
 
 export type UploadMasterAdmissionError = "required" | "unavailable";
-
-type SourceContentAdmission = {
-  analysis: SourceContentAnalysisResponseV1;
-  documentAdmission: DocumentUploadAdmission;
-  fileIdentity: string;
-};
 
 interface UseUploadPageStateArgs {
   files: File[];
@@ -94,14 +91,12 @@ export const useUploadPageState = ({
   const sourceContentMode = useSelector(
     (state: RootState) => state.pptGenUpload.sourceContentMode,
   );
-  const [sourceContentSummary, setSourceContentSummary] =
-    useState<SourceContentAnalysisSummary | null>(null);
-  const [isSourceContentAnalyzing, setIsSourceContentAnalyzing] = useState(false);
-  const [sourceContentAdmission, setSourceContentAdmission] =
-    useState<SourceContentAdmission | null>(null);
-  const sourceContentFileIdentity = files
-    .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
-    .join("|");
+  const sourceContentGate = useSourceContentAdmission({
+    pendingPresentationId,
+    setLoadingState: (state) => setLoadingState(state),
+    trackUploadValidationFailure: (reason) =>
+      trackUploadValidationFailure(reason),
+  });
   const [masterAdmissionError, setMasterAdmissionError] =
     useState<UploadMasterAdmissionError | null>(null);
   const [isMasterResolving, setIsMasterResolving] = useState(false);
@@ -125,6 +120,7 @@ export const useUploadPageState = ({
     showProgress: false,
     extra_info: "",
   });
+  const selectedFileIdentity = fileIdentityOf(files);
   const decomposeAbortControllerRef = useRef<AbortController | null>(null);
   const companyStandardRef = useRef(companyStandard);
   const startInFlightRef = useRef(false);
@@ -138,10 +134,10 @@ export const useUploadPageState = ({
   }, []);
 
   useEffect(() => {
-    setSourceContentSummary(null);
-    setSourceContentAdmission(null);
+    sourceContentGate.reset();
     dispatch(setPptGenUploadState({ sourceContentAdmission: null }));
-  }, [dispatch, sourceContentFileIdentity, sourceContentMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, selectedFileIdentity, sourceContentMode]);
 
   useEffect(() => {
     setMasterAdmissionError(null);
@@ -377,64 +373,6 @@ export const useUploadPageState = ({
     return true;
   };
 
-  const analyzeSourceContent = async (
-    selectedFiles: File[],
-  ): Promise<SourceContentAdmission | null> => {
-    const validation = validateSourceContentFiles(selectedFiles);
-    if (validation) {
-      trackUploadValidationFailure(validation);
-      notify.warning("원본 콘텐츠 유지 파일 제한", sourceContentSelectionErrorMessage(validation));
-      return null;
-    }
-    setLoadingState({
-      isLoading: true,
-      message: "원본 콘텐츠를 분석하는 중…",
-      showProgress: true,
-      duration: 90,
-      progress: 10,
-      progressLabel: "PPTX 안전 분석 및 콘텐츠 inventory",
-      extra_info: "분석이 끝난 뒤 선택한 템플릿으로 재디자인할 수 있습니다.",
-    });
-    setIsSourceContentAnalyzing(true);
-    let documentAdmission: DocumentUploadAdmission | null = null;
-    try {
-      documentAdmission = await PresentationGenerationApi.uploadDoc(selectedFiles, pendingPresentationId);
-      const analysis = await SourceContentApiV1.analyze({
-        referenceSnapshotId: documentAdmission.referenceSnapshotId,
-        idempotencyKey: `source-content-analyze:${pendingPresentationId}:${documentAdmission.referenceSnapshotId}`,
-      });
-      if (
-        analysis.status !== "ready" ||
-        !analysis.capabilities.pptx ||
-        analysis.capabilities.pdf || analysis.capabilities.docx || analysis.capabilities.ppt ||
-        analysis.referenceSnapshotBinding.referenceSnapshotId !== documentAdmission.referenceSnapshotId
-      ) {
-        throw new Error("source_content_manifest_invalid");
-      }
-      const admitted = {
-        analysis,
-        documentAdmission,
-        fileIdentity: selectedFiles
-          .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
-          .join("|"),
-      };
-      setSourceContentAdmission(admitted);
-      setSourceContentSummary(analysis.summary);
-      setLoadingState({ isLoading: false, message: "", duration: 0, showProgress: false, progress: 100 });
-      return admitted;
-    } catch (error) {
-      if (documentAdmission) {
-        await PresentationGenerationApi.cleanupDocumentAdmission({
-          referenceSnapshotId: documentAdmission.referenceSnapshotId,
-          assetIds: documentAdmission.assetIds,
-        });
-      }
-      throw error;
-    } finally {
-      setIsSourceContentAnalyzing(false);
-    }
-  };
-
   const ensureSourceContentAuthoredStyle = async (): Promise<boolean> => {
     try {
       const styles = await AuthoredStylesApi.getStyles();
@@ -455,31 +393,54 @@ export const useUploadPageState = ({
   const startPresentation = async (auto: boolean) => {
     if (startInFlightRef.current) return;
     const selectedFiles = filesRef?.current ?? files;
-    const selectedFileIdentity = selectedFiles
-      .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
-      .join("|");
+    const selectedFileIdentity = fileIdentityOf(selectedFiles);
     if (!validateConfiguration(selectedFiles)) return;
     startInFlightRef.current = true;
-    if (sourceContentMode && (
-      !sourceContentAdmission ||
-      sourceContentAdmission.fileIdentity !== selectedFileIdentity
-    )) {
+    // The analysis raises the progress overlay and the generation keeps it up,
+    // so every path that gives up in between has to lower it again. Going
+    // through one helper is what keeps a new early return from stranding the
+    // screen on "analysing" forever.
+    const abandonRun = () => {
+      setLoadingState({
+        isLoading: false,
+        message: "",
+        duration: 0,
+        showProgress: false,
+      });
+      startInFlightRef.current = false;
+    };
+    // One click carries the source-content run all the way through: analyse,
+    // then generate. The analysis is still a gate, but it only stops the run
+    // when it found something the user would not want to lose silently --
+    // `admitted` is read from the return value because the state setter behind
+    // it has not re-rendered within this same click.
+    let admitted: SourceContentAdmission | null = sourceContentMode
+      ? sourceContentGate.admission
+      : null;
+    if (sourceContentMode && admitted?.fileIdentity !== selectedFileIdentity) {
       try {
-        await analyzeSourceContent(selectedFiles);
+        admitted = await sourceContentGate.analyze(selectedFiles);
       } catch (error) {
         handleGenerationError(error);
-      } finally {
         startInFlightRef.current = false;
+        return;
       }
+      if (!admitted) {
+        abandonRun();
+        return;
+      }
+    }
+    if (admitted && !(await sourceContentGate.confirmLosses(admitted.analysis.summary))) {
+      abandonRun();
       return;
     }
     if (sourceContentMode && !(await ensureSourceContentAuthoredStyle())) {
-      startInFlightRef.current = false;
+      abandonRun();
       return;
     }
     const resolvedMaster = await resolveMasterForGeneration();
     if (resolvedMaster === null) {
-      startInFlightRef.current = false;
+      abandonRun();
       return;
     }
     trackEvent(
@@ -491,7 +452,7 @@ export const useUploadPageState = ({
     const isStockProviderReady = sourceContentMode || await ensureStockImageProviderReady();
     if (!isStockProviderReady) {
       trackUploadValidationFailure("stock_image_provider_unreachable");
-      startInFlightRef.current = false;
+      abandonRun();
       return;
     }
 
@@ -503,7 +464,7 @@ export const useUploadPageState = ({
           selectedFiles,
           auto,
           resolvedMaster,
-          sourceContentMode ? sourceContentAdmission : null,
+          admitted,
         );
       } else {
         await handleDirectPresentationGeneration(auto, resolvedMaster);
@@ -752,11 +713,9 @@ export const useUploadPageState = ({
     handleReviewOutline,
     masterAdmissionError,
     isMasterResolving,
-    sourceContentSummary,
-    isSourceContentAnalyzing,
-    sourceContentReady: Boolean(
-      sourceContentAdmission &&
-      sourceContentAdmission.fileIdentity === sourceContentFileIdentity,
-    ),
+    sourceContentSummary: sourceContentGate.summary,
+    isSourceContentAnalyzing: sourceContentGate.isAnalyzing,
+    sourceContentLossPrompt: sourceContentGate.lossPrompt,
+    resolveSourceContentLossPrompt: sourceContentGate.resolveLossPrompt,
   };
 };

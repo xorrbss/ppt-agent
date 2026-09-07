@@ -27,6 +27,11 @@ async def review_exact_candidates(ctx):
             contexts=ctx.candidate_contexts,
             source_images=ctx.candidate_sources,
             reference_mode=ctx.plan_reference_mode,
+            slide_indices=[
+                ctx.positions[index] for index in ctx.candidate_local_indices
+            ],
+            # The second review of the same slides inside the same scope.
+            critique_round="final",
         )
         ctx.final_critique_ms = (_service.time.perf_counter() - ctx.final_critique_started_at) * 1000
         for ctx.offset, ctx.local_index in enumerate(ctx.candidate_local_indices):

@@ -17,11 +17,18 @@ stream and cut short on three signals:
   this is prose, not a document;
 * ``</html>`` has been seen and 500 further characters followed -- the document
   is complete and the rest is chatter, so reading simply stops and the
-  document is returned.
+  document is returned;
+* the provider ended the stream at its output-token ceiling
+  (``response.incomplete`` with ``max_output_tokens``, read back through the
+  guarded transport's ``terminal_outcome``) and no ``</html>`` ever arrived --
+  the document is cut mid-tag, and handing it to renderer admission would only
+  report "unclosed elements" for what is really a budget problem.
 
-The first two raise :class:`AuthoredStreamAborted`, which is an ordinary
-non-terminal provider failure: ``author_deck``'s attempt loop treats it exactly
-like invalid HTML, spending the correction it would have spent anyway.
+The first two and the last raise :class:`AuthoredStreamAborted`, which is an
+ordinary non-terminal provider failure: ``author_deck``'s attempt loop treats
+it exactly like invalid HTML, spending the correction it would have spent
+anyway. The ``output_token_limit`` reason is the one the attempt loop, the
+author-stage rescue and the deck's failure envelope all name explicitly.
 
 ``llmai``'s clients expose streaming through the synchronous
 ``client.generate(..., stream=True)`` iterator, so -- like every other authored
@@ -40,9 +47,33 @@ from typing import Any, Mapping
 
 from utils.get_env_programme import is_authored_author_streaming_enabled
 from utils.provider_idempotency import provider_generate_call
+from utils.provider_terminal_outcome import ProviderTerminalOutcome
 from services.provider_usage_instrumentation import current_provider_idempotency_key
 
 logger = logging.getLogger(__name__)
+
+#: The abort reason for a document the provider cut at its output ceiling.
+OUTPUT_TOKEN_LIMIT_REASON = "output_token_limit"
+#: The ``AuthoredProviderBudgetExhausted`` code once both calls ended that way.
+OUTPUT_TOKEN_LIMIT_BUDGET_EXHAUSTED_CODE = "authored_output_token_limit_budget_exhausted"
+#: What the next call is told. There is no rejected candidate to repair: the
+#: document was never finished, so the correction is about size, not content.
+OUTPUT_TOKEN_LIMIT_CORRECTION_HINT = (
+    "The previous response was cut off by the provider's output-token limit "
+    "before the document was complete. Return a COMPLETE self-contained HTML "
+    "document that ends with </html>, and make it substantially more compact: "
+    "fewer and shorter text items, no decorative or repeated markup, no long "
+    "inline SVG or data URLs, and CSS reduced to what the layout needs."
+)
+#: What an operator is told when the budget itself is the cause.
+OUTPUT_TOKEN_LIMIT_GUIDANCE = (
+    "The provider's output-token ceiling cut the slide off before </html>. "
+    "Raise AUTHOR_MAX_TOKENS, or lower the reasoning effort or the slide "
+    "density so one slide fits the output budget."
+)
+# How deep a cause chain is walked for the token-limit abort; the same bound
+# the authored failure classifiers use.
+_MAX_CAUSE_DEPTH = 6
 
 # Characters allowed before the document must have started.
 PROLOGUE_GRACE_CHARS = 2_000
@@ -110,7 +141,7 @@ async def stream_author_call(
 
     ceiling = max_output_chars or author_stream_char_budget(kwargs)
     reader = _AuthoredStreamReader(ceiling)
-    async for event in _stream_events(client, kwargs):
+    async for event in _stream_events(client, kwargs, reader):
         if getattr(event, "type", None) == "completion":
             reader.completion = event
             continue
@@ -130,6 +161,10 @@ class _AuthoredStreamReader:
         self._document_end = -1
         self.completion: Any | None = None
         self.truncated = False
+        # Set by the pump once the provider's terminal event was seen; stays
+        # ``None`` when reading stopped early or the transport has no
+        # Responses resource.
+        self.terminal_outcome: ProviderTerminalOutcome | None = None
 
     def consume(self, chunk: str) -> bool:
         """Add one chunk; ``True`` means stop reading, and keep what we have."""
@@ -165,9 +200,75 @@ class _AuthoredStreamReader:
     def result(self) -> Any:
         """The provider's completion when it arrived, else what was streamed."""
 
+        raise_if_output_token_limited(
+            self.terminal_outcome, self._text, document_seen=self._document_end >= 0
+        )
         if self.completion is not None and not self.truncated:
+            usage = _recovered_usage(self.completion, self.terminal_outcome)
+            if usage is None:
+                return self.completion
+            try:
+                self.completion.usage = usage
+            except Exception:  # noqa: BLE001 -- a read-only completion shape
+                return StreamedAuthorResponse(content=self._text, usage=usage)
             return self.completion
         return StreamedAuthorResponse(content=self._text)
+
+
+def raise_if_output_token_limited(
+    outcome: ProviderTerminalOutcome | None,
+    text: str,
+    *,
+    document_seen: bool | None = None,
+) -> None:
+    """Refuse a document the provider cut at its output-token ceiling.
+
+    A model may end exactly at the limit, so a ``length`` finish with
+    ``</html>`` present is a complete document and is kept. Only ``length``
+    with no ``</html>`` anywhere is the truncation this names.
+    """
+
+    if outcome is None or not outcome.output_truncated:
+        return
+    if document_seen is None:
+        document_seen = _DOCUMENT_END in text.lower()
+    if document_seen:
+        return
+    raise AuthoredStreamAborted(OUTPUT_TOKEN_LIMIT_REASON, chars=len(text))
+
+
+def output_token_limit_in_cause_chain(error: object) -> bool:
+    """Whether this failure is, or wraps, the output-token-limit abort.
+
+    Recognises both the abort itself and the budget-exhausted code the attempt
+    loop derives from it, anywhere in the ``cause``/``__cause__`` chain.
+    """
+
+    current: object = error
+    visited: set[int] = set()
+    for _ in range(_MAX_CAUSE_DEPTH):
+        if not isinstance(current, BaseException) or id(current) in visited:
+            return False
+        visited.add(id(current))
+        if isinstance(current, AuthoredStreamAborted):
+            return current.reason == OUTPUT_TOKEN_LIMIT_REASON
+        if getattr(current, "code", None) == OUTPUT_TOKEN_LIMIT_BUDGET_EXHAUSTED_CODE:
+            return True
+        current = getattr(current, "cause", None) or getattr(current, "__cause__", None)
+    return False
+
+
+def _recovered_usage(completion: Any, outcome: ProviderTerminalOutcome | None) -> Any:
+    """The terminal event's usage, only when the completion chunk lost its own.
+
+    ``llmai``'s chatgpt client builds the completion chunk's usage from
+    ``response.completed`` alone, so a stream ended by ``response.incomplete``
+    arrives with ``usage=None`` even though the terminal event was billed.
+    """
+
+    if getattr(completion, "usage", None) is not None or outcome is None:
+        return None
+    return outcome.usage
 
 
 def _content_chunk(event: Any) -> str | None:
@@ -177,7 +278,9 @@ def _content_chunk(event: Any) -> str | None:
     return chunk if isinstance(chunk, str) else None
 
 
-async def _stream_events(client: Any, kwargs: Mapping[str, Any]):
+async def _stream_events(
+    client: Any, kwargs: Mapping[str, Any], reader: _AuthoredStreamReader
+):
     """Yield provider stream events, pumping the SDK on the author executor.
 
     ``llmai`` streams synchronously, so the iterator is drained on the bounded
@@ -185,6 +288,11 @@ async def _stream_events(client: Any, kwargs: Mapping[str, Any]):
     Leaving this generator (an abort, a cancellation, the end of the document)
     sets ``stop_requested``, and the pump then closes the provider iterator
     instead of downloading the rest of the response.
+
+    When the provider ends the stream itself, the guarded transport's terminal
+    outcome is handed to ``reader`` before the generator returns: the pump
+    recorded it before it enqueued the sentinel, so the loop-side read is
+    ordered after it.
     """
 
     from utils.llm_calls.author_slide import _AUTHOR_EXECUTOR
@@ -235,6 +343,7 @@ async def _stream_events(client: Any, kwargs: Mapping[str, Any]):
         while True:
             item = await queue.get()
             if item is sentinel:
+                reader.terminal_outcome = generate_call.terminal_outcome
                 return
             if isinstance(item, BaseException):
                 raise item
@@ -259,9 +368,15 @@ def _provider_id() -> str:
 
 
 __all__ = [
+    "OUTPUT_TOKEN_LIMIT_BUDGET_EXHAUSTED_CODE",
+    "OUTPUT_TOKEN_LIMIT_CORRECTION_HINT",
+    "OUTPUT_TOKEN_LIMIT_GUIDANCE",
+    "OUTPUT_TOKEN_LIMIT_REASON",
     "AuthoredStreamAborted",
     "StreamedAuthorResponse",
     "author_stream_char_budget",
     "is_authored_author_streaming_enabled",
+    "output_token_limit_in_cause_chain",
+    "raise_if_output_token_limited",
     "stream_author_call",
 ]

@@ -43,7 +43,7 @@ def test_owned_text_fragment_gets_samples_when_parent_grid_misses_14px_footer() 
         **footer["occlusion_measurement_evidence"],
         "qid": "q-div-c6f2820b2605",
         "metric": "occlusion",
-        "sensor_version": "owned-paint-v5-inset-retry",
+        "sensor_version": "owned-paint-v12-polygon-normal-hit",
         "stage": "chrome.owned_paint_sampling",
         "status": "measured",
         "reason": None,
@@ -100,3 +100,60 @@ def test_zero_sample_and_hit_test_unknowns_have_scoped_reasons() -> None:
     assert unknown["occlusion_measurement_error"] == "owner_absent_from_hit_test"
     assert unknown["occlusion_measurement_evidence"]["qid"] == "no-hit"
     assert unknown["occlusion_measurement_evidence"]["status"] == "unknown"
+
+
+def _wrapper_html() -> str:
+    # The shape a source-content restyle produces for a multi-line source
+    # block: the binding sits on a card body that paints nothing itself, and
+    # each line is a <p> carrying its own qid.  `ownedTextNodes` assigns every
+    # text node to its NEAREST qid ancestor, so the wrapper owns no rect.
+    return """<!doctype html><html><head><style>
+      html,body { margin:0; width:1280px; height:720px; overflow:hidden; }
+      #body { position:absolute; left:64px; top:120px; width:400px; }
+      p { margin:0; font:20px/28px Arial; color:#123; }
+    </style></head><body>
+      <div id="body" data-qid="source-block-wrapper">
+        <p data-qid="line-1">first line</p>
+        <p data-qid="line-2">second line</p>
+      </div>
+    </body></html>"""
+
+
+@pytest.mark.skipif(find_chrome() is None, reason="headless Chrome is required")
+def test_wrapper_without_own_paint_is_measured_from_its_descendants() -> None:
+    """A bound wrapper's ink lives in its children, and must still be measured.
+
+    Answering `not_applicable`/`no_owned_paint` here made every consumer that
+    requires a measured verdict reject a visible block: it is what failed
+    `source_content_browser_readback_failed` on every multi-line source block
+    of a restyled deck, 37 of them across 22 slides.
+    """
+
+    _png, metrics = asyncio.run(render_html_to_png_with_metrics(_wrapper_html()))
+    wrapper = _by_qid(metrics)["source-block-wrapper"]
+    evidence = wrapper["occlusion_measurement_evidence"]
+
+    assert evidence["status"] == "measured"
+    assert evidence["reason"] is None
+    assert evidence["owned_paint_source"] == "descendant"
+    assert wrapper["occlusion_sample_count"] >= 1
+    assert wrapper["occluded_fraction"] == pytest.approx(0)
+    assert wrapper["continuous_occluded_fraction"] == pytest.approx(0)
+
+
+@pytest.mark.skipif(find_chrome() is None, reason="headless Chrome is required")
+def test_an_element_with_no_paint_anywhere_below_it_stays_not_applicable() -> None:
+    """The fallback must not turn a genuinely empty box into a measurement."""
+
+    html = """<!doctype html><html><head><style>
+      html,body { margin:0; width:1280px; height:720px; overflow:hidden; }
+      #spacer { position:absolute; left:64px; top:120px; width:200px; height:40px; }
+    </style></head><body>
+      <div id="spacer" data-qid="empty-spacer"></div>
+    </body></html>"""
+    _png, metrics = asyncio.run(render_html_to_png_with_metrics(html))
+    spacer = _by_qid(metrics)["empty-spacer"]
+    evidence = spacer["occlusion_measurement_evidence"]
+
+    assert evidence["status"] == "not_applicable"
+    assert evidence["reason"] == "no_owned_paint"

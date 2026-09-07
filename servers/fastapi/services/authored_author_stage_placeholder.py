@@ -58,8 +58,11 @@ def _title_budget(contract: AuthoredHeaderContract | None) -> int:
     """How many characters one title line holds at the contract's type size.
 
     An estimate, and it only has to be one: the title is rendered with
-    ``nowrap``/``ellipsis`` as well, so this decides how much text the DOM
-    keeps rather than whether the line fits.
+    ``nowrap``/``overflow: hidden`` as well, so this decides how much text the
+    DOM keeps rather than whether the line fits. The text-level cut in
+    ``_split_content`` (with its own "…") is the visible truncation; a CSS
+    ``text-overflow: ellipsis`` is not used because authoring validation
+    rejects it as content hiding.
     """
 
     if contract is None:
@@ -131,7 +134,7 @@ def _band_children(
         f"{contract.title.font_size_px}px;font-weight:{contract.title.weight};"
         f"line-height:{contract.title.line_height};color:{contract.title.color};"
         f"max-width:{contract.title.max_width_px}px;white-space:nowrap;"
-        f'overflow:hidden;text-overflow:ellipsis;">{_html.escape(title)}</h1>'
+        f'overflow:hidden;">{_html.escape(title)}</h1>'
     )
     if contract.divider.enabled:
         parts.append(

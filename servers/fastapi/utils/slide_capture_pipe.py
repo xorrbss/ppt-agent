@@ -10,6 +10,7 @@ import subprocess
 import time
 from typing import Any, List, Mapping
 
+from utils.process_kill_on_parent_death import bind_to_parent_lifetime
 from utils.renderer_isolation import build_worker_environment
 from utils.slide_capture import _count_runtime, _kill_process_tree
 
@@ -151,6 +152,9 @@ class _ChromePipe:
                         os.close(fd)
                     except OSError:
                         pass
+        # Bind the pipe-transport Chrome to this process's lifetime so a
+        # force-killed owner cannot strand it. No-op off Windows.
+        bind_to_parent_lifetime(self.process)
         _count_runtime("chrome_process_launches")
 
     def command(

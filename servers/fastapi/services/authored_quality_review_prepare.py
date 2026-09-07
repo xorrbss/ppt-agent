@@ -216,7 +216,14 @@ async def prepare_legacy_review(ctx):
         )
         ctx.initial_critique_started_at = _service.time.perf_counter()
         ctx.initial_critiques = list(
-            await _service.critique_authored(ctx.pngs, contexts=ctx.critique_contexts, **ctx.critique_kwargs)
+            await _service.critique_authored(
+                ctx.pngs,
+                contexts=ctx.critique_contexts,
+                # One deck-level `vqa` scope covers every slide, so each needs
+                # its own provider-admission identity.
+                slide_indices=ctx.positions,
+                **ctx.critique_kwargs,
+            )
         )
         if len(ctx.initial_critiques) != len(ctx.targets):
             ctx.initial_critiques = (ctx.initial_critiques + [None] * len(ctx.targets))[: len(ctx.targets)]

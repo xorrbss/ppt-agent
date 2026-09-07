@@ -16,6 +16,7 @@ from utils.get_env_programme import (
     is_authored_renderer_framed_protocol_enabled,
     is_authored_renderer_lease_enabled,
 )
+from utils.process_kill_on_parent_death import bind_to_parent_lifetime
 from utils.renderer_isolation import (
     MAX_RESPONSE_BYTES,
     build_worker_environment, encode_request, worker_command,
@@ -48,6 +49,9 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     else:
         kwargs["start_new_session"] = True
     process = await asyncio.create_subprocess_exec(*command, **kwargs)
+    # Bind the one-shot worker to this process's lifetime; a force-killed owner
+    # otherwise strands the worker and its Chromium. No-op off Windows.
+    bind_to_parent_lifetime(process)
 
     async def terminate_process_tree() -> None:
         if process.returncode is None:

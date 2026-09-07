@@ -30,6 +30,11 @@ from utils.authored_header_validation import validate_header_contract
 from utils.authored_infographic import CONTRACT_ERROR_PREFIX
 from services.source_images.models import SourceImageCandidate
 from utils.authored_semantic_role_repair import ensure_title_role
+from utils.llm_calls.author_slide_stream import (
+    OUTPUT_TOKEN_LIMIT_CORRECTION_HINT,
+    output_token_limit_in_cause_chain,
+)
+from utils.llm_calls.author_slide_hidden_overflow import HIDDEN_OVERFLOW_ERROR_PREFIX
 from services.authored_composition_policy import (
     AuthoredCapacityPlan,
     CompositionProfile,
@@ -312,6 +317,14 @@ def _classify_author_validation_error(
     """Classify fail-closed local rejections without weakening their policies."""
 
     message = str(error)
+    if output_token_limit_in_cause_chain(error):
+        # The provider cut the document at its output ceiling: there is no
+        # candidate to repair, so the correction is about size. Classified here
+        # so the spent budget names it (``authored_output_token_limit_budget_
+        # exhausted``) and the author-stage rescue can flag it as its own cause.
+        return _AuthorValidationCorrection(
+            "output_token_limit", OUTPUT_TOKEN_LIMIT_CORRECTION_HINT
+        )
     if message.startswith(CONTRACT_ERROR_PREFIX):
         # The checker's message already names each departure from the planned
         # figure, so the retry is told exactly what to restore.
@@ -415,6 +428,17 @@ def _classify_author_validation_error(
             + source_rule
             + " Never emit a filename, URL, relative path or invented data URL in src; the trusted "
             "source-image stage supplies verified bytes after authoring.",
+        )
+    if HIDDEN_OVERFLOW_ERROR_PREFIX in message:
+        declaration = message.partition(":")[2].split(" -- ")[0].strip()
+        return _AuthorValidationCorrection(
+            "renderer_hidden_overflow",
+            f"Remove the disallowed hiding declaration `{declaration}` wherever it occurs, and "
+            "any other -webkit-line-clamp/line-clamp, text-overflow: ellipsis, or "
+            "overflow/overflow-x/overflow-y: auto or scroll. Never hide overflowing content: "
+            "reduce density (shorter copy, fewer items) or re-lay out the slide so everything is "
+            "fully visible inside the 1280x720 frame. `overflow: hidden` on a decorative "
+            "container is fine and does not need to change.",
         )
     if "HTML attribute is not allowed: data-native-candidate" in message:
         return _AuthorValidationCorrection(

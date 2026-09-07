@@ -132,6 +132,11 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
   must fit fully inside it with NO overflow, NO clipping, and NO overlap between blocks. This is
   the single most common failure — prioritise it over visual ambition. Use less/shorter text and
   generous spacing rather than cramming.
+- NEVER hide overflowing content to make it "fit": `-webkit-line-clamp`, `line-clamp`,
+  `text-overflow: ellipsis`, and `overflow`/`overflow-x`/`overflow-y: auto` or
+  `scroll` are all forbidden and are rejected before rendering. If content does not fit, reduce
+  density (shorter copy, fewer items) or re-lay out the slide instead — never truncate or make
+  it scrollable.
 - Width belongs to the CONTENT BOX, not the canvas: inside a container that is inset from the
   edge, an element is never 1280px wide. Subtract both insets (a 72px inset on each side leaves
   1136px) or set no width at all and let the container size it. Measured failures: three slides
