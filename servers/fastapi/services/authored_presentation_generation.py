@@ -2301,6 +2301,9 @@ async def _generate_authored_presentation(
             scene_envelope = remake_first.scene_envelope
             flagged = remake_first.remaining_flagged
             remake_counts.update(remake_first.remake_counts)
+            # Q3: fragmentation-only slides the remake did not rescue skip the
+            # patch round and are published flagged by the terminal round.
+            predeclared_terminal.extend(remake_first.predeclared_terminal)
             # H3's deterministic rung and the remake both produce a repaired
             # slide; only the remake spent a provider call and a remake budget.
             repaired_gate_indices = [

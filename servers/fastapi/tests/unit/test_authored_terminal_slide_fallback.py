@@ -631,10 +631,16 @@ def _install_repair_round(monkeypatch, *, raises, candidate=None):
     return round_calls
 
 
-def _flagged_pipeline_stub(monkeypatch, htmls, flagged_index, evidence=None):
-    """``evidence`` is the ``(ledger, attempt_id)`` pair the receipt path needs."""
+def _flagged_pipeline_stub(
+    monkeypatch, htmls, flagged_index, evidence=None, issues=None
+):
+    """``evidence`` is the ``(ledger, attempt_id)`` pair the receipt path needs.
+
+    ``issues`` replaces the default overlap finding on the flagged slide.
+    """
 
     ledger, attempt_id = evidence if evidence is not None else (None, None)
+    gate_issues = list(issues) if issues is not None else [_FakeIssue().to_dict()]
 
     async def fake_pipeline(
         outline,
@@ -656,7 +662,7 @@ def _flagged_pipeline_stub(monkeypatch, htmls, flagged_index, evidence=None):
             illustration_work=0.0,
             render_work=0.1,
             quality_gate_failures=(
-                {"slide_index": flagged_index, "issues": [_FakeIssue().to_dict()]},
+                {"slide_index": flagged_index, "issues": gate_issues},
             ),
             evidence_ledger=ledger,
             evidence_attempt_id=attempt_id,
@@ -1357,6 +1363,63 @@ def test_the_knob_off_deck_keeps_patch_first_and_never_remakes(monkeypatch, tmp_
     # and the deck fails rather than publishing a flagged slide.
     assert [len(call) for call in round_calls] == [1]
     assert remake_calls == []
+
+
+_FRAGMENTED_HTML = (
+    "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'></head>"
+    "<body><h1>FRAGMENTED</h1></body></html>"
+)
+
+
+def test_a_fragmentation_only_slide_gets_one_remake_and_no_patch_round(
+    monkeypatch, tmp_path
+):
+    """Q3: the remake did not rescue it, so it is published flagged as-is.
+
+    The patch round returns ``full_reauthor`` for structural change and could
+    not merge boxes anyway, and the terminal round does not remake it again:
+    the gate costs this slide exactly one provider call.
+    """
+
+    deck = [_REMADE_HTML, _FRAGMENTED_HTML]
+    _install_deck_stubs(monkeypatch, tmp_path, deck)
+    _flagged_pipeline_stub(
+        monkeypatch, deck, 1,
+        issues=[
+            {
+                "category": "fragmentation",
+                "severity": "error",
+                "message": "text_owners:61>50",
+                "detail": "Merge the 61 text owners into at most 50 boxes.",
+            }
+        ],
+    )
+    round_calls = _install_repair_round(monkeypatch, raises=None, candidate=_REMADE_HTML)
+    remake_calls: list[object] = []
+    # The fresh composition still fails admission (it carries the overlap marker).
+    _install_remakes(monkeypatch, remake_calls, candidates=[_TERMINAL_HTML])
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(tmp_path, _request(), _outline(2))
+        )
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert result.path == "deck.pptx"
+    assert remake_calls == [[1]]
+    assert round_calls == []
+    assert _pop_slide_ids(
+        presentation.theme["authoredQualityGate"]["flaggedSlides"]
+    ) == [
+        {
+            "index": 1,
+            "reason": "composition_safety:fragmentation",
+            "remakeAttempted": True,
+            "remakeOutcome": "remake_gate_failed",
+        }
+    ]
 
 
 def test_gate_defects_reach_the_brief_with_the_measured_detail():

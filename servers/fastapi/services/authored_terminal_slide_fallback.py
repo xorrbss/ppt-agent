@@ -20,7 +20,9 @@ Bounds. ``MAX_REMAKES_PER_SLIDE`` remakes per terminal slide and at most
 ``MAX_TERMINAL_REMAKES_PER_DECK`` per deck, counted across BOTH rounds that
 may remake a slide: the remake-first round that now opens the bounded repair
 (``services/authored_repair_round_order.py``) and this terminal round behind
-it. A remake is admitted only when it clears BOTH the capacity envelope and
+it. Fragmentation-only slides are budgeted and scheduled separately in
+``services/authored_remake_schedule.py`` and never reach a second remake
+here. A remake is admitted only when it clears BOTH the capacity envelope and
 the safety gate, so the fallback can never hand back a worse deck than it was
 given. A failed call flags the slide rather than calling again; the wall
 clock those two calls cost is documented in the ordering module named above.
@@ -46,6 +48,11 @@ from services.authored_presentation_artifacts import (
     _complete_stage_after_external_success,
 )
 from services.authored_measured_gates import remake_density_hint
+from services.authored_remake_schedule import (
+    flagged_slide_entry as _flagged_entry,
+    settled_flag_entry,
+    terminal_reason as _terminal_reason,
+)
 from services.authored_terminal_slide_policy import terminal_fallback_active
 from services.authored_vnext.generation.scene_envelope import replace_deck_scene_slide
 from services.image_generation_service import ImageGenerationService
@@ -91,42 +98,6 @@ class TerminalSlideFallback:
     flagged_slides: tuple[dict[str, object], ...] = ()
     remade_slide_indices: tuple[int, ...] = ()
     remake_calls: int = 0
-
-
-def _flagged_entry(
-    *,
-    index: int,
-    reason: str,
-    attempted: bool,
-    outcome: str,
-    repeated: bool | None = None,
-    remake_count: int = 0,
-) -> dict[str, object]:
-    entry: dict[str, object] = {
-        "index": int(index),
-        "reason": str(reason)[:160],
-        "remakeAttempted": bool(attempted),
-        "remakeOutcome": str(outcome)[:64],
-    }
-    if remake_count > 1:
-        # Omitted for one remake: a receipt sealed before the remake-first
-        # round existed carries no count, and one is what it means.
-        entry["remakeCount"] = int(remake_count)
-    if repeated is not None:
-        # Only the durable Scene repair claim knows whether the same digest and
-        # error came back; an ordinary terminal slide has nothing to say here
-        # and omits the key rather than inventing ``False``.
-        entry["repeated"] = bool(repeated)
-    return entry
-
-
-def _terminal_reason(defects: Sequence[Any]) -> str:
-    categories: list[str] = []
-    for issue in defects:
-        category = str(getattr(issue, "category", "") or "").strip()
-        if category and category not in categories:
-            categories.append(category)
-    return "composition_safety:" + (",".join(categories) or "unknown")
 
 
 def _slide_metrics(
@@ -430,6 +401,15 @@ async def resolve_terminal_gate_slides(
         repeated = declaration.get("repeated")
         repeated = bool(repeated) if isinstance(repeated, bool) else None
         spent = prior_counts.get(index, 0)
+        # Q3: a fragmentation-only slide the remake-first round settled is
+        # published as declared; the patch round could not merge its boxes and
+        # a second remake is not in its budget.
+        settled = settled_flag_entry(
+            index=index, declaration=declaration, reason=reason, repeated=repeated
+        )
+        if settled is not None:
+            flagged.append(settled)
+            continue
         if remake_calls >= MAX_TERMINAL_REMAKES_PER_DECK or spent >= MAX_REMAKES_PER_SLIDE:
             flagged.append(
                 _flagged_entry(

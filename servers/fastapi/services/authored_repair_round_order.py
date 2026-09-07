@@ -44,6 +44,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from services.authored_remake_schedule import (
+    RemakeLaunch,
+    plan_remakes,
+    remake_concurrency,
+    run_bounded_remakes,
+    unresolved_fragmentation_entry,
+)
 from services.authored_terminal_slide_fallback import (
     MAX_TERMINAL_REMAKES_PER_DECK,
     apply_admitted_remake,
@@ -239,13 +246,48 @@ class RemakeFirstOutcome:
     #: order it was given them.
     remaining_flagged: list[int] = field(default_factory=list)
     remade_slide_indices: tuple[int, ...] = ()
-    #: Remakes spent per slide index, carried to ``resolve_terminal_gate_slides``
-    #: so the second remake and the deck ceiling are counted once, not twice.
+    #: Remakes spent per slide index against the SHARED deck budget, carried
+    #: to ``resolve_terminal_gate_slides`` so the second remake and the deck
+    #: ceiling are counted once, not twice. Fragmentation-only remakes are
+    #: charged to their own budget and reported in ``fragmentation_counts``.
     remake_counts: dict[int, int] = field(default_factory=dict)
     #: H3: slides the deterministic text-scale rung rescued before any provider
     #: call. They spend no remake budget, so they are reported separately from
     #: ``remade_slide_indices`` even though both are repaired slides.
     text_scaled_slide_indices: tuple[int, ...] = ()
+    #: Q3: fragmentation-only remakes spent per slide index.
+    fragmentation_counts: dict[int, int] = field(default_factory=dict)
+    #: Q3: fragmentation-only slides settled here -- remade and not admitted,
+    #: or past the fragmentation budget. They skip the patch round and go to
+    #: the terminal round as declarations it publishes flagged as-is.
+    predeclared_terminal: tuple[dict[str, object], ...] = ()
+
+
+async def _text_scale_pass(
+    *, flagged: Sequence[int], issues_by_index: Mapping[int, Sequence[Mapping[str, object]]],
+    htmls: list[str], pngs: list[bytes], metrics_by_slide: dict[int, object],
+    scene_envelope: Any, capacity_plan: Any, profile: Any, reference_mode: str,
+    generation_job: Any,
+) -> tuple[Any, list[int]]:
+    """H3 step 0 over every flagged slide, in the order given; renders only."""
+
+    rescued: list[int] = []
+    if not is_authored_text_scale_rung_enabled():
+        return scene_envelope, rescued
+    for index in flagged:
+        factor = text_scale_factor(issues_by_index.get(int(index), ()))
+        if factor is None:
+            continue
+        scene_envelope, ok = await _apply_text_scale_rung(
+            index=int(index), factor=factor, htmls=htmls, pngs=pngs,
+            metrics_by_slide=metrics_by_slide, scene_envelope=scene_envelope,
+            capacity=(capacity_plan.at(index) if capacity_plan is not None else {}),
+            profile=profile, reference_mode=reference_mode,
+            generation_job=generation_job,
+        )
+        if ok:
+            rescued.append(int(index))
+    return scene_envelope, rescued
 
 
 async def remake_first_flagged_slides(
@@ -264,55 +306,39 @@ async def remake_first_flagged_slides(
     after the durable Scene repair claims are taken: a slide with no claim was
     already declared terminal and nothing may rewrite it here.
 
+    S1: the remakes run concurrently at the authoring wave's steady width
+    (``remake_concurrency``); every budget is fixed by ``plan_remakes`` before
+    the first call, and admitted results are applied in slide-index order so
+    the deck state is the same whichever call finished first. Each call keeps
+    the single-call path's own failure handling and back-off.
+
     ``htmls``, ``pngs`` and ``metrics_by_slide`` are updated in place for an
     admitted remake so the caller keeps one deck state; the resealed scene
     envelope is returned because it is immutable. A slide whose remake is not
     admitted comes back in ``remaining_flagged`` completely untouched -- its
-    original html/png/metrics triple is the one the patch round then repairs.
+    original html/png/metrics triple is the one the patch round then repairs
+    -- unless it is fragmentation-only, in which case it is settled in
+    ``predeclared_terminal`` (Q3) and the patch round never sees it.
     """
 
     defects_by_index = gate_defects_by_slide(gate_failures)
-    issues_by_index = gate_issues_by_slide(gate_failures)
-    rung_enabled = is_authored_text_scale_rung_enabled()
-    remaining: list[int] = []
-    remade: list[int] = []
-    text_scaled: list[int] = []
-    counts: dict[int, int] = {}
-    calls = 0
-    for index in flagged:
-        defects = defects_by_index.get(int(index), ())
-        # H3 step 0: a slide whose only blocking defects are fit gets one
-        # deterministic type-scale attempt before any provider call. It is a
-        # rung, not a repair round: it either passes the same admission a remake
-        # must pass, or the slide falls through to remake #1 untouched.
-        factor = (
-            text_scale_factor(issues_by_index.get(int(index), ()))
-            if rung_enabled
-            else None
-        )
-        if factor is not None:
-            scene_envelope, rescued = await _apply_text_scale_rung(
-                index=int(index), factor=factor, htmls=htmls, pngs=pngs,
-                metrics_by_slide=metrics_by_slide, scene_envelope=scene_envelope,
-                capacity=(capacity_plan.at(index) if capacity_plan is not None else {}),
-                profile=profile, reference_mode=reference_mode,
-                generation_job=generation_job,
-            )
-            if rescued:
-                text_scaled.append(int(index))
-                continue
-        if not defects or calls >= MAX_TERMINAL_REMAKES_PER_DECK:
-            # Nothing measured to brief a fresh composition with, or the deck's
-            # shared remake budget is spent. Either way this slide keeps the
-            # patch-first path and the terminal round's remake behind it.
-            remaining.append(index)
-            continue
-        calls += 1
-        counts[int(index)] = 1
-        admitted, outcome = await remake_slide_once(
+    scene_envelope, text_scaled = await _text_scale_pass(
+        flagged=flagged, issues_by_index=gate_issues_by_slide(gate_failures),
+        htmls=htmls, pngs=pngs, metrics_by_slide=metrics_by_slide,
+        scene_envelope=scene_envelope, capacity_plan=capacity_plan,
+        profile=profile, reference_mode=reference_mode, generation_job=generation_job,
+    )
+    plan = plan_remakes(
+        [int(index) for index in flagged if int(index) not in text_scaled],
+        defects_by_index, max_overflow_remakes=MAX_TERMINAL_REMAKES_PER_DECK,
+    )
+
+    async def run_one(launch: RemakeLaunch) -> tuple[tuple[str, bytes, object] | None, str]:
+        index = launch.index
+        return await remake_slide_once(
             index=index, html=htmls[index], png=pngs[index],
             content=str(contents[index]), role=str(roles[index]),
-            defects=defects, profile=profile, reference_mode=reference_mode,
+            defects=launch.defects, profile=profile, reference_mode=reference_mode,
             capacity=(capacity_plan.at(index) if capacity_plan is not None else {}),
             brand=brand, design_system=design_system, style=style,
             total_slides=len(htmls),
@@ -322,20 +348,51 @@ async def remake_first_flagged_slides(
                 infographic_plan=infographic_plan, instructions=instructions,
             ),
         )
+
+    concurrency = remake_concurrency()
+    if plan.launches:
+        LOGGER.info(
+            "[authored] remake-first schedule concurrency=%d launches=%s "
+            "fragmentation_only=%s budget_exhausted=%s",
+            concurrency, [launch.index for launch in plan.launches],
+            [launch.index for launch in plan.launches if launch.fragmentation_only],
+            [entry["index"] for entry in plan.budget_exhausted],
+        )
+    results = await run_bounded_remakes(plan.launches, concurrency=concurrency, run_one=run_one)
+
+    remade: list[int] = []
+    settled: list[dict[str, object]] = list(plan.budget_exhausted)
+    not_rescued: set[int] = set(plan.to_patch_round)
+    for launch in sorted(plan.launches, key=lambda item: item.index):
+        result = results[launch.index]
+        if isinstance(result, BaseException):
+            LOGGER.warning(
+                "[authored] remake-first launch failed slide=%d", launch.index + 1,
+                exc_info=result,
+            )
+            admitted, outcome = None, "remake_provider_failed"
+        else:
+            admitted, outcome = result
         if admitted is None:
             LOGGER.info(
                 "[authored] remake-first not admitted slide=%d outcome=%s",
-                int(index) + 1,
-                outcome,
+                launch.index + 1, outcome,
             )
-            remaining.append(index)
+            if launch.fragmentation_only:
+                settled.append(unresolved_fragmentation_entry(
+                    index=launch.index, defects=launch.defects, outcome=outcome,
+                ))
+            else:
+                not_rescued.add(launch.index)
             continue
         scene_envelope = await apply_admitted_remake(
-            index=index, admitted=admitted, htmls=htmls, pngs=pngs,
+            index=launch.index, admitted=admitted, htmls=htmls, pngs=pngs,
             metrics_by_slide=metrics_by_slide, scene_envelope=scene_envelope,
             generation_job=generation_job,
         )
-        remade.append(int(index))
+        remade.append(launch.index)
+    # The patch round gets its slides in the order the gate gave them.
+    remaining = [index for index in flagged if int(index) in not_rescued]
     if flagged:
         LOGGER.info(
             "[authored] remake-first flagged=%s text_scaled=%s remade=%s to_patch_round=%s",
@@ -348,8 +405,10 @@ async def remake_first_flagged_slides(
         scene_envelope=scene_envelope,
         remaining_flagged=remaining,
         remade_slide_indices=tuple(remade),
-        remake_counts=counts,
+        remake_counts=plan.overflow_counts,
         text_scaled_slide_indices=tuple(text_scaled),
+        fragmentation_counts=plan.fragmentation_counts,
+        predeclared_terminal=tuple(sorted(settled, key=lambda entry: int(entry["index"]))),
     )
 
 
