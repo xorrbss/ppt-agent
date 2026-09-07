@@ -41,6 +41,11 @@ from utils.llm_calls.author_deck import (
     AuthoredBatchFailure,
     AuthoredProviderBudgetExhausted,
 )
+from utils.llm_calls.author_slide_stream import (
+    OUTPUT_TOKEN_LIMIT_BUDGET_EXHAUSTED_CODE,
+    OUTPUT_TOKEN_LIMIT_GUIDANCE,
+    output_token_limit_in_cause_chain,
+)
 from utils.renderer_isolation import RendererPolicyError
 
 LOGGER = logging.getLogger(__name__)
@@ -85,6 +90,9 @@ def author_failure_retryable(error: BaseException) -> bool:
         return False
     if terminal_provider_code(error) is not None:
         return False
+    if output_token_limit_in_cause_chain(error):
+        # Replaying the unchanged operation meets the same output ceiling.
+        return False
     explicit_retryable = getattr(error, "retryable", None)
     if isinstance(explicit_retryable, bool):
         return explicit_retryable
@@ -106,6 +114,13 @@ def author_stage_failure(
         code=code,
         cause=error,
         retryable=author_failure_retryable(error),
+        # The envelope's message is what the caller shows; a spent output
+        # budget is the one author failure whose fix is a setting, so say so.
+        message=(
+            OUTPUT_TOKEN_LIMIT_GUIDANCE
+            if output_token_limit_in_cause_chain(error)
+            else None
+        ),
         provider_attempt_count=provider_attempt_count,
     )
 
@@ -171,6 +186,12 @@ def author_failure_is_rescuable(failure: AuthoredBatchFailure) -> bool:
         return False
     if terminal_provider_code(error) is not None:
         return False
+    if output_token_limit_in_cause_chain(error):
+        # The provider answered and ran out of output budget. The abort is
+        # ``retryable`` in the stream reader's vocabulary (the slide's next
+        # call may fix it), but the operation replaying the same call will
+        # not; the rescue's plainer, shorter brief is the fix.
+        return True
     if getattr(error, "retryable", None) is True:
         return False
     if isinstance(error, AuthoredProviderBudgetExhausted):
@@ -214,6 +235,8 @@ def defer_rescuable_author_failures(
             code=(
                 error.code
                 if isinstance(error, AuthoredProviderBudgetExhausted)
+                else OUTPUT_TOKEN_LIMIT_BUDGET_EXHAUSTED_CODE
+                if output_token_limit_in_cause_chain(error)
                 else AUTHOR_BUDGET_EXHAUSTED_CODE
             ),
             detail=failure.correction_hint or str(error),

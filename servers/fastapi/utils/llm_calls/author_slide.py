@@ -32,7 +32,11 @@ from utils.llm_calls import author_slide_effort, author_slide_prompt, author_sli
 from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
 from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
 from utils.llm_calls.author_prompt_split import author_messages
-from utils.llm_calls.author_slide_stream import is_authored_author_streaming_enabled, stream_author_call
+from utils.llm_calls.author_slide_stream import (
+    is_authored_author_streaming_enabled,
+    raise_if_output_token_limited,
+    stream_author_call,
+)
 
 from llmai import get_client
 
@@ -46,6 +50,7 @@ from utils.authored_header_prompt import render_header_contract
 from utils.authored_html_normalize import normalize_authored_html
 from services.authored_header_body_extent import ensure_body_root_horizontal_extent
 from utils.get_env import is_authored_html_normalize_enabled, is_authored_source_images_enabled
+from utils.llm_calls.author_slide_hidden_overflow import reject_hidden_overflow_declarations
 from utils.llm_calls.author_slide_images import illustration_slot_rules, reference_parts, source_image_parts
 from utils.authored_image_slots import scan_slots, source_slot_id_for_asset
 from utils.llm_config import enforce_llm_egress_policy, get_llm_config
@@ -732,6 +737,7 @@ def validate_authored_slide_html(
         else canonical
     )
     try:
+        reject_hidden_overflow_declarations(validation_source)
         admit_authored_html(validation_source)
     except RendererPolicyError as error:
         error.rejected_html = canonical
@@ -1097,6 +1103,13 @@ async def author_slide_html(
                     response = await stream_author_call(client, generate_kwargs)
                     return response
                 response = await loop.run_in_executor(_AUTHOR_EXECUTOR, spans.wrap(generate_call))
+                # The openai API-key transport has no terminal-event guard, so a
+                # document the provider cut at its output ceiling is named here
+                # the way the stream reader names it, before admission sees it.
+                raise_if_output_token_limited(
+                    getattr(generate_call, "terminal_outcome", None),
+                    extract_text(response.content) or "",
+                )
             return response
         except Exception as error:
             # A provider-declared cooldown is shared by all subsequent authored

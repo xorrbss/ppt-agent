@@ -48,12 +48,21 @@ from utils.llm_calls.author_deck import (
     author_planned_slide,
 )
 from utils.llm_calls.author_slide import _css_font_stack
+from utils.llm_calls.author_slide_stream import (
+    OUTPUT_TOKEN_LIMIT_GUIDANCE,
+    output_token_limit_in_cause_chain,
+)
 
 LOGGER = logging.getLogger(__name__)
 
 #: Recorded on the slide that exhausted every author attempt, in the same
 #: ``flaggedSlides`` list D7's gate-stage flags travel in.
 AUTHOR_ATTEMPTS_EXHAUSTED_REASON = "author:attempts_exhausted"
+
+#: The same flag when what exhausted the budget was the provider's own output
+#: ceiling (``utils/llm_calls/author_slide_stream.py``): the placeholder is
+#: the same, but the fix is a setting, not a prompt.
+AUTHOR_OUTPUT_TOKEN_LIMIT_REASON = "author:output_token_limit"
 
 #: The provider ordinal the rescue call occupies. The two ordinary calls own 1
 #: and 2; the receipt's ``provider_attempt_count`` must show this third one
@@ -193,10 +202,12 @@ def _rescue_attempt_kwargs(author_kwargs: Mapping[str, Any], hint: str) -> dict[
     return kwargs
 
 
-def _flagged_entry(index: int, *, outcome: str) -> dict[str, object]:
+def _flagged_entry(
+    index: int, *, outcome: str, reason: str = AUTHOR_ATTEMPTS_EXHAUSTED_REASON
+) -> dict[str, object]:
     return {
         "index": int(index),
-        "reason": AUTHOR_ATTEMPTS_EXHAUSTED_REASON,
+        "reason": reason,
         "remakeAttempted": True,
         "remakeOutcome": outcome[:64],
     }
@@ -244,10 +255,12 @@ async def rescue_author_stage(
     resolver = getattr(plan, "header_contract_at", None)
     contract = resolver(index) if callable(resolver) else None
     hint = simplified_author_brief(role=role, contract=contract)
+    token_limited = output_token_limit_in_cause_chain(error)
     LOGGER.warning(
-        "[authored] slide %d author budget spent (%s); one simplified attempt",
+        "[authored] slide %d author budget spent (%s); one simplified attempt%s",
         index + 1,
         getattr(error, "code", None) or type(error).__name__,
+        f". {OUTPUT_TOKEN_LIMIT_GUIDANCE}" if token_limited else "",
     )
     try:
         html = await author_planned_slide(
@@ -255,10 +268,12 @@ async def rescue_author_stage(
         )
     except AuthoredProviderBudgetExhausted as exhausted:
         outcome = "author_rescue_budget_exhausted"
+        token_limited = token_limited or output_token_limit_in_cause_chain(exhausted)
         LOGGER.warning(
-            "[authored] slide %d simplified attempt rejected (%s); publishing flagged",
+            "[authored] slide %d simplified attempt rejected (%s); publishing flagged%s",
             index + 1,
             getattr(exhausted, "code", None) or "unknown",
+            f". {OUTPUT_TOKEN_LIMIT_GUIDANCE}" if token_limited else "",
         )
     except Exception:
         outcome = "author_rescue_failed"
@@ -285,12 +300,21 @@ async def rescue_author_stage(
     return AuthorStageRescue(
         html=placeholder,
         provider_attempt_count=RESCUE_ATTEMPT_ORDINAL,
-        flagged_entry=_flagged_entry(index, outcome=outcome),
+        flagged_entry=_flagged_entry(
+            index,
+            outcome=outcome,
+            reason=(
+                AUTHOR_OUTPUT_TOKEN_LIMIT_REASON
+                if token_limited
+                else AUTHOR_ATTEMPTS_EXHAUSTED_REASON
+            ),
+        ),
     )
 
 
 __all__ = [
     "AUTHOR_ATTEMPTS_EXHAUSTED_REASON",
+    "AUTHOR_OUTPUT_TOKEN_LIMIT_REASON",
     "RESCUE_ATTEMPT_ORDINAL",
     "SAFE_BOTTOM_Y_PX",
     "AuthorStageRescue",
