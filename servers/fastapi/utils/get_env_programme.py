@@ -87,6 +87,25 @@ def is_authored_text_scale_rung_enabled(
     return _bool_setting("AUTHORED_TEXT_SCALE_RUNG_ENABLED", True, settings)
 
 
+def is_authored_fragmentation_gate_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Gate text fragmentation (owner count, type floor); repair by merging boxes."""
+    return _bool_setting("AUTHORED_FRAGMENTATION_GATE_ENABLED", False, settings)
+
+
+def get_authored_fragmentation_max_text_owners(
+    settings: RuntimeSettings | None = None,
+) -> int:
+    """Most text-owning elements one slide may render, clamped to 10..200."""
+    return _clamped_int("AUTHORED_FRAGMENTATION_MAX_TEXT_OWNERS", 50, 10, 200, settings)
+
+
+def get_authored_type_floor_px(settings: RuntimeSettings | None = None) -> int:
+    """Smallest rendered body type in px the gate accepts, clamped to 12..24."""
+    return _clamped_int("AUTHORED_TYPE_FLOOR_PX", 16, 12, 24, settings)
+
+
 def is_authored_in_render_fit_enabled(settings: RuntimeSettings | None = None) -> bool:
     """Fit card copy inside its card during the first render (grow then shrink)."""
     return _bool_setting("AUTHORED_IN_RENDER_FIT_ENABLED", True, settings)
@@ -257,6 +276,7 @@ def is_authored_prompt_bundle_enabled(
 
 
 __all__ = [
+    "get_authored_fragmentation_max_text_owners",
     "get_authored_illustration_share",
     "get_authored_in_render_fit_verify_sample",
     "get_authored_metrics_cache_entries",
@@ -264,6 +284,7 @@ __all__ = [
     "get_authored_renderer_lease_idle_seconds",
     "get_authored_renderer_lease_max_renders",
     "get_authored_renderer_lease_pool_size",
+    "get_authored_type_floor_px",
     "get_image_generation_concurrency",
     "get_llm_light_model_env",
     "get_openai_reasoning_effort_env",
@@ -275,6 +296,7 @@ __all__ = [
     "is_authored_deck_instruments_enabled",
     "is_authored_local_stage_async_enabled",
     "is_authored_exemplar_enabled",
+    "is_authored_fragmentation_gate_enabled",
     "is_authored_header_deterministic_repair_enabled",
     "is_authored_in_render_fit_enabled",
     "is_authored_renderer_framed_protocol_enabled",

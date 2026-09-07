@@ -26,6 +26,7 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from utils.authored_fit_edits import apply_fit_edits
+from utils.authored_fragmentation_gate import fit_font_floor_px
 from utils.authored_qid_namespace import ensure_authored_qids
 from utils.slide_capture_fit_script import FIT_CLASS, FIT_VERSION, fit_script_fragment
 
@@ -37,15 +38,19 @@ _CLASS_PATTERN = re.compile(
 _TAG_END_PATTERN = re.compile(r"\s*/?>\s*$")
 
 
-def fit_probe_prelude() -> str:
+def fit_probe_prelude(*, font_floor_px: float | None = None) -> str:
     """The fitter plus the wrapper the probe calls, as plain JavaScript.
 
     The fragment guarantees ``apply`` never throws, but a fitter defect must
     never make the metrics unavailable either: unavailable metrics block
     publication, whereas an unfitted slide merely reaches the existing gate.
     The wrapper therefore also catches, and reports the failure in the payload.
+
+    ``font_floor_px`` is the shrink floor; ``None`` resolves it from the
+    fragmentation gate knobs (the gate floor when on, 12px otherwise).
     """
-    return fit_script_fragment() + (
+    floor = fit_font_floor_px() if font_floor_px is None else font_floor_px
+    return fit_script_fragment(font_floor_px=floor) + (
         "  const __codexFitPass = (pass) => {\n"
         "    try { __codexFit.reset(); return __codexFit.apply(pass); }\n"
         "    catch (error) { return {version: '" + FIT_VERSION + "', requested: false, "
@@ -183,6 +188,7 @@ __all__ = [
     "FIT_POLL_ATTEMPTS",
     "FIT_POLL_INTERVAL_MS",
     "fit_capture_fields",
+    "fit_font_floor_px",
     "fit_marker_poll_js",
     "fit_probe_prelude",
     "fit_report_of",

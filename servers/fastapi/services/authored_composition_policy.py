@@ -32,6 +32,7 @@ from utils.authored_dom_quality import (
     ensure_authored_qids,
     normalize_browser_metrics,
 )
+from utils.authored_fragmentation_gate import fragmentation_repair_instruction
 from utils.get_env import is_authored_composition_envelope_enabled
 
 
@@ -380,6 +381,10 @@ def capacity_repair_instructions(
                 f"{slide_role} has {excess} excess content target(s). Consolidate low-value "
                 "body targets; never relabel title/body/image/supporting roles to bypass the limit."
             )
+        elif (fragmentation := fragmentation_repair_instruction(slide_role, violation)) is not None:
+            # The fragmentation gate's violations (``text_owners``, ``type_floor``,
+            # ``fit_floor``) share this road so the repair ladder bounds them.
+            detail = fragmentation
         else:
             detail = (
                 f"{slide_role} capacity defect {violation or 'unknown'}. Repair the measured "

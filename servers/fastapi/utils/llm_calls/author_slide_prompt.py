@@ -9,6 +9,7 @@ from typing import Any
 
 from models.authored_infographic_plan import AuthoredSlideInfographic
 from models.authored_visual_plan import AuthoredSlideVisualIntent
+from utils.authored_fragmentation_gate import fragmentation_prompt_clause
 from utils.authored_style_exemplars import exemplar_block
 from utils.authored_styles import archetype_for_role
 from utils.get_env_programme import get_authored_illustration_share
@@ -154,9 +155,12 @@ def build_design_system(
     # this deck's literal tokens, then the style's exemplar slide. The exemplar
     # is last because it is the longest and the most concrete: everything above
     # it is the contract it is an instance of.
+    # Empty while the fragmentation gate is off, which keeps the prompt
+    # byte-identical to the pre-gate text.
     return (
         rules
         + prompt_capability_clause()
+        + fragmentation_prompt_clause()
         + deck_tokens_block(style, brand)
         + exemplar_block(getattr(style, "id", None) if style is not None else None)
     )

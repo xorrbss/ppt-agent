@@ -1208,6 +1208,33 @@
       "description": "Try the bounded deterministic text-scale rung on overflow/clipping defects before the first remake."
     },
     {
+      "key": "AUTHORED_FRAGMENTATION_GATE_ENABLED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Gate authored slides on text fragmentation: too many text-owning elements or type below the floor sends the slide through the one bounded repair round with a merge-boxes instruction (never shrink type, never cut content). Independent of the composition envelope; binds no character count; never blocks publish on its own."
+    },
+    {
+      "key": "AUTHORED_FRAGMENTATION_MAX_TEXT_OWNERS",
+      "type": "integer",
+      "default": 50,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Most text-owning elements a slide may render before the fragmentation gate asks for boxes to be merged (clamped 10..200). Measured: 46-47 owners per slide reads well, 80-96 pushes ink out of cards."
+    },
+    {
+      "key": "AUTHORED_TYPE_FLOOR_PX",
+      "type": "integer",
+      "default": 16,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Smallest rendered body type in px the fragmentation gate accepts (clamped 12..24). While the gate is on the in-render fitter also stops shrinking here instead of at the 12px registry floor."
+    },
+    {
       "key": "AUTHORED_IN_RENDER_FIT_ENABLED",
       "type": "boolean",
       "default": true,

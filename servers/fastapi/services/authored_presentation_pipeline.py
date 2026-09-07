@@ -85,6 +85,7 @@ from utils.authored_illustrations import (
 )
 from utils.authored_font_policy import enforce_authored_font_floor
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
+from utils.authored_fragmentation_gate import FRAGMENTATION_CATEGORY, fragmentation_violations
 from utils.llm_calls.author_deck import (
     author_correction_from_stored_failure,
     AuthoredBatchFailure,
@@ -142,6 +143,7 @@ def _evaluate_slide_quality(
     capacity_plan: AuthoredCapacityPlan | None,
     composition_profile: CompositionProfile | None,
     reference_mode: str,
+    fit_report: Mapping[str, Any] | None = None,
 ) -> tuple[Any | None, dict[str, Any] | None]:
     """Evaluate one exact render before its durable checkpoint is advanced."""
 
@@ -154,17 +156,14 @@ def _evaluate_slide_quality(
     issues: list[dict[str, Any]] = []
     if capacity_plan is not None:
         issues.extend(
-            {
-                "category": "capacity",
-                "severity": "error",
-                "message": violation,
-            }
-            for violation in capacity_violations(
-                html,
-                browser_metrics,
-                capacity_plan.at(index),
-            )
+            {"category": "capacity", "severity": "error", "message": violation}
+            for violation in capacity_violations(html, browser_metrics, capacity_plan.at(index))
         )
+    # Independent of the envelope: empty while AUTHORED_FRAGMENTATION_GATE_ENABLED is off.
+    issues.extend(
+        {"category": FRAGMENTATION_CATEGORY, "severity": "error", "message": violation}
+        for violation in fragmentation_violations(browser_metrics, fit_report=fit_report)
+    )
     report = inspect_authored_dom(
         html,
         browser_metrics,
@@ -1326,6 +1325,7 @@ async def _author_illustrate_render_pipeline(
                     capacity_plan=capacity_plan,
                     composition_profile=composition_profile,
                     reference_mode=plan_reference_mode,
+                    fit_report=fit_report,
                 )
             finally:
                 quality_work = time.monotonic() - quality_started
