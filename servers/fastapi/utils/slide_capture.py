@@ -86,7 +86,7 @@ _BLOCKED_RENDERER_URL_PATTERNS = [
 # is insufficient: local font/image/CSS files and the resolved Chromium binary
 # may change without changing the authored Scene payload.
 CACHE_IDENTITY_VERSION = "authored-render-cache-identity/v2-capability-registry"
-MEASUREMENT_CACHE_VERSION = "authored-measurement/v11-polygon-normal-hit"
+MEASUREMENT_CACHE_VERSION = "authored-measurement/v12-fit-floor-identity"
 _SCENE_DIGEST_PATTERN = re.compile(
     r'(?:data-scene-digest|data-scene-hash|name\s*=\s*["\']scene-digest["\'])'
     r'\s*=\s*["\']([^"\']+)["\']',
@@ -103,6 +103,9 @@ class _RenderCacheIdentity:
     chrome_runtime_digest: str
     asset_fingerprint: str
     measurement_version: str
+    #: The floor the in-render fitter shrinks to; a fit computed at one floor
+    #: must not be replayed after the gate knob or the floor changes (S7).
+    fit_font_floor_px: float
     digest: str
 
 
@@ -116,9 +119,10 @@ def _render_cache_identity(html: str) -> _RenderCacheIdentity:
     scene_digest = _scene_digest(html, source_digest)
     chrome_digest = chrome_runtime_digest()
     asset_digest = _asset_fingerprint(html)
+    floor_px = fit_font_floor_px()
     payload = "\0".join(
         (CACHE_IDENTITY_VERSION, source_digest, scene_digest, chrome_digest, asset_digest,
-         MEASUREMENT_CACHE_VERSION, CAPABILITY_REGISTRY_DIGEST)
+         MEASUREMENT_CACHE_VERSION, CAPABILITY_REGISTRY_DIGEST, f"fit-floor:{floor_px:g}")
     )
     return _RenderCacheIdentity(
         source_digest=source_digest,
@@ -126,6 +130,7 @@ def _render_cache_identity(html: str) -> _RenderCacheIdentity:
         chrome_runtime_digest=chrome_digest,
         asset_fingerprint=asset_digest,
         measurement_version=MEASUREMENT_CACHE_VERSION,
+        fit_font_floor_px=floor_px,
         digest="sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest(),
     )
 

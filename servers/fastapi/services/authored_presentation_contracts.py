@@ -1,11 +1,36 @@
 from dataclasses import dataclass, field
-from typing import Any, List, Mapping
+from typing import TYPE_CHECKING, Any, List, Mapping
 
 from utils.llm_calls.author_deck import AuthoredDeckResult
 from services.authored_quality_receipt_v2 import public_attempt_id
 
+if TYPE_CHECKING:  # pragma: no cover - annotation only
+    from services.authored_vnext.generation.scene_envelope import AuthoredSlideSceneEnvelope
+
 
 AUTHORED_TEMPLATE = "authored"
+
+#: One slide's result from the author/illustrate/render pipeline, read
+#: positionally by ``_author_illustrate_render_pipeline``: index, HTML of
+#: record, PNG, author/illustration/render/quality seconds, DOM quality report,
+#: quality failure, scene envelope, author provider attempts, per-slide quality
+#: receipt, fired normalization rules, in-render fit report.
+SlideStageResult = tuple[
+    int,
+    str,
+    bytes,
+    float,
+    float,
+    float,
+    float,
+    Any | None,
+    dict[str, Any] | None,
+    "AuthoredSlideSceneEnvelope",
+    int,
+    Mapping[str, Any] | None,
+    Any,
+    Mapping[str, Any] | None,
+]
 
 
 @dataclass(frozen=True)
