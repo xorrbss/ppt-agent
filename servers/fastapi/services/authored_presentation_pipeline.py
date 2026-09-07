@@ -43,7 +43,7 @@ from services.authored_presentation_contracts import AuthoredGenerationPipelineR
 from services.authored_evidence_ledger import DeckEvidenceLedger
 from services.image_generation_service import ImageGenerationService
 from services.authored_source_images import plan_slide_source_images
-from services.authored_measured_gates import measured_gate_issues
+from services.authored_measured_gates import measured_font_floor_px, measured_gate_issues
 from services.authored_composition_policy import (
     AuthoredCapacityPlan,
     CompositionProfile,
@@ -85,7 +85,6 @@ from utils.authored_illustrations import (
     enforce_strict_source_image_size_floor, validate_bound_source_images, validate_visible_source_images,
 )
 from utils.authored_font_policy import enforce_authored_font_floor
-from utils.authored_fragmentation_gate import fit_font_floor_px
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
 from utils.llm_calls.author_deck import (
     author_correction_from_stored_failure,
@@ -168,9 +167,7 @@ def _evaluate_slide_quality(
                 capacity_plan.at(index),
             )
         )
-    issues.extend(measured_gate_issues(
-        browser_metrics=browser_metrics, fit_report=fit_report,
-    ))
+    issues.extend(measured_gate_issues(browser_metrics=browser_metrics, fit_report=fit_report))
     report = inspect_authored_dom(
         html,
         browser_metrics,
@@ -1147,14 +1144,12 @@ async def _author_illustrate_render_pipeline(
                         message=exc.detail,
                     ) from exc
 
-            # Provider output sometimes declares a smaller font than the capacity
-            # brief or the fragmentation gate allows. Clamp that explicit CSS
-            # before the first Chromium render so one floor governs authoring,
-            # preview, quality admission and export, not just the terminal gate.
+            # Clamp explicit CSS below the capacity brief's or the fragmentation
+            # gate's floor before the first render, so one floor governs every stage.
             if capacity_plan is not None and plan_reference_mode != EXACT_RECONSTRUCTION:
                 illustrated_html = enforce_authored_font_floor(
                     illustrated_html,
-                    minimum_px=max(capacity_plan.at(index).min_font_px, fit_font_floor_px()),
+                    minimum_px=max(capacity_plan.at(index).min_font_px, measured_font_floor_px()),
                 )
 
             # Canonicalize semantic ids before the first render.  The renderer

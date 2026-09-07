@@ -12,8 +12,15 @@ from typing import Any, Mapping
 
 from utils.authored_fragmentation_gate import (
     FRAGMENTATION_CATEGORY,
+    fit_font_floor_px,
     fragmentation_violations,
 )
+
+
+def measured_font_floor_px() -> float:
+    """The type floor the measured gates resolve; the pipeline clamps to it too."""
+
+    return fit_font_floor_px()
 
 
 def measured_gate_issues(
