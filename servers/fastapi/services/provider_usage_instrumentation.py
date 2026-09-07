@@ -83,6 +83,7 @@ class ProviderUsageScope:
     stage: str
     attempt_number: int
     slide_index: int | None = None
+    round_ordinal: int | None = None
     _sequence: int = field(default=0, init=False, repr=False)
     _physical_sequences: dict[str, int] = field(
         default_factory=dict, init=False, repr=False
@@ -104,8 +105,13 @@ class ProviderUsageScope:
         key = (
             f"receipt-v1:{self.job_id}:{self.operation}:{self.stage}:"
             f"{self.attempt_number}:{self.slide_index}:{self._sequence}:{outcome}"
+            f"{self._round_suffix(':')}"
         )
         return sha256(key.encode("utf-8")).hexdigest()
+
+    def _round_suffix(self, separator: str) -> str:
+        # A later repair round may remake the same slide: without it the key repeats.
+        return "" if self.round_ordinal is None else f"{separator}round-{self.round_ordinal}"
 
     def next_runtime_request_id(self, semantic_slot: str) -> str:
         sequence = self._physical_sequences.get(semantic_slot, 0) + 1
@@ -114,7 +120,7 @@ class ProviderUsageScope:
         logical_ordinal = self.public_logical_call_ordinal(semantic_slot)
         return (
             f"call:{self.operation}:{self.stage}:{self.attempt_number}:{slot}:"
-            f"{logical_ordinal}:{sequence}"
+            f"{logical_ordinal}:{sequence}{self._round_suffix(':')}"
         )
 
     def public_logical_call_ordinal(self, semantic_slot: str) -> int:
@@ -134,14 +140,16 @@ class ProviderUsageScope:
 
         A terminal provider receipt cannot be reopened when the provider has no
         idempotency support.  A later workspace attempt therefore receives one
-        attempt-scoped replacement slot; the public retry/request budgets still
-        cap amplification across the durable job.
+        attempt-scoped replacement slot (a later repair round its own round-scoped
+        slot); the public retry/request budgets still cap amplification across the job.
         """
 
         normalized = _normalize_semantic_slot(semantic_slot)
-        if self.attempt_number <= 1:
+        suffix = self._round_suffix(".")
+        if self.attempt_number > 1:
+            suffix += f".resume-{self.attempt_number}"
+        if not suffix:
             return normalized
-        suffix = f".resume-{self.attempt_number}"
         if len(normalized) + len(suffix) <= 128:
             return normalized + suffix
         digest = sha256(normalized.encode("utf-8")).hexdigest()[:12]
@@ -293,11 +301,13 @@ def provider_usage_scope(
     stage: str,
     attempt_number: int = 0,
     slide_index: int | None = None,
+    round_ordinal: int | None = None,
 ) -> Iterator[None]:
     """Set receipt context for one bounded pipeline segment.
 
     Non-durable/legacy generation passes ``job_id=None`` and therefore create no
     receipt.  This avoids making anonymous local calls appear billable.
+    ``round_ordinal`` names a repair round inside the stage; ``None`` keeps the keys as they were.
     """
 
     token: Token[ProviderUsageScope | None] | None = None
@@ -309,6 +319,7 @@ def provider_usage_scope(
                 stage=stage,
                 attempt_number=attempt_number,
                 slide_index=slide_index,
+                round_ordinal=round_ordinal,
             )
         )
     try:
@@ -440,10 +451,9 @@ async def provider_call_admission(
                 reserve_public_provider_call_detached,
             )
 
-            public_stage = {
-                "illustrate": "illustration",
-                "image": "illustration",
-            }.get(scope.stage, scope.stage)
+            # The public ledger bounds the repair ladder as one stage; receipts keep its rounds apart.
+            public_stage = {"illustrate": "illustration", "image": "illustration",
+                            "repair_remake": "repair", "repair_patch": "repair"}.get(scope.stage, scope.stage)
             reserved_public_lease = await reserve_public_provider_call_detached(
                 operation_id=public_fence.operation_id,
                 stage=public_stage,
