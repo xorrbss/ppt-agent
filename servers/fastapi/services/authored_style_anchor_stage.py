@@ -17,8 +17,21 @@ import inspect
 import logging
 from typing import Any, Awaitable, Callable, Collection, Sequence
 
-from utils.get_env_programme import is_authored_style_anchor_enabled
+from services.authored_measured_gates import FRAGMENTATION_REMAKE_HINT
+from utils.authored_fragmentation_gate import (
+    TEXT_OWNERS_VIOLATION,
+    FragmentationReport,
+    fragmentation_repair_instruction,
+    inspect_fragmentation,
+)
+from utils.get_env_programme import (
+    get_authored_fragmentation_max_text_owners,
+    get_authored_type_floor_px,
+    is_authored_fragmentation_gate_enabled,
+    is_authored_style_anchor_enabled,
+)
 from utils.llm_calls.author_style_anchor import StyleAnchor, extract_style_anchor
+from utils.runtime_settings import RuntimeSettings
 
 logger = logging.getLogger(__name__)
 
@@ -82,22 +95,116 @@ def accepts_style_anchor(author: Callable[..., Any]) -> bool:
     )
 
 
-def anchor_correction_hint(defects: Sequence[Any]) -> str:
-    """One correction naming the anchor's blocking defects, for its remake."""
+def anchor_correction_hint(
+    defects: Sequence[Any], *, fragmentation_hint: str | None = None
+) -> str:
+    """One correction naming the anchor's blocking defects and/or fragmentation.
 
-    named = ", ".join(
-        f"{getattr(issue, 'category', 'defect')}: "
-        f"{getattr(issue, 'message', None) or getattr(issue, 'code', '') or 'unspecified'}"
-        for issue in defects[:6]
+    Blocking DOM defects take precedence, matching the pipeline's ordinary
+    remake hint (``remake_density_hint``); when both are present the anchor's
+    one remake is told about both in a single instruction.
+    """
+
+    parts: list[str] = []
+    if defects:
+        named = ", ".join(
+            f"{getattr(issue, 'category', 'defect')}: "
+            f"{getattr(issue, 'message', None) or getattr(issue, 'code', '') or 'unspecified'}"
+            for issue in defects[:6]
+        )
+        parts.append(
+            "This slide is the deck's style anchor and every other slide will "
+            "inherit its visual language, so it must be free of layout defects. "
+            "Re-author it keeping the same design intent while fixing: "
+            + (named or "the reported layout defects")
+            + ". Every element must sit fully inside the 1280x720 canvas without "
+            "clipping, overflow or unintended overlap."
+        )
+    if fragmentation_hint:
+        parts.append(fragmentation_hint)
+    return " ".join(parts)
+
+
+def _anchor_role(plan: Any, index: int) -> str:
+    """The anchor slide's role, for the fragmentation hint's slide label."""
+
+    roles = tuple(getattr(plan, "roles", ()) or ())
+    if 0 <= index < len(roles):
+        role = str(roles[index] or "").strip().upper()
+        if role:
+            return role
+    return "SLIDE"
+
+
+def anchor_fragmentation_report(
+    html: str, *, settings: RuntimeSettings | None = None
+) -> FragmentationReport | None:
+    """The anchor's fragmentation measurement, or ``None`` when it cannot be made.
+
+    ``None`` while the gate knob is off, or when no browser metrics were
+    cached for this exact render. Mirrors :func:`anchor_blocking_defects`: the
+    metrics come from the render cache keyed on the HTML the caller already
+    rendered, so the anchor pays for no render or measurement pass of its own.
+    """
+
+    if not is_authored_fragmentation_gate_enabled(settings):
+        return None
+    from utils.slide_capture import get_cached_browser_metrics
+
+    metrics = get_cached_browser_metrics(html)
+    if metrics is None:
+        return None
+    return inspect_fragmentation(
+        metrics,
+        max_text_owners=get_authored_fragmentation_max_text_owners(settings),
+        floor_px=get_authored_type_floor_px(settings),
     )
-    return (
-        "This slide is the deck's style anchor and every other slide will "
-        "inherit its visual language, so it must be free of layout defects. "
-        "Re-author it keeping the same design intent while fixing: "
-        + (named or "the reported layout defects")
-        + ". Every element must sit fully inside the 1280x720 canvas without "
-        "clipping, overflow or unintended overlap."
+
+
+def _has_text_owner_violation(report: FragmentationReport | None) -> bool:
+    """Whether ``report`` carries the one fragmentation violation a remake can
+    fix by merging boxes.
+
+    Type size is already clamped at author time (Q1), so ``type_floor`` should
+    not appear on a fresh anchor render; ``fit_floor`` needs a fit report the
+    anchor never has. Only ``text_owners`` is checked here.
+    """
+
+    if report is None:
+        return False
+    return any(
+        violation.startswith(f"{TEXT_OWNERS_VIOLATION}:") for violation in report.violations
     )
+
+
+def anchor_fragmentation_hint(report: FragmentationReport, role: str) -> str:
+    """The merge-boxes hint for an anchor whose new defect is fragmentation."""
+
+    for violation in report.violations:
+        if violation.startswith(f"{TEXT_OWNERS_VIOLATION}:"):
+            return fragmentation_repair_instruction(role, violation) or FRAGMENTATION_REMAKE_HINT
+    return FRAGMENTATION_REMAKE_HINT
+
+
+async def _evaluate_anchor(
+    html: str,
+    *,
+    render: Callable[[str], Awaitable[Any]],
+    inspect_blocking: Callable[[str], Sequence[Any]],
+    settings: RuntimeSettings | None,
+) -> tuple[tuple[Any, ...], bool, FragmentationReport | None]:
+    """Blocking DOM defects and the fragmentation report for one anchor render.
+
+    The fragmentation report is only attempted once the blocking-defect gate
+    itself ran (``gated``): without a working render or inspection there is no
+    cached metrics to measure fragmentation on either.
+    """
+
+    defects, gated = await _blocking_defects(
+        html, render=render, inspect_blocking=inspect_blocking
+    )
+    fragmentation = anchor_fragmentation_report(html, settings=settings) if gated else None
+    return defects, gated, fragmentation
 
 
 async def resolve_style_anchor(
@@ -110,6 +217,7 @@ async def resolve_style_anchor(
     remaining_calls: int = 2,
     eligible: Collection[int] | None = None,
     enabled: bool | None = None,
+    settings: RuntimeSettings | None = None,
 ) -> tuple[StyleAnchor | None, str | None, int]:
     """Author, render and gate the deck's anchor slide.
 
@@ -119,8 +227,13 @@ async def resolve_style_anchor(
     was chosen). Every failure path returns ``(None, None, index)``.
 
     ``remaining_calls`` is the anchor slide's own provider budget. A blocking
-    defect spends the second call on one remake; with no call left the anchor is
-    used only if it is clean, and dropped otherwise (``anchor_unavailable``).
+    defect or -- while ``AUTHORED_FRAGMENTATION_GATE_ENABLED`` is on -- a
+    ``text_owners`` fragmentation violation spends the second call on one
+    remake; with no call left, or if the remake does not clear the violation,
+    the anchor is used only if it is clean, and dropped otherwise
+    (``anchor_unavailable`` / ``anchor_fragmented``). A fragmented anchor is
+    dropped rather than published: it would hand its shape to every other
+    slide in the deck, which is strictly worse than authoring without one.
     """
 
     if enabled is None:
@@ -137,34 +250,62 @@ async def resolve_style_anchor(
         logger.warning("anchor_unavailable slide=%d author failed", index, exc_info=True)
         return None, None, index
     remaining_calls -= 1
-    defects, gated = await _blocking_defects(
-        html, render=render, inspect_blocking=inspect_blocking
+    defects, gated, fragmentation = await _evaluate_anchor(
+        html, render=render, inspect_blocking=inspect_blocking, settings=settings
     )
-    if defects and remaining_calls > 0:
-        logger.info(
-            "anchor_remake slide=%d defects=%d",
-            index,
-            len(defects),
+    fragmented = _has_text_owner_violation(fragmentation)
+    if (defects or fragmented) and remaining_calls > 0:
+        if defects:
+            logger.info(
+                "anchor_remake slide=%d defects=%d",
+                index,
+                len(defects),
+            )
+        if fragmented:
+            logger.info(
+                "anchor_remake_fragmented slide=%d owners=%d",
+                index,
+                fragmentation.text_owners,
+            )
+        hint = anchor_correction_hint(
+            defects,
+            fragmentation_hint=(
+                anchor_fragmentation_hint(fragmentation, _anchor_role(plan, index))
+                if fragmented
+                else None
+            ),
         )
         try:
             remade = await author(
                 plan,
                 index,
-                **{**kwargs, "prior_failure_hint": anchor_correction_hint(defects)},
+                **{**kwargs, "prior_failure_hint": hint},
             )
         except Exception:  # noqa: BLE001 -- the remake is best effort too
             logger.warning("anchor_remake_failed slide=%d", index, exc_info=True)
             remade = None
         if remade:
             html = remade
-            defects, gated = await _blocking_defects(
-                html, render=render, inspect_blocking=inspect_blocking
+            defects, gated, fragmentation = await _evaluate_anchor(
+                html, render=render, inspect_blocking=inspect_blocking, settings=settings
             )
+            fragmented = _has_text_owner_violation(fragmentation)
     if defects:
         logger.warning(
             "anchor_unavailable slide=%d retained %d blocking defect(s)",
             index,
             len(defects),
+        )
+        return None, html, index
+    if fragmented:
+        # The design's choice (Q0): a still-fragmented anchor is dropped, not
+        # published. The deck then authors without one, exactly as it does
+        # today for a defective anchor -- propagating the fragmentation to
+        # every later slide is the outcome this gate exists to prevent.
+        logger.warning(
+            "anchor_fragmented slide=%d owners=%d",
+            index,
+            fragmentation.text_owners,
         )
         return None, html, index
     try:
@@ -174,6 +315,15 @@ async def resolve_style_anchor(
         return None, html, index
     if anchor is None:
         logger.info("anchor_unavailable slide=%d has no stylesheet to inherit", index)
+    elif fragmentation is not None:
+        # Knob on and metrics available: the bench-reportable text-owner count
+        # rides the same line as before, rather than a second log statement.
+        logger.info(
+            "anchor_ready slide=%d gated=%s owners=%d",
+            index,
+            gated,
+            fragmentation.text_owners,
+        )
     else:
         # The only positive evidence a run leaves that the deck inherited one
         # visual language, and whether that anchor was gated or merely trusted.
@@ -316,6 +466,8 @@ __all__ = [
     "accepts_style_anchor",
     "anchor_blocking_defects",
     "anchor_correction_hint",
+    "anchor_fragmentation_hint",
+    "anchor_fragmentation_report",
     "anchor_render_step",
     "anchor_slide_index",
     "resolve_direct_lane_anchor",
