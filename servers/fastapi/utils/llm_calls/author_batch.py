@@ -32,6 +32,7 @@ from services.public_operation_admission import PublicAdmissionRejected
 from services.source_images.models import SourceImageCandidate
 from utils.authored_dom_quality import validate_declared_authored_qids
 from utils.authored_font_policy import enforce_authored_font_floor
+from utils.authored_fragmentation_gate import fit_font_floor_px
 from utils.authored_image_slots import scan_slots, source_slot_id_for_asset
 from utils.llm_calls import author_slide_prompt, author_slide_rules
 from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
@@ -238,7 +239,10 @@ def _postprocess_slide(
     authored_html = extract_html_document(raw_html)
     authored_html = _strip_nonvisual_pointer_events(authored_html)
     if mode != EXACT_RECONSTRUCTION:
-        authored_html = enforce_authored_font_floor(authored_html)
+        # Same mechanical floor as the single-slide path (see author_slide).
+        authored_html = enforce_authored_font_floor(
+            authored_html, minimum_px=fit_font_floor_px()
+        )
         # Same collapse guard, figure contract, and library injection as the
         # single-slide path: a pinned data-header-part="body" wrapper with no
         # left/right/width has no horizontal extent and collapses to zero

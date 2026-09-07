@@ -41,6 +41,7 @@ from models.authored_infographic_plan import AuthoredSlideInfographic
 from models.authored_visual_plan import AuthoredSlideVisualIntent
 from utils.authored_infographic import finalize_infographic_slide_html
 from utils.authored_font_policy import enforce_authored_font_floor
+from utils.authored_fragmentation_gate import fit_font_floor_px
 from utils.authored_dom_quality import validate_declared_authored_qids
 from utils.authored_header_prompt import render_header_contract
 from utils.authored_html_normalize import normalize_authored_html
@@ -1154,7 +1155,13 @@ async def author_slide_html(
     authored_html = extract_html_document(extract_text(response.content) or "")
     authored_html = _strip_nonvisual_pointer_events(authored_html)
     if mode != EXACT_RECONSTRUCTION:
-        authored_html = enforce_authored_font_floor(authored_html)
+        # The floor the fragmentation gate resolves (15px on, 12px off) is
+        # applied here mechanically: a model that writes 13px labels against
+        # the prompt gets them raised before the first render, not after a
+        # repair round.
+        authored_html = enforce_authored_font_floor(
+            authored_html, minimum_px=fit_font_floor_px()
+        )
         # A pinned data-header-part="body" wrapper with no left/right/width
         # has no horizontal extent and collapses to zero width, taking every
         # child anchored inside it down with it. Normalise that before the
