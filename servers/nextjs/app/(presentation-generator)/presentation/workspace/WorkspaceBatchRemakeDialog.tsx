@@ -181,6 +181,10 @@ export function WorkspaceBatchRemakeDialog({
     <article
       className="rounded-2xl border border-indigo-200 bg-white p-4 shadow-sm"
       data-testid="batch-remake-dialog"
+      // Present only once the fan-out has been accepted and the polling loop is
+      // armed. The loop schedules its first poll after the start request
+      // settles, so this is the boundary anything driving the clock must see.
+      data-batch-task-id={batchTaskId ?? undefined}
       aria-label={t("title")}
       aria-live="polite"
     >

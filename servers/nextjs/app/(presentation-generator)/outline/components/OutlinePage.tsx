@@ -21,6 +21,8 @@ import {
   findResumableGenerationTask,
 } from "../hooks/durableGenerationTask";
 import MasterSelectionSummary from "./MasterSelectionSummary";
+import ResumeGenerationBanner from "./ResumeGenerationBanner";
+import { existingMasterApplyCas, record } from "./masterApplyCas";
 import MasterDesignerDialog from "../../authored-vnext/master-setup/MasterDesignerDialog";
 import { isAuthoredVnextMasterEnabled } from "@/lib/authored-vnext/master/contracts";
 import type { MasterRevisionEnvelope } from "@/lib/authored-vnext/master/contracts";
@@ -32,32 +34,6 @@ import { AuthoredVnextMasterClient } from "@/lib/authored-vnext/master/client";
 import { DashboardApi } from "../../services/api/dashboard";
 
 const masterClient = new AuthoredVnextMasterClient();
-
-const record = (value: unknown): Record<string, unknown> | null =>
-  value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-
-const existingMasterApplyCas = (presentation: unknown) => {
-  const data = record(presentation);
-  const metadata = record(record(data?.theme)?.authored_vnext);
-  const presentationRevision = data?.revision;
-  const deckRevision = metadata?.deckRevision;
-  const deckDigest = metadata?.deckDigest;
-  if (
-    !Number.isInteger(presentationRevision) ||
-    !Number.isInteger(deckRevision) ||
-    typeof deckDigest !== "string" ||
-    !deckDigest.startsWith("sha256:")
-  ) {
-    return null;
-  }
-  return {
-    presentationRevision: Number(presentationRevision),
-    deckRevision: Number(deckRevision),
-    deckDigest: deckDigest as `sha256:${string}`,
-  };
-};
 
 const OutlinePage: React.FC<{
   auto?: boolean;
@@ -465,6 +441,12 @@ const OutlinePage: React.FC<{
                 />
               </div>
             )}
+
+            <ResumeGenerationBanner
+              presentationId={resolvedPresentationId}
+              suppressed={loadingState.isLoading}
+              onResume={handleSubmit}
+            />
 
             <div className="w-full mx-auto">
               <OutlineContent

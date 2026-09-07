@@ -13,11 +13,17 @@ import { PresentationGenerationApi } from "../../services/api/presentation-gener
 import { useAutoSave } from "./useAutoSave";
 import { useHybridExportWarmup } from "./useHybridExportWarmup";
 
+// A warmup is fenced by the same optimistic revision as a user-visible export,
+// so a deck without `revision` is deliberately never warmed. Real decks carry
+// one; the fixture must too, or every warmup assertion below passes vacuously.
+const DECK_REVISION = 3;
+
 const createDeck = () => ({
   id: "deck-1",
   language: "en",
   layout: null,
   n_slides: 1,
+  revision: DECK_REVISION,
   title: "Quarterly results.pptx",
   slides: [{ id: "slide-1", layout: "authored:content" }],
   theme: null,
@@ -158,6 +164,7 @@ describe("useHybridExportWarmup", () => {
           id: "deck-1",
           title: "Quarterly-results",
           pptxMode: "hybrid",
+          expectedPresentationRevision: DECK_REVISION,
         });
       });
     cy.tick(2_000);
