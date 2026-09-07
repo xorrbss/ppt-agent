@@ -1190,6 +1190,15 @@
       "description": "Median usable characters per outline slide below which a document-backed request gets one bounded expansion call. 0 disables."
     },
     {
+      "key": "OUTLINE_DENSITY_CEILING_ENABLED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Cap each outline slide's usable characters at a per-verbosity ceiling (concise/standard/text-heavy), condensing any slide over it with one bounded call before it reaches the slide-authoring stage."
+    },
+    {
       "key": "AUTHORED_HEADER_DETERMINISTIC_REPAIR",
       "type": "boolean",
       "default": true,

@@ -74,10 +74,32 @@ def usable_chars(text: object) -> int:
     return len(collapsed)
 
 
+#: K1's counterpart ceiling (design section 8 addendum): the slide-authoring
+#: model reproduces its outline input almost verbatim (1.0x-1.4x), so a single
+#: slide with more to say than the deck's page can hold is the outline stage's
+#: defect to fix, not the author's. Unlike the floor, this is a per-slide cap,
+#: not a whole-deck median -- one dense slide should not block the rest.
+DENSITY_CEILINGS_BY_VERBOSITY: dict[str, int] = {
+    "concise": 400,
+    "standard": 700,
+    "text-heavy": 1100,
+}
+
+
+def ceiling_for_verbosity(verbosity: str | None) -> int:
+    """The per-slide usable-character ceiling for a verbosity setting.
+
+    Unknown or missing verbosity falls back to ``standard``, the same default
+    the outline prompt itself uses.
+    """
+    key = str(verbosity or "").strip().lower()
+    return DENSITY_CEILINGS_BY_VERBOSITY.get(key, DENSITY_CEILINGS_BY_VERBOSITY["standard"])
+
+
 def outline_density_receipt(
-    outline: Any, *, floor: int = 0
+    outline: Any, *, floor: int = 0, ceiling: int = 0
 ) -> dict[str, Any]:
-    """Per-slide usable characters, the deck median, and the floor in force."""
+    """Per-slide usable characters, the deck median, and the floor/ceiling in force."""
 
     slides = list(getattr(outline, "slides", None) or ())
     counts = [usable_chars(getattr(slide, "content", "")) for slide in slides]
@@ -92,6 +114,11 @@ def outline_density_receipt(
             index for index, count in enumerate(counts) if floor > 0 and count < floor
         ],
         "expanded": False,
+        "ceiling": int(ceiling),
+        "aboveCeiling": [
+            index for index, count in enumerate(counts) if ceiling > 0 and count > ceiling
+        ],
+        "condensed": False,
     }
 
 
@@ -292,23 +319,29 @@ def _log_receipt(receipt: Mapping[str, Any]) -> None:
     """
 
     LOGGER.info(
-        "outline_density median=%s floor=%s slides=%s below_floor=%s expanded=%s",
+        "outline_density median=%s floor=%s slides=%s below_floor=%s expanded=%s "
+        "ceiling=%s above_ceiling=%s condensed=%s",
         receipt["median"],
         receipt["floor"],
         receipt["slideCount"],
         len(receipt["belowFloor"]),
         receipt["expanded"],
+        receipt["ceiling"],
+        len(receipt["aboveCeiling"]),
+        receipt["condensed"],
     )
 
 
-def log_outline_density(outline_text: str, *, floor: int) -> dict[str, Any] | None:
+def log_outline_density(
+    outline_text: str, *, floor: int, ceiling: int = 0
+) -> dict[str, Any] | None:
     """Measure one streamed outline and record its receipt. Never raises."""
 
     try:
         parsed = _parse_outline_text(outline_text)
         if parsed is None:
             return None
-        receipt = outline_density_receipt(parsed[1], floor=floor)
+        receipt = outline_density_receipt(parsed[1], floor=floor, ceiling=ceiling)
         _log_receipt(receipt)
         return receipt
     except Exception:
@@ -353,11 +386,13 @@ async def apply_density_floor_to_text(
 
 
 __all__ = [
+    "DENSITY_CEILINGS_BY_VERBOSITY",
     "EXPANSION_SEMANTIC_SLOT_PREFIX",
     "MAX_EXPANDED_SLIDES",
     "MAX_SOURCE_CHARS",
     "RECEIPT_SCHEMA_VERSION",
     "apply_density_floor_to_text",
+    "ceiling_for_verbosity",
     "log_outline_density",
     "expand_thin_outline",
     "merge_expansion",

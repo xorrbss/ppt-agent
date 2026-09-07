@@ -73,6 +73,11 @@ def get_outline_density_floor_chars(settings: RuntimeSettings | None = None) -> 
     return _clamped_int("OUTLINE_DENSITY_FLOOR_CHARS", 350, 0, 2000, settings)
 
 
+def is_outline_density_ceiling_enabled(settings: RuntimeSettings | None = None) -> bool:
+    """Cap each outline slide's usable chars at a per-verbosity ceiling, condensing over it."""
+    return _bool_setting("OUTLINE_DENSITY_CEILING_ENABLED", False, settings)
+
+
 def is_authored_header_deterministic_repair_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:
@@ -289,4 +294,5 @@ __all__ = [
     "is_authored_vision_advisory_enabled",
     "is_authored_wave_barrier_disabled",
     "is_export_font_embedding_default_cjk_enabled",
+    "is_outline_density_ceiling_enabled",
 ]
