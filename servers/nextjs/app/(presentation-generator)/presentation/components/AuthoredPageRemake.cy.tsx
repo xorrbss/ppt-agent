@@ -85,6 +85,34 @@ function DismissableWorkspacePrompt(
   );
 }
 
+/**
+ * `AuthoredPageRemake` is only the toolbar trigger: it asks the workspace to
+ * open the remake prompt and renders no flow of its own. Every preview and
+ * publish assertion therefore belongs to `WorkspacePageRemakePrompt`, which is
+ * what `WorkspaceRemakePrompts` mounts for a single-page request in the product.
+ */
+function mountFlow(
+  overrides: {
+    onWorkspaceCommand?: React.ComponentProps<
+      typeof WorkspacePageRemakePrompt
+    >["onWorkspaceCommand"];
+    onDismiss?: () => void;
+  } = {},
+) {
+  const onWorkspaceCommand =
+    overrides.onWorkspaceCommand ??
+    (cy.stub().as("workspaceCommand").resolves() as never);
+  const onDismiss = overrides.onDismiss ?? (cy.stub().as("dismiss") as never);
+  cy.mount(
+    <WorkspacePageRemakePrompt
+      presentationId="deck-1"
+      currentSlide={4}
+      onWorkspaceCommand={onWorkspaceCommand}
+      onDismiss={onDismiss}
+    />,
+  );
+}
+
 function stubToasts() {
   cy.stub(notify, "error").as("notifyError");
   cy.stub(notify, "warning").as("notifyWarning");
@@ -167,14 +195,13 @@ describe("AuthoredPageRemake", () => {
 
   it("uses the exact label and generates only the current page preview", () => {
     preparePreview();
-    cy.mount(
-      <AuthoredPageRemake presentationId="deck-1" currentSlide={4} />,
-    );
+    mountFlow();
 
-    cy.get('[data-testid="page-remake-trigger"]')
-      .should("contain.text", "페이지 다시 만들기")
-      .click();
-    cy.contains("5페이지만 새 레이아웃으로 다시 만듭니다.").should("be.visible");
+    cy.get('[data-testid="page-remake-workspace-prompt"]').should(
+      "contain.text",
+      "페이지 다시 만들기",
+    );
+    cy.contains("5페이지만 새 레이아웃으로 만듭니다.").should("be.visible");
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
@@ -197,9 +224,8 @@ describe("AuthoredPageRemake", () => {
       candidate_image:
         "users/d74ac154/authored/8a836947/slide_4_47af1196.png",
     });
-    cy.mount(<AuthoredPageRemake presentationId="deck-1" currentSlide={4} />);
+    mountFlow();
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
     cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
@@ -219,9 +245,8 @@ describe("AuthoredPageRemake", () => {
       ...previewData,
       validation: { candidate_dom: "passed", candidate_change: "unchanged" },
     });
-    cy.mount(<AuthoredPageRemake presentationId="deck-1" currentSlide={4} />);
+    mountFlow();
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
     cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
@@ -241,9 +266,8 @@ describe("AuthoredPageRemake", () => {
 
   it("enlarges the preview on click and restores it on a second click", () => {
     preparePreview();
-    cy.mount(<AuthoredPageRemake presentationId="deck-1" currentSlide={4} />);
+    mountFlow();
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
     cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
@@ -257,11 +281,8 @@ describe("AuthoredPageRemake", () => {
 
   it("keeps the passing preview UX free of warning affordances", () => {
     preparePreview();
-    cy.mount(
-      <AuthoredPageRemake presentationId="deck-1" currentSlide={4} />,
-    );
+    mountFlow();
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
@@ -278,37 +299,37 @@ describe("AuthoredPageRemake", () => {
     cy.get("@notifyError").should("not.have.been.called");
   });
 
-  it("publishes only after explicit approval in the legacy write path", () => {
+  it("publishes only after explicit approval", () => {
     preparePreview();
     const publish = cy
       .stub(PresentationGenerationApi, "publishAuthoredPageRemake")
       .as("publishRequest")
       .resolves({ status: "published" });
-    const onReload = cy.stub().as("reload");
-    cy.mount(
-      <AuthoredPageRemake
-        presentationId="deck-1"
-        currentSlide={4}
-        onReload={onReload}
-      />,
-    );
+    mountFlow();
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
     cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
+    // A ready preview is not an approval: nothing may be written yet.
+    cy.get("@workspaceCommand").should("not.have.been.called");
     cy.then(() => expect(publish).not.to.have.been.called);
     cy.get('[data-testid="page-remake-publish"]').click();
 
-    cy.get("@publishRequest").should(
-      "have.been.calledOnceWith",
-      "deck-1",
-      4,
-      "task-remake-preview",
-    );
-    cy.get("@reload").should("have.been.calledOnce");
+    cy.get("@workspaceCommand").should("have.been.calledOnce");
+    cy.get("@workspaceCommand").then((command: any) => {
+      expect(command.firstCall.args[1]).to.deep.equal({
+        commandType: "slide.regenerate",
+        context: {
+          slide_index: 4,
+          preview_task_id: "task-remake-preview",
+          source: "page_remake_button",
+        },
+      });
+    });
+    cy.get("@publishRequest").should("not.have.been.called");
+    cy.get("@dismiss").should("have.been.calledOnce");
   });
 
   it("routes chat-first mode into the workspace without opening a legacy dialog", () => {
@@ -372,11 +393,8 @@ describe("AuthoredPageRemake", () => {
 
   it("shows a warned candidate as a normal preview with a Korean issue summary", () => {
     preparePreview(warnedPreviewData);
-    cy.mount(
-      <AuthoredPageRemake presentationId="deck-1" currentSlide={4} />,
-    );
+    mountFlow();
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
@@ -429,15 +447,8 @@ describe("AuthoredPageRemake", () => {
     cy.stub(PresentationGenerationApi, "publishAuthoredPageRemake")
       .as("publishRequest")
       .resolves({ status: "published" });
-    cy.mount(
-      <AuthoredPageRemake
-        presentationId="deck-1"
-        currentSlide={4}
-        onReload={cy.stub().as("reload")}
-      />,
-    );
+    mountFlow();
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
@@ -445,23 +456,26 @@ describe("AuthoredPageRemake", () => {
     cy.tick(2_000);
     cy.get('[data-testid="page-remake-publish"]').click();
 
-    cy.get("@publishRequest").should(
-      "have.been.calledOnceWith",
-      "deck-1",
-      4,
-      "task-remake-preview",
-    );
-    cy.get("@reload").should("have.been.calledOnce");
+    cy.get("@workspaceCommand").should("have.been.calledOnce");
+    cy.get("@workspaceCommand").then((command: any) => {
+      expect(command.firstCall.args[1]).to.deep.equal({
+        commandType: "slide.regenerate",
+        context: {
+          slide_index: 4,
+          preview_task_id: "task-remake-preview",
+          source: "page_remake_button",
+        },
+      });
+    });
+    cy.get("@publishRequest").should("not.have.been.called");
+    cy.get("@dismiss").should("have.been.calledOnce");
     cy.get("@notifyError").should("not.have.been.called");
   });
 
   it("summarizes a telemetry-only warning without an empty issue list", () => {
     preparePreview(telemetryOnlyWarningData);
-    cy.mount(
-      <AuthoredPageRemake presentationId="deck-1" currentSlide={4} />,
-    );
+    mountFlow();
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
@@ -495,11 +509,8 @@ describe("AuthoredPageRemake", () => {
     cy.get("@previewStatus").then((status: any) => {
       status.onCall(1).resolves({ status: "pending", message: "다시 만드는 중" });
     });
-    cy.mount(
-      <AuthoredPageRemake presentationId="deck-1" currentSlide={4} />,
-    );
+    mountFlow();
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
@@ -558,11 +569,8 @@ describe("AuthoredPageRemake", () => {
 
   it("explains a genuine failure in Korean instead of the internal code", () => {
     prepareFailedPreview("authored_page_remake_generation_failed");
-    cy.mount(
-      <AuthoredPageRemake presentationId="deck-1" currentSlide={4} />,
-    );
+    mountFlow();
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
@@ -587,11 +595,8 @@ describe("AuthoredPageRemake", () => {
 
   it("falls back to a readable message for an unmapped internal code", () => {
     prepareFailedPreview("authored_page_remake_unknown_future_code");
-    cy.mount(
-      <AuthoredPageRemake presentationId="deck-1" currentSlide={4} />,
-    );
+    mountFlow();
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.

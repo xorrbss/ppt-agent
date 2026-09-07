@@ -8,6 +8,11 @@ import threading
 from types import MethodType
 from typing import Any, Callable, Mapping
 
+from utils.provider_terminal_outcome import (
+    ProviderTerminalOutcome,
+    ProviderTerminalOutcomeRecorder,
+)
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -40,11 +45,17 @@ class BoundedProviderCall:
     await.  ``abort()`` flips the flag the guarded stream checks per event.
     """
 
-    __slots__ = ("_run", "_abort_event")
+    __slots__ = ("_run", "_abort_event", "_terminal")
 
-    def __init__(self, run: Callable[[], Any], abort_event: threading.Event) -> None:
+    def __init__(
+        self,
+        run: Callable[[], Any],
+        abort_event: threading.Event,
+        terminal: ProviderTerminalOutcomeRecorder | None = None,
+    ) -> None:
         self._run = run
         self._abort_event = abort_event
+        self._terminal = terminal
 
     def __call__(self) -> Any:
         return self._run()
@@ -55,6 +66,15 @@ class BoundedProviderCall:
     @property
     def abort_requested(self) -> bool:
         return self._abort_event.is_set()
+
+    @property
+    def terminal_outcome(self) -> ProviderTerminalOutcome | None:
+        """How the Responses stream ended, once its terminal event was seen.
+
+        ``None`` on a transport without a Responses resource, before the
+        terminal event, and on a stream that was closed early.
+        """
+        return self._terminal.outcome if self._terminal is not None else None
 
 _TIMEOUT_UNENFORCEABLE_PROVIDERS: set[str] = set()
 
@@ -178,11 +198,17 @@ class _GuardedResponsesResource:
     authored scope, so terminal stream events become durable outcomes."""
 
     def __init__(
-        self, resource: Any, *, abort_event: threading.Event, guard_outcomes: bool
+        self,
+        resource: Any,
+        *,
+        abort_event: threading.Event,
+        guard_outcomes: bool,
+        terminal: ProviderTerminalOutcomeRecorder | None = None,
     ) -> None:
         self._resource = resource
         self._abort_event = abort_event
         self._guard_outcomes = guard_outcomes
+        self._terminal = terminal or ProviderTerminalOutcomeRecorder()
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._resource, name)
@@ -192,6 +218,7 @@ class _GuardedResponsesResource:
         if not hasattr(stream, "__next__"):
             # A non-streaming response is complete on return: nothing to abort,
             # and the SDK request timeout has already bounded it.
+            self._terminal.observe_response(stream)
             return stream
 
         def guarded_events():
@@ -199,6 +226,9 @@ class _GuardedResponsesResource:
                 for event in stream:
                     if self._abort_event.is_set():
                         raise ProviderCallAborted("provider_call_aborted")
+                    # Recorded for every transport, before the authored-only
+                    # guard below can turn the same event into an outcome error.
+                    self._terminal.observe_event(event)
                     if self._guard_outcomes:
                         _raise_for_terminal_event(event)
                     yield event
@@ -238,11 +268,19 @@ def _close_quietly(stream: Any) -> None:
 
 class _GuardedResponsesClient:
     def __init__(
-        self, client: Any, *, abort_event: threading.Event, guard_outcomes: bool
+        self,
+        client: Any,
+        *,
+        abort_event: threading.Event,
+        guard_outcomes: bool,
+        terminal: ProviderTerminalOutcomeRecorder | None = None,
     ) -> None:
         self._client = client
         self.responses = _GuardedResponsesResource(
-            client.responses, abort_event=abort_event, guard_outcomes=guard_outcomes
+            client.responses,
+            abort_event=abort_event,
+            guard_outcomes=guard_outcomes,
+            terminal=terminal,
         )
 
     def __getattr__(self, name: str) -> Any:
@@ -295,6 +333,9 @@ def provider_generate_call(
     )
     adapted_client = client
     abort_event = threading.Event()
+    # Filled by the stream wrapper from ``response.completed`` /
+    # ``response.incomplete``; read back through ``call.terminal_outcome``.
+    terminal = ProviderTerminalOutcomeRecorder()
     options: dict[str, Any] = {}
     if should_adapt or timeout_seconds is not None:
         options["max_retries"] = 0
@@ -325,6 +366,7 @@ def provider_generate_call(
                 guard_outcomes=(
                     outcome_scope == _AUTHORED_OUTCOME_SCOPE and is_chatgpt
                 ),
+                terminal=terminal,
             )
             if getattr(raw_client, "responses", None) is not None
             else raw_client
@@ -390,7 +432,7 @@ def provider_generate_call(
             )
         return response
 
-    return BoundedProviderCall(generate_once, abort_event)
+    return BoundedProviderCall(generate_once, abort_event, terminal)
 
 
 __all__ = [

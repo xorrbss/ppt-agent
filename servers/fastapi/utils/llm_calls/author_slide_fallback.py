@@ -14,6 +14,10 @@ from typing import NoReturn
 from services.provider_runtime_primitives import RuntimeControlError
 from services.provider_usage_instrumentation import ProviderSpendFenceRejected
 from services.public_operation_admission import PublicAdmissionRejected
+from utils.llm_calls.author_slide_stream import (
+    AuthoredStreamAborted,
+    output_token_limit_in_cause_chain,
+)
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.provider_idempotency import ProviderOutcomeError
 
@@ -27,8 +31,11 @@ _ADMISSION_DECISIONS = (
     ProviderSpendFenceRejected,
     RuntimeControlError,
 )
-# Outcomes that survive the authored job boundary unchanged.
-_DURABLE_OUTCOMES = (PublicAdmissionRejected, ProviderOutcomeError)
+# Outcomes that survive the authored job boundary unchanged.  A stream abort
+# is the authored reader's own verdict on the response, not a client error:
+# reclassifying it for HTTP would bury the reason the attempt loop and the
+# author-stage rescue read.
+_DURABLE_OUTCOMES = (PublicAdmissionRejected, ProviderOutcomeError, AuthoredStreamAborted)
 
 
 def _admission_decision_in_cause_chain(error: BaseException) -> bool:
@@ -73,10 +80,15 @@ def text_only_fallback_applies(error: BaseException) -> bool:
       answered with nothing;
     - ``public_provider_response_failed`` and
       ``public_provider_response_incomplete``: terminal Responses API verdicts
-      on a request the provider had already accepted.
+      on a request the provider had already accepted;
+    - the ``output_token_limit`` stream abort: the provider accepted the call
+      and ran out of output budget, which dropping the input images does not
+      change, and the retry that helps is the one carrying the size correction.
     """
 
     if _admission_decision_in_cause_chain(error):
+        return False
+    if output_token_limit_in_cause_chain(error):
         return False
     if isinstance(error, ProviderOutcomeError):
         return error.code == BRIDGE_EXCEPTION_CODE and isinstance(

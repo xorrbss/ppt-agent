@@ -25,6 +25,7 @@ from services.liteparse_service import _command_str, _snippet
 from utils.asset_directory_utils import resolve_app_path_to_filesystem
 from utils.get_env import get_app_data_directory_env, get_temp_directory_env
 from utils.owner_context import get_current_owner_id
+from utils.process_kill_on_parent_death import bind_to_parent_lifetime
 from utils.runtime_limits import BoundedTextBuffer, log_memory
 
 
@@ -309,6 +310,10 @@ class ExportTaskRuntimeMixin:
             env=env,
             **windows_hidden_subprocess_kwargs(),
         )
+        # A force-killed parent runs no ``finally``, and this child drives its
+        # own headless Chromium, so without an OS-enforced tie the browser
+        # outlives the export that asked for it.
+        bind_to_parent_lifetime(process)
 
         LOGGER.info(
             "[export_runtime] child started pid=%s command=%s",

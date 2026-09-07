@@ -33,6 +33,32 @@ PARSE_REPAIR = f"{DEFAULT_PREFIX}.{PARSE_REPAIR_ROUND}"
 SCHEMA_REPAIR = f"{DEFAULT_PREFIX}.{SCHEMA_REPAIR_ROUND}"
 SCHEMA_PARSE_REPAIR = f"{DEFAULT_PREFIX}.{SCHEMA_PARSE_REPAIR_ROUND}"
 
+#: The two call sites the ``vqa`` stage makes per slide. They are separate
+#: logical calls inside one stage, so neither may take ``DEFAULT_PREFIX``.
+VQA_CRITIQUE_PREFIX = "vqa-critique"
+VQA_PATCH_PREFIX = "vqa-patch"
+
+
+def deck_stage_slot_suffix(slide_index: int | None, *, run: str = "") -> str:
+    """Separate one slide's call inside a stage whose scope names no slide.
+
+    ``repair`` and ``vqa`` open a single deck-level usage scope and then run
+    every slide through it, so the enclosing scope contributes ``slide_index =
+    -1`` to all of them. Without the slide in the slot, every slide after the
+    first reserves the same logical call and is admitted as a replay of it --
+    refused as ``public_provider_inflight_replay_unsupported`` while the first
+    is still open and ``public_provider_terminal_replay_unsupported`` after it
+    closes, for any provider that cannot replay. Pass ``None`` when the scope
+    does name the slide (``active_usage_scope_slide_index()``), which already
+    separates the calls.
+
+    ``run`` separates a second call the same call site makes for the same
+    slide, such as a validation retry that restarts the structured loop.
+    """
+
+    suffix = "" if slide_index is None else f".slide-{slide_index}"
+    return f"{suffix}.{run}" if run else suffix
+
 
 def structured_semantic_slot(
     *,

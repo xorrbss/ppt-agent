@@ -24,6 +24,7 @@ import signal
 import subprocess
 from typing import Any, Mapping
 
+from utils.process_kill_on_parent_death import bind_to_parent_lifetime
 from utils.renderer_frame_codec import (
     DEFAULT_MAX_REQUESTS_PER_PROCESS,
     RendererFrameError,
@@ -120,6 +121,10 @@ class RendererWorkerSession:
         else:
             kwargs["start_new_session"] = True
         self._process = await asyncio.create_subprocess_exec(*command, **kwargs)
+        # The exit hook below only runs on a graceful exit. Binding the worker
+        # to this process's lifetime makes the OS reap the worker -- and the
+        # Chromium it owns -- even when the owner is force-killed.
+        bind_to_parent_lifetime(self._process)
         _live_processes.add(self._process)
 
     async def render(  # noqa: ASYNC109

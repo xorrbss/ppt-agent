@@ -30,6 +30,7 @@ IMAGE_SOURCES = (
     "servers/fastapi/utils/authored_dom_fit_magnitude.py",
     "servers/fastapi/utils/authored_dom_footer_zone.py",
     "servers/fastapi/utils/authored_fragmentation_gate.py",
+    "servers/fastapi/utils/process_kill_on_parent_death.py",
     "servers/fastapi/utils/authored_dom_tags.py",
     "servers/fastapi/utils/authored_dom_text_escape.py",
     "servers/fastapi/utils/authored_qid_namespace.py",

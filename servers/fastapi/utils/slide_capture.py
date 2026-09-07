@@ -34,6 +34,7 @@ from services.authored_vnext.capability_registry import (
     capability_metadata,
 )
 from utils.authored_dom_quality import ensure_authored_qids
+from utils.process_kill_on_parent_death import bind_to_parent_lifetime
 from utils.slide_capture_fit import (
     fit_capture_fields, fit_font_floor_px, fit_probe_prelude, fit_request_html, require_qid_complete)
 from utils.slide_capture_hit_test import THIN_VIEWPORT_HIT_TEST_JS
@@ -103,8 +104,7 @@ class _RenderCacheIdentity:
     chrome_runtime_digest: str
     asset_fingerprint: str
     measurement_version: str
-    #: The floor the in-render fitter shrinks to; a fit computed at one floor
-    #: must not be replayed after the gate knob or the floor changes (S7).
+    #: The fitter's shrink floor: a fit computed at one floor must not be replayed after it changes.
     fit_font_floor_px: float
     digest: str
 
@@ -162,6 +162,9 @@ def _run_chrome_screenshot(args: List[str], timeout: int) -> bytes:
     else:
         popen_kwargs["start_new_session"] = True
     proc = subprocess.Popen(args, **popen_kwargs)
+    # A force-killed parent runs no atexit hook, so ask the OS to reap this
+    # chrome with us. No-op off Windows; never fatal.
+    bind_to_parent_lifetime(proc)
     try:
         stdout, _ = proc.communicate(timeout=timeout)
         return stdout or b""
@@ -297,8 +300,7 @@ def _instrument_authored_html(
     # Plain JavaScript with single braces.  Interpolating it as an f-string value
     # is safe -- a substituted value is never re-scanned -- and this template is
     # never passed through ``str.format``.
-    # The shrink floor rides in the probe itself, so a worker process fits to
-    # the floor the API resolved (the fragmentation gate's when it is on).
+    # The floor rides in the probe, so a worker fits to the floor the API resolved.
     fit_prelude = fit_probe_prelude(font_floor_px=fit_font_floor_px())
     script = rf"""<script data-codex-dom-probe{nonce_attribute}>
 (() => {{
@@ -393,6 +395,20 @@ def _instrument_authored_html(
         .map(candidate => polygonSurfaceRect(candidate, roundedSurfaceRect(candidate)))
         .filter((rect) => rect.width > 0 && rect.height > 0);
       ownedSurfaceRectCache.set(node, rects);
+      return rects;
+    }};
+    const descendantOwnedPaintRects = (node) => {{
+      // Every qid-bearing descendant owns its own paint under the same rule,
+      // so their rects together are exactly this element's visible ink.
+      const rects = [];
+      for (const child of node.querySelectorAll('[data-qid]')) {{
+        for (const paintRect of ownedSurfaceRects(child)) {{
+          rects.push({{paintRect, group: `descendant-surface:${{rects.length}}`}});
+        }}
+        for (const paintRect of ownedTextRects(child)) {{
+          rects.push({{paintRect, group: `descendant-text:${{rects.length}}`}});
+        }}
+      }}
       return rects;
     }};
     const pointInRect = (x, y, rect) =>
@@ -612,10 +628,24 @@ def _instrument_authored_html(
       if (rect.width <= 0 || rect.height <= 0) return empty(
         {{fraction: 1, continuous: 1, step: 0, unknown: 0, covered: 0}},
         'measured', 'degenerate_target_bbox_assumed_occluded');
-      const ownedPaintRects = [
+      const ownPaintRects = [
         ...surfaceRects.map((paintRect, index) => ({{paintRect, group: `surface:${{index}}`}})),
         ...textRects.map((paintRect, index) => ({{paintRect, group: `text:${{index}}`}}))
       ];
+      // An element that paints nothing itself still has ink when its text
+      // lives in descendants that carry their own `data-qid`: `ownedTextNodes`
+      // assigns each text node to its NEAREST qid ancestor, so a bound wrapper
+      // (a card body holding one <p> per line) owns no rect at all.  Answering
+      // `not_applicable` for those made every consumer that requires a
+      // measured verdict reject a perfectly visible block -- which is what
+      // failed `source_content_browser_readback_failed` on every multi-line
+      // source block.  Sample the descendants' paint instead: it is the same
+      // ink, and it is the ink the binding is about.  Elements with no paint
+      // anywhere below them (spacers, empty wrappers) stay not applicable.
+      const ownedPaintRects = ownPaintRects.length
+        ? ownPaintRects
+        : descendantOwnedPaintRects(node);
+      const ownedPaintSource = ownPaintRects.length ? 'own' : 'descendant';
       if (!ownedPaintRects.length) return empty(
         {{fraction: 0, continuous: 0, step: 0, unknown: 0}},
         'not_applicable', 'no_owned_paint');
@@ -765,7 +795,7 @@ def _instrument_authored_html(
       const fraction = covered / known;
       return {{
         fraction, continuous: Math.max(largest, largestOwnedGroup) / known, ...common,
-        evidence: evidence('measured', null, {{sampled, known, covered, known_occluded_fraction: fraction}})
+        evidence: evidence('measured', null, {{sampled, known, covered, known_occluded_fraction: fraction, owned_paint_source: ownedPaintSource}})
       }};
     }};
     const elements = allQids.map((node, domIndex) => {{
@@ -1480,6 +1510,9 @@ def _launch_reusable_chrome() -> _ReusableChromeRuntime:
     else:
         kwargs["start_new_session"] = True
     process = subprocess.Popen(args, **kwargs)
+    # This is the long-lived tree that leaks when the owner is force-killed:
+    # bind it to this process's lifetime so the OS reaps it either way.
+    bind_to_parent_lifetime(process)
     port_file = profile_path / "DevToolsActivePort"
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:

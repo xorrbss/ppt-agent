@@ -398,6 +398,65 @@ def test_default_version_falls_back_to_the_previous_row_before_migration(
     asyncio.run(scenario())
 
 
+def test_admission_records_the_version_of_the_row_it_actually_applied(
+    monkeypatch, tmp_path
+) -> None:
+    """The fallback has to move the identity, not only the limits.
+
+    ``load_public_policy`` answered the missing v4 default with the v3 row, but
+    admission kept writing the *requested* version onto the admission row and
+    the quota counters. Both carry a foreign key onto ``public_policy_profiles``,
+    so PostgreSQL rejected the insert with ``public_policy_authority_unavailable``
+    and every generation returned 500 -- the seam that exists to keep decks
+    working while the code is ahead of its migration instead broke all of them.
+    """
+
+    monkeypatch.setattr(
+        "services.public_operation_admission._require_phase2_authority",
+        lambda _session: PublicResourceLease,
+    )
+    database_path = tmp_path / "public-admission-before-v4.db"
+    command.upgrade(
+        _alembic_config(f"sqlite:///{database_path.as_posix()}"),
+        REVISION_BEFORE_V4,
+    )
+
+    async def scenario() -> None:
+        engine, maker = await _async_database(database_path)
+        owner_id = uuid.uuid4()
+        principal = PrincipalContext(owner_id, "tenant-fallback", "trace-fallback")
+        try:
+            async with maker() as session, session.begin():
+                session.add(
+                    User(id=owner_id, username="fallback-owner", hashed_password="test")
+                )
+            operation_id = await _seed_operation(maker, owner_id, key="fallback")
+            async with maker() as session, session.begin():
+                admitted = await admit_public_operation_compatible_v2(
+                    session,
+                    principal=principal,
+                    operation_id=operation_id,
+                    operation_kind="generation",
+                    request_plan=_plan(18),
+                    resource_plan=_RESOURCE_PLAN,
+                )
+                assert admitted.policy_version == PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION
+
+            # The quota counters have to agree, or the same foreign key fails on
+            # the next admission against this database.
+            async with maker() as session:
+                versions = (
+                    await session.execute(
+                        text("SELECT DISTINCT policy_version FROM public_quota_counters")
+                    )
+                ).scalars().all()
+            assert versions == [PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION]
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_both_default_version_constants_move_together() -> None:
     assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v4"
     assert PUBLIC_PHASE2_DEFAULT_POLICY_VERSION == PUBLIC_DEFAULT_POLICY_VERSION

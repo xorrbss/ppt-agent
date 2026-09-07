@@ -109,6 +109,7 @@ COPY servers/fastapi/utils/authored_dom_categories.py /app/servers/fastapi/utils
 COPY servers/fastapi/utils/authored_dom_fit_magnitude.py /app/servers/fastapi/utils/authored_dom_fit_magnitude.py
 COPY servers/fastapi/utils/authored_dom_footer_zone.py /app/servers/fastapi/utils/authored_dom_footer_zone.py
 COPY servers/fastapi/utils/authored_fragmentation_gate.py /app/servers/fastapi/utils/authored_fragmentation_gate.py
+COPY servers/fastapi/utils/process_kill_on_parent_death.py /app/servers/fastapi/utils/process_kill_on_parent_death.py
 COPY servers/fastapi/utils/authored_dom_tags.py /app/servers/fastapi/utils/authored_dom_tags.py
 COPY servers/fastapi/utils/authored_dom_text_escape.py /app/servers/fastapi/utils/authored_dom_text_escape.py
 COPY servers/fastapi/utils/authored_qid_namespace.py /app/servers/fastapi/utils/authored_qid_namespace.py

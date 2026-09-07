@@ -39,6 +39,7 @@ import { PromptInput } from "./PromptInput";
 import SupportingDoc, { MAX_SUPPORTED_FILES } from "./SupportingDoc";
 import { abortDocumentProcessing } from "./upload-page/abortDocumentProcessing";
 import { useSupportingFiles } from "./upload-page/useSupportingFiles";
+import SourceContentLossDialog from "./upload-page/SourceContentLossDialog";
 import { useUploadPageState } from "./upload-page/useUploadPageState";
 import UploadDesignGallery from "./UploadDesignGallery";
 
@@ -109,8 +110,11 @@ const UploadPage = ({
   const analysisSourceSignature = analysisSourceFile
     ? `${analysisSourceFile.name}:${analysisSourceFile.size}:${analysisSourceFile.lastModified}`
     : null;
+  // A remembered analysis may only be restored while the PPTX it was produced
+  // from is still staged here. Without that guard, "create from PPT" silently
+  // reopens an unrelated analysis left over from an earlier document.
   const resumeAnalysisId =
-    !analysisSourceFile || analyzedSourceSignature === analysisSourceSignature
+    analysisSourceFile && analyzedSourceSignature === analysisSourceSignature
       ? lastAnalysisId
       : null;
 
@@ -126,7 +130,8 @@ const UploadPage = ({
     masterAdmissionError,
     sourceContentSummary,
     isSourceContentAnalyzing,
-    sourceContentReady,
+    sourceContentLossPrompt,
+    resolveSourceContentLossPrompt,
   } = useUploadPageState({
     files,
     filesRef,
@@ -140,6 +145,14 @@ const UploadPage = ({
 
   const openMasterCatalog = useCallback(() => {
     setMasterCatalogEntryMode("catalog");
+    setMasterCatalogOpen(true);
+  }, []);
+
+  // The catalog lists published masters and opens the blank designer; the only
+  // way into the PPTX analysis is this entry mode, so without this control the
+  // whole AI-import flow is unreachable from the app.
+  const openAiMasterImport = useCallback(() => {
+    setMasterCatalogEntryMode("ai-import");
     setMasterCatalogOpen(true);
   }, []);
 
@@ -356,7 +369,7 @@ const UploadPage = ({
                   {loadingState.isLoading
                     ? t("generating")
                     : sourceContentMode
-                      ? (sourceContentReady ? "선택한 템플릿으로 재디자인" : "원본 콘텐츠 분석")
+                      ? "선택한 템플릿으로 재디자인"
                       : t("generate")}
                 </span>
               </Button>
@@ -418,6 +431,14 @@ const UploadPage = ({
                 <Button
                   type="button"
                   variant="outline"
+                  onClick={openAiMasterImport}
+                  data-testid="ppt-ai-master-create"
+                >
+                  {t("master.aiCreate")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={openMasterCatalog}
                   data-testid="open-master-catalog"
                 >
@@ -446,6 +467,11 @@ const UploadPage = ({
             onClear={clearMaster}
           />
         ) : null}
+
+        <SourceContentLossDialog
+          prompt={sourceContentLossPrompt}
+          onDecide={resolveSourceContentLossPrompt}
+        />
       </main>
     </Wrapper>
   );

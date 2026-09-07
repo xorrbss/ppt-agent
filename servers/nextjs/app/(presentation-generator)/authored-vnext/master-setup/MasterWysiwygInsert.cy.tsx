@@ -45,11 +45,20 @@ function Harness({ initialContract }: { initialContract?: DeckMasterContractV1 }
   );
 }
 
-function snapshot() {
-  return cy
-    .get('[data-testid="wysiwyg-contract-snapshot"]')
-    .invoke("text")
-    .then((value) => JSON.parse(value) as DeckMasterContractV1);
+/**
+ * The clipboard shortcuts below dispatch a raw KeyboardEvent, so React has not
+ * re-rendered by the time the next Cypress command runs: a plain `.then()`
+ * parses the pre-transaction snapshot exactly once and never sees the result.
+ * `.should()` re-runs the read until the rendered contract catches up.
+ */
+function snapshot(assert: (contract: DeckMasterContractV1) => void) {
+  cy.get('[data-testid="wysiwyg-contract-snapshot"]').should(($output) => {
+    assert(JSON.parse($output.text()) as DeckMasterContractV1);
+  });
+}
+
+function snapshotElements(assert: (elements: SemanticMasterElement[]) => void) {
+  snapshot((contract) => assert(contract.semanticElements ?? []));
 }
 
 function pressClipboardShortcut(key: "c" | "v") {
@@ -82,7 +91,7 @@ describe("Master WYSIWYG semantic inserts", () => {
       .contains("button", "Section")
       .click();
     pressClipboardShortcut("v");
-    snapshot().then((contract) => {
+    snapshot((contract) => {
       const copies = (contract.semanticElements ?? []).filter(
         (element) => element.content.role === "fixed-copy",
       );
@@ -98,7 +107,7 @@ describe("Master WYSIWYG semantic inserts", () => {
       .contains("button", "Cover")
       .click();
     pressClipboardShortcut("v");
-    snapshot().then((contract) => {
+    snapshot((contract) => {
       const copies = (contract.semanticElements ?? []).filter(
         (element) => element.content.role === "fixed-copy",
       );
@@ -190,7 +199,7 @@ describe("Master WYSIWYG semantic inserts", () => {
       .contains("button", "Fixed copy")
       .click();
 
-    snapshot().then((contract) => {
+    snapshot((contract) => {
       const text = contract.semanticElements?.find(
         (element): element is SemanticMasterElement => element.type === "text",
       );
@@ -219,17 +228,15 @@ describe("Master WYSIWYG semantic inserts", () => {
       .trigger("compositionend", { data: KOREAN_TEXT })
       .type("{ctrl}{enter}");
 
-    snapshot()
-      .its("semanticElements")
-      .then((elements: SemanticMasterElement[]) => {
-        expect(elements.find((element) => element.type === "text")?.content.text)
-          .to.equal(KOREAN_TEXT);
-      });
+    snapshotElements((elements) => {
+      expect(elements.find((element) => element.type === "text")?.content.text)
+        .to.equal(KOREAN_TEXT);
+    });
 
     cy.get('[data-testid="master-wysiwyg-workspace"] > header')
       .contains("button", "Page number")
       .click();
-    snapshot().then((contract) => {
+    snapshot((contract) => {
         const elements = contract.semanticElements ?? [];
         const pageNumber = elements.find((element) => element.type === "pageNumber");
         expect(pageNumber, "semantic slide-number element").to.exist;
@@ -252,21 +259,17 @@ describe("Master WYSIWYG semantic inserts", () => {
       });
 
     cy.contains("button", "Undo").click();
-    snapshot()
-      .its("semanticElements")
-      .then((elements: SemanticMasterElement[]) => {
-        expect(elements.some((element) => element.type === "pageNumber")).to.equal(false);
-      });
+    snapshotElements((elements) => {
+      expect(elements.some((element) => element.type === "pageNumber")).to.equal(false);
+    });
     cy.contains("button", "Redo").click();
 
     cy.contains("button", "Re-enter WYSIWYG").click();
-    snapshot()
-      .its("semanticElements")
-      .then((elements: SemanticMasterElement[]) => {
-        expect(elements.find((element) => element.type === "text")?.content.text)
-          .to.equal(KOREAN_TEXT);
-        expect(elements.filter((element) => element.type === "pageNumber"))
-          .to.have.length(1);
-      });
+    snapshotElements((elements) => {
+      expect(elements.find((element) => element.type === "text")?.content.text)
+        .to.equal(KOREAN_TEXT);
+      expect(elements.filter((element) => element.type === "pageNumber"))
+        .to.have.length(1);
+    });
   });
 });

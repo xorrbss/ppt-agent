@@ -1631,7 +1631,7 @@ def test_generate_request_accepts_optional_authored_style():
 def test_vision_qa_reuses_selected_design_system(monkeypatch):
     captured = []
 
-    async def fake_critique(pngs, contexts=None):
+    async def fake_critique(pngs, contexts=None, **_kwargs):
         return [SlideCritique(needs_fix=True)]
 
     async def fake_author(
@@ -1713,7 +1713,7 @@ def test_source_reflow_vqa_retains_metrics_beyond_render_cache(monkeypatch):
             ],
         }
 
-    async def clean_critique(pngs, contexts=None):
+    async def clean_critique(pngs, contexts=None, **_kwargs):
         return [SlideCritique(needs_fix=False) for _ in pngs]
 
     monkeypatch.setattr(author_vision_qa_mod, "ensure_browser_metrics", fake_metrics)
@@ -1802,7 +1802,7 @@ def test_source_reflow_checkpoint_profile_uses_retained_metrics_for_local_patch(
         proposal_issue_counts.append(len(critique.issues))
         return None
 
-    async def clean_critique(pngs, contexts=None):
+    async def clean_critique(pngs, contexts=None, **_kwargs):
         return [SlideCritique(needs_fix=False) for _ in pngs]
 
     monkeypatch.setattr(author_vision_qa_mod, "ensure_browser_metrics", fake_metrics)
@@ -1999,7 +1999,7 @@ def test_normal_authored_vqa_keeps_best_effort_cache_behavior(monkeypatch):
     async def unexpected_metrics(*_args, **_kwargs):
         raise AssertionError("normal authored must not force DOM telemetry recollection")
 
-    async def clean_critique(pngs, contexts=None):
+    async def clean_critique(pngs, contexts=None, **_kwargs):
         return [SlideCritique(needs_fix=False) for _ in pngs]
 
     monkeypatch.setattr(author_vision_qa_mod, "ensure_browser_metrics", unexpected_metrics)
@@ -2054,7 +2054,7 @@ def test_vision_qa_full_reauthor_consumes_allowed_illustration_slot(
 
     service = FakeImageService()
 
-    async def fake_critique(pngs, contexts=None):
+    async def fake_critique(pngs, contexts=None, **_kwargs):
         return [SlideCritique(needs_fix=True)]
 
     async def fake_author(*args, **kwargs):
@@ -2101,7 +2101,7 @@ def test_vision_qa_full_reauthor_removes_disallowed_illustration_slot(monkeypatc
 
     service = FakeImageService()
 
-    async def fake_critique(pngs, contexts=None):
+    async def fake_critique(pngs, contexts=None, **_kwargs):
         return [SlideCritique(needs_fix=True)]
 
     async def fake_author(*args, **kwargs):
@@ -2142,7 +2142,7 @@ def test_vision_qa_full_reauthor_keeps_original_when_illustration_fails(monkeypa
         async def generate_image(self, prompt):
             raise RuntimeError("provider unavailable")
 
-    async def fake_critique(pngs, contexts=None):
+    async def fake_critique(pngs, contexts=None, **_kwargs):
         return [SlideCritique(needs_fix=True)]
 
     async def fake_author(*args, **kwargs):
@@ -2177,7 +2177,7 @@ def test_vision_qa_full_reauthor_keeps_original_when_illustration_fails(monkeypa
 def test_vision_qa_full_reauthor_rejects_unresolved_illustration_asset_slot(
     monkeypatch,
 ):
-    async def fake_critique(pngs, contexts=None):
+    async def fake_critique(pngs, contexts=None, **_kwargs):
         return [SlideCritique(needs_fix=True)]
 
     async def fake_author(*args, **kwargs):
@@ -2265,7 +2265,7 @@ def test_vision_qa_propagates_exact_reference_mode(monkeypatch, tmp_path):
 def test_vision_qa_subset_preserves_absolute_slide_position(monkeypatch):
     captured = []
 
-    async def fake_critique(pngs, contexts=None):
+    async def fake_critique(pngs, contexts=None, **_kwargs):
         return [SlideCritique(needs_fix=True)]
 
     async def fake_author(
@@ -2303,7 +2303,7 @@ def test_vision_qa_pipelines_fast_slide_fix_before_slowest_review(monkeypatch):
     async def scenario():
         first_correction_started = asyncio.Event()
 
-        async def fake_critique(pngs, contexts=None):
+        async def fake_critique(pngs, contexts=None, **_kwargs):
             if pngs[0] == b"png-1":
                 await asyncio.wait_for(first_correction_started.wait(), timeout=0.5)
             return [SlideCritique(needs_fix=True)]
@@ -2346,7 +2346,7 @@ def test_vision_qa_pipelines_fast_slide_fix_before_slowest_review(monkeypatch):
 def test_vision_qa_rejects_invalid_reauthor_before_render(monkeypatch):
     render_calls = 0
 
-    async def fake_critique(pngs, contexts=None):
+    async def fake_critique(pngs, contexts=None, **_kwargs):
         return [SlideCritique(needs_fix=True)]
 
     async def fake_author(*args, **kwargs):
@@ -2381,7 +2381,7 @@ def test_vision_qa_rejects_invalid_reauthor_before_render(monkeypatch):
 def test_vision_qa_cache_reuses_identical_successful_review(monkeypatch):
     calls = 0
 
-    async def fake_review(image, slide_context=None):
+    async def fake_review(image, slide_context=None, **_kwargs):
         nonlocal calls
         calls += 1
         await asyncio.sleep(0)
@@ -2430,7 +2430,9 @@ def test_vision_qa_style_review_keeps_render_only_multimodal_call(monkeypatch):
     )
 
     assert critiques[0].needs_fix is False
-    assert calls == [(b"render-only", "style context", {})]
+    assert calls == [
+        (b"render-only", "style context", {"slide_index": None, "slot_run": ""})
+    ]
 
 
 def test_critique_message_assembly_uses_one_render_for_style_and_ordered_source_render_for_exact():
@@ -2493,6 +2495,8 @@ def test_vision_qa_exact_review_pairs_each_render_with_its_own_source(monkeypatc
             {
                 "source_image": b"source-0",
                 "reference_mode": EXACT_RECONSTRUCTION,
+                "slide_index": None,
+                "slot_run": "",
             },
         ),
         (
@@ -2501,6 +2505,8 @@ def test_vision_qa_exact_review_pairs_each_render_with_its_own_source(monkeypatc
             {
                 "source_image": b"source-1",
                 "reference_mode": EXACT_RECONSTRUCTION,
+                "slide_index": None,
+                "slot_run": "",
             },
         ),
     ]
