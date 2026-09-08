@@ -7686,6 +7686,7 @@
       "servers/fastapi/tests/unit/test_authored_renderer_deployment_contract.py",
       "servers/fastapi/tests/unit/test_authored_renderer_launcher_frames.py",
       "servers/fastapi/tests/unit/test_authored_renderer_worker_framing.py",
+      "servers/fastapi/tests/unit/test_authored_repair_calls_knob.py",
       "servers/fastapi/tests/unit/test_authored_repair_receipts.py",
       "servers/fastapi/tests/unit/test_authored_resume.py",
       "servers/fastapi/tests/unit/test_authored_retain_checkpoint_html.py",
@@ -9441,8 +9442,8 @@
       "upstreamOwned": 10163,
       "identical": 9374,
       "exceptions": 789,
-      "localOnly": 3888
+      "localOnly": 3889
     },
-    "policySha256": "f4446c78aeeef9b659ec65af2113e56057df6429d995103f3e4ef9d57a73232c"
+    "policySha256": "9b530a2822a70145e326996925d9cb160fb2bb16bea5337325cbd62ad1b4d3e5"
   }
 }
