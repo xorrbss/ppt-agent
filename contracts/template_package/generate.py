@@ -21,10 +21,18 @@ def content() -> bytes:
     return (json.dumps(schema, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode()
 
 
+def _normalize_eol(data: bytes) -> bytes:
+    """Windows checkouts materialise CRLF (core.autocrlf=true); the generator
+    always emits LF. Normalize both sides before comparing so a line-ending-only
+    difference is not reported as drift, while real content differences still are.
+    """
+    return data.replace(b"\r\n", b"\n")
+
+
 def main() -> int:
     expected = content()
     if "--check" in sys.argv:
-        if not OUTPUT.is_file() or OUTPUT.read_bytes() != expected:
+        if not OUTPUT.is_file() or _normalize_eol(OUTPUT.read_bytes()) != _normalize_eol(expected):
             print("TemplatePackage schema is stale", file=sys.stderr)
             return 1
         print("TemplatePackage schema is up to date.")

@@ -196,9 +196,14 @@ const docsCurrent = (() => {
     return null;
   }
 })();
+// Windows checkouts materialise CRLF (core.autocrlf=true) while every generator
+// below emits LF; compare normalized content here so line-ending-only differences
+// are not reported as drift, while real content differences still are.
+const normalizeEol = (text) => (text === null ? text : text.replace(/\r\n/g, "\n"));
+
 const drift = [];
-if (renderedCompose !== originalCompose) drift.push("docker-compose.yml");
-if (docsCurrent !== renderedDocs) drift.push("docs/configuration.md");
+if (normalizeEol(renderedCompose) !== normalizeEol(originalCompose)) drift.push("docker-compose.yml");
+if (normalizeEol(docsCurrent) !== normalizeEol(renderedDocs)) drift.push("docs/configuration.md");
 
 if (checkOnly) {
   if (drift.length) {

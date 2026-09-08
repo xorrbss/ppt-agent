@@ -12,3 +12,6 @@ templates/**/template.json text eol=lf
 templates/**/*.svg text eol=lf
 templates/manifests/*.json text eol=lf
 contracts/template_package/engines/*.json text eol=lf
+contracts/template_package/v1/schema.json text eol=lf
+servers/fastapi/constants/provider_registry_generated.py text eol=lf
+servers/nextjs/utils/provider-registry.generated.ts text eol=lf
