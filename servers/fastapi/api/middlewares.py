@@ -78,14 +78,14 @@ async def _refresh_runtime_settings(request: Request) -> Response:
         )
     )
     if not authorized:
-        # Keep this process-control surface undiscoverable unless the Electron
+        # Keep this process-control surface undiscoverable unless a local
         # launcher enabled it and supplied its process-memory token.
         return Response(status_code=404)
 
     # The file is read only for this explicit post-save notification, never on
-    # ordinary requests. Electron's local worker publishes immediately; the DB
-    # revision lets any external workers converge without carrying settings in
-    # this control request.
+    # ordinary requests. The calling process's own worker publishes
+    # immediately; the DB revision lets any external workers converge without
+    # carrying settings in this control request.
     try:
         async with async_session_maker() as session:
             body = await request.body()

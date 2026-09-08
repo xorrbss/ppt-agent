@@ -25,7 +25,5 @@ test("web authored preview fallback is opaque, scriptless, and CSP-restricted", 
   assert.match(source, /font-src data:/);
   assert.match(source, /script-src 'none'/);
   assert.match(source, /srcDoc=\{isolatedHtmlSource\}/);
-  assert.match(source, /runtime === "web"/);
-  assert.match(source, /window\.electron \? "electron" : "web"/);
-  assert.match(source, /useState<"unknown" \| "web" \| "electron">/);
+  assert.doesNotMatch(source, /window\.electron/);
 });

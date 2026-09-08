@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 
 interface AuthoredSlidePreviewProps {
   slideIndex: number;
@@ -49,6 +49,10 @@ export function isolateAuthoredPreviewHtml(html: string): string {
  * otherwise the PNG. This prevents an asset-cache refresh or viewport
  * activation from replacing the visible slide with a differently scaled
  * representation.
+ *
+ * This runs only in an ordinary browser tab (the app is web-only), so the
+ * only isolation the raw authored DOM needs is the sandboxed, scriptless,
+ * CSP-restricted iframe below.
  */
 export function AuthoredSlidePreview({
   slideIndex,
@@ -56,19 +60,8 @@ export function AuthoredSlidePreview({
   imageSrc,
   preferHtml = false,
 }: AuthoredSlidePreviewProps) {
-  // Fail closed during SSR/hydration. Only a confirmed ordinary web runtime
-  // may construct authored srcDoc; Electron always consumes the isolated
-  // backend worker's PNG artifact and therefore exposes zero authored DOM to
-  // the privileged application window/preload.
-  const [runtime, setRuntime] = useState<"unknown" | "web" | "electron">(
-    "unknown"
-  );
-  useEffect(() => {
-    setRuntime(window.electron ? "electron" : "web");
-  }, []);
   const htmlSource = typeof html === "string" ? html.trim() : "";
-  const canRenderHtml =
-    runtime === "web" && preferHtml && htmlSource.length > 0;
+  const canRenderHtml = preferHtml && htmlSource.length > 0;
   const isolatedHtmlSource = canRenderHtml
     ? isolateAuthoredPreviewHtml(htmlSource)
     : "";
@@ -76,7 +69,6 @@ export function AuthoredSlidePreview({
   return (
     <div
       data-testid={`authored-slide-preview-${slideIndex}`}
-      data-authored-runtime={runtime}
       className="aspect-video h-full w-full overflow-hidden bg-white"
     >
       {canRenderHtml ? (

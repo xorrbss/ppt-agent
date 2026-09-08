@@ -30,9 +30,10 @@ a lightweight monitor therefore adds no mandatory infrastructure.
 - Redis Pub/Sub would add a required service while remaining lossy. Durable
   recovery would still need a database revision. Redis Streams would also add
   consumer and retention operations.
-- File watching is retained only as Electron compatibility ingress. Pod-local
-  files, network-filesystem notification semantics, and multi-host deployment
-  make a file revision unsuitable as cluster authority.
+- File watching is retained only as a legacy Electron-compatibility ingress
+  path (see "Electron" below — this fork no longer ships an Electron client to
+  drive it). Pod-local files, network-filesystem notification semantics, and
+  multi-host deployment make a file revision unsuitable as cluster authority.
 - Signals, shared memory, and local sockets do not cross host or pod boundaries.
   Making them reliable would require a worker registry and acknowledgements.
 - PostgreSQL `LISTEN/NOTIFY` could later reduce wake-up latency, but periodic
@@ -80,11 +81,19 @@ receiving process; other workers catch up through revision polling.
 When `CAN_CHANGE_KEYS=false`, environment configuration remains immutable and
 database provider settings do not override it.
 
-### Electron
+### Electron (legacy, unused in this fork)
 
-Electron retains its existing control boundary: the main process generates the
-random token, writes the user configuration first, and sends an empty authenticated
-POST over IPv4 loopback. The token is not exposed to the renderer or preload API.
+This fork is web-only and does not ship or support an Electron desktop shell
+(see `CLAUDE.md`). The backend still carries the Electron-facing IPC ingress
+described below (`services/provider_settings.py`, `api/middlewares.py`,
+`utils/user_config.py`), but nothing in this fork invokes it any more — there is
+no Electron main process left to send the control request. The description
+below documents the still-present code path, not a live integration; removing
+that backend code is a separate, out-of-scope decision from this document.
+
+The original design: Electron's main process generated a random token, wrote
+the user configuration first, and sent an empty authenticated POST over IPv4
+loopback. The token was not exposed to the renderer or preload API.
 
 After authorization, FastAPI imports the just-written compatibility file through
 the same database compare-and-swap writer and publishes that exact committed
@@ -107,8 +116,8 @@ with, the loopback control token.
 PostgreSQL is the supported shared cluster profile. Its row-level transactions
 and compare-and-swap update coordinate writers across hosts and pods.
 
-SQLite remains supported for Electron, local development, tests, and multiple
-local processes sharing one database file. WAL and the configured busy timeout
+SQLite remains supported for local development, tests, and multiple local
+processes sharing one database file. WAL and the configured busy timeout
 allow bounded writer hand-off. First-connection WAL transitions are verified and
 retried within a fixed budget so simultaneous local worker startup fails closed
 instead of running with mixed journal modes. SQLite is not a supported multi-host
@@ -154,7 +163,8 @@ This design preserves the following contracts:
 
 - secrets are not transmitted in refresh notifications or returned by settings
   APIs;
-- the Electron control endpoint remains loopback-only and token-gated;
+- the legacy Electron control endpoint (unused in this fork) remains
+  loopback-only and token-gated;
 - the redacted-secret placeholder cannot replace or become a stored credential;
 - `RuntimeSettings` and each published revision envelope are immutable;
 - snapshot replacement is atomic and revision-monotonic within every process;

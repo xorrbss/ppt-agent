@@ -10,9 +10,9 @@ references, not authorization for an automatic full-suite run.
 ## Project overview
 
 Presenton is a self-hostable AI presentation generator. It uses a Python 3.11
-FastAPI backend, a Next.js 16/React 19 frontend, and an Electron desktop shell.
-It generates presentations from prompts or documents and exports editable PPTX
-and PDF files.
+FastAPI backend and a Next.js 16/React 19 frontend. This fork is web-only: it
+does not ship or support an Electron desktop shell. It generates presentations
+from prompts or documents and exports editable PPTX and PDF files.
 
 This fork adds Korean UI defaults, Windows-native development fixes, offline
 Korean OCR assets, and an authored high-quality slide mode. Preserve API values,
@@ -34,7 +34,6 @@ changes against the official Presenton project and follow
   provider integrations, and tests. Dependencies are managed with `uv`.
 - `servers/nextjs/`: App Router frontend, editor, templates, Redux state, and API
   proxy routes.
-- `electron/`: desktop shell and packaging. Electron reuses both servers.
 - `presentation-export/`: versioned PPTX/PDF export runtime. Treat generated or
   downloaded contents carefully; sync it through the root npm scripts.
 - `scripts/`: local proxy, automation CLI, and repository maintenance scripts.
@@ -52,16 +51,21 @@ effect, reload or restart only the affected server automatically. Prefer HMR,
 preserve the existing ports and launch environment, and leave unaffected
 processes running.
 
-### Electron (preferred full local workflow)
+### Full local stack (preferred full local workflow)
 
 ```powershell
-cd electron
-npm run setup:env
-npm run dev
+cd servers/fastapi; uv sync
+cd ../nextjs; npm install
+cd ../..
+.\scripts\start-local-stack.ps1
 ```
 
 Prerequisites: Node.js LTS, npm, Python 3.11, and `uv`. The first setup may need
-network access for untracked generated dependencies and export assets.
+network access for untracked generated dependencies and export assets. This
+script brings up PostgreSQL, FastAPI, controllers, Next.js, and the
+single-origin local proxy together, in dependency order; see `RUNNING-LOCAL.md`
+for the full description, `-Status`/`-Stop` flags, and why processes should not
+be started by hand.
 
 ### Backend
 
@@ -77,8 +81,7 @@ uv run python server.py --port 8000 --reload false
 
 `APP_DATA_DIRECTORY` is required. On Windows, keep uvicorn reload disabled unless
 the task specifically needs it. Keep startup migrations enabled for normal local
-and packaged runs; Alembic upgrades are idempotent. Electron injects this setting
-for both its development and packaged FastAPI launch paths.
+runs; Alembic upgrades are idempotent.
 
 ### Frontend
 
@@ -122,11 +125,6 @@ uv run pytest  # Full backend suite: explicit user request only
 cd servers/nextjs
 npm run lint
 npm run build
-
-# Electron
-cd electron
-npm run typecheck
-npm run lint:main
 
 # Export runtime consistency (repository root)
 npm run check:presentation-export

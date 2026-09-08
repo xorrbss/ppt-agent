@@ -20,6 +20,15 @@ const read = (filePath) =>
   readFileSync(new URL(`../${filePath}`, import.meta.url), "utf8");
 const readJson = (filePath) => JSON.parse(read(filePath));
 
+// Strips whole-line YAML comments so a "this used to be here" note explaining a
+// removal cannot itself satisfy — or trip — an executable-content assertion.
+function workflowSteps(source) {
+  return source
+    .split(/\r?\n/u)
+    .filter((line) => !/^\s*#/u.test(line))
+    .join("\n");
+}
+
 function workflowJob(source, jobName) {
   source = source.replaceAll("\r\n", "\n");
   const marker = `\n  ${jobName}:\n`;
@@ -248,17 +257,28 @@ test("chat-first deployment configuration is required by both CI providers", () 
   );
 });
 
+// The Electron packaging matrix and the ClamAV scan of its installers were
+// removed with the desktop shell; the npm/pip dependency audits, which never
+// depended on packaging, are what this workflow still exists for.
 test("the packaging security gate audits the locked FastAPI dependency tree", () => {
   const workflow = read(".github/workflows/cross-platform-packaging-security.yml");
-  const job = workflowJob(workflow, "package");
+  const job = workflowJob(workflow, "audit");
+  const install = job.indexOf("name: Install locked dependencies");
   const npmAudit = job.indexOf("npm audit --omit=dev --audit-level=info");
+  const nextAudit = job.indexOf(
+    "npm audit --omit=dev --audit-level=info --prefix servers/nextjs",
+  );
   const pipAudit = job.indexOf("name: Audit locked FastAPI production dependencies");
-  const firstBuild = job.indexOf("name: Build packaged Next.js resource");
 
-  assert.ok(npmAudit >= 0, "the npm production audit must remain");
+  assert.ok(install >= 0, "the locked install must remain");
+  assert.ok(npmAudit > install, "the npm production audit must run on locked trees");
+  assert.ok(nextAudit > npmAudit, "the Next.js production tree must be audited too");
   assert.ok(pipAudit > npmAudit, "the Python audit must sit beside the npm audit");
-  assert.ok(firstBuild > pipAudit, "dependency audits must run before any build");
   assert.match(job, /uv sync --frozen --directory servers\/fastapi/u);
+  assert.match(job, /node --test scripts\/operational-release-preflight\.test\.mjs/u);
+  // No desktop packaging, signing, or installer scanning may creep back in.
+  assert.doesNotMatch(workflowSteps(workflow), /electron/iu);
+  assert.doesNotMatch(workflowSteps(workflow), /clamav/iu);
   assert.match(
     job,
     /uv export --frozen --no-dev --no-emit-project --no-hashes \\\n\s*--format requirements-txt --output-file requirements-audit\.txt/u,
@@ -1068,11 +1088,15 @@ test("developer documentation matches the executable lint and test workflow", ()
   assert.doesNotMatch(claude, /does \*\*not\*\* include `servers\/nextjs\/tests\/`/u);
 });
 
-test("Windows PR packaging preflights symlink policy and validates a link-free resource", () => {
+// The Electron shell was removed from this fork, and with it the packaged
+// resource builder (electron/build_nextjs_resources.js) and its link-free
+// staging copier (electron/scripts/standalone-copy.cjs). What this gate still
+// has to protect on Windows is the pinned export runtime, the authored-hybrid
+// export contracts, and the bounded symlink fallback that the *standard*
+// Next.js build relies on (see the standalone-link-fallback test below).
+test("the Windows PR gate covers the export runtime, authored-hybrid, and symlink policy", () => {
   const workflow = read(".github/workflows/g4-pptx-roundtrip.yml");
   const job = workflowJob(workflow, "windows-release-gate");
-  const builder = read("electron/build_nextjs_resources.js");
-  const copy = read("electron/scripts/standalone-copy.cjs");
   const buildFallback = read(
     "servers/nextjs/scripts/next-standalone-symlink-fallback.cjs",
   );
@@ -1080,24 +1104,13 @@ test("Windows PR packaging preflights symlink policy and validates a link-free r
   assert.match(workflow, /push:\s*\n\s*branches: \[main\]/u);
   assert.match(workflow, /pull_request:\s*\n\s*branches: \[main\]/u);
   assert.match(job, /runs-on: windows-latest/u);
-  assert.match(job, /npm run test:standalone-copy/u);
-  assert.match(job, /npm run build:nextjs/u);
-  assert.match(job, /validateLinkFreeTree\('resources\/nextjs'\)/u);
-  assert.match(builder, /preflightWindowsSymlinkFallback\(\)/u);
-  assert.match(builder, /--require=.*standaloneSymlinkFallback/u);
-  assert.match(builder, /PRESENTON_NEXT_STANDALONE_LINK_FALLBACK: "1"/u);
-  assert.match(builder, /PRESENTON_NEXT_STANDALONE_ROOT: standaloneDir/u);
-  assert.match(
-    builder,
-    /PRESENTON_NEXT_TRACE_ROOT: path\.resolve\(nextjsDir, "\.\.", "\.\."\)/u,
-  );
-  assert.match(builder, /copyTreeSafe\([\s\S]*materializeLinks: true/u);
-  assert.match(builder, /validateLinkFreeTree\(tempOutDir\)/u);
-  assert.match(
-    copy,
-    /error\?\.code === "EPERM" \|\| error\?\.code === "EACCES"/u,
-  );
-  assert.match(copy, /privilege-free materialized-copy fallback/u);
+  assert.match(job, /npm run test:presentation-export-sync/u);
+  assert.match(job, /lib\/authored-hybrid\/mode\.test\.mjs/u);
+  assert.match(job, /lib\/authored-hybrid\/pptx-archive\.test\.mjs/u);
+  assert.match(job, /lib\/authored-hybrid\/cleanup\.test\.mjs/u);
+  // No desktop packaging may creep back into this workflow.
+  assert.doesNotMatch(workflowSteps(workflow), /electron/iu);
+
   assert.match(
     buildFallback,
     /error\?\.code !== "EPERM" && error\?\.code !== "EACCES"/u,

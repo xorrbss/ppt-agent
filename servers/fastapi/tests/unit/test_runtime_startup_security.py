@@ -87,9 +87,10 @@ def test_start_js_keeps_mcp_opt_in_and_production_reload_disabled():
 
 
 def test_native_fastapi_launch_paths_enable_startup_migrations():
+    # This fork's only surviving native FastAPI launcher is the Docker/native
+    # entrypoint start.js (the Electron packaged launcher was removed with
+    # electron/ when the fork went web-only).
     launcher = _read("start.js")
-    electron_main = _read("electron/app/main.ts")
-    electron_servers = _read("electron/app/utils/servers.ts")
 
     assert re.search(
         r"MIGRATE_DATABASE_ON_STARTUP:\s*"
@@ -97,22 +98,17 @@ def test_native_fastapi_launch_paths_enable_startup_migrations():
         launcher,
     )
     assert re.search(r"env:\s*fastApiEnvironment", launcher)
-    assert re.search(r'MIGRATE_DATABASE_ON_STARTUP:\s*"True"', electron_main)
-    assert re.search(
-        r"env:\s*\{\s*\.\.\.process\.env,\s*\.\.\.env\s*\}",
-        electron_servers,
-    )
-    assert re.search(
-        r'server\.py",\s*"--port",\s*port\.toString\(\),\s*'
-        r'"--reload",\s*"false"',
-        electron_servers,
-    )
 
 
-def test_native_launchers_fail_closed_around_external_workspace_worker():
+def test_native_launcher_fails_closed_around_external_workspace_worker():
+    # Electron's own "await fastApi.ready" / "await worker.ready" ordering
+    # check was removed with electron/ (fork went web-only). The same
+    # fail-closed contract — the workspace worker in external mode must be
+    # waited on after the core services are ready, and any readiness failure
+    # must stop every managed process and abort rather than silently
+    # continuing without the worker — still holds on start.js, so re-anchor
+    # the coverage there instead of dropping it.
     launcher = _read("start.js")
-    electron_main = _read("electron/app/main.ts")
-    electron_servers = _read("electron/app/utils/servers.ts")
 
     assert re.search(
         r"WORKSPACE_OPERATION_WORKER_MODE:\s*"
@@ -121,13 +117,33 @@ def test_native_launchers_fail_closed_around_external_workspace_worker():
     )
     assert '["-m", "services.workspace_operation_worker"]' in launcher
     assert 'MIGRATE_DATABASE_ON_STARTUP: "false"' in launcher
-    assert "await stopManagedProcesses(managedProcesses)" in launcher
 
-    assert 'const workspaceWorkerMode = "external"' in electron_main
-    assert "await fastApi.ready" in electron_main
-    assert "await worker.ready" in electron_main
-    assert electron_main.index("await fastApi.ready") < electron_main.index("await worker.ready")
-    assert "Packaged workspace worker uses embedded safe fallback" not in electron_main
-    assert '"workspace-operation-worker.exe"' in electron_servers
-    assert 'path.join(directory, workerBinary)' in electron_servers
-    assert '["run", "python", "-m", "services.workspace_operation_worker"]' in electron_servers
+    core_ready_index = launcher.index(
+        "await Promise.all([fastApiReadyPromise, nextjsReadyPromise, nginxReadyPromise]);"
+    )
+    worker_spawn_index = launcher.index(
+        '["-m", "services.workspace_operation_worker"]'
+    )
+    worker_ready_index = launcher.index(
+        'await waitForProcessReady("Workspace operation worker"'
+    )
+    # start.js has an earlier, unrelated "} catch (err) {" (dependency
+    # install); search from worker_ready_index so this anchors on the one
+    # guarding the startServers try block instead.
+    catch_index = launcher.index("} catch (err) {", worker_ready_index)
+    fail_closed_index = launcher.index(
+        "await stopManagedProcesses(managedProcesses);\n    throw err;"
+    )
+
+    # FastAPI/Next.js/nginx readiness gates spawning the external worker,
+    # the worker's own readiness is awaited before startup is considered
+    # complete, and any failure in that try block (including the worker's)
+    # is caught, stops every managed process, and re-throws -- fail closed,
+    # never a silent fallback to an embedded worker.
+    assert (
+        core_ready_index
+        < worker_spawn_index
+        < worker_ready_index
+        < catch_index
+        < fail_closed_index
+    )

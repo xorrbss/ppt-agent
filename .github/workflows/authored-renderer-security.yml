@@ -26,17 +26,15 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: electron/package-lock.json
+          cache-dependency-path: package-lock.json
 
-      - name: Install locked Electron runtime
-        run: npm ci --prefix electron
-
-      - name: Install disposable Electron display dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            xvfb libgtk-3-0 libnss3 libasound2t64 libgbm1
-
+      # The Electron shell was removed from this fork, and with it the packaged
+      # renderer probe that used to observe a real Electron renderer PID and its
+      # sandbox/contextIsolation/nodeIntegration state. `run_dynamic_gate.py`
+      # treats `--electron-observation` as optional, so the gate now runs
+      # container-only: the disposable no-volume Docker harness still decides
+      # PASS/promotion, but there is no longer a host-process observation
+      # alongside it.
       - name: Run host-safe renderer contract tests
         run: |
           python contracts/authored-renderer/verify_contract.py
@@ -44,47 +42,6 @@ jobs:
             -s docs/experiments/authored-vnext/04-renderer-security/ci \
             -p "test_*.py" -v
           node docs/experiments/authored-vnext/04-renderer-security/tests/verify-corpus.mjs
-          npm run test:authored-renderer-isolation --prefix electron
-
-      - name: Observe real Electron renderer PID and security state
-        shell: bash
-        run: |
-          mkdir -p "$RUNNER_TEMP/authored-renderer-security"
-          set +e
-          node electron/scripts/authored-renderer-runtime-probe.cjs \
-            --build-packaged \
-            --package-output "$RUNNER_TEMP/authored-renderer-probe-package" \
-            --manifest "$RUNNER_TEMP/authored-renderer-security/electron-package.json"
-          package_code=$?
-          if test "$package_code" = "0"; then
-            executable=$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["executable"])' \
-              "$RUNNER_TEMP/authored-renderer-security/electron-package.json")
-            timeout --signal=TERM --kill-after=5s 45s \
-              xvfb-run -a --server-args="-screen 0 1280x720x24 -nolisten tcp" \
-              "$executable" \
-              --output "$RUNNER_TEMP/authored-renderer-security/electron-observation.json"
-            code=$?
-          else
-            code=$package_code
-          fi
-          python - "$RUNNER_TEMP/authored-renderer-security/electron-observation.json" "$code" <<'PY'
-          import json, pathlib, sys
-          path = pathlib.Path(sys.argv[1])
-          code = int(sys.argv[2])
-          if path.exists():
-              value = json.loads(path.read_text(encoding="utf-8"))
-          else:
-              value = {
-                  "schema_version": "authored-electron-security-observation/v1",
-                  "run_id": "electron-observation-missing",
-                  "controls": {},
-                  "observer_errors": [],
-              }
-          if code != 0:
-              value.setdefault("observer_errors", []).append(f"electron-probe-exit-{code}")
-          path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
-          PY
-          exit 0
 
       - name: Run no-volume disposable container and promotion gate
         id: dynamic-gate
@@ -92,11 +49,10 @@ jobs:
         env:
           AUTHORED_VNEXT_RENDERER_ENABLED: "true"
         run: |
+          mkdir -p "$RUNNER_TEMP/authored-renderer-security"
           set +e
           python contracts/authored-renderer/run_dynamic_gate.py \
             --output-dir "$RUNNER_TEMP/authored-renderer-security" \
-            --electron-observation "$RUNNER_TEMP/authored-renderer-security/electron-observation.json" \
-            --electron-package-manifest "$RUNNER_TEMP/authored-renderer-security/electron-package.json" \
             --source-revision "$GITHUB_SHA"
           code=$?
           printf '%s\n' "$code" > "$RUNNER_TEMP/authored-renderer-security/gate-exit-code.txt"

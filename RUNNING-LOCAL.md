@@ -1,10 +1,11 @@
 # Running Presenton locally on Windows
 
 This fork of [Presenton](https://github.com/presenton/presenton) adds a Korean UI and
-a few fixes needed to run the **web** and **Electron** versions natively on Windows
-(without Docker). Its authoritative upstream is the official Presenton project
-(`presenton/presenton`). The configured `origin` remote and local worktree branches
-are collaboration and delivery copies, not upstream sources of truth.
+a few fixes needed to run the **web** version natively on Windows (without Docker).
+This fork is web-only: there is no Electron desktop shell. Its authoritative upstream
+is the official Presenton project (`presenton/presenton`). The configured `origin`
+remote and local worktree branches are collaboration and delivery copies, not
+upstream sources of truth.
 
 > The git history was slimmed: large regenerable artifacts (PyInstaller builds, the
 > FastEmbed/ONNX model caches, downloaded export runtimes) are **not** committed.
@@ -23,16 +24,10 @@ are collaboration and delivery copies, not upstream sources of truth.
 - **PPTX/PDF export fix** — `servers/fastapi/utils/export_utils.py` seeds the export
   session cookie via the Next.js proxy so the headless render authenticates (modern
   Chromium drops CDP-set `Cookie` headers).
-- **Electron dev fixes** (`electron/app/`) — use system Node for LiteParse, disable
-  uvicorn `--reload`, raise server-readiness timeout to 300s.
-- **Cross-platform npm scripts** — `electron/package.json` `dev`/`build:*`/`clean:build`
-  use `node scripts/rmrf.cjs` instead of Unix `rm -rf`, so `npm run dev` runs natively
-  on Windows.
 
 ## Prerequisites
 Node LTS, Python 3.11, [uv](https://docs.astral.sh/uv/). For export/parsing:
-LibreOffice + ImageMagick + a Chrome/Chromium (the Electron app installs these on
-first run; for the web flow install them yourself).
+LibreOffice + ImageMagick + a Chrome/Chromium — install these yourself.
 
 ## Web version (supervised local stack)
 
@@ -140,25 +135,12 @@ native commands it derives that directory from `USER_CONFIG_PATH` when omitted.
 > never renders. The same applies to `npm run dev` and to headless verification
 > (Chromium/CDP screenshots) — start Next with `USER_CONFIG_PATH` set.
 
-## Electron version
-```powershell
-cd electron
-npm run setup:env      # electron deps + uv sync + nextjs npm install + export runtime
-npm run dev            # cleans app_dist, runs tsc, launches Electron (cross-platform)
-```
-Electron runs with `DISABLE_AUTH=true` (no login). Provider keys are set in-app
-(Settings) or via env at launch (`LLM`, `OPENAI_API_KEY`, `OPENAI_MODEL`, …).
-On Windows dev, set `PRESENTON_DEV_NODE_BINARY` to your system `node.exe` so LiteParse
-runs on system Node. Electron enables `MIGRATE_DATABASE_ON_STARTUP` for both the
-native development server and the packaged FastAPI binary, and keeps backend reload
-disabled.
-
 ## Automation: `scripts/ppt-agent.mjs`
 A zero-dependency Node 18+ CLI that drives deck generation over the API
 (`POST /api/v1/ppt/presentation/generate`). Defaults to Korean.
 
 ```powershell
-# single deck (Electron / DISABLE_AUTH backend — no credentials):
+# single deck (DISABLE_AUTH backend — no credentials):
 node scripts/ppt-agent.mjs --content "인공지능 개요와 활용 사례" --slides 3 --out ./out
 
 # web/Docker with HTTP Basic auth:
@@ -205,8 +187,8 @@ the exported PPTX in PowerPoint. The default adaptive/template path is unchanged
   스키마가 코드보다 몇 개 밀려 있는지 알려주니, 마이그레이션이 필요한 변경을 받았는지
   거기서 확인합니다.
 - **30종 카탈로그 확인:** web/Docker 인증이 켜진 경우 `-Credential`에 관리자 계정을
-  전달합니다. 인증이 꺼진 Electron 백엔드는 `$credential` 줄과 `-Credential` 인수를
-  생략합니다. 결과가 정확히 `30`이고, `strategic-navy` 같은 반환 `id`만 `--style`에
+  전달합니다. 인증이 꺼진(`DISABLE_AUTH=true`) 백엔드는 `$credential` 줄과 `-Credential`
+  인수를 생략합니다. 결과가 정확히 `30`이고, `strategic-navy` 같은 반환 `id`만 `--style`에
   사용합니다.
   ```powershell
   $base = "http://localhost:5000"

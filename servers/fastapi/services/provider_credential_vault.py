@@ -161,10 +161,6 @@ class CredentialBackend(Protocol):
     def delete(self, reference: CredentialRef) -> None: ...
 
 
-class DesktopVaultBackend(CredentialBackend, Protocol):
-    """Electron/desktop adapter interface (for example, OS keychain storage)."""
-
-
 class ServerKmsBackend(CredentialBackend, Protocol):
     """Server KMS/secret-manager adapter interface."""
 
@@ -482,7 +478,6 @@ __all__ = [
     "CredentialRef",
     "CredentialScope",
     "CredentialVaultError",
-    "DesktopVaultBackend",
     "AwsSecretsManagerCredentialBackend",
     "InMemoryCredentialBackend",
     "ProviderCredentialVault",

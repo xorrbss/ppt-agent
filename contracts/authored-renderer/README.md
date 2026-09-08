@@ -138,16 +138,16 @@ only in an approved disposable Linux Docker/VM worker. Missing Docker/VM
 observations remain `INCONCLUSIVE`; never translate a static PASS into dynamic
 containment evidence.
 
-On an approved disposable Linux runner with Docker Engine, cgroup v2, and a
-real Electron observation, run the repository-contained dynamic gate:
+On an approved disposable Linux runner with Docker Engine and cgroup v2, run
+the repository-contained dynamic gate:
 
 ```bash
 python contracts/authored-renderer/run_dynamic_gate.py \
   --output-dir "$PWD/artifacts/authored-renderer-security" \
-  --electron-observation "$PWD/artifacts/electron-observation.json" \
   --source-revision "$(git rev-parse HEAD)"
 ```
 
-The command exits nonzero unless every OCI, browser, deployment, resilience,
-and Electron observation passes. Omitting `--electron-observation` is permitted
-for OCI diagnosis only and remains `INCONCLUSIVE` for promotion.
+The command exits nonzero unless every OCI, browser, deployment, and resilience
+observation passes. The Electron half of this gate was retired with the desktop
+shell, so the container observation is now the whole of the evidence and decides
+promotion on its own.

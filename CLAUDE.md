@@ -4,18 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Presenton is an open-source, self-hostable AI presentation generator (Gamma/Beautiful AI alternative). It generates editable slide decks from prompts or uploaded documents, renders them with HTML+Tailwind templates, and exports to fully-editable PPTX and PDF. It ships as a Docker image, an Electron desktop app, and an HTTP API (plus an MCP server).
+Presenton is an open-source, self-hostable AI presentation generator (Gamma/Beautiful AI alternative). It generates editable slide decks from prompts or uploaded documents, renders them with HTML+Tailwind templates, and exports to fully-editable PPTX and PDF. It ships as a Docker image and an HTTP API (plus an MCP server).
 
-**This repository is a fork** (`bitbucket.org/ibizsoftware/devax-ppt`) of `github.com/presenton/presenton`. The fork has diverged substantially: Korean UI, Windows-native operation without Docker, a Korean-business template set, and a large second generation pipeline (see "Two generation pipelines" below). Roughly 1,580 source files / 417k lines: `servers/fastapi` ~707 files, `servers/nextjs` ~770, `electron` ~80.
+**This repository is a fork** (`bitbucket.org/ibizsoftware/devax-ppt`) of `github.com/presenton/presenton`. The fork has diverged substantially: Korean UI, Windows-native operation without Docker, a Korean-business template set, and a large second generation pipeline (see "Two generation pipelines" below). This fork is **web-only**: it does not ship or support the upstream Electron desktop shell (there is no `electron/` directory here). Roughly 1,500 source files: `servers/fastapi` ~707 files, `servers/nextjs` ~770.
 
-## Architecture: one product, three runtimes
+## Architecture: one product, two runtimes
 
-The same FastAPI backend + Next.js frontend pair runs inside two packaging shells. Understand this first — almost every file lives in one of these two servers, and both packagings reuse them:
+The same FastAPI backend + Next.js frontend pair is what the whole product is built from. Understand this first — almost every file lives in one of these two servers:
 
 - **`servers/fastapi/`** — Python 3.11 FastAPI backend (managed by `uv`). All generation logic, LLM/image provider abstraction, persistence, and PPTX/PDF export live here. ~33 endpoint modules and ~96 service modules.
 - **`servers/nextjs/`** — Next.js 16 (App Router) frontend + thin API proxy layer. The slide editor, built-in templates, and Redux state live here.
-- **`electron/`** — Desktop shell that bundles the two servers above. When packaging desktop builds, FastAPI is frozen with PyInstaller and Next.js is prebuilt. (Upstream `CONTRIBUTING.md` says contributions should live inside `electron/`; that is an upstream statement — in this fork most work happens outside it, and the CI gates all live outside it.)
-- **`scripts/` + root `start.js`** — `start.js` is the Docker container entrypoint. It boots **nginx (port 80)** as a reverse proxy in front of **Next.js (3000)** and **FastAPI (8000)**, plus a standalone **MCP server (8001)**, and writes `app_data/userConfig.json` from env vars. `scripts/sync-presentation-export.cjs` downloads the versioned `presentation-export` runtime that performs PPTX/PDF export (version pinned by `presentationExportVersion` in root `package.json`).
+- **`scripts/` + root `start.js`** — `start.js` is the Docker container entrypoint. It boots **nginx (port 80)** as a reverse proxy in front of **Next.js (3000)** and **FastAPI (8000)**, plus a standalone **MCP server (8001)**, and writes `app_data/userConfig.json` from env vars. `scripts/sync-presentation-export.cjs` downloads the versioned `presentation-export` runtime that performs PPTX/PDF export (version pinned by `presentationExportVersion` in root `package.json`). `scripts/presenton-local-proxy.mjs` and `scripts/start-local-stack.ps1` provide the equivalent single-origin routing and process orchestration for a native (non-Docker) Windows run — see `RUNNING-LOCAL.md`.
 
 Supporting top-level directories that are easy to miss:
 
@@ -63,14 +62,6 @@ docker compose up production           # production image (Dockerfile)
 ```
 App is served at http://localhost:5000. Provider keys come from a `.env` next to `docker-compose.yml` (see the long env table in `README.md`).
 
-**Electron.** Requires Node LTS, npm, Python 3.11, and `uv`:
-```bash
-cd electron
-npm run setup:env     # installs electron deps, runs `uv sync` in fastapi, `npm install` in nextjs, fetches export runtime
-npm run dev           # tsc + launch Electron with bundled backend/UI
-npm run build:all     # full distributable build (Next.js prebuild + PyInstaller FastAPI + electron-builder)
-```
-
 **Per-service (fastest iteration on one server):**
 ```bash
 # Backend — APP_DATA_DIRECTORY is REQUIRED or start.js/server.py throws
@@ -85,15 +76,14 @@ npm run dev                                     # localhost:3000; set NEXT_PUBLI
 
 ## 이 포크: Windows 네이티브 + 한글 (`RUNNING-LOCAL.md` 참고)
 
-업스트림 `presenton/presenton`을 포크하여 한글 UI와, Docker 없이 Windows에서 **web**·**Electron** 앱을 네이티브로 실행하는 데 필요한 수정을 추가한 버전이다. 위의 업스트림 기준 Docker 안내도 여전히 동작하지만, 여기서의 일상 개발은 Docker 없는 경로를 사용한다.
+업스트림 `presenton/presenton`을 포크하여 한글 UI와, Docker 없이 Windows에서 **web** 앱을 네이티브로 실행하는 데 필요한 수정을 추가한 버전이다. 이 포크는 web-only이며 Electron 데스크톱 셸을 제공하지 않는다(`electron/` 디렉터리 없음). 위의 업스트림 기준 Docker 안내도 여전히 동작하지만, 여기서의 일상 개발은 Docker 없는 경로를 사용한다.
 
 - **한글 UI / 기본값:** 앱 화면(chrome)이 번역되어 있고, 기본 프레젠테이션 언어는 한국어다(`upload/components/UploadPage.tsx`). API 값, 프로바이더/모델 ID, 로직 리터럴은 영어로 유지한다. 사용자 표시 문자열은 `next-intl`과 `i18n/messages/{en,ko}.json`을 사용하고, 새 감사 대상 화면은 `tests/i18n-audited-surfaces.test.mjs` 및 `npm run check:i18n` 게이트에 포함한다.
 - **단일 오리진 프록시 (로컬에서 nginx 대체):** `node scripts/presenton-local-proxy.mjs`가 `nginx.conf`를 그대로 반영하여 `http://localhost:5000` → Next.js:3000 / FastAPI:8000 / MCP:8001로 라우팅한다. 포트는 `PROXY_PORT`/`NEXT_PORT`/`FASTAPI_PORT`/`MCP_PORT` 환경변수로 바꾼다. 브라우저 프론트엔드는 단일 오리진을 전제로 하므로, web 플로우에서는 (raw `npm run start`가 아니라) 이 프록시를 실행한다.
 - **Windows 백엔드는** `APP_DATA_DIRECTORY` **와** `USER_CONFIG_PATH` **둘 다 필요**하며, uvicorn은 `--reload false`로 실행한다(이 포크에서 reloader 비활성화). 리로더가 없으므로 백엔드 코드를 바꾸면 프로세스를 직접 재시작해야 한다.
 - **기존 `app_data`를 재사용해 업그레이드할 때는** `MIGRATE_DATABASE_ON_STARTUP=true` **를 반드시 설정한다.** 이 값이 정확히 `"true"`가 아니면 마이그레이션이 조용히 건너뛰어지고, 새 DB는 `create_db_and_tables()`로 생성되기 때문에 오류 없이 스키마만 어긋난다.
-- **`npm run dev` (electron)** 는 크로스플랫폼이다 — `rm -rf` 대신 `node scripts/rmrf.cjs`(`electron/scripts/rmrf.cjs`)를 써서 Windows에서도 동작한다. Electron은 `DISABLE_AUTH=true`로 실행된다. LiteParse가 시스템 Node에서 동작하도록 `PRESENTON_DEV_NODE_BINARY`에 시스템 `node.exe` 경로를 설정한다.
 - **Export 수정:** `utils/export_utils.py`가 Next.js 프록시를 통해 export 세션 쿠키를 주입한다(최신 Chromium은 CDP로 설정한 `Cookie` 헤더를 무시함).
-- **자동화 CLI:** `scripts/ppt-agent.mjs`는 `POST /api/v1/ppt/presentation/generate`를 호출하는 의존성 없는 Node 18+ 클라이언트다(기본 한국어). 단건 또는 `--batch <파일>`, `--slides <n|auto>`, `--async`, `--language`, `--template`, `--style`, `--tone`, `--verbosity`, `--web-search`, `--toc`, `--no-title`, `--export pptx|pdf`, `--base`/`--ui-base`, `--user`/`--password`, `--out <디렉터리>`, `--timeout` 지원. Electron/`DISABLE_AUTH` 백엔드 대상에서는 자격 증명이 필요 없다. 재시도·재개 기능은 없으므로 배치 중간 실패 시 전체를 다시 돌려야 한다.
+- **자동화 CLI:** `scripts/ppt-agent.mjs`는 `POST /api/v1/ppt/presentation/generate`를 호출하는 의존성 없는 Node 18+ 클라이언트다(기본 한국어). 단건 또는 `--batch <파일>`, `--slides <n|auto>`, `--async`, `--language`, `--template`, `--style`, `--tone`, `--verbosity`, `--web-search`, `--toc`, `--no-title`, `--export pptx|pdf`, `--base`/`--ui-base`, `--user`/`--password`, `--out <디렉터리>`, `--timeout` 지원. `DISABLE_AUTH` 백엔드 대상에서는 자격 증명이 필요 없다. 재시도·재개 기능은 없으므로 배치 중간 실패 시 전체를 다시 돌려야 한다.
 
 ## Build / test / lint commands
 
@@ -127,14 +117,16 @@ npm run test:upstream-byte-parity
 npm run check:presentation-export   # verify the pinned export runtime is present
 ```
 
-**Electron:** `npm run typecheck` (`tsc --noEmit`), `npm run lint:main`. Neither runs in CI.
+**CI gates.** This fork's `origin` is Bitbucket (`bitbucket.org/ibizsoftware/devax-ppt`); the `upstream` GitHub remote (`presenton/presenton`) has push disabled. **`.github/workflows/*.yml` therefore does not run for this fork's actual pull requests** — GitHub Actions only fires on pushes/PRs against a repository hosted on GitHub, and this repo's branches live on Bitbucket. Read those workflow files as reference material (they describe what upstream's own CI does, and are kept path-parity-checked against upstream), not as gates that block a merge here.
 
-**CI gates.** `.github/workflows/test-all.yml` runs three jobs on PRs to `main`: `test-fastapi` (Ruff, full pytest with `uv sync --frozen`, plus a PyInstaller build), `test-nextjs` (`test:next-ci` → `tsc --noEmit` → eslint → `next build` → 22 named Cypress specs), and `workspace-e2e` (xvfb browser run). Five more workflows are path-filtered (`template-v2-export-fidelity`, `upstream-compatibility`, `upstream-intake`, `cross-platform-packaging-security`, `g4-pptx-roundtrip`). `bitbucket-pipelines.yml` requires the shared Next Node suite, Dashboard Cypress component gate, upstream byte parity, and chat-first E2E on pull requests and `main`. `scripts/required-ci-contract.test.mjs` is a meta-test that asserts these workflow contracts — if you change them, update the contract test too.
+**`bitbucket-pipelines.yml` is the CI that actually runs**, on `pull-requests: "**"` and on the `main` branch: `authored-release-readiness-config` (`node scripts/verify-authored-release-required-checks.mjs`), `nextjs-ci-node-contracts` (`npm ci` + `npm run test:next-ci`), `dashboard-component-gate` (the `DashboardPage.cy.tsx` Cypress component spec), `upstream-byte-parity-check` (`npm run check:upstream-byte-parity`), and `workspace-chat-first-e2e` (`uv run ruff check .`, the template-v2 contract check, and `npm run test:workspace-e2e` under `xvfb-run`). Note this pipeline does not run the full FastAPI pytest suite — only `ruff check .` — so pytest coverage for a `servers/fastapi` change has to be verified locally.
+
+For reference, `.github/workflows/test-all.yml` (as written, not run here) has three jobs: `test-fastapi` (Ruff, full pytest with `uv sync --frozen`), `test-nextjs` (`test:next-ci` → `tsc --noEmit` → eslint → `next build` → 22 named Cypress specs), and `workspace-e2e` (xvfb browser run). Five more workflows are path-filtered (`template-v2-export-fidelity`, `upstream-compatibility`, `upstream-intake`, `cross-platform-packaging-security`, `g4-pptx-roundtrip`). `scripts/required-ci-contract.test.mjs` is a meta-test that asserts these workflow contracts — if you change them, update the contract test too.
 
 ## FastAPI backend internals
 
 - **Entry/routing:** `server.py` → `api/main.py`. Routers: `api/v1/ppt` (the bulk), `api/v1/auth`, `api/v1/admin`, `api/v1/async_tasks`, `api/v1/webhook`, and `api/v1/mock` (registered conditionally). REST endpoints live under `api/v1/ppt/endpoints/` — ~33 modules including `presentation.py`, `presentation_generate.py`, `presentation_crud.py`, `presentation_share.py`, `presentation_versions.py`, `workspace.py`, `authored.py`, `structured_templates.py`, `template_v2_compat.py`, `outlines.py`, `slide.py`, `slide_to_html.py`, `pptx_slides.py`/`pdf_slides.py`, `theme.py`/`theme_generate.py`, `images.py`, `icons.py`, `fonts.py`, `files.py`, `file_decompose_jobs.py`, `chat.py`, `layouts.py`, `prompts.py`, plus provider auth modules (`openai.py`, `anthropic.py`, `google.py`, `ollama.py`, `codex_auth.py`).
-- **Auth:** `api/middlewares.py`. `SessionAuthMiddleware` treats **every** `/api/` and `/app_data/` path as protected; the only exemptions are `/api/v1/auth/` and the token-only public share prefix. `/docs`, `/openapi.json`, `/redoc` are explicitly protected, not exempt. Auth decisions run on the **normalized** path so dot-segment traversal cannot ride an exemption. `DISABLE_AUTH=true` bypasses the whole middleware (Electron uses this).
+- **Auth:** `api/middlewares.py`. `SessionAuthMiddleware` treats **every** `/api/` and `/app_data/` path as protected; the only exemptions are `/api/v1/auth/` and the token-only public share prefix. `/docs`, `/openapi.json`, `/redoc` are explicitly protected, not exempt. Auth decisions run on the **normalized** path so dot-segment traversal cannot ride an exemption. `DISABLE_AUTH=true` bypasses the whole middleware (used for single-user local/dev runs).
 - **Generation pipeline** (trace from `endpoints/presentation_generate.py`): parse inputs (`services/documents_loader.py`, `services/liteparse_service.py`) → outline (`utils/llm_calls/generate_presentation_outlines.py`) → strategy branch (see "Two generation pipelines") → per-slide content (`generate_slide_content.py`, or `author_slide.py` for authored) → images (`services/image_generation_service.py`) → persist (`models/sql/*`) → export (`services/export_task_service.py`, which renders via headless Chromium / the bundled export runtime).
 - **Background workers** run **in-process** inside FastAPI via `api/lifespan.py`: presentation-generation dispatcher, template-v2 pptx dispatcher and cleanup, workspace operation runner + outbox dispatcher, workspace cleanup/asset/event maintenance, export retention sweeper. Some can be externalized — see `get_workspace_operation_worker_mode()`.
 - **LLM provider abstraction:** `utils/llm_provider.py` + `utils/llm_config.py` wrap the `llmai` library and select among 15 providers (`enums/llm_provider.py`). Image providers are in `enums/image_provider.py` (10, including local ComfyUI/Open WebUI and a `DISABLE_IMAGE_GENERATION` placeholder path). Add provider logic here, not in endpoints.

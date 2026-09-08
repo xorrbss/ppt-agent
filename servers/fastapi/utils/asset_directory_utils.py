@@ -29,7 +29,7 @@ def _owned_directory(root_name: str) -> str:
 def absolute_fastapi_asset_url(path: str) -> str:
     """
     Turn a FastAPI-served path (/app_data/..., /static/...) into a full URL when the public
-    base is configured (split Next + FastAPI, e.g. Electron); otherwise return the path.
+    base is configured (Next.js and FastAPI running as separate processes/ports); otherwise return the path.
     """
     p = (path or "").strip()
     if not p:
@@ -63,7 +63,7 @@ def filesystem_image_path_to_app_data_url(path_or_url: str) -> str:
     Raw absolute paths (Linux/macOS/Windows) are interpreted by the browser as paths on the
     web origin (e.g. Next.js), so AI-generated images break while https stock URLs work.
     Map known app-data image files to FastAPI's /app_data/images/... mount, as an absolute
-    URL when NEXT_PUBLIC_FAST_API is set (Electron).
+    URL when NEXT_PUBLIC_FAST_API is set (Next.js and FastAPI on separate ports).
     """
     if not path_or_url or not isinstance(path_or_url, str):
         return path_or_url

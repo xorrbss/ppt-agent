@@ -3,8 +3,10 @@
 ## Scope
 
 This document fixes the contract for confirming an AI-authored template change
-from an existing presentation. It applies to the FastAPI confirmation endpoint,
-the Next.js presentation workspace, and the Electron window boundary.
+from an existing presentation. It applies to the FastAPI confirmation endpoint
+and the Next.js presentation workspace. (It previously also covered an Electron
+window boundary; this fork is web-only and no longer ships Electron — see
+"Electron trust boundary (retired)" below.)
 
 The legacy retemplate endpoint remains available to non-workspace callers. It
 queues a derived deck and is covered by
@@ -155,41 +157,41 @@ If confirmation fails, any reserved blank popup is closed and the current
 source page remains in place. No completion card or target link is appended to
 the source timeline.
 
-## Electron trust boundary
+## Electron trust boundary (retired)
 
-Electron treats an internal presentation popup as trusted only when all of the
-following hold:
+This fork is web-only and does not ship or support an Electron desktop shell
+(see `CLAUDE.md`). The trust-boundary rules that used to live here governed how
+Electron's main process decided whether to trust a presentation popup window it
+was asked to create (origin/path/query checks, an `about:blank` staging-child
+exception, deduplication by origin + presentation ID, and a same-tab fallback
+when popup creation was denied).
 
-- the URL uses HTTP(S), has no user information, and matches the exact runtime
-  app origin (scheme, host, and port);
-- the normalized path is exactly `/presentation` or `/presentation/`;
-- the `id` query parameter is non-blank and bounded;
-- the child uses the app's isolated renderer preferences and preload policy.
-
-Trusted presentation popups are deduplicated by origin plus presentation ID.
-The presentation child may navigate only within trusted presentation routes.
-The literal `about:blank` is the sole non-HTTP(S) exception: Electron may admit
-it as an inert anonymous staging child owned by the opener. Chromium reports
-`target="_blank"` as either `_blank` or an empty frame name, so those two values
-are accepted while every reusable explicit name remains blocked. That child
-may transition only once to a trusted presentation URL. It cannot open further
-popups or navigate elsewhere.
-Other HTTP(S) URLs keep the existing external-browser policy, and unsupported
-schemes such as `javascript:`, `data:`, and `file:` are denied. A denied or
-failed child creation remains observable as a null popup so the renderer's
-same-tab fallback still runs.
+As of this edit, `AuthoredTemplateChanger.tsx` no longer opens a popup for this
+flow at all — the confirmation redirect navigates the current tab directly via
+`navigateToPresentation` / `router.push` / `window.location.assign` (see
+"Browser popup and fallback contract" above, which may itself be stale relative
+to current code and should be re-verified against that component rather than
+assumed from this document). In an ordinary browser (no Electron main process
+mediating window creation), same-tab navigation to a same-origin
+`/presentation?id=...` route needs no custom trust boundary beyond normal
+browser same-origin policy; there is no separate web-equivalent security
+control to add here unless a future change reintroduces a popup/new-window
+flow, in which case it should get its own reviewed origin/path allowlist.
 
 ## Regression evidence
 
 The pre-change source-owned behavior was pinned by the authored retemplate
 tests, `test_workspace_authored_template_operation_handler.py`, the
-`PresentationHeader`/`WorkspaceChatPanel` Cypress tests, and Electron's original
-external-open handler. The dedicated target-owned regression files are:
+`PresentationHeader`/`WorkspaceChatPanel` Cypress tests, and (historically, in
+the now-removed `electron/`) Electron's original external-open handler. The
+dedicated target-owned regression files are:
 
 - `servers/fastapi/tests/regression/test_ai_authored_template_target_workspace_contract.py`
 - `servers/nextjs/app/(presentation-generator)/presentation/components/AuthoredTemplateChanger.target-workspace.cy.tsx`
-- `electron/tests/template-workspace-trust-boundary.test.cjs`
+
+(`electron/tests/template-workspace-trust-boundary.test.cjs` no longer exists;
+it was removed with `electron/`.)
 
 Together they pin the required header/body/receipt, atomic target graph,
-idempotent replay and conflict behavior, source immutability, popup fallback,
-and exact Electron same-origin presentation boundary.
+idempotent replay and conflict behavior, source immutability, and popup
+fallback.

@@ -103,10 +103,6 @@ const DocumentsPreviewPage: React.FC = () => {
   };
 
   const readFile = useCallback(async (filePath: string) => {
-    if (typeof window !== "undefined" && window.electron?.readFile) {
-      return window.electron.readFile(filePath);
-    }
-
     const res = await fetch(`/api/read-file`, {
       method: "POST",
       body: JSON.stringify({ filePath }),

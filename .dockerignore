@@ -42,8 +42,6 @@ servers/nextjs/tsconfig.tsbuildinfo
 **/*.cy.ts
 **/*.cy.tsx
 
-electron
-
 servers/fastapi/tmp
 servers/fastapi/debug
 servers/fastapi/.venv

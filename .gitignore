@@ -66,7 +66,6 @@ servers/fastapi/fastembed_cache/
 servers/fastapi/chroma/
 servers/fastapi/build/
 servers/fastapi/dist/
-electron/servers/
 servers/nextjs/cypress/screenshots/
 servers/nextjs/cypress/videos/
 servers/nextjs/cypress/downloads/
@@ -80,11 +79,7 @@ servers/fastapi/.codex-backend.*.log
 servers/fastapi/backend-template-card.*.log
 servers/fastapi/.pytest-*/
 servers/nextjs/test-results/
-electron/kor.traineddata
 
-# Release candidates are generated and quarantined by CI. Only signed release
-# manifests deliberately added through the release process belong in Git.
-electron/dist/
 test-artifacts/
 
 # Disposable packaged renderer probes are rebuilt from the checked-in probe,

@@ -31,7 +31,7 @@
 //   --out <dir>                 output directory for runs.jsonl / summary.json / summary.md (required)
 //   --app-data <dir>            APP_DATA_DIRECTORY to read receipts from
 //                                (default: $APP_DATA_DIRECTORY env var)
-//   --user <u> --password <p>   HTTP Basic creds (omit for Electron DISABLE_AUTH)
+//   --user <u> --password <p>   HTTP Basic creds (omit for DISABLE_AUTH)
 //   --timeout <sec>             per-run poll timeout in seconds (default 900)
 //   --poll-interval-ms <ms>     status poll interval (default 5000)
 //   --success-min <0..1>        phase-1 success-rate threshold (default 0.8)

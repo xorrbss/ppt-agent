@@ -315,15 +315,10 @@ export const handleSaveLLMConfig = async (llmConfig: LLMConfig) => {
     throw new Error(validationError);
   }
 
-  // Prefer shared API routes; fallback to Electron IPC for packaged compatibility.
-  if (typeof window !== "undefined" && window.electron?.setUserConfig) {
-    await window.electron.setUserConfig(normalizedConfig);
-  } else {
-    await fetch("/api/user-config", {
-      method: "POST",
-      body: JSON.stringify(normalizedConfig),
-    });
-  }
+  await fetch("/api/user-config", {
+    method: "POST",
+    body: JSON.stringify(normalizedConfig),
+  });
 
   store.dispatch(setLLMConfig(normalizedConfig));
 };

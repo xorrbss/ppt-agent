@@ -71,69 +71,6 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _portable_electron_executable(value: str) -> Path:
-    if os.name != "nt" and len(value) >= 3 and value[1:3] in (":\\", ":/"):
-        drive = value[0].lower()
-        tail = value[3:].replace("\\", "/")
-        return Path(f"/mnt/{drive}/{tail}")
-    return Path(value)
-
-
-def _verify_electron_package(
-    package_path: Path, observation_path: Path
-) -> dict[str, Any]:
-    package = json.loads(package_path.read_text(encoding="utf-8"))
-    observation = json.loads(observation_path.read_text(encoding="utf-8"))
-    if package.get("schema_version") != "authored-electron-probe-package/v2":
-        raise RuntimeError("Electron package provenance schema is unsupported")
-    provenance = package.get("policy_provenance")
-    if not isinstance(provenance, dict) or provenance.get("schema") != (
-        "presenton.authored-renderer-policy-provenance/v1"
-    ):
-        raise RuntimeError("Electron policy provenance is missing")
-    expected_paths = {
-        "source": "app/utils/authored-renderer-policy.ts",
-        "compiled": "app_dist/utils/authored-renderer-policy.js",
-        "tsconfig": "tsconfig.json",
-    }
-    for name, relative in expected_paths.items():
-        binding = provenance.get("bindings", {}).get(name, {})
-        source = REPOSITORY_ROOT / "electron" / relative
-        if binding.get("path") != relative or binding.get("sha256") != _sha256(source):
-            raise RuntimeError(f"Electron policy {name} provenance is stale")
-    probe = REPOSITORY_ROOT / "electron" / "scripts" / "authored-renderer-runtime-probe.cjs"
-    if package.get("probe_source_sha256") != _sha256(probe):
-        raise RuntimeError("Electron packaged probe source provenance is stale")
-    if package.get("policy_sha256") != provenance["bindings"]["compiled"]["sha256"]:
-        raise RuntimeError("Electron compiled policy provenance is inconsistent")
-    local_manifest = REPOSITORY_ROOT / "electron" / "app_dist" / (
-        ".authored-renderer-policy-provenance.json"
-    )
-    manifest_digest = _sha256(local_manifest)
-    if package.get("policy_provenance_manifest_sha256") != manifest_digest:
-        raise RuntimeError("Electron policy provenance manifest is stale")
-    if observation.get("policy_provenance_manifest_sha256") != manifest_digest:
-        raise RuntimeError("Electron observation did not load the attested policy manifest")
-    executable = _portable_electron_executable(package.get("executable", ""))
-    if not executable.is_file() or package.get("executable_sha256") != _sha256(executable):
-        raise RuntimeError("Electron packaged executable provenance is stale")
-    if observation.get("executable_sha256") != package.get("executable_sha256"):
-        raise RuntimeError("Electron observation executable does not match the package")
-    controls = observation.get("controls")
-    if not isinstance(controls, dict) or controls.get(
-        "compiled_policy_matches_build_provenance"
-    ) is not True:
-        raise RuntimeError("Electron packaged policy provenance was not observed")
-    return {
-        "schema_version": package["schema_version"],
-        "executable_sha256": package["executable_sha256"],
-        "policy_source_sha256": provenance["bindings"]["source"]["sha256"],
-        "policy_compiled_sha256": provenance["bindings"]["compiled"]["sha256"],
-        "policy_provenance_manifest_sha256": manifest_digest,
-        "probe_source_sha256": package["probe_source_sha256"],
-    }
-
-
 def _revision(docker: str, configured: str) -> str:
     if configured:
         value = configured
@@ -197,8 +134,6 @@ def _product_readiness(docker: str, container: str, timeout: float = 30.0) -> di
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--electron-observation", type=Path)
-    parser.add_argument("--electron-package-manifest", type=Path)
     parser.add_argument("--source-revision", default="")
     parser.add_argument("--skip-build", action="store_true")
     args = parser.parse_args()
@@ -261,20 +196,6 @@ def main() -> int:
                 (HARNESS_ROOT / "runtime.mjs").read_bytes()
             ).hexdigest(),
         }
-        if args.electron_observation:
-            if not args.electron_package_manifest:
-                raise RuntimeError(
-                    "--electron-package-manifest is required with --electron-observation"
-                )
-            electron_observation = args.electron_observation.resolve()
-            electron_package = args.electron_package_manifest.resolve()
-            lifecycle["electron_package_provenance"] = _verify_electron_package(
-                electron_package, electron_observation
-            )
-            evidence_package = (output / "electron-package.json").resolve()
-            if electron_package != evidence_package:
-                shutil.copyfile(electron_package, evidence_package)
-
         image_id = _run([
             docker, "image", "inspect", PRODUCT_IMAGE, "--format", "{{.Id}}",
         ], timeout=30).stdout.decode().strip()
@@ -356,16 +277,6 @@ def main() -> int:
         ], env=environment, timeout=30, check=False)
 
         gate_input = observation_path
-        if args.electron_observation:
-            electron = args.electron_observation.resolve()
-            if not electron.is_file():
-                raise RuntimeError("Electron observation does not exist")
-            gate_input = output / "combined-observation.json"
-            _run([
-                sys.executable, str(EXPERIMENT_ROOT / "ci" / "combine_observations.py"),
-                "--container", str(observation_path), "--electron", str(electron),
-                "--output", str(gate_input),
-            ], timeout=30)
         gate = _run([
             sys.executable, str(EXPERIMENT_ROOT / "ci" / "security_gate.py"),
             "--input", str(gate_input), "--output-dir", str(output),

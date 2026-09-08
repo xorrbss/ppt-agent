@@ -33,14 +33,14 @@
 //   --base <url>             backend (API) base URL (default http://127.0.0.1:8000)
 //   --ui-base <url>          UI origin for the printed edit URL (default: --base origin).
 //                            Useful for web/Docker where the UI origin differs from the API --base
-//   --user <u> --password <p>  HTTP Basic creds for web/Docker (omit for Electron DISABLE_AUTH)
+//   --user <u> --password <p>  HTTP Basic creds for web/Docker (omit for DISABLE_AUTH)
 //   --out <dir>              download the produced file into <dir>
 //   --async                  use the async generate endpoint and poll status to completion
 //   --timeout <sec>          per-request / overall poll timeout in seconds (default 600)
 //   -h, --help               show this help
 //
 // Examples:
-//   # Electron (DISABLE_AUTH=true) — no credentials:
+//   # DISABLE_AUTH=true backend — no credentials:
 //   node scripts/ppt-agent.mjs --content "Quarterly sales review" --slides 10 --out ./out
 //
 //   # Web/Docker with HTTP Basic auth:
@@ -135,7 +135,7 @@ function printHelpAndExit() {
       "  --toc                   include_table_of_contents=true (default false)",
       "  --base <url>            API base URL, default http://127.0.0.1:8000",
       "  --ui-base <url>         UI origin for edit URL (default: --base origin)",
-      "  --user <u> --password <p>  HTTP Basic (omit for Electron)",
+      "  --user <u> --password <p>  HTTP Basic (omit for DISABLE_AUTH)",
       "  --out <dir>             download produced file into <dir>",
       "  --async                 use async endpoint + poll status",
       "  --timeout <sec>         per-request / overall poll timeout, default 600",
@@ -280,7 +280,7 @@ async function generateOne(content, opts) {
     }
     if (res.status === 401) {
       throw new Error(
-        `HTTP 401 Unauthorized — ${detail}. Provide --user/--password (web/Docker) or run against an Electron DISABLE_AUTH backend.`
+        `HTTP 401 Unauthorized — ${detail}. Provide --user/--password (web/Docker) or run against a DISABLE_AUTH backend.`
       );
     }
     throw new Error(`HTTP ${res.status}: ${detail}`);
@@ -309,7 +309,7 @@ function throwForStatus(res, json, text, descr) {
   }
   if (res.status === 401) {
     throw new Error(
-      `HTTP 401 Unauthorized — ${detail}. Provide --user/--password (web/Docker) or run against an Electron DISABLE_AUTH backend.`
+      `HTTP 401 Unauthorized — ${detail}. Provide --user/--password (web/Docker) or run against a DISABLE_AUTH backend.`
     );
   }
   throw new Error(`${descr} failed HTTP ${res.status}: ${detail}`);
@@ -442,7 +442,7 @@ async function downloadExport(result, opts) {
 
 function reportResult(content, result, opts, savedTo) {
   // The edit URL targets the UI origin (--ui-base) when given; otherwise it falls
-  // back to the API --base origin (in Electron/local they are the same).
+  // back to the API --base origin (in a local run they are the same).
   const origin = originOf(opts.uiBase || opts.base);
   const editUrl = result.edit_path
     ? `${origin}${result.edit_path.startsWith("/") ? "" : "/"}${result.edit_path}`
@@ -523,7 +523,7 @@ async function main() {
 
   // Auth: both --user and --password required together for Basic.
   if ((args.user && !args.password) || (!args.user && args.password)) {
-    die(`--user and --password must be provided together (or omit both for Electron DISABLE_AUTH)`);
+    die(`--user and --password must be provided together (or omit both for DISABLE_AUTH)`);
   }
 
   const opts = {

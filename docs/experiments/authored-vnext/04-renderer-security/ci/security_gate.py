@@ -64,30 +64,6 @@ CONTAINMENT_EXPECTATIONS = (
     ("crash_cleanup", True, "A crashed renderer was reaped without a surviving process"),
 )
 
-ELECTRON_EXPECTATIONS = (
-    ("renderer_pid_observed", True, "Electron reported a real renderer OS PID"),
-    ("renderer_process_metric_observed", True, "Electron process metrics matched the renderer PID"),
-    ("packaged_runtime_observed", True, "The observation came from a packaged Electron executable"),
-    ("os_sandboxed", True, "Electron reported the renderer as OS-sandboxed"),
-    ("actual_web_preferences_observed", True, "Electron reported the applied renderer webPreferences"),
-    ("sandbox_preference", True, "Electron's configured sandbox preference was enabled"),
-    ("web_security", True, "Electron's configured webSecurity preference was enabled"),
-    ("context_isolation", True, "Electron's configured contextIsolation preference was enabled"),
-    ("node_integration_disabled", True, "Electron's configured Node integration preference was disabled"),
-    ("subframe_node_integration_disabled", True, "Electron subframe Node integration was disabled"),
-    ("worker_node_integration_disabled", True, "Electron worker Node integration was disabled"),
-    ("preload_absent", True, "The disposable authored renderer had no preload"),
-    ("configured_preferences_match_actual", True, "Configured and applied security preferences matched"),
-    ("ipc_negative_probe_blocked", True, "Active privileged IPC attempts from the renderer were blocked"),
-    ("privileged_bridge_absent", True, "The renderer exposed no require/process/Electron bridge"),
-    ("ephemeral_session", True, "The renderer used an ephemeral in-memory session"),
-    (
-        "compiled_policy_matches_build_provenance",
-        True,
-        "The packaged compiled policy matched its TypeScript build provenance",
-    ),
-)
-
 DEPLOYMENT_EXPECTATIONS = (
     ("product_worker_smoke", True, "The exact isolated product worker rendered a safe PNG"),
     ("image_id_observed", True, "The executed immutable image ID was observed"),
@@ -297,7 +273,6 @@ def evaluate_document(document: dict[str, Any], source_digest: str = "") -> dict
     execution = _object_or_none(document, "execution")
     containment = _object_or_none(document, "containment")
     boundaries = _object_or_none(document, "boundaries")
-    electron = _object_or_none(document, "electron")
     deployment = _object_or_none(document, "deployment")
     resilience = _object_or_none(document, "resilience")
 
@@ -312,10 +287,6 @@ def evaluate_document(document: dict[str, Any], source_digest: str = "") -> dict
         for key, expected, title in CONTAINMENT_EXPECTATIONS
     )
     checks.extend(_boundary_check(boundaries, key, title) for key, title in BOUNDARIES)
-    checks.extend(
-        _boolean_check(electron, key, expected, title, "electron")
-        for key, expected, title in ELECTRON_EXPECTATIONS
-    )
     checks.extend(
         _boolean_check(deployment, key, expected, title, "deployment")
         for key, expected, title in DEPLOYMENT_EXPECTATIONS

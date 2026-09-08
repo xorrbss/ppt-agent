@@ -164,8 +164,6 @@ const nextConfig = {
     "/*": [
       "../../.git/**/*",
       "../../.cache/**/*",
-      "../../electron/dist/resources/**/*",
-      "../../electron/src/**/*",
       "../../docs/**/*",
       "../../servers/fastapi/**/*",
       "../../**/.next*/cache/**/*",

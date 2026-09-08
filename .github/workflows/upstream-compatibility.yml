@@ -67,15 +67,6 @@ on:
       - "docs/runtime-settings-multiworker-sync.md"
       - "docs/template-v2-canary-rehearsal-prompt-20260725.md"
       - "docs/template-v2-canary-runbook.md"
-      - "electron/app/main.ts"
-      - "electron/app/ipc/user_config_handlers.ts"
-      - "electron/app/utils/index.ts"
-      - "electron/app/utils/user-config-merge.ts"
-      - "electron/app/utils/resource-root.ts"
-      - "electron/package.json"
-      - "electron/tests/runtime-settings-refresh.test.cjs"
-      - "electron/scripts/verify-packaging-inputs.cjs"
-      - "electron/scripts/export-runtime-sync-contract.*"
       - ".github/workflows/upstream-compatibility.yml"
   workflow_dispatch:
 

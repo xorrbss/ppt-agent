@@ -81,7 +81,7 @@ def test_it_loads_the_repository_env_into_the_process(
 
 
 def test_an_existing_value_wins_over_the_file(tmp_path: Path, restore_environment):
-    """Docker, Electron and explicit overrides must keep precedence."""
+    """Docker and explicit overrides must keep precedence."""
 
     (tmp_path / ".env").write_text(
         "CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE=sqlite-local\n", encoding="utf-8"

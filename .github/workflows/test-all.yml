@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   test-fastapi:
-    name: Test Main FastAPI (locked + system + binary)
+    name: Test Main FastAPI (locked + system)
     runs-on: ubuntu-latest
     env:
       APP_DATA_DIRECTORY: /tmp/presenton-app-data
@@ -65,9 +65,6 @@ jobs:
 
     - name: Run remaining FastAPI pytest suite (including authored catalogue)
       run: uv run pytest -q --no-header --ignore=tests/integration/test_workspace_production_lifecycle_gate.py
-
-    - name: Build FastAPI binary
-      run: uv run --with pyinstaller python -m PyInstaller server.spec
 
   test-nextjs:
     name: Test Main Next.js

@@ -35,12 +35,8 @@ function getFastApiUrlFromQuery(): string | null {
   }
 }
 
-function isElectronRuntime(): boolean {
-  return typeof window !== "undefined" && !!window.electron;
-}
-
 function shouldUseDirectFastApiOriginInBrowser(): boolean {
-  return isElectronRuntime() || !!getFastApiUrlFromQuery();
+  return !!getFastApiUrlFromQuery();
 }
 
 function resolveBackendPathForRuntime(path: string): string {
@@ -59,7 +55,7 @@ function resolveBackendPathForRuntime(path: string): string {
 
 // Utility to get the backend base URL.
 // - Browser web/docker: same origin (nginx proxy).
-// - Browser electron or query override: direct FastAPI origin.
+// - Browser query override: direct FastAPI origin.
 // - Server-side: configured FastAPI origin fallback.
 export function getFastAPIUrl(): string {
   const queryFastApiUrl = getFastApiUrlFromQuery();
@@ -68,9 +64,6 @@ export function getFastAPIUrl(): string {
   }
 
   if (typeof window !== "undefined") {
-    if (isElectronRuntime()) {
-      return getConfiguredFastApiUrl() || window.location.origin;
-    }
     return window.location.origin;
   }
 
