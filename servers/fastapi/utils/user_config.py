@@ -78,7 +78,7 @@ def refresh_process_runtime_settings(
     """Publish a newly loaded process snapshot at startup or after an admin write."""
     # Keep load + publish as one process-local critical section. Without this,
     # an older, slower refresh can overwrite a newer snapshot after concurrent
-    # admin/Electron notifications complete out of order.
+    # admin/local-worker notifications complete out of order.
     with _RUNTIME_SETTINGS_REFRESH_LOCK:
         snapshot = load_runtime_settings(
             environ,

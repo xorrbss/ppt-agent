@@ -38,6 +38,8 @@ from dataclasses import dataclass
 from typing import Any, TypeVar
 
 from services.authored_provider_rate_profile import resolve_authored_rate_profile
+from utils.get_env_programme import is_authored_repair_calls_enabled
+from utils.runtime_settings import RuntimeSettings
 from utils.authored_dom_categories import BLOCKING_SAFETY_CATEGORIES
 from utils.authored_fragmentation_gate import FRAGMENTATION_CATEGORY
 
@@ -63,6 +65,18 @@ SEVERITY_OTHER = 1
 SEVERITY_FRAGMENTATION_ONLY = 2
 
 _T = TypeVar("_T")
+
+
+def are_repair_calls_enabled(settings: RuntimeSettings | None = None) -> bool:
+    """Whether a flagged slide may spend a provider call on repair.
+
+    Off, every repair round becomes a no-op that leaves the first-pass
+    slide in place; the deterministic, render-only steps (the text-scale
+    rung) still run because they cost nothing. A slide the gate flagged
+    then publishes flagged rather than being re-authored.
+    """
+
+    return is_authored_repair_calls_enabled(settings)
 
 
 def remake_concurrency() -> int:
@@ -325,6 +339,7 @@ __all__ = [
     "is_fragmentation_only",
     "order_remake_candidates",
     "plan_remakes",
+    "are_repair_calls_enabled",
     "remake_concurrency",
     "run_bounded_remakes",
     "settled_flag_entry",

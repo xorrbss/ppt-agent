@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://presenton.ai/download"><strong>Quickstart</strong></a> &middot;
+  <a href="https://docs.presenton.ai/v3/get-started/quickstart"><strong>Quickstart</strong></a> &middot;
   <a href="https://presenton.ai/explore"><strong>Templates</strong></a> &middot;
   <a href="https://docs.presenton.ai/"><strong>Docs</strong></a> &middot;
   <a href="https://www.youtube.com/@presentonai"><strong>Youtube</strong></a> &middot;
@@ -27,7 +27,6 @@ No SaaS lock-in · No forced subscriptions · Full control over models and data
 What makes Presenton different?
 
 - Use Fully **self-hosted** in Web through [Docker Package](https://docs.presenton.ai/v3/get-started/quickstart)
-- Or Download [Desktop App](https://presenton.ai/download) (Mac, Windows & Linux)
 - Works with OpenAI, Gemini, Vertex AI, Azure OpenAI, Amazon Bedrock, Fireworks, Together AI, Anthropic, LM Studio, Ollama, or custom models
 - Comes with AI Presentation Generation API
 - Fully open-source (Apache 2.0)
@@ -140,51 +139,7 @@ Browse in-built AI presentation templates for pitch decks, business reports, exe
 
 #
 
-### 💻 Presenton Desktop
-
-Create AI-powered presentations using your own model provider (BYOK) or run everything locally on your own machine for full control and data privacy.
-
-<p align="center">
-  <a href="https://presenton.ai/download">
-    <img src="./readme_assets/images/banner.png" alt="Cloud deployment" />
-  </a>
-</p>
-
-**Available Platforms**
-
-<table>
-<tr>
-<th align="left">Platform</th>
-<th align="left">Architecture</th>
-<th align="left">Package</th>
-<th align="left">Download</th>
-</tr>
-
-<tr>
-<td><b>macOS</b></td>
-<td>Apple Silicon / Intel</td>
-<td><code>.dmg</code></td>
-<td><a href="https://presenton.ai/download">Download ↗</a></td>
-</tr>
-
-<tr>
-<td><b>Windows</b></td>
-<td>x64</td>
-<td><code>.exe</code></td>
-<td><a href="https://presenton.ai/download">Download ↗</a></td>
-</tr>
-
-<tr>
-<td><b>Linux</b></td>
-<td>x64</td>
-<td> <code>.deb</code></td>
-<td><a href="https://presenton.ai/download">Download ↗</a></td>
-</tr>
-
-</table>
-
-
-**Deploy to Cloud Providers**
+### ☁️ Deploy to Cloud Providers
 
 <div style="display:flex; gap:12px; align-items:center;">
   <a href="https://railway.com/deploy/presenton-ai-presentations">
@@ -223,7 +178,6 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
 - Multi-User Workspaces — Give each user a private workspace and manage accounts from a built-in admin panel
 - Fully Open-Source — Apache 2.0 licensed, inspect, modify, and contribute
 - Docker Ready — One-command deployment with GPU support for local models
-- Electron Desktop App — Run Presenton as a native desktop application on Windows, macOS, and Linux (no browser required)
 - Sign in with ChatGPT — Use your free or paid ChatGPT account to sign in and start creating presentations instantly — no separate API key required
 
 #
@@ -243,50 +197,11 @@ Run Presenton directly in your browser — no installation, no setup required. S
 ### ⚡ Running Presenton
 
   <p>
-    You can run Presenton in two ways:
-    <strong>Docker</strong> for a one-command setup without installing a local dev
-    stack, or the <strong>Electron desktop app</strong> for a native app
-    experience (ideal for development or offline use).
+    Presenton is a web application. Run it with <strong>Docker</strong> for a
+    one-command setup without installing a local dev stack, or see
+    <a href="RUNNING-LOCAL.md"><code>RUNNING-LOCAL.md</code></a> for running the
+    Next.js and FastAPI servers natively (no Docker) for local development.
   </p>
-
-**Option 1: Electron (Desktop App)**
-
-   <p>
-    Run Presenton as a native desktop application. LLM and image provider
-    (API keys, etc.) can be configured in the app. The same environment variables
-    used for Docker apply when running the bundled backend.
-  </p>
-
-  <p>
-    <strong>Prerequisites:</strong> Node.js (LTS), npm, Python 3.11, and
-    <a href="https://docs.astral.sh/uv/">uv</a>
-    (for the shared FastAPI backend in <code>servers/fastapi</code>).
-  </p>
-
-- Setup (First Time)
-  <pre><code class="language-bash">cd electron
-  npm run setup:env</code></pre>
-
-  This installs Node dependencies, runs <code>uv sync</code> in the FastAPI
-  server, and installs Next.js dependencies.
-
-- Run in Development
-  <pre><code class="language-bash">npm run dev</code></pre>
-  <p>
-  This compiles TypeScript and starts Electron. The backend and UI run locally
-  inside the desktop window.
-  </p>
-
-- Build Distributable (Optional)
-  To create installers for Windows, macOS, or Linux:
-  <pre><code class="language-bash">npm run build:all
-  npm run dist</code></pre>
-  <p>
-  Output files are written to <code>electron/dist</code>
-  (or as configured in your <code>electron-builder</code> settings).
-  </p>
-
-**Option 2: Docker**
 
 - Start Presenton
   Linux/MacOS (Bash/Zsh Shell):
@@ -320,7 +235,7 @@ registry used by FastAPI, `start.js`, and `docker-compose.yml`; run
 The notes below highlight common settings and examples. The generated reference
 above is the exhaustive list forwarded by **`docker-compose.yml`**. Put values in
 a `.env` file next to the compose file, or export them before `docker compose up`.
-The Electron app backend can read the same names when run outside Docker.
+The same names apply to a native (non-Docker) local run — see `RUNNING-LOCAL.md`.
 
 Other optional variables exist in code (for example advanced Mem0 paths, LiteParse runners, or `FAST_API_INTERNAL_URL` when Next.js and FastAPI are not same-origin); they are **not** wired in `docker-compose.yml`. Supported names are discoverable from `servers/fastapi/utils/get_env.py` and the Next.js server utilities under `servers/nextjs/`.
 

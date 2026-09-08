@@ -302,7 +302,7 @@ def verify() -> list[dict[str, Any]]:
         '"no-new-privileges"', 'f"seccomp={SECCOMP_PROFILE}"',
         '"--pids-limit", "128"', '"--memory", "512m"', '"--cpus", "1"',
         '"--ipc", "private"', '"--user", "65532:65532"',
-        'combine_observations.py', 'security_gate.py',
+        'security_gate.py',
     )))
 
     # The worker imports first-party modules both eagerly and lazily (a lazy

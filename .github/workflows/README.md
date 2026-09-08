@@ -120,15 +120,14 @@ capability-specific integration gates:
 
 | Workflow | Required environment | Role |
 | --- | --- | --- |
-| `test-all.yml` | Ubuntu, Node 22, locked `uv` environment, Chromium | Canonical full FastAPI SQLite suite, FastAPI PyInstaller build, shared Next.js Node tests, full Next.js TypeScript typecheck, lint/build, selected Cypress component tests, and the required workspace browser E2E job. It also validates the local runner's complete dry-run plan. |
+| `test-all.yml` | Ubuntu, Node 22, locked `uv` environment, Chromium | Canonical full FastAPI SQLite suite, shared Next.js Node tests, full Next.js TypeScript typecheck, lint/build, selected Cypress component tests, and the required workspace browser E2E job. It also validates the local runner's complete dry-run plan. |
 | `bitbucket-pipelines.yml` | Cypress 15.19 image, Node, Python 3.11, locked `uv` environment | Canonical-origin pull-request and `main` shared Next.js Node, Dashboard component, upstream byte-parity, and workspace browser E2E gates. Repository merge checks must require a successful pipeline and reject failed pipelines. |
 | `upstream-compatibility.yml` | Ubuntu plus Windows path checks; PostgreSQL 16 for one job | Static/export compatibility contracts, three Windows path/synchronization guards, and real PostgreSQL migration, canary rollback, and owner-scoped async-read integration tests. The PostgreSQL job is intentionally separate from the SQLite FastAPI suite. |
 | `upstream-intake.yml` | Offline fixture on pull requests; GitHub API on schedule/manual dispatch | Detects upstream movement without merging it. Live intake is intentionally not a pull-request dependency. |
 | `template-v2-export-fidelity.yml` | Ubuntu, macOS, and Windows with Chromium, LibreOffice, and PDF tools | Template V2 structural export checks and required rendered-image fidelity on all three operating systems. |
 | `export-platform-archives.yml` | Ubuntu, macOS, and Windows with Node 22 and `tar` | Downloads every pinned v0.4.8 export archive into runner temporary storage, verifies its SHA-256 and exact two-entry structure, and checks the target ELF/Mach-O/PE ABI without claiming cross-OS native execution. |
-| `cross-platform-packaging-security.yml` | Ubuntu and macOS unsigned builders; Ubuntu ClamAV scanner | Gates the root, Next.js, and Electron packaged production dependency trees (npm audit) and the locked FastAPI production tree (pip-audit) before rebuilding FastAPI, Next.js, and Electron; records SHA-256 manifests, retains quarantined candidates for seven days, and fails closed when the downstream ClamAV scan cannot complete. |
-| `g4-pptx-roundtrip.yml` | Ubuntu Docker; macOS and Windows for release gates | Pinned export-runtime contract, macOS/Windows Electron release preflights and resource safety tests, and optional manual macOS/Windows packaging. The adaptive/legacy PPTX round-trip job that gave this workflow its name was removed with the `legacy`/`adaptive` generation strategies (see `docs/adaptive-backlog.md`); no round-trip check remains for the `authored` strategy that replaced them. |
-| `sync-releaes-to-r2.yml` | Release event and deployment credentials | Publishes release artifacts. This is a deployment workflow, not a pull-request test gate. |
+| `cross-platform-packaging-security.yml` | Ubuntu and macOS with Node 22 and a locked `uv` environment | Gates the root and Next.js locked production dependency trees (npm audit) and the locked FastAPI production tree (pinned pip-audit `--strict`), plus the operational preflight policy test. The Electron packaging matrix, its SHA-256 manifests, the quarantined installer artifacts, and the downstream ClamAV scan were removed with the desktop shell — there is no installer left to build, hash, quarantine, or scan. |
+| `g4-pptx-roundtrip.yml` | Ubuntu Docker; Windows for the export/authored-hybrid gate | Pinned export-runtime contract (built and verified inside the production image) and, on Windows, the export-runtime synchronization contract plus the authored-hybrid export contracts. The adaptive/legacy PPTX round-trip job that gave this workflow its name was removed with the `legacy`/`adaptive` generation strategies (see `docs/adaptive-backlog.md`); no round-trip check remains for the `authored` strategy that replaced them. The macOS/Windows desktop packaging, signing, notarization, and install-smoke jobs were removed with the Electron shell. |
 
 ### FastAPI consolidation
 
@@ -139,8 +138,7 @@ all of the stronger properties in one place:
 
 - `uv sync --frozen` installs the committed lockfile;
 - the Ubuntu system packages and Chromium required by the full suite remain;
-- `uv run pytest -q --no-header` runs the complete SQLite/default-feature suite;
-- PyInstaller still builds `server.spec`.
+- `uv run pytest -q --no-header` runs the complete SQLite/default-feature suite.
 
 The PostgreSQL tests were not folded into that job. They use a digest-pinned
 real PostgreSQL service, require a test-only database name, and exercise the
@@ -193,11 +191,9 @@ Capability-specific gates are explicit:
 
 | Flag | Additional gate and precondition |
 | --- | --- |
-| `--with-fastapi-binary` | Host PyInstaller build toolchain. Required in the canonical Ubuntu workflow. |
 | `--with-cypress` | Installed Cypress binary; Linux also requires `xvfb-run`. |
 | `--with-fidelity` | Chromium, LibreOffice, and `pdftocairo`; runs the current host OS only. CI remains authoritative for both Ubuntu and Windows. |
 | `--with-postgres` | `PPT_AGENT_POSTGRES_TEST_URL` pointing to a database whose name ends in `test` or `tests`. |
-| `--with-electron` | Windows only; runs the release code/resource tests and typecheck/build checks. Package creation and install/uninstall smoke remain an explicit manual workflow input. |
 | `--all` | Requests every capability gate and fails when any precondition is unavailable. |
 
 For PostgreSQL, keep credentials outside command history:
@@ -247,10 +243,17 @@ Branch protection for `main` must require the exact check context:
 `Authored renderer security / disposable isolation release gate`
 
 The job always exists for `push` and `pull_request`; it is not path-filtered. It
-runs the actual Electron PID/security probe on the disposable GitHub-hosted VM,
-then the no-volume, network-none Docker harness. JSON, JUnit, SARIF, raw
-observations, and redacted container inspect evidence are uploaded even when the
-gate fails. Only `status=PASS` with `promotion_allowed=true` exits successfully.
+runs the host-safe renderer contract tests, then the no-volume, network-none
+Docker harness. JSON, JUnit, SARIF, raw observations, and redacted container
+inspect evidence are uploaded even when the gate fails. Only `status=PASS` with
+`promotion_allowed=true` exits successfully.
+
+The gate used to additionally observe a real Electron renderer PID and its
+sandbox/contextIsolation/nodeIntegration state on the disposable VM. That probe
+was removed with the Electron shell; `run_dynamic_gate.py` treats
+`--electron-observation` as optional, so the gate now runs container-only. The
+container harness still decides PASS/promotion, but there is no longer a
+host-process observation alongside it.
 
 Repository branch protection is external state and must be configured separately;
 the workflow cannot declare itself required.

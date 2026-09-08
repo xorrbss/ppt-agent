@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  checkReleaseInputs,
   databaseDescriptor,
   parseArgs,
   runLocalRollbackDrill,
@@ -107,21 +106,16 @@ test("local rollback drill rejects missing acknowledgement and managed hosts", (
   );
 });
 
-test("release preflight never returns secret values and blocks required groups", async () => {
-  const result = await checkReleaseInputs(
-    parseArgs(["release", "--require-signing", "--require-r2"]),
-    {
-      CSC_LINK: "base64-secret",
-      CSC_KEY_PASSWORD: "password-secret",
-      R2_ACCOUNT_ID: "account-secret",
-      R2_ACCESS_KEY: "access-secret",
-      R2_SECRET_KEY: "r2-secret",
-    }
-  );
-  assert.equal(result.status, "blocked");
-  assert.match(result.signing.blockers.join(" "), /upstream\/default/);
-  assert.doesNotMatch(
-    JSON.stringify(result),
-    /base64-secret|password-secret|account-secret|access-secret|r2-secret/
-  );
+// The `release` subcommand (`--require-signing` / `--require-r2`) checked AppX
+// identity in electron/build.js and the Cloudflare R2 upload credentials. Both
+// the Electron shell and the desktop release-to-R2 workflow were removed, so
+// the subcommand no longer has a caller or a subject; only the deployment
+// gates below remain.
+test("the CLI accepts only the deployment subcommands that still have callers", () => {
+  for (const command of ["canary", "rollback-drain", "verify-off", "local-drill"]) {
+    assert.equal(parseArgs([command]).command, command);
+  }
+  assert.throws(() => parseArgs(["release"]), /canary\|rollback-drain\|verify-off\|local-drill/);
+  assert.throws(() => parseArgs(["canary", "--require-signing"]), /Unknown argument/);
+  assert.throws(() => parseArgs(["canary", "--require-r2"]), /Unknown argument/);
 });

@@ -69,48 +69,14 @@ async function writeIco(relativePath, sizes) {
   await fs.writeFile(outputPath, Buffer.concat([directory, ...images]));
 }
 
-async function writeWideAppxLogo() {
-  const iconBuffer = await createPngBuffer(150);
-  const outputPath = resolveFromRoot(
-    "electron",
-    "build",
-    "appx",
-    "Wide310x150Logo.png",
-  );
-
-  await sharp({
-    create: {
-      width: 310,
-      height: 150,
-      channels: 4,
-      background: "#ffffff",
-    },
-  })
-    .composite([{ input: iconBuffer, left: 80, top: 0 }])
-    .png({ compressionLevel: 9 })
-    .toFile(outputPath);
-}
-
+// The desktop icon set (electron/build/**: NSIS .ico, AppX Square*/Store/Wide
+// logos, Linux icons/NxN.png) was dropped with the Electron shell. Only the
+// web application icons are generated now.
 const squarePngTargets = [
   ["servers/nextjs/public/logo-with-bg.png", 512],
   ["servers/nextjs/app/icon.png", 512],
   ["servers/nextjs/app/apple-icon.png", 180],
-  ["electron/resources/ui/assets/images/presenton_short_filled.png", 512],
-  ["electron/build/logo.png", 1024],
-  ["electron/build/appx/Square44x44Logo.png", 44],
-  ["electron/build/appx/Square44x44LogoTransParent.png", 44],
-  ["electron/build/appx/Square150x150Logo.png", 150],
-  ["electron/build/appx/Square150x150LogoTransParent.png", 150],
-  ["electron/build/appx/StoreLogo.png", 1080],
-  ["electron/build/appx/StoreLogoTransParent.png", 1080],
 ];
-
-for (const size of [16, 32, 48, 64, 128, 256, 512]) {
-  squarePngTargets.push([
-    `electron/build/icons/${size}x${size}.png`,
-    size,
-  ]);
-}
 
 await Promise.all(
   squarePngTargets.map(([relativePath, size]) =>
@@ -119,13 +85,8 @@ await Promise.all(
 );
 
 const icoSizes = [16, 32, 48, 64, 128, 256];
-await Promise.all([
-  writeIco("servers/nextjs/app/favicon.ico", icoSizes),
-  writeIco("electron/build/icon.ico", icoSizes),
-  writeIco("electron/build/appx/icon.ico", icoSizes),
-  writeWideAppxLogo(),
-]);
+await Promise.all([writeIco("servers/nextjs/app/favicon.ico", icoSizes)]);
 
 console.log(
-  `Generated ${squarePngTargets.length + 4} brand icon assets from ${absoluteSourcePath}`,
+  `Generated ${squarePngTargets.length + 1} brand icon assets from ${absoluteSourcePath}`,
 );

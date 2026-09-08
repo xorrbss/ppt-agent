@@ -49,6 +49,7 @@ from services.authored_presentation_artifacts import (
 )
 from services.authored_measured_gates import remake_density_hint
 from services.authored_remake_schedule import (
+    are_repair_calls_enabled,
     flagged_slide_entry as _flagged_entry,
     settled_flag_entry,
     terminal_reason as _terminal_reason,
@@ -392,6 +393,7 @@ async def resolve_terminal_gate_slides(
     if not terminal:
         return TerminalSlideFallback(scene_envelope=scene_envelope)
 
+    repair_calls = are_repair_calls_enabled()
     prior_counts = {int(key): int(value) for key, value in (remake_counts or {}).items()}
     flagged: list[dict[str, object]] = []
     remade: list[int] = []
@@ -410,12 +412,17 @@ async def resolve_terminal_gate_slides(
         if settled is not None:
             flagged.append(settled)
             continue
-        if remake_calls >= MAX_TERMINAL_REMAKES_PER_DECK or spent >= MAX_REMAKES_PER_SLIDE:
+        if (
+            not repair_calls
+            or remake_calls >= MAX_TERMINAL_REMAKES_PER_DECK
+            or spent >= MAX_REMAKES_PER_SLIDE
+        ):
             flagged.append(
                 _flagged_entry(
                     index=index, reason=reason, attempted=spent > 0,
-                    outcome="remake_budget_exhausted", repeated=repeated,
-                    remake_count=spent,
+                    outcome=("repair_calls_disabled" if not repair_calls
+                             else "remake_budget_exhausted"),
+                    repeated=repeated, remake_count=spent,
                 )
             )
             continue

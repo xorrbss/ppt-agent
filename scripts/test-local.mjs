@@ -17,8 +17,6 @@ const knownArguments = new Set([
   "--dry-run",
   "--help",
   "--with-cypress",
-  "--with-electron",
-  "--with-fastapi-binary",
   "--with-fidelity",
   "--with-postgres",
 ]);
@@ -39,11 +37,9 @@ treated as passed.
 
 Options:
   --dry-run              Print commands, preconditions, and NOT RUN gates only
-  --with-fastapi-binary  Build the PyInstaller binary used by Ubuntu CI
   --with-cypress         Run the gated Cypress component specs
   --with-fidelity        Require visual tools and run host-OS export fidelity
   --with-postgres        Require PPT_AGENT_POSTGRES_TEST_URL and run live DB tests
-  --with-electron        Require Windows and run the Windows release gate
   --all                  Request every capability gate (fails if one is unavailable)
   --help                 Show this help
 `);
@@ -61,7 +57,6 @@ const artifactDirectory = join(runtimeRoot, "artifacts", `template-v2-${platform
 const sqlitePath = join(runtimeRoot, "test.db").replaceAll("\\", "/");
 const fastapiDirectory = join(root, "servers", "fastapi");
 const nextDirectory = join(root, "servers", "nextjs");
-const electronDirectory = join(root, "electron");
 const results = [];
 
 function cleanupLocalRuntime() {
@@ -448,17 +443,6 @@ runStep({
   },
 });
 
-const fastapiBinarySelected = requested("--with-fastapi-binary");
-runStep({
-  name: "FastAPI PyInstaller binary",
-  command: uv,
-  args: ["run", "--with", "pyinstaller", "python", "-m", "PyInstaller", "server.spec"],
-  cwd: fastapiDirectory,
-  selected: fastapiBinarySelected,
-  notRunReason: "requires --with-fastapi-binary; Ubuntu CI runs this required gate",
-  preconditionDescription: "host build toolchain and PyInstaller download",
-});
-
 const cypressSelected = requested("--with-cypress");
 runStep({
   name: "Cypress binary verification",
@@ -572,97 +556,6 @@ runStep({
   preconditionDescription:
     "running disposable PostgreSQL database whose name ends in test/tests; never a shared or managed database",
 });
-const electronSelected = requested("--with-electron");
-const electronPrecondition = withNode22(() => isWindows ? null : "the release gate is Windows-only");
-runStep({
-  name: "Electron locked dependency install",
-  command: npm,
-  args: ["ci"],
-  cwd: electronDirectory,
-  selected: electronSelected,
-  notRunReason: "requires --with-electron on Windows",
-  env: { CYPRESS_INSTALL_BINARY: "0" },
-  precondition: electronPrecondition,
-  preconditionDescription: "Windows, Node 22, and npm",
-});
-runStep({
-  name: "Electron release dependency audit",
-  command: npm,
-  args: ["run", "audit:release"],
-  cwd: electronDirectory,
-  selected: electronSelected,
-  notRunReason: "requires --with-electron on Windows",
-  precondition: electronPrecondition,
-  preconditionDescription: "Windows and electron npm ci",
-});
-for (const script of [
-  "test:audit-release",
-  "test:standalone-copy",
-  "test:package-preflight",
-  "test:build-config",
-  "test:update-channel",
-  "test:runtime-settings-refresh",
-]) {
-  runStep({
-    name: `Electron ${script}`,
-    command: npm,
-    args: ["run", script],
-    cwd: electronDirectory,
-    selected: electronSelected,
-    notRunReason: "requires --with-electron on Windows",
-    precondition: electronPrecondition,
-    preconditionDescription: "Windows and electron npm ci",
-  });
-}
-runStep({
-  name: "Windows release artifact verifier",
-  command: process.execPath,
-  args: ["--test", "scripts/verify-windows-release.test.cjs"],
-  cwd: electronDirectory,
-  selected: electronSelected,
-  notRunReason: "requires --with-electron on Windows",
-  precondition: electronPrecondition,
-  preconditionDescription: "Windows and electron npm ci",
-});
-runStep({
-  name: "Electron authored-hybrid release subset",
-  command: process.execPath,
-  args: [
-    "--experimental-strip-types",
-    "--test",
-    "lib/authored-hybrid/mode.test.mjs",
-    "lib/authored-hybrid/pptx-archive.test.mjs",
-    "lib/authored-hybrid/cleanup.test.mjs",
-  ],
-  cwd: nextDirectory,
-  selected: electronSelected,
-  notRunReason: "requires --with-electron on Windows",
-  precondition: electronPrecondition,
-  preconditionDescription: "Windows and Next.js npm ci",
-});
-for (const script of ["typecheck", "build:ts", "check:main-no-undef"]) {
-  runStep({
-    name: `Electron ${script}`,
-    command: npm,
-    args: ["run", script],
-    cwd: electronDirectory,
-    selected: electronSelected,
-    notRunReason: "requires --with-electron on Windows",
-    precondition: electronPrecondition,
-    preconditionDescription: "Windows and electron npm ci",
-  });
-}
-runStep({
-  name: "Electron MSIX export runtime isolation",
-  command: process.execPath,
-  args: ["--test", "tests/export-msix-runtime.test.cjs"],
-  cwd: electronDirectory,
-  selected: electronSelected,
-  notRunReason: "requires --with-electron on Windows",
-  precondition: electronPrecondition,
-  preconditionDescription: "Windows, compiled Electron TypeScript, and electron npm ci",
-});
-
 console.log("\nSummary");
 for (const result of results) {
   console.log(`${result.status.padEnd(7)} ${result.name}${result.detail ? ` — ${result.detail}` : ""}`);
@@ -680,4 +573,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(`\nSelected host profile passed; ${notRun.length} capability step(s) were NOT RUN.`);
-console.log("GitHub remains authoritative for the other OS, service, packaging, and runner-image gates.");
+console.log("GitHub remains authoritative for the other OS, service, and runner-image gates.");

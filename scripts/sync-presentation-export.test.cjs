@@ -22,15 +22,8 @@ const {
 const {
   SUPPORTED_EXPORT_RUNTIME_ASSETS,
 } = require("./lib/presentation-export-assets.cjs");
-const {
-  assertElectronSharpLoadable,
-  finalizeRuntimeInstall: finalizeElectronRuntimeInstall,
-  validateExistingRuntime: validateExistingElectronRuntime,
-  writeInstalledVersionAtomic: writeElectronInstalledVersionAtomic,
-} = require("../electron/sync_export_runtime.js");
 
 const rootPackage = require("../package.json");
-const electronPackage = require("../electron/package.json");
 const repoRoot = path.join(__dirname, "..");
 
 test("CLI accepts only documented presentation-export sync options", () => {
@@ -134,39 +127,6 @@ function installDamagedSharpFixture(runtimeRoot) {
     path.join(sharpDir, "index.js"),
     "throw new Error('damaged Sharp fixture');\n"
   );
-}
-
-function createElectronRuntimeFixture(version) {
-  const runtimeRoot = fs.mkdtempSync(
-    path.join(os.tmpdir(), "electron-export-sync-")
-  );
-  const pyDir = path.join(runtimeRoot, "py");
-  fs.mkdirSync(pyDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(runtimeRoot, "index.js"),
-    "async function capture(s,p){await BXr(s),p&&await QXr(s),await s.screenshot({type:'png'})}\n" +
-      "async function iGt(s,r){let a=await open(s,r);try{await a.waitForFunction(()=>document.readyState===\"complete\")}catch{}try{await Att(a)}catch{}return a}\n"
-  );
-
-  const converterName =
-    process.platform === "win32"
-      ? `convert-${process.platform}-${process.arch}.exe`
-      : `convert-${process.platform}-${process.arch}`;
-  const binaryHeader =
-    process.platform === "win32"
-      ? Buffer.from([0x4d, 0x5a, 0x00, 0x00])
-      : process.platform === "darwin"
-        ? Buffer.from([0xfe, 0xed, 0xfa, 0xcf])
-        : Buffer.from([0x7f, 0x45, 0x4c, 0x46]);
-  fs.writeFileSync(path.join(pyDir, converterName), binaryHeader);
-
-  if (version !== undefined) {
-    writeElectronInstalledVersionAtomic(
-      version,
-      path.join(runtimeRoot, ".installed-version")
-    );
-  }
-  return runtimeRoot;
 }
 
 test("atomic marker round-trips the installed version", () => {
@@ -324,16 +284,8 @@ test("strict validation rejects a stale CommonJS bundle", () => {
   }
 });
 
-test("root and Electron pin the same v0.4.8 export release, assets, and Sharp range", () => {
+test("the root pins the v0.4.8 export release and its platform assets", () => {
   assert.equal(rootPackage.presentationExportVersion, "v0.4.8");
-  assert.equal(
-    electronPackage.exportVersion,
-    rootPackage.presentationExportVersion
-  );
-  assert.equal(
-    electronPackage.dependencies.sharp,
-    rootPackage.dependencies.sharp
-  );
   const manifest = require("../compatibility/upstream-compatibility.json");
   assert.deepEqual(
     Object.keys(manifest.exportRuntime.assets),
@@ -443,57 +395,6 @@ test("root install finalization never writes a marker after Sharp failure", () =
   assert.equal(markerWrites, 0);
 });
 
-test("Electron runtime accepts a matching v0.4.2 marker and native converter", () => {
-  const runtimeRoot = createElectronRuntimeFixture("v0.4.2");
-  try {
-    const result = validateExistingElectronRuntime("v0.4.2", runtimeRoot);
-    assert.equal(result.ok, true);
-    assert.equal(result.version, "v0.4.2");
-    assert.match(
-      fs.readFileSync(path.join(runtimeRoot, "index.js"), "utf8"),
-      /templateV2ResourceError==="true"/
-    );
-  } finally {
-    removeFixture(runtimeRoot);
-  }
-});
-
-test("Electron runtime rejects a stale marker without changing it", () => {
-  const runtimeRoot = createElectronRuntimeFixture("v0.3.3");
-  const markerFile = path.join(runtimeRoot, ".installed-version");
-  try {
-    const result = validateExistingElectronRuntime("v0.4.2", runtimeRoot);
-    assert.equal(result.ok, false);
-    assert.match(result.reason, /v0\.3\.3.*does not match.*v0\.4\.2/);
-    assert.equal(fs.readFileSync(markerFile, "utf8").trim(), "v0.3.3");
-  } finally {
-    removeFixture(runtimeRoot);
-  }
-});
-
-test("Electron Sharp validation rejects a damaged native addon", () => {
-  const runtimeRoot = createElectronRuntimeFixture("v0.4.2");
-  try {
-    installDamagedSharpFixture(runtimeRoot);
-    assert.throws(
-      () => assertElectronSharpLoadable(runtimeRoot),
-      /requires a loadable sharp native addon/
-    );
-  } finally {
-    removeFixture(runtimeRoot);
-  }
-});
-
-test("Electron install finalization verifies Sharp before writing the marker", () => {
-  const events = [];
-  finalizeElectronRuntimeInstall("v0.4.2", {
-    prepareRuntime: () => events.push("readiness"),
-    assertSharp: () => events.push("sharp"),
-    writeMarker: () => events.push("marker"),
-  });
-  assert.deepEqual(events, ["readiness", "sharp", "marker"]);
-});
-
 test("production and development containers copy the readiness helper before sync", () => {
   const production = fs.readFileSync(path.join(repoRoot, "Dockerfile"), "utf8");
   const development = fs.readFileSync(
@@ -517,55 +418,4 @@ test("production and development containers copy the readiness helper before syn
     development.indexOf(helper) <
       development.indexOf("node /app/scripts/sync-presentation-export.cjs --force")
   );
-});
-
-test("Electron check-only validation rejects a runtime without the readiness overlay", () => {
-  const runtimeRoot = createElectronRuntimeFixture("v0.4.2");
-  try {
-    const result = validateExistingElectronRuntime("v0.4.2", runtimeRoot, {
-      repair: false,
-    });
-    assert.equal(result.ok, false);
-    assert.match(result.reason, /readiness overlay is missing/);
-  } finally {
-    removeFixture(runtimeRoot);
-  }
-});
-
-test("Electron install finalization never writes a marker after readiness failure", () => {
-  let markerWrites = 0;
-  assert.throws(
-    () =>
-      finalizeElectronRuntimeInstall("v0.4.2", {
-        prepareRuntime: () => {
-          throw new Error("missing readiness overlay");
-        },
-        assertSharp: () => {
-          throw new Error("Sharp should not run");
-        },
-        writeMarker: () => {
-          markerWrites += 1;
-        },
-      }),
-    /missing readiness overlay/
-  );
-  assert.equal(markerWrites, 0);
-});
-
-test("Electron install finalization never writes a marker after Sharp failure", () => {
-  let markerWrites = 0;
-  assert.throws(
-    () =>
-      finalizeElectronRuntimeInstall("v0.4.2", {
-        prepareRuntime: () => {},
-        assertSharp: () => {
-          throw new Error("damaged Electron Sharp");
-        },
-        writeMarker: () => {
-          markerWrites += 1;
-        },
-      }),
-    /damaged Electron Sharp/
-  );
-  assert.equal(markerWrites, 0);
 });

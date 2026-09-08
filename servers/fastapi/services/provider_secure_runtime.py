@@ -112,8 +112,8 @@ def protect_provider_settings_for_storage(
     """Replace plaintext setting secrets with opaque vault references.
 
     Local compatibility profiles retain their historical plaintext behavior.
-    Managed, self-host secure, and Electron profiles never return a plaintext
-    secret from this storage boundary.
+    Managed and self-host secure profiles never return a plaintext secret
+    from this storage boundary.
     """
 
     protected = dict(config)

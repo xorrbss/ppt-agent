@@ -131,7 +131,6 @@ function createDocument() {
   const dependencies = [
     ...npmPackages("root", path.join(repositoryRoot, "package-lock.json")),
     ...npmPackages("nextjs", path.join(repositoryRoot, "servers", "nextjs", "package-lock.json")),
-    ...npmPackages("electron", path.join(repositoryRoot, "electron", "package-lock.json")),
     ...pythonPackages(),
   ].sort((left, right) => left.SPDXID.localeCompare(right.SPDXID));
   const identity = crypto

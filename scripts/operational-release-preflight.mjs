@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,14 +12,10 @@ function parseArgs(argv) {
     command,
     dryRun: false,
     allowLocalRehearsal: false,
-    requireSigning: false,
-    requireR2: false,
   };
   for (const argument of rest) {
     if (argument === "--dry-run") options.dryRun = true;
     else if (argument === "--allow-local-rehearsal") options.allowLocalRehearsal = true;
-    else if (argument === "--require-signing") options.requireSigning = true;
-    else if (argument === "--require-r2") options.requireR2 = true;
     else throw new Error(`Unknown argument: ${argument}`);
   }
   if (
@@ -29,12 +24,11 @@ function parseArgs(argv) {
       "rollback-drain",
       "verify-off",
       "local-drill",
-      "release",
     ].includes(command)
   ) {
     throw new Error(
       "Usage: operational-release-preflight.mjs " +
-        "<canary|rollback-drain|verify-off|local-drill|release> [options]"
+        "<canary|rollback-drain|verify-off|local-drill> [options]"
     );
   }
   return options;
@@ -172,57 +166,10 @@ function runLocalRollbackDrill(
   };
 }
 
-function matchBuildValue(source, property) {
-  const match = source.match(new RegExp(`\\b${property}:\\s*["']([^"']+)["']`));
-  return match?.[1] ?? null;
-}
-
-async function checkReleaseInputs(options, environment = process.env) {
-  const buildSource = await readFile(path.join(repoRoot, "electron", "build.js"), "utf8");
-  const identityName = matchBuildValue(buildSource, "identityName");
-  const publisher = matchBuildValue(buildSource, "publisher");
-  const signingBlockers = [];
-  const r2Blockers = [];
-
-  if (!environment.CSC_LINK) signingBlockers.push("CSC_LINK is not configured");
-  if (!identityName || identityName === "PresentonAI.Presenton") {
-    signingBlockers.push("AppX identity is still the upstream/default identity");
-  }
-  if (!publisher || publisher === "CN=8A2C57B5-F1C6-473A-93EE-2E9B72134341") {
-    signingBlockers.push("AppX publisher is still the upstream/default publisher");
-  }
-  for (const name of ["R2_ACCOUNT_ID", "R2_ACCESS_KEY", "R2_SECRET_KEY"]) {
-    if (!environment[name]) r2Blockers.push(`${name} is not configured`);
-  }
-
-  const failed =
-    (options.requireSigning && signingBlockers.length > 0) ||
-    (options.requireR2 && r2Blockers.length > 0);
-  return {
-    status: failed ? "blocked" : "ready",
-    signing: {
-      required: options.requireSigning,
-      identityName,
-      publisher,
-      credentialPresent: Boolean(environment.CSC_LINK),
-      passwordPresent: Boolean(environment.CSC_KEY_PASSWORD),
-      blockers: signingBlockers,
-    },
-    r2: {
-      required: options.requireR2,
-      credentialsPresent: r2Blockers.length === 0,
-      blockers: r2Blockers,
-      note: "Credential presence is checked without printing values; bucket write access still requires the workflow probe.",
-    },
-  };
-}
-
 async function main(argv = process.argv.slice(2), environment = process.env) {
   const options = parseArgs(argv);
   let result;
-  if (options.command === "release") {
-    result = await checkReleaseInputs(options, environment);
-  } else if (options.command === "local-drill") {
+  if (options.command === "local-drill") {
     result = runLocalRollbackDrill(options, environment);
   } else {
     result = runOperationalGate(options, environment);
@@ -233,7 +180,6 @@ async function main(argv = process.argv.slice(2), environment = process.env) {
 }
 
 export {
-  checkReleaseInputs,
   databaseDescriptor,
   main,
   parseArgs,

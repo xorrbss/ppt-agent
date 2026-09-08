@@ -433,7 +433,7 @@ async def save_provider_settings_record(
 async def import_legacy_file_to_provider_settings(
     session: AsyncSession,
 ) -> ProviderSettingsRecord:
-    """Import Electron's already-durable compatibility write through DB CAS."""
+    """Import the already-durable legacy compatibility file write through DB CAS."""
     path = get_user_config_path_env()
     if not path:
         raise RuntimeError("provider settings compatibility file unavailable")

@@ -229,7 +229,7 @@ function assertCleanHeadEquivalent(source) {
 
 const exceptionReasons = {
   "auth-ownership-transaction": "Local authentication, ownership, revision, and transactional workspace contracts intentionally extend the upstream backend.",
-  "authored-export-runtime": "Local authored, PDF/PPTX, Electron, and bounded export-runtime behavior is protected by dedicated regression and security tests.",
+  "authored-export-runtime": "Local authored, PDF/PPTX, and bounded export-runtime behavior is protected by dedicated regression and security tests.",
   "compatibility-control": "Local compatibility policy, ledgers, CI, and verification code have no upstream byte-for-byte counterpart.",
   "local-fork-replacement": "The fork intentionally replaces or removes this upstream path; the path remains an explicit reviewed exception rather than an implicit drift.",
   "studio-template-v2": "Local Template V2 Studio editing, strict validation, table round-trip, and lossless payload adapters extend the upstream editor contract.",
@@ -241,7 +241,7 @@ function reasonCode(filePath) {
   if (filePath.startsWith("servers/nextjs/components/slide-editor/") || filePath.includes("Tiptap")) return "tiptap3-editor-adapter";
   if (filePath.startsWith("servers/nextjs/app/template-v2-studio/") || filePath.startsWith("servers/nextjs/lib/template-v2") || filePath.includes("template-preview")) return "studio-template-v2";
   if (filePath.startsWith("servers/fastapi/")) return "auth-ownership-transaction";
-  if (filePath.startsWith("electron/") || filePath.startsWith("presentation-export/") || filePath.includes("export-presentation") || filePath.includes("authored")) return "authored-export-runtime";
+  if (filePath.startsWith("presentation-export/") || filePath.includes("export-presentation") || filePath.includes("authored")) return "authored-export-runtime";
   return "local-fork-replacement";
 }
 

@@ -1,13 +1,6 @@
 {
   "lineLimit": 500,
   "files": {
-    "electron/app/ipc/export_handlers.ts": 564,
-    "electron/app/ipc/libreoffice_install_handlers.ts": 627,
-    "electron/app/ipc/setup_install_handlers.ts": 637,
-    "electron/app/main.ts": 532,
-    "electron/scripts/verify-packaging-inputs.cjs": 650,
-    "electron/scripts/verify-windows-release.cjs": 577,
-    "electron/sync_export_runtime.js": 674,
     "scripts/authored-bounded-gate-minus1/gate-minus1-authority.mjs": 903,
     "scripts/authored-vnext-controlled-load.mjs": 1200,
     "scripts/authored-vnext-quality/deck_matrix_census.py": 603,

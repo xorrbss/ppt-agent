@@ -97,13 +97,9 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
 
     let canChangeKeys = false;
     try {
-      if (window.electron?.getCanChangeKeys) {
-        canChangeKeys = await window.electron.getCanChangeKeys();
-      } else {
-        const res = await fetch('/api/can-change-keys');
-        const data = await res.json();
-        canChangeKeys = data.canChange ?? false;
-      }
+      const res = await fetch('/api/can-change-keys');
+      const data = await res.json();
+      canChangeKeys = data.canChange ?? false;
     } catch (e) {
       console.error('Failed to fetch can-change-keys:', e);
       canChangeKeys = false;
@@ -113,12 +109,8 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
     if (canChangeKeys) {
       let llmConfig: LLMConfig = {};
       try {
-        if (window.electron?.getUserConfig) {
-          llmConfig = await window.electron.getUserConfig();
-        } else {
-          const res = await fetch('/api/user-config');
-          llmConfig = await res.json();
-        }
+        const res = await fetch('/api/user-config');
+        llmConfig = await res.json();
       } catch (e) {
         console.error('Failed to fetch user config:', e);
         llmConfig = {};

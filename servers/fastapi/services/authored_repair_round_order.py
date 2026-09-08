@@ -46,6 +46,7 @@ from typing import Any
 
 from services.authored_remake_schedule import (
     RemakeLaunch,
+    are_repair_calls_enabled,
     plan_remakes,
     remake_concurrency,
     run_bounded_remakes,
@@ -328,9 +329,16 @@ async def remake_first_flagged_slides(
         scene_envelope=scene_envelope, capacity_plan=capacity_plan,
         profile=profile, reference_mode=reference_mode, generation_job=generation_job,
     )
+    # AUTHORED_REPAIR_CALLS_ENABLED off: the deterministic text-scale pass above
+    # still runs (it only re-renders); no slide is planned for a provider call.
+    candidates = (
+        [int(index) for index in flagged if int(index) not in text_scaled]
+        if are_repair_calls_enabled()
+        else []
+    )
     plan = plan_remakes(
-        [int(index) for index in flagged if int(index) not in text_scaled],
-        defects_by_index, max_overflow_remakes=MAX_TERMINAL_REMAKES_PER_DECK,
+        candidates, defects_by_index,
+        max_overflow_remakes=MAX_TERMINAL_REMAKES_PER_DECK,
     )
 
     async def run_one(launch: RemakeLaunch) -> tuple[tuple[str, bytes, object] | None, str]:
@@ -419,6 +427,7 @@ __all__ = [
     "RemakeFirstOutcome",
     "gate_defects_by_slide",
     "gate_issues_by_slide",
+    "are_repair_calls_enabled",
     "remake_first_flagged_slides",
     "text_scale_factor",
 ]

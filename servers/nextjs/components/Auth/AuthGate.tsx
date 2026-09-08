@@ -72,31 +72,23 @@ export default function AuthGate() {
       let llmConfig: LLMConfig = {};
 
       try {
-        if (window.electron?.getCanChangeKeys) {
-          canChangeKeys = await window.electron.getCanChangeKeys();
-        } else {
-          const response = await fetch("/api/can-change-keys", {
-            cache: "no-store",
-          });
-          if (!response.ok) {
-            throw new Error("Could not load configuration permissions");
-          }
-          const data = await response.json();
-          canChangeKeys = data.canChange ?? false;
+        const response = await fetch("/api/can-change-keys", {
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          throw new Error("Could not load configuration permissions");
         }
+        const data = await response.json();
+        canChangeKeys = data.canChange ?? false;
 
         if (canChangeKeys) {
-          if (window.electron?.getUserConfig) {
-            llmConfig = await window.electron.getUserConfig();
-          } else {
-            const response = await fetch("/api/user-config", {
-              cache: "no-store",
-            });
-            if (!response.ok) {
-              throw new Error("Could not load user configuration");
-            }
-            llmConfig = await response.json();
+          const userConfigResponse = await fetch("/api/user-config", {
+            cache: "no-store",
+          });
+          if (!userConfigResponse.ok) {
+            throw new Error("Could not load user configuration");
           }
+          llmConfig = await userConfigResponse.json();
           llmConfig = normalizeLLMConfig(llmConfig);
         }
       } catch (configurationError) {

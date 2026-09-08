@@ -1208,6 +1208,15 @@
       "description": "Try the bounded deterministic text-scale rung on overflow/clipping defects before the first remake."
     },
     {
+      "key": "AUTHORED_REPAIR_CALLS_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Spend provider calls repairing a flagged slide: the remake-first round, the bounded patch round and the terminal remake. Off publishes the first-pass slide as it stands (flagged when the gate found a defect) and keeps only the deterministic, render-only repairs, which is the fastest and cheapest way to generate a deck."
+    },
+    {
       "key": "AUTHORED_FRAGMENTATION_GATE_ENABLED",
       "type": "boolean",
       "default": false,

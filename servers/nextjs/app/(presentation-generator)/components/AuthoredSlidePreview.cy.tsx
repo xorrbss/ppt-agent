@@ -7,10 +7,6 @@ import {
 } from "./AuthoredSlidePreview";
 
 describe("AuthoredSlidePreview", () => {
-  beforeEach(() => {
-    delete (window as typeof window & { electron?: unknown }).electron;
-  });
-
   it("uses persisted HTML for the main canvas without executing authored scripts", () => {
     const html = `<!doctype html><html><body><div>실행·운영 요구 묶음</div><script>window.parent.__authoredScriptRan = true</script></body></html>`;
 
@@ -143,20 +139,29 @@ describe("AuthoredSlidePreview", () => {
     cy.get("iframe").should("not.exist");
   });
 
-  it("never constructs raw authored DOM in Electron and uses the isolated PNG", () => {
+  it("renders the sandboxed authored HTML regardless of stray global runtime flags", () => {
+    // The app is web-only now: there is no Electron runtime branch left to
+    // special-case, so an incidental `window.electron`-shaped global (e.g.
+    // left over from a stale extension or test pollution) must not change
+    // which render kind is chosen. Isolation comes entirely from the
+    // sandboxed, scriptless, CSP-restricted iframe, not from runtime detection.
     (window as typeof window & { electron?: unknown }).electron = {};
+    const html = '<div>web-only preview</div><script>window.electron.readFile("C:/canary")</script>';
+
     mount(
       <AuthoredSlidePreview
         slideIndex={7}
-        html={'<script>window.electron.readFile("C:/canary")</script>'}
+        html={html}
         imageSrc="/isolated-worker.png"
         preferHtml
       />
     );
 
-    cy.get('[data-testid="authored-slide-preview-7"]')
-      .should("have.attr", "data-authored-runtime", "electron");
-    cy.get("iframe").should("not.exist");
-    cy.get('img[src="/isolated-worker.png"]').should("exist");
+    cy.get('[data-testid="authored-html-preview-7"]')
+      .should("have.attr", "srcdoc", isolateAuthoredPreviewHtml(html))
+      .and("have.attr", "sandbox", "");
+    cy.get('img[src="/isolated-worker.png"]').should("not.exist");
+
+    delete (window as typeof window & { electron?: unknown }).electron;
   });
 });

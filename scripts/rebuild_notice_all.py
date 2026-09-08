@@ -332,7 +332,6 @@ def main():
         ] or [
             str(REPO_ROOT / "node_modules"),
             str(NEXT_DIR / "node_modules"),
-            str(REPO_ROOT / "electron" / "node_modules"),
         ]
     merged_node_entries: Dict[Tuple[str, str], Dict[str, str]] = {}
     for value in configured_node_modules:

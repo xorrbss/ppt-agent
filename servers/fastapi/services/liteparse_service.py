@@ -259,8 +259,6 @@ class LiteParseService:
             [
                 # Repo-root layout: servers/fastapi/services -> <repo>/tessdata
                 os.path.abspath(os.path.join(service_dir, "..", "..", "..", "tessdata")),
-                # Next to the LiteParse runner (Electron packaged bundle)
-                os.path.join(self.runner_dir, "tessdata"),
                 "/app/tessdata",
             ]
         )

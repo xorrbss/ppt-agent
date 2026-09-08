@@ -231,7 +231,7 @@ WORKDIR /app
 ARG INSTALL_TESSERACT=true
 ARG INSTALL_LIBREOFFICE=true
 
-# LiteParse uses Node + @llamaindex/liteparse (same runner as Electron); OCR uses Tesseract.
+# LiteParse uses Node + @llamaindex/liteparse; OCR uses Tesseract.
 ENV APP_DATA_DIRECTORY=/app_data \
     TEMP_DIRECTORY=/tmp/presenton \
     EXPORT_PACKAGE_ROOT=/app/presentation-export \

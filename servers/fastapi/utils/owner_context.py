@@ -98,7 +98,7 @@ def reset_request_scope_active(token: Token) -> None:
 def owner_context_enforced() -> bool:
     """Fail closed only inside an authenticated request with auth enabled.
 
-    ``DISABLE_AUTH=true`` (Electron, focused harnesses) keeps the historical
+    ``DISABLE_AUTH=true`` (local runs, focused harnesses) keeps the historical
     fail-open behaviour; so does every code path that never set the request
     flag, which is how workers and maintenance loops read across owners.
     """

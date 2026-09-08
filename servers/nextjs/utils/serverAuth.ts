@@ -43,7 +43,7 @@ export async function getServerAuthStatus(): Promise<AuthStatus> {
     return {
       configured: true,
       authenticated: true,
-      username: "electron",
+      username: "local",
       user_id: null,
       available: true,
       role: "admin",

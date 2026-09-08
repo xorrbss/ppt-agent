@@ -23,8 +23,8 @@ def load_repository_environment(
     ``run-next-build.mjs`` fixes for the client bundle, so it is fixed the same
     way here.
 
-    Values already present in the environment win, so Docker, Electron and
-    explicit overrides keep precedence and a missing file is not an error.
+    Values already present in the environment win, so Docker and explicit
+    overrides keep precedence and a missing file is not an error.
     """
 
     try:
@@ -120,7 +120,7 @@ def run_server(args: argparse.Namespace) -> None:
     reload = args.reload == "true"
     host = "127.0.0.1"
 
-    # Bind asset/base URL generation to the active runtime port (same env name as Next/Electron).
+    # Bind asset/base URL generation to the active runtime port (same env name as Next.js).
     os.environ["NEXT_PUBLIC_FAST_API"] = f"http://{host}:{args.port}"
     os.environ["LOG_LEVEL"] = args.log_level.upper()
     file_log_handler = configure_file_logging(args.log_level)

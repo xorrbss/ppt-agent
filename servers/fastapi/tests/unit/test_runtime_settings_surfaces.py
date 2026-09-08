@@ -1,7 +1,5 @@
 import asyncio
 import importlib
-import json
-from pathlib import Path
 
 import pytest
 
@@ -113,13 +111,3 @@ def test_mem0_ollama_fallback_uses_snapshot_without_reusing_openai_secret(monkey
     assert llm_config["openai_base_url"] == "http://snapshot-ollama:11434/v1"
     assert llm_config["api_key"] == "ollama"
 
-
-def test_pyinstaller_spec_bundles_the_runtime_settings_registry():
-    fastapi_root = Path(__file__).resolve().parents[2]
-    spec_text = (fastapi_root / "server.spec").read_text(encoding="utf-8")
-    registry_path = fastapi_root / "constants" / "settings_registry.json"
-
-    assert '("constants/settings_registry.json", "constants")' in spec_text
-    payload = json.loads(registry_path.read_text(encoding="utf-8"))
-    assert payload["schemaVersion"] == 1
-    assert payload["settings"]

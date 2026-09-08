@@ -63,13 +63,6 @@
           ]
         },
         {
-          "path": "electron/scripts/export-runtime-sync-contract.cjs",
-          "requiredContains": [
-            "../../scripts/lib/presentation-export-assets.cjs",
-            "verifySharedDownloadedAsset"
-          ]
-        },
-        {
           "path": "compatibility/presentation-export-v0.4.8-release-receipt.json",
           "requiredContains": [
             "c0375365b11dcad89db71df39f6b303dcf0cd33f",
@@ -86,7 +79,9 @@
         },
         {
           "path": "presentation-export/.installed-version",
-          "requiredContains": ["v0.4.8"]
+          "requiredContains": [
+            "v0.4.8"
+          ]
         }
       ]
     },
@@ -97,8 +92,12 @@
       "files": [
         {
           "path": "servers/nextjs/lib/export-render-url.ts",
-          "requiredContains": ["http://127.0.0.1:"],
-          "forbiddenContains": ["http://0.0.0.0:"]
+          "requiredContains": [
+            "http://127.0.0.1:"
+          ],
+          "forbiddenContains": [
+            "http://0.0.0.0:"
+          ]
         },
         {
           "path": "servers/nextjs/lib/export-process-supervisor.ts",
@@ -362,7 +361,7 @@
       ]
     },
     {
-      "id": "windows-sqlite-sharp-electron",
+      "id": "windows-sqlite-sharp",
       "category": "windows-sync",
       "rationale": "Preserve Windows SQLite path normalization, pinned Sharp/native runtime packaging, Electron resource containment, and renderer isolation settings.",
       "files": [
@@ -379,30 +378,6 @@
           "requiredContains": [
             "sharpNativeRuntimeTrace",
             "node_modules/@img/sharp-"
-          ]
-        },
-        {
-          "path": "electron/scripts/verify-packaging-inputs.cjs",
-          "requiredContains": [
-            "EXPECTED_EXPORT_VERSION = \"v0.4.8\"",
-            "Export runtime marker must be"
-          ]
-        },
-        {
-          "path": "electron/app/utils/resource-root.ts",
-          "requiredContains": [
-            "resource path must stay below resourceRoot"
-          ]
-        },
-        {
-          "path": "electron/app/main.ts",
-          "requiredContains": [
-            "buildSecureAppWebPreferences",
-            "app.enableSandbox"
-          ],
-          "forbiddenContains": [
-            "contextIsolation: false",
-            "nodeIntegration: true"
           ]
         }
       ]

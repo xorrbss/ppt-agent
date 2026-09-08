@@ -119,7 +119,7 @@ def test_explicit_loopback_refresh_publishes_saved_user_config_for_next_request(
     tmp_path,
 ):
     config_path = tmp_path / "userConfig.json"
-    refresh_token = "electron-control-token"
+    refresh_token = "local-control-token"
     monkeypatch.setenv("USER_CONFIG_PATH", str(config_path))
     monkeypatch.setenv("CAN_CHANGE_KEYS", "true")
     monkeypatch.setenv("PRESENTON_RUNTIME_SETTINGS_REFRESH_TOKEN", refresh_token)
@@ -216,7 +216,7 @@ def test_explicit_loopback_refresh_publishes_saved_user_config_for_next_request(
 def test_secure_loopback_refresh_writes_in_memory_settings_without_legacy_file(
     monkeypatch,
 ):
-    refresh_token = "electron-control-token"
+    refresh_token = "local-control-token"
     monkeypatch.setenv("PRESENTON_RUNTIME_SETTINGS_REFRESH_TOKEN", refresh_token)
     saved = []
 
