@@ -41,6 +41,9 @@ from services.presentation_export_attempt_service import (
     terminalize_export_attempt_failed,
     terminalize_export_attempt_succeeded,
 )
+from services.presentation_export_hybrid_attempt import (
+    provenance_is_hybrid_attempt,
+)
 from services.presentation_export_capabilities import (
     PresentationExportContractError,
     PresentationExportFreshnessError,
@@ -743,17 +746,6 @@ async def complete_direct_fidelity_export_attempt(
     }
 
 
-def _is_hybrid_attempt(attempt: PresentationExportAttempt) -> bool:
-    provenance = attempt.provenance or {}
-    evidence = provenance.get("capability_evidence") or {}
-    compiler = (provenance.get("compiler_runtime") or {}).get("compiler")
-    return (
-        evidence.get("export_mode") == "hybrid"
-        or compiler == "authored-hybrid"
-        or provenance.get("coverage_manifest") is not None
-    )
-
-
 def _projected_value(value: dict[str, Any], snake: str, camel: str) -> Any:
     return value.get(snake) if snake in value else value.get(camel)
 
@@ -783,7 +775,11 @@ async def list_direct_hybrid_export_attempt_history(
             )
         )
     ).scalars().all()
-    attempts = [attempt for attempt in attempts if _is_hybrid_attempt(attempt)]
+    attempts = [
+        attempt
+        for attempt in attempts
+        if provenance_is_hybrid_attempt(attempt.provenance)
+    ]
     newest_success: dict[tuple[int, str], PresentationExportAttempt] = {}
     for attempt in attempts:
         key = (attempt.source_revision, attempt.format)
