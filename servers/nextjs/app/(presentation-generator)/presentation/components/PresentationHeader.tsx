@@ -157,7 +157,6 @@ const PresentationHeader = ({
 
   const workspaceHistoryEnabled =
     workspaceCommandsEnabled && Boolean(onWorkspaceCommand);
-  const historyEnabled = workspaceHistoryEnabled;
   const { onUndo, onRedo, canUndo, canRedo } = usePresentationUndoRedo(
     false,
     workspaceHistoryEnabled ? onWorkspaceCommand : undefined,
@@ -418,7 +417,7 @@ const PresentationHeader = ({
             presentationData={presentationData}
             isStreaming={isStreaming}
             mutationsEnabled={mutationsEnabled}
-            historyEnabled={historyEnabled}
+            historyEnabled={workspaceHistoryEnabled}
             canUndo={canUndo}
             canRedo={canRedo}
             onUndo={onUndo}
@@ -444,6 +443,7 @@ const PresentationHeader = ({
               onOpenHybridExportHistory={openHybridExportHistory}
               historyDisabled={isStreaming === true}
               hybridDisabledReason={hybridDisabledReason}
+              presentation={presentationData}
               manifestBindingLabel={
                 authoredCapabilityStatus.state === "ready" && authoredCapabilityStatus.readiness.version === "v1-fallback"
                   ? `동일 manifest · revision ${authoredCapabilityStatus.readiness.projection.presentationRevision} · ${authoredCapabilityStatus.readiness.projection.manifestDigest ?? "미기록"}`

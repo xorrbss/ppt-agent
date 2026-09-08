@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 import type { PptxExportMode } from "./types";
+import { presentationExportBlockReason } from "../../utils/masterPresentation";
 
 interface ExportMenuProps {
   isAuthoredDeck: boolean;
@@ -19,6 +20,8 @@ interface ExportMenuProps {
   onOpenHybridExportHistory?: () => void;
   historyDisabled?: boolean;
   hybridDisabledReason?: string;
+  /** The deck itself; its quality receipt can refuse every format. */
+  presentation?: unknown;
   manifestBindingLabel?: string;
 }
 
@@ -32,6 +35,7 @@ const ExportMenu = ({
   onOpenHybridExportHistory,
   historyDisabled = false,
   hybridDisabledReason,
+  presentation,
   manifestBindingLabel,
 }: ExportMenuProps) => {
   const t = useTranslations("exportMenu");
@@ -42,13 +46,18 @@ const ExportMenu = ({
     requestAnimationFrame(() => exportTriggerRef.current?.focus());
   };
 
+  const exportBlockReason = isAuthoredDeck
+    ? presentationExportBlockReason(presentation)
+    : undefined;
+  const blocked = exportDisabled || exportBlockReason !== undefined;
   const ExportOptions = ({ mobile }: { mobile: boolean }) => (
     <div className={`rounded-[18px] max-md:mt-4 ${mobile ? "" : "bg-white"} p-5`} aria-label={t("formatGroup")} role="group">
       <p className="text-sm font-medium text-[#19001F]">{t("chooseFormat")}</p>
+      {exportBlockReason ? <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-900" role="note" data-testid="export-blocked">{exportBlockReason}</p> : null}
       <div className="my-[18px] h-[1px] bg-[#E8E8E8]" />
       <div className="space-y-2">
         {isAuthoredDeck && <>
-          <Button type="button" onClick={() => { closeExportOptions(); void onExportPptx("fidelity"); }} disabled={exportDisabled} data-testid="export-pptx" variant="ghost" className="h-auto min-h-[72px] w-full items-start justify-between gap-3 whitespace-normal rounded-xl px-3 py-3 text-left text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] disabled:cursor-not-allowed" aria-label="Fidelity PPTX 내보내기">
+          <Button type="button" onClick={() => { closeExportOptions(); void onExportPptx("fidelity"); }} disabled={blocked} data-testid="export-pptx" variant="ghost" className="h-auto min-h-[72px] w-full items-start justify-between gap-3 whitespace-normal rounded-xl px-3 py-3 text-left text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] disabled:cursor-not-allowed" aria-label="Fidelity PPTX 내보내기">
             <span className="min-w-0 flex-1"><span className="block font-semibold leading-5">Fidelity PPTX · 1280×720 raster</span><span className="mt-0.5 block text-[11px] font-normal leading-[1.45] text-[#5F5B66]">각 슬라이드의 1280×720 렌더를 보존합니다. 접근 가능한 텍스트·개체 편집은 제공하지 않으며, CJK 글자 크기·밀도와 overflow/occlusion은 릴리스 receipt로 별도 확인합니다.</span></span>
             <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           </Button>
@@ -66,10 +75,10 @@ const ExportMenu = ({
             Hybrid 내보내기 이력 및 증거 <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           </Button>}
         </>}
-        <Button onClick={() => { closeExportOptions(); void onExportPdf(); }} disabled={exportDisabled} data-testid="export-pdf" variant="ghost" className={`h-auto min-h-10 w-full justify-between gap-3 whitespace-normal rounded-lg px-3 py-2.5 text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] ${mobile ? "border-none bg-white" : ""}`}>
+        <Button onClick={() => { closeExportOptions(); void onExportPdf(); }} disabled={blocked} data-testid="export-pdf" variant="ghost" className={`h-auto min-h-10 w-full justify-between gap-3 whitespace-normal rounded-lg px-3 py-2.5 text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] ${mobile ? "border-none bg-white" : ""}`}>
           PDF <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         </Button>
-        {!isAuthoredDeck && <Button onClick={() => { closeExportOptions(); void onExportPptx(); }} disabled={exportDisabled} data-testid="export-pptx" variant="ghost" className={`h-auto min-h-10 w-full justify-between gap-3 whitespace-normal rounded-lg px-3 py-2.5 text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] ${mobile ? "bg-white" : ""}`}>
+        {!isAuthoredDeck && <Button onClick={() => { closeExportOptions(); void onExportPptx(); }} disabled={blocked} data-testid="export-pptx" variant="ghost" className={`h-auto min-h-10 w-full justify-between gap-3 whitespace-normal rounded-lg px-3 py-2.5 text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] ${mobile ? "bg-white" : ""}`}>
           PPTX <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         </Button>}
       </div>

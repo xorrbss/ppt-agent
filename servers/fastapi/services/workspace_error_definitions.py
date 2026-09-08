@@ -357,6 +357,27 @@ WORKSPACE_ERROR_REGISTRY: dict[str, WorkspaceErrorDefinition] = {
             retryable=True,
             status_code=500,
         ),
+        # Without these the export quality gate fell through to the generic
+        # "The workspace request could not be completed", which tells the user
+        # nothing about a deck that no format can export and no retry can fix.
+        definition(
+            "quality_receipt_v3_blocked",
+            "This deck's quality review has not passed, so it cannot be "
+            "exported in any format. Remake the affected pages and try again.",
+            status_code=409,
+        ),
+        definition(
+            "quality_receipt_v3_required",
+            "This deck has no quality record yet, so it cannot be exported. "
+            "Remake it and try again.",
+            status_code=409,
+        ),
+        definition(
+            "quality_receipt_v3_digest_invalid",
+            "This deck's quality record could not be verified, so it cannot be "
+            "exported. Remake it and try again.",
+            status_code=409,
+        ),
         definition(
             "page_remake_request_invalid",
             "This page remake request is missing its page or preview.",

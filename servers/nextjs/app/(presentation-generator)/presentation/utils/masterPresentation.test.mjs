@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { presentationHybridQualityBlockReason } from "./masterPresentation.ts";
+import {
+  presentationExportBlockReason,
+  presentationHybridQualityBlockReason,
+} from "./masterPresentation.ts";
 
 const deck = (qualityReceiptV3) => ({ theme: { authoredQualityGate: { qualityReceiptV3 } } });
 
@@ -53,4 +56,24 @@ test("a non-string blocker entry cannot smuggle itself into the message", () => 
     deck({ gatePassed: false, blockers: [{ code: "x" }, 7] }),
   );
   assert.match(reason ?? "", /사유 미기재/);
+});
+
+test("a review that never ran blocks Hybrid only, not the whole deck", () => {
+  const pending = deck({ gatePassed: false, blockers: ["visualReview.required_failed"] });
+  assert.equal(presentationExportBlockReason(pending), undefined);
+  assert.match(presentationHybridQualityBlockReason(pending) ?? "", /vision-QA/);
+});
+
+test("a review that ran and failed blocks every format", () => {
+  const failed = deck({ gatePassed: false, blockers: ["visualReview.failed"] });
+  const all = presentationExportBlockReason(failed);
+  assert.match(all ?? "", /내보낼 수 없습니다/);
+  // The Hybrid reason repeats it so the Hybrid options are withheld too.
+  assert.equal(presentationHybridQualityBlockReason(failed), all);
+});
+
+test("a passed or absent receipt blocks nothing", () => {
+  assert.equal(presentationExportBlockReason(deck({ gatePassed: true, blockers: [] })), undefined);
+  assert.equal(presentationExportBlockReason({ theme: {} }), undefined);
+  assert.equal(presentationExportBlockReason(undefined), undefined);
 });

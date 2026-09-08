@@ -195,35 +195,55 @@ export function masterPinnedBodyOnlyContext(
   };
 }
 
+/** The blockers a deck's sealed V3 receipt still carries, if any. */
+function unresolvedQualityBlockers(presentation: unknown): string[] | undefined {
+  const gate = record(record(record(presentation)?.theme)?.authoredQualityGate);
+  const receipt = record(gate?.qualityReceiptV3);
+  // No receipt at all is the retained legacy-Fidelity compatibility path; it is
+  // the server's decision to make, not a reason to withhold anything here.
+  if (!receipt || receipt.gatePassed === true) return undefined;
+  return Array.isArray(receipt.blockers)
+    ? receipt.blockers.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
 /**
- * Why the editable Hybrid export would be refused for this deck, if it would.
+ * Why no export of this deck can succeed, if none can.
  *
- * The capability projection answers whether the *renderer* admits Hybrid; this
- * answers whether the deck's own quality receipt does. `export.pptx` accepts a
- * receipt whose only sealed blocker is a pending visual review for Fidelity
- * (decision `public-export.fidelity-visual-review-pending`, which forbids the
- * same waiver for Hybrid), so a deck generated without the vision-QA pass has
- * a Hybrid button that could only ever fail after the click. Say so instead.
+ * `export.pptx` waives a pending visual review for Fidelity alone (decision
+ * `public-export.fidelity-visual-review-pending`, which forbids the same waiver
+ * for Hybrid). Every other unresolved blocker refuses all formats, so offering
+ * the buttons would send the user into an export that fails in the timeline
+ * with a message they cannot act on.
+ */
+export function presentationExportBlockReason(
+  presentation: unknown,
+): string | undefined {
+  const blockers = unresolvedQualityBlockers(presentation);
+  if (blockers === undefined) return undefined;
+  if (blockers.length === 1 && blockers[0] === "visualReview.required_failed") {
+    return undefined;
+  }
+  if (blockers.includes("visualReview.failed")) {
+    return "시각 검수가 통과하지 못해 이 덱은 내보낼 수 없습니다. 페이지를 다시 만든 뒤 시도하세요.";
+  }
+  return `품질 검수가 통과하지 않아 내보낼 수 없습니다: ${blockers.join(", ") || "사유 미기재"}`;
+}
+
+/**
+ * Why the editable Hybrid export in particular would be refused.
+ *
+ * A review that never ran withholds Hybrid only; anything that stops the whole
+ * deck is reported by `presentationExportBlockReason` and repeated here so the
+ * Hybrid options are withheld too.
  */
 export function presentationHybridQualityBlockReason(
   presentation: unknown,
 ): string | undefined {
-  const gate = record(record(record(presentation)?.theme)?.authoredQualityGate);
-  const receipt = record(gate?.qualityReceiptV3);
-  // No receipt at all is the retained legacy-Fidelity compatibility path; it is
-  // the server's decision to make, not a reason to withhold the option here.
-  if (!receipt || receipt.gatePassed === true) return undefined;
-  const blockers = Array.isArray(receipt.blockers)
-    ? receipt.blockers.filter((entry): entry is string => typeof entry === "string")
-    : [];
-  // Only a review that never ran is waived, and only for Fidelity. A review
-  // that ran and failed refuses every format, so promising Fidelity here would
-  // send the user into an export that fails in the timeline.
+  const blockers = unresolvedQualityBlockers(presentation);
+  if (blockers === undefined) return undefined;
   if (blockers.length === 1 && blockers[0] === "visualReview.required_failed") {
     return "이 덱은 시각 검수 없이 생성되어 편집 가능한 Hybrid를 사용할 수 없습니다. 다시 만들 때 '고품질 검수 (vision-QA)'를 켜세요. Fidelity PPTX와 PDF는 그대로 내보낼 수 있습니다.";
   }
-  if (blockers.includes("visualReview.failed")) {
-    return "시각 검수가 통과하지 못해 이 덱은 Hybrid도 Fidelity도 내보낼 수 없습니다. 페이지를 다시 만든 뒤 시도하세요.";
-  }
-  return `품질 영수증이 통과하지 않아 내보낼 수 없습니다: ${blockers.join(", ") || "사유 미기재"}`;
+  return presentationExportBlockReason(presentation);
 }
