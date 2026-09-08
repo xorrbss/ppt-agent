@@ -36,12 +36,20 @@ def visual_review_outcome(
     accepted_fixed: Iterable[int],
     repair_details: Iterable[Mapping[str, object]] = (),
     error: BaseException | None = None,
+    review_stats: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Fold one ``revise_authored_deck`` run into receipt evidence.
 
     ``fixed`` is what the reviser changed, ``accepted_fixed`` what the capacity
     admission kept, ``repair_details`` the per-slide correction records the
     reviser produced for every critique that needed a fix.
+
+    ``review_stats`` is the reviser's own reachability count.  ``reviewedSlideCount``
+    says how many slides entered the stage; ``modelReviewedSlideCount`` says how
+    many the vision-QA MODEL actually looked at.  Until 2026-09-07 only the first
+    existed, and it read as a model review of the whole deck while the model half
+    was in fact unreachable on every slide (see
+    ``utils.llm_calls.author_vqa_critique_routing``).
     """
     fixed_set = {int(index) for index in fixed}
     accepted = {int(index) for index in accepted_fixed}
@@ -61,6 +69,11 @@ def visual_review_outcome(
         "acceptedFixedSlideCount": len(accepted & fixed_set),
         "residualSlideCount": len(residual),
         "residualSlideIndices": sorted(residual),
+        "modelReviewedSlideCount": (
+            int(review_stats.get("vqaReviewedSlideCount") or 0)
+            if review_stats is not None
+            else None
+        ),
     }
     if error is not None:
         payload["reasonCode"] = f"visual_review_error:{type(error).__name__}"

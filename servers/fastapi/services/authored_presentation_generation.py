@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+from hashlib import sha256
 import logging
 import os
 import time
@@ -70,6 +71,14 @@ from services.authored_header_contract_service import (
 from services.authored_presentation_pipeline import _author_illustrate_render_pipeline
 from services.authored_presentation_publication import publish_authored_presentation
 from services.authored_generation_progress_poller import mark_authored_generation_stage
+from services.authored_local_fit_evidence import (
+    AcceptedLocalFit,
+    AuthoredLocalFitRejected,
+    accept_unchanged_capture,
+    accept_verified_capture,
+    cache_accepted_capture,
+)
+from services.authored_local_fit_policy import html_digest, local_fit_policy
 from models.authored_vnext.deck import (
     DeckGenerationSnapshot,
     DeckSceneIR,
@@ -885,6 +894,62 @@ async def _bind_bounded_repair_evidence(
         bound_pngs.append(capture.png)
         bound_metrics.append(capture.browser_metrics)
     return bound_htmls, bound_pngs, bound_metrics
+
+
+async def _fit_content_revision(
+    html: str,
+    *,
+    slide_index: int,
+) -> AcceptedLocalFit:
+    """Run a provider content correction through the same local-fit boundary.
+
+    The provider result starts a new author revision.  A changed fitter result
+    therefore receives its own one-shot, fit-disabled reconstruction instead
+    of inheriting the receipt for the pre-VQA HTML.
+    """
+
+    original_digest = html_digest(html)
+    policy = local_fit_policy(
+        author_revision=original_digest,
+        original_html_digest=original_digest,
+        slide_index=slide_index,
+    )
+    fitted = await render_html_to_png_with_metrics(
+        html,
+        fit=True,
+        fit_policy=policy,
+    )
+    report = fitted.fit_report or {}
+    changed = bool(report.get("changed")) or bool(
+        fitted.fitted_html and fitted.fitted_html != html
+    )
+    if not changed:
+        return accept_unchanged_capture(
+            fitted,
+            original_html=html,
+            policy=policy,
+        )
+    verify_queued_at = time.monotonic()
+    verify_started_at = time.monotonic()
+    verified = await render_html_to_png_with_metrics(
+        fitted.fitted_html,
+        fit=False,
+        fit_policy={
+            **dict(policy),
+            "baseline": dict(report.get("baseline") or {}),
+        },
+        fresh=True,
+    )
+    verify_finished_at = time.monotonic()
+    return accept_verified_capture(
+        fitted,
+        verified,
+        original_html=html,
+        policy=policy,
+        verify_queued_at=verify_queued_at,
+        verify_started_at=verify_started_at,
+        verify_finished_at=verify_finished_at,
+    )
 
 
 async def _apply_bounded_header_eyebrow_fallback(
@@ -2144,6 +2209,22 @@ async def _generate_authored_presentation(
                 message=error.detail,
             ) from error
     pngs = pipeline.pngs
+    local_fit_receipts = [
+        dict(item)
+        for item in getattr(pipeline, "local_fit_receipts", ())
+        if isinstance(item, Mapping) and item
+    ]
+    if (
+        reference_mode != EXACT_RECONSTRUCTION
+        and not source_reflow
+        and len(local_fit_receipts) != len(htmls)
+    ):
+        raise AuthoredStageError(
+            slide_index=0,
+            stage="render",
+            code="authored_local_fit_evidence_incomplete",
+            retryable=False,
+        )
 
     fixed_count = 0
     vision_elapsed = 0.0
@@ -2238,6 +2319,18 @@ async def _generate_authored_presentation(
     await mark_stage("repair")
     repair_started = time.monotonic()
     repair_claims: dict[int, object] = {}
+    if gate_failures and local_fit_receipts:
+        first = min(int(item["slide_index"]) for item in gate_failures)
+        raise AuthoredStageError(
+            slide_index=first,
+            stage="render",
+            code="authored_local_fit_geometry_unresolved",
+            retryable=False,
+            message=(
+                "The active local-fit policy left a geometry/font failure; "
+                "provider repair and remake are disabled for this condition"
+            ),
+        )
     if gate_failures:
         flagged = sorted({int(item["slide_index"]) for item in gate_failures})
         if generation_job is not None:
@@ -2586,6 +2679,9 @@ async def _generate_authored_presentation(
             for index in range(len(pre_vqa_htmls))
         }
         fixed, accepted_fixed, vqa_repair_details = [], [], []
+        # Reachability of the vision-QA MODEL half, kept apart from the
+        # deterministic critique's own findings (QUAL-04).
+        vqa_review_stats: dict[str, object] = {}
         vision_started = time.monotonic()
         with provider_usage_scope(
             job_id=generation_job.id if generation_job is not None else None,
@@ -2623,10 +2719,32 @@ async def _generate_authored_presentation(
                     "local_patch_only": source_reflow,
                     "capacity_briefs": capacity_briefs,
                     "repair_details_sink": vqa_repair_details,
+                    "review_stats_sink": vqa_review_stats,
                     **vision_qa_kwargs,
                 }
                 vqa_provider_recovery_allowed: list[bool] | None = None
-                if has_author_provider_attempt_counts:
+                if local_fit_receipts:
+                    # Measured geometry/font findings cannot consume a
+                    # provider recovery. Content-only review findings retain
+                    # their existing correction policy; an admitted rewrite is
+                    # sent through a new local-fit author revision below.
+                    vqa_provider_recovery_allowed = [
+                        (
+                            not has_author_provider_attempt_counts
+                            or author_provider_attempt_counts[index] < 2
+                        )
+                        for index in range(len(htmls))
+                    ]
+                    revise_kwargs["provider_recovery_allowed"] = (
+                        vqa_provider_recovery_allowed
+                    )
+                    revise_kwargs["provider_recovery_blocked_issue_types"] = (
+                        "overflow",
+                        "overlap",
+                        "misalignment",
+                        "empty-space",
+                    )
+                elif has_author_provider_attempt_counts:
                     vqa_provider_recovery_allowed = [
                         count < 2 for count in author_provider_attempt_counts
                     ]
@@ -2671,7 +2789,29 @@ async def _generate_authored_presentation(
                     candidate_html = canonicalize_authored_roles(
                         candidate_htmls[index]
                     )
-                    candidate_metrics = await ensure_browser_metrics(candidate_html)  # measure, don't just look up
+                    candidate_fit: AcceptedLocalFit | None = None
+                    if local_fit_receipts:
+                        try:
+                            candidate_fit = await _fit_content_revision(
+                                candidate_html,
+                                slide_index=index,
+                            )
+                        except AuthoredLocalFitRejected as error:
+                            LOGGER.warning(
+                                "[authored] rejected post-VQA local-fit candidate "
+                                "slide=%d reason=%s digest=%s",
+                                index + 1,
+                                error.reason,
+                                digest_html(candidate_html),
+                            )
+                            continue
+                        candidate_html = candidate_fit.html
+                        candidate_pngs[index] = candidate_fit.png
+                        candidate_metrics = candidate_fit.metrics
+                    else:
+                        # Measure the exact correction instead of consulting a
+                        # potentially stale capture cache.
+                        candidate_metrics = await ensure_browser_metrics(candidate_html)
                     (
                         selected_html,
                         selected_png,
@@ -2693,6 +2833,9 @@ async def _generate_authored_presentation(
                         if selected_metrics is not None:
                             revised_metrics_by_slide[index] = selected_metrics
                         continue
+                    if candidate_fit is not None:
+                        local_fit_receipts[index] = candidate_fit.receipt
+                        cache_accepted_capture(candidate_fit, timeout=60)
                     accepted_fixed.append(index)
                     scene_envelope = replace_deck_scene_slide(
                         scene_envelope,
@@ -2720,12 +2863,14 @@ async def _generate_authored_presentation(
                         )
                 fixed_count = len(accepted_fixed)
                 visual_review_evidence = visual_review_outcome(
-                    slide_count=len(htmls), fixed=fixed, accepted_fixed=accepted_fixed, repair_details=vqa_repair_details)
+                    slide_count=len(htmls), fixed=fixed, accepted_fixed=accepted_fixed,
+                    repair_details=vqa_repair_details, review_stats=vqa_review_stats)
             except Exception as error:
                 traceback.print_exc()
                 visual_review_evidence = visual_review_outcome(
                     slide_count=len(htmls), fixed=fixed, accepted_fixed=accepted_fixed,
-                    repair_details=vqa_repair_details, error=error)
+                    repair_details=vqa_repair_details, review_stats=vqa_review_stats,
+                    error=error)
                 if bool(request._source_content_authored_reflow):
                     if isinstance(error, AuthoredVqaResidualDomIssuesError):
                         await _checkpoint_source_reflow_vqa_repairs(generation_job, error)
@@ -2801,6 +2946,20 @@ async def _generate_authored_presentation(
         "_authored_cooldown_wait_seconds",
         float(getattr(pipeline, "cooldown_wait_seconds", 0.0) or 0.0),
     )
+
+    if local_fit_receipts:
+        for index, (html, receipt) in enumerate(
+            zip(htmls, local_fit_receipts, strict=True)
+        ):
+            if receipt.get("finalHtmlDigest") != (
+                "sha256:" + sha256(html.encode("utf-8")).hexdigest()
+            ):
+                raise AuthoredStageError(
+                    slide_index=index,
+                    stage="render",
+                    code="authored_local_fit_post_acceptance_mutation",
+                    retryable=False,
+                )
 
     await mark_stage("checkpoint")
     checkpoint_started = time.monotonic()
@@ -2952,6 +3111,11 @@ async def _generate_authored_presentation(
         repaired_slide_indices=repaired_gate_indices,
     )
     quality_gate_receipt["sceneEnvelope"] = scene_envelope.receipt()
+    if local_fit_receipts:
+        quality_gate_receipt["localFit"] = {
+            "policyRevision": local_fit_receipts[0].get("policy_revision"),
+            "slides": list(local_fit_receipts),
+        }
     if flagged_slides:
         quality_gate_receipt["flaggedSlides"] = flagged_slides
     if source_readback_receipt is not None:
@@ -3172,7 +3336,13 @@ async def _generate_authored_presentation(
                     stage="persist",
                     code="authored_attempt_lost",
                 )
-        out_path = _build_authored_export(request, presentation_id, pngs, title)
+        out_path = _build_authored_export(
+            request,
+            presentation_id,
+            pngs,
+            title,
+            local_fit_receipts=(local_fit_receipts or None),
+        )
         if generation_job is not None and quality_receipt_v2 is not None:
             # Publication copies these bytes and returns a public download URL,
             # not a filesystem path. Collect before any publication commit so

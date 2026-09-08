@@ -12,6 +12,7 @@ import logging
 import os
 import time
 from collections import OrderedDict
+from collections.abc import Collection
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple
 
@@ -22,7 +23,14 @@ from services.authored_infographic_assets import (
     fill_scene_cutout,
     substitute_figure_icons,
 )
-from utils.authored_dom_categories import RESIDUAL_BLOCKING_CATEGORIES, critique_type_for_category
+from utils.authored_dom_categories import (
+    RESIDUAL_BLOCKING_CATEGORIES,
+    critique_type_for_category,
+)
+from utils.llm_calls.author_vqa_critique_routing import (
+    deterministic_critique_supersedes_vqa,
+    with_advisory_findings as _with_advisory_findings,
+)
 from utils.authored_dom_quality import (
     build_compact_dom_map,
     ensure_authored_qids,
@@ -554,7 +562,11 @@ async def revise_authored_deck(
     capacity_briefs: Optional[Sequence[str]] = None,
     # QUAL-04: receives every correction record even when ``return_details`` is off.
     repair_details_sink: Optional[list[dict[str, Any]]] = None,
+    # QUAL-04 reachability: how many slides the vision-QA MODEL actually looked
+    # at, as distinct from how many the deterministic critique flagged.
+    review_stats_sink: Optional[dict[str, Any]] = None,
     provider_recovery_allowed: Optional[Sequence[bool]] = None,
+    provider_recovery_blocked_issue_types: Optional[Collection[str]] = None,
     allow_patch_proposal_retry: bool = True,
 ) -> Any:
     """Bounded critique -> re-author -> re-render loop over an authored deck. Returns
@@ -598,6 +610,9 @@ async def revise_authored_deck(
         raise ValueError(
             "provider_recovery_allowed must match the reviewed slide count"
         )
+    blocked_recovery_issue_types = frozenset(
+        str(value) for value in (provider_recovery_blocked_issue_types or ())
+    )
     forced_full_reauthor = set(force_full_reauthor_indices or ())
     if any(type(index) is not int or index < 0 or index >= n for index in forced_full_reauthor):
         raise ValueError("force_full_reauthor_indices contains an invalid local index")
@@ -674,8 +689,14 @@ async def revise_authored_deck(
 
     def deterministic_critique(
         html: str, metrics: Mapping[str, Any] | None
-    ) -> SlideCritique | None:
-        return deterministic_dom_critique(local_report(html, metrics))
+    ) -> tuple[SlideCritique | None, bool]:
+        """The measured brief, and whether it stands in for the model call."""
+
+        report = local_report(html, metrics)
+        return (
+            deterministic_dom_critique(report),
+            deterministic_critique_supersedes_vqa(report),
+        )
 
     async def full_reauthor(
         i: int, current_html: str, critique: SlideCritique
@@ -810,6 +831,7 @@ async def revise_authored_deck(
         float,
         dict[str, Any] | None,
         object,
+        bool,
     ]:
         """Pipeline one slide through review -> correction -> render immediately.
 
@@ -825,6 +847,10 @@ async def revise_authored_deck(
                 current_html = ensure_authored_qids(current_html)
         current_png = pngs[i]
         changed = False
+        # QUAL-04 reachability: "the model looked at this slide" is a different
+        # fact from "the deterministic critique produced findings", and until
+        # 2026-09-07 the receipt could not tell them apart.
+        vqa_reviewed = False
         slide_critique_work = 0.0
         slide_correction_work = 0.0
         repair_detail: dict[str, Any] | None = None
@@ -847,12 +873,18 @@ async def revise_authored_deck(
 
         for cycle in range(max(1, max_cycles)):
             patch_ms = 0.0
-            critique = deterministic_critique(current_html, current_metrics)
-            if critique is not None:
+            critique, supersedes_vqa = deterministic_critique(
+                current_html, current_metrics
+            )
+            advisory = None if supersedes_vqa else critique
+            critique_source = "deterministic"
+            if critique is not None and supersedes_vqa:
                 pass
             elif cycle == 0 and initial_critiques is not None:
-                critique = initial_critiques[i]
+                critique_source = "initial"
+                critique = _with_advisory_findings(initial_critiques[i], advisory)
             else:
+                critique_source = "vision_qa"
                 review_started = time.monotonic()
                 # This re-review runs per slide AND per cycle inside the one
                 # deck-level `vqa` scope, so both have to reach the slot.
@@ -877,7 +909,10 @@ async def revise_authored_deck(
                         critique_round=cycle_round,
                     )
                 slide_critique_work += time.monotonic() - review_started
-                critique = critiques[0] if critiques else None
+                vqa_reviewed = True
+                critique = _with_advisory_findings(
+                    critiques[0] if critiques else None, advisory
+                )
             if critique is None or not critique.needs_fix:
                 break
 
@@ -899,6 +934,9 @@ async def revise_authored_deck(
             recovery_allowed = (
                 provider_recovery_allowed is None
                 or provider_recovery_allowed[i] is True
+            ) and not any(
+                issue.type in blocked_recovery_issue_types
+                for issue in critique.issues
             )
             try:
                 if (
@@ -1150,6 +1188,8 @@ async def revise_authored_deck(
                 }
             finally:
                 slide_correction_work += time.monotonic() - correction_started
+                if repair_detail is not None:
+                    repair_detail["critique_source"] = critique_source
 
         return (
             i,
@@ -1160,11 +1200,13 @@ async def revise_authored_deck(
             slide_correction_work,
             repair_detail,
             local_report(current_html, current_metrics),
+            vqa_reviewed,
         )
 
     # gather starts every per-slide pipeline concurrently while preserving input order.
     results = await asyncio.gather(*(review_and_fix(i) for i in range(n)))
     final_reports = []
+    vqa_reviewed_slides = 0
     for (
         i,
         new_html,
@@ -1174,7 +1216,9 @@ async def revise_authored_deck(
         correction_time,
         detail,
         final_report,
+        slide_vqa_reviewed,
     ) in results:
+        vqa_reviewed_slides += int(bool(slide_vqa_reviewed))
         critique_work += review_time
         correction_work += correction_time
         if changed:
@@ -1214,10 +1258,15 @@ async def revise_authored_deck(
                 repair_details=repair_details,
             )
 
+    if review_stats_sink is not None:
+        review_stats_sink["vqaReviewedSlideCount"] = vqa_reviewed_slides
+        review_stats_sink["deterministicOnlySlideCount"] = n - vqa_reviewed_slides
+
     LOGGER.info(
-        "[authored-vqa] slides=%d fixed=%d total=%.1fs critique_work=%.1fs "
-        "correction_work=%.1fs concurrency=%d cache_size=%d",
+        "[authored-vqa] slides=%d model_reviewed=%d fixed=%d total=%.1fs "
+        "critique_work=%.1fs correction_work=%.1fs concurrency=%d cache_size=%d",
         n,
+        vqa_reviewed_slides,
         len(fixed),
         time.monotonic() - started,
         critique_work,

@@ -711,6 +711,23 @@ def inspect_authored_dom(
             "video",
         }
 
+    def owns_painted_text(item: Mapping[str, Any]) -> bool:
+        """Whether this element paints glyphs of its own, for the contrast check.
+
+        A text contrast ratio is a statement about glyphs the element itself
+        paints.  Structural card and wrapper divs inherit a ``color`` and carry
+        their own (often near-transparent) background, so the check used to read
+        a ratio for text that does not exist there -- and, when the browser
+        probe had declined to measure the element at all, invented one from the
+        computed style, compositing a 3.5%-alpha wash as if it were opaque
+        paint.  Replayed over 905 stored bench slides, 1,577 of 7,843 contrast
+        findings (20.1%) sat on such elements, including every finding below a
+        ratio of 2.0 in the run 48 deck.  Payloads from a probe that does not
+        report ownership keep the historical conservative behaviour.
+        """
+
+        return "has_owned_text" not in item or bool(item.get("has_owned_text"))
+
     occluded_fraction_threshold = 0.2
     continuous_occluded_fraction_threshold = 0.12
 
@@ -1389,7 +1406,7 @@ def inspect_authored_dom(
                     )
                 )
         style = item.get("computed_style", item.get("style", {}))
-        if isinstance(style, Mapping):
+        if isinstance(style, Mapping) and owns_painted_text(item):
             measurement = item.get("measurement")
             pixel_contrast_unavailable = (
                 item["contrast_ratio"] is None
