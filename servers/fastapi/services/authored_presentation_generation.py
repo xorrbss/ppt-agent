@@ -144,7 +144,7 @@ from services.authored_quality_gate_diagnostics import (
 )
 from services.authored_prompt_cache_report import log_author_stage_prompt_cache_summary_safely
 from services.authored_repair_receipts import PATCH_ROUND, REMAKE_FIRST_ROUND, TERMINAL_ROUND, repair_round_receipts
-from services.authored_repair_round_order import remake_first_flagged_slides
+from services.authored_repair_round_order import are_repair_calls_enabled, remake_first_flagged_slides
 from services.authored_terminal_slide_fallback import (
     MAX_REMAKES_PER_SLIDE,
     replayed_plan_kwargs,
@@ -804,7 +804,7 @@ async def _revise_gate_repair_candidates(
         for local_index, absolute_index in enumerate(flagged)
         if digest_html(revised_htmls[local_index]) == digest_html(htmls[absolute_index])
     ]
-    if not reviewed_local_indices:
+    if not reviewed_local_indices or not are_repair_calls_enabled():
         return revised_htmls, []
 
     subset_kwargs = dict(repair_kwargs)
