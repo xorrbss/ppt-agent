@@ -589,7 +589,14 @@ async function generatePackage(templateId, engine, engineBytes, rendererBytes) {
     const destination = path.join(manifestRoot, name);
     if (checkOnly) {
       const current = await readFile(destination).catch(() => null);
-      if (!current?.equals(expected)) throw new Error(`template package metadata is stale: ${name}`);
+      // Windows checkouts can materialise CRLF (core.autocrlf=true) even for paths that
+      // .gitattributes pins to LF (misconfiguration, submodule checkout, etc.); compare
+      // normalized text so a line-ending-only difference is not reported as stale, while
+      // real content differences still are.
+      const normalizeEol = (buffer) => buffer.toString("utf8").replace(/\r\n/g, "\n");
+      if (!current || normalizeEol(current) !== normalizeEol(expected)) {
+        throw new Error(`template package metadata is stale: ${name}`);
+      }
     } else {
       await writeFile(destination, expected);
     }
