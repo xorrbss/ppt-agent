@@ -752,6 +752,8 @@ export class PresentationGenerationApi {
             template: "authored",
             strategy: "authored",
             export_as: "pptx",
+            // Export refuses a "development" receipt in every format.
+            qualityProfile: "release",
             // Optional self-correction pass (render + vision-critique + re-author flagged).
             // OFF by default — it adds a second authoring round (~doubles time); the
             // design-system hardening already prevents most overflow/overlap. Opt in for

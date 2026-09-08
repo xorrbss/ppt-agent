@@ -19,6 +19,7 @@ from services.authored_quality_receipt_v2 import (
 from services.authored_visual_review_evidence import seal_visual_review_evidence
 from services.authored_vnext.capability_registry import (
     CAPABILITY_REGISTRY_DIGEST,
+    prompt_capability_clause,
     require_capability_metadata,
 )
 from services.authored_vnext.master.digests import canonical_digest
@@ -154,15 +155,15 @@ def _prompt_consumer(design_system_prompt: object | None) -> dict[str, object]:
             required=True,
             reason_code="prompt_checker_evidence_missing",
         )
-    if CAPABILITY_REGISTRY_DIGEST not in design_system_prompt:
+    # The clause, not the registry digest: the 2026-09-05 prompt audit removed
+    # that digest from the prompt, and looking for it here blocked every deck.
+    if prompt_capability_clause() not in design_system_prompt:
         return _consumer(
             "prompt",
             status="unavailable",
             required=True,
-            reason_code="prompt_capability_registry_missing",
+            reason_code="prompt_capability_clause_missing",
         )
-    # The V3 consumer wire seals the registry digest; the evidence snapshot
-    # additionally seals the actual prompt bytes below.
     return _consumer("prompt", status="passed", required=True)
 
 

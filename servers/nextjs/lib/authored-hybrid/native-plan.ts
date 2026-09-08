@@ -27,6 +27,10 @@ import type {
   AuthoredHybridTypographyIssue,
 } from "./schema.ts";
 import { validateHybridDataImageUrl } from "./security.ts";
+import {
+  mergeAdjacentTextPieces,
+  type PowerPointTextPiece,
+} from "./native-text-runs.ts";
 import type { AuthoredHybridNativeChartSource } from "./native-chart.ts";
 import type { AuthoredHybridNativeTableSource } from "./native-table.ts";
 import { serializeNativeTableFrame } from "./native-table.ts";
@@ -1805,12 +1809,6 @@ function textSegments(element: AuthoredHybridEditableTextElement): TextSegment[]
   }];
 }
 
-interface PowerPointTextPiece {
-  kind: "run" | "break";
-  text: string;
-  style: AuthoredHybridTextStyle;
-}
-
 function powerPointTextParagraphs(
   element: AuthoredHybridEditableTextElement
 ): PowerPointTextPiece[][] {
@@ -1838,7 +1836,7 @@ function powerPointTextParagraphs(
       }
     });
   }
-  return paragraphs;
+  return paragraphs.map(mergeAdjacentTextPieces);
 }
 
 function textSpacingPointValue(points: number): number {

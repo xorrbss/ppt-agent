@@ -26,6 +26,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * A shadow projection must never claim promotion or deployment. Absent and
+ * false are both "no claim" -- the same reading the server applies in
+ * `services/authored_vnext/semantic/editable_mvp_completion.py`, which accepts
+ * `not in (None, False)`. Requiring a literal `false` here rejected every deck
+ * the publisher writes, because it omits the key entirely, and silently
+ * demoted the whole deck to raster.
+ */
+function claimsReleaseAuthority(value: unknown): boolean {
+  return value !== undefined && value !== null && value !== false;
+}
+
 /** Explicit mode wins; old authored sentinels keep pre-mode rows working. */
 export function isAuthoredPresentation(
   presentation: StoredPresentationIdentity
@@ -62,8 +74,8 @@ export function presentationEditableHybridProfileId(
     projection.profileId !== EDITABLE_HYBRID_SHADOW_PROFILE_ID ||
     projection.status !== "shadow" ||
     projection.reasonCode !== "editable_hybrid_mvp_completion_not_sealed" ||
-    projection.promotionReady !== false ||
-    projection.deploymentAuthorized !== false ||
+    claimsReleaseAuthority(projection.promotionReady) ||
+    claimsReleaseAuthority(projection.deploymentAuthorized) ||
     typeof projection.deckId !== "string" ||
     !/^deck:[a-z0-9][a-z0-9._-]*$/u.test(projection.deckId) ||
     !Number.isSafeInteger(projection.deckRevision) ||

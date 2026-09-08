@@ -589,6 +589,7 @@ async def publish_authored_presentation(
                 else "editable_hybrid_scene_unavailable"
             ),
             "blockerDetail": scene_blocker,
+            "promotionReady": False,  # omitted, this read as a claim
             "deploymentAuthorized": False,
         }
         presentation.theme = {

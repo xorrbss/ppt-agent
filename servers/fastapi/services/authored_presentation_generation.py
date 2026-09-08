@@ -2671,7 +2671,7 @@ async def _generate_authored_presentation(
                     candidate_html = canonicalize_authored_roles(
                         candidate_htmls[index]
                     )
-                    candidate_metrics = get_cached_browser_metrics(candidate_html)
+                    candidate_metrics = await ensure_browser_metrics(candidate_html)  # measure, don't just look up
                     (
                         selected_html,
                         selected_png,

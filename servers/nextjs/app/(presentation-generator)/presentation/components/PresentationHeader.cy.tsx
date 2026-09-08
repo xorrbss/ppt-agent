@@ -30,6 +30,7 @@ const mountHeader = (
     pageRemake?: WorkspacePageRemakeRequester;
   },
   editableHybridProjection?: Record<string, unknown>,
+  authoredQualityGate?: Record<string, unknown>,
 ) => {
   store.dispatch(
     setPresentationData({
@@ -39,7 +40,17 @@ const mountHeader = (
       n_slides: 1,
       title: "deck",
       slides: [{ id: "slide-1", layout: "template-v2" }],
-      theme: editableHybridProjection ? { authored_vnext: editableHybridProjection } : null,
+      theme:
+        editableHybridProjection || authoredQualityGate
+          ? {
+              ...(editableHybridProjection
+                ? { authored_vnext: editableHybridProjection }
+                : {}),
+              ...(authoredQualityGate
+                ? { authoredQualityGate }
+                : {}),
+            }
+          : null,
       mode: isAuthoredDeck ? "authored" : "template",
       version: "v2-standard",
     } as any)
@@ -118,11 +129,9 @@ const FIXTURE_DIGEST = `sha256:${"a".repeat(64)}`;
 /**
  * A hybrid-ready capability projection on the retained v1 compatibility route.
  * The header only renders the Hybrid options when the server publishes a
- * hybrid-ready projection: 2800b3c ("feat(public-service): complete generation
- * and fidelity export path") retired Hybrid for the bounded v3 release profile,
- * whose `nativeSubsetStatus` is always "notApplicable". Pinning the projection
- * keeps this spec about the export labels instead of about which readiness
- * endpoint happens to answer.
+ * hybrid-ready projection. Pinning the projection keeps this spec about the
+ * export labels instead of about which readiness endpoint happens to answer;
+ * the bounded v3 route production actually serves has its own case below.
  */
 const hybridReadyCapabilityProjection = {
   schemaVersion: "workbench-capability-projection/v1",
@@ -179,6 +188,86 @@ const stubHybridReadyCapabilityProjection = () => {
     statusCode: 200,
     body: hybridReadyCapabilityProjection,
   }).as("capabilityProjection");
+};
+
+/**
+ * The bounded release readiness the server actually publishes today: every
+ * receipt still missing, the renderer unattested, and `nativeSubsetStatus`
+ * pinned to "notApplicable" because this profile never claims the native
+ * subset. None of that withholds the diagnostic Hybrid export, so the header
+ * must still offer it. Freshness is checked against the wall clock, so the
+ * timestamps are relative rather than pinned.
+ */
+const boundedReleaseV3Projection = () => {
+  const capabilityIds = [
+    "ci.requiredChecks",
+    "evidence.visual",
+    "receipt.degradation",
+    "renderer.attestation",
+  ];
+  return {
+    schemaVersion: "workbench-capability-projection/v3",
+    presentationId: "deck-1",
+    presentationRevision: 7,
+    canonicalMode: "bundleGraph",
+    canonicalDigest: FIXTURE_DIGEST,
+    manifestDigest: FIXTURE_DIGEST,
+    degradedFidelityOnly: false,
+    releaseProfile: {
+      schemaVersion: "authored-bounded-hybrid-release-readiness/v3",
+      profileId: "profile:bounded-hybrid",
+      platformScope: { platform: "windows", renderer: "external-worker", archetypes: ["title"] },
+      evaluatedAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+      deckEvidenceReady: false,
+      serializerProfileReady: false,
+      nativeSubsetReady: false,
+      releaseCommitReady: false,
+      promotionReady: false,
+      deploymentAuthorized: false,
+      fullNativeParityStatus: "notApplicable",
+      independentVnextGenerationStatus: "notApplicable",
+      deckEvidenceCapabilityIds: ["evidence.visual"],
+      serializerProfileCapabilityIds: ["receipt.degradation", "renderer.attestation"],
+      nativeSubsetStatus: "notApplicable",
+      nativeSubsetCapabilityIds: [],
+      unsupportedNativeCapabilityIds: [
+        "receipt.chart",
+        "receipt.cjk",
+        "receipt.imageCrop",
+        "receipt.table",
+        "receipt.zBand",
+      ],
+      releaseCommitCapabilityIds: ["ci.requiredChecks"],
+      allRequiredCapabilityIds: [...capabilityIds].sort(),
+      profileDefinitionDigest: FIXTURE_DIGEST,
+      deckEvidenceReceiptDigests: [],
+      serializerProfileReceiptDigests: [],
+      nativeSubsetReceiptDigests: [],
+      releaseCommitReceiptDigests: [],
+      promotionReceiptDigests: [],
+      reasonCode: "release_evidence_incomplete",
+    },
+    capabilities: capabilityIds.map((capabilityId, index) => ({
+      capabilityId,
+      state: "ready",
+      reasonCode: "receipt_verified",
+      receiptDigest: `sha256:${String(index + 1).repeat(64)}`,
+      scope: { platform: "windows", renderer: "external-worker", archetypes: ["title"] },
+      serializerId: "presenton-authored-hybrid",
+      serializerVersion: "v3",
+      expiresAt: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+    })),
+    rendererAttestation: {
+      state: "unattested",
+      reasonCode: "renderer_attestation_missing",
+      attestationDigest: null,
+      environment: { os: "windows", boundary: "external-worker" },
+      expiresAt: null,
+    },
+    killSwitches: [],
+    releaseAuthorityReceiptDigests: [],
+  };
 };
 
 describe("PresentationHeader workspace controls", () => {
@@ -307,6 +396,67 @@ describe("PresentationHeader workspace controls", () => {
       .should("contain.text", "raster fallback 호환 모드")
       .and("have.attr", "aria-label")
       .and("contain", "글꼴 미포함");
+  });
+
+  it("offers Hybrid on the bounded v3 readiness route the server publishes", () => {
+    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
+    cy.intercept("GET", "**/authored-emission/capability-projection-v3", {
+      statusCode: 200,
+      body: boundedReleaseV3Projection(),
+    }).as("capabilityProjectionV3");
+    mountHeader(true, false, { enabled: true, command: workspaceCommand });
+    cy.wait("@capabilityProjectionV3");
+
+    openExportOptions();
+    cy.get('[data-testid="authored-export-hybrid"]').should("be.visible");
+    cy.get('[data-testid="authored-export-hybrid-compatibility"]').should("be.visible");
+    cy.get('[data-testid="authored-export-hybrid-unavailable"]').should("not.exist");
+    // The uncertified scope is disclosed in the status line, not by withholding
+    // the export.
+    cy.get('[data-testid="authored-capability-status"]').should(
+      "contain.text",
+      "native subset은 지원하지 않으며",
+    );
+  });
+
+  it("names the vision-QA pass when the deck's own receipt withholds Hybrid", () => {
+    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
+    cy.intercept("GET", "**/authored-emission/capability-projection-v3", {
+      statusCode: 200,
+      body: boundedReleaseV3Projection(),
+    }).as("capabilityProjectionV3");
+    // A deck generated without vision-QA: the renderer admits Hybrid, but the
+    // export gate waives a pending visual review for Fidelity only.
+    mountHeader(true, false, { enabled: true, command: workspaceCommand }, undefined, {
+      qualityReceiptV3: {
+        gatePassed: false,
+        blockers: ["visualReview.required_failed"],
+      },
+    });
+    cy.wait("@capabilityProjectionV3");
+
+    openExportOptions();
+    cy.get('[data-testid="export-pptx"]').should("contain.text", "Fidelity PPTX");
+    cy.get('[data-testid="authored-export-hybrid"]').should("not.exist");
+    cy.get('[data-testid="authored-export-hybrid-unavailable"]')
+      .should("contain.text", "시각 검수")
+      .and("contain.text", "vision-QA");
+  });
+
+  it("offers Hybrid once the deck's receipt has passed", () => {
+    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
+    cy.intercept("GET", "**/authored-emission/capability-projection-v3", {
+      statusCode: 200,
+      body: boundedReleaseV3Projection(),
+    }).as("capabilityProjectionV3");
+    mountHeader(true, false, { enabled: true, command: workspaceCommand }, undefined, {
+      qualityReceiptV3: { gatePassed: true, blockers: [] },
+    });
+    cy.wait("@capabilityProjectionV3");
+
+    openExportOptions();
+    cy.get('[data-testid="authored-export-hybrid"]').should("be.visible");
+    cy.get('[data-testid="authored-export-hybrid-unavailable"]').should("not.exist");
   });
 
   it("withholds Hybrid and keeps Fidelity when the capability projection is unavailable", () => {

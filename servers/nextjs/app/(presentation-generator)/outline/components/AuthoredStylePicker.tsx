@@ -322,8 +322,15 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
                     ? "불러오는 중"
                     : DEFAULT_AUTHORED_STYLE.name)}
               </p>
+              {/* The toggle decides more than generation time: the export
+                  gate refuses editable Hybrid PPTX for a deck that carries no
+                  visual-review evidence, and almost every real deck needs it
+                  (a cover or closing slide alone raises the deck to tier T1).
+                  Fidelity PPTX and PDF still export without it. */}
               <p className="mt-0.5 text-xs leading-5 text-[#666078]">
-                생성 전 시각 검수를 추가하면 시간이 더 걸릴 수 있습니다.
+                편집 가능한 PPTX(Hybrid)로 내보내려면 시각 검수가 필요합니다. 켜면 생성
+                시간이 약 두 배가 되고, 끄면 화면을 그대로 담는 Fidelity PPTX와 PDF만
+                내보낼 수 있습니다.
               </p>
             </div>
           </div>

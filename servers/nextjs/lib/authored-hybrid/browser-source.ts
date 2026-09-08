@@ -1261,8 +1261,29 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
       });
       for (var index = 0; index < runs.length; index += 1) {
         if (runs[index].text !== "\n") continue;
-        if (index > 0) runs[index - 1].text = runs[index - 1].text.replace(/ +$/g, "");
-        if (index + 1 < runs.length) runs[index + 1].text = runs[index + 1].text.replace(/^ +/g, "");
+        var previous = index > 0 ? runs[index - 1] : null;
+        var next = index + 1 < runs.length ? runs[index + 1] : null;
+        if (runs[index].softLineBreak) {
+          // A soft break is the browser's own wrap point, and it is dropped at
+          // serialization -- PowerPoint rewraps the paragraph itself. So the
+          // whitespace the browser wrapped at is the only word boundary the
+          // exported text will ever carry. Stripping both sides, as a surviving
+          // hard break may, glued the words together across every wrapped line
+          // ("...완전하게" + "보존되어야..."). Keep exactly one space, and keep
+          // none where the source had none, so a CJK mid-word wrap stays
+          // unspaced.
+          var wrapped =
+            (previous !== null && / $/.test(previous.text)) ||
+            (next !== null && /^ /.test(next.text));
+          if (previous !== null && previous.text !== "\n") {
+            previous.text = previous.text.replace(/ +$/g, "");
+            if (wrapped) previous.text += " ";
+          }
+          if (next !== null) next.text = next.text.replace(/^ +/g, "");
+          continue;
+        }
+        if (previous !== null) previous.text = previous.text.replace(/ +$/g, "");
+        if (next !== null) next.text = next.text.replace(/^ +/g, "");
       }
       for (var adjacent = 1; adjacent < runs.length; adjacent += 1) {
         if (runs[adjacent - 1].text.endsWith(" ") && runs[adjacent].text.startsWith(" ")) {

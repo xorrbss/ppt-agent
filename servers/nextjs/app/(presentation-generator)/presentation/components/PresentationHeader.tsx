@@ -144,7 +144,7 @@ const PresentationHeader = ({
   }, [expectedRevision, isAuthoredDeck, presentation_id]);
 
   const hybridDisabledReason = isAuthoredDeck
-    ? authoredHybridUnavailableReason(authoredCapabilityStatus, expectedRevision)
+    ? authoredHybridUnavailableReason(authoredCapabilityStatus, expectedRevision, presentationData)
     : undefined;
   // Compatibility facade for isolated header consumers. The presentation page
   // always supplies the server-derived projection; this fallback is removable
