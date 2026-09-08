@@ -15,9 +15,9 @@ Whitelist (nothing more):
   ``<style>`` blocks -- are stripped.
 * A ``hidden`` attribute on an element that has no *bound source text* (the
   element or any descendant carries ``data-source-block-id`` or ``data-qid``,
-  see ``services/source_content/source_stamp_dom.py`` and
-  ``services/composer/render_text.py``) removes the whole element: the author
-  meant it to disappear and admission does not accept ``hidden``.
+  see ``services/source_content/source_stamp_dom.py``) removes the whole
+  element: the author meant it to disappear and admission does not accept
+  ``hidden``.
 * A ``hidden`` attribute on an element WITH bound source text only has the
   attribute stripped, so the gate re-measures the element instead of losing
   source content.
@@ -117,9 +117,8 @@ _STYLE_BLOCK = re.compile(r"(?is)(<style\b[^>]*>)(.*?)(</style\s*>)")
 #: ``_CSS_BLOCK`` in ``utils/renderer_isolation.py``), so blocks are flat.
 _CSS_RULE_BLOCK = re.compile(r"([^{}]*)\{([^{}]*)\}")
 
-#: The attribute marking bound source text (``services/source_content/`` and
-#: ``services/composer/render_text.py``): present on the element itself or
-#: any descendant.
+#: The attribute marking bound source text (``services/source_content/``):
+#: present on the element itself or any descendant.
 _BOUND_TEXT_ATTRIBUTE = re.compile(r"(?i)\bdata-(?:source-block-id|qid)\s*=")
 
 #: A ``hidden`` boolean attribute on a start tag, with or without a value.

@@ -18,9 +18,8 @@ slides carry, and that the rest of the pipeline already keys on, are:
 * ``data-header-part="title"`` -- the header-contract marker the slide
   prompt asks for (``utils/authored_header_prompt.py``; vocabulary in
   ``models/authored_header_contract.py``).
-* ``data-semantic-role="title"`` -- emitted by the placeholder and composer
-  builders (``services/authored_author_stage_placeholder.py``,
-  ``services/composer/render_cover.py``).
+* ``data-semantic-role="title"`` -- emitted by the placeholder builder
+  (``services/authored_author_stage_placeholder.py``).
 * A ``data-qid`` in the primary title vocabulary (``title``, ``text.title``,
   ``cover.title``, ``header.title``, ``slide.title``, their ``.``-prefixed
   descendants, and ``*.title.text``).

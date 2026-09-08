@@ -1,8 +1,8 @@
 """Document-level title signals for a PPTX source, independent of slide content.
 
 ``pptx.py`` extracts the slide/notes object tree; this module resolves the
-two signals ``deck_title()`` (``services/composer/pipeline_inputs.py``) falls
-back to when the source's cover page carries no title-role text block:
+two signals a deck title resolver falls back to when the source's cover page
+carries no title-role text block:
 
 - the document title recorded in the OPC core-properties part
   (``docProps/core.xml`` ``dc:title``), and

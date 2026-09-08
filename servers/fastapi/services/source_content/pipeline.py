@@ -62,7 +62,6 @@ from utils.color_contrast import (
     readable_accent_color,
     readable_color_scheme,
 )
-from utils.get_env import get_composer_restyle_enabled
 
 
 SOURCE_MODE = "source_content_restyle"
@@ -142,12 +141,6 @@ async def admit_source_content_request(
         if not code.startswith("source_content_"):
             code = "source_content_manifest_invalid"
         raise _source_error(code, status_code=409) from error
-    if get_composer_restyle_enabled():
-        # Server-owned composition: the request keeps ``source_mode`` and one
-        # slide per admitted page; ``prepare_source_content_authored_reflow``
-        # then leaves it untouched and generation routes to the Composer.
-        request._composer_restyle = True
-        request.n_slides = int(request._source_document_outline.source_slide_count)
     return manifest
 
 
@@ -163,10 +156,6 @@ def prepare_source_content_authored_reflow(request: Any) -> str:
     outline = getattr(request, "_source_document_outline", None)
     if manifest is None or outline is None:
         raise _source_error("source_content_manifest_invalid", status_code=409)
-    if getattr(request, "_composer_restyle", False):
-        # The Composer reads the manifest and outline directly; no authored
-        # contract instruction, slides_markdown or vision pass is projected.
-        return str(manifest.reference_snapshot_id)
     try:
         slides = build_authored_text_image_slides(
             manifest=manifest,

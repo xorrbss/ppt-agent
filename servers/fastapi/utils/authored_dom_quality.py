@@ -56,8 +56,8 @@ from utils.authored_dom_text_escape import (
 from utils.authored_qid_namespace import (
     ensure_authored_qids,
     # Re-exported: the qid namespace moved to `authored_qid_namespace`, but the
-    # patch engine, composer and semantic candidate boundaries all import these
-    # two from here, and that import path is part of their contract.
+    # patch engine and semantic candidate boundaries both import these two
+    # from here, and that import path is part of their contract.
     is_valid_authored_qid,  # noqa: F401
     validate_declared_authored_qids,  # noqa: F401
 )

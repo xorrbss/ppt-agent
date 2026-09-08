@@ -103,9 +103,10 @@ class SourceContentManifest(ContractModel):
     units: tuple[SourceContentUnit, ...]
     counts: SourceContentCounts
     manifest_digest: str
-    #: Captured since the Composer enrichment; ``None`` for manifests sealed
-    #: before it. Omitted from dumps while ``None`` so those stored manifests
-    #: still re-derive their recorded digest byte for byte.
+    #: Captured since manifest enrichment added slide-size capture; ``None``
+    #: for manifests sealed before it. Omitted from dumps while ``None`` so
+    #: those stored manifests still re-derive their recorded digest byte for
+    #: byte.
     slide_size: SourceSlideSize | None = None
     #: ``dc:title`` from ``docProps/core.xml`` (``pptx_document_identity.py``),
     #: whitespace-collapsed; ``None`` when the source never had one, when it

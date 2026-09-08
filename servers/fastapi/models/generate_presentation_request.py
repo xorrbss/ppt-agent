@@ -87,10 +87,6 @@ class GeneratePresentationRequest(BaseModel):
     _source_content_manifest: Any = PrivateAttr(default=None)
     _source_document_outline: Any = PrivateAttr(default=None)
     _source_content_authored_reflow: bool = PrivateAttr(default=False)
-    # Set at admission when COMPOSER_RESTYLE_ENABLED routes a restyle to the
-    # server-owned Composer; the request then keeps its source_mode and skips
-    # the authored rewrite.
-    _composer_restyle: bool = PrivateAttr(default=False)
     _authored_source_readback_receipt: Any = PrivateAttr(default=None)
     # Resolved once at generation admission and reused by authoring, repair and
     # publication.  It is intentionally private: callers select source policy

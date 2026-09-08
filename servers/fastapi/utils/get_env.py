@@ -318,17 +318,6 @@ def is_authored_visual_story_plan_enabled(
     )
 
 
-def get_composer_restyle_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Whether ``source_content_restyle`` is composed server-side by the Composer.
-
-    Off by default. With the flag unset a restyle request is rewritten into the
-    ordinary authored pipeline exactly as before the Composer existed.
-    """
-    return _is_truthy(get_setting_env("COMPOSER_RESTYLE_ENABLED", settings))
-
-
 def get_authored_export_fallback_limit(
     settings: RuntimeSettings | None = None,
 ) -> int:

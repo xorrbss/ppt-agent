@@ -12,12 +12,11 @@ titles and body text. Measuring all 39 styles under ``authored_styles/``
 against the derived tokens found 17 with contrast below WCAG's 4.5:1 body
 threshold.
 
-The Composer offline evaluation harness (``scripts/composer_offline_eval*``)
-never caught this because it defaulted to its own hardcoded ``NEUTRAL_TOKENS``
-placeholder palette: reaching ``_style_tokens`` at all required passing
-``--style``, which routine runs did not. That harness now defaults to the
-style the product generates with, but a CLI default is not a gate -- this
-test is, and it covers every style rather than one.
+A now-retired offline evaluation harness never caught this because it
+defaulted to its own hardcoded ``NEUTRAL_TOKENS`` placeholder palette:
+reaching ``_style_tokens`` at all required passing a non-default style,
+which routine runs did not. A CLI default is not a gate -- this test is,
+and it covers every style rather than one.
 
 This test is the independent oracle for the fix: it reimplements WCAG
 contrast math from scratch (it must NOT import any production color-contrast

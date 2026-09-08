@@ -1,13 +1,12 @@
 """Deck-title candidate cleaning from an uploaded PPTX's own file name.
 
-``title_from_file_name`` is the file-name half of the ``deck_title()``
-fallback chain (``services/composer/pipeline_inputs.py``): a user's own
-upload is typically named after its subject, so a cleaned candidate from it
-outranks the last-resort constant, but a generic or opaque name must not
-become the title. These are direct unit tests of the pure cleaning
-function; its wiring into ``extract_pptx_source_content`` (including the
-docProps/core.xml document title) is covered by
-``tests/unit/test_composer_manifest_enrichment.py``.
+``title_from_file_name`` is the file-name half of the deck-title fallback
+chain: a user's own upload is typically named after its subject, so a
+cleaned candidate from it outranks the last-resort constant, but a generic
+or opaque name must not become the title. These are direct unit tests of
+the pure cleaning function; its wiring into ``extract_pptx_source_content``
+(including the docProps/core.xml document title) is covered by
+``tests/unit/test_source_content_manifest_enrichment.py``.
 """
 
 from __future__ import annotations

@@ -576,9 +576,9 @@ class PresentationGenerationOperationHandler:
                         # WorkspaceOperationExecutionContext.extend_lease is a
                         # Protocol method, not enforced at runtime; resolve it
                         # defensively so a context double that predates this
-                        # capability (declared optional throughout the chain
-                        # down to run_composer_restyle) degrades to "no lease
-                        # to extend" instead of an AttributeError.
+                        # capability (declared optional throughout the generation
+                        # handler chain) degrades to "no lease to extend" instead
+                        # of an AttributeError.
                         extend_lease=getattr(context, "extend_lease", None),
                         sql_session=session,
                     )
