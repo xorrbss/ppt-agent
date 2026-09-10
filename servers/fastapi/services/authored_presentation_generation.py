@@ -1889,7 +1889,7 @@ async def _generate_authored_presentation(
             repair_claims.update(claim_outcome.claims)
             predeclared_terminal.extend(claim_outcome.predeclared)
             flagged = claim_outcome.flagged
-        if terminal_fallback_enabled:
+        if terminal_fallback_enabled and not source_reflow:
             # D7 remake-first: on a deck that may publish a flagged slide, a
             # fresh composition briefed with the gate's own defects beats
             # patching the failing HTML -- bench run 10 measured the patch
