@@ -11,6 +11,7 @@ from dataclasses import replace
 from typing import Any, Awaitable, Callable, Optional
 
 from services.authored_structural_repair import RepairAssessment, SlideRepairResult
+from services.provider_usage_instrumentation import _ACTIVE_SCOPE, provider_usage_scope
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 
 async def revise_structural_candidates(
@@ -193,15 +194,31 @@ async def revise_structural_candidates(
                     receipt["configured_model"] = str(get_model() or "") or None
                 except Exception:
                     pass
-                async with _get_vqa_sem():
-                    proposal = await propose_authored_slide_patch(
-                        current_png, compact_dom, critique,
-                        slide_index=absolute_index, slot_run=f"cycle-{cycle}",
-                        retry_invalid_model_patch=False,
-                        allow_source_reflow_safe_styles=True,
-                        repair_scope=scope,
-                        html=current_html,
-                    )
+                parent_usage_scope = _ACTIVE_SCOPE.get()
+                with provider_usage_scope(
+                    job_id=(
+                        parent_usage_scope.job_id
+                        if parent_usage_scope is not None
+                        else None
+                    ),
+                    operation="authored_generation",
+                    stage="repair_patch",
+                    attempt_number=(
+                        parent_usage_scope.attempt_number
+                        if parent_usage_scope is not None
+                        else 0
+                    ),
+                    slide_index=absolute_index,
+                ):
+                    async with _get_vqa_sem():
+                        proposal = await propose_authored_slide_patch(
+                            current_png, compact_dom, critique,
+                            slide_index=absolute_index, slot_run=f"cycle-{cycle}",
+                            retry_invalid_model_patch=False,
+                            allow_source_reflow_safe_styles=True,
+                            repair_scope=scope,
+                            html=current_html,
+                        )
                 if not proposal.ok or proposal.plan is None:
                     reason = (
                         proposal.failure_reason

@@ -525,6 +525,65 @@ def _structural_repair_double(monkeypatch, *, final_decision="admitted", duplica
     )
 
 
+def test_structural_proposal_uses_per_slide_repair_patch_scope(monkeypatch):
+    import uuid
+
+    from services.provider_usage_instrumentation import (
+        active_usage_scope_slide_index,
+        provider_usage_scope,
+    )
+    from utils.llm_calls import author_structural_repair_loop
+
+    double = _structural_repair_double(monkeypatch)
+    seen_slide_indices = []
+    opened_scopes = []
+    original_proposal = author_vision_qa.propose_authored_slide_patch
+    original_scope = author_structural_repair_loop.provider_usage_scope
+
+    async def observing_proposal(*args, **kwargs):
+        seen_slide_indices.append(active_usage_scope_slide_index())
+        return await original_proposal(*args, **kwargs)
+
+    def observing_scope(**kwargs):
+        opened_scopes.append(kwargs)
+        return original_scope(**kwargs)
+
+    monkeypatch.setattr(
+        author_vision_qa, "propose_authored_slide_patch", observing_proposal
+    )
+    monkeypatch.setattr(
+        author_structural_repair_loop, "provider_usage_scope", observing_scope
+    )
+    job_id = uuid.uuid4()
+
+    async def run():
+        with provider_usage_scope(
+            job_id=job_id,
+            operation="authored_generation",
+            stage="repair",
+            attempt_number=4,
+        ):
+            return await author_vision_qa.revise_authored_deck(
+                [double.original], [b"original"], ["content"], ["CONTENT"],
+                Brand(topic="topic"), "design", max_cycles=1,
+                slide_indices=[33], total_slides=35,
+                candidate_evaluator=double.evaluator,
+                initial_browser_metrics=[double.metrics],
+                structural_candidate_capture=double.capture,
+            )
+
+    asyncio.run(run())
+
+    assert seen_slide_indices == [33]
+    assert opened_scopes == [{
+        "job_id": job_id,
+        "operation": "authored_generation",
+        "stage": "repair_patch",
+        "attempt_number": 4,
+        "slide_index": 33,
+    }]
+
+
 @pytest.mark.parametrize("final_decision", ["admitted", "provisional", "reject"])
 def test_structural_repair_accumulates_only_in_memory_until_admitted(monkeypatch, final_decision):
     double = _structural_repair_double(monkeypatch, final_decision=final_decision)
