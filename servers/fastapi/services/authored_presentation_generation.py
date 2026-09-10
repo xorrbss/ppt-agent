@@ -1930,7 +1930,9 @@ async def _generate_authored_presentation(
             # document. It may only use the existing structured QID patch path
             # or the deterministic reducers below.
             "local_patch_only": True,
-            "fail_on_residual_dom_issues": True,
+            "fail_on_residual_dom_issues": not (
+                source_reflow and terminal_fallback_enabled
+            ),
             "allow_patch_proposal_retry": False,
             "candidate_validator": validate_source_repair_candidate,
             "capacity_briefs": [capacity_briefs[index] for index in flagged],
@@ -2009,16 +2011,16 @@ async def _generate_authored_presentation(
         }
         if source_reflow:
             manifest = request._source_content_manifest
-            outline = request._source_document_outline
+            source_outline = request._source_document_outline
             manifest = manifest.model_dump(mode="json", by_alias=True) if hasattr(manifest, "model_dump") else manifest
-            outline = outline.model_dump(mode="json", by_alias=True) if hasattr(outline, "model_dump") else outline
+            source_outline = source_outline.model_dump(mode="json", by_alias=True) if hasattr(source_outline, "model_dump") else source_outline
             source_units = {
                 str(unit.get("sourceUnitId") or unit.get("source_unit_id") or ""): unit
                 for unit in manifest.get("units", ())
             }
             evaluators = {}
             for index in flagged:
-                source_slide = outline["slides"][index]
+                source_slide = source_outline["slides"][index]
                 source_unit = source_units.get(str(
                     source_slide.get("sourceUnitId") or source_slide.get("source_unit_id") or ""
                 ))
@@ -2200,7 +2202,9 @@ async def _generate_authored_presentation(
                 if len(results_by_index) != len(flagged) or set(results_by_index) != set(flagged):
                     raise ValueError("authored_vqa_checkpoint_index_mapping_invalid")
                 for index in flagged:
-                    validate_repair_result(results_by_index[index], expected_slide_index=index)
+                    result = results_by_index[index]
+                    if result.final_status == "admitted":
+                        validate_repair_result(result, expected_slide_index=index)
                 revised_htmls = [results_by_index[index].html for index in flagged]
                 revised_pngs = [results_by_index[index].png for index in flagged]
                 revised_metrics = [results_by_index[index].metrics for index in flagged]
@@ -2218,6 +2222,11 @@ async def _generate_authored_presentation(
                 ) = frozen_gate_inputs[absolute_index]
                 if source_reflow:
                     result = results_by_index[absolute_index]
+                    if result.final_status != "admitted":
+                        predeclared_terminal.append(
+                            declare_unadmitted_gate_repair(absolute_index)
+                        )
+                        continue
                     if local_fit_receipts and digest_html(result.html) != digest_html(original_html):
                         receipt = source_repair_fit_receipts.get((absolute_index, digest_html(result.html)))
                         if receipt is None:

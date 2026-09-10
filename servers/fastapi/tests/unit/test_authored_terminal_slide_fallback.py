@@ -34,12 +34,14 @@ from services.authored_vnext.generation.scene_checkpoint import (
     SceneRepairBudgetExhausted,
 )
 from services.authored_evidence_ledger import DeckEvidenceLedger
+from services.authored_composition_policy import CompositionProfile
 from services.authored_generation_preflight import over_budget_violations
 from services.authored_generation_timing_receipt_e4 import (
     flagged_slide_entries,
     optional_top_level_fields,
 )
 from services.authored_quality_receipt_v2 import public_attempt_id
+from services.source_content.browser_readback import BrowserSourceReadbackResult
 from utils.llm_calls import author_vision_qa as author_vision_qa_mod
 from utils.llm_calls.author_deck import AuthoredDeckResult
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
@@ -85,6 +87,7 @@ class _FakeIssue:
     category = "overlap"
     detail = "two owned boxes overlap"
     severity = "high"
+    qids = ()
 
     def to_dict(self):
         return {
@@ -730,6 +733,126 @@ def _install_repair_round(monkeypatch, *, raises, candidate=None):
     return round_calls
 
 
+def _source_reflow_request(count):
+    request = _request()
+    request._source_content_authored_reflow = True
+    request._authored_composition_profile = CompositionProfile(
+        "source-verbatim", "verbatim", False, True, 2
+    )
+    request._source_content_manifest = {
+        "units": [
+            {"sourceUnitId": f"unit-{index}", "blocks": []}
+            for index in range(count)
+        ]
+    }
+    request._source_document_outline = {
+        "slides": [
+            {"sourceUnitId": f"unit-{index}"}
+            for index in range(count)
+        ]
+    }
+    return request
+
+
+def _install_source_reflow_contract_stubs(monkeypatch, count):
+    async def no_source_images(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr(
+        authored_generation_mod, "collect_source_image_candidates", no_source_images
+    )
+    monkeypatch.setattr(
+        authored_generation_mod,
+        "_source_block_bindings",
+        lambda _request: tuple({} for _ in range(count)),
+    )
+    monkeypatch.setattr(
+        authored_generation_mod,
+        "_source_image_block_bindings",
+        lambda _request: tuple({} for _ in range(count)),
+    )
+    monkeypatch.setattr(
+        authored_generation_mod, "_require_source_verbatim_bindings", lambda *_a: None
+    )
+    monkeypatch.setattr(
+        authored_generation_mod, "source_pages_are_numbered", lambda _bindings: False
+    )
+    monkeypatch.setattr(
+        authored_generation_mod, "inspect_slide_source_visibility", lambda **_kwargs: ()
+    )
+    monkeypatch.setattr(
+        authored_generation_mod, "make_source_repair_evaluator", lambda **_kwargs: object()
+    )
+    monkeypatch.setattr(
+        authored_generation_mod, "validate_visible_source_images", lambda *_a: None
+    )
+    receipt = BrowserSourceReadbackResult(
+        checked_slide_count=count, checked_block_count=0
+    )
+    monkeypatch.setattr(
+        authored_generation_mod,
+        "verify_source_verbatim_readback",
+        lambda **_kwargs: receipt,
+    )
+    browser_calls = []
+
+    def verify_browser(**kwargs):
+        browser_calls.append((len(kwargs["htmls"]), len(kwargs["browser_metrics"])))
+        return receipt
+
+    monkeypatch.setattr(
+        authored_generation_mod, "verify_browser_source_readback", verify_browser
+    )
+    final_gate_flags = []
+
+    async def final_gate(**kwargs):
+        final_gate_flags.append(list(kwargs["flagged_slide_indices"]))
+        return [
+            {"slide_index": index, "issues": [_FakeIssue().to_dict()]}
+            for index in kwargs["flagged_slide_indices"]
+        ]
+
+    monkeypatch.setattr(authored_generation_mod, "_final_authored_quality_gate", final_gate)
+    return browser_calls, final_gate_flags
+
+
+def _install_source_reflow_unresolved_round(monkeypatch):
+    fail_closed_values = []
+    monkeypatch.setattr(
+        authored_generation_mod,
+        "_deterministic_repair_candidate",
+        lambda **kwargs: kwargs["html"],
+    )
+    monkeypatch.setattr(
+        authored_generation_mod,
+        "preflight_authored_provider_repair",
+        lambda **_kwargs: SimpleNamespace(
+            provider_call_allowed=True, terminal=False, code=None, violations=()
+        ),
+    )
+
+    async def fake_revise(*args, **kwargs):
+        fail_closed = kwargs["fail_on_residual_dom_issues"]
+        fail_closed_values.append(fail_closed)
+        result = SimpleNamespace(
+            slide_index=kwargs["slide_indices"][0],
+            final_status="unresolved",
+            changed=False,
+            html=args[0][0],
+            png=args[1][0],
+            metrics=kwargs["initial_browser_metrics"][0],
+        )
+        kwargs["structural_results_sink"].append(result)
+        if fail_closed:
+            error = _residual_round_error(args[0])
+            error.repair_results = [result]
+            raise error
+        return [list(args[0]), list(args[1]), []]
+
+    monkeypatch.setattr(authored_service, "revise_authored_deck", fake_revise)
+    return fail_closed_values
+
+
 def _flagged_pipeline_stub(monkeypatch, htmls, flagged_index, evidence=None):
     """``evidence`` is the ``(ledger, attempt_id)`` pair the receipt path needs."""
 
@@ -852,6 +975,78 @@ def _locally_accepted_whole_page_failure_stub(monkeypatch, htmls, flagged_index)
     monkeypatch.setattr(
         authored_service, "_author_illustrate_render_pipeline", fake_pipeline
     )
+
+
+def test_source_reflow_unresolved_repair_is_predeclared_and_published_flagged(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
+    deck = [_REMADE_HTML, _TERMINAL_HTML]
+    _install_deck_stubs(monkeypatch, tmp_path, deck)
+    evidence, _recorded, _recorded_v3 = _install_receipt_evidence(monkeypatch)
+    _flagged_pipeline_stub(monkeypatch, deck, 1, evidence=evidence)
+    browser_calls, final_gate_flags = _install_source_reflow_contract_stubs(
+        monkeypatch, len(deck)
+    )
+    fail_closed_values = _install_source_reflow_unresolved_round(monkeypatch)
+
+    def forbidden_validation(*_args, **_kwargs):
+        raise AssertionError("unresolved source repair must not be validated")
+
+    monkeypatch.setattr(
+        authored_generation_mod, "validate_repair_result", forbidden_validation
+    )
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(
+                tmp_path, _source_reflow_request(len(deck)), _outline(len(deck))
+            )
+        )
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert result.path == "deck.pptx"
+    assert fail_closed_values == [False]
+    assert final_gate_flags == [[1]]
+    assert browser_calls == [(len(deck), len(deck))]
+    assert _pop_slide_ids(
+        presentation.theme["authoredQualityGate"]["flaggedSlides"]
+    ) == [
+        {
+            "index": 1,
+            "reason": "composition_safety:gate_repair_not_admitted",
+            "remakeAttempted": False,
+            "remakeOutcome": "verbatim_flag_only",
+        }
+    ]
+
+
+def test_source_reflow_unresolved_repair_still_fails_with_fallback_disabled(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "false")
+    deck = [_REMADE_HTML, _TERMINAL_HTML]
+    _install_deck_stubs(monkeypatch, tmp_path, deck)
+    _flagged_pipeline_stub(monkeypatch, deck, 1)
+    _install_source_reflow_contract_stubs(monkeypatch, len(deck))
+    fail_closed_values = _install_source_reflow_unresolved_round(monkeypatch)
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        with pytest.raises(Exception) as caught:
+            _run(
+                _generate_on_sqlite(
+                    tmp_path, _source_reflow_request(len(deck)), _outline(len(deck))
+                )
+            )
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert getattr(caught.value, "code", None) == (
+        "authored_composition_safety_gate_failed"
+    )
+    assert fail_closed_values == [True]
 
 
 def test_local_fit_accepted_whole_page_failure_flags_one_slide_without_aborting_the_deck(
