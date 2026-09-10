@@ -543,9 +543,11 @@ def evaluate_unified_gate(
     source = _mapping(_domain(evidence, "sourceReadback"))
     source_required = policy.require_source_readback or not (source and source.get("required") is False)
     if source_required:
+        source_integrity_passed = bool(source and source_readback_integrity_verified(source))
+        if source_integrity_passed and source.get("verified") is False:
+            statuses["sourceReadback"] = "pending"
         source_failed = source is None or (
-            source.get("verified") is not True
-            or source.get("passed") is False
+            not source_integrity_passed
             or bool(source.get("failures"))
             or bool(source.get("failedBlocks"))
             or bool(source.get("clipped"))
@@ -555,7 +557,7 @@ def evaluate_unified_gate(
         if source_failed:
             statuses["sourceReadback"] = "blocked"
             _append(blockers, "sourceReadback.failed")
-        elif source and source.get("verified") is True:
+        elif source_integrity_passed:
             statuses["sourceReadback"] = "passed"
         elif statuses["sourceReadback"] in {"pending", "not_assessed", "not_applicable"}:
             _append(blockers, "sourceReadback.unverified")
@@ -610,6 +612,29 @@ def evaluate_unified_gate(
         raster_fallbacks=raster_fallbacks,
         quality_status=quality_status,
         publication_status=statuses["publication"],
+    )
+
+
+def source_readback_integrity_verified(source: Mapping[str, object]) -> bool:
+    """Accept honest flagged-visibility receipts without relaxing integrity."""
+
+    if source.get("verified") is True and source.get("passed") is not False:
+        return True
+    flagged = source.get("flaggedVisibilityFailures")
+    visible = source.get("visibilityFailures")
+    return bool(
+        source.get("integrityVerified") is True
+        and source.get("verified") is False
+        and source.get("passed") is False
+        and isinstance(flagged, Sequence) and not isinstance(flagged, (str, bytes))
+        and list(flagged)
+        and isinstance(visible, Sequence) and not isinstance(visible, (str, bytes))
+        and list(flagged) == list(visible)
+        and not source.get("missingBlockIds")
+        and not source.get("orderViolations")
+        and not source.get("integrityFailures")
+        and not source.get("telemetryFailures")
+        and not source.get("diagnosticError")
     )
 
 

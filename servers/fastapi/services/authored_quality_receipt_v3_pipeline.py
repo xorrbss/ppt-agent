@@ -15,6 +15,7 @@ from services.authored_quality_receipt_v2 import (
     QualityReceiptV3Ledger,
     create_quality_receipt_v3_from_v2,
     quality_receipt_manifest_path,
+    source_readback_integrity_verified,
 )
 from services.authored_visual_review_evidence import seal_visual_review_evidence
 from services.authored_vnext.capability_registry import (
@@ -230,7 +231,7 @@ def _source_content_evidence(
 
     manifest = _mapping(source_manifest)
     readback = _mapping(source_readback)
-    if manifest is None or readback is None or readback.get("verified") is not True:
+    if manifest is None or readback is None or not source_readback_integrity_verified(readback):
         raise ValueError("authored_quality_v3_source_readback_missing")
     require_capability_metadata(readback.get("capabilityRegistry"), consumer="readback")
 

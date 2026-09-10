@@ -260,9 +260,11 @@ from services.authored_font_signal import body_font_median_signal
 from services.authored_visual_review_evidence import visual_review_not_assessed, visual_review_outcome
 from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
+    inspect_browser_source_readback,
     stamp_source_block_ids,
     verify_browser_source_readback,
 )
+from services.authored_terminal_slide_flag_only import source_visibility_flag_entries
 from services.source_content.readback import (
     SourceContentReadbackError,
     verify_source_verbatim_readback,
@@ -912,14 +914,21 @@ def _merge_flagged_slide_entries(
     for entry in entries:
         index = int(entry["index"])
         reason = entry.get("reason")
+        extra_reasons = entry.get("reasons")
+        entry_reasons: list[str] = []
+        if isinstance(extra_reasons, Sequence) and not isinstance(extra_reasons, (str, bytes)):
+            entry_reasons.extend(item for item in extra_reasons if isinstance(item, str))
+        elif isinstance(reason, str):
+            entry_reasons.append(reason)
         if index not in merged:
             merged[index] = dict(entry)
-            reasons_by_index[index] = [reason] if isinstance(reason, str) else []
+            reasons_by_index[index] = list(dict.fromkeys(entry_reasons))
             order.append(index)
             continue
         reasons = reasons_by_index[index]
-        if isinstance(reason, str) and reason not in reasons:
-            reasons.append(reason)
+        reasons.extend(item for item in entry_reasons if item not in reasons)
+        if "sourceVisibilityBlockIds" in entry:
+            merged[index]["sourceVisibilityBlockIds"] = entry["sourceVisibilityBlockIds"]
     result: list[dict[str, object]] = []
     for index in order:
         entry = merged[index]
@@ -2840,38 +2849,68 @@ async def _generate_authored_presentation(
             )
 
     source_readback_receipt = None
+    source_readback_payload = None
+    readback_retryable = True
     if source_reflow and composition_profile.text_mode == "verbatim":
         try:
+            readback_retryable = not terminal_fallback_enabled
             source_readback_receipt = verify_source_verbatim_readback(
                 manifest=request._source_content_manifest,
                 outline=request._source_document_outline,
                 htmls=htmls,
             )
             if evidence_ledger is not None:
-                browser_source_receipt = verify_browser_source_readback(
+                browser_source_receipt = (
+                    inspect_browser_source_readback if terminal_fallback_enabled
+                    else verify_browser_source_readback
+                )(
                     manifest=request._source_content_manifest,
                     outline=request._source_document_outline,
                     browser_metrics=final_browser_metrics,
                     htmls=htmls,
                 )
-                if not browser_source_receipt.passed:
-                    raise BrowserSourceReadbackError(
-                        "source_content_browser_readback_failed",
-                        detail="browser-observed source block contract failed",
-                        block_ids=tuple(browser_source_receipt.missing_block_ids),
-                        slide_indices=tuple(
-                            range(browser_source_receipt.checked_slide_count)
-                        ),
+                if terminal_fallback_enabled:
+                    visibility_entries, unflagged_visibility = source_visibility_flag_entries(
+                        outline=request._source_document_outline,
+                        block_ids=browser_source_receipt.visibility_failures,
+                        flagged_indices=[entry["index"] for entry in flagged_slides],
                     )
+                    hard_failure = bool(
+                        browser_source_receipt.missing_block_ids
+                        or browser_source_receipt.order_violations
+                        or browser_source_receipt.integrity_failures
+                        or browser_source_receipt.telemetry_failures
+                        or browser_source_receipt.diagnostic_error
+                    )
+                    readback_retryable = bool(
+                        browser_source_receipt.telemetry_failures
+                        or browser_source_receipt.diagnostic_error
+                    )
+                    if hard_failure or unflagged_visibility:
+                        raise BrowserSourceReadbackError(
+                            "source_content_browser_readback_failed",
+                            detail="browser source text/geometry/visibility contract failed",
+                            block_ids=tuple(dict.fromkeys((*browser_source_receipt.missing_block_ids, *browser_source_receipt.visibility_failures))),
+                            slide_indices=browser_source_receipt.failed_slide_indices,
+                            order_violations=browser_source_receipt.order_violations,
+                        )
+                    flagged_slides = _merge_flagged_slide_entries((*flagged_slides, *visibility_entries))
+                    object.__setattr__(request, "_authored_flagged_slides", flagged_slides)
                 source_readback_receipt = browser_source_receipt
-            request._authored_source_readback_receipt = source_readback_receipt.as_dict()
+            source_readback_payload = source_readback_receipt.as_dict()
+            if terminal_fallback_enabled and evidence_ledger is not None:
+                source_readback_payload.update(
+                    integrityVerified=True,
+                    flaggedVisibilityFailures=list(browser_source_receipt.visibility_failures),
+                )
+            request._authored_source_readback_receipt = source_readback_payload
         except (SourceContentReadbackError, BrowserSourceReadbackError) as error:
             raise AuthoredStageError(
                 slide_index=error.slide_indices[0] if error.slide_indices else 0,
                 stage="render",
                 code=error.code,
                 cause=error,
-                retryable=True,
+                retryable=readback_retryable,
                 message=error.detail,
             ) from error
 
@@ -2899,7 +2938,7 @@ async def _generate_authored_presentation(
         reviewPages=review_pages,
     )
     if source_readback_receipt is not None:
-        quality_gate_receipt["sourceReadback"] = source_readback_receipt.as_dict()
+        quality_gate_receipt["sourceReadback"] = source_readback_payload
     # H4/H6 evidence: deck instruments and the one vision advisory pass. Both
     # are receipt-only and knob-gated; neither can change what is published.
     await attach_deck_receipt_extras(
@@ -2946,8 +2985,8 @@ async def _generate_authored_presentation(
         else:
             capacity_evidence = {"browserObserved": False, "checks": {name: False for name in ("text", "title", "body", "font", "qid", "image")}}
         source_evidence = (
-            source_readback_receipt.as_dict()
-            if source_readback_receipt is not None
+            source_readback_payload
+            if source_readback_payload is not None
             else {"required": False, "status": "not_applicable"}
         )
         safety_evidence = {
@@ -3025,8 +3064,8 @@ async def _generate_authored_presentation(
             visual_review=visual_review_evidence,
             source_manifest=(request._source_content_manifest if source_reflow else None),
             source_readback=(
-                source_readback_receipt.as_dict()
-                if source_readback_receipt is not None
+                source_readback_payload
+                if source_readback_payload is not None
                 else None
             ),
             # These are the exact completed-deck artifacts, not registry

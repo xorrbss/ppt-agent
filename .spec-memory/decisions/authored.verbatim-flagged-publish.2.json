@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.verbatim-flagged-publish",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Allow visibility-only source readback failures on already flagged verbatim source-reflow slides while preserving fail-closed source integrity.",
+  "scope": [
+    "authored",
+    "source-content",
+    "source-reflow",
+    "publication"
+  ],
+  "invariants": [
+    "A source block must remain present, intact, unique, and in source order with complete browser telemetry.",
+    "A clipped or occluded block may publish only when its slide was already accepted by the terminal flag-only fallback.",
+    "The source readback receipt remains passed=false and verified=false and records integrityVerified=true plus every flagged visibility block ID."
+  ],
+  "forbidden": [
+    "Publish missing, reordered, duplicated, or integrity-failed source blocks.",
+    "Publish incomplete readback telemetry or a visibility failure on an unflagged slide."
+  ],
+  "evidence": [
+    "User decision recorded 2026-09-11",
+    "artifacts/authored-full-product-validation-20260910/run-10-readback-diagnosis/diagnosis.md",
+    "servers/fastapi/services/authored_presentation_generation.py",
+    "servers/fastapi/tests/unit/test_authored_terminal_slide_fallback.py"
+  ],
+  "supersedes": "authored.verbatim-flagged-publish@1",
+  "recordedAt": "2026-09-11T00:00:00+09:00"
+}

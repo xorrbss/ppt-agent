@@ -58,4 +58,35 @@ def verbatim_flagged_slides(
     )
 
 
-__all__ = ["flagged_entry", "terminal_reason", "verbatim_flagged_slides"]
+def source_visibility_flag_entries(
+    *, outline: Any, block_ids: Sequence[str], flagged_indices: Sequence[int]
+) -> tuple[tuple[dict[str, object], ...], tuple[str, ...]]:
+    """Bind visibility-only failures to slides already accepted as flagged."""
+
+    dump = getattr(outline, "model_dump", None)
+    value = dump(mode="json", by_alias=True) if callable(dump) else outline
+    slides = value.get("slides", ()) if isinstance(value, Mapping) else ()
+    allowed = {int(index) for index in flagged_indices}
+    remaining = set(block_ids)
+    entries: list[dict[str, object]] = []
+    for index, slide in enumerate(slides):
+        if not isinstance(slide, Mapping) or index not in allowed:
+            continue
+        reading_order = slide.get("readingOrder", slide.get("reading_order", ()))
+        matched = [block_id for block_id in block_ids if block_id in reading_order]
+        if not matched:
+            continue
+        remaining.difference_update(matched)
+        entry = flagged_entry(
+            index=index, reason="source_visibility", attempted=False,
+            outcome="verbatim_flag_only",
+        )
+        entry["sourceVisibilityBlockIds"] = matched
+        entries.append(entry)
+    return tuple(entries), tuple(block_id for block_id in block_ids if block_id in remaining)
+
+
+__all__ = [
+    "flagged_entry", "source_visibility_flag_entries", "terminal_reason",
+    "verbatim_flagged_slides",
+]

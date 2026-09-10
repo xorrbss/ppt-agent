@@ -214,13 +214,16 @@ WHERE o.id = '$OperationId';
     $flaggedSlides = if ($null -ne $flaggedSlidesProperty) { @($flaggedSlidesProperty.Value) } else { 'unavailable' }
     $missingBlocks = @(Get-JsonProperty $sourceReadback 'missingBlockIds')
     $visibilityFailures = @(Get-JsonProperty $sourceReadback 'visibilityFailures')
+    $flaggedVisibilityFailures = @(Get-JsonProperty $sourceReadback 'flaggedVisibilityFailures')
+    $visibilityAccounted = ($visibilityFailures.Count -eq $flaggedVisibilityFailures.Count) -and (($visibilityFailures -join "`0") -eq ($flaggedVisibilityFailures -join "`0"))
+    $integrityAccepted = ((Get-JsonProperty $sourceReadback 'passed') -eq $true -and (Get-JsonProperty $sourceReadback 'verified') -eq $true) -or (Get-JsonProperty $sourceReadback 'integrityVerified') -eq $true
     Add-AuditCheck $checks 'qualityGate.present' ($null -ne $qualityGate) ([bool]($null -ne $qualityGate)) $true
     Add-AuditCheck $checks 'qualityGate.documentCompleted' ((Get-JsonProperty $qualityGate 'documentCompleted') -eq $true) (Get-JsonProperty $qualityGate 'documentCompleted') $true
     Add-AuditCheck $checks 'sourceReadback.present' ($null -ne $sourceReadback) ([bool]($null -ne $sourceReadback)) $true
     Add-AuditCheck $checks 'sourceReadback.checkedSlides' (([int](Get-JsonProperty $sourceReadback 'checkedSlideCount')) -eq $ExpectedSlides) (Get-JsonProperty $sourceReadback 'checkedSlideCount') $ExpectedSlides
     Add-AuditCheck $checks 'sourceReadback.checkedBlocks' (([int](Get-JsonProperty $sourceReadback 'checkedBlockCount')) -eq $ExpectedSourceBlocks) (Get-JsonProperty $sourceReadback 'checkedBlockCount') $ExpectedSourceBlocks
-    Add-AuditCheck $checks 'sourceReadback.passedAndVerified' ((Get-JsonProperty $sourceReadback 'passed') -eq $true -and (Get-JsonProperty $sourceReadback 'verified') -eq $true) ([pscustomobject]@{ passed = (Get-JsonProperty $sourceReadback 'passed'); verified = (Get-JsonProperty $sourceReadback 'verified') }) 'true/true'
-    Add-AuditCheck $checks 'sourceReadback.noResiduals' (($missingBlocks.Count -eq 0) -and (([int](Get-JsonProperty $sourceReadback 'orderViolations')) -eq 0) -and ($visibilityFailures.Count -eq 0)) ([pscustomobject]@{ missingBlockIds = $missingBlocks.Count; orderViolations = (Get-JsonProperty $sourceReadback 'orderViolations'); visibilityFailures = $visibilityFailures.Count }) '0/0/0'
+    Add-AuditCheck $checks 'sourceReadback.integrityVerified' $integrityAccepted ([pscustomobject]@{ passed = (Get-JsonProperty $sourceReadback 'passed'); verified = (Get-JsonProperty $sourceReadback 'verified'); integrityVerified = (Get-JsonProperty $sourceReadback 'integrityVerified') }) 'passed+verified or integrityVerified'
+    Add-AuditCheck $checks 'sourceReadback.noResiduals' (($missingBlocks.Count -eq 0) -and (([int](Get-JsonProperty $sourceReadback 'orderViolations')) -eq 0) -and $visibilityAccounted) ([pscustomobject]@{ missingBlockIds = $missingBlocks.Count; orderViolations = (Get-JsonProperty $sourceReadback 'orderViolations'); visibilityFailures = $visibilityFailures.Count; flaggedVisibilityFailures = $flaggedVisibilityFailures.Count }) '0/0/visibility accounted by flagged slides'
 
     $downloadPath = Join-Path $runPath '07-download-evidence.json'
     $download = if (Test-Path -LiteralPath $downloadPath -PathType Leaf) { Get-Content -LiteralPath $downloadPath -Raw -Encoding UTF8 | ConvertFrom-Json } else { $null }
@@ -300,6 +303,7 @@ WHERE o.id = '$OperationId';
             timingReceiptFilePresent = (Test-Path -LiteralPath "$receiptBase-attempt-timing.json" -PathType Leaf)
         }
         flaggedSlides = $flaggedSlides
+        flaggedVisibilityFailures = $flaggedVisibilityFailures
         pptx = [pscustomobject]@{
             downloaded = $pptxExists
             sha256 = $pptxSha256

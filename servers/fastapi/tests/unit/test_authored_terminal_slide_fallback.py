@@ -41,7 +41,11 @@ from services.authored_generation_timing_receipt_e4 import (
     optional_top_level_fields,
 )
 from services.authored_quality_receipt_v2 import public_attempt_id
-from services.source_content.browser_readback import BrowserSourceReadbackResult
+from services.source_content.browser_readback import (
+    BrowserSourceBlockEvidence,
+    BrowserSourceReadbackError,
+    BrowserSourceReadbackResult,
+)
 from utils.llm_calls import author_vision_qa as author_vision_qa_mod
 from utils.llm_calls.author_deck import AuthoredDeckResult
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
@@ -754,7 +758,7 @@ def _source_reflow_request(count):
     return request
 
 
-def _install_source_reflow_contract_stubs(monkeypatch, count):
+def _install_source_reflow_contract_stubs(monkeypatch, count, browser_receipt=None):
     async def no_source_images(*_args, **_kwargs):
         return []
 
@@ -796,12 +800,27 @@ def _install_source_reflow_contract_stubs(monkeypatch, count):
     )
     browser_calls = []
 
-    def verify_browser(**kwargs):
+    def inspect_browser(**kwargs):
         browser_calls.append((len(kwargs["htmls"]), len(kwargs["browser_metrics"])))
-        return receipt
+        return browser_receipt or receipt
+
+    def verify_browser(**kwargs):
+        result = inspect_browser(**kwargs)
+        if not result.passed:
+            raise BrowserSourceReadbackError(
+                "source_content_browser_readback_failed",
+                detail="browser source text/geometry/visibility contract failed",
+                block_ids=(*result.missing_block_ids, *result.visibility_failures),
+                slide_indices=result.failed_slide_indices,
+                order_violations=result.order_violations,
+            )
+        return result
 
     monkeypatch.setattr(
         authored_generation_mod, "verify_browser_source_readback", verify_browser
+    )
+    monkeypatch.setattr(
+        authored_generation_mod, "inspect_browser_source_readback", inspect_browser
     )
     final_gate_flags = []
 
@@ -814,6 +833,34 @@ def _install_source_reflow_contract_stubs(monkeypatch, count):
 
     monkeypatch.setattr(authored_generation_mod, "_final_authored_quality_gate", final_gate)
     return browser_calls, final_gate_flags
+
+
+def _bind_source_block(request, *, slide_index, block_id):
+    request._source_content_manifest["units"][slide_index]["blocks"] = [
+        {
+            "kind": "text", "sourceBlockId": block_id,
+            "contentDigest": "sha256:" + "1" * 64,
+        }
+    ]
+    request._source_document_outline["slides"][slide_index]["readingOrder"] = [block_id]
+
+
+def _browser_failure_receipt(count, *, block_id, slide_index, missing=False):
+    evidence = () if missing else (
+        BrowserSourceBlockEvidence(
+            source_block_id=block_id, qid="q-source", rendered_text="source text",
+            bbox={"x": 1.0, "y": 1.0, "width": 10.0, "height": 10.0},
+            visible=True, clipped=False, occluded_fraction=0.1,
+            continuous_occluded_fraction=0.1,
+        ),
+    )
+    return BrowserSourceReadbackResult(
+        checked_slide_count=count, checked_block_count=0 if missing else 1,
+        evidence=evidence,
+        missing_block_ids=(block_id,) if missing else (),
+        visibility_failures=() if missing else (block_id,),
+        failed_slide_indices=(slide_index,),
+    )
 
 
 def _install_source_reflow_unresolved_round(monkeypatch):
@@ -1149,6 +1196,129 @@ def test_source_reflow_unresolved_vqa_still_fails_with_fallback_disabled(
 
     assert getattr(caught.value, "code", None) == "authored_vqa_residual_dom_issues"
     assert fail_closed_values == [True]
+
+
+def test_flagged_visibility_only_readback_publishes_and_records_reason(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
+    deck = [_REMADE_HTML, _TERMINAL_HTML]
+    block_id = "source-slide:2:text:1"
+    _install_deck_stubs(monkeypatch, tmp_path, deck)
+    evidence, _recorded, _recorded_v3 = _install_receipt_evidence(monkeypatch)
+    _flagged_pipeline_stub(monkeypatch, deck, 1, evidence=evidence)
+    receipt = _browser_failure_receipt(
+        len(deck), block_id=block_id, slide_index=1
+    )
+    _install_source_reflow_contract_stubs(
+        monkeypatch, len(deck), browser_receipt=receipt
+    )
+    _install_source_reflow_unresolved_round(monkeypatch)
+    request = _source_reflow_request(len(deck))
+    _bind_source_block(request, slide_index=1, block_id=block_id)
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(tmp_path, request, _outline(len(deck)))
+        )
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert result.path == "deck.pptx"
+    gate = presentation.theme["authoredQualityGate"]
+    flagged = _pop_slide_ids(gate["flaggedSlides"])[0]
+    assert flagged["reasons"] == [
+        "composition_safety:gate_repair_not_admitted", "source_visibility"
+    ]
+    assert flagged["sourceVisibilityBlockIds"] == [block_id]
+    source_readback = gate["sourceReadback"]
+    assert source_readback["passed"] is False
+    assert source_readback["verified"] is False
+    assert source_readback["integrityVerified"] is True
+    assert source_readback["flaggedVisibilityFailures"] == [block_id]
+
+
+def test_flagged_fallback_still_rejects_a_missing_source_block(monkeypatch, tmp_path):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
+    deck = [_REMADE_HTML, _TERMINAL_HTML]
+    block_id = "source-slide:2:text:1"
+    _install_deck_stubs(monkeypatch, tmp_path, deck)
+    evidence, _recorded, _recorded_v3 = _install_receipt_evidence(monkeypatch)
+    _flagged_pipeline_stub(monkeypatch, deck, 1, evidence=evidence)
+    _install_source_reflow_contract_stubs(
+        monkeypatch, len(deck), browser_receipt=_browser_failure_receipt(
+            len(deck), block_id=block_id, slide_index=1, missing=True
+        )
+    )
+    _install_source_reflow_unresolved_round(monkeypatch)
+    request = _source_reflow_request(len(deck))
+    _bind_source_block(request, slide_index=1, block_id=block_id)
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        with pytest.raises(Exception) as caught:
+            _run(_generate_on_sqlite(tmp_path, request, _outline(len(deck))))
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert getattr(caught.value, "code", None) == "source_content_browser_readback_failed"
+    assert caught.value.retryable is False
+
+
+def test_flagged_fallback_rejects_visibility_failure_on_unflagged_slide(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
+    deck = [_REMADE_HTML, _TERMINAL_HTML]
+    block_id = "source-slide:1:text:1"
+    _install_deck_stubs(monkeypatch, tmp_path, deck)
+    evidence, _recorded, _recorded_v3 = _install_receipt_evidence(monkeypatch)
+    _flagged_pipeline_stub(monkeypatch, deck, 1, evidence=evidence)
+    _install_source_reflow_contract_stubs(
+        monkeypatch, len(deck), browser_receipt=_browser_failure_receipt(
+            len(deck), block_id=block_id, slide_index=0
+        )
+    )
+    _install_source_reflow_unresolved_round(monkeypatch)
+    request = _source_reflow_request(len(deck))
+    _bind_source_block(request, slide_index=0, block_id=block_id)
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        with pytest.raises(Exception) as caught:
+            _run(_generate_on_sqlite(tmp_path, request, _outline(len(deck))))
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert getattr(caught.value, "code", None) == "source_content_browser_readback_failed"
+    assert caught.value.retryable is False
+
+
+def test_fallback_disabled_keeps_strict_visibility_readback(monkeypatch, tmp_path):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "false")
+    deck = [_REMADE_HTML]
+    block_id = "source-slide:1:text:1"
+    _install_deck_stubs(monkeypatch, tmp_path, deck)
+    evidence, _recorded, _recorded_v3 = _install_receipt_evidence(monkeypatch)
+    _flagged_pipeline_stub(monkeypatch, deck, None, evidence=evidence)
+    _install_source_reflow_contract_stubs(
+        monkeypatch, len(deck), browser_receipt=_browser_failure_receipt(
+            len(deck), block_id=block_id, slide_index=0
+        )
+    )
+    request = _source_reflow_request(len(deck))
+    _bind_source_block(request, slide_index=0, block_id=block_id)
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        with pytest.raises(Exception) as caught:
+            _run(_generate_on_sqlite(tmp_path, request, _outline(len(deck))))
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert getattr(caught.value, "code", None) == "source_content_browser_readback_failed"
+    assert caught.value.retryable is True
 
 
 def test_local_fit_accepted_whole_page_failure_flags_one_slide_without_aborting_the_deck(
