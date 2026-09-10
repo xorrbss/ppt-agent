@@ -1937,9 +1937,13 @@ def _v3_provider_call_blockers(evidence: Mapping[str, object]) -> tuple[str, ...
             _append(blockers, f"providerCalls.slide_duplicate:{slide_index}")
             continue
         observed_indices.add(slide_index)
-        initial, recovery, declared_total = call.get("initial"), call.get("recovery"), call.get("total")
+        initial = call.get("initial")
+        recovery = call.get("recovery")
+        rescue = call.get("rescue", 0)
+        declared_total = call.get("total")
         expected_initial = 0 if provider_free_allowed else 1
         allowed_recovery = (0,) if provider_free_allowed else (0, 1)
+        allowed_rescue = (0,) if provider_free_allowed else (0, 1)
         if (
             not isinstance(initial, int)
             or isinstance(initial, bool)
@@ -1947,6 +1951,9 @@ def _v3_provider_call_blockers(evidence: Mapping[str, object]) -> tuple[str, ...
             or not isinstance(recovery, int)
             or isinstance(recovery, bool)
             or recovery not in allowed_recovery
+            or not isinstance(rescue, int)
+            or isinstance(rescue, bool)
+            or rescue not in allowed_rescue
         ):
             _append(blockers, f"providerCalls.slide_budget_invalid:{slide_index}")
         if (
@@ -1954,7 +1961,9 @@ def _v3_provider_call_blockers(evidence: Mapping[str, object]) -> tuple[str, ...
             or isinstance(initial, bool)
             or not isinstance(recovery, int)
             or isinstance(recovery, bool)
-            or declared_total != initial + recovery
+            or not isinstance(rescue, int)
+            or isinstance(rescue, bool)
+            or declared_total != initial + recovery + rescue
         ):
             _append(blockers, f"providerCalls.slide_total_mismatch:{slide_index}")
     for missing in sorted(expected_indices - observed_indices):

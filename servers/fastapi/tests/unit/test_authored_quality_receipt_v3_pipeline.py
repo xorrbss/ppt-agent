@@ -125,6 +125,47 @@ async def test_live_generation_binds_v2_to_evidence_bound_v3() -> None:
     assert "visual_review=visual_review_evidence" in source
 
 
+@pytest.mark.anyio
+async def test_generation_records_third_author_call_as_distinct_rescue() -> None:
+    appended: list[dict] = []
+
+    class Port:
+        async def append_quality_receipt_v3(self, *, receipt, evidence) -> None:
+            appended.append(evidence)
+
+    receipt_v3 = await create_generation_quality_receipt_v3(
+        receipt_v2=_receipt_v2(),
+        job_id=None,
+        slide_roles=("cover",),
+        provider_attempt_counts=(3,),
+        repaired_slide_indices=(),
+        capacity_evidence={
+            "browserObserved": True,
+            "checks": {"font": True},
+            "violations": [],
+        },
+        safety_evidence={"status": "passed", "residuals": []},
+        browser_metrics=(
+            {"capabilityRegistry": capability_metadata(consumer="chromium")},
+        ),
+        visual_review=visual_review_outcome(
+            slide_count=1,
+            fixed=[0],
+            accepted_fixed=[0],
+        ),
+        source_manifest=None,
+        source_readback=None,
+        persistence_port=Port(),
+        durability_profile="public",
+    )
+
+    assert appended[0]["providerCalls"]["slides"] == [
+        {"slideIndex": 0, "initial": 1, "recovery": 1, "rescue": 1, "total": 3}
+    ]
+    assert "providerCalls.slide_budget_invalid:0" not in receipt_v3.blockers
+    assert "providerCalls.slide_total_mismatch:0" not in receipt_v3.blockers
+
+
 async def _sealed_visual_review(visual_review, *, roles=("cover",)) -> tuple[object, dict]:
     appended: list[dict] = []
 

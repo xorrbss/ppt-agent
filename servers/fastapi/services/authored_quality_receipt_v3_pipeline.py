@@ -303,7 +303,8 @@ async def create_generation_quality_receipt_v3(
             {
                 "slideIndex": index,
                 "initial": 1,
-                "recovery": count - 1,
+                "recovery": 1 if count >= 2 else 0,
+                "rescue": 1 if count >= 3 else 0,
                 "total": count,
             }
             for index, count in enumerate(provider_attempt_counts)
