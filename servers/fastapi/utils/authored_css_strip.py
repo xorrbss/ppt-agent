@@ -22,7 +22,11 @@ in ``ALLOWED_CSS_PROPERTIES`` (see ``renderer_css_policy`` module docstring
 for why each is refused): ``content``, ``content-visibility``, ``contain``,
 and any ``--*`` custom property. Leaving them in place means admission still
 rejects a slide that uses them for correctness reasons, not renderer-parser
-reasons -- stripping them here would silently launder a real defect.
+reasons -- stripping them here would silently launder a real defect. The only
+``content`` exception is an exact empty string, ``none``, or ``normal``: those
+values generate no text and no measurable content, so deleting the declaration
+cannot launder a visible-text defect. It only removes a decorative pseudo-element
+the model was already instructed to remove.
 
 Parsing strategy
 -----------------
@@ -54,6 +58,12 @@ from utils.renderer_css_policy import ALLOWED_CSS_PROPERTIES
 #: cannot handle them -- see ``renderer_css_policy`` module docstring. Never
 #: stripped: a slide using them keeps failing admission on its own terms.
 _EXEMPT_PROPERTIES: frozenset[str] = frozenset({"content", "content-visibility", "contain"})
+
+#: The only ``content`` values that cannot contribute rendered text or measured
+#: content. Everything else remains exempt from stripping and fails admission.
+_NON_RENDERING_CONTENT_VALUE = re.compile(
+    r"(?ix)^\s*(?:''|\"\"|none|normal)\s*(?:!\s*important\s*)?$"
+)
 
 _MAX_AT_RULE_PASSES = 8
 
@@ -210,6 +220,9 @@ def _strip_declarations(text: str) -> tuple[str, dict[str, int]]:
 
     def _replace(match: re.Match[str]) -> str:
         name = match.group(1).strip().lower()
+        if name == "content" and _NON_RENDERING_CONTENT_VALUE.fullmatch(match.group(2)):
+            counts[name] = counts.get(name, 0) + 1
+            return ""
         if name.startswith("--") or name in _EXEMPT_PROPERTIES or name in ALLOWED_CSS_PROPERTIES:
             return match.group(0)
         counts[name] = counts.get(name, 0) + 1
