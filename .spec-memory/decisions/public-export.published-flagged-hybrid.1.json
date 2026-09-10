@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.published-flagged-hybrid",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Hybrid export may admit a published, document-completed authored deck whose valid passed V2 gate has non-empty unique in-range verbatim_flag_only flags and whose sealed V3 blockers contain only visualReview.failed or providerCalls.slide_budget_invalid:<n>.",
+  "scope": [
+    "public-export",
+    "authored-hybrid",
+    "quality-receipt"
+  ],
+  "invariants": [
+    "The presentation lifecycle is DB-authoritatively published and the authored gate is documentStatus completed with documentCompleted true.",
+    "The V2 gate validates its digest and policy binding and has gatePassed true.",
+    "flaggedSlides is non-empty and every entry has remakeOutcome verbatim_flag_only with a unique integer index in the declared slideCount range.",
+    "The sealed V3 receipt has gatePassed false and every blocker is exactly visualReview.failed or providerCalls.slide_budget_invalid:<n>.",
+    "The V3 digest is checked after the compatibility predicate and must remain valid."
+  ],
+  "forbidden": [
+    "This is not a generic Hybrid bypass; any other blocker, invalid V2 evidence, invalid V3 digest, invalid flag entry, or non-published lifecycle refuses export.",
+    "This decision narrows and does not supersede public-export.fidelity-visual-review-pending or public-export.legacy-fidelity-quality-compatibility."
+  ],
+  "evidence": [
+    "artifacts/authored-full-product-validation-20260910/run-11-hybrid-export/diagnosis.md",
+    "servers/fastapi/services/workspace_export_quality_evidence.py",
+    "servers/fastapi/services/workspace_quality_export_operation_handlers.py",
+    "servers/fastapi/tests/unit/test_workspace_quality_export_operations.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-11T00:00:00+09:00"
+}

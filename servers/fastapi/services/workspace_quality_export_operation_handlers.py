@@ -15,7 +15,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from api.v1.auth.internal import authenticated_internal_request_headers
-from models.sql.presentation import PresentationModel
+from models.sql.presentation import PRESENTATION_LIFECYCLE_PUBLISHED, PresentationModel
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.slide import SlideModel
 from models.sql.workspace import WorkspaceOperation
@@ -637,6 +637,10 @@ class WorkspaceExportOperationHandler:
                             presentation.theme,
                             scene_digest=authored_scene_digest,
                             pptx_mode=pptx_mode,
+                            published=(
+                                presentation.lifecycle_status
+                                == PRESENTATION_LIFECYCLE_PUBLISHED
+                            ),
                         )
                     )
                 if (
@@ -696,6 +700,10 @@ class WorkspaceExportOperationHandler:
                         ),
                         "visual_review_pending": (
                             fidelity_quality_compatibility == "visual-review-pending"
+                        ),
+                        "published_flagged_compatibility": (
+                            fidelity_quality_compatibility
+                            == "published-flagged-hybrid"
                         ),
                         "release_readiness": (
                             "blocked"

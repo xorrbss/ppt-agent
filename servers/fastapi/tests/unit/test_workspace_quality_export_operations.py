@@ -33,6 +33,10 @@ from models.sql.workspace import (
 )
 from models.workspace import WorkspaceCommandRequest
 from services import workspace_artifact_publication_service as publication
+from services.authored_quality_receipt_v2 import (
+    QualityReceiptLedger,
+    create_quality_receipt_v2,
+)
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     WorkspaceOperationClaim,
@@ -73,6 +77,66 @@ TABLES = [
     PublicOperationAdmission.__table__,
     AsyncPresentationGenerationTaskModel.__table__,
 ]
+
+
+def _published_flagged_hybrid_theme(
+    *, blockers: list[str] | None = None
+) -> dict[str, object]:
+    receipt_v2 = create_quality_receipt_v2(
+        QualityReceiptLedger(),
+        attempt_id="published-flagged-hybrid",
+        revision=1,
+        ledger_digest="sha256:" + "a" * 64,
+        deck_html_digest="sha256:" + "b" * 64,
+        evidence={
+            "safety": {"status": "passed", "residuals": []},
+            "capacity": {
+                "browserObserved": True,
+                "checks": {
+                    name: True
+                    for name in ("text", "title", "body", "font", "qid", "image")
+                },
+            },
+            "sourceReadback": {"required": False, "status": "not_applicable"},
+        },
+    )
+    gate = {
+        **receipt_v2.to_dict(),
+        "documentStatus": "completed",
+        "documentCompleted": True,
+        "slideCount": 1,
+        "flaggedSlides": [
+            {"index": 0, "remakeOutcome": "verbatim_flag_only"}
+        ],
+    }
+    sealed = {
+        "schemaVersion": "quality-receipt/v3",
+        "attemptId": "published-flagged-hybrid",
+        "revision": 1,
+        "sequence": 0,
+        "eventType": "evaluation",
+        "evidenceDigest": "sha256:" + "1" * 64,
+        "capabilityRegistryDigest": "sha256:" + "2" * 64,
+        "capabilityConsumerStatuses": {"chromium": "passed"},
+        "qualityTier": "T1",
+        "t1Triggers": ["slide:0:repair"],
+        "blockers": blockers
+        or ["providerCalls.slide_budget_invalid:0", "visualReview.failed"],
+        "gatePassed": False,
+        "previousSchemaVersion": "quality-receipt/v2",
+        "previousVersionReceiptDigest": receipt_v2.receipt_digest,
+        "previousReceiptDigest": None,
+    }
+    receipt_digest = "sha256:" + hashlib.sha256(
+        json.dumps(
+            sealed,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+    gate["qualityReceiptV3"] = {**sealed, "receiptDigest": receipt_digest}
+    return {"authoredQualityGate": gate}
 
 
 def test_release_review_receipt_is_evidence_and_revision_bound() -> None:
@@ -1768,6 +1832,64 @@ def test_stale_export_publication_compensates_external_file(
             await engine.dispose()
 
     asyncio.run(scenario())
+
+
+def test_published_flagged_hybrid_accepts_only_known_terminal_blockers() -> None:
+    _digest, compatibility = _resolved_authored_quality_digest(
+        _published_flagged_hybrid_theme(),
+        scene_digest="sha256:" + "c" * 64,
+        pptx_mode="hybrid",
+        published=True,
+    )
+
+    assert compatibility == "published-flagged-hybrid"
+
+
+def test_published_flagged_hybrid_requires_publication_authority() -> None:
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="quality_receipt_v3_blocked",
+    ):
+        _resolved_authored_quality_digest(
+            _published_flagged_hybrid_theme(),
+            scene_digest="sha256:" + "c" * 64,
+            pptx_mode="hybrid",
+            published=False,
+        )
+
+
+def test_published_flagged_hybrid_rejects_non_whitelisted_blocker() -> None:
+    theme = _published_flagged_hybrid_theme(
+        blockers=[
+            "providerCalls.slide_budget_invalid:0",
+            "visualReview.failed",
+            "sourceContent.readback_mismatch",
+        ]
+    )
+
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="quality_receipt_v3_blocked",
+    ):
+        _resolved_authored_quality_digest(
+            theme,
+            scene_digest="sha256:" + "c" * 64,
+            pptx_mode="hybrid",
+            published=True,
+        )
+
+
+def test_published_flagged_compatibility_is_hybrid_only() -> None:
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="quality_receipt_v3_blocked",
+    ):
+        _resolved_authored_quality_digest(
+            _published_flagged_hybrid_theme(),
+            scene_digest="sha256:" + "c" * 64,
+            pptx_mode="fidelity",
+            published=True,
+        )
 
 
 def test_legacy_fidelity_compatibility_and_nonretryable_export_error(
