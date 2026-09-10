@@ -3,10 +3,30 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs/promises";
 
+import {
+  WindowsCleanupCoordinator,
+  parseWindowsProfileScan,
+  type WindowsCleanupTelemetry,
+  type WindowsProfileProcess,
+} from "./windows-cleanup-coordinator.ts";
+
 const KILL_GRACE_MS = 5_000;
 // CIM enumeration can be slow on otherwise healthy Windows hosts. Keep the
 // helper bounded without turning normal process inspection into a failure.
+//
+// This budget is only honest while it is spent on a helper that is running.
+// It used to be spent on contention instead: every capture ran its own
+// process-table scan, twelve captures run at once, and the resulting storm
+// timed out helpers that had barely started. The coordinator below makes the
+// scan shared and queues the helpers, which is why this stays at ten seconds
+// rather than being widened to cover a self-inflicted stall.
 const WINDOWS_HELPER_TIMEOUT_MS = 10_000;
+/** Helpers allowed to run at once across every concurrent teardown. */
+const WINDOWS_HELPER_CONCURRENCY = 4;
+/** How long one completed scan may answer teardowns that accept its start. */
+const WINDOWS_PROFILE_SCAN_CACHE_MS = 500;
+/** Kill attempts before teardown reports the processes it could not remove. */
+const WINDOWS_PROFILE_KILL_ATTEMPTS = 4;
 
 export async function accessible(filePath: string): Promise<boolean> {
   try {
@@ -47,6 +67,16 @@ async function runWindowsHelper(
   command: string,
   args: string[],
   options: { env?: NodeJS.ProcessEnv; timeoutMs?: number } = {}
+): Promise<Buffer> {
+  // The slot is taken before the child is spawned, so the timeout below starts
+  // when this helper starts rather than while it waits behind other helpers.
+  return cleanupCoordinator.runHelper(() => spawnWindowsHelper(command, args, options));
+}
+
+function spawnWindowsHelper(
+  command: string,
+  args: string[],
+  options: { env?: NodeJS.ProcessEnv; timeoutMs?: number }
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -105,29 +135,40 @@ export async function taskkillProcessTree(pid: number): Promise<void> {
   await runWindowsHelper("taskkill", ["/pid", String(pid), "/T", "/F"]);
 }
 
-async function windowsProcessesUsingProfile(profilePath: string): Promise<number[]> {
-  const output = await runWindowsHelper(
-    "powershell.exe",
-    [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      "$target=[Environment]::GetEnvironmentVariable('PRESENTON_AUTHORED_HYBRID_PROFILE');$pattern='(?i)(?:^|\\s)(?:\"--user-data-dir=([^\"]*)\"|''--user-data-dir=([^'']*)''|--user-data-dir=(?:\"([^\"]*)\"|''([^'']*)''|([^\\s\"'']+)))';Get-CimInstance Win32_Process | Where-Object { $line=[string]$_.CommandLine;$values=@([regex]::Matches($line,$pattern) | ForEach-Object { if ($_.Groups[1].Success) { $_.Groups[1].Value } elseif ($_.Groups[2].Success) { $_.Groups[2].Value } elseif ($_.Groups[3].Success) { $_.Groups[3].Value } elseif ($_.Groups[4].Success) { $_.Groups[4].Value } else { $_.Groups[5].Value } });@($values | Where-Object { $_ -ceq $target }).Count -gt 0 } | ForEach-Object { $_.ProcessId }",
-    ],
-    {
-      env: {
-        ...process.env,
-        PRESENTON_AUTHORED_HYBRID_PROFILE: profilePath,
-      },
-    }
-  );
-  return [...new Set(
-    output
-      .toString("utf8")
-      .split(/\s+/)
-      .map((value) => Number(value))
-      .filter((value) => Number.isSafeInteger(value) && value > 0)
-  )];
+// One scan for every profile, filtered in-process. The query it replaces took
+// the target profile through an environment variable and returned only the
+// matching process IDs, which made each concurrent teardown need a scan of its
+// own. Emitting `<pid>\t<user-data-dir>` for every occurrence lets one scan
+// answer them all; the match pattern itself is unchanged.
+const WINDOWS_PROFILE_SCAN_COMMAND =
+  "$pattern='(?i)(?:^|\\s)(?:\"--user-data-dir=([^\"]*)\"|''--user-data-dir=([^'']*)''|--user-data-dir=(?:\"([^\"]*)\"|''([^'']*)''|([^\\s\"'']+)))';Get-CimInstance Win32_Process | ForEach-Object { $owner=$_.ProcessId;$line=[string]$_.CommandLine;foreach ($m in [regex]::Matches($line,$pattern)) { if ($m.Groups[1].Success) { $v=$m.Groups[1].Value } elseif ($m.Groups[2].Success) { $v=$m.Groups[2].Value } elseif ($m.Groups[3].Success) { $v=$m.Groups[3].Value } elseif ($m.Groups[4].Success) { $v=$m.Groups[4].Value } else { $v=$m.Groups[5].Value };\"$owner`t$v\" } }";
+
+async function scanWindowsProfileProcesses(): Promise<WindowsProfileProcess[]> {
+  const output = await runWindowsHelper("powershell.exe", [
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
+    WINDOWS_PROFILE_SCAN_COMMAND,
+  ]);
+  return parseWindowsProfileScan(output.toString("utf8"));
+}
+
+const cleanupCoordinator = new WindowsCleanupCoordinator({
+  scan: scanWindowsProfileProcesses,
+  helperConcurrency: WINDOWS_HELPER_CONCURRENCY,
+  cacheTtlMs: WINDOWS_PROFILE_SCAN_CACHE_MS,
+});
+
+function windowsProcessesUsingProfile(
+  profilePath: string,
+  options: { notBefore?: number } = {}
+): Promise<number[]> {
+  return cleanupCoordinator.profileProcesses(profilePath, options);
+}
+
+/** Kernel-free counters for the shared scan and the helper queue. */
+export function windowsCleanupTelemetry(): WindowsCleanupTelemetry {
+  return cleanupCoordinator.telemetry();
 }
 
 export async function terminateWindowsProfileProcesses(profilePath: string): Promise<void> {
@@ -135,8 +176,13 @@ export async function terminateWindowsProfileProcesses(profilePath: string): Pro
   // `close` event. The per-capture profile is unique, so it is a safe process
   // identity even after the original launcher PID no longer exists.
   const helperErrors: unknown[] = [];
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const pids = await windowsProcessesUsingProfile(profilePath);
+  // Every scan this teardown reads must have started after the teardown did,
+  // and after each kill wave must post-date those kills. Without that the
+  // shared scan could answer with a process table from before the kill and
+  // teardown would either re-kill dead IDs or accept a stale all-clear.
+  let notBefore = Date.now();
+  for (let attempt = 0; attempt < WINDOWS_PROFILE_KILL_ATTEMPTS; attempt += 1) {
+    const pids = await windowsProcessesUsingProfile(profilePath, { notBefore });
     if (pids.length === 0) break;
     const terminations = await Promise.allSettled(
       pids.map((pid) => taskkillProcessTree(pid))
@@ -146,9 +192,10 @@ export async function terminateWindowsProfileProcesses(profilePath: string): Pro
         .filter((result) => result.status === "rejected")
         .map((result) => (result as PromiseRejectedResult).reason)
     );
+    notBefore = Date.now();
     await delay(100);
   }
-  const remaining = await windowsProcessesUsingProfile(profilePath);
+  const remaining = await windowsProcessesUsingProfile(profilePath, { notBefore });
   if (remaining.length > 0) {
     const residualError = new Error(
       `Windows Chrome cleanup left profile-associated process IDs: ${remaining.join(", ")}.`
@@ -164,7 +211,11 @@ export const __testOnlyRunWindowsHelper = runWindowsHelper;
 export const __testOnlyAssertWindowsProfileGone = async (
   profilePath: string
 ): Promise<void> => {
-  const remaining = await windowsProcessesUsingProfile(profilePath);
+  // An assertion about the process table right now must not be answered from a
+  // scan taken before the caller looked.
+  const remaining = await windowsProcessesUsingProfile(profilePath, {
+    notBefore: Date.now(),
+  });
   if (remaining.length > 0) {
     throw new Error(
       `Windows Chrome cleanup left profile-associated process IDs: ${remaining.join(", ")}.`
