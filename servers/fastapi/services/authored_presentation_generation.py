@@ -2416,7 +2416,9 @@ async def _generate_authored_presentation(
                     )
                 )
                 if source_reflow:
-                    vision_qa_kwargs["fail_on_residual_dom_issues"] = True
+                    vision_qa_kwargs["fail_on_residual_dom_issues"] = (
+                        not terminal_fallback_enabled
+                    )
                 revise_kwargs: dict[str, object] = {
                     "max_cycles": composition_profile.max_repair_cycles,
                     "style": style,
@@ -2571,6 +2573,30 @@ async def _generate_authored_presentation(
                             png=selected_png,
                             browser_metrics=selected_metrics,
                         )
+                if source_reflow and terminal_fallback_enabled:
+                    declared_indices = {
+                        int(entry["index"])
+                        for entry in predeclared_terminal
+                        if isinstance(entry.get("index"), int)
+                    }
+                    for detail in vqa_repair_details:
+                        slide_index = detail.get("slide_index")
+                        unresolved = (
+                            detail.get("attempted") is True
+                            and detail.get("succeeded") is not True
+                        ) or (
+                            "candidate_status" in detail
+                            and detail.get("candidate_status") != "admitted"
+                        )
+                        if (
+                            isinstance(slide_index, int)
+                            and unresolved
+                            and slide_index not in declared_indices
+                        ):
+                            predeclared_terminal.append(
+                                declare_unadmitted_gate_repair(slide_index)
+                            )
+                            declared_indices.add(slide_index)
                 fixed_count = len(accepted_fixed)
                 visual_review_evidence = visual_review_outcome(
                     slide_count=len(htmls), fixed=fixed, accepted_fixed=accepted_fixed,

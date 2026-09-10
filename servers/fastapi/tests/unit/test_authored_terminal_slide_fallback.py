@@ -878,7 +878,14 @@ def _flagged_pipeline_stub(monkeypatch, htmls, flagged_index, evidence=None):
             illustration_work=0.0,
             render_work=0.1,
             quality_gate_failures=(
-                {"slide_index": flagged_index, "issues": [_FakeIssue().to_dict()]},
+                ()
+                if flagged_index is None
+                else (
+                    {
+                        "slide_index": flagged_index,
+                        "issues": [_FakeIssue().to_dict()],
+                    },
+                )
             ),
             local_fit_receipts=_fit_receipts(htmls),
             evidence_ledger=ledger,
@@ -893,6 +900,39 @@ def _flagged_pipeline_stub(monkeypatch, htmls, flagged_index, evidence=None):
     monkeypatch.setattr(
         authored_service, "_author_illustrate_render_pipeline", fake_pipeline
     )
+
+
+def _install_source_reflow_vqa_unresolved(monkeypatch, slide_index):
+    fail_closed_values = []
+
+    async def fake_revise(
+        htmls,
+        pngs,
+        *_args,
+        fail_on_residual_dom_issues=False,
+        repair_details_sink=None,
+    ):
+        fail_closed_values.append(fail_on_residual_dom_issues)
+        detail = {
+            "local_index": slide_index,
+            "slide_index": slide_index,
+            "attempted": True,
+            "succeeded": False,
+            "candidate_status": "unresolved",
+        }
+        repair_details_sink.append(detail)
+        if fail_on_residual_dom_issues:
+            raise author_vision_qa_mod.AuthoredVqaResidualDomIssuesError(
+                f"{slide_index + 1}:available:1",
+                htmls=list(htmls),
+                pngs=list(pngs),
+                fixed=[],
+                repair_details=[detail],
+            )
+        return [list(htmls), list(pngs), []]
+
+    monkeypatch.setattr(authored_service, "revise_authored_deck", fake_revise)
+    return fail_closed_values
 
 
 def _locally_accepted_whole_page_failure_stub(monkeypatch, htmls, flagged_index):
@@ -1046,6 +1086,68 @@ def test_source_reflow_unresolved_repair_still_fails_with_fallback_disabled(
     assert getattr(caught.value, "code", None) == (
         "authored_composition_safety_gate_failed"
     )
+    assert fail_closed_values == [True]
+
+
+def test_source_reflow_unresolved_vqa_is_predeclared_and_published_flagged(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
+    deck = [_REMADE_HTML, _REMADE_HTML]
+    _install_deck_stubs(monkeypatch, tmp_path, deck)
+    evidence, _recorded, _recorded_v3 = _install_receipt_evidence(monkeypatch)
+    _flagged_pipeline_stub(monkeypatch, deck, None, evidence=evidence)
+    browser_calls, final_gate_flags = _install_source_reflow_contract_stubs(
+        monkeypatch, len(deck)
+    )
+    fail_closed_values = _install_source_reflow_vqa_unresolved(monkeypatch, 1)
+    request = _source_reflow_request(len(deck))
+    request.vision_qa = True
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(tmp_path, request, _outline(len(deck)))
+        )
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert result.path == "deck.pptx"
+    assert fail_closed_values == [False]
+    assert final_gate_flags == [[1]]
+    assert browser_calls == [(len(deck), len(deck))]
+    assert _pop_slide_ids(
+        presentation.theme["authoredQualityGate"]["flaggedSlides"]
+    ) == [
+        {
+            "index": 1,
+            "reason": "composition_safety:gate_repair_not_admitted",
+            "remakeAttempted": False,
+            "remakeOutcome": "verbatim_flag_only",
+        }
+    ]
+
+
+def test_source_reflow_unresolved_vqa_still_fails_with_fallback_disabled(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "false")
+    deck = [_REMADE_HTML]
+    _install_deck_stubs(monkeypatch, tmp_path, deck)
+    _flagged_pipeline_stub(monkeypatch, deck, None)
+    _install_source_reflow_contract_stubs(monkeypatch, len(deck))
+    fail_closed_values = _install_source_reflow_vqa_unresolved(monkeypatch, 0)
+    request = _source_reflow_request(len(deck))
+    request.vision_qa = True
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        with pytest.raises(Exception) as caught:
+            _run(_generate_on_sqlite(tmp_path, request, _outline(len(deck))))
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert getattr(caught.value, "code", None) == "authored_vqa_residual_dom_issues"
     assert fail_closed_values == [True]
 
 
