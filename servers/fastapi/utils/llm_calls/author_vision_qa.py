@@ -9,10 +9,13 @@ leaves that slide unchanged. Never on the fast default path."""
 import asyncio
 import hashlib
 import logging
+import math
 import os
+import sys
 import time
 from collections import OrderedDict
 from collections.abc import Collection
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple
 
@@ -23,6 +26,14 @@ from services.authored_infographic_assets import (
     fill_scene_cutout,
     substitute_figure_icons,
 )
+from services.authored_structural_repair import (
+    RepairAssessment,
+    SlideRepairResult,
+    bind_repair_candidate,
+    protected_scope_violations,
+    source_repair_html_violations,
+)
+from services.authored_source_visibility_repair import _is_root_page_number, source_visibility_issues
 from utils.authored_dom_categories import (
     RESIDUAL_BLOCKING_CATEGORIES,
     critique_type_for_category,
@@ -36,6 +47,7 @@ from utils.authored_dom_quality import (
     ensure_authored_qids,
     has_dom_quality_regression,
     inspect_authored_dom,
+    normalize_browser_metrics,
     validate_declared_authored_qids,
 )
 from utils.authored_patch_engine import apply_authored_patch
@@ -55,7 +67,10 @@ from utils.llm_calls.author_slide import (
     normalize_reference_mode,
     validate_authored_slide_html,
 )
-from utils.llm_calls.author_slide_patch import propose_authored_slide_patch
+from utils.llm_calls.author_slide_patch import (
+    build_structural_repair_scopes,
+    propose_authored_slide_patch,
+)
 from utils.llm_calls.author_deck import plan_authored_visual_story
 from utils.authored_styles import reference_images_for_role
 from utils.llm_calls.critique_slide import (
@@ -75,6 +90,23 @@ from utils.slide_capture import (
     render_html_to_png,
     render_html_to_png_with_metrics,
 )
+from utils.llm_calls.author_structural_repair_evidence import (
+    AuthoredVqaResidualDomIssuesError,
+    StructuralRepairBudget,
+    _advance_repair_evaluator,
+    _measured_structural_issue_qids,
+    _repair_evaluator_for,
+    _structural_compact_dom,
+)
+from utils.llm_calls.author_structural_repair_loop import (
+    revise_structural_candidates as _revise_structural_candidates_impl,
+)
+from utils.llm_calls.author_vision_qa_style import (
+    _style_comparison_cache_key,
+    _style_comparison_cached,
+    critique_authored_style_comparison,
+    style_comparison_failure_diagnostic,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -89,31 +121,6 @@ from utils.llm_calls.authored_semantic_alias_canonicalizer import (  # noqa: E40
 
 class _ImageServiceLike(Protocol):
     async def generate_image(self, prompt: ImagePrompt) -> object: ...
-
-
-class AuthoredVqaResidualDomIssuesError(ValueError):
-    """Fail-closed source-reflow result that still exposes durable repairs.
-
-    Local patches are provider work that may have succeeded even when another
-    slide still has a blocking DOM issue.  Carry the successful HTML/PNG pairs
-    to the checkpoint owner so a retry resumes from those repairs instead of
-    presenting the same original deck to VQA again.
-    """
-
-    def __init__(
-        self,
-        summary: str,
-        *,
-        htmls: Sequence[str],
-        pngs: Sequence[bytes],
-        fixed: Sequence[int],
-        repair_details: Sequence[Mapping[str, Any]],
-    ) -> None:
-        super().__init__(f"authored_vqa_residual_dom_issues:{summary}")
-        self.htmls = list(htmls)
-        self.pngs = list(pngs)
-        self.fixed = list(fixed)
-        self.repair_details = [dict(item) for item in repair_details]
 
 
 async def _render_correction_html(html: str) -> bytes:
@@ -270,164 +277,6 @@ async def _critique_cached(
     return critique
 
 
-def _style_comparison_cache_key(
-    baseline: bytes,
-    candidate: bytes,
-    context: Optional[str],
-    *,
-    reference_mode: str = STYLE_REFERENCE,
-) -> str:
-    """Fingerprint a style comparison independently from all existing QA caches."""
-    mode = normalize_reference_mode(reference_mode)
-    if mode != STYLE_REFERENCE:
-        raise ValueError("Authored style comparison only supports style_reference mode")
-
-    digest = hashlib.sha256()
-    digest.update(STYLE_COMPARISON_VQA_PROMPT_VERSION.encode("utf-8"))
-    digest.update(b"\0")
-    try:
-        model = str(get_model() or "")
-    except Exception:
-        model = ""
-    digest.update(model.encode("utf-8"))
-    digest.update(b"\0")
-    digest.update(mode.encode("utf-8"))
-    digest.update(b"\0")
-    digest.update((context or "").encode("utf-8"))
-    digest.update(b"\0")
-    digest.update(hashlib.sha256(baseline).digest())
-    digest.update(hashlib.sha256(candidate).digest())
-    return digest.hexdigest()
-
-
-async def _style_comparison_cached(
-    baseline: bytes,
-    candidate: bytes,
-    context: Optional[str],
-    *,
-    reference_mode: str = STYLE_REFERENCE,
-) -> Optional[SlideCritique]:
-    """Return one best-effort baseline-vs-candidate style critique."""
-    mode = normalize_reference_mode(reference_mode)
-    if mode != STYLE_REFERENCE:
-        raise ValueError("Authored style comparison only supports style_reference mode")
-
-    key = _style_comparison_cache_key(
-        baseline,
-        candidate,
-        context,
-        reference_mode=mode,
-    )
-
-    def record_failure(error: Exception) -> None:
-        _style_comparison_vqa_failures[key] = {
-            "error_type": type(error).__name__,
-            "reason_code": str(getattr(error, "code", "vqa.provider_failed")),
-            "status_code": getattr(error, "status_code", None),
-        }
-        _style_comparison_vqa_failures.move_to_end(key)
-        limit = max(1, VQA_CACHE_SIZE)
-        while len(_style_comparison_vqa_failures) > limit:
-            _style_comparison_vqa_failures.popitem(last=False)
-
-    async def invoke() -> SlideCritique:
-        async with _get_vqa_sem():
-            return await critique_slide_style_comparison(
-                baseline,
-                candidate,
-                slide_context=context,
-            )
-
-    if VQA_CACHE_SIZE <= 0:
-        try:
-            critique = await invoke()
-            _style_comparison_vqa_failures.pop(key, None)
-            return critique
-        except Exception as error:
-            record_failure(error)
-            return None
-    cached = _style_comparison_vqa_cache.get(key)
-    if cached is not None:
-        _style_comparison_vqa_cache.move_to_end(key)
-        return cached
-
-    task = _style_comparison_vqa_inflight.get(key)
-    if task is None:
-        task = asyncio.create_task(invoke())
-        _style_comparison_vqa_inflight[key] = task
-
-    try:
-        critique = await asyncio.shield(task)
-    except Exception as error:
-        record_failure(error)
-        return None
-    finally:
-        if _style_comparison_vqa_inflight.get(key) is task and task.done():
-            _style_comparison_vqa_inflight.pop(key, None)
-
-    _style_comparison_vqa_cache[key] = critique
-    _style_comparison_vqa_failures.pop(key, None)
-    _style_comparison_vqa_cache.move_to_end(key)
-    while len(_style_comparison_vqa_cache) > VQA_CACHE_SIZE:
-        _style_comparison_vqa_cache.popitem(last=False)
-    return critique
-
-
-def style_comparison_failure_diagnostic(
-    baseline: bytes,
-    candidate: bytes,
-    context: Optional[str],
-    *,
-    reference_mode: str = STYLE_REFERENCE,
-) -> dict[str, object] | None:
-    """Return bounded provider failure evidence for one exact paired request."""
-
-    key = _style_comparison_cache_key(
-        baseline,
-        candidate,
-        context,
-        reference_mode=normalize_reference_mode(reference_mode),
-    )
-    value = _style_comparison_vqa_failures.get(key)
-    return dict(value) if value is not None else None
-
-
-async def critique_authored_style_comparison(
-    baseline_pngs: List[bytes],
-    candidate_pngs: List[bytes],
-    contexts: Optional[List[Optional[str]]] = None,
-    *,
-    reference_mode: str = STYLE_REFERENCE,
-) -> List[Optional[StyleComparisonCritique]]:
-    """Compare post-fix authored renders with non-authoritative pre-fix baselines.
-
-    Returns ``None`` for a candidate whose single model call failed. Empty batches are
-    valid and return immediately without invoking the model.
-    """
-    mode = normalize_reference_mode(reference_mode)
-    if mode != STYLE_REFERENCE:
-        raise ValueError("Authored style comparison only supports style_reference mode")
-    if len(baseline_pngs) != len(candidate_pngs):
-        raise ValueError("Style comparison baseline and candidate counts must match")
-    if any(not isinstance(image, bytes) or not image for image in baseline_pngs):
-        raise ValueError("Style comparison baselines must be non-empty bytes")
-    if any(not isinstance(image, bytes) or not image for image in candidate_pngs):
-        raise ValueError("Style comparison candidates must be non-empty bytes")
-
-    ctx = contexts or []
-
-    async def review(i: int) -> Optional[StyleComparisonCritique]:
-        context = ctx[i] if i < len(ctx) else None
-        return await _style_comparison_cached(
-            baseline_pngs[i],
-            candidate_pngs[i],
-            context,
-            reference_mode=mode,
-        )
-
-    return list(await asyncio.gather(*[review(i) for i in range(len(candidate_pngs))]))
-
-
 def _feedback(critique: SlideCritique, *, exact_reconstruction: bool = False) -> str:
     issues = (
         "; ".join(f"{x.type} — {x.detail}" for x in critique.issues) or "visual problems"
@@ -536,6 +385,13 @@ def deterministic_dom_critique(report: Any) -> SlideCritique | None:
     )
 
 
+async def _revise_structural_candidates(**kwargs: Any) -> Any:
+    return await _revise_structural_candidates_impl(
+        runtime=sys.modules[__name__],
+        **kwargs,
+    )
+
+
 async def revise_authored_deck(
     htmls: List[str],
     pngs: List[bytes],
@@ -571,6 +427,20 @@ async def revise_authored_deck(
     candidate_validator: Optional[
         Callable[[int, str, Mapping[str, Any]], Awaitable[None]]
     ] = None,
+    candidate_evaluator: Optional[
+        Callable[[int, str, Mapping[str, Any]], Awaitable[RepairAssessment]]
+    ] = None,
+    candidate_evaluators: Optional[Mapping[
+        int, Callable[[int, str, Mapping[str, Any]], Awaitable[RepairAssessment]]
+    ]] = None,
+    initial_browser_metrics: Optional[Sequence[Mapping[str, Any] | None]] = None,
+    initial_assessments: Optional[Sequence[RepairAssessment | None]] = None,
+    initial_repair_history: Optional[Sequence[Sequence[Mapping[str, Any]]]] = None,
+    structural_results_sink: Optional[list[SlideRepairResult]] = None,
+    structural_candidate_capture: Optional[
+        Callable[[str, int], Awaitable[tuple[str, bytes, Mapping[str, Any]]]]
+    ] = None,
+    structural_budgets: Optional[Mapping[int, StructuralRepairBudget]] = None,
 ) -> Any:
     """Bounded critique -> re-author -> re-render loop over an authored deck. Returns
     the (possibly revised) htmls + pngs and the local indices that changed.
@@ -591,11 +461,23 @@ async def revise_authored_deck(
     other unresolved slot is removed.
     """
     n = len(htmls)
+    if candidate_evaluator is not None and candidate_evaluators is not None:
+        raise ValueError("candidate_evaluator and candidate_evaluators are mutually exclusive")
+    if candidate_validator is not None and (
+        candidate_evaluator is not None or candidate_evaluators is not None
+    ):
+        raise ValueError("candidate_validator and candidate_evaluator are mutually exclusive")
     if not (len(pngs) == len(contents) == len(roles) == n):
         raise ValueError("Authored QA inputs must have matching lengths")
     absolute_indices = list(slide_indices) if slide_indices is not None else list(range(n))
     if len(absolute_indices) != n:
         raise ValueError("slide_indices must match the reviewed slide count")
+    if initial_browser_metrics is not None and len(initial_browser_metrics) != n:
+        raise ValueError("initial_browser_metrics must match the reviewed slide count")
+    if initial_assessments is not None and len(initial_assessments) != n:
+        raise ValueError("initial_assessments must match the reviewed slide count")
+    if initial_repair_history is not None and len(initial_repair_history) != n:
+        raise ValueError("initial_repair_history must match the reviewed slide count")
     deck_size = total_slides if total_slides is not None else n
     if deck_size < n:
         raise ValueError("total_slides cannot be smaller than the reviewed slide count")
@@ -623,6 +505,30 @@ async def revise_authored_deck(
     reference_mode = normalize_reference_mode(
         getattr(style, "reference_mode", STYLE_REFERENCE)
     )
+    if candidate_evaluator is not None or candidate_evaluators is not None:
+        if reference_mode == EXACT_RECONSTRUCTION or forced_full_reauthor:
+            raise ValueError("Structural source repair cannot re-author or reconstruct slides")
+        return await _revise_structural_candidates(
+            htmls=htmls,
+            pngs=pngs,
+            absolute_indices=absolute_indices,
+            max_cycles=max_cycles,
+            candidate_evaluator=candidate_evaluator,
+            candidate_evaluators=candidate_evaluators,
+            initial_browser_metrics=initial_browser_metrics,
+            initial_assessments=initial_assessments,
+            initial_repair_history=initial_repair_history,
+            initial_critiques=initial_critiques,
+            provider_recovery_allowed=provider_recovery_allowed,
+            blocked_recovery_issue_types=blocked_recovery_issue_types,
+            fail_on_residual_dom_issues=fail_on_residual_dom_issues,
+            return_details=return_details,
+            repair_details_sink=repair_details_sink,
+            structural_results_sink=structural_results_sink,
+            review_stats_sink=review_stats_sink,
+            structural_candidate_capture=structural_candidate_capture,
+            structural_budgets=structural_budgets,
+        )
     visual_plan = (
         None
         if reference_mode == EXACT_RECONSTRUCTION
@@ -970,6 +876,7 @@ async def revise_authored_deck(
                             slide_index=absolute_indices[i],
                             slot_run=f"cycle-{cycle}",
                             reference_mode=reference_mode,
+                            allow_source_reflow_safe_styles=fail_on_residual_dom_issues,
                             retry_invalid_model_patch=(
                                 fail_on_residual_dom_issues
                                 and allow_patch_proposal_retry

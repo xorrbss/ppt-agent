@@ -105,6 +105,28 @@ def _is_card_like(item: Mapping[str, Any]) -> bool:
         return False
     if str(item.get("tag", "")).strip().lower() in _PAINTED_TAGS:
         return True
+    # A measured, unpadded two-pixel connector is a line, not the panel
+    # containing its arrow. Keep walking to the real enclosing panel. This
+    # does not exempt the arrow from clipping, overlap or source readback.
+    edges = _edges(item.get("bbox"))
+    if edges is not None:
+        width, height = edges[2] - edges[0], edges[3] - edges[1]
+        if (
+            item.get("semantic_role") == "decoration"
+            and item.get("has_owned_text") is False
+            and not item.get("text_fragments")
+            and min(width, height) <= 2.0
+            and max(width, height) >= 12.0
+            and all(style.get(axis) == "visible" for axis in ("overflowX", "overflowY"))
+            and all(_css_px(style.get(f"padding{side}")) == 0 for side in ("Top", "Right", "Bottom", "Left"))
+            and all(_css_px(style.get(f"border{side}Width")) == 0 for side in ("Top", "Right", "Bottom", "Left"))
+            and style.get("backgroundImage") == "none"
+            and style.get("boxShadow") == "none"
+            and style.get("clipPath") == "none"
+            and style.get("maskImage") == "none"
+            and style.get("transform") == "none"
+        ):
+            return False
     background = str(style.get("backgroundColor", "")).replace(" ", "").lower()
     if background and background not in _TRANSPARENT:
         return True

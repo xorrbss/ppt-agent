@@ -847,6 +847,11 @@ def _validate_css_value(
         }
     elif prop == "grid-template-columns":
         parts = value.split()
+        repeat = re.fullmatch(r"repeat\(\s*([1-9]\d?)\s*,\s*([^(),]+)\s*\)", value)
+        if allow_source_reflow_safe_styles and repeat:
+            count, tracks = int(repeat.group(1)), repeat.group(2).split()
+            if count <= 16 and len(tracks) * count <= 16:
+                parts = tracks * count
         valid = 1 <= len(parts) <= 16 and all(
             part == "auto"
             or (
@@ -855,24 +860,20 @@ def _validate_css_value(
             )
             for part in parts
         )
+        if valid: value = " ".join(parts)
     elif prop in {"grid-column", "grid-row"}:
         valid = bool(re.fullmatch(r"\d+\s*/\s*span\s+\d+", value))
     if not valid:
         raise ValueError(f"unsupported CSS value {value!r} for {prop}")
     return value
-
-
 def _canonical_style_property_name(value: str) -> str:
     """Accept browser ``computedStyle`` camelCase keys at the patch boundary.
-
     Model prompts receive browser-native keys such as ``fontSize`` and
     ``marginTop``.  Store only kebab-case after validation so inline CSS output,
     duplicate detection, and the allowlist continue to use one representation.
     """
     name = value.strip()
     return _CAMEL_CASE_STYLE_KEY.sub(r"-\1", name).lower()
-
-
 def _validate_position(value: str) -> str:
     value = value.strip().lower()
     if any(char in value for char in ";{}<>") or _CSS_DANGER.search(value):
@@ -884,7 +885,6 @@ def _validate_position(value: str) -> str:
     ):
         raise ValueError("crop position must use one or two keywords/lengths")
     return value
-
 
 def validate_patch_plan(
     plan: AuthoredPatchPlan | Mapping[str, Any],

@@ -87,6 +87,10 @@ class BrowserSourceReadbackResult:
     # Blocks bound to a shared or out-of-order owner: measured and reported,
     # never a failure.  Where a template places a block's own items is layout.
     binding_deviations: int = 0
+    integrity_failures: tuple[str, ...] = ()
+    telemetry_failures: tuple[str, ...] = ()
+    failed_slide_indices: tuple[int, ...] = ()
+    diagnostic_error: str = ""
 
     @property
     def passed(self) -> bool:
@@ -94,6 +98,9 @@ class BrowserSourceReadbackResult:
             self.missing_block_ids
             or self.order_violations
             or self.visibility_failures
+            or self.integrity_failures
+            or self.telemetry_failures
+            or self.diagnostic_error
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -106,6 +113,10 @@ class BrowserSourceReadbackResult:
             "bindingDeviations": self.binding_deviations,
             "visibilityFailures": list(self.visibility_failures),
             "passed": self.passed,
+            "integrityFailures": list(self.integrity_failures),
+            "telemetryFailures": list(self.telemetry_failures),
+            "failedSlideIndices": list(self.failed_slide_indices),
+            "diagnosticError": self.diagnostic_error,
             # Only this browser verifier can mint the explicit admission bit
             # consumed by QualityReceipt v2.  Keeping it separate from
             # ``passed`` prevents arbitrary caller dictionaries from being
@@ -363,6 +374,22 @@ class _Observation:
     image_payload: Mapping[str, Any] | None
     natural_width: float | None
     natural_height: float | None
+    occlusion_measured: bool
+
+    def integrity_failed(self, accepts, expected_qid, qid_counts, seen_qids) -> bool:
+        return (
+            accepts is None or not accepts(self.rendered)
+            or not self.qid or self.qid in seen_qids
+            or self.qid != expected_qid or qid_counts.get(self.qid, 0) != 1
+            or not self.semantic_role
+        )
+
+    def telemetry_failed(self, *, text: bool = True) -> bool:
+        return (
+            self.bbox is None or self.visible is None
+            or not self.clipping_known or not self.occlusion_measured
+            or (text and not self.font_loaded)
+        )
 
     def text_failed(
         self,
@@ -407,8 +434,6 @@ def _observe(metric: Mapping[str, Any], canvas_width: float, canvas_height: floa
         and continuous is not None
         and 0 <= occluded <= 1
         and 0 <= continuous <= 1
-        and occluded == 0
-        and continuous == 0
     )
     measurement = _field(metric, "measurement", default={})
     occlusion_known = (
@@ -437,6 +462,30 @@ def _observe(metric: Mapping[str, Any], canvas_width: float, canvas_height: floa
         image_payload = metric
     if not isinstance(image_payload, Mapping):
         image_payload = None
+    if tag == "img":
+        # Images have no glyph ranges, so the text clipping flags can all be
+        # false even when an ancestor hides most of the source occurrence.
+        # New captures provide Chromium's intersection of every clip ancestor.
+        # Older captures retain their existing explicit clipping contract.
+        clip_bounds = _field(metric, "source_clip_bounds", "sourceClipBounds", default=None)
+        if clip_bounds is not None:
+            edges = (
+                [_number(clip_bounds.get(key)) for key in ("left", "top", "right", "bottom")]
+                if isinstance(clip_bounds, Mapping) else []
+            )
+            if len(edges) != 4 or any(value is None for value in edges) or bbox is None:
+                clipping_known = False
+            else:
+                left, top, right, bottom = edges
+                # Match the existing browser range-clipping/intrinsic-image
+                # tolerance rather than treating subpixel paint noise as loss.
+                clipped = clipped or (
+                    right <= left or bottom <= top
+                    or bbox["x"] < left - 0.5
+                    or bbox["y"] < top - 0.5
+                    or bbox["x"] + bbox["width"] > right + 0.5
+                    or bbox["y"] + bbox["height"] > bottom + 0.5
+                )
     natural_width = natural_height = None
     if image_payload is not None:
         natural_width = _number(_field(image_payload, "natural_width", "naturalWidth", default=None))
@@ -453,11 +502,12 @@ def _observe(metric: Mapping[str, Any], canvas_width: float, canvas_height: floa
         clipping_known=clipping_known,
         occluded=occluded,
         continuous=continuous,
-        occlusion_known=occlusion_known,
+        occlusion_known=occlusion_known and occluded == 0 and continuous == 0,
         font_loaded=_field(metric, "font_loaded", "fontLoaded", default=None) is True,
         image_payload=image_payload,
         natural_width=natural_width,
         natural_height=natural_height,
+        occlusion_measured=bool(occlusion_known),
     )
 
 
@@ -586,6 +636,8 @@ def _verify_run_partition(
     canvas: tuple[float, float],
     qid_counts: Counter[str],
     seen_qids: set[str],
+    integrity_failures: list[str] | None = None,
+    telemetry_failures: list[str] | None = None,
 ) -> tuple[BrowserSourceBlockEvidence | None, bool, bool]:
     """Return ``(evidence, complete, ordered)`` for a run-bound block.
 
@@ -620,6 +672,12 @@ def _verify_run_partition(
         observation = _observe(metric, *canvas)
         run_id = source_run_binding_id(block_id, start, end, projection.run_count)
         accepts = _span_matcher(projection, start, end)
+        if integrity_failures is not None and observation.integrity_failed(
+            accepts, deterministic_source_qid(run_id), qid_counts, seen_qids
+        ):
+            integrity_failures.append(block_id)
+        if telemetry_failures is not None and observation.telemetry_failed():
+            telemetry_failures.append(block_id)
         if observation.text_failed(accepts, deterministic_source_qid(run_id), qid_counts, seen_qids):
             failed = True
         seen_qids.add(observation.qid)
@@ -685,181 +743,50 @@ def _check_slide_capture(metrics: Mapping[str, Any], html_source: str | None, in
     return canvas_width, canvas_height
 
 
-def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metrics: Any, htmls: Sequence[str] | None = None) -> BrowserSourceReadbackResult:
-    """Validate source IDs, rendered text, geometry, order, and visibility.
+def _inspect_browser_source_readback(
+    *, manifest: Any, outline: Any, browser_metrics: Any,
+    htmls: Sequence[str] | None = None,
+) -> BrowserSourceReadbackResult:
+    # Import lazily so the implementation can reuse the facade's established
+    # evidence types and low-level validators without an import cycle.
+    from services.source_content.browser_readback_inspection import (
+        inspect_browser_source_readback as inspect_impl,
+    )
 
-    ``browser_metrics`` is the payload emitted by ``ensure_browser_metrics``
-    (one object per slide, or ``{"slides": [...]}``). Every admitted text block
-    must have one explicit source-block binding (or a complete run partition)
-    and measured, visible DOM boxes.  Missing telemetry, clipping, occlusion,
-    duplicate/unknown IDs, and rendered text mismatches all fail closed.
+    return inspect_impl(
+        manifest=manifest,
+        outline=outline,
+        browser_metrics=browser_metrics,
+        htmls=htmls,
+    )
+
+
+def inspect_browser_source_readback(*, manifest: Any, outline: Any, browser_metrics: Any, htmls: Sequence[str] | None = None) -> BrowserSourceReadbackResult:
+    """Return diagnostics without turning damaged input into admission evidence.
+
+    Visibility defects are retained separately from immutable source defects and
+    incomplete telemetry. Structural/capture errors cannot be compared as an
+    improving candidate and are represented by ``diagnostic_error``.
     """
-
-    manifest_value = _mapping(manifest, "source manifest")
-    outline_value = _mapping(outline, "source outline")
-    units = _field(manifest_value, "units", default=())
-    slides = _field(outline_value, "slides", default=())
-    if not isinstance(units, Sequence) or isinstance(units, (str, bytes)) or not isinstance(slides, Sequence) or isinstance(slides, (str, bytes)):
-        raise BrowserSourceReadbackError("source_content_browser_readback_invalid", detail="manifest units and outline slides must be sequences")
-    metric_slides = _slides_metrics(browser_metrics)
-    if len(units) != len(slides) or len(metric_slides) != len(slides) or (htmls is not None and len(htmls) != len(slides)):
-        raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="source and browser slide cardinality differs", slide_indices=tuple(range(max(len(slides), len(metric_slides)))))
-    blocks_by_unit, ordered_ids_by_unit, expected_unit_order = _manifest_index(units)
-
-    evidence: list[BrowserSourceBlockEvidence] = []
-    missing: list[str] = []
-    visibility_failures: list[str] = []
-    order_violations = 0
-    binding_deviations = 0
-    checked = 0
-    failed_slides: set[int] = set()
-    for index, (raw_slide, metrics) in enumerate(zip(slides, metric_slides, strict=True)):
-        slide = _mapping(raw_slide, "outline slide")
-        unit_id = str(_field(slide, "sourceUnitId", "source_unit_id", default=""))
-        expected_ids = ordered_ids_by_unit.get(unit_id, [])
-        reading_order = _field(slide, "readingOrder", "reading_order", default=())
-        if not isinstance(reading_order, Sequence) or isinstance(reading_order, (str, bytes)):
-            raise BrowserSourceReadbackError("source_content_browser_readback_invalid", detail="outline reading order must be a sequence")
-        outline_ids = [str(item) for item in reading_order]
-        allowed_ids = {
-            block_id for block_id, block in blocks_by_unit.get(unit_id, {}).items()
-            if str(_field(block, "kind", default="")) in {"text", "image"}
-        }
-        if any(block_id not in allowed_ids for block_id in outline_ids) or len(outline_ids) != len(set(outline_ids)):
-            order_violations += 1
-            failed_slides.add(index)
-        outline_text_ids = [str(item) for item in reading_order if str(item) in expected_ids]
-        if expected_unit_order[index] != unit_id or outline_text_ids != expected_ids:
-            order_violations += 1
-            failed_slides.add(index)
-        canvas = _check_slide_capture(metrics, htmls[index] if htmls is not None else None, index)
-        raw_elements = _field(metrics, "elements", default=())
-        if not isinstance(raw_elements, Sequence) or isinstance(raw_elements, (str, bytes)):
-            raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="browser elements telemetry is missing", slide_indices=(index,))
-        # A source QID is canonical only when Chromium observed exactly one DOM
-        # owner for it. Count every measured element, including non-source
-        # authored furniture, so a duplicate outside the source subset cannot
-        # masquerade as a valid source binding.
-        qid_counts = Counter(
-            str(_field(_mapping(item, "browser element metric"), "qid", default="") or "").strip()
-            for item in raw_elements
+    try:
+        return _inspect_browser_source_readback(
+            manifest=manifest, outline=outline, browser_metrics=browser_metrics, htmls=htmls
         )
-        qid_counts.pop("", None)
-        observed: list[tuple[int, str, BrowserSourceBlockEvidence]] = []
-        seen: set[str] = set()
-        seen_qids: set[str] = set()
-        run_groups: dict[str, list[tuple[int, int, int, Mapping[str, Any]]]] = {}
-        for dom_index, raw_metric in enumerate(raw_elements):
-            metric = _mapping(raw_metric, "browser element metric")
-            raw_id = str(_field(metric, "sourceBlockId", "source_block_id", "dataSourceBlockId", "data_source_block_id", default="") or "")
-            if not raw_id:
-                continue
-            block_id, run_start, run_end = parse_source_binding_id(raw_id)
-            if block_id in seen or block_id not in expected_ids:
-                order_violations += 1
-                failed_slides.add(index)
-                continue
-            block = blocks_by_unit[unit_id][block_id]
-            block_kind = str(_field(block, "kind", default="text"))
-            if run_start is not None:
-                if block_kind != "text":
-                    order_violations += 1
-                    failed_slides.add(index)
-                    continue
-                run_groups.setdefault(block_id, []).append((dom_index, run_start, run_end or run_start, metric))
-                continue
-            if block_id in run_groups:
-                # A block cannot be bound both as a whole and as runs.
-                order_violations += 1
-                failed_slides.add(index)
-                continue
-            observation = _observe(metric, *canvas)
-            payload = _mapping(_field(block, "payload", default={}), "source block payload")
-            declared_qid = str(_field(block, "qid", "sourceQid", "source_qid", default="") or "").strip()
-            expected_qid = declared_qid or deterministic_source_qid(block_id)
-            if block_kind == "text":
-                projection = _block_projection(block)
-                accepts = _span_matcher(projection, *projection.whole) if projection is not None else None
-                failed = observation.text_failed(accepts, expected_qid, qid_counts, seen_qids)
-            else:
-                failed = (
-                    not observation.qid
-                    or observation.qid in seen_qids
-                    or observation.qid != expected_qid
-                    or qid_counts.get(observation.qid, 0) != 1
-                    or not observation.in_canvas
-                    or observation.visible is not True
-                    or not observation.clipping_known
-                    or observation.clipped
-                    or not observation.occlusion_known
-                    or (block_kind == "image" and _image_failed(observation, payload))
-                )
-            if failed:
-                visibility_failures.append(block_id)
-                failed_slides.add(index)
-            seen.add(block_id)
-            seen_qids.add(observation.qid)
-            observed.append((
-                dom_index,
-                block_id,
-                BrowserSourceBlockEvidence(
-                    block_id,
-                    observation.qid,
-                    observation.rendered,
-                    observation.bbox or {},
-                    bool(observation.visible),
-                    observation.clipped,
-                    observation.occluded,
-                    observation.continuous,
-                    block_kind,
-                    observation.natural_width,
-                    observation.natural_height,
-                    observation.semantic_role,
-                ),
-            ))
-        for block_id, runs in run_groups.items():
-            if block_id in seen:
-                order_violations += 1
-                failed_slides.add(index)
-                continue
-            block_evidence, passed, ordered = _verify_run_partition(
-                block_id,
-                _block_projection(blocks_by_unit[unit_id][block_id]),
-                runs,
-                canvas=canvas,
-                qid_counts=qid_counts,
-                seen_qids=seen_qids,
-            )
-            seen.add(block_id)
-            if not ordered:
-                binding_deviations += 1
-            if block_evidence is None:
-                missing.append(block_id)
-                failed_slides.add(index)
-                continue
-            if not passed:
-                visibility_failures.append(block_id)
-                failed_slides.add(index)
-            observed.append((min(item[0] for item in runs), block_id, block_evidence))
-        for block_id in expected_ids:
-            checked += 1
-            if block_id not in seen:
-                missing.append(block_id)
-                failed_slides.add(index)
-        # DOM order across blocks is deliberately not compared with the manifest
-        # order.  Restyling re-lays out the page, and the new template owns
-        # where each source block lands; page numbers and running headers in
-        # particular move into the template's own bands.  Source shape order is
-        # not the source's reading order either, so equality here rejects
-        # correct decks.  Every stronger guarantee is kept above: each block is
-        # bound to exactly one visible DOM owner, no block is bound twice, none
-        # is missing, and ``_verify_run_partition`` still requires a block's own
-        # runs to appear in source order.
-        evidence.extend(item[2] for item in sorted(observed, key=lambda item: item[0]))
+    except BrowserSourceReadbackError as error:
+        return BrowserSourceReadbackResult(
+            0, 0, missing_block_ids=tuple(error.block_ids),
+            order_violations=error.order_violations,
+            failed_slide_indices=tuple(error.slide_indices), diagnostic_error=error.detail,
+        )
 
-    result = BrowserSourceReadbackResult(len(slides), checked, tuple(evidence), tuple(dict.fromkeys(missing)), order_violations, tuple(dict.fromkeys(visibility_failures)), binding_deviations)
+
+def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metrics: Any, htmls: Sequence[str] | None = None) -> BrowserSourceReadbackResult:
+    """Keep the existing strict browser verifier and its exception semantics."""
+    result = _inspect_browser_source_readback(
+        manifest=manifest, outline=outline, browser_metrics=browser_metrics, htmls=htmls
+    )
     if not result.passed:
-        raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="browser source text/geometry/visibility contract failed", block_ids=tuple(dict.fromkeys((*result.missing_block_ids, *result.visibility_failures))), slide_indices=tuple(sorted(failed_slides)), order_violations=result.order_violations)
+        raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="browser source text/geometry/visibility contract failed", block_ids=tuple(dict.fromkeys((*result.missing_block_ids, *result.visibility_failures))), slide_indices=result.failed_slide_indices, order_violations=result.order_violations)
     return result
 
 
@@ -878,5 +805,6 @@ __all__ = [
     "stamp_source_block_ids",
     "stamp_source_image_block_ids",
     "verify_browser_source_readback",
+    "inspect_browser_source_readback",
     "verify_source_verbatim_browser_readback",
 ]

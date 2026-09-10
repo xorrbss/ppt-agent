@@ -1836,7 +1836,7 @@ def test_source_reflow_checkpoint_profile_uses_retained_metrics_for_local_patch(
     assert all(size > 0 for size in compact_sizes)
 
 
-def test_source_reflow_residual_repairs_are_checkpointed_before_retry(monkeypatch):
+def test_source_reflow_residual_repairs_require_admission_evidence(monkeypatch):
     calls = []
 
     async def fake_complete(**kwargs):
@@ -1865,8 +1865,36 @@ def test_source_reflow_residual_repairs_are_checkpointed_before_retry(monkeypatc
         )
     )
 
-    # Every checkpoint write is fenced by the workspace lease token, and an
-    # unavailable browser probe is persisted as explicit empty evidence.
+    # A legacy changed index cannot authorize a completed source checkpoint.
+    assert calls == []
+
+    provisional = SimpleNamespace(slide_index=4, final_status="unresolved", changed=True)
+    admitted = SimpleNamespace(
+        slide_index=9, final_status="admitted", changed=True,
+        html="patched-html", png=b"patched-png", metrics={"verified": True},
+    )
+    validated = []
+
+    def verify_result(result, *, expected_slide_index):
+        assert result is admitted
+        assert expected_slide_index == 9
+        validated.append(expected_slide_index)
+
+    monkeypatch.setattr(authored_generation_mod, "validate_repair_result", verify_result)
+    monkeypatch.setattr(authored_generation_mod, "structural_checkpoint_metrics", lambda result: result.metrics)
+    error.repair_results = [provisional, admitted]
+    scene_updates = []
+
+    def persist_scene(result):
+        assert validated == [9]
+        assert calls == []
+        scene_updates.append(result.slide_index)
+
+    _run(authored_generation_mod._checkpoint_source_reflow_vqa_repairs(
+        job, error, absolute_indices=[4, 9], persist_scene=persist_scene,
+    ))
+    assert validated == [9]
+    assert scene_updates == [9]
     assert calls == [
         {
             "job_id": job_id,
@@ -1876,9 +1904,36 @@ def test_source_reflow_residual_repairs_are_checkpointed_before_retry(monkeypatc
             "fencing_token": 7,
             "html": "patched-html",
             "png": b"patched-png",
-            "browser_metrics": {},
+            "browser_metrics": {"verified": True},
         },
     ]
+
+
+def test_source_reflow_checkpoint_rejects_mapping_and_unverified_results(monkeypatch):
+    calls = []
+
+    async def fake_complete(**kwargs):
+        calls.append(kwargs)
+
+    def reject_evidence(result, **kwargs):
+        raise ValueError("unbound repair evidence")
+
+    monkeypatch.setattr(authored_generation_mod, "_complete_stage_after_external_success", fake_complete)
+    monkeypatch.setattr(authored_generation_mod, "validate_repair_result", reject_evidence)
+    job = SimpleNamespace(id=uuid.uuid4(), attempt_token="attempt-1")
+    error = author_vision_qa_mod.AuthoredVqaResidualDomIssuesError(
+        "residual", htmls=["a"], pngs=[b"png"], fixed=[0], repair_details=[],
+        repair_results=[SimpleNamespace(slide_index=21, final_status="admitted", changed=True)],
+    )
+    with pytest.raises(ValueError, match="index_mapping_invalid"):
+        _run(authored_generation_mod._checkpoint_source_reflow_vqa_repairs(
+            job, error, absolute_indices=[27],
+        ))
+    with pytest.raises(ValueError, match="unbound repair evidence"):
+        _run(authored_generation_mod._checkpoint_source_reflow_vqa_repairs(
+            job, error, absolute_indices=[21],
+        ))
+    assert calls == []
 
 
 def test_source_reflow_vqa_fails_closed_on_residual_hidden_image(monkeypatch):
@@ -3634,3 +3689,51 @@ def test_footer_only_deck_publishes_without_spending_a_remake(monkeypatch):
     assert outcome.text_scaled_slide_indices == ()
     assert outcome.remaining_flagged == []
     assert outcome.scene_envelope == "sealed"
+
+
+def test_source_repair_scene_resume_requires_exact_admitted_durable_tuple(monkeypatch):
+    calls = []
+    original, repaired = "original illustrated source", "admitted repaired source"
+    evidence = SimpleNamespace(html=repaired, png=b"repaired-png", metrics={"admission": "bound"})
+
+    def validate(**kwargs):
+        calls.append(kwargs)
+        return True
+
+    monkeypatch.setattr(authored_pipeline_mod, "validate_structural_checkpoint", validate)
+    assert authored_pipeline_mod._reusable_source_repair_scene(
+        source_reflow=True, durable_evidence=evidence,
+        original_html=original, scene_html=repaired, slide_index=33,
+    ) is True
+    assert calls == [{
+        "html": repaired, "png": evidence.png, "metrics": evidence.metrics,
+        "expected_slide_index": 33,
+        "baseline_html_digest": authored_pipeline_mod.html_digest(original),
+    }]
+
+
+@pytest.mark.parametrize("source_reflow,has_evidence,scene_matches", [
+    (False, True, True), (True, False, True), (True, True, False),
+])
+def test_source_repair_scene_resume_never_trusts_unbound_scene(
+    monkeypatch, source_reflow, has_evidence, scene_matches,
+):
+    def must_not_validate(**_kwargs):
+        raise AssertionError("A mismatched scene must not reach admission reuse")
+
+    monkeypatch.setattr(authored_pipeline_mod, "validate_structural_checkpoint", must_not_validate)
+    evidence = SimpleNamespace(html="repaired", png=b"png", metrics={}) if has_evidence else None
+    assert authored_pipeline_mod._reusable_source_repair_scene(
+        source_reflow=source_reflow, durable_evidence=evidence,
+        original_html="original", scene_html="repaired" if scene_matches else "other",
+        slide_index=21,
+    ) is False
+
+
+def test_source_repair_scene_resume_does_not_promote_rejected_admission(monkeypatch):
+    monkeypatch.setattr(authored_pipeline_mod, "validate_structural_checkpoint", lambda **_kwargs: False)
+    assert authored_pipeline_mod._reusable_source_repair_scene(
+        source_reflow=True,
+        durable_evidence=SimpleNamespace(html="repaired", png=b"png", metrics={}),
+        original_html="original", scene_html="repaired", slide_index=27,
+    ) is False

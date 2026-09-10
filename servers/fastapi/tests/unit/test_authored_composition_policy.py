@@ -43,6 +43,52 @@ from services.authored_presentation_generation import (
 )
 from services.source_content.browser_readback import BrowserSourceReadbackError
 from utils.renderer_isolation import admit_authored_html
+from utils.llm_calls.author_vision_qa import _measured_overflowing_grid_qids
+
+
+@pytest.mark.parametrize("decision", ["reject", "provisional", "admitted"])
+def test_structural_gate_measures_deterministic_candidate_before_model(monkeypatch, decision):
+    from services import authored_presentation_generation as generation
+
+    captured = []
+    reviewed = []
+    source_metrics = {"source": "original"}
+    candidate_metrics = {"source": "candidate"}
+
+    async def capture(html, index):
+        captured.append((html, index))
+        return html, b"candidate-png", candidate_metrics
+
+    async def evaluate(index, html, metrics):
+        assert (index, html, metrics) == (21, "candidate", candidate_metrics)
+        return SimpleNamespace(decision=decision)
+
+    async def revise(htmls, pngs, contents, roles, brand, design_system, **kwargs):
+        reviewed.append((htmls, pngs, kwargs))
+        return htmls, pngs, [], []
+
+    monkeypatch.setattr(generation, "revise_authored_deck", revise)
+    htmls = ["original"] * 35
+    result, _ = asyncio.run(_revise_gate_repair_candidates(
+        flagged=[21, 27], htmls=htmls, pngs=[b"original-png"] * 35,
+        contents=["source"] * 35, roles=["CONTENT"] * 35,
+        deterministic_candidates={21: "candidate", 27: "original"},
+        brand=object(), design_system="design",
+        repair_kwargs={
+            "candidate_evaluator": evaluate, "structural_candidate_capture": capture,
+            "initial_browser_metrics": [source_metrics, source_metrics],
+            "slide_indices": [21, 27], "provider_recovery_allowed": [True, True],
+        },
+    ))
+    selected = "original" if decision == "reject" else "candidate"
+    assert captured == [("candidate", 21)]
+    assert result == [selected, "original"]
+    kwargs = reviewed[0][2]
+    assert kwargs["slide_indices"] == [21, 27]
+    assert kwargs["provider_recovery_allowed"] == [True, True]
+    assert kwargs["initial_browser_metrics"][0] is (
+        source_metrics if decision == "reject" else candidate_metrics
+    )
 
 
 def test_capacity_treats_only_exact_chart_week_ticks_as_supporting() -> None:

@@ -663,10 +663,12 @@ def _instrument_authored_html(
         polygon_domain_supported_rects: surfaceRects.filter(r => r.polygon_domain?.status === 'supported').length,
         polygon_domain_unsupported_rects: surfaceRects.filter(r => r.polygon_domain?.status === 'unsupported').length,
         polygon_edge_retry_count: polygonEdgeRetries, polygon_edge_recovered_samples: polygonEdgeRecovered,
-        thin_edge_retry_count: thinEdgeRetries, thin_edge_recovered_samples: thinEdgeRecovered
+        thin_edge_retry_count: thinEdgeRetries, thin_edge_recovered_samples: thinEdgeRecovered,
+        inline_fragment_retry_count: inlineFragmentRetries, inline_fragment_recovered_samples: inlineFragmentRecovered
       }});
       let roundedExcluded = 0, polygonExcluded = 0, polygonEdgeRetries = 0, polygonEdgeRecovered = 0;
       let thinEdgeRetries = 0, thinEdgeRecovered = 0;
+      let inlineFragmentRetries = 0, inlineFragmentRecovered = 0;
       const empty = (values, status, reason) => ({{
         fraction: values.fraction, continuous: values.continuous,
         step: values.step, unknown: values.unknown,
@@ -766,17 +768,29 @@ def _instrument_authored_html(
         // and actual hit stack; the unknown threshold is unchanged.
         if (owner < 0) {{
           const polygonSamples = polygonAAInteriorSamples(node, x, y, textRects, surfaceRects, stack);
+          // A multiline inline owner's union box includes space between and
+          // beside its line fragments. At an exact line edge, moving towards
+          // that union's centre can move OUT of the line being sampled. Keep
+          // the same bounded retry distances, but aim inside the actual owned
+          // text fragment; every retry still requires a real browser hit.
+          const inlineFragment = !surfaceRects.length && textRects.length > 1 &&
+            getComputedStyle(node).display === 'inline'
+            ? textRects.find(fragment => pointInRect(x, y, fragment)) : null;
+          const retryCenterX = inlineFragment ? inlineFragment.x + inlineFragment.width / 2 : rect.left + rect.width / 2;
+          const retryCenterY = inlineFragment ? inlineFragment.y + inlineFragment.height / 2 : rect.top + rect.height / 2;
           const retrySamples = polygonSamples ?? [.5, 1].map(inset => [
-            x + Math.sign(rect.left + rect.width / 2 - x) * inset,
-            y + Math.sign(rect.top + rect.height / 2 - y) * inset
+            x + Math.sign(retryCenterX - x) * inset,
+            y + Math.sign(retryCenterY - y) * inset
           ]);
           for (const [cx, cy] of retrySamples) {{
             hitX = cx; hitY = cy;
             if (polygonSamples !== null) polygonEdgeRetries += 1;
+            else if (inlineFragment) inlineFragmentRetries += 1;
             stack = document.elementsFromPoint(hitX, hitY);
             owner = stack.findIndex((candidate) => candidate === node || node.contains(candidate));
             if (owner >= 0) {{
               if (polygonSamples !== null) polygonEdgeRecovered += 1;
+              else if (inlineFragment) inlineFragmentRecovered += 1;
               break;
             }}
           }}
@@ -894,6 +908,7 @@ def _instrument_authored_html(
         qid: node.getAttribute('data-qid'), tag: node.tagName.toLowerCase(),
         semantic_role: node.getAttribute('data-semantic-role') || node.getAttribute('data-role') || node.getAttribute('role') || null,
         source_block_id: node.getAttribute('data-source-block-id'),
+        source_clip_bounds: node.hasAttribute('data-source-block-id') ? visibleClip(node).bounds : undefined,
         source_image_kind: node.getAttribute('data-source-image-kind'),
         source_image_aspect_ratio: node.getAttribute('data-source-image-aspect-ratio'),
         css_visible: cssVisible, effective_opacity: effectiveOpacity,
@@ -1023,8 +1038,6 @@ def _instrument_authored_html(
     if issue_capability:
         _register_internal_render_source(enriched)
     return enriched, key
-
-
 def _extract_browser_metrics(dumped_dom: bytes) -> Mapping[str, Any] | None:
     if not dumped_dom:
         return None
@@ -1038,8 +1051,6 @@ def _extract_browser_metrics(dumped_dom: bytes) -> Mapping[str, Any] | None:
     except (ValueError, TypeError):
         return None
     return value if isinstance(value, Mapping) else None
-
-
 from utils.slide_capture_pixel_probe import (
     _append_probe_style,
     _enrich_pixel_contrast,
@@ -1051,25 +1062,18 @@ from utils.slide_capture_glyph_probe import (
     GLYPH_CLIPPING_SENSOR_VERSION,
     probe_glyph_clipping_file,
 )
-
-
-
 def _peek_cached_browser_metrics(html: str) -> Mapping[str, Any] | None:
     key = _metrics_cache_key(html)
     metrics = _browser_metrics_cache.get(key)
     if metrics is not None:
         _browser_metrics_cache.move_to_end(key)
     return metrics
-
-
 def get_cached_browser_metrics(html: str) -> Mapping[str, Any] | None:
     """Return metrics captured by the same Chrome invocation as the PNG render."""
     metrics = _peek_cached_browser_metrics(html)
     if metrics is not None:
         _count_runtime("metrics_cache_hits")
     return metrics
-
-
 def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> None:
     """Store metrics under the same authored HTML identity as its rendered PNG."""
     # The in-page probe runs over nonce-bearing admitted HTML, but its source
@@ -1095,11 +1099,7 @@ def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> None:
     ):
         _browser_metrics_cache.popitem(last=False)
         _count_runtime("metrics_cache_evictions")
-
-
 _shared_render_waiters: dict[asyncio.Task[Any], int] = {}
-
-
 async def _await_shared_render_task(
     task: asyncio.Task[Any], inflight: dict, key: tuple[str, str, str],
     *, timeout: float | None = None,
@@ -1111,7 +1111,6 @@ async def _await_shared_render_task(
                 inflight.pop(key, None)
             if not done.cancelled():
                 done.exception()  # Retrieve errors even if every caller departed.
-
         task.add_done_callback(completed)
     _shared_render_waiters[task] = _shared_render_waiters.get(task, 0) + 1
     try:
@@ -1129,13 +1128,10 @@ async def _await_shared_render_task(
             if not task.done():
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
-
-
 async def ensure_browser_metrics(
     html: str, timeout: int = 60, *, deck_scope: str | None = None
 ) -> Mapping[str, Any] | None:
     """Return browser telemetry for ``html``, recollecting it when a PNG outlives it.
-
     PNG and DOM caches have different retention limits by design, so a render-cache
     hit cannot assume the corresponding probe payload remains resident.  Recollect
     with the exact instrumented render path when necessary.  A failed extraction is
@@ -1145,12 +1141,10 @@ async def ensure_browser_metrics(
     cached = get_cached_browser_metrics(html)
     if cached is not None:
         return cached
-
     # A cache miss means the PNG outlived its DOM telemetry and requires a
     # second browser pass; expose that duplicate work in benchmark evidence.
     _count_runtime("metrics_recollection_requests")
     _count_runtime("metrics_cache_misses")
-
     key = _metrics_cache_key(html)
     task = _browser_metrics_inflight.get(key)
     if task is None:
@@ -1176,7 +1170,6 @@ async def ensure_browser_metrics(
                     script_nonce=admitted.nonce,
                 )
             return _peek_cached_browser_metrics(html)
-
         with set_render_deck_scope(resolve_render_deck_scope(deck_scope)):
             task = asyncio.create_task(recollect())
         _browser_metrics_inflight[key] = task
@@ -1198,15 +1191,12 @@ async def ensure_browser_metrics(
     finally:
         if _browser_metrics_inflight.get(key) is task and task.done():
             _browser_metrics_inflight.pop(key, None)
-
-
 async def render_html_to_png_with_metrics(
     html: str, timeout: int = 60, *, deck_scope: str | None = None,
     fit: bool = False, fit_policy: Mapping[str, Any] | None = None,
     fresh: bool = False,
 ) -> "RenderCapture":
     """Render one slide and return telemetry tied to the same HTML cache identity.
-
     This is the preferred API for quality-review callers.  It preserves the legacy
     bytes-only renderer while making cache divergence explicit and recoverable.
     """
@@ -1268,26 +1258,18 @@ async def render_html_to_png_with_metrics(
     )
     _cache_capture(html, timeout, capture)
     return capture
-
-
 from utils.slide_capture_result import RenderCapture
-
-
 def _capture_cache_key(html: str, timeout: int) -> tuple[str, str, str]:
     # Timeout only bounds work; it does not alter a successful deterministic
     # render.  Excluding it lets retries with a larger budget reuse the same
     # atomic capture instead of relaunching Chromium.
     return _cache_key_for("capture", html)
-
-
 def _peek_cached_capture(html: str, timeout: int) -> RenderCapture | None:
     key = _capture_cache_key(html, timeout)
     capture = _capture_cache.get(key)
     if capture is not None:
         _capture_cache.move_to_end(key)
     return capture
-
-
 def _cache_capture(html: str, timeout: int, capture: RenderCapture) -> None:
     # Keep only a small atomic-result tail.  PNG bytes are shared with the render
     # LRU by reference, while this tail protects the corresponding metrics from
@@ -1306,8 +1288,6 @@ def _cache_capture(html: str, timeout: int, capture: RenderCapture) -> None:
     ):
         _capture_cache.popitem(last=False)
         _count_runtime("capture_cache_evictions")
-
-
 async def _wait_for_output(out: str, timeout: float = 15.0) -> bool:
     """Poll for the --screenshot file after the chrome process we waited on exits.
     On Windows chrome.exe is a thin launcher: it spawns the real browser child and
@@ -1320,12 +1300,7 @@ async def _wait_for_output(out: str, timeout: float = 15.0) -> bool:
             return True
         await asyncio.sleep(0.25)
     return os.path.isfile(out) and os.path.getsize(out) > 0
-
-
 from utils.slide_capture_chrome_discovery import _playwright_headless_shell_candidates, find_chrome
-
-
-
 _runtime_counter_lock = threading.Lock()
 _runtime_counters: dict[str, int] = {
     "requests": 0,
@@ -1361,16 +1336,11 @@ _runtime_counters: dict[str, int] = {
     "metrics_cache_bytes": 0,
 }
 _chrome_identity_cache: tuple[str, int, int, str] | None = None
-
-
 def _count_runtime(name: str, amount: int = 1) -> None:
     with _runtime_counter_lock:
         _runtime_counters[name] = _runtime_counters.get(name, 0) + amount
-
-
 def get_render_runtime_counters() -> dict[str, int]:
     """Return a read-only snapshot of cache/process/session activity."""
-
     with _runtime_counter_lock:
         snapshot = dict(_runtime_counters)
     # Current resident payload size is intentionally derived outside the counter
@@ -1387,17 +1357,13 @@ def get_render_runtime_counters() -> dict[str, int]:
     snapshot["capture_cache_bytes_current"] = _capture_cache_resident_bytes()
     snapshot["capture_cache_byte_budget"] = CAPTURE_CACHE_BYTE_BUDGET
     return snapshot
-
-
 def get_render_runtime_snapshot() -> dict[str, Any]:
     """Return metadata-only cache/pool evidence safe for a public metrics read.
-
     This intentionally omits HTML, QIDs, asset URLs, profiles, and filesystem
     paths.  The digest and cache-version fields let a controlled-load report
     prove which renderer identity and invalidation contract produced its
     counters without exposing slide content.
     """
-
     return {
         "schemaVersion": "authored-render-runtime/v2",
         "chromeRuntimeDigest": chrome_runtime_digest(),
@@ -1413,11 +1379,8 @@ def get_render_runtime_snapshot() -> dict[str, Any]:
         },
         "counters": get_render_runtime_counters(),
     }
-
-
 def chrome_runtime_digest() -> str:
     """Digest the resolved Chrome binary identity used by incremental caches."""
-
     global _chrome_identity_cache
     chrome = find_chrome()
     if not chrome:
@@ -1450,11 +1413,8 @@ def chrome_runtime_digest() -> str:
     result = "sha256:" + hashlib.sha256(payload).hexdigest()
     _chrome_identity_cache = (str(path), size, modified, result)
     return result
-
-
 class _ReusableChromeRuntime:
     """One isolated Chrome process serving bounded, disposable CDP pages."""
-
     def __init__(
         self,
         process: subprocess.Popen[bytes],
@@ -1467,14 +1427,11 @@ class _ReusableChromeRuntime:
         self.session_count = 0
         self.active_sessions = 0
         self.retired = False
-
     @property
     def base_url(self) -> str:
         return f"http://127.0.0.1:{self.port}"
-
     def alive(self) -> bool:
         return self.process.poll() is None
-
     def close(self) -> None:
         if self.process.poll() is None:
             _kill_process_tree(self.process)
@@ -1483,13 +1440,9 @@ class _ReusableChromeRuntime:
             except Exception:
                 pass
         self.profile.cleanup()
-
-
 _reusable_chrome_lock = threading.Lock()
 _reusable_chrome: _ReusableChromeRuntime | None = None
 _retired_reusable_chromes: set[_ReusableChromeRuntime] = set()
-
-
 def _launch_reusable_chrome() -> _ReusableChromeRuntime:
     if renderer_requires_external_worker():
         raise RendererPolicyError(
@@ -1551,8 +1504,6 @@ def _launch_reusable_chrome() -> _ReusableChromeRuntime:
         _kill_process_tree(process)
     profile.cleanup()
     raise RuntimeError("reusable Chrome did not publish DevToolsActivePort")
-
-
 def _get_reusable_chrome_sync() -> _ReusableChromeRuntime:
     global _reusable_chrome
     with _reusable_chrome_lock:
@@ -1572,8 +1523,6 @@ def _get_reusable_chrome_sync() -> _ReusableChromeRuntime:
         _reusable_chrome.session_count = 1
         _reusable_chrome.active_sessions = 1
         return _reusable_chrome
-
-
 def _discard_reusable_chrome_sync(runtime: _ReusableChromeRuntime) -> None:
     """Stop new admissions without killing sibling pages already using it."""
     global _reusable_chrome
@@ -1583,7 +1532,6 @@ def _discard_reusable_chrome_sync(runtime: _ReusableChromeRuntime) -> None:
             _reusable_chrome = None
         runtime.retired = True
         _retired_reusable_chromes.add(runtime)
-
 
 def _release_reusable_chrome_sync(runtime: _ReusableChromeRuntime) -> None:
     with _reusable_chrome_lock:
@@ -2019,7 +1967,7 @@ CAPTURE_CACHE_BYTE_BUDGET = _env_nonnegative_int(
 )
 _capture_cache: "OrderedDict[tuple[str, str, str], RenderCapture]" = OrderedDict()
 OCCLUSION_PROBE_CONTRACT_VERSION = "owned-paint-v3"
-OCCLUSION_SENSOR_VERSION = "owned-paint-v12-polygon-normal-hit"
+OCCLUSION_SENSOR_VERSION = "owned-paint-v13-inline-fragment-hit"
 DOM_METRICS_VERSION = "authored-dom-metrics-v26-font-stack-fallback"
 DOM_METRICS_CACHE_SIZE = max(1, RENDER_CACHE_SIZE)
 DOM_METRICS_CACHE_BYTE_BUDGET = _env_nonnegative_int(

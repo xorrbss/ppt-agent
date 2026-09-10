@@ -156,6 +156,53 @@ def test_target_must_be_an_exact_qid_not_a_selector():
         )
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("repeat(4, 1fr)", "1fr 1fr 1fr 1fr"), ("repeat(2, 120px 1fr)", "120px 1fr 120px 1fr")],
+)
+def test_source_reflow_normalizes_fixed_grid_repeat_without_changing_content(value, expected):
+    result = apply_authored_patch(
+        HTML,
+        _plan({"action": "setStyle", "qid": "box", "styles": {"gridTemplateColumns": value}}),
+        allow_source_reflow_safe_styles=True,
+    )
+    assert result.ok is True
+    assert f"grid-template-columns: {expected}" in result.html
+    assert "repeat(" not in result.html
+    assert result.changes[0].after == {"styles": {"grid-template-columns": expected}}
+    assert "Old &amp; title" in result.html
+    assert "font-size: 40px" in result.html
+    for qid in ("slide", "title", "box", "hero"):
+        assert result.html.count(f'data-qid="{qid}"') == 1
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["repeat(17, 1fr)", "repeat(9, 1fr 2fr)", "repeat(0, 1fr)",
+     "repeat(auto-fill, 1fr)", "repeat(auto-fit, 1fr)", "repeat(2, minmax(0, 1fr))",
+     "repeat(2, repeat(2, 1fr))", "repeat(2, var(--track))", "repeat(2, calc(50% - 2px))",
+     "repeat(2, -1fr)", "repeat(2, 0fr)", "repeat(2, 1fr); color: red"],
+)
+def test_source_reflow_rejects_unbounded_or_unsafe_grid_repeat_atomically(value):
+    result = apply_authored_patch(
+        HTML,
+        _plan({"action": "setStyle", "qid": "box", "styles": {"grid-template-columns": value}}),
+        allow_source_reflow_safe_styles=True,
+    )
+    assert result.ok is False
+    assert result.html == HTML
+    assert result.changes == []
+
+
+def test_ordinary_patch_does_not_gain_grid_repeat_syntax():
+    result = apply_authored_patch(
+        HTML,
+        _plan({"action": "setStyle", "qid": "box", "styles": {"grid-template-columns": "repeat(4, 1fr)"}}),
+    )
+    assert result.ok is False
+    assert result.html == HTML
+
+
 def test_late_missing_target_rolls_back_earlier_actions():
     result = apply_authored_patch(
         HTML,
