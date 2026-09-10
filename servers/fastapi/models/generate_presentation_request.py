@@ -24,6 +24,15 @@ GenerationMode = Literal[
     "editable-first",
 ]
 
+CodexGenerationPreset = Literal[
+    "luna-medium",
+    "luna-high",
+    "sol-medium",
+    "sol-high",
+    "astra-low",
+    "astra-medium",
+]
+
 
 class AuthoredMasterPinInput(StrictCamelModel):
     """Small public pin accepted by the existing presentation flow.
@@ -92,6 +101,7 @@ class GeneratePresentationRequest(BaseModel):
     # the authored rewrite.
     _composer_restyle: bool = PrivateAttr(default=False)
     _authored_source_readback_receipt: Any = PrivateAttr(default=None)
+    _authored_local_fit_policy_revision: Optional[str] = PrivateAttr(default=None)
     # Resolved once at generation admission and reused by authoring, repair and
     # publication.  It is intentionally private: callers select source policy
     # through ``contentPolicy``; the server owns the effective profile.
@@ -103,6 +113,10 @@ class GeneratePresentationRequest(BaseModel):
     presentation_id: Optional[uuid.UUID] = Field(default=None)
 
     content: str = Field(..., description="The content for generating the presentation")
+    codex_generation_preset: Optional[CodexGenerationPreset] = Field(
+        default=None,
+        description="Request-scoped Codex model and reasoning preset.",
+    )
     slides_markdown: Optional[List[str]] = Field(
         default=None, description="The markdown for the slides"
     )

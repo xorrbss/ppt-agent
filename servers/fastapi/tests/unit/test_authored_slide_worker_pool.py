@@ -84,6 +84,42 @@ def test_one_failure_stops_further_claims_and_surfaces_the_error():
     assert len(claimed) < 40
 
 
+def test_one_failure_cancels_and_reaps_in_flight_siblings():
+    all_started = asyncio.Event()
+    started: set[int] = set()
+    cancelled: set[int] = set()
+
+    async def process_slide(index: int):
+        started.add(index)
+        if len(started) == 4:
+            all_started.set()
+        if index == 0:
+            await all_started.wait()
+            raise _SlideFailure("terminal fit failure")
+        try:
+            await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            cancelled.add(index)
+            raise
+
+    async def scenario():
+        with pytest.raises(_SlideFailure, match="terminal fit failure"):
+            await run_slide_worker_pool(
+                process_slide, slide_count=20, worker_count=4
+            )
+        leftovers = [
+            task
+            for task in asyncio.all_tasks()
+            if not task.done()
+            and task.get_coro().__qualname__.startswith("run_slide_worker_pool.")
+        ]
+        assert leftovers == []
+
+    _run(scenario())
+    assert started == {0, 1, 2, 3}
+    assert cancelled == {1, 2, 3}
+
+
 def test_missing_result_is_reported_not_hidden():
     async def process_slide(index: int):
         return None if index == 2 else index
@@ -116,5 +152,99 @@ def test_cancellation_stops_producer_and_workers():
             and task.get_coro().__qualname__.startswith("run_slide_worker_pool.")
         ]
         assert leftovers == []
+
+    _run(scenario())
+
+
+def test_stream_failure_reaps_active_workers():
+    started = asyncio.Event()
+    cleaned = asyncio.Event()
+    supplied = False
+
+    async def next_index():
+        nonlocal supplied
+        if not supplied:
+            supplied = True
+            return 0
+        await started.wait()
+        raise _SlideFailure("author stream failed")
+
+    async def process_slide(index):
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            await asyncio.sleep(0)
+            cleaned.set()
+
+    async def scenario():
+        with pytest.raises(_SlideFailure, match="author stream failed"):
+            await run_slide_worker_pool(
+                process_slide, slide_count=20, worker_count=4,
+                index_source=next_index,
+            )
+        assert cleaned.is_set()
+
+    _run(scenario())
+
+
+def test_terminal_failure_waits_for_stream_pull_cleanup():
+    pulling = asyncio.Event()
+    cleaned = asyncio.Event()
+    supplied = False
+
+    async def next_index():
+        nonlocal supplied
+        if not supplied:
+            supplied = True
+            return 0
+        pulling.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            # Real sources can release an async resource during cancellation.
+            for _ in range(5):
+                await asyncio.sleep(0)
+            cleaned.set()
+
+    async def process_slide(index):
+        await pulling.wait()
+        raise _SlideFailure("terminal fit failure")
+
+    async def scenario():
+        with pytest.raises(_SlideFailure, match="terminal fit failure"):
+            await run_slide_worker_pool(
+                process_slide, slide_count=20, worker_count=4,
+                index_source=next_index,
+            )
+        assert cleaned.is_set()
+
+    _run(scenario())
+
+
+def test_worker_cancellation_reaps_siblings():
+    started: set[int] = set()
+    cleaned: set[int] = set()
+    all_started = asyncio.Event()
+
+    async def process_slide(index):
+        started.add(index)
+        if len(started) == 4:
+            all_started.set()
+        try:
+            await all_started.wait()
+            if index == 0:
+                raise asyncio.CancelledError()
+            await asyncio.Event().wait()
+        finally:
+            await asyncio.sleep(0)
+            cleaned.add(index)
+
+    async def scenario():
+        with pytest.raises(asyncio.CancelledError):
+            await run_slide_worker_pool(
+                process_slide, slide_count=20, worker_count=4,
+            )
+        assert started == cleaned == {0, 1, 2, 3}
 
     _run(scenario())

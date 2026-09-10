@@ -1970,7 +1970,12 @@ async def reserve_public_provider_call(
             outcome="replayed",
         )
         return (existing, True) if _return_reuse else existing
-    is_retry = retry_class != "initial"
+    # A resumed worker can reach a logical provider call for the first time.
+    # Keep the ``resume`` label for auditability, but charge that new call to
+    # the deck's planned-request pool. Only an explicit provider recovery call
+    # consumes the retry pool. Replays of an already-reserved logical key return
+    # above without incrementing either counter.
+    is_retry = retry_class == "retry"
     row = PublicProviderLogicalCall(
         admission_id=admission_id,
         stage=stage,

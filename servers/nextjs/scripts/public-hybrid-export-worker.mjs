@@ -148,7 +148,7 @@ async function loadHybridModules() {
   const libRoot = pathToFileURL(
     path.join(path.resolve(path.join(import.meta.dirname, "..")), "lib", path.sep),
   ).href;
-  const [index, slideLayer, assembler, fontEmbedding, fontPolicy, quality, inspection, slideQuality] =
+  const [index, slideLayer, assembler, fontEmbedding, fontPolicy, quality, inspection, slideQuality, localFit] =
     await Promise.all([
       import(`${libRoot}authored-hybrid/index.ts`),
       import(`${libRoot}authored-hybrid/slide-layer.ts`),
@@ -158,6 +158,7 @@ async function loadHybridModules() {
       import(`${libRoot}presentation-export-quality.ts`),
       import(`${libRoot}authored-hybrid/pptx-quality-inspection.ts`),
       import(`${libRoot}authored-hybrid/export-slide-quality.ts`),
+      import(`${libRoot}authored-hybrid/local-fit-export-evidence.ts`),
     ]);
   return {
     resolveAuthoredHybridChromeExecutable: index.resolveAuthoredHybridChromeExecutable,
@@ -171,6 +172,8 @@ async function loadHybridModules() {
     inspectPptxEditability: inspection.inspectPptxEditability,
     imageFallbackSlide: slideQuality.imageFallbackSlide,
     noFontRenderingTelemetry: slideQuality.noFontRenderingTelemetry,
+    createLocalFitExportEvidence: localFit.createLocalFitExportEvidence,
+    writeLocalFitExportEvidence: localFit.writeLocalFitExportEvidence,
   };
 }
 
@@ -397,6 +400,8 @@ async function run() {
     { embeddedTypefaceFamilies: embedding.embeddedTypefaceFamilies },
   );
   await writeFile(job.outputPath, hybridBytes, { flag: "wx", mode: 0o600 });
+  await modules.writeLocalFitExportEvidence(job.outputPath,
+    modules.createLocalFitExportEvidence(layers, htmls, job.rendererSourceDigest ?? "", hybridBytes));
   const structural = modules.inspectPptxEditability(hybridBytes);
 
   return {

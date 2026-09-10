@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { LocalFitCaptureEvidence } from "./local-fit-export-evidence.ts";
 
 import {
   flattenPreparedNativeElements,
@@ -41,6 +42,7 @@ const SLIDE_WIDTH_PX = 1_280;
 const SLIDE_HEIGHT_PX = 720;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 export interface AuthoredHybridSlideLayer {
+  localFitCapture?: LocalFitCaptureEvidence;
   /** One-based OOXML slide number. */
   slideNumber: number;
   backplatePng: Buffer;

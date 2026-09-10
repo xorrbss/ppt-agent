@@ -5,6 +5,7 @@
  */
 import { AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE } from "./css-paint-browser.ts";
 import { AUTHORED_HYBRID_SHADOW_BROWSER_SOURCE } from "./shadow-effect-browser.ts";
+import { LOCAL_FIT_BROWSER_SOURCE } from "./local-fit-browser.ts";
 
 export const AUTHORED_HYBRID_RESULT_MARKER_ID =
   "__presenton_authored_hybrid_result_v1__";
@@ -20,6 +21,7 @@ export const AUTHORED_HYBRID_ELEMENT_ATTRIBUTE =
 export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
 (async function () {
   "use strict";
+  ${LOCAL_FIT_BROWSER_SOURCE}
 
   var MARKER_ID = "__presenton_authored_hybrid_result_v1__";
   var COMPLETION_MARKER_NAME = "__presenton_authored_hybrid_complete_v1__";
@@ -1239,13 +1241,16 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
         var fragments = Array.from(range.getClientRects())
           .filter(function (rect) { return rect.width > 0 || rect.height > 0; })
           .map(rectValue);
-        runs.push({
+        var extractedRun = {
           text: slice.text,
           boundsPx: rectValue(range.getBoundingClientRect()),
           fragmentRectsPx: fragments,
           style: textStyle(parent, slice.text),
           script: slice.script,
-        });
+        };
+        localFitExtractedRunSources.set(extractedRun, localFitOriginalTextNodes.get(node));
+        if (localFitOriginalWhitespace.has(node)) localFitWhitespaceRuns.add(extractedRun);
+        runs.push(extractedRun);
       });
     }
 
@@ -3474,6 +3479,9 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
   try {
     await ensureFixedViewport();
     var renderReadiness = await waitForStablePage();
+    var localFitObservation = null;
+    // Missing policy evidence fails only the policy consumer, never a legacy export.
+    try { localFitObservation = observeLocalFitFonts(); } catch (_) {}
     if (captureMode === "fidelity") {
       writeResult({
         ok: true,
@@ -3484,6 +3492,7 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
             devicePixelRatio: window.devicePixelRatio,
           },
           elements: [],
+          localFitObservation: localFitObservation,
           warnings: [],
           appliedPromotedElementIds: [],
           rejectedPromotedElementIds: [],
@@ -3588,6 +3597,7 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
           svgElement,
           await svgImagePayload(svgElement, svgReasons, svgBounds)
         );
+        rememberLocalFitImage(svgElement, svgBounds, complexSvgImagePayloads.get(svgElement), "source");
       } else if (
         svgElement.tagName && svgElement.namespaceURI !== "http://www.w3.org/2000/svg" &&
         complexKind(svgElement) === "complex-diagram" &&
@@ -3601,6 +3611,7 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
           svgElement,
           await htmlDiagramImagePayload(svgElement, htmlReasons, htmlBounds)
         );
+        rememberLocalFitImage(svgElement, htmlBounds, complexHtmlImagePayloads.get(svgElement), "suppressed");
       }
     }
     var coveredRoots = [];
@@ -3861,6 +3872,7 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
       await waitForTwoPaints();
     }
 
+    try { bindLocalFitElements(localFitObservation, records); } catch (_) { localFitObservation = null; }
     writeResult({
       ok: true,
       value: {
@@ -3870,6 +3882,7 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
           devicePixelRatio: window.devicePixelRatio,
         },
         elements: records.map(function (record) { return record.observation; }),
+        localFitObservation: localFitObservation,
         warnings: warnings,
         appliedPromotedElementIds: suppression.applied,
         rejectedPromotedElementIds: suppression.rejected,

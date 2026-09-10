@@ -1154,6 +1154,15 @@
       "description": "Author the first content slide alone and hand its stylesheet to every other slide as the deck's established visual language."
     },
     {
+      "key": "AUTHORED_CONTENT_BRIEF_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Generate the optional knowledge brief before an authored outline. False skips its provider call and grounds the outline directly in the supplied source and document context."
+    },
+    {
       "key": "AUTHORED_ILLUSTRATION_SHARE",
       "type": "string",
       "default": "0.25",

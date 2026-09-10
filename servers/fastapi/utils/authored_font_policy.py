@@ -102,6 +102,7 @@ def enforce_authored_font_floor(
     html: str,
     *,
     minimum_px: float = MIN_AUTHORED_FONT_SIZE_PX,
+    minimum_pt: float | None = None,
 ) -> str:
     """Raise explicit positive CSS font sizes below the requested floor.
 
@@ -114,7 +115,10 @@ def enforce_authored_font_floor(
         return html
 
     minimum_px = max(float(minimum_px), MIN_AUTHORED_FONT_SIZE_PX)
-    minimum_pt = max(MIN_AUTHORED_FONT_SIZE_PT, minimum_px * 0.75)
+    minimum_pt = max(
+        MIN_AUTHORED_FONT_SIZE_PT,
+        minimum_px * 0.75 if minimum_pt is None else float(minimum_pt),
+    )
 
     parts = _SCRIPT_BLOCK_RE.split(html)
     return "".join(

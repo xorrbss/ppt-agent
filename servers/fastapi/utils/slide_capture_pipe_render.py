@@ -166,6 +166,7 @@ def render_admitted_htmls_over_pipe(
                     }});
                   }}));
                   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                  if (window.__codexObserveFinal) window.__codexObserveFinal();
                   const marker = document.getElementById('{METRICS_ELEMENT_ID}');
                   return marker ? marker.getAttribute('content') : null;
                 }})()""",
@@ -215,8 +216,9 @@ def render_admitted_htmls_over_pipe(
                 output = io.BytesIO()
                 image.save(output, format="PNG")
                 if metrics is not None:
+                    from utils.slide_capture_local_fit import measured_html
                     metrics = probe_glyph_clipping_sync(
-                        admitted.html, metrics, output.getvalue(),
+                        measured_html(admitted.html, metrics), metrics, output.getvalue(),
                         command=page_command, frame_id=frame_id,
                     )
                 return output.getvalue(), metrics

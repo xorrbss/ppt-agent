@@ -23,6 +23,7 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
     cache_html: str | None = None, blocked_urls: Sequence[str],
     cache_metrics: Callable[..., None], cdp_command: Callable[..., Any],
     count_runtime: Callable[[str], None], discard_runtime: Callable[[Any], None],
+    release_runtime: Callable[[Any], None],
     enrich_contrast: Callable[..., Mapping[str, Any]], get_runtime: Callable[[], Any],
     instrument_html: Callable[..., tuple[str, str]], metrics_element_id: str,
     pixel_probe_document: Callable[[str], str], runtime_value: Callable[[Mapping[str, Any]], Any],
@@ -31,12 +32,18 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
 
     from PIL import Image
 
-    runtime = await asyncio.to_thread(get_runtime)
+    runtime = None
+    acquisition = asyncio.create_task(asyncio.to_thread(get_runtime))
     timeout_config = aiohttp.ClientTimeout(total=max(5, timeout))
     target_id = ""
-    page_closed = False
+    failed = False
     try:
-        async with aiohttp.ClientSession(timeout=timeout_config) as session:
+        # ClientTimeout does not bound WebSocket receive/Runtime.evaluate.
+        async with (
+            asyncio.timeout(max(0.001, timeout)),
+            aiohttp.ClientSession(timeout=timeout_config) as session,
+        ):
+            runtime = await asyncio.shield(acquisition)
             create_url = f"{runtime.base_url}/json/new?{urllib.parse.quote('about:blank', safe='')}"
             async with session.put(create_url) as response:
                 if response.status != 200:
@@ -95,7 +102,12 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                     {
                         "expression": f"""(async () => {{
                           if (document.fonts && document.fonts.ready) await document.fonts.ready;
+                          await Promise.all(Array.from(document.images).map(image => image.complete
+                            ? (image.decode ? image.decode().catch(() => undefined) : Promise.resolve())
+                            : new Promise(resolve => {{image.addEventListener('load',resolve,{{once:true}});
+                                image.addEventListener('error',resolve,{{once:true}});}})));
                           await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                          if (window.__codexObserveFinal) window.__codexObserveFinal();
                           const marker = document.getElementById('{metrics_element_id}');
                           return marker ? marker.getAttribute('content') : null;
                         }})()""",
@@ -132,6 +144,7 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                     and bool(item.get("requires_pixel_contrast"))
                     for item in metrics.get("elements", ())
                 ):
+                    from utils.slide_capture_local_fit import measured_html
                     await command(
                         "Emulation.setDeviceMetricsOverride",
                         {
@@ -145,7 +158,7 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                         "Page.setDocumentContent",
                         {
                             "frameId": frame_id,
-                            "html": pixel_probe_document(html),
+                            "html": pixel_probe_document(measured_html(html, metrics)),
                         },
                     )
                     await command(
@@ -186,27 +199,57 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                 output = io.BytesIO()
                 image.save(output, format="PNG")
                 if metrics is not None:
+                    from utils.slide_capture_local_fit import measured_html
                     metrics = await probe_glyph_clipping_async(
-                        html, metrics, output.getvalue(), command=command, frame_id=frame_id,
+                        measured_html(html, metrics), metrics, output.getvalue(), command=command, frame_id=frame_id,
                     )
                     cache_metrics(cache_html or html, metrics)
 
-            close_url = f"{runtime.base_url}/json/close/{target_id}"
-            for _attempt in range(2):
-                try:
-                    async with session.get(close_url) as response:
-                        if response.status == 200:
-                            page_closed = True
-                            break
-                except aiohttp.ClientError:
-                    await asyncio.sleep(0)
-            if not page_closed:
-                raise RuntimeError("Chrome DevTools page cleanup failed")
-            count_runtime("page_sessions_closed")
             return output.getvalue(), metrics
-    except Exception:
-        # A protocol failure can leave state behind.  Retire the shared process;
-        # the caller falls back to the proven one-shot renderer and the next
-        # request starts a fresh isolated runtime.
-        await asyncio.to_thread(discard_runtime, runtime)
+    except BaseException:
+        failed = True
         raise
+    finally:
+        async def cleanup() -> None:
+            owned_runtime = runtime
+            if owned_runtime is None:
+                # A cancelled to_thread acquisition still runs. Recover and
+                # release its reference instead of abandoning a Chrome process.
+                acquired = await asyncio.gather(acquisition, return_exceptions=True)
+                if isinstance(acquired[0], BaseException):
+                    return
+                owned_runtime = acquired[0]
+            cleanup_failed = False
+            try:
+                if failed:
+                    await asyncio.to_thread(discard_runtime, owned_runtime)
+                if target_id:
+                    page_closed = False
+                    try:
+                        async with asyncio.timeout(5), aiohttp.ClientSession(
+                            timeout=aiohttp.ClientTimeout(total=5)
+                        ) as cleanup_session:
+                            close_url = f"{owned_runtime.base_url}/json/close/{target_id}"
+                            for _attempt in range(2):
+                                async with cleanup_session.get(close_url) as response:
+                                    if response.status in (200, 404):
+                                        page_closed = True
+                                        break
+                    except (aiohttp.ClientError, TimeoutError):
+                        pass
+                    cleanup_failed = not page_closed
+                    if page_closed:
+                        count_runtime("page_sessions_closed")
+                    else:
+                        await asyncio.to_thread(discard_runtime, owned_runtime)
+            finally:
+                await asyncio.to_thread(release_runtime, owned_runtime)
+            if cleanup_failed and not failed:
+                raise RuntimeError("Chrome DevTools page cleanup failed")
+
+        cleanup_task = asyncio.create_task(cleanup())
+        try:
+            await asyncio.shield(cleanup_task)
+        except asyncio.CancelledError:
+            await cleanup_task
+            raise

@@ -49,3 +49,18 @@ def test_enforce_authored_font_floor_accepts_frozen_capacity_floor():
     assert ".valid{font-size:16px}" in once
     assert 'style="font-size:15px"' in once
     assert twice == once
+
+
+def test_enforce_authored_font_floor_uses_independent_px_and_pt_floors():
+    html = """<style>
+.page{font-size:12px}.exact-floor{font-size:9.5pt}
+</style>"""
+
+    result = enforce_authored_font_floor(
+        html,
+        minimum_px=12.6667,
+        minimum_pt=9.5,
+    )
+
+    assert ".page{font-size:12.6667px}" in result
+    assert ".exact-floor{font-size:9.5pt}" in result

@@ -180,6 +180,56 @@ def test_a_retry_carries_the_reason_the_slide_was_rejected() -> None:
     assert author_correction_from_stored_failure({}) is None
 
 
+def test_stored_source_rejection_prefers_actionable_detail_and_exact_block() -> None:
+    expected = "‘영상’이 아니라 ‘콘텐츠 운영’을 판다"
+    hint = author_correction_from_stored_failure({
+        "code": "authored_provider_attempt_budget_exhausted",
+        "cause": "Authored slide author failed",
+        "prior_failure": {
+            "code": "authored_slide_author_failed",
+            "cause": "source_content_browser_readback_failed",
+            "detail": f"source block text has no unique DOM element (run 0: expected {expected!r})",
+            "message": "Authored slide author failed",
+            "block_ids": ["source-slide:7:text:10"],
+        },
+    })
+    assert hint is not None
+    assert expected in hint
+    assert "source-slide:7:text:10" in hint
+    assert "authored_provider_attempt_budget_exhausted" not in hint
+    assert "source_content_browser_readback_failed" not in hint
+    assert len(hint) <= 460
+
+
+def test_prior_source_rejection_preserves_sanitized_message_across_attempts() -> None:
+    expected = "‘영상’이 아니라 ‘콘텐츠 운영’을 판다"
+    message = f"source-slide:7:text:10: expected {expected!r}; Bearer sensitivecredential"
+    stage_error = AuthoredStageError(
+        slide_index=6,
+        stage="author",
+        code="authored_provider_attempt_budget_exhausted",
+        prior_failure={
+            "code": "source_content_browser_readback_failed",
+            "cause": "source_content_browser_readback_failed",
+            "message": message,
+            "detail": "Authored slide author failed",
+            "block_ids": ["source-slide:7:text:10"],
+            "untrusted_payload": "must not survive",
+        },
+    )
+    stored = stage_error.as_safe_dict()
+    prior = stored["prior_failure"]
+    assert expected in prior["message"]
+    assert "sensitivecredential" not in prior["message"]
+    assert "[redacted]" in prior["message"]
+    assert prior["block_ids"] == ["source-slide:7:text:10"]
+    assert "untrusted_payload" not in prior
+    hint = author_correction_from_stored_failure(stored)
+    assert expected in hint
+    assert "source-slide:7:text:10" in hint
+    assert "sensitivecredential" not in hint
+
+
 def test_a_later_operation_attempt_gives_a_failed_slide_its_calls_back(
     tmp_path, monkeypatch
 ) -> None:
@@ -376,12 +426,15 @@ def test_provider_attempt_reservation_survives_crash_and_fences_stale_worker(
     assert asyncio.run(scenario()) == (1, 2)
 
 
-def test_initial_and_recovery_use_distinct_stable_public_logical_slots() -> None:
+def test_initial_recovery_and_rescue_use_distinct_stable_public_logical_slots() -> None:
     initial = authored_provider_semantic_slot(
         receipt_retry_class="initial", receipt_attempt_ordinal=1
     )
     recovery = authored_provider_semantic_slot(
         receipt_retry_class="recovery", receipt_attempt_ordinal=2
+    )
+    rescue = authored_provider_semantic_slot(
+        receipt_retry_class="recovery", receipt_attempt_ordinal=3
     )
     first_scope = ProviderUsageScope(
         job_id=uuid.uuid4(),
@@ -398,13 +451,23 @@ def test_initial_and_recovery_use_distinct_stable_public_logical_slots() -> None
         slide_index=2,
     )
 
-    assert (initial, recovery) == ("author.initial", "author.recovery")
+    assert (initial, recovery, rescue) == (
+        "author.initial",
+        "author.recovery",
+        "author.rescue",
+    )
     assert first_scope.public_logical_call_ordinal(initial) != (
         first_scope.public_logical_call_ordinal(recovery)
     )
     assert first_scope.public_logical_call_ordinal(recovery) == (
         resumed_scope.public_logical_call_ordinal(recovery)
     )
+    assert len(
+        {
+            first_scope.public_logical_call_ordinal(slot)
+            for slot in (initial, recovery, rescue)
+        }
+    ) == 3
 
 
 def test_deck_level_stage_gives_every_remade_slide_its_own_logical_call():

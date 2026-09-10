@@ -26,6 +26,7 @@ import {
   displayResultValue,
   formatDuration,
   formatTimestamp,
+  generationCompletionSummary,
   numberValue,
   qualityMetric,
   qualityReviewHistory,
@@ -322,6 +323,9 @@ export function WorkspaceOperationCard({
     activity ? ["활동", activity] : undefined,
   ].filter((item): item is [string, string] => item !== undefined);
   const result = recordValue(operation.result);
+  const generationCompletion = isPresentationGeneration
+    ? generationCompletionSummary(result)
+    : undefined;
   const isQualityReview =
     operation.operationType === "quality.review" ||
     result.kind === "quality.review";
@@ -797,6 +801,33 @@ export function WorkspaceOperationCard({
         <p className="mt-2 rounded-lg bg-emerald-50 px-2.5 py-2 text-xs text-emerald-800">
           {resultSummary}
         </p>
+      )}
+      {operation.status === "succeeded" && generationCompletion && (
+        <section
+          className={`mt-2 rounded-lg border px-2.5 py-2 text-xs ${
+            generationCompletion.reviewRequired > 0
+              ? "border-amber-200 bg-amber-50 text-amber-950"
+              : "border-emerald-100 bg-emerald-50 text-emerald-950"
+          }`}
+          aria-label="문서 생성 결과"
+          data-testid="generation-completion-summary"
+        >
+          <p className="font-semibold">
+            문서 생성 완료 — {generationCompletion.total}페이지 / 정상{" "}
+            {generationCompletion.normal} · 자동 수정{" "}
+            {generationCompletion.autoRepaired} · 검토 필요{" "}
+            {generationCompletion.reviewRequired}
+          </p>
+          {generationCompletion.reviewPages.length > 0 && (
+            <ul className="mt-2 space-y-1" data-testid="generation-review-pages">
+              {generationCompletion.reviewPages.map((page) => (
+                <li key={page.index}>
+                  {page.index + 1}페이지: {page.reasons.join(" · ")}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
       {operation.status === "succeeded" && remakeOfferSlideIndex !== undefined && (
         <section

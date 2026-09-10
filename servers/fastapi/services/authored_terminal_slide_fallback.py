@@ -366,6 +366,8 @@ async def resolve_terminal_gate_slides(
     instructions: object = None, generation_job: Any = None,
     predeclared: Sequence[Mapping[str, object]] = (),
     remake_counts: Mapping[int, int] | None = None,
+    preserved_flagged_indices: Sequence[int] = (),
+    prepare_admitted: Any = None,
 ) -> TerminalSlideFallback:
     """Remake every ladder-terminal slide again; flag the ones that stay terminal.
 
@@ -391,6 +393,7 @@ async def resolve_terminal_gate_slides(
     ):
         return TerminalSlideFallback(scene_envelope=scene_envelope)
 
+    preserved_indices = {int(index) for index in preserved_flagged_indices}
     declared_by_index = {
         int(entry["index"]): dict(entry)
         for entry in predeclared
@@ -398,6 +401,8 @@ async def resolve_terminal_gate_slides(
     }
     terminal: list[tuple[int, tuple[Any, ...], dict[str, object]]] = []
     for index, html in enumerate(htmls):
+        if index in preserved_indices:
+            continue
         metrics = _slide_metrics(index, html, metrics_by_slide)
         defects = (
             _blocking_defects(
@@ -463,6 +468,17 @@ async def resolve_terminal_gate_slides(
                 )
             )
             continue
+        if prepare_admitted is not None:
+            admitted = await prepare_admitted(index, admitted)
+            if admitted is None:
+                flagged.append(
+                    _flagged_entry(
+                        index=index, reason=reason, attempted=True,
+                        outcome="remake_local_fit_rejected", repeated=repeated,
+                        remake_count=spent,
+                    )
+                )
+                continue
         scene_envelope = await apply_admitted_remake(
             index=index, admitted=admitted, htmls=htmls, pngs=pngs,
             metrics_by_slide=metrics_by_slide, scene_envelope=scene_envelope,

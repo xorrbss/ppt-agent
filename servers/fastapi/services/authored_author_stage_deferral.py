@@ -219,13 +219,12 @@ def defer_rescuable_author_failures(
 ) -> dict[int, DeferredAuthorBudgetExhausted]:
     """The unresolved slides the tail may rescue, keyed by slide index.
 
-    Returns an empty mapping -- today's behaviour exactly -- when the deck's
-    rescue predicate is inactive, so an exact-reconstruction, verbatim or
-    non-strict deck still fails closed on the first unresolved slide.
+    Source-reflow decks may use the same bounded third provider call, but never
+    the lossy placeholder fallback. The downstream rescue keeps that boundary.
     """
 
-    if not terminal_fallback_active(
-        profile=profile, reference_mode=reference_mode, source_reflow=source_reflow
+    if not source_reflow and not terminal_fallback_active(
+        profile=profile, reference_mode=reference_mode, source_reflow=False
     ):
         return {}
     deferred: dict[int, DeferredAuthorBudgetExhausted] = {}
@@ -294,7 +293,9 @@ def deferred_author_budget_error(
 
     if not terminal_fallback_active(
         profile=profile, reference_mode=reference_mode, source_reflow=source_reflow
-    ):
+    ) and not source_reflow:
+        return None
+    if provider_attempt_count != 2:
         return None
     deferred = deferrals.get(index)
     if deferred is not None:

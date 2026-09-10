@@ -812,6 +812,9 @@ def fallback_slide_html(
     # The numbered layout reserves a 72px footer zone; an unnumbered deck keeps
     # the 32px bottom margin its slides were authored against.
     bottom_padding = 72 if page_number_mode == TEMPLATE_PAGE_NUMBER_MODE else 32
+    from services.authored_local_fit_policy import FONT_FLOOR_PT, pt_per_css_px, required_font_px
+    footer_font_px = required_font_px(
+        FONT_FLOOR_PT, 1, pt_per_css_px(width_pt=960, height_pt=540))
     return (
         f"<!DOCTYPE html><html lang=\"ko\" {_FALLBACK_SLIDE_MARKER}>"
         "<head><meta charset=\"utf-8\"><style>"
@@ -824,7 +827,7 @@ def fallback_slide_html(
         "font-weight:700;margin-bottom:18px;}"
         ".body{font-size:30px;line-height:1.5;color:#0F172A;font-weight:500;max-width:1000px;}"
         ".foot{position:absolute;left:0;right:0;bottom:14px;text-align:center;"
-        "font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3;}"
+        f"font-size:{footer_font_px:g}px;line-height:16px;font-weight:500;color:#A7ACB3;}}"
         "</style></head><body>"
         f"<div class=\"bar\"></div><div class=\"eyebrow\">{eyebrow}</div>"
         f"<div class=\"body\">{text}</div>{footer}"
@@ -882,7 +885,9 @@ def authored_provider_semantic_slot(
     """
 
     base = (
-        "author.recovery"
+        "author.rescue"
+        if receipt_attempt_ordinal == 3
+        else "author.recovery"
         if receipt_attempt_ordinal == 2 or receipt_retry_class == "recovery"
         else "author.initial"
     )
@@ -1043,9 +1048,9 @@ async def author_slide_html(
     if receipt_attempt_ordinal is not None and (
         isinstance(receipt_attempt_ordinal, bool)
         or not isinstance(receipt_attempt_ordinal, int)
-        or receipt_attempt_ordinal not in {1, 2}
+        or receipt_attempt_ordinal not in {1, 2, 3}
     ):
-        raise ValueError("receipt_attempt_ordinal must be 1 or 2 when provided")
+        raise ValueError("receipt_attempt_ordinal must be 1, 2, or 3 when provided")
     if (
         receipt_retry_class is not None
         and receipt_attempt_ordinal is not None

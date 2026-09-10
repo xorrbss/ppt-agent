@@ -14,7 +14,11 @@ from datetime import datetime
 from typing import Any, Mapping, Sequence
 import uuid
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from models.sql.presentation import PresentationModel
+from models.sql.slide import SlideModel
 
 from models.sql.public_artifact import (
     ArtifactRef as PublicArtifactRef,
@@ -33,6 +37,9 @@ from services.public_render_batching import (
     OperationRenderBatcher,
     admit_render_authority,
     gather_render_members,
+)
+from services.presentation_export_route_inputs import (
+    resolve_authored_local_fit_receipts,
 )
 from services.public_export_identity import (
     CanonicalExportExecution,
@@ -69,6 +76,7 @@ from services.isolated_worker_process import (
 from services.trusted_executor.dispatch_evidence import private_dispatch_evidence_summary
 from services.workspace_operation_handler_registry import WorkspaceOperationClaim
 from utils.slide_capture import _render_cache_identity
+from utils.asset_directory_utils import resolve_image_path_to_filesystem
 
 
 class PublicExportOperationError(RuntimeError):
@@ -767,6 +775,7 @@ def build_validated_checkpoint_export_bundle(
     export_attempt_id: str | None = None,
     renderer_source_digest: str | None = None,
     font_embedding: bool = False,
+    local_fit_receipts: Sequence[Mapping[str, object]] = (),
 ) -> bytes:
     """Build an export input from durable validated slides without re-rendering.
 
@@ -803,6 +812,12 @@ def build_validated_checkpoint_export_bundle(
             for index, reference in enumerate(source_slides)
         ]
         payload["fontEmbedding"] = bool(font_embedding)
+        if local_fit_receipts:
+            if not renderer_source_digest:
+                raise PublicExportOperationError(
+                    "public_export_local_fit_renderer_identity_invalid"
+                )
+            payload["rendererSourceDigest"] = renderer_source_digest
         if semantic_slides:
             if (
                 len(semantic_slides) != len(identity.slides)
@@ -818,6 +833,14 @@ def build_validated_checkpoint_export_bundle(
             # governs, and inlining binds it to the job capability by the same
             # digest as the rest of the input instead of by a second reference.
             payload["semanticSlides"] = [dict(slide) for slide in semantic_slides]
+    if local_fit_receipts:
+        if len(local_fit_receipts) != len(identity.slides):
+            raise PublicExportOperationError(
+                "public_export_local_fit_receipts_invalid"
+            )
+        payload["localFitReceipts"] = [
+            dict(receipt) for receipt in local_fit_receipts
+        ]
     return json.dumps(
         payload,
         ensure_ascii=True,
@@ -1075,6 +1098,7 @@ async def execute_canonical_export_execution(
     export_attempt_id: str | None = None,
     renderer_source_digest: str | None = None,
     font_embedding: bool = False,
+    local_fit_receipts: Sequence[Mapping[str, object]] = (),
     deadline_seconds: int | None = None,
     session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
 ) -> PublicWorkerArtifactResult:
@@ -1130,6 +1154,7 @@ async def execute_canonical_export_execution(
         export_attempt_id=export_attempt_id,
         renderer_source_digest=renderer_source_digest,
         font_embedding=font_embedding,
+        local_fit_receipts=local_fit_receipts,
     )
     async with session_factory() as session:
         bundle_ref = await artifact_service.persist_bytes(
@@ -1231,6 +1256,43 @@ async def render_and_export_authored_htmls(
     )
     normalized_quality_digest = normalize_sha256(
         quality_digest.removeprefix("sha256:")
+    )
+    local_fit_receipts: tuple[Mapping[str, object], ...] = ()
+    persisted_slides: list[SlideModel] = []
+    if export_format == "pptx":
+        async with session_factory() as session:
+            presentation = await session.get(
+                PresentationModel, claim.presentation_id
+            )
+            persisted_slides = (
+                await session.execute(
+                    select(SlideModel)
+                    .where(SlideModel.presentation == claim.presentation_id)
+                    .order_by(SlideModel.index, SlideModel.id)
+                )
+            ).scalars().all()
+        if presentation is None:
+            raise PublicExportOperationError("presentation_not_found")
+        local_fit_receipts = resolve_authored_local_fit_receipts(
+            presentation, persisted_slides
+        )
+        if local_fit_receipts and [
+            slide.html_content for slide in persisted_slides
+        ] != htmls:
+            raise PublicExportOperationError(
+                "public_export_local_fit_source_mismatch"
+            )
+    local_fit_receipt_digest = (
+        sha256(
+            json.dumps(
+                list(local_fit_receipts),
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        if local_fit_receipts
+        else ""
     )
 
     if pptx_mode not in {"fidelity", "hybrid"}:
@@ -1353,6 +1415,61 @@ async def render_and_export_authored_htmls(
     render_checkpoint_reuse_count = 0
     render_singleflight_join_count = 0
     render_authority_modes: set[str] = set()
+    approved_png_refs: list[PublicArtifactRef] = []
+    if local_fit_receipts:
+        async with session_factory() as session:
+            for index, (slide, receipt) in enumerate(
+                zip(persisted_slides, local_fit_receipts, strict=True)
+            ):
+                properties = (
+                    slide.properties
+                    if isinstance(slide.properties, Mapping)
+                    else {}
+                )
+                content = (
+                    slide.content
+                    if isinstance(slide.content, Mapping)
+                    else {}
+                )
+                image_ref = properties.get("image") or content.get("image")
+                if not isinstance(image_ref, str) or not image_ref.strip():
+                    raise PublicExportOperationError(
+                        "public_export_approved_png_unavailable"
+                    )
+                served_ref = image_ref.strip()
+                if not served_ref.startswith(("/app_data/", "/static/")):
+                    served_ref = (
+                        "/app_data/images/" + served_ref.lstrip("/\\")
+                    )
+                image_path = resolve_image_path_to_filesystem(served_ref)
+                if image_path is None:
+                    raise PublicExportOperationError(
+                        "public_export_approved_png_unavailable"
+                    )
+                png = pathlib.Path(image_path).read_bytes()
+                actual_digest = "sha256:" + sha256(png).hexdigest()
+                if (
+                    not png.startswith(b"\x89PNG\r\n\x1a\n")
+                    or receipt.get("png_digest") != actual_digest
+                ):
+                    raise PublicExportOperationError(
+                        "public_export_approved_png_identity_mismatch"
+                    )
+                approved_png_refs.append(
+                    await artifact_service.persist_bytes(
+                        session,
+                        owner_id=claim.owner_id,
+                        tenant_id=tenant_id,
+                        kind="slide-png",
+                        payload=png,
+                        media_type="image/png",
+                        created_by_operation_id=claim.operation_id,
+                        retention_class=(
+                            "checkpoint" if canonical_enabled else "ephemeral"
+                        ),
+                    )
+                )
+            await session.commit()
     singleflight_wait_seconds = max(
         1.0,
         min(
@@ -1500,13 +1617,8 @@ async def render_and_export_authored_htmls(
             [
                 json.dumps(htmls, ensure_ascii=False, separators=(",", ":")),
                 semantic_digest_binding or "",
+                local_fit_receipt_digest,
             ],
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode("utf-8")
-        if semantic_digest_binding
-        else json.dumps(
-            htmls,
             ensure_ascii=False,
             separators=(",", ":"),
         ).encode("utf-8")
@@ -1661,21 +1773,26 @@ async def render_and_export_authored_htmls(
         return rendered
 
     render_batch_started = time.perf_counter()
-    try:
-        if canonical_enabled:
-            png_refs = await gather_render_members(
-                [render_canonical_slide(index, reference, slide_identities[index])
-                 for index, reference in enumerate(html_refs)]
-            )
-        else:
-            png_refs = await gather_render_members(
-                [render_fresh(index, reference)
-                 for index, reference in enumerate(html_refs)]
-            )
-    finally:
-        # Do not let an operation cancellation/fence failure leave the
-        # operation-scoped drain task or an isolated Chromium child behind.
+    if approved_png_refs:
+        png_refs = approved_png_refs
         await render_batcher.close()
+        render_authority_modes.add("accepted-local-fit-artifact")
+    else:
+        try:
+            if canonical_enabled:
+                png_refs = await gather_render_members(
+                    [render_canonical_slide(index, reference, slide_identities[index])
+                     for index, reference in enumerate(html_refs)]
+                )
+            else:
+                png_refs = await gather_render_members(
+                    [render_fresh(index, reference)
+                     for index, reference in enumerate(html_refs)]
+                )
+        finally:
+            # Do not let an operation cancellation/fence failure leave the
+            # operation-scoped drain task or an isolated Chromium child behind.
+            await render_batcher.close()
     render_wall_millis = int((time.perf_counter() - render_batch_started) * 1000)
     png_stage_started = time.perf_counter()
     await asyncio.gather(*(stage_worker_input(reference) for reference in png_refs))
@@ -1795,6 +1912,13 @@ async def render_and_export_authored_htmls(
                                     "pngDigest": reference.sha256,
                                     "sceneDigest": normalized_scene_digest,
                                     "qualityDigest": normalized_quality_digest,
+                                    "localFitAcceptanceKey": (
+                                        local_fit_receipts[index].get(
+                                            "acceptanceKey"
+                                        )
+                                        if local_fit_receipts
+                                        else None
+                                    ),
                                 },
                                 sort_keys=True,
                                 separators=(",", ":"),
@@ -1830,6 +1954,7 @@ async def render_and_export_authored_htmls(
                     render_runtime_binding_digest if hybrid else None
                 ),
                 font_embedding=font_embedding if hybrid else False,
+                local_fit_receipts=local_fit_receipts,
                 deadline_seconds=(
                     HYBRID_EXPORT_DEADLINE_SECONDS if hybrid else None
                 ),
@@ -1906,6 +2031,15 @@ async def render_and_export_authored_htmls(
             "slides": [
                 _worker_ref(reference).to_wire() for reference in png_refs
             ],
+            **(
+                {
+                    "localFitReceipts": [
+                        dict(receipt) for receipt in local_fit_receipts
+                    ]
+                }
+                if local_fit_receipts
+                else {}
+            ),
         },
         ensure_ascii=True,
         sort_keys=True,

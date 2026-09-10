@@ -17,4 +17,5 @@ export type GenerationPreferences = {
   include_table_of_contents?: boolean;
   include_title_slide?: boolean;
   web_search?: boolean;
+  codex_generation_preset?: import("@/components/codex-config").CodexGenerationPresetId;
 };

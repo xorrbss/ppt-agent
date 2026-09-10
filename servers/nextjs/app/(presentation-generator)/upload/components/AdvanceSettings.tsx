@@ -7,6 +7,7 @@ import { Pencil, Save, SlidersHorizontal, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import React, { useEffect, useState } from 'react';
 import { PresentationConfig, ToneType, VerbosityType } from '../type';
+import { CODEX_GENERATION_PRESETS, type CodexGenerationPresetId } from '@/components/codex-config';
 
 interface ConfigurationSelectsProps {
     config: PresentationConfig;
@@ -47,6 +48,7 @@ const AdvanceSettings = ({
         includeTableOfContents: config.includeTableOfContents,
         includeTitleSlide: config.includeTitleSlide,
         webSearch: config.webSearch,
+        codexGenerationPreset: config.codexGenerationPreset,
     });
 
     const syncDraftFromConfig = () => {
@@ -57,6 +59,7 @@ const AdvanceSettings = ({
             includeTableOfContents: config.includeTableOfContents,
             includeTitleSlide: config.includeTitleSlide,
             webSearch: config.webSearch,
+            codexGenerationPreset: config.codexGenerationPreset,
         });
     };
 
@@ -76,6 +79,7 @@ const AdvanceSettings = ({
         onConfigChange('includeTableOfContents', advancedDraft.includeTableOfContents);
         onConfigChange('includeTitleSlide', advancedDraft.includeTitleSlide);
         onConfigChange('webSearch', advancedDraft.webSearch);
+        onConfigChange('codexGenerationPreset', advancedDraft.codexGenerationPreset);
         setOpenAdvanced(false);
     };
 
@@ -232,6 +236,27 @@ const AdvanceSettings = ({
                                         </SelectContent>
                                     </Select>
                                 </div>
+
+                                {advancedDraft.codexGenerationPreset ? <div className="flex items-center justify-between gap-3">
+                                    <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">생성 모델</label>
+                                    <Select
+                                        value={advancedDraft.codexGenerationPreset}
+                                        onValueChange={(value) =>
+                                            setAdvancedDraft((prev) => ({ ...prev, codexGenerationPreset: value as CodexGenerationPresetId }))
+                                        }
+                                    >
+                                        <SelectTrigger aria-label="생성 모델" className="p-2.5 w-[160px] rounded-xl border-[#DBDBE1] bg-white font-syne text-sm font-medium text-[#2C2B37] shadow-none focus:ring-0 focus-visible:ring-0">
+                                            <SelectValue placeholder="생성 모델 선택" />
+                                        </SelectTrigger>
+                                        <SelectContent className="z-[120] font-syne">
+                                            {CODEX_GENERATION_PRESETS.map((preset) => (
+                                                <SelectItem key={preset.id} value={preset.id} className="text-sm font-medium">
+                                                    {preset.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div> : null}
 
                                 <div className="flex items-center justify-between gap-3">
                                     <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">

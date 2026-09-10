@@ -69,9 +69,10 @@ AUTHOR_OUTPUT_TOKEN_LIMIT_REASON = "author:output_token_limit"
 #: rather than under-reporting what the deck was billed for.
 RESCUE_ATTEMPT_ORDINAL = 3
 
-#: ``_author_one_resilient`` runs ``while offset + made < 2``. An offset of one
-#: therefore buys EXACTLY one more call -- not a second two-call budget.
-_ONE_MORE_CALL_OFFSET = 1
+#: The strict third attempt starts after the two ordinary calls and raises the
+#: temporary call limit to three, buying exactly one call rather than another
+#: two-call budget.
+_ONE_MORE_CALL_OFFSET = 2
 
 #: The lowest point on the canvas an absolutely positioned element may claim.
 #: Below it a box is either clipped by the 720px frame or collides with the
@@ -178,6 +179,26 @@ def simplified_author_brief(*, role: str, contract: Any) -> str:
     )
 
 
+def strict_source_reflow_author_brief(*, role: str, contract: Any) -> str:
+    """Final correction for a source-locked slide without relaxing fidelity."""
+
+    header = (
+        "Reproduce the header contract exactly with only these required parts: "
+        f"{_required_header_parts(contract)}. Remove any data-header-part=\"right\" "
+        "element; move its source text into an ordinary body owner unchanged."
+        if contract is not None
+        else "Do not add a header band or header-part elements."
+    )
+    return (
+        "The two previous candidates were rejected. This is the one final, "
+        "source-locked correction. Preserve every source text block verbatim, "
+        "including punctuation and ordering; do not summarize, shorten, merge, "
+        "or invent text. Give every source block exactly one visible owner. "
+        f"{header} Use a plain {role or 'content'} layout inside 1280x720 and "
+        "change geometry only as needed to make all source text visible."
+    )
+
+
 def _rescue_attempt_kwargs(author_kwargs: Mapping[str, Any], hint: str) -> dict[str, Any]:
     """The third call's kwargs: the caller's, with the attempt plumbing rebound.
 
@@ -189,16 +210,7 @@ def _rescue_attempt_kwargs(author_kwargs: Mapping[str, Any], hint: str) -> dict[
     kwargs = dict(author_kwargs)
     kwargs["prior_failure_hint"] = hint
     kwargs["provider_attempt_offset"] = _ONE_MORE_CALL_OFFSET
-    observer = kwargs.get("attempt_observer")
-    if observer is not None:
-        kwargs["attempt_observer"] = lambda _ordinal: observer(RESCUE_ATTEMPT_ORDINAL)
-    reserver = kwargs.get("attempt_reserver")
-    if reserver is not None:
-
-        async def reserve_rescue_attempt(_ordinal: int) -> None:
-            await reserver(RESCUE_ATTEMPT_ORDINAL)
-
-        kwargs["attempt_reserver"] = reserve_rescue_attempt
+    kwargs["provider_attempt_limit"] = RESCUE_ATTEMPT_ORDINAL
     return kwargs
 
 
@@ -246,15 +258,20 @@ async def rescue_author_stage(
 
     if not isinstance(error, AuthoredProviderBudgetExhausted):
         return None
-    if not terminal_fallback_active(
+    fallback_allowed = terminal_fallback_active(
         profile=profile, reference_mode=reference_mode, source_reflow=source_reflow
-    ):
+    )
+    if not fallback_allowed and not source_reflow:
         return None
 
     role = str(plan.roles[index]) if getattr(plan, "roles", None) else ""
     resolver = getattr(plan, "header_contract_at", None)
     contract = resolver(index) if callable(resolver) else None
-    hint = simplified_author_brief(role=role, contract=contract)
+    hint = (
+        strict_source_reflow_author_brief(role=role, contract=contract)
+        if source_reflow
+        else simplified_author_brief(role=role, contract=contract)
+    )
     token_limited = output_token_limit_in_cause_chain(error)
     LOGGER.warning(
         "[authored] slide %d author budget spent (%s); one simplified attempt%s",
@@ -267,6 +284,8 @@ async def rescue_author_stage(
             _SimplifiedPlan(plan), index, **_rescue_attempt_kwargs(author_kwargs, hint)
         )
     except AuthoredProviderBudgetExhausted as exhausted:
+        if source_reflow:
+            raise
         outcome = "author_rescue_budget_exhausted"
         token_limited = token_limited or output_token_limit_in_cause_chain(exhausted)
         LOGGER.warning(
@@ -276,6 +295,8 @@ async def rescue_author_stage(
             f". {OUTPUT_TOKEN_LIMIT_GUIDANCE}" if token_limited else "",
         )
     except Exception:
+        if source_reflow:
+            raise
         outcome = "author_rescue_failed"
         LOGGER.warning(
             "[authored] slide %d simplified attempt failed; publishing flagged",
@@ -320,4 +341,5 @@ __all__ = [
     "AuthorStageRescue",
     "rescue_author_stage",
     "simplified_author_brief",
+    "strict_source_reflow_author_brief",
 ]

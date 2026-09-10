@@ -29,7 +29,8 @@ const ProviderCredentialFields = ({ selectedProvider, llmConfig, onInputChange, 
           key={credential.settingKey}
           variant="settings"
           codexModel={llmConfig.CODEX_MODEL || ""}
-          onInputChange={(nextValue, field) => onInputChange(nextValue, field === "codex_model" ? "CODEX_MODEL" : field)}
+          codexReasoningEffort={llmConfig.CODEX_REASONING_EFFORT || ""}
+          onInputChange={(nextValue, field) => onInputChange(nextValue, field === "codex_model" ? "CODEX_MODEL" : field === "codex_reasoning_effort" ? "CODEX_REASONING_EFFORT" : field)}
         />;
       }
       const sensitive = credential.inputType === "password";

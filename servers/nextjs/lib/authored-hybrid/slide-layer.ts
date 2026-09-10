@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { localFitImageEvidence } from "./local-fit-export-evidence.ts";
 
 import {
   extractDeclaredAuthoredSlideDom,
@@ -660,6 +661,7 @@ export async function prepareSlideLayer(
               rasterPng: capture.rasterPng,
               elementIds: band.elementIds,
               artifactDigest: capture.capturePngSha256,
+              localFitObservation: capture.localFitObservation,
             };
           }),
       )
@@ -801,6 +803,14 @@ export async function prepareSlideLayer(
     layer: {
       slideNumber,
       backplatePng: backplate.backplatePng,
+      localFitCapture: {
+        observation: backplate.localFitObservation,
+        localImages: localFitImageEvidence(contract, selected),
+        rasterObservations: [{ pngDigest: `sha256:${createHash("sha256").update(backplate.backplatePng).digest("hex")}`,
+          observation: backplate.localFitObservation }, ...rasterPaintBands.map((band) => ({
+          pngDigest: band.artifactDigest, observation: band.localFitObservation,
+        }))],
+      },
       elements: nestPreparedNativeGroups(selected),
       ...(rasterPaintBands.length
         ? {
@@ -985,7 +995,10 @@ export async function prepareFidelitySlideLayer(
     throw new Error("authored_fidelity_backplate_identity_mismatch");
   }
   return {
-    layer: { slideNumber, backplatePng: backplate.backplatePng, elements: [] },
+    layer: { slideNumber, backplatePng: backplate.backplatePng, elements: [],
+      localFitCapture: { observation: backplate.localFitObservation,
+        rasterObservations: [{ pngDigest: `sha256:${createHash("sha256").update(backplate.backplatePng).digest("hex")}`,
+          observation: backplate.localFitObservation }] } },
     fontRendering,
   };
 }

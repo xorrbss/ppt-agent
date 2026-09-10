@@ -314,6 +314,9 @@ export const usePresentationGeneration = (
       // including outline reload/resume paths reconstructed from Redux.
       visionQa: isSourceContentGeneration ? false : authoredVisionQa,
       authoredStyle,
+      ...(generationConfig?.codexGenerationPreset
+        ? { codexGenerationPreset: generationConfig.codexGenerationPreset }
+        : {}),
       ...(companyStandard
         ? { masterPin: generationMasterPin(companyStandard) }
         : {}),
@@ -371,6 +374,7 @@ export const usePresentationGeneration = (
         language: authoredRequest.language,
         vision_qa: authoredRequest.visionQa,
         authored_style: authoredRequest.authoredStyle,
+        codex_generation_preset: authoredRequest.codexGenerationPreset,
         masterPin: authoredRequest.masterPin,
         sourceMode: authoredRequest.sourceMode,
         sourceContentManifestPin: authoredRequest.sourceContentManifestPin,

@@ -297,6 +297,22 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                 )
                 await session.refresh(accounting)
                 assert accounting.actual_cost_unavailable_count == 0
+                resumed_first_call = await reserve_public_provider_call(
+                    session,
+                    admission_id=first.id,
+                    stage="author",
+                    slide_index=1,
+                    logical_call_ordinal=1,
+                    retry_class="resume",
+                    estimated_cost_microunits=0,
+                )
+                await reconcile_public_provider_call(
+                    session,
+                    logical_call_id=resumed_first_call.id,
+                    outcome="succeeded",
+                    latency_ms=10,
+                    actual_cost_microunits=0,
+                )
                 conservative = await reserve_public_provider_call(
                     session,
                     admission_id=first.id,
@@ -330,7 +346,8 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                     principal=principal_a,
                     operation_kind="generation",
                 )
-                assert operation_metrics["initial_request_count"] == 2
+                assert operation_metrics["initial_request_count"] == 3
+                assert operation_metrics["retry_request_count"] == 0
                 assert operation_metrics["actual_consumed_microunits"] == 12
                 assert operation_metrics["actual_cost_unavailable_count"] == 1
                 assert all(isinstance(value, int) for value in operation_metrics.values())

@@ -3,6 +3,7 @@ import type {
   GenerationProgress,
 } from "../../services/api/presentation-generation";
 import type { SourceContentPolicy } from "../../services/api/source-content/contract";
+import type { CodexGenerationPresetId } from "@/components/codex-config";
 
 export type DurableGenerationMode = "authored" | "template-v2";
 
@@ -34,6 +35,7 @@ export interface DurableGenerationTask {
     instructions?: string | null;
     visionQa: boolean;
     authoredStyle: string;
+    codexGenerationPreset?: CodexGenerationPresetId;
     masterPin?: {
       masterId: string;
       revision: number;

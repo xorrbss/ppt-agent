@@ -684,12 +684,21 @@ async def publish_authored_presentation(
                 # compensation.  A returned revision means the complete tuple
                 # committed, including after an ambiguous commit ACK.
                 artifact_handed_to_publish = True
+                publication_result_evidence = dict(native_export_evidence or {})
+                if isinstance(quality_gate_receipt, dict):
+                    publication_result_evidence["generationQualityReceipt"] = {
+                        "schemaVersion": quality_gate_receipt.get("schemaVersion"),
+                        "passed": quality_gate_receipt.get("qualityPass"),
+                        "documentStatus": quality_gate_receipt.get("documentStatus"),
+                        "pageSummary": quality_gate_receipt.get("pageSummary"),
+                        "reviewPages": quality_gate_receipt.get("reviewPages"),
+                    }
                 await publish_workspace_generation_artifact(
                     sql_session,
                     artifact=workspace_artifact,
                     expected_revision=expected_revision,
                     attempt_token=attempt_token or "",
-                    result_evidence=native_export_evidence,
+                    result_evidence=publication_result_evidence,
                 )
             except WorkspaceArtifactPublicationError as error:
                 raise AuthoredStageError(

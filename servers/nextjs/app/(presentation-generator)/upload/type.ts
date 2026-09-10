@@ -129,6 +129,7 @@ export interface PresentationConfig {
   includeTableOfContents: boolean;
   includeTitleSlide: boolean;
   webSearch: boolean;
+  codexGenerationPreset: import("@/components/codex-config").CodexGenerationPresetId | null;
 }
 
 export enum ToneType {

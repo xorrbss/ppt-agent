@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Mapping
 import uuid
 
 from pathvalidate import sanitize_filename
@@ -95,6 +95,7 @@ class PresentationExportAdapterRequest:
     workspace_operation_id: uuid.UUID | None = None
     export_attempt_id: uuid.UUID | None = None
     canonical_source_digest: str | None = None
+    local_fit_receipts: tuple[Mapping[str, object], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +111,7 @@ class PresentationExportAdapterResult:
     package_sha256: str | None
     coverage_manifest: dict[str, Any] | None = None
     renderer_source_sha256: str | None = None
+    local_fit_export_evidence: dict[str, Any] | None = None
 
 
 def _publish_native_bytes(
@@ -154,6 +156,7 @@ def _result(
     package_sha256: str | None = None,
     coverage_manifest: dict[str, Any] | None = None,
     renderer_source_sha256: str | None = None,
+    local_fit_export_evidence: dict[str, Any] | None = None,
 ) -> PresentationExportAdapterResult:
     path = Path(presentation.path)
     payload = path.read_bytes()
@@ -175,6 +178,7 @@ def _result(
         package_sha256=package_sha256,
         coverage_manifest=coverage_manifest,
         renderer_source_sha256=renderer_source_sha256,
+        local_fit_export_evidence=local_fit_export_evidence,
     )
 
 
@@ -312,6 +316,15 @@ async def run_general_adapter(
             expected_revision=request.expected_revision,
             workspace_operation_id=request.workspace_operation_id,
         )
+    local_fit_export_evidence = None
+    if (authored_hybrid or authored_fidelity) and request.local_fit_receipts:
+        from services.authored_local_fit_export import verify_local_fit_pptx
+
+        local_fit_export_evidence = verify_local_fit_pptx(
+            exported.path,
+            request.local_fit_receipts,
+            mode="hybrid" if authored_hybrid else "fidelity",
+        )
     return _result(
         exported,
         adapter="general",
@@ -339,6 +352,7 @@ async def run_general_adapter(
             if authored_hybrid
             else None
         ),
+        local_fit_export_evidence=local_fit_export_evidence,
     )
 
 

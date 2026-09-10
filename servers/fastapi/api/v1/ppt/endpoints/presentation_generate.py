@@ -191,6 +191,7 @@ from utils.authored_styles import (
 )
 from utils.document_context import build_document_context
 from utils.get_env import get_authored_resume_max_attempts_env
+from utils.get_env_programme import is_authored_content_brief_enabled
 from services.public_operation_deadline_scope import remaining_public_operation_seconds
 from api.v1.ppt.endpoints.content_brief_policy import (
     brief_failure_is_terminal, log_content_brief_skipped, merge_brief_context,
@@ -1044,34 +1045,37 @@ async def generate_presentation_handler(
             # then ground the outline in it. Falls back to documents-only on failure.
             # Deadline, single reduced retry and brief_status: content_brief_policy.
             outline_context = additional_context
-            try:
-                with provider_usage_scope(
-                    job_id=(generation_job.id if generation_job is not None else None),
-                    operation="authored_generation",
-                    stage="content_brief",
-                    attempt_number=(generation_job.attempt_number if generation_job else 0),
-                ):
-                    brief_outcome = await run_content_brief_with_checkpoint(
-                        generate_content_brief, content=request.content,
-                        language=language_to_use,
-                        additional_context=additional_context,
-                        tone=request.tone.value, verbosity=request.verbosity.value,
-                        instructions=request.instructions,
-                        # A resume reuses this brief instead of re-paying its 500 s.
-                        presentation_id=presentation_id, generation_job=generation_job,
-                        remaining_operation_seconds=remaining_public_operation_seconds(),
-                    )
-                if brief_outcome.brief is not None:
-                    outline_context = merge_brief_context(additional_context, brief_outcome.brief)
-            except Exception as error:
-                # A content brief is optional only for ordinary provider or
-                # parsing failures (and a 429 always ends generation). Durable
-                # budget/admission decisions must retain their terminal
-                # retryability instead of becoming a generic HTTP 500.
-                if brief_failure_is_terminal(error):
-                    raise
-                log_content_brief_skipped(presentation_id, error)
-                traceback.print_exc()
+            if is_authored_content_brief_enabled():
+                try:
+                    with provider_usage_scope(
+                        job_id=(generation_job.id if generation_job is not None else None),
+                        operation="authored_generation",
+                        stage="content_brief",
+                        attempt_number=(generation_job.attempt_number if generation_job else 0),
+                    ):
+                        brief_outcome = await run_content_brief_with_checkpoint(
+                            generate_content_brief, content=request.content,
+                            language=language_to_use,
+                            additional_context=additional_context,
+                            tone=request.tone.value, verbosity=request.verbosity.value,
+                            instructions=request.instructions,
+                            # A resume reuses this brief instead of re-paying its 500 s.
+                            presentation_id=presentation_id, generation_job=generation_job,
+                            remaining_operation_seconds=remaining_public_operation_seconds(),
+                        )
+                    if brief_outcome.brief is not None:
+                        outline_context = merge_brief_context(
+                            additional_context, brief_outcome.brief
+                        )
+                except Exception as error:
+                    # A content brief is optional only for ordinary provider or
+                    # parsing failures (and a 429 always ends generation). Durable
+                    # budget/admission decisions must retain their terminal
+                    # retryability instead of becoming a generic HTTP 500.
+                    if brief_failure_is_terminal(error):
+                        raise
+                    log_content_brief_skipped(presentation_id, error)
+                    traceback.print_exc()
 
             # Finding number of slides to generate by considering table of contents
             #
@@ -1328,7 +1332,10 @@ async def generate_presentation_handler(
         elif not isinstance(e, HTTPException):
             safe_exception = _authored_vnext_generation_http_exception(e)
             if safe_exception is None:
-                traceback.print_exc()
+                # Keep the public payload generic, but preserve the exception
+                # class and traceback in the managed backend log so a durable
+                # retry cannot erase the only actionable failure evidence.
+                logger.exception("Unhandled presentation generation failure")
                 safe_exception = HTTPException(
                     status_code=500, detail="Presentation generation failed"
                 )
@@ -1803,6 +1810,9 @@ async def queue_presentation_generation(
     idempotency_key: Optional[str] = None,
 ) -> AsyncPresentationGenerationTaskModel:
     """Validate and atomically enqueue one durable, idempotent generation job."""
+    from utils.generation_model import generation_model_settings
+
+    generation_model_settings(request.codex_generation_preset)
     # Apply the authored-vNext creation contract before idempotency lookup or
     # chat-first workspace bootstrap.  This keeps blocked Template V2/legacy
     # requests from minting even a temporary durable presentation shell.

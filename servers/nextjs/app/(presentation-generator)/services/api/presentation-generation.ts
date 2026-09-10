@@ -190,7 +190,7 @@ function waitForDecomposePoll(delayMs: number, signal?: AbortSignal) {
   });
 }
 
-const generationPreferencesPayload = (body: GenerationPreferences) => ({ language: body.language ?? null, ...(body.tone ? { tone: body.tone } : {}), ...(body.verbosity ? { verbosity: body.verbosity } : {}), ...(body.instructions !== undefined ? { instructions: body.instructions } : {}), ...(body.include_table_of_contents !== undefined ? { include_table_of_contents: body.include_table_of_contents } : {}), ...(body.include_title_slide !== undefined ? { include_title_slide: body.include_title_slide } : {}), ...(body.web_search !== undefined ? { web_search: body.web_search } : {}) });
+const generationPreferencesPayload = (body: GenerationPreferences) => ({ language: body.language ?? null, ...(body.tone ? { tone: body.tone } : {}), ...(body.verbosity ? { verbosity: body.verbosity } : {}), ...(body.instructions !== undefined ? { instructions: body.instructions } : {}), ...(body.include_table_of_contents !== undefined ? { include_table_of_contents: body.include_table_of_contents } : {}), ...(body.include_title_slide !== undefined ? { include_title_slide: body.include_title_slide } : {}), ...(body.web_search !== undefined ? { web_search: body.web_search } : {}), ...(body.codex_generation_preset ? { codex_generation_preset: body.codex_generation_preset } : {}) });
 
 export class PresentationGenerationApi {
   static async uploadDoc(

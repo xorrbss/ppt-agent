@@ -240,3 +240,39 @@ def test_a_raised_batch_is_recorded_and_never_reauthored():
 
     assert sorted(index for batch in seen for index in batch) == [0, 1]
     assert all(is_exception for _batch, is_exception in recorded)
+
+
+def test_cancelling_admission_reaps_every_inflight_batch():
+    started: set[int] = set()
+    cleaned: set[int] = set()
+    all_started = asyncio.Event()
+
+    async def run_batch(indexes):
+        index = indexes[0]
+        started.add(index)
+        if len(started) == 4:
+            all_started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            await asyncio.sleep(0)
+            cleaned.add(index)
+
+    async def scenario():
+        schedule = AuthoredWaveSchedule(_state(initial=4, steady=4))
+        task = asyncio.create_task(
+            run_initial_authoring(
+                list(range(20)),
+                schedule,
+                run_batch=run_batch,
+                record=lambda _indexes, _outcome: True,
+                barrier_disabled=True,
+            )
+        )
+        await all_started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert started == cleaned == {0, 1, 2, 3}
+
+    _run(scenario())

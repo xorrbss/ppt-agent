@@ -592,6 +592,8 @@ def write_valid_evidence(
 
 def read_valid_evidence(
     checkpoint: AuthoredSlideCheckpoint,
+    *,
+    require_current_html_match: bool = True,
 ) -> SlideCheckpointBundle | None:
     """Recover browser evidence using the checkpoint's render pointer.
 
@@ -656,6 +658,8 @@ def read_valid_evidence(
             and hashlib.sha256(render_bytes).hexdigest() != checkpoint.render_sha256
         )
         or (
+            require_current_html_match
+            and
             checkpoint_stage_html(checkpoint) is not None
             and checkpoint_stage_html(checkpoint) != bundle.html
         )
@@ -666,12 +670,17 @@ def read_valid_evidence(
 
 async def read_valid_evidence_artifact(
     checkpoint: AuthoredSlideCheckpoint,
+    *,
+    require_current_html_match: bool = True,
 ) -> SlideCheckpointBundle | None:
     """Read an immutable checkpoint bundle from object storage when present."""
 
     reference = _checkpoint_artifact_ref(checkpoint, "evidence")
     if reference is None:
-        return read_valid_evidence(checkpoint)
+        return read_valid_evidence(
+            checkpoint,
+            require_current_html_match=require_current_html_match,
+        )
     if (
         reference.kind != "checkpoint"
         or reference.media_type != "application/json"
@@ -694,6 +703,8 @@ async def read_valid_evidence_artifact(
         or bundle.slide_index != checkpoint.slide_index
         or bundle.png != render
         or (
+            require_current_html_match
+            and
             checkpoint_stage_html(checkpoint) is not None
             and checkpoint_stage_html(checkpoint) != bundle.html
         )

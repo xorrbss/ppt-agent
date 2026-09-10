@@ -6,9 +6,9 @@ same profile from one place.
 
 D18 / G9 of ``docs/authored-quality-speed-programme-design-20260905.md``: the
 fast roles (cover, section, agenda, closing) keep the full 16k output budget --
-truncating them was blamed for the cover overlap defect -- and author at the
-model's LOWEST SUPPORTED reasoning effort rather than at the literal "minimal"
-level, which several codex models reject outright.
+truncating them was blamed for the cover overlap defect. Authored slides now use
+medium reasoning consistently so fixed-canvas layout decisions receive the same
+reasoning budget across roles.
 """
 
 from __future__ import annotations
@@ -27,9 +27,9 @@ AUTHOR_MAX_TOKENS = 16000
 # ``author_slide`` back.
 EXACT_RECONSTRUCTION = "exact_reconstruction"
 
-# Authoring bespoke HTML needs little reasoning, and per-slide latency on a
-# reasoning model IS reasoning time, so the ordinary content slide defaults low.
-DEFAULT_REASONING_EFFORT = "low"
+# Fixed-canvas HTML requires the model to reconcile content density, component
+# geometry, and typography. Medium is the authored default for every role.
+DEFAULT_REASONING_EFFORT = "medium"
 
 # codex (gpt-5.x) reasoning-effort levels we forward verbatim. 'off'/'default' are OUR
 # sentinels meaning "send no override, let the provider apply its own default effort" --
@@ -98,9 +98,9 @@ def resolve_authoring_reasoning_level(
 ) -> Optional[str]:
     """Return the codex reasoning level for this call, or None for no override.
 
-    Resolution: a non-blank ``effort`` argument wins; otherwise the
-    AUTHORED_REASONING_EFFORT env; if neither is meaningfully set the authoring
-    default is the fast 'low' effort.
+    Resolution: a non-blank ``effort`` argument wins; otherwise the configured
+    Codex effort, then AUTHORED_REASONING_EFFORT; if neither is meaningfully set
+    the authoring default is the authored 'medium' effort.
 
     Returns a level in :data:`REASONING_EFFORTS` normalized to the model's
     capability set. Returns ``None`` (no override -> the provider's own default
@@ -113,13 +113,19 @@ def resolve_authoring_reasoning_level(
     if override:
         raw, source = override, "reasoning_effort argument"
     else:
+        from utils.get_env import (
+            get_codex_reasoning_effort_env,
+        )
+
+        codex_effort = get_codex_reasoning_effort_env() or ""
         raw, source = (
-            os.getenv("AUTHORED_REASONING_EFFORT", ""),
-            "AUTHORED_REASONING_EFFORT",
+            (codex_effort, "CODEX_REASONING_EFFORT")
+            if codex_effort.strip()
+            else (os.getenv("AUTHORED_REASONING_EFFORT", ""), "AUTHORED_REASONING_EFFORT")
         )
     level = raw.strip().lower()
     if not level:
-        level = DEFAULT_REASONING_EFFORT  # unset / blank -> fast authoring default
+        level = DEFAULT_REASONING_EFFORT  # unset / blank -> authored default
     if level in REASONING_DISABLE:
         return None
     if level in REASONING_EFFORTS:
@@ -167,17 +173,18 @@ def authoring_output_profile(
     # Structured contexts include source-verbatim requests. Exact reconstruction
     # and repairs likewise need the established 16k/low profile so a fixed
     # source or a complex rejected document is never truncated to save time.
+    configured_effort = resolve_authoring_reasoning_level(None, model)
+    profile_effort = configured_effort or DEFAULT_REASONING_EFFORT
     if (
         reference_mode == EXACT_RECONSTRUCTION
         or structured_context is not None
         or correction_hint is not None
     ):
-        return AUTHOR_MAX_TOKENS, DEFAULT_REASONING_EFFORT
+        return AUTHOR_MAX_TOKENS, profile_effort
     budget = FAST_ROLE_OUTPUT_BUDGETS.get((role or "").strip().upper())
     if budget is None:
-        return AUTHOR_MAX_TOKENS, DEFAULT_REASONING_EFFORT
-    resolved_model = selected_authoring_model() if model is None else model
-    return budget, normalized_authoring_reasoning_effort(resolved_model, "minimal")
+        return AUTHOR_MAX_TOKENS, profile_effort
+    return budget, profile_effort
 
 
 __all__ = [

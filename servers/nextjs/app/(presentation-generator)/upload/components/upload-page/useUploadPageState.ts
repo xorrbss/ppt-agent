@@ -45,6 +45,7 @@ import {
   createDurableGenerationTask,
   saveDurableGenerationTask,
 } from "../../../outline/hooks/durableGenerationTask";
+import { CODEX_GENERATION_PRESETS } from "@/components/codex-config";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 const masterClient = new AuthoredVnextMasterClient();
@@ -111,6 +112,12 @@ export const useUploadPageState = ({
     includeTableOfContents: false,
     includeTitleSlide: false,
     webSearch: false,
+    codexGenerationPreset: ["codex", "chatgpt"].includes(llmConfig.LLM || "")
+      ? CODEX_GENERATION_PRESETS.find(
+          (preset) => preset.modelId === llmConfig.CODEX_MODEL
+            && preset.effort === llmConfig.CODEX_REASONING_EFFORT,
+        )?.id ?? "astra-medium"
+      : null,
   });
 
   const [loadingState, setLoadingState] = useState<LoadingState>({
@@ -235,6 +242,9 @@ export const useUploadPageState = ({
         ...(sourceContent ? { instructions: sourceContentInstructions || null } : {}),
         visionQa: sourceContent ? false : authoredVisionQa,
         authoredStyle,
+        ...(config.codexGenerationPreset
+          ? { codexGenerationPreset: config.codexGenerationPreset }
+          : {}),
         ...(sourceContent
           ? {
               sourceMode: "source_content_restyle" as const,

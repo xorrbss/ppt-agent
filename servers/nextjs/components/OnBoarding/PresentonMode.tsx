@@ -17,7 +17,7 @@ import { usePathname } from 'next/navigation';
 import { getLLMConfigValidationError, handleSaveLLMConfig } from '@/utils/storeHelpers';
 import { checkIfSelectedOllamaModelIsPulled, pullOllamaModel } from '@/utils/providerUtils';
 import { getApiUrl } from '@/utils/api';
-import CodexConfig, { CHATGPT_MODELS } from '@/components/codex-config';
+import CodexConfig, { CODEX_GENERATION_PRESETS } from '@/components/codex-config';
 import VertexAzureManualFields from '@/components/VertexAzureManualFields';
 import BedrockManualFields from '@/components/BedrockManualFields';
 import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields';
@@ -486,8 +486,13 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 </div>
                 <CodexConfig
                     codexModel={llmConfig.CODEX_MODEL || ''}
+                    codexReasoningEffort={llmConfig.CODEX_REASONING_EFFORT || ''}
                     onInputChange={(value, field) => {
-                        const normalizedField = field === 'codex_model' ? 'CODEX_MODEL' : field;
+                        const normalizedField = field === 'codex_model'
+                            ? 'CODEX_MODEL'
+                            : field === 'codex_reasoning_effort'
+                                ? 'CODEX_REASONING_EFFORT'
+                                : field;
                         setLlmConfig(prev => ({
                             ...prev,
                             [normalizedField]: value
@@ -623,7 +628,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             ) : llmConfig.LLM === 'chatgpt' || llmConfig.LLM === 'codex' ? (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        GPT 모델 선택
+                                        PPT 생성 모델 · 추론 강도
                                     </label>
                                     <Popover open={openModelSelect} onOpenChange={setOpenModelSelect}>
                                         <PopoverTrigger asChild>
@@ -635,7 +640,10 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                             >
                                                 <span className="text-sm text-gray-900">
                                                     {llmConfig.CODEX_MODEL
-                                                        ? (CHATGPT_MODELS.find((m) => m.id === llmConfig.CODEX_MODEL)?.name ?? llmConfig.CODEX_MODEL)
+                                                        ? (CODEX_GENERATION_PRESETS.find((preset) =>
+                                                            preset.modelId === llmConfig.CODEX_MODEL
+                                                            && preset.effort === llmConfig.CODEX_REASONING_EFFORT
+                                                        )?.name ?? `${llmConfig.CODEX_MODEL}${llmConfig.CODEX_REASONING_EFFORT ? ` · ${llmConfig.CODEX_REASONING_EFFORT}` : ''}`)
                                                         : "모델 선택"}
                                                 </span>
                                                 <ChevronUp className="w-4 h-4 text-gray-400" />
@@ -651,14 +659,15 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                                 <CommandList>
                                                     <CommandEmpty>모델을 찾을 수 없습니다.</CommandEmpty>
                                                     <CommandGroup>
-                                                        {CHATGPT_MODELS.map((model) => (
+                                                        {CODEX_GENERATION_PRESETS.map((preset) => (
                                                             <CommandItem
-                                                                key={model.id}
-                                                                value={model.id}
-                                                                onSelect={(value) => {
+                                                                key={`${preset.modelId}:${preset.effort}`}
+                                                                value={`${preset.modelId} ${preset.effort}`}
+                                                                onSelect={() => {
                                                                     setLlmConfig(prev => ({
                                                                         ...prev,
-                                                                        CODEX_MODEL: value
+                                                                        CODEX_MODEL: preset.modelId,
+                                                                        CODEX_REASONING_EFFORT: preset.effort
                                                                     }));
                                                                     setOpenModelSelect(false);
                                                                 }}
@@ -666,11 +675,14 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                                                 <Check
                                                                     className={cn(
                                                                         "mr-2 h-4 w-4",
-                                                                        llmConfig.CODEX_MODEL === model.id ? "opacity-100" : "opacity-0"
+                                                                        llmConfig.CODEX_MODEL === preset.modelId
+                                                                            && llmConfig.CODEX_REASONING_EFFORT === preset.effort
+                                                                            ? "opacity-100"
+                                                                            : "opacity-0"
                                                                     )}
                                                                 />
                                                                 <span className="text-sm text-gray-900">
-                                                                    {model.name}
+                                                                    {preset.name}
                                                                 </span>
                                                             </CommandItem>
                                                         ))}

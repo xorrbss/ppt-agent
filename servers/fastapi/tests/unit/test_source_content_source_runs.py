@@ -174,6 +174,59 @@ def test_stamp_repairs_one_appended_full_stop_back_to_source_bytes() -> None:
         stamp_source_block_ids("<div>제작 파트너&#46;</div>", [("n", "제작 파트너")])
 
 
+@pytest.mark.parametrize("actual", [
+    "‘영상’ 아니라 ‘콘텐츠 운영’을 판다",
+    "‘영상’이 아니라 ‘콘텍텐츠 운영’을 판다",
+    "‘영상’이 아니라 ‘콘텐츠 운영’을 판더",
+])
+def test_stamp_restores_one_unambiguous_leaf_to_authoritative_text(actual) -> None:
+    expected = "‘영상’이 아니라 ‘콘텐츠 운영’을 판다"
+    block_id = "source-slide:7:text:10"
+    stamped = stamp_source_blocks(
+        f'<section><p class="message"><span>{actual}</span></p></section>',
+        [(block_id, expected)],
+    )
+    assert f">{expected}</span>" in stamped.html
+    assert f'<span data-source-block-id="{block_id}"' in stamped.html
+    assert stamped.deviations == ()
+    assert stamp_source_block_ids(stamped.html, [(block_id, expected)]) == stamped.html
+
+
+def test_stamp_leaf_repair_preserves_source_whitespace_and_escapes_markup() -> None:
+    expected = "  A & B < C  "
+    stamped = stamp_source_block_ids("<p>A &amp; B &lt; D</p>", [("b", expected)])
+    assert ">  A &amp; B &lt; C  </p>" in stamped
+    assert stamp_source_block_ids(stamped, [("b", expected)]) == stamped
+
+
+@pytest.mark.parametrize("authored", [
+    "<p>‘영상’ 아니라 ‘콘텐츠 운영’을 판다</p>"
+    "<p>‘영상’ 아니라 ‘콘텐츠 운영’을 판다</p>",
+    "<p><span>‘영상’</span> 아니라 <strong>‘콘텐츠 운영’을 판다</strong></p>",
+    '<p data-source-block-id="other">‘영상’ 아니라 ‘콘텐츠 운영’을 판다</p>',
+    '<section data-source-block-id="other"><p>‘영상’ 아니라 ‘콘텐츠 운영’을 판다</p></section>',
+    '<section style="display:none"><p>‘영상’ 아니라 ‘콘텐츠 운영’을 판다</p></section>',
+    '<p hidden>‘영상’ 아니라 ‘콘텐츠 운영’을 판다</p>',
+    "<p>완전히 다른 내용</p>",
+])
+def test_stamp_does_not_guess_ambiguous_nested_owned_hidden_or_missing_text(authored) -> None:
+    expected = "‘영상’이 아니라 ‘콘텐츠 운영’을 판다"
+    with pytest.raises(BrowserSourceReadbackError) as error:
+        stamp_source_block_ids(authored, [("source-slide:7:text:10", expected)])
+    assert error.value.block_ids == ("source-slide:7:text:10",)
+    assert expected in error.value.detail
+
+
+def test_stamp_missing_footer_stays_fail_closed_and_reports_expected_span() -> None:
+    with pytest.raises(BrowserSourceReadbackError) as error:
+        stamp_source_block_ids(
+            "<h1>완성된 제목</h1>",
+            [("title", "완성된 제목"), ("footer", "빠진 원문 푸터 전체")],
+        )
+    assert error.value.block_ids == ("footer",)
+    assert "빠진 원문 푸터 전체" in error.value.detail
+
+
 def _manifest() -> dict[str, object]:
     return {
         "units": [{

@@ -163,6 +163,8 @@ def test_an_ornament_over_source_text_still_reaches_the_repair_call():
     # The caller lets a safety-gate classification continue into repair and
     # raises on a capacity one, so the code is the whole decision here.
     assert preflight.code == "authored_composition_safety_gate_failed"
+    assert preflight.provider_call_allowed is True
+    assert preflight.terminal is False
 
 
 def test_a_clipped_source_block_is_a_layout_defect_the_repair_can_fix():
@@ -187,6 +189,8 @@ def test_a_clipped_source_block_is_a_layout_defect_the_repair_can_fix():
     )
     assert "browser_text_not_visible:source-block-4c1e" in preflight.violations
     assert preflight.code == "authored_composition_safety_gate_failed"
+    assert preflight.provider_call_allowed is True
+    assert preflight.terminal is False
 
 
 def test_a_restyled_slide_over_its_text_budget_is_still_terminal():
@@ -276,6 +280,8 @@ def test_an_offcanvas_infographic_figure_node_still_reaches_the_repair_call():
     )
     assert "browser_text_not_visible:ig.s14.n6.desc" in preflight.violations
     assert preflight.code == "authored_composition_safety_gate_failed"
+    assert preflight.provider_call_allowed is True
+    assert preflight.terminal is False
 
 
 def test_an_ordinary_slide_over_its_text_budget_is_still_terminal():

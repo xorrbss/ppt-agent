@@ -11,6 +11,7 @@ import type {
   AuthoredHybridTextStyle,
   AuthoredHybridTableEvidence,
 } from "./schema.ts";
+import type { LocalFitObservation } from "./local-fit-browser.ts";
 
 export interface BrowserTextRunObservation {
   text: string;
@@ -127,6 +128,7 @@ export interface BrowserRenderReadinessObservation {
 }
 
 export interface BrowserAuthoredHybridObservation {
+  localFitObservation?: LocalFitObservation;
   viewport: {
     widthPx: number;
     heightPx: number;

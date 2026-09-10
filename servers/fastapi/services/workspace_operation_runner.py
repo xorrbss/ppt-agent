@@ -712,11 +712,51 @@ def sanitize_workspace_event_payload(
                 key: value.get(key)
                 for key in (
                     "schemaVersion", "p0Count", "p1Count", "p2Count",
-                    "passed", "receiptDigest",
+                    "passed", "receiptDigest", "documentStatus",
                 )
                 if value.get(key) is None
                 or isinstance(value.get(key), (str, int, float, bool))
             }
+            page_summary = value.get("pageSummary")
+            if isinstance(page_summary, Mapping):
+                safe[normalized]["pageSummary"] = {
+                    key: count
+                    for key in (
+                        "total", "normal", "autoRepaired", "reviewRequired",
+                    )
+                    if isinstance((count := page_summary.get(key)), int)
+                    and not isinstance(count, bool)
+                    and 0 <= count <= 500
+                }
+            review_pages = value.get("reviewPages")
+            if isinstance(review_pages, Sequence) and not isinstance(
+                review_pages, (str, bytes, bytearray)
+            ):
+                public_review_pages: list[dict[str, object]] = []
+                for page in review_pages[:30]:
+                    if not isinstance(page, Mapping):
+                        continue
+                    index = page.get("index")
+                    reasons = page.get("reasons")
+                    if (
+                        not isinstance(index, int)
+                        or isinstance(index, bool)
+                        or index < 0
+                        or index >= 500
+                        or not isinstance(reasons, Sequence)
+                        or isinstance(reasons, (str, bytes, bytearray))
+                    ):
+                        continue
+                    public_reasons = [
+                        reason.strip()[:240]
+                        for reason in reasons[:3]
+                        if isinstance(reason, str) and reason.strip()
+                    ]
+                    if public_reasons:
+                        public_review_pages.append(
+                            {"index": index, "reasons": public_reasons}
+                        )
+                safe[normalized]["reviewPages"] = public_review_pages
             for stage in ("static", "browser", "deck"):
                 stage_value = value.get(stage)
                 if isinstance(stage_value, Mapping):

@@ -385,6 +385,27 @@ def test_the_job_lane_render_step_holds_the_gate_and_binds_the_deck_scope():
     assert current_render_deck_scope() is None
 
 
+def test_the_job_lane_render_step_strips_authoring_only_image_attributes():
+    gate = asyncio.Semaphore(1)
+    seen: dict[str, str] = {}
+    source = (
+        "<html><body><img data-illust-prompt='city skyline' "
+        "data-asset-id='asset-1' data-source-slot-id='slot-1' "
+        "alt='skyline'></body></html>"
+    )
+
+    async def render_html(html):
+        seen["html"] = html
+
+    step = stage.anchor_render_step(gate, deck_scope="deck-7", render_html=render_html)
+    _run(step(source))
+
+    assert "data-illust-prompt" not in seen["html"]
+    assert "data-asset-id" not in seen["html"]
+    assert "data-source-slot-id" not in seen["html"]
+    assert "alt='skyline'" in seen["html"]
+
+
 def test_the_job_lane_render_step_lets_a_render_failure_reach_the_caller():
     gate = asyncio.Semaphore(1)
 

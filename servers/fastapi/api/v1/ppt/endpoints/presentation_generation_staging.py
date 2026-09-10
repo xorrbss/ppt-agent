@@ -19,6 +19,7 @@ from models.sql.slide import SlideModel
 from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
 from utils.authored_styles import AuthoredStyle
 from services.database import sql_engine
+from services.authored_local_fit_policy import POLICY_REVISION, font_policy
 from services.presentation_generation_export_orchestration import (
     execute_generation_export,
     publish_staged_presentation,
@@ -46,6 +47,7 @@ INTERNAL_RESOLVED_MASTER_PIN_KEY = "_internal_authored_resolved_master_pin"
 INTERNAL_STYLE_SNAPSHOT_KEY = "_internal_authored_style_snapshot"
 INTERNAL_DECK_METADATA_KEY = "_internal_authored_deck_metadata"
 INTERNAL_SOURCE_SEMANTIC_SNAPSHOT_KEY = "_internal_authored_source_semantic_snapshot"
+INTERNAL_LOCAL_FIT_POLICY_REVISION_KEY = "_internal_authored_local_fit_policy_revision"
 
 
 def _durable_style_snapshot(style: AuthoredStyle) -> dict[str, Any]:
@@ -79,6 +81,13 @@ def _durable_request_payload(request: GeneratePresentationRequest) -> dict:
     # optional field's wire shape for old workers while ensuring its value can
     # never contain a locator.
     payload["files"] = None
+    if request.strategy == "authored" or str(request.template or "").lower() == "authored":
+        policy_revision = (
+            request._authored_local_fit_policy_revision or POLICY_REVISION
+        )
+        font_policy(policy_revision)
+        request._authored_local_fit_policy_revision = policy_revision
+        payload[INTERNAL_LOCAL_FIT_POLICY_REVISION_KEY] = policy_revision
     if request._authored_exact_snapshot_id is not None:
         payload[INTERNAL_EXACT_SNAPSHOT_KEY] = request._authored_exact_snapshot_id
     if request._authored_composition_pin is not None:
@@ -297,6 +306,9 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     source_semantic_snapshot = values.pop(
         INTERNAL_SOURCE_SEMANTIC_SNAPSHOT_KEY, None
     )
+    local_fit_policy_revision = values.pop(
+        INTERNAL_LOCAL_FIT_POLICY_REVISION_KEY, None
+    )
     # Internal runner metadata is deliberately outside the public request
     # schema. It remains on the durable job across operation rebinds, but must
     # never be passed to Pydantic as caller input.
@@ -322,5 +334,9 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
         )
     request._authored_source_semantic_snapshot = source_semantic_snapshot
     request._authored_design_replay = design_replay is True
+    if local_fit_policy_revision is not None:
+        local_fit_policy_revision = str(local_fit_policy_revision)
+        font_policy(local_fit_policy_revision)
+        request._authored_local_fit_policy_revision = local_fit_policy_revision
     return request
 

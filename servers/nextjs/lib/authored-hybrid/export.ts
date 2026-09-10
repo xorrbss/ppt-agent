@@ -49,6 +49,7 @@ import {
   resolveHybridExportConcurrencyDefault,
 } from "./export-performance.ts";
 import { attachAuthoredHybridEvidence } from "./export-evidence.ts";
+import { createLocalFitExportEvidence, writeLocalFitExportEvidence } from "./local-fit-export-evidence.ts";
 import {
   resolveFontEmbeddingPlan,
   type FontEmbeddingPlan,
@@ -87,7 +88,7 @@ const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // retain the bundled export's shared-DOM raster: authored slide styles can collide there.
 const HYBRID_DECK_BUDGET_MS = 15 * 60_000;
 const HYBRID_CACHE_VERSION =
-  "authored-hybrid-v22-raster-kind-reconciliation";
+  "authored-hybrid-v23-local-fit-capture-evidence";
 const HYBRID_RESULT_CACHE_LIMIT = 24;
 // Standard explicit Hybrid uses the element-level semantic/QID admission
 // gates. A persisted authored-vNext Scene projection, when present, is a
@@ -385,6 +386,10 @@ export async function runAuthoredFidelityPresentationExport(
         sourceDigest: fetched.sourceSha256,
       },
     );
+    await writeLocalFitExportEvidence(resultArtifact.path, createLocalFitExportEvidence(
+      layers, presentation.slides.map((slide) => isRecord(slide) && typeof slide.html_content === "string" ? slide.html_content : ""),
+      fetched.sourceSha256, resultArtifact.bytes,
+    ));
     recordExportProgress(progressKey, { phase: "completed" });
     return { path: resultArtifact.path };
   } catch (error) {
@@ -783,6 +788,11 @@ async function runUncachedAuthoredHybridExport(
     );
     const assemblyMs = elapsedMs(assemblyStartedAt);
     const hybridBytes = hybridArtifact.bytes;
+    const localFitExportEvidence = createLocalFitExportEvidence(
+      layers, slides.map((slide) => isRecord(slide) && typeof slide.html_content === "string" ? slide.html_content : ""),
+      sourceSha256, hybridBytes,
+    );
+    await writeLocalFitExportEvidence(hybridArtifact.path, localFitExportEvidence);
     const quality = attachAuthoredHybridStage2ReadbackMetadata(
       attachPresentationExportOoxmlReadback(logicalQuality, inspectPptxEditability(hybridBytes)),
       hybridBytes,
@@ -796,6 +806,7 @@ async function runUncachedAuthoredHybridExport(
       pptxSha256: createHash("sha256").update(hybridBytes).digest("hex"),
       activeBinding,
       editableHybridProfileId: params.editableHybridProfileId,
+      localFitExportEvidence,
     });
     await rememberCompletedHybridExport(cacheKey, result);
     console.info(

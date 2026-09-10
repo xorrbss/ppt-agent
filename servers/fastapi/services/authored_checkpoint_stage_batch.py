@@ -177,7 +177,12 @@ async def complete_render_stage_batched(
         expected_render_path = checkpoint.render_path
         expected_artifact_refs = checkpoint.artifact_refs
         if has_evidence:
-            prior = await read_valid_evidence_artifact(checkpoint)
+            # A legal re-author stores the next HTML before its replacement
+            # render. Read the immutable prior revision without requiring that
+            # transient new HTML to equal the previous bundle.
+            prior = await read_valid_evidence_artifact(
+                checkpoint, require_current_html_match=False
+            )
             if checkpoint_revision is None:
                 checkpoint_revision = (prior.revision + 1) if prior else 0
             elif prior is not None and checkpoint_revision <= prior.revision:

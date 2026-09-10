@@ -64,6 +64,9 @@ over with `-Adopt`.
 to be a hybrid of this script and `start-public-v2-rc.ps1` that neither could
 restart or stop: the environment existed only inside the running processes, and
 the schema drifted six migrations behind the code without anything saying so.
+The supported launcher also fails closed unless the API and both controllers
+have PostgreSQL `DATABASE_URL` values; it never permits the backend's SQLite
+fallback for this daily multi-user stack.
 
 `start-public-v2-rc.ps1` is a different tool: it creates a throwaway PostgreSQL
 under the temp directory for RC verification, on ports 8010/3010/5110. It is not

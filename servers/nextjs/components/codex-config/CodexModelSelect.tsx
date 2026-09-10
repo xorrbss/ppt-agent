@@ -16,22 +16,31 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { CHATGPT_MODELS } from "./constants";
+import { CHATGPT_MODELS, CODEX_GENERATION_PRESETS, type CodexReasoningEffort } from "./constants";
 
 interface CodexModelSelectProps {
   codexModel: string;
-  onSelect: (modelId: string) => void;
+  codexReasoningEffort: string;
+  onSelect: (modelId: string, effort: CodexReasoningEffort) => void;
 }
 
 /** ChatGPT models are a fixed client-side list; the provider exposes no discovery API. */
-const CodexModelSelect = ({ codexModel, onSelect }: CodexModelSelectProps) => {
+const CodexModelSelect = ({ codexModel, codexReasoningEffort, onSelect }: CodexModelSelectProps) => {
   const [open, setOpen] = useState(false);
-  const selectedName = CHATGPT_MODELS.find((model) => model.id === codexModel)?.name;
+  const selectedPreset = CODEX_GENERATION_PRESETS.find(
+    (preset) => preset.modelId === codexModel && preset.effort === codexReasoningEffort,
+  );
+  const selectedModelName = CHATGPT_MODELS.find((model) => model.id === codexModel)?.name;
+  const selectedName = selectedPreset?.name ?? (
+    codexModel
+      ? `${selectedModelName ?? codexModel}${codexReasoningEffort ? ` · ${codexReasoningEffort}` : ""}`
+      : ""
+  );
 
   return (
     <div>
       <label className="mb-2 block text-sm font-medium text-gray-700">
-        GPT 모델 선택
+        PPT 생성 모델 · 추론 강도
       </label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -57,22 +66,24 @@ const CodexModelSelect = ({ codexModel, onSelect }: CodexModelSelectProps) => {
             <CommandList>
               <CommandEmpty>모델을 찾을 수 없습니다.</CommandEmpty>
               <CommandGroup>
-                {CHATGPT_MODELS.map((model) => (
+                {CODEX_GENERATION_PRESETS.map((preset) => (
                   <CommandItem
-                    key={model.id}
-                    value={model.id}
-                    onSelect={(value) => {
-                      onSelect(value);
+                    key={`${preset.modelId}:${preset.effort}`}
+                    value={`${preset.modelId} ${preset.effort}`}
+                    onSelect={() => {
+                      onSelect(preset.modelId, preset.effort);
                       setOpen(false);
                     }}
                   >
                     <Check
                       className={cn(
                         "mr-2 h-4 w-4",
-                        codexModel === model.id ? "opacity-100" : "opacity-0"
+                        codexModel === preset.modelId && codexReasoningEffort === preset.effort
+                          ? "opacity-100"
+                          : "opacity-0"
                       )}
                     />
-                    <span className="text-sm text-gray-900">{model.name}</span>
+                    <span className="text-sm text-gray-900">{preset.name}</span>
                   </CommandItem>
                 ))}
               </CommandGroup>

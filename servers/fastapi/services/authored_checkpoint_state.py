@@ -192,7 +192,9 @@ def provider_attempt_count_in_epoch(
         return 0
     raw = metadata.get("provider_attempt_count", 0)
     current = raw if isinstance(raw, int) and not isinstance(raw, bool) else 0
-    current = min(2, max(0, current))
+    # Ordinal 3 belongs to the bounded author-stage rescue. Preserve it so a
+    # worker resuming the same operation attempt cannot buy a fourth call.
+    current = min(3, max(0, current))
     if epoch is None:
         return current
     return current if provider_attempt_epoch(metadata) >= int(epoch) else 0
@@ -337,7 +339,11 @@ async def complete_stage(
             )
             expected_render_path = previous.render_path
             expected_artifact_refs = previous.artifact_refs
-            prior = await read_valid_evidence_artifact(previous)
+            # During render replacement, author/illustrate may already hold the
+            # next HTML while the pointer still names the last valid revision.
+            prior = await read_valid_evidence_artifact(
+                previous, require_current_html_match=False
+            )
             if checkpoint_revision is None:
                 checkpoint_revision = (prior.revision + 1) if prior else 0
             elif prior is not None and checkpoint_revision <= prior.revision:

@@ -58,6 +58,7 @@ class ExportBundle:
     semantic_slides: list[Mapping[str, object]]
     export_attempt_id: str | None
     renderer_source_digest: str | None
+    local_fit_receipts: list[Mapping[str, object]]
 
 
 def _read_bundle(
@@ -120,6 +121,10 @@ def _read_bundle(
             raise PublicWorkerExecutionError("public_export_bundle_identity_invalid")
     else:
         raise PublicWorkerExecutionError("public_export_bundle_schema_unsupported")
+    if "localFitReceipts" in value:
+        expected_keys.add("localFitReceipts")
+    if "rendererSourceDigest" in value:
+        expected_keys.add("rendererSourceDigest")
     if set(value) != expected_keys:
         raise PublicWorkerExecutionError("public_export_bundle_invalid_shape")
     export_format = value.get("exportFormat")
@@ -167,6 +172,9 @@ def _read_bundle(
     semantic_slides, export_attempt_id, renderer_source_digest = _read_declared_graph(
         value, expected=len(slides)
     )
+    local_fit_receipts = _read_local_fit_receipts(
+        value, expected=len(slides)
+    )
     return ExportBundle(
         export_format=export_format,
         export_mode=export_mode,
@@ -176,6 +184,7 @@ def _read_bundle(
         semantic_slides=semantic_slides,
         export_attempt_id=export_attempt_id,
         renderer_source_digest=renderer_source_digest,
+        local_fit_receipts=local_fit_receipts,
     )
 
 
@@ -194,7 +203,15 @@ def _read_declared_graph(
 
     raw_graph = value.get("semanticSlides")
     if raw_graph is None:
-        return [], None, None
+        renderer_digest = value.get("rendererSourceDigest")
+        if renderer_digest is not None and (
+            not isinstance(renderer_digest, str)
+            or not _PREFIXED_SHA256.fullmatch(renderer_digest)
+        ):
+            raise PublicWorkerExecutionError(
+                "public_export_semantic_binding_invalid"
+            )
+        return [], None, renderer_digest
     attempt_id = value.get("exportAttemptId")
     renderer_digest = value.get("rendererSourceDigest")
     if (
@@ -217,6 +234,33 @@ def _read_declared_graph(
             raise PublicWorkerExecutionError("public_export_semantic_slide_invalid")
         graph.append(declared)
     return graph, attempt_id.strip(), renderer_digest
+
+
+def _read_local_fit_receipts(
+    value: Mapping[str, object],
+    *,
+    expected: int,
+) -> list[Mapping[str, object]]:
+    raw = value.get("localFitReceipts")
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or len(raw) != expected:
+        raise PublicWorkerExecutionError(
+            "public_export_local_fit_receipts_invalid"
+        )
+    receipts: list[Mapping[str, object]] = []
+    for slide_index, receipt in enumerate(raw):
+        if (
+            not isinstance(receipt, Mapping)
+            or receipt.get("slideIndex") != slide_index
+            or not isinstance(receipt.get("acceptanceKey"), str)
+            or not isinstance(receipt.get("finalHtmlDigest"), str)
+        ):
+            raise PublicWorkerExecutionError(
+                "public_export_local_fit_receipts_invalid"
+            )
+        receipts.append(receipt)
+    return receipts
 
 
 def _read_source_slides(
@@ -378,6 +422,32 @@ async def execute_export(
             if outcome.output_path is not None:
                 target = outcome.output_path
                 delivered_mode = EDITABLE_HYBRID_MODE
+        if bundle.local_fit_receipts and export_format == "pptx":
+            from services.authored_local_fit_export import verify_local_fit_pptx
+
+            try:
+                local_fit_evidence = verify_local_fit_pptx(
+                    target,
+                    bundle.local_fit_receipts,
+                    mode=(
+                        "hybrid"
+                        if delivered_mode == EDITABLE_HYBRID_MODE
+                        else "fidelity"
+                    ),
+                    pngs=(
+                        [
+                            store.read(reference)
+                            for reference in bundle.slides
+                        ]
+                        if delivered_mode == FIDELITY_RASTER_MODE
+                        else None
+                    ),
+                )
+            except (OSError, ValueError, zipfile.BadZipFile) as error:
+                raise PublicWorkerExecutionError(
+                    "public_export_local_fit_readback_failed"
+                ) from error
+            evidence["localFit"] = local_fit_evidence
         artifact = store.put_path(
             target,
             source=job.input_artifact,

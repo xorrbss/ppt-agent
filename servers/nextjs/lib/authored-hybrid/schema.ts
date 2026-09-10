@@ -1,3 +1,5 @@
+import type { LocalFitObservation } from "./local-fit-browser.ts";
+
 export const AUTHORED_HYBRID_SCHEMA_VERSION =
   "presenton.authored-hybrid/v1" as const;
 
@@ -464,6 +466,7 @@ export interface AuthoredHybridSlideV1 {
 }
 
 export interface AuthoredHybridBackplateRenderResult {
+  localFitObservation?: LocalFitObservation;
   /** RGBA PNG with only identity-verified native elements suppressed. */
   backplatePng: Buffer;
   /** Requested elements whose current DOM identity still matched extraction. */

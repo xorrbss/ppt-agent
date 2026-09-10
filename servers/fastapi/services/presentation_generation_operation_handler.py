@@ -61,6 +61,9 @@ from services.presentation_generation_attempt_timing import (
     _safe_failure,
 )
 from services.public_operation_deadline_scope import public_operation_deadline_scope
+from services.authored_local_fit_deadline import (
+    authored_local_fit_deadline_scope,
+)
 from services.provider_usage_instrumentation import provider_operation_usage_scope
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
@@ -717,7 +720,9 @@ class PresentationGenerationOperationHandler:
             # Publish the pinned instant so stages below can size their own
             # sub-budget against what is left; asyncio.timeout does not expose
             # its deadline to the code it wraps.
-            with public_operation_deadline_scope(deadline):
+            with public_operation_deadline_scope(
+                deadline
+            ), authored_local_fit_deadline_scope(remaining_seconds):
                 async with asyncio.timeout(remaining_seconds):
                     return await self._execute_without_deadline(context)
         except TimeoutError:
@@ -733,7 +738,7 @@ class PresentationGenerationOperationHandler:
     ) -> WorkspaceOperationResult:
         claim = context.claim
         await context.raise_if_cancelled()
-        await self._linked_job(claim.operation_id)
+        linked_job = await self._linked_job(claim.operation_id)
 
         # Public generation workers are sessionless.  Export is submitted as a
         # principal-bound durable operation and must never inherit a browser or
@@ -799,9 +804,17 @@ class PresentationGenerationOperationHandler:
                 raise WorkspaceOperationLeaseLost(
                     "presentation_generation_lifecycle_fenced"
                 )
-            result = await self._pipeline(
-                job_id, task_id, export_cookie_header, context
+            from utils.generation_model import generation_model_context
+
+            preset = (
+                linked_job.request_payload.get("codex_generation_preset")
+                if isinstance(linked_job.request_payload, Mapping)
+                else None
             )
+            with generation_model_context(preset):
+                result = await self._pipeline(
+                    job_id, task_id, export_cookie_header, context
+                )
             return result
         except asyncio.CancelledError:
             raise

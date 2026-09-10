@@ -165,26 +165,35 @@ async def _run_admission(
     position = 0
     admitted = 0
     inflight: dict[asyncio.Task, tuple[int, ...]] = {}
-    while position < len(queue) or inflight:
-        # The width is re-read here, not captured: an overload that halved the
-        # cap between two admissions narrows the scheduler immediately, and a
-        # restored cap widens it again without rebuilding anything.
-        while position < len(queue) and len(inflight) < schedule.policy.concurrency:
-            admitted += 1
-            await schedule.wait_out_cooldown(f"admission-{admitted}")
-            batch = queue[position]
-            position += 1
-            inflight[asyncio.ensure_future(run_batch(batch))] = batch
-        # ``concurrency`` never falls below 1, so a pending queue always admits
-        # at least one call above and this wait can never spin on an empty set.
-        done, _ = await asyncio.wait(
-            set(inflight), return_when=asyncio.FIRST_COMPLETED
-        )
-        for task in done:
-            batch = inflight.pop(task)
-            error = task.exception()
-            outcome = error if error is not None else task.result()
-            schedule.advance(outcome, succeeded=record(batch, outcome))
+    try:
+        while position < len(queue) or inflight:
+            # The width is re-read here, not captured: an overload that halved the
+            # cap between two admissions narrows the scheduler immediately, and a
+            # restored cap widens it again without rebuilding anything.
+            while position < len(queue) and len(inflight) < schedule.policy.concurrency:
+                admitted += 1
+                await schedule.wait_out_cooldown(f"admission-{admitted}")
+                batch = queue[position]
+                position += 1
+                inflight[asyncio.ensure_future(run_batch(batch))] = batch
+            # ``concurrency`` never falls below 1, so a pending queue always admits
+            # at least one call above and this wait can never spin on an empty set.
+            done, _ = await asyncio.wait(
+                set(inflight), return_when=asyncio.FIRST_COMPLETED
+            )
+            for task in done:
+                batch = inflight.pop(task)
+                error = task.exception()
+                outcome = error if error is not None else task.result()
+                schedule.advance(outcome, succeeded=record(batch, outcome))
+    finally:
+        # The streamed render tail can fail while later author calls are in
+        # flight. Reap those child tasks before the author pass returns so each
+        # provider admission can settle its durable reservation as cancelled.
+        for task in inflight:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*inflight, return_exceptions=True)
 
 
 __all__ = [

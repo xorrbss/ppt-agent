@@ -18,6 +18,7 @@ import logging
 from typing import Any, Awaitable, Callable, Collection, Sequence
 
 from utils.get_env_programme import is_authored_style_anchor_enabled
+from utils.llm_calls.author_slide import canonicalize_authored_slide_html
 from utils.llm_calls.author_style_anchor import StyleAnchor, extract_style_anchor
 
 logger = logging.getLogger(__name__)
@@ -239,9 +240,13 @@ def anchor_render_step(
     from utils.slide_capture_deck_scope import set_render_deck_scope
 
     async def render_anchor(html: str) -> None:
+        # The anchor is rendered before illustration/substitution has consumed
+        # authoring-only image slot metadata.  Admit a renderer-safe projection
+        # while retaining the original HTML for the downstream authoring stages.
+        renderable_html = canonicalize_authored_slide_html(html, finalized=True)
         async with render_gate:
             with set_render_deck_scope(deck_scope):
-                await render_html(html)
+                await render_html(renderable_html)
 
     return render_anchor
 

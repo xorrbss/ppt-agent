@@ -43,6 +43,7 @@ from services.authored_quality_receipt_v2 import public_attempt_id
 from utils.llm_calls import author_vision_qa as author_vision_qa_mod
 from utils.llm_calls.author_deck import AuthoredDeckResult
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
+from utils.authored_semantic_role_repair import canonicalize_authored_roles
 
 TERMINAL_MARKER = "TERMINAL-SLIDE"
 
@@ -214,7 +215,7 @@ def _install_deck_stubs(monkeypatch, tmp_path, htmls):
     monkeypatch.setattr(
         authored_service,
         "_build_authored_export",
-        lambda request, presentation_id, pngs, title: "deck.pptx",
+        lambda request, presentation_id, pngs, title, **_kwargs: "deck.pptx",
     )
     from utils import llm_provider
 
@@ -663,6 +664,109 @@ def _flagged_pipeline_stub(monkeypatch, htmls, flagged_index, evidence=None):
     monkeypatch.setattr(
         authored_service, "_author_illustrate_render_pipeline", fake_pipeline
     )
+
+
+def _locally_accepted_whole_page_failure_stub(monkeypatch, htmls, flagged_index):
+    """A local-fit acceptance can still fail the later whole-page gate.
+
+    The receipt is intentionally a clean, baseline-bound *acceptance* from
+    local fit; the overflow below is the independent page-quality finding that
+    arrives after that capture.  Keeping the two records distinct prevents a
+    future change from treating a local-fit receipt as a whole-page verdict.
+    """
+
+    receipts = tuple(
+        {
+            "policy_revision": "authored-local-fit/v1.3",
+            "finalHtmlDigest": (
+                "sha256:"
+                + hashlib.sha256(
+                    canonicalize_authored_roles(html).encode("utf-8")
+                ).hexdigest()
+            ),
+            "qualityStatus": "passed",
+            "unresolvedReasons": [],
+        }
+        for html in htmls
+    )
+    local_fit_flag = {
+        "index": flagged_index,
+        "reason": "composition_safety:local_fit",
+        "remakeAttempted": False,
+        "remakeOutcome": "not_attempted",
+        "reasons": ["local_fit:whole_page_geometry"],
+    }
+
+    async def fake_pipeline(
+        outline,
+        brand,
+        style,
+        header_contract=None,
+        page_number_mode="none",
+        chapter_plan=None,
+        illustration_plan=None,
+        instructions=None,
+        **_job_kwargs,
+    ):
+        return authored_service.AuthoredGenerationPipelineResult(
+            deck=AuthoredDeckResult(list(htmls), "DESIGN SYSTEM"),
+            pngs=[b"png" for _ in htmls],
+            elapsed=0.1,
+            author_work=0.1,
+            illustration_work=0.0,
+            render_work=0.1,
+            quality_gate_failures=(
+                {"slide_index": flagged_index, "issues": [_FakeIssue().to_dict()]},
+            ),
+            local_fit_receipts=receipts,
+            # Reuse the existing publication channel.  A local-fit warning is
+            # terminal, like an author-stage fallback, so it must not need a
+            # parallel result field or a second receipt schema.
+            author_flagged_slides=(local_fit_flag,),
+        )
+
+    monkeypatch.setattr(
+        authored_service, "_author_illustrate_render_pipeline", fake_pipeline
+    )
+
+
+def test_local_fit_accepted_whole_page_failure_flags_one_slide_without_aborting_the_deck(
+    monkeypatch, tmp_path
+):
+    """A later geometry finding is D7 evidence, not a deck-wide local-fit abort."""
+
+    deck = [_REMADE_HTML, _TERMINAL_HTML, _REMADE_HTML]
+    _install_deck_stubs(monkeypatch, tmp_path, deck)
+    _locally_accepted_whole_page_failure_stub(monkeypatch, deck, flagged_index=1)
+    repair_calls = _install_repair_round(monkeypatch, raises=None)
+    remake_calls: list[object] = []
+    _install_remake(monkeypatch, remake_calls, candidate=_TERMINAL_HTML)
+
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        result, presentation = _run(
+            _generate_on_sqlite(tmp_path, _request(), _outline(3))
+        )
+        slides = _run(_slides_for(tmp_path, presentation.id))
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert result.path == "deck.pptx"
+    assert [slide.index for slide in slides] == [0, 1, 2]
+    # A local-fit accepted capture that later fails the whole-page gate is
+    # already terminal evidence. It must not spend the provider repair/remake
+    # budget and must not prevent either neighbouring slide from publishing.
+    assert repair_calls == []
+    assert remake_calls == []
+    assert _pop_slide_ids(presentation.theme["authoredQualityGate"]["flaggedSlides"]) == [
+        {
+            "index": 1,
+            "reason": "composition_safety:local_fit",
+            "remakeAttempted": False,
+            "remakeOutcome": "not_attempted",
+            "reasons": ["local_fit:whole_page_geometry"],
+        }
+    ]
 
 
 def test_repair_round_residual_reaches_the_remake_instead_of_failing_the_deck(

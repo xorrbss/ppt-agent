@@ -19,6 +19,7 @@ from services.provider_runtime_control import (
     BudgetExceededError,
     CancellationRequested,
 )
+from services.public_operation_admission import PublicAdmissionRejected
 from services.provider_pricing import ProviderModelPricing
 
 
@@ -688,5 +689,70 @@ def test_outer_cancellation_during_the_reconcile_still_makes_the_row_terminal(
             await asyncio.sleep(0)
 
         assert reconciliations == [("structured.initial", "cancelled")]
+
+    asyncio.run(scenario())
+
+
+def test_pre_sdk_retry_admission_rejection_does_not_trip_provider_circuit(
+    monkeypatch,
+) -> None:
+    async def scenario() -> None:
+        settled = []
+        job_id = uuid.uuid4()
+
+        # The runtime guard permits a retry only after one initial request.
+        with provider_usage_scope(
+            job_id=job_id,
+            operation="generate",
+            stage="author",
+            attempt_number=1,
+            slide_index=0,
+        ):
+            async with provider_call_admission():
+                pass
+
+        async def reject(**_kwargs):
+            raise PublicAdmissionRejected("public_provider_retry_limit_exceeded")
+
+        async def settle(**kwargs):
+            settled.append(kwargs["durable_outcome"])
+            await kwargs["lease"].finish(
+                actual_cost_microunits=None,
+                outcome=kwargs["durable_outcome"],
+            )
+
+        async def current_fence(_fence):
+            return None
+
+        monkeypatch.setattr(
+            "services.public_operation_admission.reserve_public_provider_call_detached",
+            reject,
+        )
+        monkeypatch.setattr(
+            "services.provider_usage_instrumentation._settle_provider_call", settle
+        )
+        monkeypatch.setattr(
+            "services.provider_usage_instrumentation._assert_current_public_operation_fence",
+            current_fence,
+        )
+
+        with public_operation_scope(
+            uuid.uuid4(), attempt_token="attempt-2", fencing_token=2
+        ), provider_usage_scope(
+            job_id=job_id,
+            operation="generate",
+            stage="author",
+            attempt_number=2,
+            slide_index=0,
+        ):
+            with pytest.raises(PublicAdmissionRejected):
+                async with provider_call_admission(
+                    is_retry=True, pricing=_unavailable_pricing()
+                ):
+                    pytest.fail("public budget rejection reached the SDK boundary")
+
+        assert settled == ["failure"]
+        status = await provider_runtime_job_status(job_id)
+        assert status["consecutive_failures"] == 1
 
     asyncio.run(scenario())

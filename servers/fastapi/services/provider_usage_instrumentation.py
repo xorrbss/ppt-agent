@@ -512,7 +512,15 @@ async def provider_call_admission(
                 ),
                 public_started_at=public_started_at,
                 durable_lease=durable_lease,
-                durable_outcome="retryable_failure" if is_retry else "failure",
+                # A local/durable/public admission refusal happened before the
+                # SDK boundary and says nothing about provider health. In
+                # particular, retry-budget rejection must not open the shared
+                # provider circuit and fan out across concurrent users.
+                durable_outcome=(
+                    "failure"
+                    if sdk_started_at is None
+                    else ("retryable_failure" if is_retry else "failure")
+                ),
                 lease=lease,
             )
         )

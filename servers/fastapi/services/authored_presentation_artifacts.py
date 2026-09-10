@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import shutil
 import uuid
-from typing import List, Optional
+from typing import List, Mapping, Optional, Sequence
 
 from pathvalidate import sanitize_filename
 from sqlalchemy.exc import SQLAlchemyError
@@ -171,6 +171,8 @@ def _build_authored_export(
     presentation_id: uuid.UUID,
     pngs: List[bytes],
     title: str,
+    *,
+    local_fit_receipts: Sequence[Mapping[str, object]] | None = None,
 ) -> str:
     """Assemble the rendered slides into the requested export format (pure Python:
     python-pptx / PIL ??no external converter). Returns the absolute file path."""
@@ -199,6 +201,15 @@ def _build_authored_export(
 
         if len(PptxPresentation(temporary).slides) != len(pngs):
             raise RuntimeError("authored PPTX slide count validation failed")
+        if local_fit_receipts is not None:
+            from services.authored_local_fit_export import verify_local_fit_pptx
+
+            verify_local_fit_pptx(
+                temporary,
+                local_fit_receipts,
+                mode="fidelity",
+                pngs=pngs,
+            )
         os.replace(temporary, destination)
     finally:
         if os.path.exists(temporary):

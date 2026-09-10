@@ -186,6 +186,27 @@ def preflight_authored_provider_repair(
         item for item in violations if item.startswith(_CAPACITY_PREFIXES)
     ]
     source_capacity_blocked = bool(over_budget_violations(capacity_violations_found))
+    safety_qids = {
+        str(qid)
+        for issue in safety_issues
+        for qid in getattr(issue, "qids", ())
+        if qid
+    }
+    layout_visibility_violations = {
+        f"browser_text_not_visible:{qid}" for qid in safety_qids
+    }
+    layout_repairable = bool(safety_issues) and not source_capacity_blocked and all(
+        item in layout_visibility_violations for item in violations
+    )
+    if layout_repairable:
+        return AuthoredSlidePreflight(
+            slide_index=slide_index,
+            classification="provider_repair",
+            code="authored_composition_safety_gate_failed",
+            violations=all_violations,
+            retryable=True,
+            terminal=False,
+        )
     code = (
         "authored_slide_capacity_exceeded"
         if source_capacity_blocked

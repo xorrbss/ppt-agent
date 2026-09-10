@@ -85,7 +85,7 @@ _BLOCKED_RENDERER_URL_PATTERNS = [
 # is insufficient: local font/image/CSS files and the resolved Chromium binary
 # may change without changing the authored Scene payload.
 CACHE_IDENTITY_VERSION = "authored-render-cache-identity/v2-capability-registry"
-MEASUREMENT_CACHE_VERSION = "authored-measurement/v11-polygon-normal-hit"
+MEASUREMENT_CACHE_VERSION = "authored-measurement/v13-font-stack-fallback"
 _SCENE_DIGEST_PATTERN = re.compile(
     r'(?:data-scene-digest|data-scene-hash|name\s*=\s*["\']scene-digest["\'])'
     r'\s*=\s*["\']([^"\']+)["\']',
@@ -291,10 +291,72 @@ def _instrument_authored_html(
     registry_metadata = json.dumps(
         capability_metadata(consumer="chromium"), sort_keys=True, separators=(",", ":")
     )
+    from utils.slide_capture_local_fit import policy_from_request, observation_script
+    from utils.slide_capture_fit import fit_probe_prelude
+    policy = policy_from_request(html)
+    fit_prelude = fit_probe_prelude(policy=policy) if policy else "const __codexFitPass = () => null;"
     script = rf"""<script data-codex-dom-probe{nonce_attribute}>
 (() => {{
-  const done = () => {{
+  {fit_prelude}
+  const done = (pass = 'final') => {{
+    const fit = __codexFitPass(pass);
     const px = (value) => {{ const parsed = parseFloat(value || '0'); return Number.isFinite(parsed) ? parsed : 0; }};
+    const fontFamilies = (value) => {{
+      const families = []; let current = '', quote = null, escaped = false;
+      for (const character of String(value || '')) {{
+        if (escaped) {{ current += character; escaped = false; continue; }}
+        if (character === '\\') {{ current += character; escaped = true; continue; }}
+        if (quote) {{
+          current += character;
+          if (character === quote) quote = null;
+          continue;
+        }}
+        if (character === '"' || character === "'") {{ current += character; quote = character; continue; }}
+        if (character === ',') {{
+          if (current.trim()) families.push(current.trim().replace(/^['"]|['"]$/g, ''));
+          current = ''; continue;
+        }}
+        current += character;
+      }}
+      if (current.trim()) families.push(current.trim().replace(/^['"]|['"]$/g, ''));
+      return families;
+    }};
+    const familyAvailable = (family, text) => {{
+      const canvas = document.createElement('canvas'), context = canvas.getContext('2d');
+      if (!context) return false;
+      const sample = String(text || '').trim() || 'AaMmWw09\uD55C\uAE00\u6F22\u5B57';
+      return ['monospace', 'serif', 'sans-serif'].some((fallback) => {{
+        context.font = '72px ' + fallback; const base = context.measureText(sample).width;
+        context.font = '72px "__codex_missing_font__",' + fallback;
+        const missing = context.measureText(sample).width;
+        context.font = '72px ' + JSON.stringify(family) + ',' + fallback;
+        const actual = context.measureText(sample).width;
+        return Math.abs(actual - base) > 0.01 && Math.abs(actual - missing) > 0.01;
+      }});
+    }};
+    const fontEvidence = (style, text) => {{
+      if (!document.fonts) return {{loaded: true, family: null, source: 'font-api-unavailable'}};
+      try {{
+        if (document.fonts.status !== 'loaded') return {{loaded: false, family: null, source: 'fonts-pending'}};
+        const generic = new Set(['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui']);
+        for (const family of fontFamilies(style.fontFamily)) {{
+          const normalized = family.toLowerCase();
+          if (generic.has(normalized)) return {{loaded: true, family, source: 'generic-fallback'}};
+          const loadedFace = Array.from(document.fonts).some((font) =>
+            String(font.family || '').replace(/^['"]|['"]$/g, '').toLowerCase() === normalized &&
+            font.status === 'loaded');
+          if (loadedFace) {{
+            const descriptor = [style.fontStyle, style.fontWeight, style.fontSize,
+              JSON.stringify(family)].join(' ');
+            if (document.fonts.check(descriptor, String(text || '').trim() || 'M'))
+              return {{loaded: true, family, source: 'loaded-font-face'}};
+          }}
+          if (familyAvailable(family, text))
+            return {{loaded: true, family, source: 'installed-local-font'}};
+        }}
+        return {{loaded: false, family: null, source: 'no-available-family'}};
+      }} catch (_) {{ return {{loaded: false, family: null, source: 'font-probe-error'}}; }}
+    }};
     const rgba = (value) => {{
       const match = String(value || '').match(/rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)/i);
       return match ? [Number(match[1]), Number(match[2]), Number(match[3]), match[4] === undefined ? 1 : Number(match[4])] : null;
@@ -827,8 +889,7 @@ def _instrument_authored_html(
         naturalWidth: Number(node.naturalWidth || 0), naturalHeight: Number(node.naturalHeight || 0),
         cssVisible, effectiveOpacity, viewportIntersectionRatio
       }} : undefined;
-      let fontLoaded = true;
-      try {{ fontLoaded = !document.fonts || document.fonts.check(style.font); }} catch (_) {{}}
+      const resolvedFont = fontEvidence(style, node.innerText || node.textContent || '');
       return {{
         qid: node.getAttribute('data-qid'), tag: node.tagName.toLowerCase(),
         semantic_role: node.getAttribute('data-semantic-role') || node.getAttribute('data-role') || node.getAttribute('role') || null,
@@ -888,7 +949,9 @@ def _instrument_authored_html(
         measurement: {{geometry: true, transform: q.measured, clipping: true, contrast: contrast !== null, occlusion: occultation.fraction !== null, stacking: true, visual_effects: !complexEffect}},
         intentional: node.hasAttribute('data-allow-overlap') || node.hasAttribute('data-intentional-crop'),
         unintentional: node.hasAttribute('data-quality-unintentional'),
-        font_loaded: fontLoaded, image,
+        font_loaded: resolvedFont.loaded,
+        resolved_font_family: resolvedFont.family,
+        font_resolution_source: resolvedFont.source, image,
         connector_geometry: connector,
         static_translation_probe: staticTranslationProbe,
         font_size: px(style.fontSize),
@@ -936,7 +999,8 @@ def _instrument_authored_html(
       fonts_ready: !document.fonts || document.fonts.status === 'loaded',
       capabilityRegistry: {registry_metadata},
       source_digest: '{source_digest}', render_digest: '{render_digest}',
-      dom_metrics_version: '{DOM_METRICS_VERSION}', metrics_cache_key: '{key}', elements
+      dom_metrics_version: '{DOM_METRICS_VERSION}', metrics_cache_key: '{key}', fit, elements,
+      observation_state: pass
     }};
     let marker = document.getElementById('{_METRICS_ELEMENT_ID}');
     if (!marker) {{ marker = document.createElement('meta'); marker.id = '{_METRICS_ELEMENT_ID}'; document.head.appendChild(marker); }}
@@ -947,13 +1011,7 @@ def _instrument_authored_html(
     if (!marker) {{ marker = document.createElement('meta'); marker.id = '{_METRICS_ELEMENT_ID}'; document.head.appendChild(marker); }}
     marker.setAttribute('content', encodeURIComponent(JSON.stringify({{width: innerWidth, height: innerHeight, fonts_ready: false, elements: [], probe_error: String(error && (error.stack || error.message) || error)}})));
   }};
-  const run = () => {{
-    try {{ done(); }} catch (error) {{ failed(error); }}
-    // Publish synchronously so --dump-dom can never race an unresolved font
-    // promise.  If web fonts settle within Chrome's virtual-time budget, refresh
-    // the same marker with final glyph geometry before the dump/screenshot.
-    try {{ if (document.fonts && document.fonts.ready) document.fonts.ready.then(done).catch(failed); }} catch (_) {{}}
-  }};
+  {observation_script(_METRICS_ELEMENT_ID)}
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, {{once: true}}); else run();
 }})();
 </script>"""
@@ -1039,6 +1097,40 @@ def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> None:
         _count_runtime("metrics_cache_evictions")
 
 
+_shared_render_waiters: dict[asyncio.Task[Any], int] = {}
+
+
+async def _await_shared_render_task(
+    task: asyncio.Task[Any], inflight: dict, key: tuple[str, str, str],
+    *, timeout: float | None = None,
+) -> Any:
+    """Keep shared work alive only while a caller still needs its result."""
+    if task not in _shared_render_waiters:
+        def completed(done: asyncio.Task[Any]) -> None:
+            if inflight.get(key) is done:
+                inflight.pop(key, None)
+            if not done.cancelled():
+                done.exception()  # Retrieve errors even if every caller departed.
+
+        task.add_done_callback(completed)
+    _shared_render_waiters[task] = _shared_render_waiters.get(task, 0) + 1
+    try:
+        if timeout is None:
+            return await asyncio.shield(task)
+        return await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+    finally:
+        remaining = _shared_render_waiters[task] - 1
+        if remaining:
+            _shared_render_waiters[task] = remaining
+        else:
+            _shared_render_waiters.pop(task, None)
+            if inflight.get(key) is task:
+                inflight.pop(key, None)
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+
 async def ensure_browser_metrics(
     html: str, timeout: int = 60, *, deck_scope: str | None = None
 ) -> Mapping[str, Any] | None:
@@ -1092,9 +1184,11 @@ async def ensure_browser_metrics(
         # The renderer owns its own timeout, but a wedged browser semaphore or
         # detached Windows Chrome child can otherwise leave this shared task
         # pending forever and block the entire FastAPI event loop during
-        # canonical Scene publication.  Bound the outer wait as well and cancel
-        # the poisoned in-flight entry so a later retry can recollect cleanly.
-        return await asyncio.wait_for(task, timeout=max(1, timeout) + 15)
+        # canonical Scene publication. Bound each outer wait independently;
+        # shared work is cancelled only after its last waiter departs.
+        return await _await_shared_render_task(
+            task, _browser_metrics_inflight, key, timeout=max(1, timeout) + 15
+        )
     except Exception as error:
         # Rendering an already-cached PNG remains useful even if a best-effort
         # telemetry recollection cannot start.  Consumers receive ``None`` and
@@ -1107,7 +1201,9 @@ async def ensure_browser_metrics(
 
 
 async def render_html_to_png_with_metrics(
-    html: str, timeout: int = 60, *, deck_scope: str | None = None
+    html: str, timeout: int = 60, *, deck_scope: str | None = None,
+    fit: bool = False, fit_policy: Mapping[str, Any] | None = None,
+    fresh: bool = False,
 ) -> "RenderCapture":
     """Render one slide and return telemetry tied to the same HTML cache identity.
 
@@ -1117,7 +1213,26 @@ async def render_html_to_png_with_metrics(
     # Preserve renderer admission semantics even when the atomic result cache
     # contains a prior successful capture.
     ensure_renderer_enabled()
+    if fit_policy is not None:
+        from utils.slide_capture_local_fit import capture_with_policy
+        return await capture_with_policy(html, timeout, deck_scope=deck_scope,
+                                         fit=fit, policy=fit_policy, fresh=fresh)
+    if fit:
+        raise ValueError("fit requires an explicit authored local policy")
     html_digest = "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
+    if fresh:
+        # Bypass every pixel/capture cache and in-flight alias. The renderer
+        # opens a disposable document even when its Chrome process is reused.
+        _browser_metrics_cache.pop(_metrics_cache_key(html), None)
+        if deck_scope:
+            with set_render_deck_scope(deck_scope):
+                png = await _render_html_to_png_uncached(html, timeout=timeout)
+        else:
+            png = await _render_html_to_png_uncached(html, timeout=timeout)
+        return RenderCapture.from_payload(
+            html_digest=html_digest, png=png,
+            browser_metrics=_peek_cached_browser_metrics(html),
+            runtime_counters=get_render_runtime_counters())
     cached_capture = _peek_cached_capture(html, timeout)
     if cached_capture is not None:
         _count_runtime("requests")
@@ -1155,68 +1270,7 @@ async def render_html_to_png_with_metrics(
     return capture
 
 
-@dataclass(frozen=True, slots=True)
-class RenderCapture:
-    """Atomic result for one HTML render.
-
-    ``html_digest``, PNG bytes and browser metrics are produced/selected as one
-    value so callers cannot accidentally pair telemetry from a different HTML
-    revision.  ``__iter__`` retains the historical ``png, metrics = ...`` API.
-    ``runtime_counters`` is a snapshot for measuring duplicate browser/I/O work
-    across large decks without retaining process objects in the result.
-    """
-
-    html_digest: str
-    png: bytes
-    browser_metrics: Mapping[str, Any] | None
-    png_digest: str
-    metrics_digest: str | None
-    runtime_counters: Mapping[str, int]
-
-    @classmethod
-    def from_payload(
-        cls,
-        *,
-        html_digest: str,
-        png: bytes,
-        browser_metrics: Mapping[str, Any] | None,
-        runtime_counters: Mapping[str, int],
-    ) -> "RenderCapture":
-        canonical = json.dumps(
-            browser_metrics, sort_keys=True, separators=(",", ":"),
-            ensure_ascii=False, default=str,
-        ).encode("utf-8") if browser_metrics is not None else None
-        return cls(
-            html_digest=html_digest,
-            png=png,
-            browser_metrics=browser_metrics,
-            png_digest="sha256:" + hashlib.sha256(png).hexdigest(),
-            metrics_digest=("sha256:" + hashlib.sha256(canonical).hexdigest()) if canonical is not None else None,
-            runtime_counters=dict(runtime_counters),
-        )
-
-    def __iter__(self):
-        # Backward compatible with all existing callers.
-        yield self.png
-        yield self.browser_metrics
-
-    @property
-    def metrics(self) -> Mapping[str, Any] | None:
-        """Short alias for callers that refer to browser telemetry as metrics."""
-        return self.browser_metrics
-
-    def as_dict(self, *, include_payload: bool = False) -> dict[str, Any]:
-        result: dict[str, Any] = {
-            "htmlDigest": self.html_digest,
-            "pngDigest": self.png_digest,
-            "metricsDigest": self.metrics_digest,
-            "browserMetricsCaptured": self.browser_metrics is not None,
-            "runtimeCounters": dict(self.runtime_counters),
-        }
-        if include_payload:
-            result["pngBase64"] = base64.b64encode(self.png).decode("ascii")
-            result["browserMetrics"] = self.browser_metrics
-        return result
+from utils.slide_capture_result import RenderCapture
 
 
 def _capture_cache_key(html: str, timeout: int) -> tuple[str, str, str]:
@@ -1411,6 +1465,8 @@ class _ReusableChromeRuntime:
         self.profile = profile
         self.port = port
         self.session_count = 0
+        self.active_sessions = 0
+        self.retired = False
 
     @property
     def base_url(self) -> str:
@@ -1431,6 +1487,7 @@ class _ReusableChromeRuntime:
 
 _reusable_chrome_lock = threading.Lock()
 _reusable_chrome: _ReusableChromeRuntime | None = None
+_retired_reusable_chromes: set[_ReusableChromeRuntime] = set()
 
 
 def _launch_reusable_chrome() -> _ReusableChromeRuntime:
@@ -1501,30 +1558,52 @@ def _get_reusable_chrome_sync() -> _ReusableChromeRuntime:
     with _reusable_chrome_lock:
         if _reusable_chrome is not None and _reusable_chrome.alive():
             _reusable_chrome.session_count += 1
+            _reusable_chrome.active_sessions += 1
             _count_runtime("session_reuse_hits")
             return _reusable_chrome
         if _reusable_chrome is not None:
             _count_runtime("session_restarts")
-            _reusable_chrome.close()
+            _reusable_chrome.retired = True
+            if _reusable_chrome.active_sessions:
+                _retired_reusable_chromes.add(_reusable_chrome)
+            else:
+                _reusable_chrome.close()
         _reusable_chrome = _launch_reusable_chrome()
         _reusable_chrome.session_count = 1
+        _reusable_chrome.active_sessions = 1
         return _reusable_chrome
 
 
 def _discard_reusable_chrome_sync(runtime: _ReusableChromeRuntime) -> None:
+    """Stop new admissions without killing sibling pages already using it."""
     global _reusable_chrome
     with _reusable_chrome_lock:
         if _reusable_chrome is runtime:
             _count_runtime("session_restarts")
-            runtime.close()
             _reusable_chrome = None
+        runtime.retired = True
+        _retired_reusable_chromes.add(runtime)
+
+
+def _release_reusable_chrome_sync(runtime: _ReusableChromeRuntime) -> None:
+    with _reusable_chrome_lock:
+        runtime.active_sessions -= 1
+        should_close = runtime.retired and runtime.active_sessions == 0
+        if should_close:
+            _retired_reusable_chromes.discard(runtime)
+    if should_close:
+        runtime.close()
 
 
 def _close_reusable_chrome() -> None:
     global _reusable_chrome
     with _reusable_chrome_lock:
         runtime, _reusable_chrome = _reusable_chrome, None
-    if runtime is not None:
+        runtimes = set(_retired_reusable_chromes)
+        _retired_reusable_chromes.clear()
+        if runtime is not None:
+            runtimes.add(runtime)
+    for runtime in runtimes:
         runtime.close()
 
 
@@ -1605,6 +1684,7 @@ async def _render_html_in_reusable_chrome(
         cdp_command=_cdp_command,
         count_runtime=_count_runtime,
         discard_runtime=_discard_reusable_chrome_sync,
+        release_runtime=_release_reusable_chrome_sync,
         enrich_contrast=_enrich_pixel_contrast,
         get_runtime=_get_reusable_chrome_sync,
         instrument_html=_instrument_authored_html,
@@ -1693,7 +1773,8 @@ async def _render_html_to_png_subprocess(
                     probe_html_path = os.path.join(td, "pixel-probe.html")
                     probe_out = os.path.join(td, "pixel-probe.png")
                     with open(probe_html_path, "w", encoding="utf-8") as file:
-                        file.write(_pixel_probe_document(html))
+                        from utils.slide_capture_local_fit import measured_html
+                        file.write(_pixel_probe_document(measured_html(html, metrics)))
                     probe_args = [
                         chrome,
                         "--headless=new",
@@ -1737,8 +1818,9 @@ async def _render_html_to_png_subprocess(
             buf = io.BytesIO()
             img.save(buf, format="PNG")
             if metrics is not None:
+                from utils.slide_capture_local_fit import measured_html
                 metrics = await probe_glyph_clipping_file(
-                    html, metrics, buf.getvalue(), directory=td, screenshot_args=args,
+                    measured_html(html, metrics), metrics, buf.getvalue(), directory=td, screenshot_args=args,
                     timeout=timeout, count_runtime=_count_runtime,
                     run_screenshot=_run_chrome_screenshot, wait_for_output=_wait_for_output,
                 )
@@ -1871,7 +1953,7 @@ async def _render_html_to_png_cached(html: str, timeout: int) -> bytes:
     else:
         _count_runtime("render_inflight_joins")
     try:
-        rendered = await asyncio.shield(task)
+        rendered = await _await_shared_render_task(task, _render_inflight, key)
     finally:
         if _render_inflight.get(key) is task and task.done():
             _render_inflight.pop(key, None)
@@ -1938,7 +2020,7 @@ CAPTURE_CACHE_BYTE_BUDGET = _env_nonnegative_int(
 _capture_cache: "OrderedDict[tuple[str, str, str], RenderCapture]" = OrderedDict()
 OCCLUSION_PROBE_CONTRACT_VERSION = "owned-paint-v3"
 OCCLUSION_SENSOR_VERSION = "owned-paint-v12-polygon-normal-hit"
-DOM_METRICS_VERSION = "authored-dom-metrics-v25-polygon-normal-hit"
+DOM_METRICS_VERSION = "authored-dom-metrics-v26-font-stack-fallback"
 DOM_METRICS_CACHE_SIZE = max(1, RENDER_CACHE_SIZE)
 DOM_METRICS_CACHE_BYTE_BUDGET = _env_nonnegative_int(
     "AUTHORED_DOM_METRICS_CACHE_BYTE_BUDGET", 32 * 1024 * 1024

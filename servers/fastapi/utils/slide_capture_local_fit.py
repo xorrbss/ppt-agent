@@ -1,0 +1,162 @@
+"""Request-only policy transport through existing isolated renderer paths."""
+from __future__ import annotations
+
+import base64
+import json
+import re
+import uuid
+from collections.abc import Mapping
+from typing import Any
+
+from services.authored_local_fit_policy import POLICY_REVISION, font_policy
+
+_MARKER = re.compile(r"<!--codex-local-fit-v1[2345]:([A-Za-z0-9_=-]+)-->")
+
+
+def policy_request_html(html: str, policy: Mapping[str, Any], *, fit: bool) -> str:
+    if _MARKER.search(html):
+        raise ValueError("reserved local fit request marker in authored source")
+    payload = {**policy, "fit": bool(fit), "enabled": bool(fit)}
+    encoded = base64.urlsafe_b64encode(json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), allow_nan=False,
+    ).encode("utf-8")).decode("ascii")
+    revision = str(policy.get("policy_revision") or POLICY_REVISION)
+    font_policy(revision)
+    marker_revision = revision.rsplit("/v", 1)[-1].replace(".", "")
+    # A comment changes no selectors, authored styles or visual DOM structure.
+    return html + f"<!--codex-local-fit-v{marker_revision}:" + encoded + "-->"
+
+
+def policy_from_request(html: str) -> dict[str, Any] | None:
+    markers = list(_MARKER.finditer(html))
+    if not markers:
+        return None
+    if len(markers) != 1:
+        raise ValueError("invalid local fit policy marker")
+    policy = json.loads(base64.urlsafe_b64decode(markers[0].group(1)))
+    if not isinstance(policy, dict):
+        raise ValueError("unsupported local fit policy")
+    try:
+        font_policy(str(policy.get("policy_revision") or ""))
+    except ValueError as exc:
+        raise ValueError("unsupported local fit policy") from exc
+    return policy
+
+
+def measured_html(html: str, metrics: Mapping[str, Any] | None) -> str:
+    """Use the measured revision for existing contrast/glyph side probes too."""
+    report = (metrics or {}).get("fit")
+    edits = report.get("edits") if isinstance(report, Mapping) else None
+    if not edits:
+        return html
+    from utils.authored_fit_edits import apply_fit_edits
+    return apply_fit_edits(html, edits)
+
+
+def local_fit_render_identity(html: str, policy: Mapping[str, Any], *, fit: bool) -> str:
+    from services.authored_local_fit_policy import digest
+    from utils.authored_font_identity import installed_font_identity
+    from utils import slide_capture
+    # Baseline belongs to acceptance identity. A fit-disabled render of the
+    # same final bytes has the same pixels for two different original sizes.
+    policy_revision = str(policy.get("policy_revision") or POLICY_REVISION)
+    font_policy(policy_revision)
+    return digest({"renderer": slide_capture._render_cache_identity(html).digest,
+                   "installed_fonts": installed_font_identity(),
+                   "fit_mode": bool(fit), "policy_revision": policy_revision,
+                   "export_scale_manifest": policy["export_scale_manifest"]})
+
+
+async def capture_with_policy(html: str, timeout: int, *, deck_scope: str | None,
+                              fit: bool, policy: Mapping[str, Any], fresh: bool):
+    from services.authored_local_fit_policy import html_digest
+    from utils import slide_capture as capture
+    from utils.authored_fit_edits import apply_fit_edits
+    from utils.authored_font_identity import installed_font_identity
+
+    policy = {**policy, "installed_font_identity": installed_font_identity()}
+    canonical_request = policy_request_html(html, policy, fit=fit)
+    request_html = (policy_request_html(html, {**policy, "_document_nonce": uuid.uuid4().hex}, fit=fit)
+                    if fresh else canonical_request)
+    measured = await capture.render_html_to_png_with_metrics(
+        request_html, timeout=timeout, deck_scope=deck_scope, fresh=fresh)
+    metrics = dict(measured.browser_metrics or {})
+    report = metrics.get("fit")
+    if not isinstance(report, Mapping) or report.get("fit_state") != "final":
+        raise ValueError("local fit final observation unavailable")
+    edits = report.get("edits") or []
+    if not fit and edits:
+        raise ValueError("fit-disabled renderer returned edits")
+    final_html = apply_fit_edits(html, edits) if edits else html
+    # Rebind the request-only marker identity to the exact saved bytes. This
+    # does not approve them: changed HTML still requires a fresh independent run.
+    source, rendered = capture._source_render_digests(final_html)
+    metrics.update(source_digest=source, render_digest=rendered,
+                   metrics_cache_key=capture._metric_evidence_cache_key(final_html))
+    metrics["local_fit_render_identity"] = local_fit_render_identity(final_html, policy, fit=fit)
+    metrics["local_fit_mode"] = bool(fit)
+    return capture.RenderCapture.from_payload(
+        html_digest=html_digest(final_html), png=measured.png, browser_metrics=metrics,
+        runtime_counters=capture.get_render_runtime_counters(),
+        fitted_html=final_html if final_html != html else None, fit_report=dict(report))
+
+
+def observation_script(metrics_element_id: str) -> str:
+    return _OBSERVATION_JS.replace("__METRICS_ID__", metrics_element_id)
+
+
+_OBSERVATION_JS = r"""
+  let domRevision = 0, finalIdentity = null, finalObservations = 0, duplicateFinalSkipped = 0;
+  const relevantMutation = record => {
+    const target = record.target;
+    if (target && target.id === '__METRICS_ID__') return false;
+    if (record.type === 'childList' && [...record.addedNodes, ...record.removedNodes].every(
+        node => node.id === '__METRICS_ID__')) return false;
+    return true;
+  };
+  const countMutations = records => { if (records.some(relevantMutation)) domRevision += 1; };
+  const observer = new MutationObserver(countMutations);
+  observer.observe(document.documentElement, {attributes:true, childList:true, subtree:true, characterData:true});
+  const stateIdentity = () => {
+    countMutations(observer.takeRecords());
+    return JSON.stringify([domRevision, innerWidth, innerHeight,
+      document.fonts ? [...document.fonts].map(f => [f.family,f.style,f.weight,f.status]) : [],
+      [...document.images].map(i => [i.currentSrc,i.complete,i.naturalWidth,i.naturalHeight]),
+      performance.getEntriesByType('resource').map(r => [r.name,r.responseEnd]),
+      document.getAnimations().filter(a => a.playState === 'running').map(a => a.currentTime)]);
+  };
+  const observe = () => {
+    const ready = (!document.fonts || document.fonts.status === 'loaded') &&
+      [...document.images].every(image => image.complete);
+    const identity = stateIdentity();
+    if (ready && identity === finalIdentity) {
+      duplicateFinalSkipped += 1;
+      const marker = document.getElementById('__METRICS_ID__');
+      if (marker) {
+        const payload = JSON.parse(decodeURIComponent(marker.getAttribute('content')));
+        payload.observation_telemetry = {final_observations:finalObservations,
+          duplicate_final_skipped:duplicateFinalSkipped, dom_revision:domRevision};
+        marker.setAttribute('content', encodeURIComponent(JSON.stringify(payload)));
+      }
+      return;
+    }
+    try {
+      done(ready ? 'final' : 'provisional');
+      if (ready) { finalObservations += 1; finalIdentity = stateIdentity(); }
+      const marker = document.getElementById('__METRICS_ID__');
+      const payload = JSON.parse(decodeURIComponent(marker.getAttribute('content')));
+      payload.observation_telemetry = {final_observations:finalObservations,
+        duplicate_final_skipped:duplicateFinalSkipped, dom_revision:domRevision};
+      marker.setAttribute('content', encodeURIComponent(JSON.stringify(payload)));
+    } catch (error) { failed(error); }
+  };
+  window.__codexObserveFinal = observe;
+  const run = () => {
+    observe();
+    try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(observe).catch(failed); } catch (_) {}
+    for (const image of document.images) {
+      if (!image.complete) { image.addEventListener('load', observe, {once:true});
+        image.addEventListener('error', observe, {once:true}); }
+    }
+  };
+"""

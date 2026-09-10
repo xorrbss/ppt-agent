@@ -15,6 +15,8 @@ import {
   type AuthoredHybridFontLayoutMode,
 } from "./html-instrumentation.ts";
 import type { BrowserAuthoredHybridObservation } from "./observation.ts";
+import type { LocalFitObservation } from "./local-fit-browser.ts";
+import { rememberLocalFitSource } from "./local-fit-export-evidence.ts";
 import type {
   AuthoredHybridBackplateRenderResult,
   AuthoredHybridSlideV1,
@@ -127,8 +129,10 @@ async function extractAuthoredSlideDomObservation(
     domCompletionToken,
     options
   );
+  const slide = buildAuthoredHybridSlide(html, observation, baseUrl);
+  rememberLocalFitSource(slide, observation.localFitObservation);
   return {
-    slide: buildAuthoredHybridSlide(html, observation, baseUrl),
+    slide,
     observation,
     screenshotPng: capture.screenshotPng,
   };
@@ -234,7 +238,7 @@ export async function renderAuthoredFidelityBackplate(
     captureMode: "fidelity",
     completionToken: domCompletionToken,
   });
-  const { capture } = await captureWithFixedViewport(
+  const { capture, observation } = await captureWithFixedViewport(
     instrumented,
     true,
     domCompletionToken,
@@ -247,6 +251,7 @@ export async function renderAuthoredFidelityBackplate(
   return {
     backplatePng: screenshotPng,
     appliedPromotedElementIds: [],
+    localFitObservation: observation.localFitObservation,
     fallbackElementIds: [],
     capturePngSha256: `sha256:${createHash("sha256").update(screenshotPng).digest("hex")}`,
   };
@@ -332,12 +337,14 @@ export async function renderAuthoredBackplate(
   return {
     backplatePng: screenshotPng,
     appliedPromotedElementIds: promoted.filter((id) => applied.includes(id)),
+    localFitObservation: observation.localFitObservation,
     fallbackElementIds: promoted.filter((id) => rejected.includes(id)),
     capturePngSha256: `sha256:${createHash("sha256").update(screenshotPng).digest("hex")}`,
   };
 }
 
 export interface AuthoredHybridRasterPaintBandRenderResult {
+  readonly localFitObservation?: LocalFitObservation;
   readonly rasterPng: Buffer;
   readonly elementIds: readonly string[];
   readonly capturePngSha256: string;
@@ -401,6 +408,7 @@ export async function renderAuthoredRasterPaintBand(
   const rasterPng = await normalizeBackplatePng(capture.screenshotPng);
   return {
     rasterPng,
+    localFitObservation: observation.localFitObservation,
     elementIds: requested,
     capturePngSha256: `sha256:${createHash("sha256").update(rasterPng).digest("hex")}`,
   };

@@ -34,12 +34,12 @@ _SECRET_PATTERNS = (
 _PUBLISH_FENCE_SECONDS = 300
 
 
-_PRIOR_FAILURE_KEYS = ("code", "exception_type", "cause", "fingerprint")
+_PRIOR_FAILURE_KEYS = ("code", "exception_type", "cause", "message", "detail", "fingerprint")
 
 
 def _bounded_prior_failure(
     value: Mapping[str, Any] | None,
-) -> dict[str, str] | None:
+) -> dict[str, Any] | None:
     """Keep only the scalar diagnostic fields of an earlier attempt's failure.
 
     The stored value is already sanitized task metadata, but a later attempt
@@ -49,10 +49,21 @@ def _bounded_prior_failure(
     if not isinstance(value, Mapping):
         return None
     bounded = {
-        key: " ".join(str(value[key]).split())[:200]
+        key: sanitize_exception_message(RuntimeError(value[key]))[
+            :512 if key in {"message", "detail"} else 200
+        ]
         for key in _PRIOR_FAILURE_KEYS
         if isinstance(value.get(key), str) and value.get(key)
     }
+    raw_block_ids = value.get("block_ids")
+    if isinstance(raw_block_ids, (list, tuple)):
+        block_ids = [
+            " ".join(item.split())[:160]
+            for item in raw_block_ids[:16]
+            if isinstance(item, str) and item.strip()
+        ]
+        if block_ids:
+            bounded["block_ids"] = block_ids
     return bounded or None
 
 
@@ -115,6 +126,15 @@ class AuthoredStageError(RuntimeError):
             "fingerprint": fingerprint,
             "retryable": self.retryable,
         }
+        raw_block_ids = getattr(cause, "block_ids", ())
+        if isinstance(raw_block_ids, (list, tuple)):
+            block_ids = [
+                " ".join(item.split())[:160]
+                for item in raw_block_ids[:16]
+                if isinstance(item, str) and item.strip()
+            ]
+            if block_ids:
+                value["block_ids"] = block_ids
         if request_id:
             value["request_id"] = request_id
         if attempt_number is not None:

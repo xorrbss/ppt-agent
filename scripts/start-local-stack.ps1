@@ -88,6 +88,23 @@ function Write-State([hashtable]$State) {
     $State | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $statePath -Encoding utf8
 }
 
+function Assert-PostgreSqlRuntime([hashtable]$Environments) {
+    foreach ($component in @("api", "worker-generation", "worker-export")) {
+        if (-not $Environments.ContainsKey($component)) {
+            throw "local stack: missing environment for $component"
+        }
+        $componentEnvironment = $Environments[$component]
+        $databaseUrl = if ($componentEnvironment.ContainsKey("DATABASE_URL")) {
+            [string]$componentEnvironment["DATABASE_URL"]
+        } else {
+            ""
+        }
+        if ($databaseUrl -notmatch '^postgresql(?:\+[^:]+)?://') {
+            throw "local stack: $component DATABASE_URL must use PostgreSQL; SQLite fallback is forbidden"
+        }
+    }
+}
+
 function Import-EnvironmentDirectory([string]$Directory) {
     $components = @{}
     $files = @{
@@ -344,6 +361,7 @@ function Invoke-Stop {
 
 function Invoke-Start {
     $environments = Read-StackEnvironment $environmentStore
+    Assert-PostgreSqlRuntime $environments
     if (-not (Test-Path -LiteralPath $logs)) { New-Item -ItemType Directory -Path $logs -Force | Out-Null }
 
     foreach ($port in @($ApiPort, $NextPort, $ProxyPort)) {

@@ -2378,6 +2378,34 @@ async def publish_workspace_generation_artifact(
                     "authored_template_visual_evidence_invalid"
                 )
             result_payload = {**result_payload, **result_evidence}
+    elif (
+        operation_metadata is not None
+        and operation_metadata.kind == "presentation.generate"
+        and isinstance(result_evidence, dict)
+        and isinstance(
+            result_evidence.get("generationQualityReceipt"), dict
+        )
+    ):
+        # The workspace result card needs only the bounded completion summary.
+        # The full authored QualityReceipt remains on the generation task and
+        # evidence ledger; do not duplicate its internal metrics or QIDs here.
+        from services.workspace_operation_runner import (
+            sanitize_workspace_event_payload,
+        )
+
+        public_projection = sanitize_workspace_event_payload(
+            {
+                "generationQualityReceipt": result_evidence[
+                    "generationQualityReceipt"
+                ]
+            },
+            operation_kind="presentation.generate",
+        ).get("generationQualityReceipt")
+        if isinstance(public_projection, dict):
+            result_payload = {
+                **result_payload,
+                "generationQualityReceipt": public_projection,
+            }
     try:
         if fencing_token is None:
             raise WorkspaceArtifactPublicationError("operation_lease_lost")

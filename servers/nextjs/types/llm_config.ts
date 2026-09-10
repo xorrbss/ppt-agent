@@ -108,6 +108,7 @@ export interface LLMConfig {
 
   // Codex OAuth (ChatGPT)
   CODEX_MODEL?: string;
+  CODEX_REASONING_EFFORT?: string;
   CODEX_ACCESS_TOKEN?: string;
   CODEX_REFRESH_TOKEN?: string;
   CODEX_TOKEN_EXPIRES?: string;

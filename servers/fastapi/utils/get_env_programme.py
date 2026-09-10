@@ -40,6 +40,13 @@ def is_authored_style_anchor_enabled(settings: RuntimeSettings | None = None) ->
     return _bool_setting("AUTHORED_STYLE_ANCHOR_ENABLED", True, settings)
 
 
+def is_authored_content_brief_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Generate the optional knowledge brief before an authored outline."""
+    return _bool_setting("AUTHORED_CONTENT_BRIEF_ENABLED", True, settings)
+
+
 def get_authored_illustration_share(settings: RuntimeSettings | None = None) -> float:
     """Share (0..1) of content slides that get one illustration slot; 0 disables."""
     raw = (get_setting_env("AUTHORED_ILLUSTRATION_SHARE", settings) or "").strip()
@@ -242,6 +249,7 @@ __all__ = [
     "is_authored_author_streaming_enabled",
     "is_authored_checkpoint_batching_enabled",
     "is_authored_checkpoint_html_dedupe_enabled",
+    "is_authored_content_brief_enabled",
     "is_authored_deck_instruments_enabled",
     "is_authored_local_stage_async_enabled",
     "is_authored_exemplar_enabled",

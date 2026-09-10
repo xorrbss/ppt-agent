@@ -234,7 +234,7 @@ def test_third_attempt_uses_the_simplified_brief_and_publishes_unflagged(monkeyp
         seen["plan"] = rescue_plan
         seen["kwargs"] = kwargs
         if attempt_observer is not None:
-            attempt_observer(1)
+            attempt_observer(3)
         return _RESCUED_HTML
 
     result = _run_pipeline(
@@ -251,7 +251,8 @@ def test_third_attempt_uses_the_simplified_brief_and_publishes_unflagged(monkeyp
     # A recovered slide is not a flagged slide.
     assert result.author_flagged_slides == ()
     # One more call, not a second two-call budget.
-    assert seen["kwargs"]["provider_attempt_offset"] == 1
+    assert seen["kwargs"]["provider_attempt_offset"] == 2
+    assert seen["kwargs"]["provider_attempt_limit"] == 3
     hint = seen["kwargs"]["prior_failure_hint"]
     assert hint == rescue_mod.simplified_author_brief(role="CLOSING", contract=contract)
     # The deck's visual ambitions are withheld; everything else is the deck's.
@@ -360,20 +361,31 @@ def test_knob_off_keeps_todays_failed_deck(monkeypatch):
     assert caught.value.stage == "author"
 
 
-def test_a_source_reflow_deck_stays_fail_closed(monkeypatch):
-    async def forbidden_rescue(*_args, **_kwargs):
-        raise AssertionError("a verbatim deck may not gain a placeholder")
+def test_a_source_reflow_deck_gets_one_strict_third_call_without_placeholder(
+    monkeypatch,
+):
+    seen = {}
 
-    with pytest.raises(pipeline_mod.AuthoredStageError) as caught:
-        _run_pipeline(
-            monkeypatch,
-            plan=_stub_plan(contract=default_header_contract()),
-            first_pass=_first_pass_that_spends_its_budget([]),
-            rescue=forbidden_rescue,
-            source_images_locked_to_source_slide=True,
-        )
+    async def strict_rescue(_plan, _index, **kwargs):
+        seen.update(kwargs)
+        return _RESCUED_HTML
 
-    assert caught.value.code == "authored_slide_author_failed"
+    result = _run_pipeline(
+        monkeypatch,
+        plan=_stub_plan(contract=default_header_contract()),
+        first_pass=_first_pass_that_spends_its_budget([]),
+        rescue=strict_rescue,
+        source_images_locked_to_source_slide=True,
+    )
+
+    assert len(result.pngs) == 1
+    assert result.author_flagged_slides == ()
+    assert result.author_provider_attempt_counts == (3,)
+    assert seen["provider_attempt_offset"] == 2
+    assert seen["provider_attempt_limit"] == 3
+    hint = seen["prior_failure_hint"]
+    assert "source-locked correction" in hint
+    assert "do not summarize, shorten, merge" in hint
 
 
 def test_a_retryable_transport_failure_is_not_rescued(monkeypatch):

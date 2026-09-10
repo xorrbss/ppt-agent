@@ -20,6 +20,7 @@ from utils.llm_calls.author_slide import (
 from utils.llm_calls import author_slide as author_slide_mod
 from utils.llm_calls import author_slide_fallback as author_slide_fallback_mod
 from utils.provider_idempotency import ProviderOutcomeError
+from utils.runtime_settings import RuntimeSettings, runtime_settings_context
 
 
 def test_provider_cap_and_role_profiles_preserve_strict_authoring(monkeypatch) -> None:
@@ -34,83 +35,86 @@ def test_provider_cap_and_role_profiles_preserve_strict_authoring(monkeypatch) -
     assert authored_provider_concurrency("openai") == 6
     assert authored_provider_concurrency("anthropic") == 16
 
-    # G9/D18: the fast roles keep the full output budget -- a truncated cover is
-    # a broken slide -- and author at the model's LOWEST SUPPORTED effort rather
-    # than at the literal "minimal", which gpt-6-astra and gpt-5.6-sol reject.
+    # Fast roles keep the full output budget and the same medium reasoning used
+    # by content slides so fixed-canvas layout decisions are consistent.
     assert _authoring_output_profile(
         role="COVER",
         reference_mode="style_reference",
         structured_context=None,
         correction_hint=None,
         model="gpt-6-astra",
-    ) == (AUTHOR_MAX_TOKENS, "low")
+    ) == (AUTHOR_MAX_TOKENS, "medium")
     assert _authoring_output_profile(
         role="COVER",
         reference_mode="style_reference",
         structured_context=None,
         correction_hint=None,
         model="gpt-5.6-sol",
-    ) == (AUTHOR_MAX_TOKENS, "none")
+    ) == (AUTHOR_MAX_TOKENS, "medium")
     assert _authoring_output_profile(
         role="COVER",
         reference_mode="style_reference",
         structured_context=None,
         correction_hint=None,
         model="gpt-5.4",
-    ) == (AUTHOR_MAX_TOKENS, "minimal")
+    ) == (AUTHOR_MAX_TOKENS, "medium")
     assert _authoring_output_profile(
         role="CLOSING",
         reference_mode=EXACT_RECONSTRUCTION,
         structured_context=None,
         correction_hint=None,
         model="gpt-6-astra",
-    ) == (AUTHOR_MAX_TOKENS, "low")
+    ) == (AUTHOR_MAX_TOKENS, "medium")
     assert _authoring_output_profile(
         role="SECTION",
         reference_mode="style_reference",
         structured_context={"zones": []},
         correction_hint=None,
         model="gpt-6-astra",
-    ) == (AUTHOR_MAX_TOKENS, "low")
+    ) == (AUTHOR_MAX_TOKENS, "medium")
     assert _authoring_output_profile(
         role="AGENDA",
         reference_mode="style_reference",
         structured_context=None,
         correction_hint="repair",
         model="gpt-6-astra",
-    ) == (AUTHOR_MAX_TOKENS, "low")
+    ) == (AUTHOR_MAX_TOKENS, "medium")
 
 
-def test_role_profile_effort_beats_the_authored_reasoning_effort_env(monkeypatch) -> None:
-    """The role profile is passed as the explicit effort, so it wins over the env.
+def test_codex_generation_effort_flows_into_the_authored_role_profile(monkeypatch) -> None:
+    """The user-selected Codex preset remains authoritative for authored slides."""
 
-    This is the behaviour the bench compares runs on; changing it silently would
-    make every historical AUTHORED_REASONING_EFFORT comparison meaningless.
-    """
-
-    monkeypatch.setenv("AUTHORED_REASONING_EFFORT", "high")
+    monkeypatch.setenv("AUTHORED_REASONING_EFFORT", "low")
     monkeypatch.setattr(author_slide_mod, "is_codex_selected", lambda: True)
 
-    # An ordinary content slide still authors at the profile's own "low"...
-    budget, effort = _authoring_output_profile(
-        role="CONTENT",
-        reference_mode="style_reference",
-        structured_context=None,
-        correction_hint=None,
-        model="gpt-6-astra",
+    settings = RuntimeSettings.from_sources(
+        environ={"CODEX_REASONING_EFFORT": "high"}
     )
-    assert (budget, effort) == (AUTHOR_MAX_TOKENS, "low")
-    assert author_slide_mod._authoring_extra_body(effort, model="gpt-6-astra") == {
-        "reasoning": {"effort": "low"}
-    }
-    # ...while a caller that supplies no effort at all still reads the env.
-    assert author_slide_mod._authoring_extra_body(None, model="gpt-6-astra") == {
-        "reasoning": {"effort": "high"}
-    }
+    with runtime_settings_context(settings):
+        budget, effort = _authoring_output_profile(
+            role="CONTENT",
+            reference_mode="style_reference",
+            structured_context=None,
+            correction_hint=None,
+            model="gpt-5.6-luna",
+        )
+        assert (budget, effort) == (AUTHOR_MAX_TOKENS, "high")
+        assert author_slide_mod._authoring_extra_body(
+            effort, model="gpt-5.6-luna"
+        ) == {"reasoning": {"effort": "high"}}
+
+    # The authored-only escape hatch remains the fallback when no Codex preset
+    # is configured.
+    with runtime_settings_context(RuntimeSettings.from_sources(environ={})):
+        assert author_slide_mod._authoring_extra_body(
+            None, model="gpt-6-astra"
+        ) == {"reasoning": {"effort": "low"}}
     monkeypatch.setenv("AUTHORED_REASONING_EFFORT", "off")
-    assert author_slide_mod._authoring_extra_body(None, model="gpt-6-astra") is None
+    with runtime_settings_context(RuntimeSettings.from_sources(environ={})):
+        assert author_slide_mod._authoring_extra_body(None, model="gpt-6-astra") is None
     monkeypatch.setenv("AUTHORED_REASONING_EFFORT", "nonsense")
-    assert author_slide_mod._authoring_extra_body(None, model="gpt-6-astra") is None
+    with runtime_settings_context(RuntimeSettings.from_sources(environ={})):
+        assert author_slide_mod._authoring_extra_body(None, model="gpt-6-astra") is None
 
 
 def test_codex_model_reasoning_capability_normalizes_once_at_author_egress(
@@ -174,10 +178,9 @@ def test_codex_model_reasoning_capability_normalizes_once_at_author_egress(
     assert raised.value.code == "public_provider_bridge_exception"
     assert "provider unavailable" in str(raised.value.__cause__)
     assert len(calls) == 1
-    # G9/D18: the cover keeps the full budget and the model's lowest supported
-    # level; gpt-5.6-sol rejects "minimal", so "none" is what leaves the process.
+    # The cover keeps the full budget and uses the authored medium profile.
     assert calls[0]["max_tokens"] == AUTHOR_MAX_TOKENS
-    assert calls[0]["extra_body"] == {"reasoning": {"effort": "none"}}
+    assert calls[0]["extra_body"] == {"reasoning": {"effort": "medium"}}
     assert len(receipts) == 1
     assert receipts[0]["retry_class"] == "recovery"
 

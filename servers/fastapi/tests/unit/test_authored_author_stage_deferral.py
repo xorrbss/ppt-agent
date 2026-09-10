@@ -152,6 +152,18 @@ def test_an_inactive_predicate_defers_nothing():
     assert set(deferred) == {_FAILING_SLIDE}
     assert deferred[_FAILING_SLIDE].provider_attempt_count == 2
 
+    strict_deferred = defer_rescuable_author_failures(
+        _SLIDE_COUNT,
+        successful=set(),
+        failures=failures,
+        attempt_counts={_FAILING_SLIDE: 2},
+        profile=None,
+        reference_mode="style_reference",
+        source_reflow=True,
+    )
+    assert set(strict_deferred) == {_FAILING_SLIDE}
+    assert strict_deferred[_FAILING_SLIDE].provider_attempt_count == 2
+
 
 def test_a_resumed_slide_keeps_a_recorded_refusal_fail_closed():
     # A deferred slide is never failed, so its checkpoint carries the ordinals

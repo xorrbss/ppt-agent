@@ -447,6 +447,137 @@ def test_streaming_publishes_a_recovered_slide_exactly_once(tmp_path, monkeypatc
     assert sum("slide-2" in html for html in result.deck.htmls) == 1
 
 
+def test_source_text_rejection_recovers_in_the_same_streamed_attempt(
+    tmp_path, monkeypatch
+):
+    """Missing source text spends only that slide's second author call."""
+
+    monkeypatch.setenv("AUTHORED_TAIL_STREAMING_ENABLED", "true")
+    slide_count = 4
+    source_text = "Source revenue remains exactly 456 units."
+    block_id = "source-slide-2-revenue"
+    bindings = ((), (), ((block_id, source_text),), ())
+    rejected_html = _VALID_SLIDE.format(index=2).replace(
+        "</body>", "<p>Unrelated summary loses the original numbers.</p></body>"
+    )
+    corrected_html = _VALID_SLIDE.format(index=2).replace(
+        "</body>", f"<p>{source_text}</p></body>"
+    )
+    calls: list[tuple[tuple[int, ...], bool]] = []
+    renders: list[int] = []
+    overlapping_renders = asyncio.Event()
+    healthy_rendered = asyncio.Event()
+    active_renders = 0
+    peak_renders = 0
+    job = None
+
+    async def batch(
+        _plan,
+        indexes,
+        *,
+        recovery,
+        prior_failures,
+        attempt_observers,
+        attempt_reservers,
+        **_kwargs,
+    ):
+        selected = tuple(indexes)
+        calls.append((selected, recovery))
+        for index in selected:
+            ordinal = 2 if recovery else 1
+            await attempt_reservers[index](ordinal)
+            attempt_observers[index](ordinal)
+        if recovery:
+            assert selected == (2,)
+            assert set(prior_failures) == {2}
+            failure = prior_failures[2]
+            assert isinstance(failure.error, pipeline.BrowserSourceReadbackError)
+            assert failure.error.code == "source_content_browser_readback_failed"
+            assert failure.error.block_ids == (block_id,)
+            assert failure.correction_hint == failure.error.detail
+            assert source_text in failure.correction_hint
+            assert failure.rejected_html == rejected_html
+            checkpoint = await checkpoints.get_checkpoint(job.id, 2)
+            assert checkpoint.author_status == "running"
+            assert checkpoint.author_html is None
+            # Healthy siblings must keep rendering while this slide's own
+            # correction is outstanding; the operation need not be retried.
+            await asyncio.wait_for(healthy_rendered.wait(), timeout=5)
+        return AuthoredPlannedBatchResult(
+            htmls={
+                index: (
+                    corrected_html if recovery else rejected_html
+                ) if index == 2 else _VALID_SLIDE.format(index=index)
+                for index in selected
+            },
+            failures={},
+        )
+
+    async def render(html):
+        nonlocal active_renders, peak_renders
+        index = next(
+            index for index in range(slide_count) if f">slide-{index}<" in html
+        )
+        renders.append(index)
+        if len(renders) == 1:
+            # The style anchor's gate precedes the streamed tail.
+            return b"png"
+        if index == 2:
+            assert source_text in html
+            assert f'data-source-block-id="{block_id}"' in html
+        active_renders += 1
+        peak_renders = max(peak_renders, active_renders)
+        try:
+            if active_renders >= 2:
+                overlapping_renders.set()
+            await asyncio.wait_for(overlapping_renders.wait(), timeout=5)
+            if index != 2:
+                healthy_rendered.set()
+            return b"png"
+        finally:
+            active_renders -= 1
+
+    async def scenario():
+        nonlocal job
+        engine, maker = await _checkpoint_database(tmp_path, monkeypatch)
+        _install_pipeline_fakes(
+            monkeypatch, slide_count=slide_count, batch=batch, render=render
+        )
+        try:
+            job = await _running_authored_job(maker, total_slides=slide_count)
+            result = await asyncio.wait_for(
+                pipeline._author_illustrate_render_pipeline(
+                    _outline(slide_count),
+                    _brand(),
+                    SimpleNamespace(
+                        reference_mode="style_reference", illustration_prompt=None
+                    ),
+                    generation_job=job,
+                    source_block_bindings=bindings,
+                    source_image_block_bindings=((),) * slide_count,
+                ),
+                timeout=10,
+            )
+            rows = [
+                await checkpoints.get_checkpoint(job.id, index)
+                for index in range(slide_count)
+            ]
+            return result, rows
+        finally:
+            await engine.dispose()
+
+    result, rows = _run(scenario())
+
+    assert len(result.pngs) == slide_count
+    assert result.author_provider_attempt_counts == (1, 1, 2, 1)
+    assert [indexes for indexes, recovery in calls if recovery] == [(2,)]
+    assert renders.count(2) == 1
+    assert peak_renders >= 2
+    assert all(row.persist_status == "completed" for row in rows)
+    assert {row.attempt_token for row in rows} == {"attempt-stream"}
+    assert f'data-source-block-id="{block_id}"' in rows[2].author_html
+
+
 def test_streaming_never_hands_the_pool_a_twice_failed_slide(tmp_path, monkeypatch):
     monkeypatch.setenv("AUTHORED_TAIL_STREAMING_ENABLED", "true")
     slide_count = 3

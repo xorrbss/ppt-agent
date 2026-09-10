@@ -13,6 +13,7 @@ from services.generation_provider_admission import (
 )
 from services.presentation_profiles import resolve_presentation_profile
 from utils import llm_provider
+from utils.generation_model import generation_model_settings
 from utils.llm_provider import (
     generation_provider_admission,
     generation_provider_policy,
@@ -23,6 +24,38 @@ from utils.runtime_settings import RuntimeSettings
 
 def _settings(provider: str) -> RuntimeSettings:
     return RuntimeSettings.from_sources(environ={}, user_config={"LLM": provider})
+
+
+@pytest.mark.parametrize(
+    ("preset", "model", "effort"),
+    [
+        ("luna-medium", "gpt-5.6-luna", "medium"),
+        ("luna-high", "gpt-5.6-luna", "high"),
+        ("sol-medium", "gpt-5.6-sol", "medium"),
+        ("sol-high", "gpt-5.6-sol", "high"),
+        ("astra-low", "gpt-6-astra", "low"),
+        ("astra-medium", "gpt-6-astra", "medium"),
+    ],
+)
+def test_upload_generation_preset_pins_codex_model_and_effort(
+    preset: str,
+    model: str,
+    effort: str,
+) -> None:
+    request = GeneratePresentationRequest.model_validate(
+        {"content": "preset", "codex_generation_preset": preset}
+    )
+    restored = GeneratePresentationRequest.model_validate(
+        request.model_dump(mode="json")
+    )
+
+    settings = generation_model_settings(
+        restored.codex_generation_preset,
+        _settings("codex"),
+    )
+
+    assert settings.get_env("CODEX_MODEL") == model
+    assert settings.get_env("CODEX_REASONING_EFFORT") == effort
 
 
 @pytest.mark.parametrize(

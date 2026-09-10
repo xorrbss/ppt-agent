@@ -14,7 +14,7 @@ import time
 from collections import OrderedDict
 from collections.abc import Collection
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple
+from typing import Any, Awaitable, Callable, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple
 
 from models.authored_infographic_plan import AuthoredSlideInfographic
 from models.image_prompt import ImagePrompt
@@ -568,6 +568,9 @@ async def revise_authored_deck(
     provider_recovery_allowed: Optional[Sequence[bool]] = None,
     provider_recovery_blocked_issue_types: Optional[Collection[str]] = None,
     allow_patch_proposal_retry: bool = True,
+    candidate_validator: Optional[
+        Callable[[int, str, Mapping[str, Any]], Awaitable[None]]
+    ] = None,
 ) -> Any:
     """Bounded critique -> re-author -> re-render loop over an authored deck. Returns
     the (possibly revised) htmls + pngs and the local indices that changed.
@@ -743,7 +746,9 @@ async def revise_authored_deck(
             roles[i],
             absolute_indices[i],
             deck_size,
-            reasoning_effort="high",
+            # The durable generation preset is request-scoped and remains
+            # authoritative during the optional re-author pass as well.
+            reasoning_effort=None,
             receipt_retry_class="recovery",
             receipt_attempt_ordinal=2,
             allow_provider_fallback=False,
@@ -1009,12 +1014,16 @@ async def revise_authored_deck(
                                 patch_failure = failure_detail("patch_render", error)
                                 fallback_reason = patch_failure["code"]
                             else:
+                                candidate_metrics = await metrics_for(applied.html)
+                                if candidate_validator is not None:
+                                    await candidate_validator(
+                                        absolute_indices[i],
+                                        applied.html,
+                                        candidate_metrics,
+                                    )
                                 if not has_dom_quality_regression(
                                     local_report(current_html, current_metrics),
-                                    local_report(
-                                        applied.html,
-                                        await metrics_for(applied.html),
-                                    ),
+                                    local_report(applied.html, candidate_metrics),
                                 ):
                                     new_html, new_png = applied.html, candidate_png
                                     patch_succeeded = True

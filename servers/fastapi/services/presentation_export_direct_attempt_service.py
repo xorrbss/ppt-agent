@@ -49,6 +49,9 @@ from services.presentation_export_capabilities import (
     PresentationExportFreshnessError,
     analyze_presentation_export_capabilities,
 )
+from services.presentation_export_route_inputs import (
+    resolve_authored_local_fit_receipts,
+)
 from services.presentation_export_powerpoint_qa import (
     publish_finalized_hybrid_sidecars,
     require_matching_hybrid_sidecars,
@@ -329,6 +332,24 @@ async def complete_direct_hybrid_export_attempt(
     actual_sha256 = await asyncio.to_thread(_sha256_file, artifact)
     if actual_size != pptx_size_bytes or not hmac.compare_digest(actual_sha256, pptx_sha256):
         raise PresentationExportFreshnessError("presentation_export_artifact_digest_mismatch")
+    local_fit_receipts = resolve_authored_local_fit_receipts(
+        presentation, slides
+    )
+    local_fit_export_evidence = None
+    if local_fit_receipts:
+        from services.authored_local_fit_export import verify_local_fit_pptx
+
+        supplied_evidence = quality.get("localFitExportEvidence")
+        local_fit_export_evidence = verify_local_fit_pptx(
+            artifact,
+            local_fit_receipts,
+            mode="hybrid",
+            export_evidence=(
+                supplied_evidence
+                if isinstance(supplied_evidence, dict)
+                else None
+            ),
+        )
     require_matching_hybrid_sidecars(
         artifact,
         quality=quality,
@@ -425,6 +446,12 @@ async def complete_direct_hybrid_export_attempt(
     provenance["coverage_manifest"] = finalized_coverage_json
     provenance["atomic_binding"] = atomic_binding
     provenance["powerpoint_qa"] = qa.model_dump(mode="json")
+    if local_fit_export_evidence is not None:
+        capability_evidence = dict(provenance["capability_evidence"])
+        capability_evidence["authored_local_fit_export"] = (
+            local_fit_export_evidence
+        )
+        provenance["capability_evidence"] = capability_evidence
     provenance["visual_parity"] = {
         "status": visual_parity_status,
         "binding": atomic_binding,
@@ -686,6 +713,18 @@ async def complete_direct_fidelity_export_attempt(
     actual_sha256 = await asyncio.to_thread(_sha256_file, artifact)
     if actual_size != pptx_size_bytes or not hmac.compare_digest(actual_sha256, pptx_sha256):
         raise PresentationExportFreshnessError("presentation_export_artifact_digest_mismatch")
+    local_fit_receipts = resolve_authored_local_fit_receipts(
+        presentation, slides
+    )
+    local_fit_export_evidence = None
+    if local_fit_receipts:
+        from services.authored_local_fit_export import verify_local_fit_pptx
+
+        local_fit_export_evidence = verify_local_fit_pptx(
+            artifact,
+            local_fit_receipts,
+            mode="fidelity",
+        )
 
     renderer_source_sha256 = attempt.provenance["freshness"]["renderer_source_sha256"]
     atomic_binding = {
@@ -707,6 +746,12 @@ async def complete_direct_fidelity_export_attempt(
     freshness["package_sha256"] = pptx_sha256
     provenance["freshness"] = freshness
     provenance["atomic_binding"] = atomic_binding
+    if local_fit_export_evidence is not None:
+        capability_evidence = dict(provenance["capability_evidence"])
+        capability_evidence["authored_local_fit_export"] = (
+            local_fit_export_evidence
+        )
+        provenance["capability_evidence"] = capability_evidence
     await terminalize_export_attempt_succeeded(
         session,
         attempt_id=attempt.id,

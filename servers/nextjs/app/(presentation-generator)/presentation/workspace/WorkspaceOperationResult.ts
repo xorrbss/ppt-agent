@@ -49,6 +49,74 @@ export function booleanValue(...values: unknown[]): boolean | undefined {
   return values.find((value): value is boolean => typeof value === "boolean");
 }
 
+export interface GenerationCompletionReviewPage {
+  index: number;
+  reasons: string[];
+}
+
+export interface GenerationCompletionSummary {
+  total: number;
+  normal: number;
+  autoRepaired: number;
+  reviewRequired: number;
+  reviewPages: GenerationCompletionReviewPage[];
+}
+
+const MAX_GENERATION_REVIEW_PAGES = 30;
+const MAX_GENERATION_REVIEW_REASONS = 3;
+
+function nonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0
+    ? value
+    : undefined;
+}
+
+/** Read the bounded public completion projection from a generation receipt. */
+export function generationCompletionSummary(
+  result: Record<string, unknown>,
+): GenerationCompletionSummary | undefined {
+  const receipt = recordValue(result.generationQualityReceipt);
+  if (stringValue(receipt.documentStatus) !== "completed") return undefined;
+
+  const pageSummary = recordValue(receipt.pageSummary);
+  const total = nonNegativeInteger(pageSummary.total);
+  const normal = nonNegativeInteger(pageSummary.normal);
+  const autoRepaired = nonNegativeInteger(pageSummary.autoRepaired);
+  const reviewRequired = nonNegativeInteger(pageSummary.reviewRequired);
+  if (
+    total === undefined ||
+    normal === undefined ||
+    autoRepaired === undefined ||
+    reviewRequired === undefined ||
+    normal + autoRepaired + reviewRequired !== total
+  ) {
+    return undefined;
+  }
+
+  const reviewPages = (Array.isArray(receipt.reviewPages)
+    ? receipt.reviewPages
+    : []
+  )
+    .slice(0, MAX_GENERATION_REVIEW_PAGES)
+    .flatMap((value) => {
+      const page = recordValue(value);
+      const index = nonNegativeInteger(page.index);
+      const reasons = (Array.isArray(page.reasons) ? page.reasons : [])
+        .filter(
+          (reason): reason is string =>
+            typeof reason === "string" && reason.trim().length > 0,
+        )
+        .slice(0, MAX_GENERATION_REVIEW_REASONS);
+      return index === undefined || reasons.length === 0
+        ? []
+        : [{ index, reasons }];
+    });
+
+  return { total, normal, autoRepaired, reviewRequired, reviewPages };
+}
+
 export function slideIndexes(
   zeroBasedValues: unknown,
   oneBasedValues: unknown,

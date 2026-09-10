@@ -543,21 +543,44 @@ def author_correction_from_stored_failure(error: object) -> str | None:
     if not isinstance(error, Mapping):
         return None
     parts: list[str] = []
+    fallback_codes: list[str] = []
+    block_ids: list[str] = []
     for candidate in (error, error.get("prior_failure")):
         if not isinstance(candidate, Mapping):
             continue
-        cause = str(candidate.get("cause") or "").strip()
         code = str(candidate.get("code") or "").strip()
-        detail = cause or str(candidate.get("message") or "").strip()
-        if detail and detail not in parts and not detail.startswith("Authored slide"):
+        detail = ""
+        for field in ("detail", "message", "cause"):
+            value = candidate.get(field)
+            if not isinstance(value, str):
+                continue
+            value = value.strip()
+            if (not value or value == code or re.fullmatch(r"[a-z][a-z0-9_]+", value)
+                    or value.startswith(("Authored slide", "Slide authoring failed",
+                                         "Slide rendering failed", "Slide illustration failed"))):
+                continue
+            detail = value
+            break
+        if detail and detail not in parts:
             parts.append(detail)
-        elif code and code not in parts and not detail:
-            parts.append(code)
+        if code and code not in fallback_codes:
+            fallback_codes.append(code)
+        for field in ("block_ids", "source_block_ids", "sourceBlockIds", "sourceBlockId"):
+            values = candidate.get(field)
+            if isinstance(values, str):
+                values = [values]
+            if isinstance(values, (list, tuple)):
+                for value in values:
+                    if isinstance(value, str) and value.strip() and value not in block_ids:
+                        block_ids.append(value.strip())
+    if not parts:
+        parts = fallback_codes
     if not parts:
         return None
+    block_hint = "Source blocks: " + ", ".join(block_ids) + "; " if block_ids else ""
     return (
         "A previous attempt at this slide was rejected: "
-        + "; ".join(parts[:2])[:400]
+        + (block_hint + "; ".join(parts[:2]))[:370]
         + ". Fix exactly that and keep every other rule."
     )
 
@@ -774,6 +797,7 @@ async def _author_one_resilient(
     allow_title_capacity_recovery: bool = False,
     attempt_observer: Callable[[int], None] | None = None,
     provider_attempt_offset: int = 0,
+    provider_attempt_limit: int = _MAX_AUTHOR_CALLS_PER_SLIDE,
     attempt_reserver: Callable[[int], Awaitable[None]] | None = None,
     prior_failure_hint: str | None = None,
     # G0: the deck's already-authored anchor slide, offered to this call as data.
@@ -800,8 +824,14 @@ async def _author_one_resilient(
         )
     source_image_ids = tuple(candidate.asset_id for candidate in source_images)
     last_error: object = "invalid HTML"
-    if isinstance(provider_attempt_offset, bool) or provider_attempt_offset not in {0, 1}:
-        raise ValueError("authored provider attempt offset must be 0 or 1")
+    if (
+        isinstance(provider_attempt_offset, bool)
+        or provider_attempt_offset not in {0, 1, 2}
+        or isinstance(provider_attempt_limit, bool)
+        or provider_attempt_limit not in {2, 3}
+        or provider_attempt_offset >= provider_attempt_limit
+    ):
+        raise ValueError("authored provider attempt range is invalid")
     attempts_made = 0
     header_reject: str | None = None
     # A correction learned in an earlier attempt of the same operation. Without
@@ -810,7 +840,7 @@ async def _author_one_resilient(
     correction_hint: str | None = prior_failure_hint or None
     rejected_html: str | None = None
     title_recovery: tuple[str, tuple[str, ...]] | None = None
-    while provider_attempt_offset + attempts_made < _MAX_AUTHOR_CALLS_PER_SLIDE:
+    while provider_attempt_offset + attempts_made < provider_attempt_limit:
         attempts_made += 1
         provider_attempt_ordinal = provider_attempt_offset + attempts_made
         if attempt_reserver is not None:
@@ -998,8 +1028,7 @@ async def _author_one_resilient(
             # the same slide's correction after rejection obscures the cause.
             recovery_allowed = getattr(e, "recovery_allowed", False) is True
             recovery_remaining = (
-                provider_attempt_offset + attempts_made
-                < _MAX_AUTHOR_CALLS_PER_SLIDE
+                provider_attempt_offset + attempts_made < provider_attempt_limit
             )
             if getattr(e, "retryable", None) is False and not (
                 recovery_allowed and recovery_remaining
@@ -1030,14 +1059,14 @@ async def _author_one_resilient(
                 if reference_mode == EXACT_RECONSTRUCTION and isinstance(e, ValueError):
                     raise
 
-        if attempts_made < _MAX_AUTHOR_CALLS_PER_SLIDE:
+        if provider_attempt_offset + attempts_made < provider_attempt_limit:
             logger.warning(
                 "[authored] slide %d/%d scheduling explicit correction %d/%d "
                 "(class=%s; last error: %s)",
                 index + 1,
                 n,
                 attempts_made + 1,
-                _MAX_AUTHOR_CALLS_PER_SLIDE,
+                provider_attempt_limit,
                 (
                     local_correction.category
                     if local_correction is not None
@@ -1615,6 +1644,7 @@ async def author_planned_slide(
     require_all_source_images: bool = False,
     attempt_observer: Callable[[int], None] | None = None,
     provider_attempt_offset: int = 0,
+    provider_attempt_limit: int = _MAX_AUTHOR_CALLS_PER_SLIDE,
     attempt_reserver: Callable[[int], Awaitable[None]] | None = None,
     prior_failure_hint: str | None = None,
     style_anchor: object | None = None,
@@ -1676,6 +1706,7 @@ async def author_planned_slide(
         ),
         attempt_observer=attempt_observer,
         provider_attempt_offset=provider_attempt_offset,
+        provider_attempt_limit=provider_attempt_limit,
         attempt_reserver=attempt_reserver,
         prior_failure_hint=prior_failure_hint,
         style_anchor=style_anchor,
@@ -1786,11 +1817,14 @@ def build_image_pptx(images: List[bytes], out_path: str) -> str:
     """Assemble rendered slide PNGs into a 16:9 PPTX, one full-bleed picture per
     slide (perfect fidelity, opens in PowerPoint). Returns the saved path."""
     from pptx import Presentation
-    from pptx.util import Inches
+    from pptx.util import Emu
 
     prs = Presentation()
-    prs.slide_width = Inches(13.333)
-    prs.slide_height = Inches(7.5)
+    # 1280x720 CSS px at 96dpi maps to an exact 960x540pt page.  The former
+    # decimal-inch approximation was 0.024pt narrow and could not share the
+    # local-fit export-scale identity.
+    prs.slide_width = Emu(12_192_000)
+    prs.slide_height = Emu(6_858_000)
     blank = prs.slide_layouts[6]
     for img in images:
         slide = prs.slides.add_slide(blank)

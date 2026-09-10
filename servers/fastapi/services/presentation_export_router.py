@@ -48,6 +48,7 @@ from services.presentation_export_capabilities import (
 from services.presentation_export_route_inputs import (
     build_slide_inputs,
     hash_export_artifact,
+    resolve_authored_local_fit_receipts,
     resolve_template_identity,
 )
 from services.template_v2_generation_service import (
@@ -307,6 +308,9 @@ async def execute_presentation_export(
     )
     html_source_sha256 = build_export_html_source_sha256(slides)
     composition_sha256 = build_export_composition_sha256(presentation, slides)
+    local_fit_receipts = resolve_authored_local_fit_receipts(
+        presentation, slides
+    )
 
     template_identity = resolve_template_identity(presentation)
     if template_target is None and template_identity is not None:
@@ -408,6 +412,7 @@ async def execute_presentation_export(
                 workspace_operation_id=workspace_operation_id,
                 export_attempt_id=attempt.id,
                 canonical_source_digest=source_snapshot_sha256,
+                local_fit_receipts=local_fit_receipts,
             ),
             analysis,
             asset_digests_verified=True,
@@ -528,6 +533,15 @@ async def route_presentation_export(
             "attempted_adapters": list(attempted),
             "selected_adapter": adapter_id,
             "unsupported_codes": unsupported,
+            **(
+                {
+                    "authored_local_fit_export": (
+                        result.local_fit_export_evidence
+                    )
+                }
+                if result.local_fit_export_evidence is not None
+                else {}
+            ),
         }
         return PresentationExportRouteResult(
             result=result,

@@ -723,6 +723,7 @@ def test_vision_qa_false_gate_repair_normalizes_short_labels_without_qid_loss(
             )
         )
     assert residual.value is residual_error
+    assert residual.value.checkpoint_absolute_indices == (4,)
     assert reviews[-1] == {"indices": [4], "allowed": [False]}
 
 

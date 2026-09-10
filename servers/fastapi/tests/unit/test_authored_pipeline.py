@@ -1859,22 +1859,18 @@ def test_source_reflow_residual_repairs_are_checkpointed_before_retry(monkeypatc
         repair_details=[],
     )
 
-    _run(authored_generation_mod._checkpoint_source_reflow_vqa_repairs(job, error))
+    _run(
+        authored_generation_mod._checkpoint_source_reflow_vqa_repairs(
+            job, error, absolute_indices=[4, 9]
+        )
+    )
 
     # Every checkpoint write is fenced by the workspace lease token, and an
     # unavailable browser probe is persisted as explicit empty evidence.
     assert calls == [
         {
             "job_id": job_id,
-            "slide_index": 1,
-            "stage": "illustrate",
-            "attempt_token": "attempt-3",
-            "fencing_token": 7,
-            "html": "patched-html",
-        },
-        {
-            "job_id": job_id,
-            "slide_index": 1,
+            "slide_index": 9,
             "stage": "render",
             "attempt_token": "attempt-3",
             "fencing_token": 7,

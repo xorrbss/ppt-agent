@@ -14,8 +14,10 @@ the source contract promises.  When no element owns a span exclusively, or the
 owners appear in another DOM order, the span is still bound -- to the innermost
 element carrying its characters -- and the compromise is reported as a
 :class:`SourceBindingDeviation` instead of failing the deck.  Binding fails
-closed only when the characters are absent from the slide, which is the content
-contract and is verified independently by the flat readback.
+closed when source characters are absent, except that one unambiguous unowned
+text leaf with a single-character transcription error is restored to the
+authoritative source before binding. Flat readback still verifies the exact
+source characters; fuzzy matches never become accepted source text.
 
 Repeats are tolerated only when bounded: identical text that matches several
 elements binds the first in document order, and the remaining exact
@@ -26,6 +28,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+import html
+from html.parser import HTMLParser
+import re
 
 from services.source_content.source_runs import (
     SourceRunProjection,
@@ -137,7 +142,7 @@ def stamp_source_blocks(
                 detail="source block IDs/text must be unique and non-empty",
             )
         projection = project_source_runs(raw_expected)
-        for binding in _bind_block(parser, projection, block_id):
+        for binding in _bind_block(parser, projection, block_id, raw_expected):
             node = binding.node
             if node.qid_count > 1:
                 raise BrowserSourceReadbackError(
@@ -161,7 +166,8 @@ def stamp_source_blocks(
 
 
 def _bind_block(
-    parser: _StampParser, projection: SourceRunProjection, block_id: str
+    parser: _StampParser, projection: SourceRunProjection, block_id: str,
+    raw_expected: str,
 ) -> list[_SpanBinding]:
     """Cover every projected run with the coarsest DOM spans available.
 
@@ -189,11 +195,103 @@ def _bind_block(
                     detail="source block text is already bound to a conflicting ID",
                     block_ids=(block_id,),
                 )
-            raise _no_match(block_id, projection, cursor, cursor)
+            binding = _repair_source_span(
+                parser, projection, block_id, cursor, raw_expected, bound
+            )
+            if binding is None:
+                raise _no_match(block_id, projection, cursor, cursor)
         bound.append(binding)
         last_start = max(last_start, binding.node.start)
         cursor = binding.end + 1
     return bound
+
+
+def _one_edit_apart(actual: str, expected: str) -> bool:
+    """Recognize exactly one insertion, deletion or substitution in O(n)."""
+    if actual == expected or not actual or not expected or abs(len(actual) - len(expected)) > 1:
+        return False
+    if len(actual) > len(expected):
+        return _one_edit_apart(expected, actual)
+    for index, (left, right) in enumerate(zip(actual, expected, strict=False)):
+        if left != right:
+            return (actual[index + 1:] == expected[index + 1:]
+                    if len(actual) == len(expected)
+                    else actual[index:] == expected[index + 1:])
+    return len(expected) == len(actual) + 1
+
+
+class _RepairVisibility(HTMLParser):
+    """Reject explicitly hidden leaf owners and their ancestors before repair."""
+    visible = True
+
+    def handle_starttag(self, _tag, attrs):
+        values = dict(attrs)
+        style = re.sub(r"\s+", "", values.get("style") or "").lower()
+        if ("hidden" in values or (values.get("aria-hidden") or "").lower() == "true"
+                or re.search(r"(?:^|;)(?:display:none|visibility:(?:hidden|collapse)|opacity:0(?:\.0*)?)(?:!important)?(?:;|$)", style)):
+            self.visible = False
+
+
+def _raw_source_span(
+    raw: str, projection: SourceRunProjection, start: int, end: int
+) -> str | None:
+    """Map projection offsets back to source bytes without normalizing a repair."""
+    if normalize_source_text(raw) != projection.text:
+        return None
+    if (start, end) == projection.whole:
+        return raw
+    offsets: list[int] = []
+    for word in re.finditer(r"\S+", raw):
+        if offsets:
+            offsets.append(word.start() - 1)
+        offsets.extend(range(word.start(), word.end()))
+    begin = projection.runs[start].begin
+    finish = projection.runs[end].end
+    return raw[offsets[begin]:offsets[finish - 1] + 1]
+
+
+def _repair_source_span(
+    parser: _StampParser, projection: SourceRunProjection, block_id: str,
+    cursor: int, raw_expected: str, bound: list[_SpanBinding],
+) -> _SpanBinding | None:
+    """Restore one unambiguous unowned text leaf, then use the strict binder.
+
+    This does not accept fuzzy readback or rewrite mixed/nested content. More
+    than one candidate, an owned ancestor, or an absent span remains an error.
+    """
+    candidates: list[tuple[int, _StampNode, str]] = []
+    for node in parser.nodes:
+        if node.hidden or node.stamped or node.end is None or not node.text_indices:
+            continue
+        if any(other.start > node.start and other.start < node.end for other in parser.nodes):
+            continue  # A leaf only: never flatten nested formatting or content.
+        ancestors = [other for other in parser.nodes if other.start <= node.start
+                     and other.end is not None and other.end >= node.end]
+        if any(other.stamped or any(item.node is other for item in bound) for other in ancestors):
+            continue
+        visibility = _RepairVisibility()
+        for ancestor in ancestors:
+            visibility.feed(parser.tokens[ancestor.start])
+        if not visibility.visible:
+            continue
+        actual = normalize_source_text(parser.node_text(node))
+        for end in range(projection.run_count - 1, cursor - 1, -1):
+            expected = normalize_source_text(projection.span_text(cursor, end))
+            if not _one_edit_apart(actual, expected):
+                continue
+            authoritative = _raw_source_span(raw_expected, projection, cursor, end)
+            if authoritative is not None:
+                candidates.append((end, node, authoritative))
+    if len(candidates) != 1:
+        return None
+    end, node, authoritative = candidates[0]
+    for ordinal, index in enumerate(node.text_indices):
+        parser.tokens[index] = html.escape(authoritative, quote=False) if ordinal == 0 else ""
+        parser.text_values[index] = authoritative if ordinal == 0 else ""
+    # Re-run the existing exact matcher; the repaired source is not a new
+    # accepted spelling, and the resulting owner must remain this same leaf.
+    binding = _find_span(parser, projection, block_id, cursor, end, after=-1)
+    return binding if binding is not None and binding.node is node else None
 
 
 def _bind_span(
@@ -248,8 +346,7 @@ def _no_match(
     block_id: str, projection: SourceRunProjection, start: int, end: int
 ) -> BrowserSourceReadbackError:
     detail = "source block text has no unique DOM element"
-    if projection.run_count > 1:
-        detail += f" (run {start}: {projection.span_text(start, end)[:60]!r})"
+    detail += f" (run {start}: expected {projection.span_text(start, end)[:120]!r})"
     return BrowserSourceReadbackError(
         "source_content_browser_readback_failed", detail=detail, block_ids=(block_id,)
     )

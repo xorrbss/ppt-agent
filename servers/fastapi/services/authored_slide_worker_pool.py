@@ -31,8 +31,9 @@ async def run_slide_worker_pool(
 ) -> list[Any]:
     """Process every slide index once and return results in slide order.
 
-    Raises the first worker failure after the remaining workers have drained,
-    or ``RuntimeError`` if a worker exited without producing every slide.
+    Raises the first worker failure after the remaining workers have been
+    cancelled and reaped, or ``RuntimeError`` if a worker exited without
+    producing every slide.
 
     ``index_source`` streams the indexes instead of producing ``range()``: it
     is awaited for the next slide whose authoring has landed and returns
@@ -61,24 +62,6 @@ async def run_slide_worker_pool(
                 return
             queue.task_done()
 
-    async def next_streamed_index() -> int | None:
-        """The next streamed index, or ``None`` once the workers have stopped.
-
-        A streamed producer has no finite range to run out of: without racing
-        the stop signal here, a worker failure would leave the producer waiting
-        for an index that will never come and the surviving workers waiting for
-        a sentinel the producer can only send after that.
-        """
-
-        pull = asyncio.ensure_future(index_source())
-        stop = asyncio.ensure_future(stop_workers.wait())
-        try:
-            await asyncio.wait({pull, stop}, return_when=asyncio.FIRST_COMPLETED)
-            return pull.result() if pull.done() else None
-        finally:
-            pull.cancel()
-            stop.cancel()
-
     async def produce_indexes() -> None:
         if index_source is None:
             for index in range(slide_count):
@@ -87,7 +70,9 @@ async def run_slide_worker_pool(
                 await queue.put(index)
             return
         while not stop_workers.is_set():
-            index = await next_streamed_index()
+            # The pool cancels and reaps this producer on any worker failure;
+            # keep the pull in this task so its cleanup is awaited as well.
+            index = await index_source()
             if index is None:
                 break
             await queue.put(int(index))
@@ -95,6 +80,9 @@ async def run_slide_worker_pool(
     async def producer() -> None:
         try:
             await produce_indexes()
+        except BaseException:
+            stop_workers.set()
+            raise
         finally:
             if stop_workers.is_set():
                 # Workers are draining or already gone, so nothing guarantees
@@ -121,8 +109,8 @@ async def run_slide_worker_pool(
                     results[index] = await process_slide(index)
                 except BaseException:
                     # Already-returned provider work is checkpointed by the
-                    # process_slide boundary. Other workers drain without
-                    # claiming more billable slides.
+                    # process_slide boundary. The pool cancels and reaps every
+                    # sibling before surfacing this failure.
                     stop_workers.set()
                     raise
             finally:
@@ -131,32 +119,24 @@ async def run_slide_worker_pool(
     producer_task = asyncio.create_task(producer())
     worker_tasks = [asyncio.create_task(worker()) for _ in range(worker_count)]
     try:
-        worker_outcomes = await asyncio.gather(
-            *worker_tasks, return_exceptions=True
-        )
-    except asyncio.CancelledError:
-        # User/server cancellation still interrupts the deck attempt. Any
-        # provider result that already returned is checkpointed by the
-        # process_slide boundary before the worker can finish cancellation.
-        producer_task.cancel()
-        for task in worker_tasks:
-            task.cancel()
-        await asyncio.gather(producer_task, *worker_tasks, return_exceptions=True)
-        raise
-    failures = [
-        outcome
-        for outcome in worker_outcomes
-        if isinstance(outcome, BaseException)
-    ]
-    if failures:
+        pending = {producer_task, *worker_tasks}
+        while pending:
+            done, pending = await asyncio.wait(
+                pending, return_when=asyncio.FIRST_COMPLETED
+            )
+            # Watch the producer too, including cancellation: FIRST_EXCEPTION
+            # does not wake for a cancelled task and can strand its siblings.
+            for task in done:
+                task.result()
+    finally:
         stop_workers.set()
-        # No worker is left to consume; free the queue before waiting on the
-        # producer so its shutdown can never block on a full queue.
+        # Stop both active and queued provider work before returning any error,
+        # and let cancellation cleanup release admission and DB resources.
+        for task in (producer_task, *worker_tasks):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(producer_task, *worker_tasks, return_exceptions=True)
         _drain_queue()
-        producer_task.cancel()
-        await asyncio.gather(producer_task, return_exceptions=True)
-        raise failures[0]
-    await producer_task
     completed_results = [result for result in results if result is not None]
     if len(completed_results) != slide_count:
         raise RuntimeError(WORKER_EXIT_MESSAGE)

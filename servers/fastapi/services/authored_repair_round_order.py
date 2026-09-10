@@ -194,6 +194,7 @@ async def _apply_text_scale_rung(
     index: int, factor: float, htmls: list[str], pngs: list[bytes],
     metrics_by_slide: dict[int, object], scene_envelope: Any, capacity: object,
     profile: Any, reference_mode: str, generation_job: Any,
+    prepare_admitted: Any = None,
 ) -> tuple[Any, bool]:
     """Step 0: shrink this slide's type and keep it only if it now passes.
 
@@ -218,6 +219,10 @@ async def _apply_text_scale_rung(
         return scene_envelope, False
     if admitted is None:
         return scene_envelope, False
+    if prepare_admitted is not None:
+        admitted = await prepare_admitted(index, admitted)
+        if admitted is None:
+            return scene_envelope, False
     resealed = await apply_admitted_remake(
         index=index, admitted=admitted, htmls=htmls, pngs=pngs,
         metrics_by_slide=metrics_by_slide, scene_envelope=scene_envelope,
@@ -257,6 +262,7 @@ async def remake_first_flagged_slides(
     metrics_by_slide: dict[int, object], chapter_plan: Any = None,
     illustration_plan: Any = None, infographic_plan: Any = None,
     instructions: object = None, generation_job: Any = None,
+    prepare_admitted: Any = None,
 ) -> RemakeFirstOutcome:
     """Remake every flagged slide once, before the bounded patch round is built.
 
@@ -297,6 +303,7 @@ async def remake_first_flagged_slides(
                 capacity=(capacity_plan.at(index) if capacity_plan is not None else {}),
                 profile=profile, reference_mode=reference_mode,
                 generation_job=generation_job,
+                prepare_admitted=prepare_admitted,
             )
             if rescued:
                 text_scaled.append(int(index))
@@ -330,6 +337,11 @@ async def remake_first_flagged_slides(
             )
             remaining.append(index)
             continue
+        if prepare_admitted is not None:
+            admitted = await prepare_admitted(index, admitted)
+            if admitted is None:
+                remaining.append(index)
+                continue
         scene_envelope = await apply_admitted_remake(
             index=index, admitted=admitted, htmls=htmls, pngs=pngs,
             metrics_by_slide=metrics_by_slide, scene_envelope=scene_envelope,
