@@ -39,11 +39,62 @@ from services.authored_presentation_generation import (
     _evaluate_capacity_role_evidence,
     _final_authored_quality_gate,
     _require_source_verbatim_bindings,
+    _repair_authored_intrinsic_grid_overlap,
     _revise_gate_repair_candidates,
 )
 from services.source_content.browser_readback import BrowserSourceReadbackError
 from utils.renderer_isolation import admit_authored_html
-from utils.llm_calls.author_vision_qa import _measured_overflowing_grid_qids
+
+
+def test_intrinsic_grid_overlap_repair_only_releases_measured_grid_items():
+    html = """<!doctype html><html><body>
+    <div data-qid="grid"><div data-qid="card-a">긴 원문 __________</div>
+    <div data-qid="card-b">원문 유지</div></div>
+    <div data-qid="panel"><span data-qid="victim">실행 패널</span></div>
+    </body></html>"""
+    metrics = {
+        "elements": [
+            {
+                "qid": "grid", "parent_qid": "", "clientWidth": 200,
+                "scrollWidth": 320,
+                "computed_style": {"display": "grid", "minWidth": "0px"},
+            },
+            {
+                "qid": "card-a", "parent_qid": "grid",
+                "computed_style": {"display": "block", "minWidth": "auto"},
+            },
+            {
+                "qid": "card-b", "parent_qid": "grid",
+                "computed_style": {"display": "block", "minWidth": "auto"},
+            },
+            {
+                "qid": "panel", "parent_qid": "",
+                "computed_style": {"display": "block", "minWidth": "auto"},
+            },
+            {
+                "qid": "victim", "parent_qid": "panel",
+                "continuous_occluded_fraction": 0.8,
+                "occlusion_occluder_qids": ["card-a"],
+                "computed_style": {"display": "inline", "minWidth": "auto"},
+            },
+        ]
+    }
+
+    repaired = _repair_authored_intrinsic_grid_overlap(html, metrics)
+
+    assert repaired != html
+    assert repaired.count('data-qid="') == html.count('data-qid="')
+    assert "긴 원문 __________" in repaired and "원문 유지" in repaired
+    assert repaired.count("min-width: 0px") == 2
+    assert "font-size" not in repaired
+    no_collision = deepcopy(metrics)
+    no_collision["elements"][-1]["occlusion_occluder_qids"] = []
+    assert _repair_authored_intrinsic_grid_overlap(html, no_collision) == html
+
+    escaped = deepcopy(no_collision)
+    escaped["elements"][0]["bbox"] = {"x": 0, "width": 200}
+    escaped["elements"][2]["bbox"] = {"x": 220, "width": 100}
+    assert _repair_authored_intrinsic_grid_overlap(html, escaped).count("min-width: 0px") == 2
 
 
 @pytest.mark.parametrize("decision", ["reject", "provisional", "admitted"])

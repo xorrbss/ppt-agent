@@ -308,6 +308,10 @@ def _deterministic_repair_candidate(*args, **kwargs):
     return _call_extracted(_repair_impl, "_deterministic_repair_candidate", *args, **kwargs)
 
 
+def _repair_authored_intrinsic_grid_overlap(*args, **kwargs):
+    return _call_extracted(_repair_impl, "_repair_authored_intrinsic_grid_overlap", *args, **kwargs)
+
+
 def _admit_vqa_capacity_candidate(*args, **kwargs):
     return _call_extracted(_repair_impl, "_admit_vqa_capacity_candidate", *args, **kwargs)
 
