@@ -66,7 +66,6 @@
     "servers/fastapi/services/authored_presentation_publication.py": 769,
     "servers/fastapi/services/authored_quality_ocr.py": 547,
     "servers/fastapi/services/authored_quality_receipt_v2.py": 2566,
-    "servers/fastapi/services/authored_quality_receipt_v3_pipeline.py": 542,
     "servers/fastapi/services/authored_title_recovery_contract.py": 521,
     "servers/fastapi/services/authored_vnext/body_grammar.py": 1197,
     "servers/fastapi/services/authored_vnext/composition_capacity.py": 2396,
