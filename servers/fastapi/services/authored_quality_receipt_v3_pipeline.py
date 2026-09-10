@@ -17,6 +17,13 @@ from services.authored_quality_receipt_v2 import (
     quality_receipt_manifest_path,
     source_readback_integrity_verified,
 )
+from services.authored_quality_receipt_v3_helpers import (
+    capacity_checks_pass as _capacity_checks_pass,
+    consumer as _consumer,
+    digest_bound_check as _digest_bound_check,
+    mapping as _mapping,
+    prefixed_sha256 as _prefixed_sha256,
+)
 from services.authored_visual_review_evidence import seal_visual_review_evidence
 from services.authored_vnext.capability_registry import (
     CAPABILITY_REGISTRY_DIGEST,
@@ -65,85 +72,6 @@ def quality_receipt_v3_manifest_path(job_id: object) -> Path:
 
     v2_path = quality_receipt_manifest_path(job_id)
     return v2_path.with_name(f"{v2_path.stem}-v3{v2_path.suffix}")
-
-
-def _mapping(value: object) -> Mapping[str, Any] | None:
-    if isinstance(value, Mapping):
-        return value
-    if hasattr(value, "model_dump"):
-        payload = value.model_dump(mode="json", by_alias=True)
-        return payload if isinstance(payload, Mapping) else None
-    if hasattr(value, "as_dict"):
-        payload = value.as_dict()
-        return payload if isinstance(payload, Mapping) else None
-    return None
-
-
-def _consumer(
-    name: str,
-    *,
-    status: str,
-    required: bool,
-    reason_code: str | None = None,
-) -> dict[str, object]:
-    payload: dict[str, object] = {
-        "status": status,
-        "required": required,
-        "digest": CAPABILITY_REGISTRY_DIGEST,
-    }
-    if reason_code is not None:
-        payload["reasonCode"] = reason_code
-    return payload
-
-
-def _prefixed_sha256(value: object) -> bool:
-    return (
-        isinstance(value, str)
-        and len(value) == 71
-        and value.startswith("sha256:")
-        and all(character in "0123456789abcdef" for character in value[7:])
-    )
-
-
-def _digest_bound_check(
-    value: object,
-    *,
-    observed: bool,
-    reason_code: str,
-) -> dict[str, object]:
-    """Project a real checker input without upgrading an absent observation."""
-
-    if not observed:
-        return {
-            "status": "not_assessed",
-            "observed": False,
-            "reasonCode": reason_code,
-        }
-    payload = _mapping(value)
-    if payload is None:
-        return {
-            "status": "failed",
-            "observed": False,
-            "reasonCode": reason_code,
-        }
-    return {
-        "status": "passed",
-        "observed": True,
-        "evidenceDigest": canonical_digest(dict(payload)),
-    }
-
-
-def _capacity_checks_pass(
-    capacity_evidence: Mapping[str, object],
-    *names: str,
-) -> bool:
-    checks = _mapping(capacity_evidence.get("checks"))
-    return (
-        capacity_evidence.get("browserObserved") is True
-        and checks is not None
-        and all(checks.get(name) is True for name in names)
-        and not capacity_evidence.get("violations", ())
-    )
 
 
 def _prompt_consumer(design_system_prompt: object | None) -> dict[str, object]:

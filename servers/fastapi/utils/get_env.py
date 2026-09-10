@@ -7,6 +7,10 @@ from constants.settings_registry import get_settings_by_key
 from services.provider_settings_values import SECRET_SETTING_KEYS
 from utils.parsers import parse_bool_or_none
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
+from utils.get_env_authored_publish import (
+    is_authored_publish_flagged_slides_enabled,
+    is_authored_publish_flagged_slides_source_reflow_enabled,
+)
 
 
 def _is_truthy(value: str | None) -> bool:
@@ -240,38 +244,6 @@ def is_authored_design_critique_enabled(
 ) -> bool:
     """Whether the closed-operation design critic runs. Off by default."""
     return _is_truthy(get_setting_env("AUTHORED_DESIGN_CRITIQUE_ENABLED", settings))
-
-
-def is_authored_publish_flagged_slides_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Whether a still-terminal slide is remade once and then published flagged.
-
-    On by default (D7, ``docs/generation-programme-master-design-20260904.md``
-    section A4): a published deck carrying one flagged slide beats a deck that
-    failed with ``authored_composition_safety_gate_failed``. Setting it to
-    false restores the fail-closed deck behaviour exactly.
-    """
-    parsed = parse_bool_or_none(
-        get_setting_env("AUTHORED_PUBLISH_FLAGGED_SLIDES", settings)
-    )
-    return True if parsed is None else parsed
-
-
-def is_authored_publish_flagged_slides_source_reflow_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Whether verbatim source-reflow decks may publish terminal slides flagged.
-
-    Off by default. When enabled, the source-reflow path still requires strict
-    whole-deck browser source readback and never re-authors a terminal slide.
-    """
-    parsed = parse_bool_or_none(
-        get_setting_env(
-            "AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", settings
-        )
-    )
-    return False if parsed is None else parsed
 
 
 def is_authored_retain_checkpoint_html_enabled(

@@ -19,6 +19,14 @@ from pathlib import Path
 
 from services.authored_composition_policy import _normalized_capacity_owned_text
 from services.authored_font_signal import body_font_median_px
+from services.authored_quality_receipt_helpers import (
+    append_unique as _append,
+    domain as _domain,
+    domain_status as _domain_status,
+    mapping as _mapping,
+    read as _read,
+    status as _status,
+)
 
 
 def quality_receipt_root() -> Path:
@@ -79,68 +87,6 @@ def public_attempt_id(value: object) -> str:
     if len(candidate) == 32 and all(char in "0123456789abcdefABCDEF" for char in candidate):
         return candidate.lower()
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
-
-
-def _read(value: object, *names: str, default: object = None) -> object:
-    if isinstance(value, Mapping):
-        for name in names:
-            if name in value:
-                return value[name]
-    else:
-        for name in names:
-            if hasattr(value, name):
-                return getattr(value, name)
-    return default
-
-
-def _status(value: object) -> str:
-    if isinstance(value, bool):
-        return "passed" if value else "failed"
-    if value is None:
-        return "pending"
-    text = str(value).strip().lower().replace("-", "_")
-    if text in {"pass", "passed", "ok", "verified", "ready", "publishable", "published", "true"}:
-        return "passed"
-    if text in {"fail", "failed", "error", "invalid", "false"}:
-        return "failed"
-    if text in {"blocked", "rejected", "unsafe"}:
-        return "blocked"
-    if text in {"pending", "unknown", "unverified", "not_run", "not_verified"}:
-        return "pending"
-    return text or "pending"
-
-
-def _domain(evidence: object, key: str) -> object:
-    aliases = {
-        "sourceReadback": ("sourceReadback", "source_readback", "sourceVerbatim", "source_verbatim", "sourceReadbackStatus", "source_readback_status"),
-        "visualReview": ("visualReview", "visual_review", "visualReviewStatus", "visual_review_status"),
-        "nativeCoverage": ("nativeCoverage", "native_coverage", "nativeCoverageStatus", "native_coverage_status"),
-        "fontPreflight": ("fontPreflight", "font_preflight", "fontPreflightStatus", "font_preflight_status"),
-        "powerpointQa": ("powerpointQa", "powerpointQA", "powerpoint_qa"),
-    }.get(key, (key, f"{key}Status", f"{key}_status"))
-    return _read(evidence, *aliases, default=None)
-
-
-def _domain_status(evidence: object, key: str) -> str:
-    value = _domain(evidence, key)
-    if isinstance(value, Mapping) or (value is not None and not isinstance(value, (str, bool, int, float))):
-        value = _read(value, "status", "verdict", "state", "passed", default=None)
-    return _status(value)
-
-
-def _mapping(value: object) -> Mapping[str, object] | None:
-    if isinstance(value, Mapping):
-        return value
-    dump = getattr(value, "model_dump", None)
-    if callable(dump):
-        result = dump(mode="python", by_alias=True)
-        return result if isinstance(result, Mapping) else None
-    return None
-
-
-def _append(blockers: list[str], value: str) -> None:
-    if value not in blockers:
-        blockers.append(value)
 
 
 @dataclass(frozen=True, slots=True)
