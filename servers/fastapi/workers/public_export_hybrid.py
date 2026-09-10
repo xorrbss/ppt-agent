@@ -20,6 +20,8 @@ import pathlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from services.public_export_hybrid_evidence import bounded_hybrid_quality_summary
+
 
 HYBRID_JOB_SCHEMA = "public-hybrid-export-job/v1"
 HYBRID_RESULT_SCHEMA = "public-hybrid-export-result/v1"
@@ -203,13 +205,13 @@ async def assemble_hybrid_pptx(
             None,
             # A failed assembly still owes an account of itself; the caller
             # records it beside the fallback reason.
-            {"quality": _bounded_evidence(result.get("quality"))},
+            {"quality": bounded_hybrid_quality_summary(result.get("quality"))},
             str(reason)[:160] if isinstance(reason, str) and reason else "hybrid_assembler_failed",
         )
     if not output_path.is_file() or output_path.stat().st_size <= 0:
         return HybridAssemblyOutcome(None, {}, "hybrid_assembler_output_missing")
     evidence = {
-        "quality": _bounded_evidence(result.get("quality")),
+        "quality": bounded_hybrid_quality_summary(result.get("quality")),
         "structural": _bounded_evidence(result.get("structural")),
         "font_embedding": _bounded_evidence(result.get("fontEmbedding")),
     }

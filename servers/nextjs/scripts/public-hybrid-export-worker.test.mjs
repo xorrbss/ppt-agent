@@ -6,8 +6,30 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { mapHybridSlideFallbackCode } from "./public-hybrid-export-worker.mjs";
+
 const WORKER = fileURLToPath(new URL("./public-hybrid-export-worker.mjs", import.meta.url));
 const DIGEST = `sha256:${"a".repeat(64)}`;
+
+test("slide preparation errors map to bounded stable fallback codes", () => {
+  assert.equal(
+    mapHybridSlideFallbackCode(new Error("authored_hybrid_paint_band_complex_ancestor")),
+    "authored_hybrid_paint_band_complex_ancestor",
+  );
+  assert.equal(
+    mapHybridSlideFallbackCode(
+      Object.assign(new Error("wrapper text"), { code: "authored_semantic_qid_mismatch" }),
+    ),
+    "authored_semantic_qid_mismatch",
+  );
+  assert.equal(
+    mapHybridSlideFallbackCode(Object.assign(new Error("slow"), { name: "TimeoutError" })),
+    "measurement-timeout",
+  );
+  assert.equal(mapHybridSlideFallbackCode(new Error("unexpected qid owner conflict")), "qid-ownership-mismatch");
+  assert.equal(mapHybridSlideFallbackCode(new Error("Protocol error: Target closed")), "browser-guard-rejected");
+  assert.equal(mapHybridSlideFallbackCode(new Error("customer text must not persist")), "unknown-exception");
+});
 
 /** Run the worker with one job and return its single result line. */
 function runWorker(job) {

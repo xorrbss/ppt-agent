@@ -819,6 +819,58 @@ def test_hybrid_assembler_budget_reserves_time_to_assemble_and_store(
     assert exhausted.fallback_reason == "hybrid_assembler_budget_exhausted"
 
 
+def test_hybrid_quality_summary_persists_bounded_slide_fallback_codes() -> None:
+    from services.public_export_hybrid_evidence import (
+        HYBRID_QUALITY_SUMMARY_SCHEMA,
+        MAX_HYBRID_SLIDE_FALLBACKS,
+        bounded_hybrid_quality_summary,
+        bounded_hybrid_worker_evidence,
+    )
+
+    raw = {
+        "schemaVersion": HYBRID_QUALITY_SUMMARY_SCHEMA,
+        "status": "partially-editable",
+        "editableSlides": 7,
+        "imageFallbackSlides": 28,
+        "rasterFallbackElements": 28,
+        "fallbackReasonTally": {
+            "authored_hybrid_paint_band_complex_ancestor": 25,
+            "hybrid-deck-budget-exhausted": 3,
+            "unsafe free-form message": 1,
+        },
+        "slideFallbacks": [
+            {"n": 0, "code": "unsafe free-form message"},
+            *[
+                {"n": number, "code": "unknown-exception"}
+                for number in range(1, MAX_HYBRID_SLIDE_FALLBACKS + 2)
+            ],
+        ],
+        "deckBudgetMillis": 1_500_000,
+        "slidesNotAttempted": 3,
+        "message": "must not persist",
+    }
+
+    quality = bounded_hybrid_quality_summary(raw)
+    persisted = bounded_hybrid_worker_evidence(
+        {"quality": quality, "deliveredExportMode": "editable-hybrid"}
+    )
+
+    assert quality["schemaVersion"] == HYBRID_QUALITY_SUMMARY_SCHEMA
+    assert quality["fallbackReasonTally"] == {
+        "authored_hybrid_paint_band_complex_ancestor": 25,
+        "hybrid-deck-budget-exhausted": 3,
+    }
+    assert len(quality["slideFallbacks"]) == MAX_HYBRID_SLIDE_FALLBACKS
+    assert quality["slideFallbacks"][0] == {"n": 1, "code": "unknown-exception"}
+    assert quality["deckBudgetMillis"] == 1_500_000
+    assert quality["slidesNotAttempted"] == 3
+    assert "message" not in quality
+    assert persisted == {
+        "quality": quality,
+        "deliveredExportMode": "editable-hybrid",
+    }
+
+
 def _hybrid_bundle_payload(**overrides: object) -> dict:
     declared = {
         "schemaVersion": "public-hybrid-declared-semantic/v1",

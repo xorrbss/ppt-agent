@@ -23,6 +23,7 @@ const RESULT_SCHEMA = "public-hybrid-export-result/v1";
 const MAX_SLIDES = 100;
 const MAX_JOB_BYTES = 1024 * 1024;
 const MAX_BASE_PPTX_BYTES = 512 * 1024 * 1024;
+const MAX_SLIDE_FALLBACKS = 200;
 const KOREAN_NATIVE_EMBEDDING_FAMILY = "Noto Sans KR";
 const KOREAN_FACE_PATTERN = /(?:noto\s+sans\s+(?:kr|cjk)|pretendard|malgun|맑은\s*고딕)/iu;
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
@@ -32,6 +33,36 @@ class HybridWorkerError extends Error {
     super(code);
     this.code = code;
   }
+}
+
+const AUTHORED_HYBRID_ERROR_CODES = Object.freeze([
+  "authored_fidelity_backplate_identity_mismatch", "authored_hybrid_chrome_unavailable",
+  "authored_hybrid_export_attempt_binding_required", "authored_hybrid_isolated_raster_fallback_failed",
+  "authored_hybrid_paint_band_complex_ancestor", "authored_hybrid_paint_band_qid_duplicate",
+  "authored_hybrid_paint_band_qid_mismatch", "authored_hybrid_presentation_lookup_failed",
+  "authored_hybrid_qid_owner_exact_once_mismatch", "authored_hybrid_requires_authored_presentation",
+  "authored_hybrid_revision_invalid", "authored_hybrid_slide_count_unsupported",
+  "authored_hybrid_slide_layer_missing", "authored_render_mutation_window_unstable",
+  "authored_render_readiness_timeout", "authored_render_resources_unresolved",
+  "authored_semantic_qid_duplicate", "authored_semantic_qid_invalid",
+  "authored_semantic_qid_mismatch", "cached_hybrid_artifact_digest_mismatch",
+  "stale_render_revision",
+]);
+
+/** Reduce an exception to a receipt-safe code without retaining its message. */
+export function mapHybridSlideFallbackCode(error) {
+  const fields = [error?.code, error?.name, error instanceof Error ? error.message : null]
+    .filter((value) => typeof value === "string");
+  for (const code of AUTHORED_HYBRID_ERROR_CODES) {
+    if (fields.some((value) => value === code || value.includes(code))) return code;
+  }
+  const description = fields.join(" ");
+  if (/timeout|timed out/iu.test(description)) return "measurement-timeout";
+  if (/qid|semantic owner|ownership/iu.test(description)) return "qid-ownership-mismatch";
+  if (/browser|protocol error|target closed|page crashed|execution context/iu.test(description)) {
+    return "browser-guard-rejected";
+  }
+  return "unknown-exception";
 }
 
 async function readJob() {
@@ -220,14 +251,24 @@ function summarizeStructural(structural) {
   };
 }
 
-function summarizeQuality(report) {
+function summarizeQuality(report, deckBudgetMillis) {
   const tally = {};
   for (const slide of report.slides) {
     for (const reason of slide.fallbackReasons ?? []) {
       tally[reason] = (tally[reason] ?? 0) + 1;
     }
   }
+  const slideFallbacks = report.slides
+    .filter((slide) => slide.imageFallback)
+    .map((slide) => ({
+      n: slide.slideNumber,
+      code: /^[a-z][a-z0-9_-]{0,95}$/u.test(slide.fallbackReasons?.[0] ?? "")
+        ? slide.fallbackReasons[0]
+        : "unknown-exception",
+    }))
+    .slice(0, MAX_SLIDE_FALLBACKS);
   return {
+    schemaVersion: "public-hybrid-quality-summary/v1",
     status: report.status,
     editableSlides: report.slides.filter((slide) => slide.editable).length,
     imageFallbackSlides: report.slides.filter((slide) => slide.imageFallback).length,
@@ -236,6 +277,11 @@ function summarizeQuality(report) {
       0,
     ),
     fallbackReasonTally: tally,
+    slideFallbacks,
+    deckBudgetMillis,
+    slidesNotAttempted: slideFallbacks.filter(
+      (fallback) => fallback.code === "hybrid-deck-budget-exhausted",
+    ).length,
   };
 }
 
@@ -343,10 +389,7 @@ async function run() {
         // A declared graph that does not reconcile with what the browser
         // observed costs this slide its native layer, never the export. The
         // reason is distinct so the receipt says which failure it was.
-        const semanticMismatch =
-          semanticContext !== undefined &&
-          error instanceof Error &&
-          /semantic/i.test(error.name + error.message);
+        const fallbackCode = mapHybridSlideFallbackCode(error);
         process.stderr.write(
           `[public-hybrid] slide ${slide.slideNumber} raster fallback: ${String(error)}\n`,
         );
@@ -354,9 +397,7 @@ async function run() {
           layer: null,
           quality: modules.imageFallbackSlide(
             slide.slideNumber,
-            semanticMismatch
-              ? "semantic-observation-mismatch"
-              : "slide-processing-failed",
+            fallbackCode,
           ),
           fontRendering: modules.noFontRenderingTelemetry(),
         };
@@ -391,7 +432,7 @@ async function run() {
     // Every slide fell back. Report why, per slide: a bare "no layers" leaves
     // the caller with a downgrade it can name but cannot explain or act on.
     const noLayers = new HybridWorkerError("hybrid_no_native_layers");
-    noLayers.quality = summarizeQuality(report);
+    noLayers.quality = summarizeQuality(report, job.budgetMillis);
     throw noLayers;
   }
   const hybridBytes = await modules.assembleAuthoredHybridPptxAsync(
@@ -408,7 +449,7 @@ async function run() {
     schemaVersion: RESULT_SCHEMA,
     ok: true,
     errorCode: null,
-    quality: summarizeQuality(report),
+    quality: summarizeQuality(report, job.budgetMillis),
     structural: summarizeStructural(structural),
     semantic: {
       slidesWithDeclaredGraph: semantics.filter(Boolean).length,
@@ -426,25 +467,31 @@ async function run() {
   };
 }
 
-try {
-  const result = await run();
-  process.stdout.write(`${JSON.stringify(result)}\n`);
-  process.exit(0);
-} catch (error) {
-  const code =
-    error instanceof HybridWorkerError
-      ? error.code
-      : `hybrid_unexpected_failure:${error instanceof Error ? error.message.slice(0, 120) : "unknown"}`;
-  process.stdout.write(
-    `${JSON.stringify({
-      schemaVersion: RESULT_SCHEMA,
-      ok: false,
-      errorCode: code,
-      // A refusal still owes an account of itself when it has one.
-      ...(error instanceof HybridWorkerError && error.quality
-        ? { quality: error.quality }
-        : {}),
-    })}\n`,
-  );
-  process.exit(1);
+async function main() {
+  try {
+    const result = await run();
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+    process.exit(0);
+  } catch (error) {
+    const code =
+      error instanceof HybridWorkerError
+        ? error.code
+        : `hybrid_unexpected_failure:${error instanceof Error ? error.message.slice(0, 120) : "unknown"}`;
+    process.stdout.write(
+      `${JSON.stringify({
+        schemaVersion: RESULT_SCHEMA,
+        ok: false,
+        errorCode: code,
+        // A refusal still owes an account of itself when it has one.
+        ...(error instanceof HybridWorkerError && error.quality
+          ? { quality: error.quality }
+          : {}),
+      })}\n`,
+    );
+    process.exit(1);
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  await main();
 }

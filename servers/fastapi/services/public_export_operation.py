@@ -41,6 +41,7 @@ from services.public_render_batching import (
 from services.presentation_export_route_inputs import (
     resolve_authored_local_fit_receipts,
 )
+from services.public_export_hybrid_evidence import bounded_hybrid_worker_evidence
 from services.public_export_identity import (
     CanonicalExportExecution,
     CanonicalExportIdentity,
@@ -1102,13 +1103,8 @@ async def execute_canonical_export_execution(
     deadline_seconds: int | None = None,
     session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
 ) -> PublicWorkerArtifactResult:
-    """Execute/join single-flight without publishing the public pointer.
-
-    The workspace export handler owns the only final transaction that promotes
-    the pointer, terminalizes the operation, appends the result event, and
-    exposes the authorized download. This boundary only makes the immutable
-    result durable and completes the reusable export identity.
-    """
+    """Execute/join without publishing; the workspace handler owns publication.
+    This boundary only durably completes the reusable export identity."""
 
     require_public_export_identity_v2_enabled()
     if execution.singleflight.disposition == "in_flight":
@@ -1200,7 +1196,7 @@ async def execute_canonical_export_execution(
             await session.commit()
         raise PublicExportHybridFallback(
             reason,
-            evidence=exported.execution_evidence,
+            evidence=bounded_hybrid_worker_evidence(exported.execution_evidence),
             resource_metrics={"role": exported.role, **exported.resource_metrics},
         )
     result_ref = _public_worker_output(
@@ -1221,7 +1217,9 @@ async def execute_canonical_export_execution(
         resource_metrics={
             "role": exported.role,
             **exported.resource_metrics,
-            "public_export_worker_evidence": dict(exported.execution_evidence),
+            "public_export_worker_evidence": bounded_hybrid_worker_evidence(
+                exported.execution_evidence
+            ),
         },
     )
 
