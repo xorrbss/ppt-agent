@@ -18,12 +18,17 @@ except Exception:
 _AUTHORED_AUTHOR_WORKERS = authored_provider_concurrency(_selected_provider)
 
 
-_AUTHORED_RENDER_WORKERS = max(
-    1,
-    int(
-        os.getenv("AUTHORED_SLIDE_RENDER_CONCURRENCY", str(_AUTHORED_AUTHOR_WORKERS))
-    ),
-)
+def _resolve_authored_render_workers(
+    author_workers: int, environment: Mapping[str, str] = os.environ,
+) -> int:
+    """Resolve the authored render queue against the managed Chromium ceiling."""
+    raw = environment.get("AUTHORED_SLIDE_RENDER_CONCURRENCY")
+    if raw is None:
+        raw = environment.get("PUBLIC_RENDER_MAX_CONCURRENCY", str(author_workers))
+    return max(1, int(raw))
+
+
+_AUTHORED_RENDER_WORKERS = _resolve_authored_render_workers(_AUTHORED_AUTHOR_WORKERS)
 _AUTHORED_SLIDE_WORKERS = _AUTHORED_AUTHOR_WORKERS + _AUTHORED_RENDER_WORKERS
 _DEFAULT_AUTHOR_PLANNED_SLIDE = author_planned_slide
 

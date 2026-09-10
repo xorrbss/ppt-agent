@@ -1997,7 +1997,13 @@ _browser_metrics_cache: "OrderedDict[tuple[str, str, str], Mapping[str, Any]]" =
 _browser_metrics_inflight: Dict[tuple[str, str, str], "asyncio.Task[Mapping[str, Any] | None]"] = {}
 _observed_cache_identities: "OrderedDict[str, _RenderCacheIdentity]" = OrderedDict()
 _CACHE_IDENTITY_OBSERVATION_LIMIT = 256
-RENDER_CONCURRENCY = _env_int("AUTHORED_RENDER_CONCURRENCY", 4)
+# The authored override remains authoritative.  Managed stacks already expose
+# their shared Chromium ceiling as PUBLIC_RENDER_MAX_CONCURRENCY, so inherit it
+# when no authored-specific value is present instead of silently using four.
+RENDER_CONCURRENCY = _env_int(
+    "AUTHORED_RENDER_CONCURRENCY",
+    _env_int("PUBLIC_RENDER_MAX_CONCURRENCY", 4),
+)
 CHROME_REUSE_ENABLED = os.getenv("AUTHORED_CHROME_REUSE", "1").strip().lower() not in {
     "0",
     "false",

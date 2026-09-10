@@ -69,6 +69,19 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+def test_authored_render_workers_inherit_managed_render_ceiling():
+    assert authored_pipeline_mod._resolve_authored_render_workers(
+        5, {"PUBLIC_RENDER_MAX_CONCURRENCY": "2"}
+    ) == 2
+    assert authored_pipeline_mod._resolve_authored_render_workers(
+        5,
+        {
+            "PUBLIC_RENDER_MAX_CONCURRENCY": "2",
+            "AUTHORED_SLIDE_RENDER_CONCURRENCY": "3",
+        },
+    ) == 3
+
+
 def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypatch):
     calls = []
     candidate = (
