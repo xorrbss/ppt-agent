@@ -17,6 +17,13 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { installNextjsModuleAliasHooks } from "./lib/nextjs-module-alias-hooks.mjs";
+import {
+  describeHybridErrorChain,
+  mapHybridSlideFallbackCode,
+} from "./lib/hybrid-slide-fallback-code.mjs";
+
+// Re-exported so the worker keeps naming its own classification surface.
+export { describeHybridErrorChain, mapHybridSlideFallbackCode };
 
 const JOB_SCHEMA = "public-hybrid-export-job/v1";
 const RESULT_SCHEMA = "public-hybrid-export-result/v1";
@@ -33,36 +40,6 @@ class HybridWorkerError extends Error {
     super(code);
     this.code = code;
   }
-}
-
-const AUTHORED_HYBRID_ERROR_CODES = Object.freeze([
-  "authored_fidelity_backplate_identity_mismatch", "authored_hybrid_chrome_unavailable",
-  "authored_hybrid_export_attempt_binding_required", "authored_hybrid_isolated_raster_fallback_failed",
-  "authored_hybrid_paint_band_complex_ancestor", "authored_hybrid_paint_band_qid_duplicate",
-  "authored_hybrid_paint_band_qid_mismatch", "authored_hybrid_presentation_lookup_failed",
-  "authored_hybrid_qid_owner_exact_once_mismatch", "authored_hybrid_requires_authored_presentation",
-  "authored_hybrid_revision_invalid", "authored_hybrid_slide_count_unsupported",
-  "authored_hybrid_slide_layer_missing", "authored_render_mutation_window_unstable",
-  "authored_render_readiness_timeout", "authored_render_resources_unresolved",
-  "authored_semantic_qid_duplicate", "authored_semantic_qid_invalid",
-  "authored_semantic_qid_mismatch", "cached_hybrid_artifact_digest_mismatch",
-  "stale_render_revision",
-]);
-
-/** Reduce an exception to a receipt-safe code without retaining its message. */
-export function mapHybridSlideFallbackCode(error) {
-  const fields = [error?.code, error?.name, error instanceof Error ? error.message : null]
-    .filter((value) => typeof value === "string");
-  for (const code of AUTHORED_HYBRID_ERROR_CODES) {
-    if (fields.some((value) => value === code || value.includes(code))) return code;
-  }
-  const description = fields.join(" ");
-  if (/timeout|timed out/iu.test(description)) return "measurement-timeout";
-  if (/qid|semantic owner|ownership/iu.test(description)) return "qid-ownership-mismatch";
-  if (/browser|protocol error|target closed|page crashed|execution context/iu.test(description)) {
-    return "browser-guard-rejected";
-  }
-  return "unknown-exception";
 }
 
 async function readJob() {
@@ -390,8 +367,12 @@ async function run() {
         // observed costs this slide its native layer, never the export. The
         // reason is distinct so the receipt says which failure it was.
         const fallbackCode = mapHybridSlideFallbackCode(error);
+        // The stderr tail is the only place the aggregate members are readable
+        // at all, and the isolated lane discards it on success. Name the code
+        // that will be persisted beside the chain that produced it.
         process.stderr.write(
-          `[public-hybrid] slide ${slide.slideNumber} raster fallback: ${String(error)}\n`,
+          `[public-hybrid] slide ${slide.slideNumber} raster fallback ${fallbackCode}: ` +
+            `${describeHybridErrorChain(error)}\n`,
         );
         return {
           layer: null,
