@@ -25,6 +25,10 @@ from dataclasses import asdict, dataclass, field
 from html.parser import HTMLParser
 from typing import Any, Literal
 
+from utils.authored_empty_media import (
+    EMPTY_MEDIA_CATEGORY, EMPTY_MEDIA_DETAIL, find_empty_media_panels,
+)
+
 from utils.authored_dom_fit_magnitude import (
     build_element_kind_index,
     build_fit_summary,
@@ -129,6 +133,7 @@ class DomQualityIssue:
         "image",
         "content",
         "contrast",
+        "empty_media_panel",
     ]
     severity: Literal["high", "medium", "low"]
     detail: str
@@ -1650,6 +1655,13 @@ def inspect_authored_dom(
                 footer_zone_magnitude(intrusion, kind=kind_of(intrusion.qid)),
             )
         )
+    for qid in find_empty_media_panels(
+        html, elements, width=width, height=height,
+        exact_reconstruction=mode == EXACT_RECONSTRUCTION,
+    ):
+        issues.append(DomQualityIssue(
+            EMPTY_MEDIA_CATEGORY, "medium", EMPTY_MEDIA_DETAIL, (qid,), mode,
+        ))
     # Coalesce same category/target reports while retaining deterministic ordering.
     unique = {(issue.category, issue.qids, issue.detail): issue for issue in issues}
     ordered = tuple(

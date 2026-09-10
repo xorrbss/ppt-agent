@@ -31,6 +31,7 @@ from collections.abc import Mapping
 
 from utils.authored_dom_footer_zone import FOOTER_ZONE_CATEGORY
 from utils.authored_dom_text_escape import TEXT_ESCAPE_CATEGORY
+from utils.authored_empty_media import EMPTY_MEDIA_CATEGORY
 
 #: Every value ``utils.authored_dom_quality.DomQualityIssue.category`` accepts,
 #: in the order its ``Literal`` declares them.  The contract test asserts the
@@ -47,6 +48,7 @@ DOM_QUALITY_CATEGORIES: tuple[str, ...] = (
     "image",
     "content",
     "contrast",
+    EMPTY_MEDIA_CATEGORY,
 )
 
 #: Every geometry category a detector reports.  Membership here is what makes a
@@ -60,8 +62,13 @@ DETECTED_GEOMETRY_CATEGORIES = frozenset(
         "overlap",
         TEXT_ESCAPE_CATEGORY,
         FOOTER_ZONE_CATEGORY,
+        EMPTY_MEDIA_CATEGORY,
     }
 )
+
+# Empty media is a measured composition defect, not an admission exception.
+# This registry has no per-profile classification: ordinary decks spend their
+# bounded remake budget; terminal verbatim source-reflow slides carry a flag.
 
 #: Detected, recorded, briefed -- but never a reason on its own to flag a
 #: slide, spend a remake or hold a deck back.
@@ -153,6 +160,7 @@ CRITIQUE_TYPE_BY_CATEGORY: Mapping[str, str] = {
     "content": "other",
     TEXT_ESCAPE_CATEGORY: "overflow",
     FOOTER_ZONE_CATEGORY: "overflow",
+    EMPTY_MEDIA_CATEGORY: "other",
 }
 
 

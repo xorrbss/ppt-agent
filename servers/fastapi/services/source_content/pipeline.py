@@ -63,7 +63,7 @@ from utils.color_contrast import (
     readable_color_scheme,
 )
 from utils.get_env import get_composer_restyle_enabled
-
+from utils.authored_empty_media import source_reflow_empty_media_instruction
 
 SOURCE_MODE = "source_content_restyle"
 _INSTRUCTION_CONFLICT = re.compile(
@@ -211,6 +211,7 @@ def prepare_source_content_authored_reflow(request: Any) -> str:
             "offered for that slide exactly once. Do not create or reproduce tables, "
             "charts, or the source slide layout. Do not generate replacement illustrations."
         )
+    contract_instruction += source_reflow_empty_media_instruction(outline)
     existing_instruction = str(getattr(request, "instructions", None) or "").strip()
     request.instructions = (
         f"{existing_instruction}\n\n{contract_instruction}"
@@ -228,7 +229,6 @@ def prepare_source_content_authored_reflow(request: Any) -> str:
     request.vision_qa = True
     request._source_content_authored_reflow = True
     request._authored_composition_profile = resolve_composition_profile(request)
-    # Fall through to the ordinary authored outline/author/render pipeline.
     request.source_mode = None
     return str(manifest.reference_snapshot_id)
 
