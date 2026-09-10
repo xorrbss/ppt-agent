@@ -141,7 +141,8 @@
     "authored.repair-preflight-separates-source-from-decoration": "decisions/authored.repair-preflight-separates-source-from-decoration.1.json",
     "authored.offcanvas-width-is-repaired-deterministically": "decisions/authored.offcanvas-width-is-repaired-deterministically.1.json",
     "source-content.verbatim-same-page-fit-ladder": "decisions/source-content.verbatim-same-page-fit-ladder.1.json",
-    "public-export.hybrid-in-isolated-lane": "decisions/public-export.hybrid-in-isolated-lane.1.json"
+    "public-export.hybrid-in-isolated-lane": "decisions/public-export.hybrid-in-isolated-lane.1.json",
+    "authored.verbatim-flagged-publish": "decisions/authored.verbatim-flagged-publish.1.json"
   },
   "readFirst": [
     "AGENTS.md"

@@ -828,6 +828,15 @@
       "description": "Give a slide that is still terminal after the bounded repair one automatic lower-density remake, then publish the deck with that slide flagged instead of failing the whole deck."
     },
     {
+      "key": "AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Publish a verbatim source-reflow deck with geometry-defective slides flagged after strict whole-deck source readback passes, without re-authoring those slides."
+    },
+    {
       "key": "AUTHORED_RETAIN_CHECKPOINT_HTML",
       "type": "boolean",
       "default": false,

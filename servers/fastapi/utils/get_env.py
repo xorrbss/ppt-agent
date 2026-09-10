@@ -258,6 +258,22 @@ def is_authored_publish_flagged_slides_enabled(
     return True if parsed is None else parsed
 
 
+def is_authored_publish_flagged_slides_source_reflow_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Whether verbatim source-reflow decks may publish terminal slides flagged.
+
+    Off by default. When enabled, the source-reflow path still requires strict
+    whole-deck browser source readback and never re-authors a terminal slide.
+    """
+    parsed = parse_bool_or_none(
+        get_setting_env(
+            "AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", settings
+        )
+    )
+    return False if parsed is None else parsed
+
+
 def is_authored_retain_checkpoint_html_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:

@@ -16,7 +16,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from services.authored_generation_preflight import over_budget_violations
-from utils.get_env import is_authored_publish_flagged_slides_enabled
+from utils.get_env import (
+    is_authored_publish_flagged_slides_enabled,
+    is_authored_publish_flagged_slides_source_reflow_enabled,
+)
 from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION
 
 LOGGER = logging.getLogger(__name__)
@@ -40,13 +43,19 @@ def terminal_fallback_active(
     from the bounded round on one rule and then refusing to rescue it on
     another would publish a deck with an unrepaired, unflagged slide.
 
-    A verbatim/exact deck may not lose a word, and a profile whose strict DOM
-    gate is off has no terminal slide to rescue.
+    Exact reconstruction remains fail-closed, and a profile whose strict DOM
+    gate is off has no terminal slide to rescue. Source reflow has a separate,
+    default-off flag-only path because its verbatim text may not be re-authored.
     """
 
+    if source_reflow:
+        return (
+            is_authored_publish_flagged_slides_source_reflow_enabled()
+            and reference_mode != EXACT_RECONSTRUCTION
+            and bool(getattr(profile, "strict_dom_gate", False))
+        )
     return (
         is_authored_publish_flagged_slides_enabled()
-        and not source_reflow
         and reference_mode != EXACT_RECONSTRUCTION
         and bool(getattr(profile, "strict_dom_gate", False))
         and bool(getattr(profile, "allow_summarization", False))
@@ -218,9 +227,9 @@ def recover_residual_repair_round(
     length invariant can still be checked.
 
     ``enabled`` is ``terminal_fallback_active`` for this deck, resolved by the
-    caller. Source reflow is fail-closed inside it: a verbatim deck may not
-    publish with a flagged slide, and its partial repairs already have their own
-    checkpoint path (``_checkpoint_source_reflow_vqa_repairs``).
+    caller. Source reflow remains fail-closed by default; its separate flag-only
+    knob may recover this bound state, but strict candidate admission and the
+    whole-deck browser source readback still run before publication.
     """
 
     if not enabled:

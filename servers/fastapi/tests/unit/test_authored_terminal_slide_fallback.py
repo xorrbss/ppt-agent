@@ -115,6 +115,22 @@ def _fake_blocking(report):
     return tuple(report.issues)
 
 
+def _fit_receipts(htmls):
+    return tuple(
+        {
+            "policy_revision": "authored-local-fit/v1.3",
+            "finalHtmlDigest": "sha256:"
+            + hashlib.sha256(
+                canonicalize_authored_roles(html).encode("utf-8")
+            ).hexdigest(),
+            "qualityStatus": "passed",
+            "unresolvedReasons": [],
+            "changed": False,
+        }
+        for html in htmls
+    )
+
+
 def _outline(count):
     return PresentationOutlineModel(
         slides=[SlideOutlineModel(content=f"slide {i} content") for i in range(count)]
@@ -185,6 +201,7 @@ def _install_deck_stubs(monkeypatch, tmp_path, htmls):
             author_work=0.1,
             illustration_work=0.0,
             render_work=0.1,
+            local_fit_receipts=_fit_receipts(htmls),
         )
 
     async def fake_header_contract(
@@ -232,6 +249,22 @@ def _install_deck_stubs(monkeypatch, tmp_path, htmls):
             module, "capacity_violations", lambda *args, **kwargs: ()
         )
     monkeypatch.setattr(authored_generation_mod, "ensure_browser_metrics", fake_metrics)
+
+    async def fake_fit_content_revision(html, *, slide_index, policy_revision=None):
+        canonical = canonicalize_authored_roles(html)
+        return SimpleNamespace(
+            html=canonical,
+            png=b"remade-png",
+            metrics={"telemetry": "ok"},
+            receipt=_fit_receipts([canonical])[0],
+        )
+
+    monkeypatch.setattr(
+        authored_generation_mod, "_fit_content_revision", fake_fit_content_revision
+    )
+    monkeypatch.setattr(
+        authored_generation_mod, "cache_accepted_capture", lambda *_a, **_k: None
+    )
     monkeypatch.setattr(
         terminal_mod, "get_cached_browser_metrics", lambda _html: {"telemetry": "ok"}
     )
@@ -325,6 +358,8 @@ def test_remake_that_stays_terminal_publishes_the_deck_with_a_flag(
     ]
     # The residual evidence is still recorded next to the flag.
     assert gate["residualIssueCount"] == 1
+    assert gate["documentCompleted"] is True
+    assert gate["qualityPass"] is False
     assert calls == [[0]]
 
 
@@ -439,7 +474,7 @@ def test_remake_budget_flags_without_calling_the_provider_again(monkeypatch):
     assert outcomes.count("remake_budget_exhausted") == 2
 
 
-def test_verbatim_source_decks_never_lose_density(monkeypatch):
+def test_verbatim_source_decks_default_to_fail_closed(monkeypatch):
     calls: list[object] = []
     _install_remake(monkeypatch, calls, candidate=_REMADE_HTML)
     profile = SimpleNamespace(
@@ -466,6 +501,76 @@ def test_verbatim_source_decks_never_lose_density(monkeypatch):
 
     assert outcome.flagged_slides == ()
     assert calls == []
+
+
+def test_verbatim_source_decks_flag_terminal_slides_without_remaking(monkeypatch):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
+    profile = SimpleNamespace(
+        profile_id="source-verbatim", strict_dom_gate=True, allow_summarization=False
+    )
+
+    async def forbidden(*_args, **_kwargs):
+        raise AssertionError("source reflow must not remake or apply a slide")
+
+    monkeypatch.setattr(terminal_mod, "remake_slide_once", forbidden)
+    monkeypatch.setattr(terminal_mod, "apply_admitted_remake", forbidden)
+    monkeypatch.setattr(terminal_mod, "inspect_authored_dom", _fake_inspect)
+    monkeypatch.setattr(terminal_mod, "blocking_safety_issues", _fake_blocking)
+    monkeypatch.setattr(terminal_mod, "capacity_violations", lambda *a, **k: ())
+    monkeypatch.setattr(
+        terminal_mod, "get_cached_browser_metrics", lambda _html: {"telemetry": "ok"}
+    )
+
+    outcome = _run(
+        terminal_mod.resolve_terminal_gate_slides(
+            htmls=[_TERMINAL_HTML],
+            pngs=[b"png"],
+            contents=["verbatim source"],
+            roles=["body"],
+            brand=SimpleNamespace(primary="#000"),
+            design_system="DS",
+            style=SimpleNamespace(id="editorial"),
+            capacity_plan=None,
+            profile=profile,
+            reference_mode="style_reference",
+            scene_envelope=SimpleNamespace(),
+            metrics_by_slide={},
+            source_reflow=True,
+            remake_counts={0: 1},
+        )
+    )
+
+    assert outcome.flagged_slides == (
+        {
+            "index": 0,
+            "reason": "composition_safety:overlap",
+            "remakeAttempted": False,
+            "remakeOutcome": "verbatim_flag_only",
+        },
+    )
+    assert outcome.remade_slide_indices == ()
+    assert outcome.remake_calls == 0
+
+
+def test_source_reflow_flag_policy_is_separate_strict_and_not_exact(monkeypatch):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
+    verbatim = SimpleNamespace(strict_dom_gate=True, allow_summarization=False)
+
+    assert policy_mod.terminal_fallback_active(
+        profile=verbatim,
+        reference_mode="style_reference",
+        source_reflow=True,
+    )
+    assert not policy_mod.terminal_fallback_active(
+        profile=SimpleNamespace(strict_dom_gate=False, allow_summarization=False),
+        reference_mode="style_reference",
+        source_reflow=True,
+    )
+    assert not policy_mod.terminal_fallback_active(
+        profile=verbatim,
+        reference_mode="exact_reconstruction",
+        source_reflow=True,
+    )
 
 
 def test_merge_flagged_slide_entries_keeps_a_lone_flag_byte_identical():
@@ -652,6 +757,7 @@ def _flagged_pipeline_stub(monkeypatch, htmls, flagged_index, evidence=None):
             quality_gate_failures=(
                 {"slide_index": flagged_index, "issues": [_FakeIssue().to_dict()]},
             ),
+            local_fit_receipts=_fit_receipts(htmls),
             evidence_ledger=ledger,
             evidence_attempt_id=attempt_id,
             # The v3 receipt audits one provider-call row per slide; a deck
@@ -684,10 +790,28 @@ def _locally_accepted_whole_page_failure_stub(monkeypatch, htmls, flagged_index)
                     canonicalize_authored_roles(html).encode("utf-8")
                 ).hexdigest()
             ),
-            "qualityStatus": "passed",
-            "unresolvedReasons": [],
+            **(
+                {
+                    "selectionStatus": "preserved_original_review",
+                    "deliveryRevision": "authored-local-fit-original-delivery/v1",
+                    "deliveryStatus": "output_usable",
+                    "pageOutputReady": True,
+                    "qualityPass": False,
+                    "qualityStatus": "warning",
+                    "changed": False,
+                    "renderedFitDisabled": True,
+                    "verifiedFitDisabled": False,
+                    "unresolvedReasons": ["whole_page_geometry"],
+                }
+                if index == flagged_index
+                else {
+                    "qualityStatus": "passed",
+                    "unresolvedReasons": [],
+                    "changed": False,
+                }
+            ),
         }
-        for html in htmls
+        for index, html in enumerate(htmls)
     )
     local_fit_flag = {
         "index": flagged_index,
@@ -1545,14 +1669,23 @@ def _install_receipt_evidence(monkeypatch):
         capacity_role_evidence,
     )
     recorded: list[dict[str, object]] = []
+    recorded_v3: list[dict[str, object]] = []
     real_create = authored_generation_mod.create_quality_receipt_v2
+    real_create_v3 = authored_generation_mod.create_generation_quality_receipt_v3
 
     def spy(*args, **kwargs):
         recorded.append(dict(kwargs.get("evidence") or {}))
         return real_create(*args, **kwargs)
 
+    async def spy_v3(*args, **kwargs):
+        recorded_v3.append(dict(kwargs))
+        return await real_create_v3(*args, **kwargs)
+
     monkeypatch.setattr(authored_generation_mod, "create_quality_receipt_v2", spy)
-    return (ledger, attempt_id), recorded
+    monkeypatch.setattr(
+        authored_generation_mod, "create_generation_quality_receipt_v3", spy_v3
+    )
+    return (ledger, attempt_id), recorded, recorded_v3
 
 
 def _receipt_deck(monkeypatch, tmp_path, deck):
@@ -1561,14 +1694,16 @@ def _receipt_deck(monkeypatch, tmp_path, deck):
     _install_deck_stubs(monkeypatch, tmp_path, deck)
     _install_repair_round(monkeypatch, raises=None)
     _install_capacity_violations(monkeypatch, _ELEMENT_NAMED_VIOLATIONS)
-    evidence, recorded = _install_receipt_evidence(monkeypatch)
+    evidence, recorded, recorded_v3 = _install_receipt_evidence(monkeypatch)
     _flagged_pipeline_stub(monkeypatch, deck, 1, evidence=evidence)
     _install_remake(monkeypatch, [], candidate=_TERMINAL_HTML)
-    return recorded
+    return recorded, recorded_v3
 
 
 def test_a_flagged_slide_never_blocks_the_receipt_capacity_gate(monkeypatch, tmp_path):
-    recorded = _receipt_deck(monkeypatch, tmp_path, [_REMADE_HTML, _TERMINAL_HTML])
+    recorded, recorded_v3 = _receipt_deck(
+        monkeypatch, tmp_path, [_REMADE_HTML, _TERMINAL_HTML]
+    )
 
     owner_token = set_current_owner_id(uuid.uuid4())
     try:
@@ -1581,11 +1716,19 @@ def test_a_flagged_slide_never_blocks_the_receipt_capacity_gate(monkeypatch, tmp
     assert result.path == "deck.pptx"
     gate = presentation.theme["authoredQualityGate"]
     assert gate["capacityStatus"] == "passed"
-    assert gate["status"] == "passed"
+    assert gate["qualityPass"] is False
+    assert gate["documentCompleted"] is True
+    assert gate["residualIssueCount"] == 1
+    assert isinstance(gate["qualityReceiptV3"], dict)
     assert [entry["index"] for entry in gate["flaggedSlides"]] == [1]
     # The excluded slide is named in the evidence, never silently dropped.
     assert recorded[-1]["capacity"]["flaggedSlideIndices"] == [1]
     assert recorded[-1]["capacity"]["violations"] == []
+    assert [entry["index"] for entry in recorded[-1]["safety"]["flagged"]] == [1]
+    assert [
+        entry["index"]
+        for entry in recorded_v3[-1]["safety_evidence"]["flagged"]
+    ] == [1]
 
 
 def test_a_capacity_failure_on_an_unflagged_slide_still_blocks(monkeypatch, tmp_path):
@@ -1683,7 +1826,8 @@ def test_a_sealed_ledger_gap_is_recollected_instead_of_blocking(
     assert result.path == "deck.pptx"
     gate = presentation.theme["authoredQualityGate"]
     assert gate["capacityStatus"] == "passed"
-    assert gate["status"] == "passed"
+    assert gate["status"] == "blocked"
+    assert gate["qualityPass"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -1837,6 +1981,7 @@ def test_a_slide_flagged_by_both_stages_keeps_both_reasons(monkeypatch, tmp_path
             author_work=0.1,
             illustration_work=0.0,
             render_work=0.1,
+            local_fit_receipts=_fit_receipts([_TERMINAL_HTML]),
             author_flagged_slides=(author_flag,),
         )
 
