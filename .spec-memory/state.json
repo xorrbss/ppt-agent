@@ -143,7 +143,8 @@
     "source-content.verbatim-same-page-fit-ladder": "decisions/source-content.verbatim-same-page-fit-ladder.1.json",
     "public-export.hybrid-in-isolated-lane": "decisions/public-export.hybrid-in-isolated-lane.1.json",
     "public-export.published-flagged-hybrid": "decisions/public-export.published-flagged-hybrid.1.json",
-    "authored.verbatim-flagged-publish": "decisions/authored.verbatim-flagged-publish.2.json"
+    "authored.verbatim-flagged-publish": "decisions/authored.verbatim-flagged-publish.2.json",
+    "public-export.identity-includes-worker-bundle": "decisions/public-export.identity-includes-worker-bundle.1.json"
   },
   "readFirst": [
     "AGENTS.md"

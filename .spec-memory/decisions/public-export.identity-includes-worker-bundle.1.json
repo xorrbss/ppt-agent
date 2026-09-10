@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.identity-includes-worker-bundle",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "implementation",
+  "summary": "Bind the canonical public export identity to a content digest of the Node export worker bundle so a worker code fix produces a new identity while identical code keeps cache reuse.",
+  "scope": [
+    "public-export",
+    "export-identity",
+    "trusted-execution"
+  ],
+  "invariants": [
+    "exporter_digest is a sha256 over the on-disk sources the isolated hybrid export worker executes: the assembler entrypoint, servers/nextjs/scripts/lib non-test .mjs helpers, servers/nextjs/lib/presentation-export-quality.ts, and non-test sources under servers/nextjs/lib/authored-hybrid.",
+    "The worker protocol string stays exporter_version and is folded into the digest payload, so a protocol bump also splits the identity.",
+    "The digest is computed once per process from file bytes and recorded relative to the Next.js root, so two checkouts of identical code share one identity.",
+    "An unreadable or incomplete worker tree falls back to a stable digest over the protocol string plus the 'bundle-unavailable' marker, and the operation receipt records source and reason.",
+    "The receipt key exporterWorkerBundle names the worker code that produced the delivered bytes."
+  ],
+  "forbidden": [
+    "Derive exporter_digest from the protocol string alone: a completed identity is reused unconditionally, so a broken worker would be served from cache forever.",
+    "Include test files, spec files, or fixtures in the bundle inventory: they never execute in the worker and would invalidate published exports on a test-only edit.",
+    "Add a manual cache-invalidation switch in place of the content binding."
+  ],
+  "evidence": [
+    "servers/fastapi/services/public_export_worker_bundle.py",
+    "servers/fastapi/tests/unit/test_public_export_worker_bundle.py",
+    "servers/fastapi/models/sql/public_artifact.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-11T00:00:00.0000000+00:00"
+}

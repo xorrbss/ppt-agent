@@ -42,6 +42,7 @@ from services.presentation_export_route_inputs import (
     resolve_authored_local_fit_receipts,
 )
 from services.public_export_hybrid_evidence import bounded_hybrid_worker_evidence
+from services.public_export_worker_bundle import public_export_worker_bundle
 from services.public_export_identity import (
     CanonicalExportExecution,
     CanonicalExportIdentity,
@@ -62,7 +63,6 @@ from services.public_export_identity import (
     reuse_completed_export_identity,
     run_slide_render_singleflight,
 )
-
 from services.isolated_worker_contracts import (
     ArtifactRef,
     IsolatedWorkerContractError,
@@ -1795,6 +1795,7 @@ async def render_and_export_authored_htmls(
     png_stage_started = time.perf_counter()
     await asyncio.gather(*(stage_worker_input(reference) for reference in png_refs))
     artifact_stage_millis += int((time.perf_counter() - png_stage_started) * 1000)
+    worker_bundle = public_export_worker_bundle(PUBLIC_RENDER_WORKER_PROTOCOL_VERSION)
 
     def metric_millis(metrics: Mapping[str, Any], name: str) -> int:
         raw = metrics.get(name, 0)
@@ -1856,6 +1857,7 @@ async def render_and_export_authored_htmls(
                 "bindingDigest": final_runtime_binding_digest,
             },
             "deckRenderIdentityDigest": final_deck_render_identity_digest,
+            "exporterWorkerBundle": worker_bundle.evidence(),
         }
 
     if hybrid_requested and not canonical_enabled:
@@ -1865,8 +1867,6 @@ async def render_and_export_authored_htmls(
         hybrid_requested = False
         hybrid_degraded_reason = "hybrid_requires_export_identity_v2"
     if canonical_enabled:
-        exporter_version = PUBLIC_RENDER_WORKER_PROTOCOL_VERSION
-
         def canonical_identity(*, hybrid: bool) -> CanonicalExportIdentity:
             return CanonicalExportIdentity.build(
                 owner_id=claim.owner_id,
@@ -1882,12 +1882,12 @@ async def render_and_export_authored_htmls(
                     if hybrid
                     else "public-isolated-fidelity"
                 ),
-                exporter_version=exporter_version,
+                exporter_version=PUBLIC_RENDER_WORKER_PROTOCOL_VERSION,
                 evidence=ExportEvidenceDigests(
                     scene_digest=normalized_scene_digest,
                     semantic_digest=semantic_digest,
                     quality_digest=normalized_quality_digest,
-                    exporter_digest=sha256(exporter_version.encode("utf-8")).hexdigest(),
+                    exporter_digest=worker_bundle.digest,
                     font_manifest_digest=sha256(
                         (
                             f"editable-hybrid:font-embedding={'on' if font_embedding else 'off'}"
