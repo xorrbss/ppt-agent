@@ -244,102 +244,31 @@ async def _execute_generation_export(*args: Any, **kwargs: Any) -> PresentationE
     )
 
 
-def _chat_first_generation_enabled() -> bool:
-    """Keep runtime admission injectable at the endpoint boundary."""
-
-    try:
-        require_supported_workspace_runtime(sql_engine.url)
-    except UnsupportedWorkspaceRuntimeError as error:
-        raise HTTPException(status_code=501, detail=error.code) from error
-    return True
-
-
-def _require_local_sync_generation(database_url_or_dialect: Any) -> None:
-    """Keep the legacy inline generator on the explicit local SQLite path only."""
-
-    profile = resolve_workspace_runtime_profile(database_url_or_dialect)
-    if profile.kind == WorkspaceRuntimeKind.SQLITE_LOCAL:
-        return
-    raise HTTPException(
-        status_code=410,
-        detail={
-            "reasonCode": "sync_generation_deprecated",
-            "replacement": "/api/v2/presentations/generations",
-        },
-        headers={
-            "Deprecation": "true",
-            "Link": '</api/v2/presentations/generations>; rel="successor-version"',
-        },
-    )
-
-
-def _require_local_legacy_async_generation(database_url_or_dialect: Any) -> None:
-    """Allow the compatibility route only on supported workspace stores."""
-
-    try:
-        require_supported_workspace_runtime(database_url_or_dialect)
-    except UnsupportedWorkspaceRuntimeError as error:
-        raise HTTPException(status_code=501, detail=error.code) from error
-
-
-PRESENTATION_GENERATE_ROUTER = APIRouter(
-    prefix="/presentation", tags=["Presentation"]
+from api.v1.ppt.endpoints.presentation_generate_admission import (
+    AsyncPresentationGenerationAdmissionResponse,
+    AsyncPresentationGenerationTaskResponse,
+    PRESENTATION_GENERATE_ROUTER,
+    _chat_first_generation_enabled,
+    _require_local_legacy_async_generation,
+    _require_local_sync_generation,
 )
-
-
-class AsyncPresentationGenerationTaskResponse(BaseModel):
-    id: str
-    status: str
-    message: Optional[str] = None
-    error: Optional[dict] = None
-    created_at: datetime
-    updated_at: datetime
-    data: Optional[dict] = None
-    progress: Optional[dict] = None
-    failure: Optional[dict] = None
-
-
-class AsyncPresentationGenerationAdmissionResponse(
-    AsyncPresentationGenerationTaskResponse
-):
-    """Accepted durable generation plus its canonical workspace operation."""
-
-    operation_id: Optional[uuid.UUID] = None
 
 
 def _authored_exact_admission_exception(
     error: AuthoredExactReconstructionUnavailableError,
 ) -> HTTPException:
     """Map private exact-preset failures to stable, non-sensitive API errors."""
-    # ``resolve_authored_style`` deliberately includes useful server-side context
-    # (style id and validation reason).  That context can identify a private
-    # preset and must not cross the API or durable task-status boundary.
     if "failed preset validation" in str(error):
-        exception = HTTPException(
-            status_code=422,
-            detail="authored_exact_reconstruction_invalid",
-        )
+        exception = HTTPException(status_code=422, detail="authored_exact_reconstruction_invalid")
     else:
-        exception = HTTPException(
-            status_code=403,
-            detail="authored_exact_reconstruction_unavailable",
-        )
-    # The workspace operation adapter preserves these attributes when it maps
-    # a retry admission failure. Exact-preset failures are deterministic and
-    # must not be presented as an automatically retryable card.
+        exception = HTTPException(status_code=403, detail="authored_exact_reconstruction_unavailable")
     exception.code = str(exception.detail)
     exception.retryable = False
     return exception
 
 
 def _validate_authored_exact_admission(request: GeneratePresentationRequest) -> None:
-    """Reject unavailable exact presets before sync work or durable queueing.
-
-    An unknown ordinary authored style intentionally retains the historical
-    default-style fallback.  Only a style *declared* as exact is fail-closed by
-    ``resolve_authored_style``; this keeps the rollout private without silently
-    downgrading an exact request to style-reference generation.
-    """
+    """Reject unavailable exact presets before sync work or durable queueing."""
     template = (request.template or "").strip().lower()
     authored_requested = template == AUTHORED_TEMPLATE or request.strategy == "authored"
     if not authored_requested:
@@ -350,97 +279,50 @@ def _validate_authored_exact_admission(request: GeneratePresentationRequest) -> 
         raise _authored_exact_admission_exception(error) from error
 
 
-async def _validate_authored_master_pin_admission(
-    request: GeneratePresentationRequest,
-) -> None:
+async def _validate_authored_master_pin_admission(request: GeneratePresentationRequest) -> None:
     """Resolve a company-standard pin only when authored generation requests one."""
-
     if request.template != AUTHORED_TEMPLATE:
         if request.master_pin is not None:
             raise HTTPException(status_code=400, detail="generation_strategy_conflict")
         return
-    if (
-        request.master_pin is None
-        and request._authored_master_pin is None
-        and request._authored_composition_pin is None
-    ):
-        # "No company standard" is an explicit product choice. Keep the request
-        # unpinned so the Authored style owns the full canvas; publication seals
-        # the resulting unpinned style/composition digests independently.
+    if request.master_pin is None and request._authored_master_pin is None and request._authored_composition_pin is None:
         return
-    master_enabled = (
-        os.getenv("AUTHORED_VNEXT_MASTER_ENABLED", "true").strip().lower()
-        == "true"
-    )
+    master_enabled = os.getenv("AUTHORED_VNEXT_MASTER_ENABLED", "true").strip().lower() == "true"
     if not master_enabled:
         raise HTTPException(status_code=404, detail="authored_vnext_master_disabled")
     owner_id = get_current_owner_id()
     if owner_id is None:
         raise HTTPException(status_code=401, detail="authored_vnext_owner_required")
-    if (
-        request._authored_master_pin is not None
-        and request._authored_composition_pin is not None
-    ):
+    if request._authored_master_pin is not None and request._authored_composition_pin is not None:
         frozen_pin = request._authored_master_pin
         composition_pin = request._authored_composition_pin
         if frozen_pin is None or composition_pin is None:
-            raise HTTPException(
-                status_code=409,
-                detail="authored_vnext_composition_checkpoint_missing",
-            )
+            raise HTTPException(status_code=409, detail="authored_vnext_composition_checkpoint_missing")
         try:
             repository = generation_repository_for_owner(owner_id)
-            master = await asyncio.to_thread(
-                repository.get_master,
-                frozen_pin.master_id,
-                frozen_pin.master_revision,
-            )
+            master = await asyncio.to_thread(repository.get_master, frozen_pin.master_id, frozen_pin.master_revision)
             font_digest = master.contract.font_manifest.digest
-            layout_digest = canonical_digest(
-                master.contract.layouts.model_dump(mode="json", by_alias=True)
-            )
-            if (
-                master.status != "published"
-                or master.digest != frozen_pin.master_digest
-                or layout_digest != frozen_pin.layout_registry_digest
-                or font_digest != frozen_pin.font_manifest_digest
-                or composition_pin.master_digest != frozen_pin.master_digest
-            ):
+            layout_digest = canonical_digest(master.contract.layouts.model_dump(mode="json", by_alias=True))
+            if (master.status != "published" or master.digest != frozen_pin.master_digest or layout_digest != frozen_pin.layout_registry_digest or font_digest != frozen_pin.font_manifest_digest or composition_pin.master_digest != frozen_pin.master_digest):
                 raise ValueError("frozen authored design checkpoint mismatch")
             materialize_authored_composition(master.contract, composition_pin)
         except AuthoredVNextGenerationNotFoundError as error:
-            exception = HTTPException(
-                status_code=404,
-                detail="authored_vnext_generation_not_found",
-            )
+            exception = HTTPException(status_code=404, detail="authored_vnext_generation_not_found")
             exception.code = "authored_vnext_generation_not_found"
             exception.retryable = False
             raise exception from error
         except ValueError as error:
-            exception = HTTPException(
-                status_code=409,
-                detail="authored_vnext_stale_master",
-            )
+            exception = HTTPException(status_code=409, detail="authored_vnext_stale_master")
             exception.code = "authored_vnext_stale_master"
             exception.retryable = False
             raise exception from error
         request._authored_master_contract = master.contract
-        request._authored_master_resolution = ResolvedLegacyMasterPin(
-            owner_id=owner_id,
-            pin=frozen_pin,
-            contract=master.contract,
-        )
+        request._authored_master_resolution = ResolvedLegacyMasterPin(owner_id=owner_id, pin=frozen_pin, contract=master.contract)
         return
     try:
-        resolved = await asyncio.to_thread(
-            resolve_legacy_master_pin,
-            owner_id=owner_id,
-            requested=request.master_pin,
-        )
+        resolved = await asyncio.to_thread(resolve_legacy_master_pin, owner_id=owner_id, requested=request.master_pin)
     except AuthoredVNextGenerationPipelineError as error:
-        status_code = (
-            404 if isinstance(error, AuthoredVNextGenerationNotFoundError) else 409
-        )
+        status_code = 404 if isinstance(error, AuthoredVNextGenerationNotFoundError) else 409
         exception = HTTPException(status_code=status_code, detail=error.code)
         exception.code = error.code
         exception.retryable = False
@@ -448,16 +330,9 @@ async def _validate_authored_master_pin_admission(
     request._authored_master_pin = resolved.pin
     request._authored_master_contract = resolved.contract
     request._authored_master_resolution = resolved
-    # Freeze every mutable style/rule input before the durable queue is
-    # admitted. Workers and export replay this pin and never reread style YAML.
     style = resolve_authored_style(request.authored_style)
     request._authored_style_snapshot = style
-    composition, _ = resolve_authored_composition(
-        resolved.contract,
-        style=style if request.authored_style is not None else None,
-        visual_direction=getattr(resolved, "visual_direction", None),
-        metadata=request._authored_deck_metadata,
-    )
+    composition, _ = resolve_authored_composition(resolved.contract, style=style if request.authored_style is not None else None, visual_direction=getattr(resolved, "visual_direction", None), metadata=request._authored_deck_metadata)
     request._authored_composition_pin = composition
 
 
