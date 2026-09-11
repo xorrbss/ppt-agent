@@ -43,15 +43,6 @@ UNCERTAIN_COMPARISON_REJECTIONS = frozenset(
         "reject.font_unverifiable",
     }
 )
-PUBLISHABLE_VISUAL_REASONS = frozenset(
-    {
-        "parent_region_unavailable",
-        "parent_geometry_unsupported",
-        "parent_preservation_failed",
-    }
-)
-
-
 class AuthoredLocalFitRejected(RuntimeError):
     """The deterministic fitter or its independent reconstruction failed."""
 
@@ -1061,7 +1052,6 @@ __all__ = [
     "AcceptedLocalFit",
     "AuthoredLocalFitRejected",
     "ORIGINAL_DELIVERY_REVISION",
-    "PUBLISHABLE_VISUAL_REASONS",
     "RECEIPT_KEY",
     "accept_unchanged_capture",
     "accept_verified_capture",

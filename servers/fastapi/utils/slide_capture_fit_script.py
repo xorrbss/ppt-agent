@@ -248,7 +248,7 @@ __LOCAL_MORPH_MEMBERS__
       if (!child.hasAttribute('data-qid') || !this._eligible(child)) continue;
       const childItem = this._struct(child);
       if (!['static', 'relative'].includes(childItem.position) || childItem.display === 'none') continue;
-      if (child.getAttribute('data-intentional-overlap') === 'true' ||
+      if (child.getAttribute('data-allow-overlap') === 'true' ||
           (!this._isCardLike(child, childItem) && !childItem.ownText)) continue;
       const childBox = this._box(child);
       if (!followingBoxes.some((siblingBox) => this._intersects(childBox, siblingBox))) continue;

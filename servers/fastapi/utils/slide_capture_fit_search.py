@@ -53,7 +53,7 @@ SEARCH_MEMBERS = r"""
     const nodes = [region.card].concat(Array.from(region.card.querySelectorAll('[data-qid]')));
     if (nodes.some((node) => {
       return !this._eligible(node) ||
-        node.getAttribute('data-intentional-overlap') === 'true';
+        node.getAttribute('data-allow-overlap') === 'true';
     })) return {invalid: 'unsupported_geometry'};
     const spacingNodes = nodes.filter((node) => {
       const item = this._struct(node);

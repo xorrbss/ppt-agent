@@ -14,7 +14,6 @@ import pytest
 
 from services.authored_local_fit_evidence import validate_changed_capture
 from services.authored_local_fit_policy import font_size_allowed, minimum_allowed_pt
-from utils.renderer_worker_policy import RendererPolicyError
 from utils.slide_capture import find_chrome
 
 _SUPPORT = Path(__file__).resolve().parents[1] / "fixtures" / "local_fit_v14" / "support.py"
@@ -125,18 +124,6 @@ def test_displacing_a_protected_sibling_rejects_scope_exceeded() -> None:
         "morph_allowed": False, "rule": "protected_box",
     })
     assert termination["rejection_counts"]["reject.text_escape"] >= 1
-
-
-@pytest.mark.xfail(
-    strict=True, raises=RendererPolicyError,
-    reason="DEFECT: data-local-fit-protected is read by _protected() but is not in the "
-    "renderer GLOBAL_ATTRIBUTES allowlist, so a slide carrying it never renders.",
-)
-def test_data_local_fit_protected_sibling_rejects_scope_exceeded() -> None:
-    _, _, capture = support.fit("scope_exceeded_unadmitted")
-    report = support.report_of(capture)
-
-    assert support.rejection_codes(report)["reject.scope_exceeded"] >= 1
 
 
 # --- font floor and shrink cap --------------------------------------------
@@ -271,19 +258,6 @@ def test_a_label_with_explicit_semantics_blocks_the_morph() -> None:
     assert blocked[0]["space"] == [pytest.approx({
         "qid": "bar-b", "required_growth_px": 28, "available_growth_px": 2, "growth_cap_px": 40,
     })]
-
-
-@pytest.mark.xfail(
-    strict=True, raises=RendererPolicyError,
-    reason="DEFECT: _morphExplicitSemantics()/_morphLabelGroup() guard on data-status "
-    "and data-semantic-color, which utils/renderer_markup_policy.py never admits; "
-    "only role= and aria-* guards can fire on rendered HTML.",
-)
-def test_a_label_carrying_data_status_blocks_the_morph() -> None:
-    _, _, capture = support.fit("morph_status_unadmitted")
-    report = support.report_of(capture)
-
-    assert support.rejection_codes(report)["reject.morph_semantic_guard"] >= 1
 
 
 def test_a_label_that_would_drop_below_4_5_contrast_blocks_the_morph() -> None:

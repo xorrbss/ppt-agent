@@ -6,10 +6,12 @@ MORPH_MEMBERS = r"""
     for (let current = node; current; current = current.parentElement) {
       const role = String(current.getAttribute('role') || '').trim().toLowerCase();
       const semantic = String(current.getAttribute('data-semantic-role') || '').trim().toLowerCase();
+      // role, aria-label/-hidden and data-semantic-role are the only semantic
+      // attributes utils/renderer_markup_policy.py admits; guarding on others
+      // would never fire on rendered HTML.
       if ((role && !['none', 'presentation'].includes(role)) || !plainRoles.has(semantic) ||
           current.matches('button,a,input,select,textarea,summary,meter,progress') ||
-          ['aria-pressed', 'aria-checked', 'aria-selected', 'aria-current', 'data-status', 'data-state',
-            'data-semantic-color', 'tabindex'].some(name => current.hasAttribute(name))) return true;
+          current.hasAttribute('aria-label') || current.hasAttribute('aria-hidden')) return true;
       if (current === boundary) break;
     }
     return false;
@@ -118,9 +120,7 @@ MORPH_MEMBERS = r"""
           !label.hasAttribute('data-qid') || !this._plainGeometry(label) || !this._ownedTextNodes(label).length ||
           label.querySelector('*') || !text || text.length > 60 || /[\r\n.!?。！？]/.test(text) ||
           !['static', 'relative'].includes(s.position) || s.backgroundImage !== 'none' ||
-          s.boxShadow !== 'none' || signature(label) !== first ||
-          label.hasAttribute('data-semantic-color') || label.hasAttribute('data-status') ||
-          label.hasAttribute('aria-current') || label.hasAttribute('aria-selected')) return null;
+          s.boxShadow !== 'none' || signature(label) !== first) return null;
       const top = this._box(label).top;
       if (!tops.some(value => Math.abs(value - top) <= this.C.geometry_tolerance_px)) tops.push(top);
     }

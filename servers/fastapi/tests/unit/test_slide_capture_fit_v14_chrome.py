@@ -16,7 +16,6 @@ from pathlib import Path
 import pytest
 
 from services.authored_local_fit_evidence import validate_changed_capture
-from utils.renderer_worker_policy import RendererPolicyError
 from utils.slide_capture import find_chrome
 
 _SUPPORT = Path(__file__).resolve().parents[1] / "fixtures" / "local_fit_v14" / "support.py"
@@ -59,8 +58,8 @@ def test_card_painted_under_a_bottom_anchored_band_seeds_bottom_band() -> None:
     }]
 
 
-def test_footer_and_header_part_ancestors_produce_no_seed() -> None:
-    """Collisions under ``<footer>`` or ``data-header-part`` are left alone."""
+def test_protected_ancestors_produce_no_seed() -> None:
+    """Collisions under ``data-allow-overlap``, ``<footer>`` or a header part are left alone."""
 
     _, _, capture = support.fit("protected_no_seed")
     report = support.report_of(capture)
@@ -72,21 +71,6 @@ def test_footer_and_header_part_ancestors_produce_no_seed() -> None:
     assert report["unresolved_reasons"] == []
     assert report["candidates"] == []
     assert report["edits"] == []
-
-
-@pytest.mark.xfail(
-    strict=True, raises=RendererPolicyError,
-    reason="DEFECT: _protected() honours data-intentional-overlap, data-footer-part and "
-    "data-local-fit-protected, but utils/renderer_markup_policy.py GLOBAL_ATTRIBUTES "
-    "never admits them, so authored HTML carrying them is rejected before the fitter "
-    "runs; the attribute guards are unreachable in production.",
-)
-def test_intentional_overlap_and_footer_part_attributes_produce_no_seed() -> None:
-    _, _, capture = support.fit("protected_no_seed_unadmitted")
-    report = support.report_of(capture)
-
-    assert report["geometry_seeds"] == []
-    assert report["status"] == "unchanged"
 
 
 # --- resolution ------------------------------------------------------------

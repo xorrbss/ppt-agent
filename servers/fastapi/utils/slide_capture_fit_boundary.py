@@ -24,7 +24,7 @@ BOUNDARY_MEMBERS = r"""
     let childBottom = box.top;
     for (const child of Array.from(node.children)) {
       if (!child.hasAttribute('data-qid') || !this._boundaryVisible(child) || this._protected(child)) continue;
-      if (child.getAttribute('data-intentional-overlap') === 'true') continue;
+      if (child.getAttribute('data-allow-overlap') === 'true') continue;
       const cs = getComputedStyle(child);
       if (!['static', 'relative'].includes(cs.position)) continue;
       if (this._isCardLike(child) || this._px(cs.borderBottomWidth) > 0) childBottom = Math.max(childBottom, this._box(child).bottom);

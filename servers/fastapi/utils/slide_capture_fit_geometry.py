@@ -3,8 +3,7 @@
 GEOMETRY_MEMBERS = r"""
   _protected(node) {
     for (let current = node; current && current !== document.body; current = current.parentElement) {
-      if (current.matches('[data-source-locked="true"],[data-intentional-overlap="true"]')) return true;
-      if (current.matches('[data-local-fit-protected="true"],[data-footer-part]') || current.tagName === 'FOOTER') return true;
+      if (current.matches('[data-allow-overlap="true"]') || current.tagName === 'FOOTER') return true;
       if (current.hasAttribute('data-header-part') && current.getAttribute('data-header-part') !== 'body') return true;
     }
     return Boolean(this._slotFor(node));
