@@ -29,6 +29,7 @@ from services import authored_author_stage_rescue as rescue_mod
 from services import authored_presentation_pipeline as pipeline_mod
 from services import authored_presentation_service as authored_service
 from services import authored_terminal_slide_fallback as terminal_mod
+from services.authored_batch_policy import OVERLOAD_COOLDOWN_BASE_SECONDS
 from services.authored_composition_policy import CompositionProfile
 from services.authored_generation_observability import (
     log_authored_slide_failure_observation,
@@ -53,6 +54,7 @@ from utils.llm_calls.author_slide import (
     validate_authored_slide_html,
 )
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
+from utils.provider_idempotency import ProviderOutcomeError
 from tests.unit.test_authored_terminal_slide_fallback import _pop_slide_ids
 
 _ORDINARY = CompositionProfile("ordinary", "authored", True, True, 1)
@@ -138,6 +140,25 @@ def _install_pipeline_stubs(monkeypatch):
         ),
     )
     monkeypatch.setattr(pipeline_mod, "blocking_safety_issues", lambda _report: ())
+
+
+def _capture_cooldown_waits(monkeypatch):
+    waits: list[float] = []
+    now = [100.0]
+    schedule_type = pipeline_mod.AuthoredWaveSchedule
+
+    async def sleep(seconds: float) -> None:
+        waits.append(seconds)
+        now[0] += seconds
+
+    monkeypatch.setattr(
+        pipeline_mod,
+        "AuthoredWaveSchedule",
+        lambda policy: schedule_type(
+            policy, clock=lambda: now[0], sleep=sleep
+        ),
+    )
+    return waits
 
 
 def _run_pipeline(monkeypatch, *, plan, first_pass, rescue, slides=1, **kwargs):
@@ -294,6 +315,85 @@ def test_third_attempt_uses_the_simplified_brief_and_publishes_unflagged(monkeyp
     assert simplified.header_contract_at(0) is contract
 
 
+def test_rescue_overload_waits_for_shared_cooldown_then_succeeds_without_new_ordinal(
+    monkeypatch,
+):
+    waits = _capture_cooldown_waits(monkeypatch)
+    calls: list[tuple[int, int]] = []
+    observed: list[int] = []
+
+    async def overloaded_once(
+        _plan,
+        _index,
+        *,
+        attempt_observer=None,
+        provider_attempt_offset=0,
+        provider_attempt_limit=2,
+        **_kwargs,
+    ):
+        calls.append((provider_attempt_offset, provider_attempt_limit))
+        if attempt_observer is not None:
+            attempt_observer(provider_attempt_offset + 1)
+            observed.append(provider_attempt_offset + 1)
+        if len(calls) == 1:
+            raise ProviderOutcomeError(
+                "public_provider_bridge_exception", recovery_allowed=True
+            )
+        return _RESCUED_HTML
+
+    result = _run_pipeline(
+        monkeypatch,
+        plan=_stub_plan(contract=default_header_contract()),
+        first_pass=_first_pass_that_spends_its_budget([]),
+        rescue=overloaded_once,
+        source_images_locked_to_source_slide=True,
+    )
+
+    assert calls == [(2, 3), (2, 3)]
+    assert observed == [3, 3]
+    assert waits == [OVERLOAD_COOLDOWN_BASE_SECONDS]
+    assert result.author_provider_attempt_counts == (3,)
+
+
+@pytest.mark.parametrize(
+    "code", ("public_provider_bridge_exception", "public_provider_call_timeout")
+)
+def test_rescue_overload_past_bound_keeps_coded_terminal_failure(monkeypatch, code):
+    waits = _capture_cooldown_waits(monkeypatch)
+    calls = 0
+
+    async def always_overloaded(
+        _plan, _index, *, attempt_observer=None, provider_attempt_offset=0, **_kwargs
+    ):
+        nonlocal calls
+        calls += 1
+        if attempt_observer is not None:
+            attempt_observer(provider_attempt_offset + 1)
+        raise ProviderOutcomeError(code, recovery_allowed=True)
+
+    with pytest.raises(pipeline_mod.AuthoredStageError) as caught:
+        _run_pipeline(
+            monkeypatch,
+            plan=_stub_plan(contract=default_header_contract()),
+            first_pass=_first_pass_that_spends_its_budget([]),
+            rescue=always_overloaded,
+            source_images_locked_to_source_slide=True,
+        )
+
+    assert calls == 2
+    assert waits == [OVERLOAD_COOLDOWN_BASE_SECONDS]
+    assert caught.value.code == code
+    assert caught.value.provider_attempt_count == 3
+    event = log_authored_slide_failure_observation(
+        stage="author",
+        code=caught.value.code,
+        slide_number=1,
+        retryable=False,
+        provider_attempt_count=3,
+    )
+    assert event["code"] == code
+
+
 def test_third_attempt_failure_publishes_a_flagged_placeholder(monkeypatch):
     contract = default_header_contract(primary="#2563EB")
     calls: list[tuple[str, int]] = []
@@ -325,7 +425,12 @@ def test_third_attempt_failure_publishes_a_flagged_placeholder(monkeypatch):
 
 
 def test_a_provider_crash_in_the_third_attempt_still_publishes_flagged(monkeypatch):
+    waits = _capture_cooldown_waits(monkeypatch)
+    calls = 0
+
     async def fake_rescue(_plan, _index, **_kwargs):
+        nonlocal calls
+        calls += 1
         raise RuntimeError("provider transport died")
 
     result = _run_pipeline(
@@ -338,6 +443,8 @@ def test_a_provider_crash_in_the_third_attempt_still_publishes_flagged(monkeypat
     assert [entry["remakeOutcome"] for entry in result.author_flagged_slides] == [
         "author_rescue_failed"
     ]
+    assert calls == 1
+    assert waits == []
 
 
 def test_only_the_failed_slide_spends_a_rescue_call(monkeypatch):

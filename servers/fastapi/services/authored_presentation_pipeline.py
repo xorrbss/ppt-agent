@@ -246,9 +246,9 @@ async def _author_illustrate_render_pipeline(
     # G0: the deck's style anchor, once one slide has been authored and gated.
     # ``None`` keeps every later prompt byte-identical to today's.
     style_anchor: Any | None = None
-    # F3: seconds this attempt spent waiting out a provider cooldown before an
-    # admission. A single-element list so the nested stages can write to it.
+    # F3: cooldown-wait seconds; the nested stages update this one-element list.
     authoring_cooldown_wait_seconds = [0.0]
+    schedule = AuthoredWaveSchedule(new_authored_batch_policy_state())
     # Phase 3: with the tail streamed, a slide's illustrate/render/quality/
     # checkpoint tail starts as its own authoring lands instead of waiting out
     # the whole pre-authoring pass. ``None`` keeps the phase barrier: the pass
@@ -315,7 +315,6 @@ async def _author_illustrate_render_pipeline(
         successful, carried_failures = scan.successful, scan.carried_failures
         preauthored_attempt_counts.update(scan.attempt_counts)
         nonlocal style_anchor
-        schedule = AuthoredWaveSchedule(new_authored_batch_policy_state())
         pending = list(initial)
         # One ledger: a slide this call persisted stops being a failure, and a
         # slide already accepted never becomes one again.
@@ -695,8 +694,9 @@ async def _author_illustrate_render_pipeline(
                                     author_kwargs=author_kwargs,
                                     profile=composition_profile,
                                     reference_mode=plan_reference_mode,
-                                    source_reflow=source_reflow,
+                                    source_reflow=source_reflow, schedule=schedule,
                                 )
+                                authoring_cooldown_wait_seconds[0] = schedule.cooldown_wait_seconds
                                 if rescue is None:
                                     raise
                                 html = rescue.html

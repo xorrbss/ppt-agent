@@ -51,6 +51,7 @@ class AuthoredWaveSchedule:
         self.policy = policy
         self.cooldown_wait_seconds = 0.0
         self._clock = clock
+        self._cooldown_lock = asyncio.Lock()
         # Resolved at call time, not bound here: a default argument would
         # capture the ``asyncio.sleep`` that existed when this module was
         # imported, so a caller (or a test) that replaces it later would be
@@ -67,28 +68,33 @@ class AuthoredWaveSchedule:
         ordinary cancellable ``sleep``.
         """
 
-        now = self._clock()
-        remaining = self.policy.cooldown_remaining(now)
-        if remaining <= 0.0:
-            return 0.0
-        if self._deadline is not None:
-            remaining = min(remaining, max(0.0, self._deadline - now))
-        if remaining <= 0.0:
-            return 0.0
-        logger.info(
-            "authored_batch_cooldown_wait admission=%s seconds=%.1f",
-            label,
-            remaining,
-        )
-        await (self._sleep or asyncio.sleep)(remaining)
-        self.cooldown_wait_seconds += remaining
-        return remaining
+        waited = 0.0
+        async with self._cooldown_lock:
+            while True:
+                now = self._clock()
+                remaining = self.policy.cooldown_remaining(now)
+                if self._deadline is not None:
+                    remaining = min(remaining, max(0.0, self._deadline - now))
+                if remaining <= 0.0:
+                    return waited
+                logger.info(
+                    "authored_batch_cooldown_wait admission=%s seconds=%.1f",
+                    label,
+                    remaining,
+                )
+                await (self._sleep or asyncio.sleep)(remaining)
+                self.cooldown_wait_seconds += remaining
+                waited += remaining
+                # Test/no-op sleepers may deliberately leave the clock fixed.
+                if self._clock() <= now:
+                    return waited
 
     def advance(self, outcome: Any, *, succeeded: bool) -> None:
         self.policy = advance_authored_batch_policy(
             self.policy,
             succeeded=succeeded,
             error=outcome if isinstance(outcome, BaseException) else None,
+            now=self._clock(),
         )
 
 

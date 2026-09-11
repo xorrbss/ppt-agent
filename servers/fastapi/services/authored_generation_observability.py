@@ -44,6 +44,8 @@ _FAILURE_CODES = {
     "authored_composition_safety_gate_failed",
     "authored_provider_attempt_budget_exhausted",
     "source_content_browser_readback_failed",
+    "public_provider_bridge_exception",
+    "public_provider_call_timeout",
     "public_provider_request_limit_exceeded",
     "public_provider_retry_limit_exceeded",
 }

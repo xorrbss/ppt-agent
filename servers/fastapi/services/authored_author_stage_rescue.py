@@ -13,13 +13,15 @@ header band.
 This module extends the same principle one stage earlier, as the same three
 rungs:
 
-1. A THIRD author call whose brief is deliberately simpler than the two that
+1. A THIRD author attempt whose brief is deliberately simpler than the two that
    failed. Same content, same header contract -- but the contract is restated
    first and as non-negotiable, the deck's silhouette/figure decisions are
    withheld so the model composes the role's plain layout, and the frame is
    spelled out in pixels. It reuses ``author_planned_slide`` and the existing
    correction-hint seam rather than a second prompt module, so there is exactly
-   one authoring prompt in this system.
+   one authoring prompt in this system. A provider overload may replay that
+   same ordinal once after the batch scheduler's cooldown; it does not spend a
+   fourth content-attempt ordinal.
 2. Failing that, ``services/authored_author_stage_placeholder.py`` renders the
    slide's outline deterministically and the slide is registered flagged with
    reason ``author:attempts_exhausted`` -- the same ``flaggedSlides`` structure
@@ -43,9 +45,11 @@ from collections.abc import Sequence
 from typing import Any, Mapping
 
 from services.authored_author_stage_placeholder import author_placeholder_html
+from services.authored_batch_policy import is_authored_provider_overload
 from services.authored_checkpoint_service import AuthoredStageError
 from services.authored_terminal_slide_flag_only import flagged_entry
 from services.authored_terminal_slide_policy import terminal_fallback_active
+from services.authored_wave_scheduler import AuthoredWaveSchedule
 from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
     inspect_browser_source_readback,
@@ -312,6 +316,49 @@ def _placeholder(plan: Any, index: int) -> str:
     )
 
 
+def _overload_recovery_allowed(error: BaseException) -> bool:
+    """Reuse the batch predicate plus the provider outcome recovery contract."""
+
+    return is_authored_provider_overload(error) or (
+        getattr(error, "recovery_allowed", False) is True
+    )
+
+
+async def _author_with_overload_recovery(
+    plan: Any,
+    index: int,
+    *,
+    author_kwargs: Mapping[str, Any],
+    hint: str,
+    schedule: AuthoredWaveSchedule,
+) -> str:
+    """Run ordinal three, replaying it once only for a recoverable overload."""
+
+    kwargs = _rescue_attempt_kwargs(author_kwargs, hint)
+    await schedule.wait_out_cooldown(f"author-rescue-{index + 1}")
+    try:
+        html = await author_planned_slide(_SimplifiedPlan(plan), index, **kwargs)
+    except Exception as error:
+        schedule.advance(error, succeeded=False)
+        if not _overload_recovery_allowed(error):
+            raise
+        LOGGER.warning(
+            "[authored] slide %d simplified attempt overloaded (%s); "
+            "waiting for the shared cooldown and replaying ordinal %d once",
+            index + 1,
+            getattr(error, "code", None) or type(error).__name__,
+            RESCUE_ATTEMPT_ORDINAL,
+        )
+        await schedule.wait_out_cooldown(f"author-rescue-recovery-{index + 1}")
+        try:
+            html = await author_planned_slide(_SimplifiedPlan(plan), index, **kwargs)
+        except Exception as recovery_error:
+            schedule.advance(recovery_error, succeeded=False)
+            raise
+    schedule.advance(html, succeeded=True)
+    return html
+
+
 async def rescue_author_stage(
     plan: Any,
     index: int,
@@ -321,6 +368,7 @@ async def rescue_author_stage(
     profile: Any,
     reference_mode: str,
     source_reflow: bool,
+    schedule: AuthoredWaveSchedule,
 ) -> AuthorStageRescue | None:
     """Rescue one slide whose author budget is spent, or ``None`` to fail closed.
 
@@ -352,8 +400,8 @@ async def rescue_author_stage(
         f". {OUTPUT_TOKEN_LIMIT_GUIDANCE}" if token_limited else "",
     )
     try:
-        html = await author_planned_slide(
-            _SimplifiedPlan(plan), index, **_rescue_attempt_kwargs(author_kwargs, hint)
+        html = await _author_with_overload_recovery(
+            plan, index, author_kwargs=author_kwargs, hint=hint, schedule=schedule
         )
     except AuthoredProviderBudgetExhausted as exhausted:
         if source_reflow:
