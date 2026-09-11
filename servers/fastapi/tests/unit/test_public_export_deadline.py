@@ -265,7 +265,10 @@ def test_the_ceiling_mirrors_the_executor_cap_and_the_v5_row() -> None:
     v5 = _revision_module(V5_REVISION)
     assert v5._EXPORT_DEADLINE_CEILING_SECONDS == PUBLIC_EXPORT_DEADLINE_MAX_SECONDS
     assert v5.down_revision == V4_REVISION
-    assert revision_contract.HEAD_REVISION == V5_REVISION
+    # Not `revision_contract.HEAD_REVISION == V5_REVISION`: v5 was head when
+    # this test was written, but head moves with later revisions (e.g. the
+    # global quota reconciliation added in `c6e8a0f2b4d7`) that have nothing
+    # to do with the export deadline row this test actually protects.
     assert revision_contract.REVISION_PUBLIC_EXPORT_DEADLINE_CEILING_V5 == V5_REVISION
     assert PUBLIC_EXPORT_DEADLINE_MAX_SECONDS <= _ROLE_RESOURCE_BUDGETS["export"][2]
 
