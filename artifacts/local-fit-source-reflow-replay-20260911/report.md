@@ -215,3 +215,84 @@ from `servers/fastapi`, with `LOCAL_FIT_DB_URL_FILE` pointing at a file holding 
 database URL and `SIM_ARMS` selecting the arms. Per-slide records in
 `content-width-simulation.json`. No generation, no provider call, no database
 write, no stack contact.
+
+## Baseline on non-verbatim decks — is `fixed_horizontal` the document or the contract?
+
+Everything above came from one source document, so the rejection mix could be
+that document's habits. `baseline_non_verbatim.py` re-runs the bounded search
+over the **60 most recent non-verbatim authored decks** (2026-08-19 .. 09-09,
+1,252 slides, many different prompts) by rendering stored `slides.html_content`
+as it sits. Only the `fit=True` render is needed. No code changed, nothing was
+generated, no provider was called, no row was written.
+
+A second document *was* attempted first and is not available: the 43-page
+contract PPTX has three decks, but all three hold 43 empty slide rows, binding
+state `admitted`, never completed. Of 188 decks that do hold authored HTML, only
+17 are source-bound and all 17 are the same 35-slide document.
+
+### The fitter never runs on a slide that carries a raster image
+
+The dominant outcome was not a rejection at all:
+
+| slide outcome | slides | share |
+|---|---|---|
+| `unresolved`, reason `font_unverifiable`, **zero candidates produced** | 414 | 33.1% |
+| `unchanged` | 483 | 38.6% |
+| `unresolved`, reason `candidates_exhausted` | 177 | 14.1% |
+| `spacing_adjusted` | 162 | 12.9% |
+| `combined` / `text_scaled` / render error | 16 | 1.3% |
+
+`font_unverifiable` tracks one thing almost perfectly: **401 of those 414 slides
+carry a raster element** (`<img>`, `background-image: url(...)`, `<video>`,
+`<canvas>`), while only 4 of the other 838 slides do.
+
+The cause is a field with two readers and no writer. `slide_capture_fit_runner.py`
+resolves image-text proof from `this.P.image_text_evidence`, and
+`authored_local_fit_evidence.py::_validate_image_text_scope` fails closed on a
+visible raster without `image_text_evidence` in the metrics. **No code in the
+repository ever populates either one.** `local_fit_policy()` does not set it, and
+production calls that function with the same arguments this measurement does
+(`authored_presentation_generation.py:645`). So every image asset resolves as
+unverifiable, the runner records `font_unverifiable`, and the search stops before
+proposing a single candidate.
+
+Open question this measurement cannot settle: whether production inserts images
+before or after the fit pass. If images are present at fit time, the deterministic
+fitter is disabled on a third of all slides. That belongs to whoever owns the
+image stage, and it is worth answering before any further work on the fit search.
+
+### With those slides set aside, the rule mix
+
+On the 834 slides where the search actually ran:
+
+| rule | share of 9,046 candidates | share on `unresolved` slides only |
+|---|---|---|
+| `fixed_horizontal` | 23.9% | 27.1% |
+| `reject.dominated` | 15.9% | 0% |
+| `parent_space_unavailable` | 15.4% | 20.1% |
+| `reject.flow_box_escape` | 14.6% | 14.8% |
+| `reject.text_escape` | 11.3% | 11.0% |
+| `vertical_movement_cap` | 11.0% | 16.7% |
+
+### Answer
+
+`fixed_horizontal` is **a property of the contract, not of one document** — it is
+the largest single rejection rule here too. But 42.7% overstated it. Across many
+documents it is 23.9% of all candidates and 27.1% on the slides that fail, and it
+is not dominant: four other rules each take 11% or more.
+
+Its spread across decks is wide. Of 22 decks whose search rejected anything,
+**9 show 0%** and the maximum is 54.5%, median 15.9%. It concentrates in
+dense, many-boxed layouts and is absent from simple ones.
+
+Consequences for the proposed scope-level reflow contract:
+
+- The contract change stays justified, because the rule is real across documents.
+- Its expected yield is **lower** than the one-document figure implied, and the
+  `(c)` simulation already showed the rejection moves to a neighbouring rule.
+- It is **not the first thing to fix.** A third of all slides never reach the
+  search at all, for a reason unrelated to geometry.
+
+Reproduce: `python baseline_non_verbatim.py <decks.json> <out.json>` from
+`servers/fastapi`, with `LOCAL_FIT_DB_URL_FILE` pointing at a file holding the
+database URL. Per-deck and per-slide records in `baseline-non-verbatim.json`.
