@@ -98,22 +98,3 @@ def load_snapshot(snapshots_dir: Path):
         return json.loads(path.read_text(encoding="utf-8"))
 
     return _load
-
-
-@pytest.fixture(autouse=True)
-def auth_secret_backend(monkeypatch):
-    """Give every test a private in-memory signing-secret vault.
-
-    The production accessor fails closed without PROVIDER_CREDENTIAL_BACKEND;
-    tests that exercise that path override this factory explicitly.
-    """
-    from api.v1.auth import secret_store
-    from services.provider_credential_vault import InMemoryCredentialBackend
-
-    backend = InMemoryCredentialBackend()
-    monkeypatch.setattr(secret_store, "_backend_factory", lambda: backend)
-    secret_store.reset_auth_secret_cache()
-    try:
-        yield backend
-    finally:
-        secret_store.reset_auth_secret_cache()

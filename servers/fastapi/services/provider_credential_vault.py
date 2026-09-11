@@ -453,8 +453,8 @@ def validate_persisted_credential_ref(value: object) -> CredentialRef:
         raise CredentialVaultError("credential_storage_requires_ref") from error
 
 
-def credential_backend_from_environment() -> CredentialBackend:
-    """Select the configured production backend without a plaintext fallback."""
+def provider_credential_vault_from_environment() -> ProviderCredentialVault:
+    """Build the configured production backend without a plaintext fallback."""
 
     backend = (os.getenv("PROVIDER_CREDENTIAL_BACKEND") or "").strip().lower()
     if backend == "desktop_vault":
@@ -463,19 +463,18 @@ def credential_backend_from_environment() -> CredentialBackend:
             or Path(os.getenv("APP_DATA_DIRECTORY") or "app_data")
             / "provider-credential-vault"
         )
-        return WindowsDpapiCredentialBackend(root)
+        return ProviderCredentialVault(WindowsDpapiCredentialBackend(root))
     if backend == "server_kms":
-        return AwsSecretsManagerCredentialBackend(
-            region=(os.getenv("AWS_REGION") or "").strip() or None,
-            prefix=(os.getenv("PROVIDER_SERVER_KMS_PREFIX") or "presenton/provider"),
+        return ProviderCredentialVault(
+            AwsSecretsManagerCredentialBackend(
+                region=(os.getenv("AWS_REGION") or "").strip() or None,
+                prefix=(
+                    os.getenv("PROVIDER_SERVER_KMS_PREFIX")
+                    or "presenton/provider"
+                ),
+            )
         )
     raise CredentialVaultError("credential_backend_not_configured")
-
-
-def provider_credential_vault_from_environment() -> ProviderCredentialVault:
-    """Build the configured production backend without a plaintext fallback."""
-
-    return ProviderCredentialVault(credential_backend_from_environment())
 
 
 __all__ = [
@@ -490,7 +489,6 @@ __all__ = [
     "SecretValue",
     "ServerKmsBackend",
     "WindowsDpapiCredentialBackend",
-    "credential_backend_from_environment",
     "provider_credential_vault_from_environment",
     "validate_persisted_credential_ref",
 ]

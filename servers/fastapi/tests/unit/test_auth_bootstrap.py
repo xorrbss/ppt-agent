@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from api.v1.auth import bootstrap, secret_store
+from api.v1.auth import bootstrap
 from api.v1.auth.users import PASSWORD_HELPER
 from models.sql.access_token import AccessToken, hash_access_token
 from models.sql.user import User
@@ -155,9 +155,7 @@ def test_reset_auth_recovers_admin_without_replacing_account(
     config = json.loads(config_path.read_text())
     assert config["AUTH_USERNAME"] == "recovered-admin"
     assert config["AUTH_PASSWORD_HASH"] != "old-hash"
-    # Rotation writes the new secret to the vault and drops the plaintext copy.
-    assert "AUTH_SECRET_KEY" not in config
-    assert secret_store.peek_auth_secret() not in (None, "old-secret")
+    assert config["AUTH_SECRET_KEY"] != "old-secret"
     assert config["LLM_PROVIDER"] == "openai"
     assert_private_config_file(config_path)
     assert_private_config_file(tmp_path / "userConfig.json.bak")
