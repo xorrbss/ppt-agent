@@ -31,6 +31,7 @@ from utils.llm_calls.author_slide_admission import (
 from utils.llm_calls import author_slide_effort, author_slide_prompt, author_slide_rules
 from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
 from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
+from utils.llm_calls.author_prompt_profile import authoring_model, current_author_prompt_profile
 from utils.llm_calls.author_prompt_split import author_messages
 from utils.llm_calls.author_slide_stream import (
     is_authored_author_streaming_enabled,
@@ -299,11 +300,12 @@ def build_design_system(
     deck reproduce the same header.
     """
     validate_page_number_mode(page_number_mode)
+    profile = current_author_prompt_profile()
     return author_slide_prompt.build_design_system(
         brand,
         style,
-        default_style_brief=author_slide_rules.DEFAULT_STYLE_BRIEF,
-        design_system_rules=author_slide_rules.DESIGN_SYSTEM_RULES,
+        default_style_brief=profile.sections.default_style_brief,
+        design_system_rules=profile.sections.design_system_rules,
         # The wider rule is opt-in with the feature: offering asset ids the
         # deck cannot produce would only invite an unresolvable slot.
         illustration_slot_rules=illustration_slot_rules(
@@ -315,7 +317,7 @@ def build_design_system(
         page_number_system=author_slide_rules.PAGE_NUMBER_RULES_BY_MODE[
             page_number_mode
         ],
-        type_scale=type_scale_rules(getattr(brand, "verbosity", None)),
+        type_scale=profile.type_scale(getattr(brand, "verbosity", None)),
         header_system=(
             render_header_contract(
                 header_contract,
@@ -995,7 +997,7 @@ async def author_slide_html(
     )
     image_parts = [*reference_image_parts, *source_parts]
     client = get_client(config=get_llm_config())
-    model = get_model()
+    model = authoring_model(get_model())
     if mode == EXACT_RECONSTRUCTION:
         reference_guidance = author_slide_rules.EXACT_RECONSTRUCTION_GUIDANCE
     else:

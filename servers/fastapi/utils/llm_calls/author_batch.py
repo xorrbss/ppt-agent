@@ -35,6 +35,7 @@ from utils.authored_font_policy import enforce_authored_font_floor
 from utils.authored_image_slots import scan_slots, source_slot_id_for_asset
 from utils.llm_calls import author_slide_prompt, author_slide_rules
 from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
+from utils.llm_calls.author_prompt_profile import authoring_model
 from utils.llm_calls.author_prompt_split import (
     is_authored_prompt_system_hoist_enabled,
     split_deck_invariant,
@@ -359,7 +360,7 @@ async def author_slides_html(
         user_parts.extend(item.image_parts)
 
     client = get_client(config=get_llm_config())
-    model = get_model()
+    model = authoring_model(get_model())
     messages = [
         SystemMessage(
             content=author_slide_rules.SYSTEM_PROMPT

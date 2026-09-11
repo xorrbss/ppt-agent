@@ -53,6 +53,32 @@ def get_authored_composition_envelope_profile(
     return name
 
 
+def get_authored_author_prompt_profile(settings: RuntimeSettings | None = None) -> str:
+    """Which authoring prompt text an authored slide is written from.
+
+    ``current`` (default) is today's prompt byte for byte; ``august-0819`` is
+    the 2026-08-19 text with every contract the gates now require kept. Like
+    the envelope profile above it is a registry ``enum``, so a misspelled or
+    space-padded value is refused rather than silently read as ``current``:
+    a wrong profile would invalidate the A/B the switch exists for.
+    """
+    name = get_setting_env("AUTHORED_AUTHOR_PROMPT_PROFILE", settings) or "current"
+    if name not in {"current", "august-0819"}:
+        raise ValueError("authored_author_prompt_profile_invalid")
+    return name
+
+
+def get_authored_author_prompt_model(settings: RuntimeSettings | None = None) -> str | None:
+    """Pin the authoring model for the run, or ``None`` to leave it alone.
+
+    Composition follows the model at least as much as the prompt, so a prompt
+    A/B is only a clean comparison at a fixed model. Unset — the default — is
+    not a pin: the provider's own selection stands exactly as it does today.
+    """
+    value = (get_setting_env("AUTHORED_AUTHOR_PROMPT_MODEL", settings) or "").strip()
+    return value or None
+
+
 def get_image_generation_concurrency(settings: RuntimeSettings | None = None) -> int:
     """Concurrent image provider calls per process, clamped to 1..8."""
     return _clamped_int("IMAGE_GENERATION_CONCURRENCY", 3, 1, 8, settings)
@@ -310,6 +336,8 @@ __all__ = [
     "is_authored_verbatim_placeholder_authoring_enabled",
     "is_authored_verbatim_single_repair_loop_enabled",
     "get_authored_admission_gate_mode",
+    "get_authored_author_prompt_model",
+    "get_authored_author_prompt_profile",
     "get_authored_composition_envelope_profile",
     "get_authored_illustration_share",
     "get_authored_metrics_cache_entries",

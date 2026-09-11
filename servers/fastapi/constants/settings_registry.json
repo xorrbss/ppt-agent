@@ -1526,6 +1526,25 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
       "description": "Model repair calls the single repair loop may spend on one slide, clamped to 0..3. Only read when AUTHORED_VERBATIM_SINGLE_REPAIR_LOOP is on."
+    },
+    {
+      "key": "AUTHORED_AUTHOR_PROMPT_PROFILE",
+      "type": "enum",
+      "default": "current",
+      "secret": false,
+      "choices": ["current", "august-0819"],
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Authoring prompt text for authored slides: current keeps today's prompt byte for byte; august-0819 restores the 2026-08-19 design-system brief, default style brief and block order (design system stated last, no archetype clause, no deck-token or exemplar tail, pre-bundle type scale), keeping every contract the current gates require - the semantic-role vocabulary, the hidden-overflow prohibition, the data-qid sentence, the header contract and the requirement-identifier rules. Measured on one fixture the deck-invariant brief is 8235 characters under august-0819 and 11569 under current for the default style. It does not change the style anchor, the illustration plan, the composition envelope or the DOM gate; those keep their own knobs."
+    },
+    {
+      "key": "AUTHORED_AUTHOR_PROMPT_MODEL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Pin the model that authors slide HTML, so a prompt A/B is measured at a fixed model. Unset - the default - is not a pin and leaves the provider's own model selection exactly as it is."
     }
   ]
 }

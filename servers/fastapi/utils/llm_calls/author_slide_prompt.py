@@ -14,6 +14,10 @@ from utils.authored_styles import archetype_for_role
 from utils.get_env_programme import get_authored_illustration_share
 from utils.llm_calls.author_deck_tokens import deck_tokens_block
 from utils.llm_calls.author_infographic_marker import infographic_marker
+from utils.llm_calls.author_prompt_profile import (
+    assemble_author_prompt,
+    current_prompt_sections,
+)
 from utils.llm_calls.author_slide_brief import (
     AGENDA_STRUCTURE_BRIEF,
     INLINE_SVG_CONTRACT,
@@ -21,6 +25,7 @@ from utils.llm_calls.author_slide_brief import (
     SECTION_STRUCTURE_BRIEF,
     SEMANTIC_ROLE_RULES,
     SHARED_UNIVERSALS,
+    SLIDE_OUTPUT_CONTRACT,
     SOURCE_IMAGE_RULES,
     STORY_RULES,
     composition_intent_block,
@@ -154,7 +159,10 @@ def build_design_system(
     # Deck-invariant tail, in the order design section G8 fixes: the rules, then
     # this deck's literal tokens, then the style's exemplar slide. The exemplar
     # is last because it is the longest and the most concrete: everything above
-    # it is the contract it is an instance of.
+    # it is the contract it is an instance of. None of the three existed on
+    # 2026-08-19, so the ``august-0819`` profile states the rules and stops.
+    if not current_prompt_sections().deck_invariant_tail:
+        return rules
     return (
         rules
         + prompt_capability_clause()
@@ -460,43 +468,38 @@ def author_prompt(
     placeholder_contract = placeholder_prompt_for_slide(index)
     if placeholder_contract:
         structured_contract += "\n\n" + placeholder_contract
-    marker = requirement_marker(requirements_enabled=requirements_enabled)
-    requirement_block = f"{marker}\n\n" if marker else ""
-    chapter = chapter_marker(
-        chapter_breadcrumb=chapter_breadcrumb, chapter_prefix=chapter_prefix
-    )
-    chapter_block = f"{chapter}\n\n" if chapter else ""
-    structure = structure_role_brief(role)
-    structure_block = f"{structure}\n\n" if structure else ""
-    illustration = illustration_marker(illustration_allowed)
-    illustration_block = f"{illustration}\n\n" if illustration else ""
-    visual_story = visual_story_marker(visual_intent)
-    visual_story_block = f"{visual_story}\n\n" if visual_story else ""
-    figure = infographic_marker(infographic, page_number_mode=page_number_mode)
-    figure_block = f"{figure}\n\n" if figure else ""
-    direction = user_direction_brief(instructions)
-    direction_block = f"{direction}\n\n" if direction else ""
-    capacity_block = f"{capacity_brief}\n\n" if capacity_brief else ""
-    anchor = (
-        str(style_anchor.prompt_block()).strip()
-        if style_anchor is not None
+    blocks = {
+        "requirement": requirement_marker(requirements_enabled=requirements_enabled),
+        "chapter": chapter_marker(
+            chapter_breadcrumb=chapter_breadcrumb, chapter_prefix=chapter_prefix
+        ),
+        "structure": structure_role_brief(role),
+        "illustration": illustration_marker(illustration_allowed),
+        "visual_story": visual_story_marker(visual_intent),
+        "figure": infographic_marker(infographic, page_number_mode=page_number_mode),
+        "direction": user_direction_brief(instructions),
+        "capacity": capacity_brief or "",
+        "anchor": (
+            str(style_anchor.prompt_block()).strip() if style_anchor is not None else ""
+        ),
+    }
+    # The archetype clause is 2026-09 composition guidance, not a contract, so
+    # the August profile states the role and nothing else.
+    archetype = (
+        f" ⇒ compose it with the style's \"{archetype_for_role(role)}\" archetype"
+        if current_prompt_sections().archetype_clause
         else ""
     )
-    anchor_block = f"{anchor}\n\n" if anchor else ""
-    return (
-        f"{design_system}\n\n"
-        f"{anchor_block}{direction_block}"
-        f"{structure_block}{chapter_block}{requirement_block}"
-        f"{illustration_block}{visual_story_block}{figure_block}{capacity_block}"
-        f"Author slide {index + 1} of {n}. Deck topic: {brand.topic}. This slide's ROLE: "
-        f"{role} ⇒ compose it with the style's \"{archetype_for_role(role)}\" archetype. "
-        f"CONTENT: {content}.{wordmark}{structured_contract}\n\n"
-        f"{page_marker}\n\n"
-        "Design THIS slide bespoke and premium within the shared system, vary the layout to "
-        "suit the role. Give a unique stable data-qid to every element that owns text, and to "
-        "every image, table, chart, and card that carries text; a plain decorative shape or a "
-        "pure wrapper does not need one. Output ONLY the complete self-contained HTML "
-        "document."
+    return assemble_author_prompt(
+        design_system=design_system,
+        blocks=blocks,
+        slide_line=(
+            f"Author slide {index + 1} of {n}. Deck topic: {brand.topic}. This slide's "
+            f"ROLE: {role}{archetype}. "
+            f"CONTENT: {content}.{wordmark}{structured_contract}"
+        ),
+        page_marker=page_marker,
+        closing=SLIDE_OUTPUT_CONTRACT,
     )
 
 
