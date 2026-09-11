@@ -7,6 +7,7 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from services.authored_admission_capture import capture_once
 from services.authored_local_fit_evidence import (
     AcceptedLocalFit,
     AuthoredLocalFitRejected,
@@ -58,6 +59,7 @@ async def admit_local_fit_capture(
     slide_deadline: float,
     verify_seconds: float,
     deck_scope: str | None,
+    slide_index: int | None = None,
 ) -> AcceptedLocalFit:
     """Select verification or original restoration before accepting one tuple."""
 
@@ -90,8 +92,13 @@ async def admit_local_fit_capture(
             started_at = time.monotonic()
             remaining = max(0.001, deadline - started_at)
             async with asyncio.timeout(remaining):
-                second = await render(
+                # The verification render carries the fitted digest and a
+                # fit-disabled profile, so the owner keeps it as the design's
+                # legitimate second capture instead of serving the first one.
+                second = await capture_once(
                     capture.fitted_html,
+                    index=slide_index,
+                    capture=render,
                     timeout=max(1, min(60, int(remaining))),
                     fit=False,
                     fit_policy={
@@ -132,6 +139,7 @@ async def admit_local_fit_capture(
             slide_deadline=slide_deadline,
             verify_seconds=verify_seconds,
             deck_scope=deck_scope,
+            slide_index=slide_index,
         )
 
 
@@ -146,6 +154,7 @@ async def preserve_original_capture(
     verify_seconds: float,
     deck_scope: str | None,
     rejected_report: Mapping[str, Any] | None = None,
+    slide_index: int | None = None,
 ) -> AcceptedLocalFit:
     """Render the independent original tuple reserved for failed local fit."""
 
@@ -159,8 +168,10 @@ async def preserve_original_capture(
         acquired = True
         remaining = max(0.001, deadline - time.monotonic())
         async with asyncio.timeout(remaining):
-            original = await render(
+            original = await capture_once(
                 original_html,
+                index=slide_index,
+                capture=render,
                 timeout=max(1, min(60, int(remaining))),
                 fit=False,
                 fit_policy=dict(policy),

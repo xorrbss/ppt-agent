@@ -10,6 +10,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import replace
 from typing import Any, Awaitable, Callable, Optional
 
+from services.authored_admission_capture import capture_once, captured_metrics_or_existing
 from services.authored_structural_repair import RepairAssessment, SlideRepairResult
 from services.provider_usage_instrumentation import _ACTIVE_SCOPE, provider_usage_scope
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
@@ -85,7 +86,9 @@ async def revise_structural_candidates(
         current_html, current_png = htmls[i], pngs[i]
         metrics = initial_browser_metrics[i] if initial_browser_metrics is not None else None
         if metrics is None:
-            metrics = await ensure_browser_metrics(current_html)
+            metrics = await captured_metrics_or_existing(
+                current_html, index=absolute_index, ensure=ensure_browser_metrics
+            )
         metrics = dict(metrics or {})
         assessment = (
             initial_assessments[i]
@@ -264,7 +267,11 @@ async def revise_structural_candidates(
                         candidate_html, absolute_indices[i]
                     )
                 else:
-                    candidate_png, candidate_metrics = await render_html_to_png_with_metrics(candidate_html)
+                    candidate_png, candidate_metrics = await capture_once(
+                        candidate_html,
+                        index=absolute_indices[i],
+                        capture=render_html_to_png_with_metrics,
+                    )
                 final_digest = hashlib.sha256(candidate_html.encode("utf-8")).hexdigest()
                 if final_digest != digest and final_digest in seen_digests:
                     receipt["stop_reason"] = "duplicate_candidate_digest"

@@ -28,14 +28,19 @@ from utils.authored_figure_variants import (
     select_candidate,
 )
 from utils.llm_calls.author_slide import STYLE_REFERENCE
+from services.authored_admission_capture import capture_once
 from utils.slide_capture import render_html_to_png_with_metrics
 
 RenderCallable = Callable[[str], Awaitable[tuple[bytes, Mapping[str, Any] | None]]]
 
 
 async def default_render(html: str) -> tuple[bytes, Mapping[str, Any] | None]:
-    """Adapt the capture entry point to a plain ``(png, metrics)`` pair."""
-    capture = await render_html_to_png_with_metrics(html)
+    """Adapt the capture entry point to a plain ``(png, metrics)`` pair.
+
+    Candidate variants differ by document, so each is a distinct capture; the
+    owner is here for the variant a caller offers twice, and for the counters.
+    """
+    capture = await capture_once(html, capture=render_html_to_png_with_metrics)
     if hasattr(capture, "png") and hasattr(capture, "browser_metrics"):
         return capture.png, capture.browser_metrics
     png, metrics = capture

@@ -144,6 +144,55 @@ def _assert_deck_cardinality(
         ) from error
 
 
+async def _persist_publishable_checkpoints(*, generation_job, admissions, htmls, pngs, metrics) -> None:
+    """Make every published slide readable as a publishable checkpoint.
+
+    A slide whose render checkpoint already reads back as the exact published
+    document is left alone.  Rewriting it would repeat its HTML, PNG, metrics
+    and evidence bundle -- one serial DB commit and artifact write per slide,
+    appended to the deck's critical path after all provider and browser work is
+    done, and the most expensive possible window for a lease to expire.  The
+    read that replaces the write is concurrent and carries no artifact I/O.
+    """
+
+    import asyncio
+
+    from services.authored_checkpoint_html import checkpoint_stage_html
+    from services.authored_checkpoint_state import get_checkpoint
+    from services.authored_presentation_artifacts import _complete_stage_after_external_success
+
+    attempt_token = generation_job.attempt_token
+    fencing_token = getattr(generation_job, "_workspace_fencing_token", None)
+    existing = await asyncio.gather(
+        *(
+            get_checkpoint(
+                generation_job.id, index, attempt_token=attempt_token, fencing_token=fencing_token,
+            )
+            for index in range(len(admissions))
+        ),
+        return_exceptions=True,
+    )
+    for index, admission in enumerate(admissions):
+        current = existing[index]
+        if not isinstance(current, BaseException) and checkpoint_stage_html(
+            current, publishable=True
+        ) == htmls[index]:
+            continue
+        saved = await _complete_stage_after_external_success(
+            job_id=generation_job.id,
+            slide_index=index,
+            stage="render",
+            attempt_token=attempt_token,
+            fencing_token=fencing_token,
+            html=htmls[index],
+            png=pngs[index],
+            browser_metrics=metrics[index],
+            admission_receipt=admission.receipt,
+        )
+        if checkpoint_stage_html(saved, publishable=True) != htmls[index]:
+            raise BrowserSourceReadbackError(SOURCE_READBACK_FAILED, detail="publishable checkpoint unavailable")
+
+
 async def final_readback(*, pngs, generation_job, **kwargs):
     _assert_deck_cardinality(**kwargs)
     session = current_session()
@@ -208,23 +257,9 @@ async def final_readback(*, pngs, generation_job, **kwargs):
                 message=admission.predicate,
             )
     if generation_job is not None:
-        from services.authored_presentation_artifacts import _complete_stage_after_external_success
-        from services.authored_checkpoint_html import checkpoint_stage_html
-
-        for index, admission in enumerate(admissions):
-            saved = await _complete_stage_after_external_success(
-                job_id=generation_job.id,
-                slide_index=index,
-                stage="render",
-                attempt_token=generation_job.attempt_token,
-                fencing_token=getattr(generation_job, "_workspace_fencing_token", None),
-                html=htmls[index],
-                png=pngs[index],
-                browser_metrics=metrics[index],
-                admission_receipt=admission.receipt,
-            )
-            if checkpoint_stage_html(saved, publishable=True) != htmls[index]:
-                raise BrowserSourceReadbackError(SOURCE_READBACK_FAILED, detail="publishable checkpoint unavailable")
+        await _persist_publishable_checkpoints(
+            generation_job=generation_job, admissions=admissions, htmls=htmls, pngs=pngs, metrics=metrics,
+        )
     if not kwargs["source_reflow"]:
         return None, None, kwargs["flagged_slides"]
     results = [admission.readback for admission in admissions]

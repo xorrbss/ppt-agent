@@ -33,6 +33,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from services.authored_admission_capture import capture_once
 from services.authored_composition_policy import (
     blocking_safety_issues,
     capacity_violations,
@@ -225,12 +226,15 @@ async def _remake_candidate(
 
 
 async def _admit_remade_slide(
-    *, candidate_html: str, capacity: object, profile: Any, reference_mode: str
+    *, candidate_html: str, capacity: object, profile: Any, reference_mode: str,
+    slide_index: int | None = None,
 ) -> tuple[str, bytes, object] | None:
     """Bind fresh pixels/telemetry and admit only a candidate that clears both gates."""
 
     canonical = canonicalize_authored_roles(candidate_html)
-    capture = await render_html_to_png_with_metrics(canonical)
+    capture = await capture_once(
+        canonical, index=slide_index, capture=render_html_to_png_with_metrics
+    )
     metrics = capture.browser_metrics
     if metrics is None or capture.png == _placeholder_png():
         return None
@@ -275,7 +279,7 @@ async def remake_slide_once(
     try:
         admitted = await _admit_remade_slide(
             candidate_html=candidate, capacity=capacity, profile=profile,
-            reference_mode=reference_mode,
+            reference_mode=reference_mode, slide_index=index,
         )
     except Exception:
         LOGGER.warning(

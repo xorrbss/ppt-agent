@@ -95,7 +95,12 @@ async def _final_authored_quality_gate(
         metrics = browser_metrics_by_slide
     else:
         with set_render_deck_scope(str(presentation_id)):
-            metrics = await asyncio.gather(*(ensure_browser_metrics(html) for html in htmls))
+            metrics = await asyncio.gather(
+                *(
+                    captured_metrics_or_existing(html, index=index, ensure=ensure_browser_metrics)
+                    for index, html in enumerate(htmls)
+                )
+            )
     residual: list[dict[str, object]] = []
     for index, (html, browser_metrics) in enumerate(zip(htmls, metrics, strict=True)):
         if capacity_plan is not None:

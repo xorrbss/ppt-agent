@@ -102,7 +102,12 @@ async def _persist_master_pinned_editable_scene_deck(
         telemetry = tuple(browser_metrics_by_slide)
     else:
         with set_render_deck_scope(str(presentation_id)):
-            telemetry = await asyncio.gather(*(ensure_browser_metrics(html) for html in htmls))
+            telemetry = await asyncio.gather(
+                *(
+                    captured_metrics_or_existing(html, index=index, ensure=ensure_browser_metrics)
+                    for index, html in enumerate(htmls)
+                )
+            )
     if any(metrics is None for metrics in telemetry):
         raise ValueError("editable Hybrid Scene browser telemetry is unavailable")
     deck_id = f"deck:semantic-{presentation_id.hex}"

@@ -23,7 +23,7 @@ from models.authored_infographic_plan import AuthoredSlideInfographic
 from models.image_prompt import ImagePrompt
 from services.authored_admission_producers import author_html as admit_author_html
 from services.authored_admission_producers import illustrate_html as admit_expanded_html
-from services.authored_admission_capture import capture_once
+from services.authored_admission_capture import capture_once, captured_metrics_or_existing
 from services.authored_infographic_assets import (
     InfographicAssetContext,
     fill_scene_cutout,
@@ -610,7 +610,12 @@ async def revise_authored_deck(
     retained_metrics: list[Mapping[str, Any] | None] = (
         list(
             await asyncio.gather(
-                *(ensure_browser_metrics(html) for html in htmls)
+                *(
+                    captured_metrics_or_existing(
+                        html, index=absolute_indices[i], ensure=ensure_browser_metrics
+                    )
+                    for i, html in enumerate(htmls)
+                )
             )
         )
         if fail_on_residual_dom_issues
@@ -625,9 +630,11 @@ async def revise_authored_deck(
             strict_structural_off_canvas=fail_on_residual_dom_issues,
         )
 
-    async def metrics_for(html: str) -> Mapping[str, Any] | None:
+    async def metrics_for(html: str, index: int | None = None) -> Mapping[str, Any] | None:
         if fail_on_residual_dom_issues:
-            return await ensure_browser_metrics(html)
+            return await captured_metrics_or_existing(
+                html, index=index, ensure=ensure_browser_metrics
+            )
         return get_cached_browser_metrics(html)
 
     def deterministic_critique(
@@ -951,7 +958,9 @@ async def revise_authored_deck(
                                 patch_failure = failure_detail("patch_render", error)
                                 fallback_reason = patch_failure["code"]
                             else:
-                                candidate_metrics = await metrics_for(applied.html)
+                                candidate_metrics = await metrics_for(
+                                    applied.html, absolute_indices[i]
+                                )
                                 if candidate_validator is not None:
                                     await candidate_validator(
                                         absolute_indices[i],
@@ -1103,7 +1112,7 @@ async def revise_authored_deck(
                 if new_html is not None and new_png is not None:
                     current_html = new_html
                     current_png = new_png
-                    current_metrics = await metrics_for(current_html)
+                    current_metrics = await metrics_for(current_html, absolute_indices[i])
                     changed = True
             except Exception as error:
                 log_failure("correction", error)

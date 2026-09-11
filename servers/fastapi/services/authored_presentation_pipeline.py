@@ -1198,6 +1198,7 @@ async def _author_illustrate_render_pipeline(
                             slide_deadline=float(slide_deadline),
                             verify_seconds=local_budget["verify_seconds"],
                             deck_scope=render_deck_scope,
+                            slide_index=index,
                         )
                         illustrated_html = accepted.html
                         png = accepted.png
@@ -1241,6 +1242,7 @@ async def _author_illustrate_render_pipeline(
                                 slide_deadline=float(slide_deadline),
                                 verify_seconds=local_budget["verify_seconds"],
                                 deck_scope=render_deck_scope,
+                                slide_index=index,
                             )
                         except AuthoredLocalFitRejected as recovery_error:
                             raise AuthoredStageError(

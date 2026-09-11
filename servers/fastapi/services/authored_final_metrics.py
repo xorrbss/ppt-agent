@@ -97,10 +97,16 @@ async def resolve_final_browser_metrics(
         missing[:8],
     )
     if missing:
+        from services.authored_admission_capture import captured_metrics_or_existing
         from utils.slide_capture import ensure_browser_metrics
 
         gathered = await asyncio.gather(
-            *(ensure_browser_metrics(htmls[index]) for index in missing)
+            *(
+                captured_metrics_or_existing(
+                    htmls[index], index=index, ensure=ensure_browser_metrics
+                )
+                for index in missing
+            )
         )
         for index, metrics in zip(missing, gathered, strict=True):
             resolved[index] = metrics

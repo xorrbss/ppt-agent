@@ -63,9 +63,23 @@ async def apply_slide_quality_loop(
         # the attempt that chose it and is not re-derived here.
         return reused, {}
     labels = tuple(node.label for node in infographic.nodes) if infographic else ()
+
+    async def render_candidate(candidate: str):
+        # Every candidate render of this slide -- best-of variants and the one
+        # critique correction alike -- goes through the deck's capture owner,
+        # attributed to this slide.
+        from services.authored_admission_capture import capture_once
+        from utils.slide_capture import render_html_to_png_with_metrics
+
+        capture = await capture_once(
+            candidate, index=slide_index, capture=render_html_to_png_with_metrics
+        )
+        return capture.png, capture.browser_metrics
+
     try:
         outcome = await run_authored_quality_loop(
             html,
+            render=render_candidate,
             reference_mode=reference_mode,
             strict_structural_off_canvas=(
                 getattr(composition_profile, "profile_id", "ordinary") != "ordinary"

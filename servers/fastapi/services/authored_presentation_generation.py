@@ -68,7 +68,11 @@ from utils.slide_capture_deck_scope import set_render_deck_scope
 from services.source_content.header_pages import source_pages_are_numbered
 from services.authored_vqa_source_integrity import source_vqa_candidate_integrity_passes
 from services.authored_admission_producers import source_candidate
-from services.authored_admission_capture import capture_once, captured_metrics_or_existing
+from services.authored_admission_capture import (
+    capture_once,
+    capture_ownership_receipt,
+    captured_metrics_or_existing,
+)
 from services.authored_admission_publication import final_readback
 from services.authored_admission_session import admission_scope, configure_admission, admission_shadow_receipt, producer_scope
 from services.authored_header_contract_service import (
@@ -795,7 +799,7 @@ async def _apply_bounded_layout_alignment_repairs(
         if repaired == html:
             continue
         bound_htmls, bound_pngs, bound_metrics = await _bind_bounded_repair_evidence(
-            [repaired]
+            [repaired], [index]
         )
         violations = capacity_violations(
             bound_htmls[0], bound_metrics[0], capacity_plan.at(index)
@@ -2245,7 +2249,7 @@ async def _generate_authored_presentation(
                 revised_metrics = [results_by_index[index].metrics for index in flagged]
             else:
                 revised_htmls, revised_pngs, revised_metrics = (
-                    await _bind_bounded_repair_evidence(revised_htmls)
+                    await _bind_bounded_repair_evidence(revised_htmls, list(flagged))
                 )
             admitted_repairs: list[tuple[int, str, bytes, object]] = []
             for local_index, absolute_index in enumerate(flagged):
@@ -2899,6 +2903,10 @@ async def _generate_authored_presentation(
         repaired_slide_indices=repaired_gate_indices,
     )
     quality_gate_receipt["admissionShadow"] = admission_shadow_receipt()
+    # Real Chromium captures and owner-served reuses per slide: the number
+    # the live series reports, counted at the one owner every capture site
+    # routes through rather than at the gate, which sees only admissions.
+    quality_gate_receipt["captureOwnership"] = capture_ownership_receipt()
     quality_gate_receipt["sceneEnvelope"] = scene_envelope.receipt()
     if local_fit_receipts:
         quality_gate_receipt["localFit"] = {

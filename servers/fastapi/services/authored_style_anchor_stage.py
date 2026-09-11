@@ -237,6 +237,8 @@ def anchor_render_step(
     30 on 2026-09-06). Building the step here keeps that one line under test.
     """
 
+    from services.authored_admission_capture import capture_png_once
+    from utils.slide_capture import get_cached_browser_metrics
     from utils.slide_capture_deck_scope import set_render_deck_scope
 
     async def render_anchor(html: str) -> None:
@@ -246,7 +248,13 @@ def anchor_render_step(
         renderable_html = canonicalize_authored_slide_html(html, finalized=True)
         async with render_gate:
             with set_render_deck_scope(deck_scope):
-                await render_html(renderable_html)
+                # The anchor candidate may be re-offered; the owner renders the
+                # same projection once. It has no deck index of its own.
+                await capture_png_once(
+                    renderable_html,
+                    render=render_html,
+                    read_metrics=get_cached_browser_metrics,
+                )
 
     return render_anchor
 
