@@ -2,7 +2,7 @@
  "run": "run-20",
  "slide_index": 33,
  "job_id": "999f04be-eb53-4298-a011-cbee07e2fa11",
- "job_id_basis": "created_at order, between run-19 and run-21",
+ "job_id_basis": "05-admission.json operation_id -> presentation_generation_jobs.workspace_operation_id (authoritative join; agrees with the created_at ordering it replaces for all 11 runs)",
  "job_state": "published",
  "presentation_id": "3c1ee6ec-74a7-42c6-8274-8c10c0c92f94",
  "completed_slides": 35,
@@ -453,5 +453,6 @@
   "html-author.txt: checkpoint author_html is null (cleared after publication on published decks)",
   "html-illustrated.txt: checkpoint illustrated_html is null",
   "metrics.json: browser metrics are not persisted anywhere (authored_slide_checkpoints has no metrics column, artifact_refs is null, authored_evidence_*_v3 are empty)"
- ]
+ ],
+ "workspace_operation_id": "5ce102a8"
 }

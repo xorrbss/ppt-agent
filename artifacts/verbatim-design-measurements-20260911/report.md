@@ -186,16 +186,17 @@ run-23 `01, 08, 11, 29`. A failing slide is any slide the record names: an expli
 the slide owning a failing source block (mapped through the manifest), a checkpoint with a failed
 stage, or a slide that never authored while its neighbours did.
 
-Job ids: runs 11, 13, 14, 15 are the ids recorded in `repeatability-20260911.md`; runs 18 and 19
-come from their own failure artefacts; runs 16, 17, 20, 21, 23 were placed by `created_at` order
-between confirmed neighbours over the same 35-slide input, since every run shares one
-`request_sha256` and the hash cannot separate them. **Each slide's `verdict.json` records which
-basis was used for its run**, so a wrong placement is visible rather than silent.
+Job ids are resolved authoritatively: each run directory's `05-admission.json` records an
+`operation_id`, which joins to `presentation_generation_jobs.workspace_operation_id`. **All
+eleven runs resolve, and all eleven agree with the `created_at` ordering this replaces**, so the
+fixture contents are unchanged by the correction — only the recorded basis is. Each
+`verdict.json` now carries `workspace_operation_id` alongside `job_id` and states the join it
+came from, so the mapping is checkable rather than asserted.
 
 ## Limits of this pass
 
-- 3.2's job ids are now resolved for all eleven runs and the checkpoint HTML is exported, but
-  five of the eleven rest on `created_at` ordering rather than a recorded id (see above).
+- 3.2's job ids are resolved for all eleven runs through the recorded `operation_id`, and the
+  checkpoint HTML is exported.
 - No browser metrics exist to export, so a gate that needs them cannot be tested against these
   fixtures without re-rendering.
 - 3.3's token delta is an estimate with a stated range, not a measurement, because the

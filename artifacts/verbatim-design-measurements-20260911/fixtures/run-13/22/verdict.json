@@ -2,7 +2,7 @@
  "run": "run-13",
  "slide_index": 22,
  "job_id": "88c1e3e6-ef8d-40e6-9661-61d884a23a6d",
- "job_id_basis": "repeatability-20260911.md",
+ "job_id_basis": "05-admission.json operation_id -> presentation_generation_jobs.workspace_operation_id (authoritative join; agrees with the created_at ordering it replaces for all 11 runs)",
  "job_state": "failed",
  "presentation_id": "78faf730-e7e6-49f5-a03f-9c1b4ed4a043",
  "completed_slides": 33,
@@ -55,5 +55,6 @@
   "html-author.txt: checkpoint author_html is null (cleared after publication on published decks)",
   "html-illustrated.txt: checkpoint illustrated_html is null",
   "metrics.json: browser metrics are not persisted anywhere (authored_slide_checkpoints has no metrics column, artifact_refs is null, authored_evidence_*_v3 are empty)"
- ]
+ ],
+ "workspace_operation_id": "19a08008-3cbd-4cab-80dd-e76ec25a1144"
 }
