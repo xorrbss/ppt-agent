@@ -22,7 +22,7 @@ from uuid import UUID
 _COMPONENT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _KEY_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 _REFERENCE_PREFIX = "credential-ref:v1"
-_SUPPORTED_BACKENDS = frozenset({"desktop_vault", "server_kms", "memory"})
+_SUPPORTED_BACKENDS = frozenset({"desktop_vault", "server_kms", "local_file", "memory"})
 _MAX_SECRET_BYTES = 64 * 1024
 
 
@@ -199,6 +199,28 @@ class InMemoryCredentialBackend:
         return len(self._secrets)
 
 
+def credential_entry_path(root: Path, reference: CredentialRef, suffix: str) -> Path:
+    """The on-disk layout shared by every file-backed credential backend."""
+    return root / reference.tenant_id / reference.user_id / f"{reference.key_id}{suffix}"
+
+
+def write_credential_file(destination: Path, payload: bytes) -> None:
+    """Create a vault entry atomically and owner-only; an existing entry is never replaced."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(f".{secrets.token_hex(8)}.tmp")
+    try:
+        descriptor = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if destination.exists():
+            raise CredentialVaultError("credential_ref_conflict")
+        os.replace(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 class _DataBlob(ctypes.Structure):
     _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_byte))]
 
@@ -223,7 +245,7 @@ class WindowsDpapiCredentialBackend:
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _path(self, reference: CredentialRef) -> Path:
-        return self.root / reference.tenant_id / reference.user_id / f"{reference.key_id}.bin"
+        return credential_entry_path(self.root, reference, ".bin")
 
     @staticmethod
     def _entropy(reference: CredentialRef) -> bytes:
@@ -275,22 +297,8 @@ class WindowsDpapiCredentialBackend:
     def put(self, reference: CredentialRef, secret: SecretValue) -> None:
         if reference.backend != self.backend_id:
             raise CredentialVaultError("credential_backend_mismatch")
-        destination = self._path(reference)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        encrypted = self._protect(
-            secret.reveal().encode("utf-8"), self._entropy(reference)
-        )
-        temporary = destination.with_suffix(f".{secrets.token_hex(8)}.tmp")
-        try:
-            with temporary.open("xb") as handle:
-                handle.write(base64.b64encode(encrypted))
-                handle.flush()
-                os.fsync(handle.fileno())
-            if destination.exists():
-                raise CredentialVaultError("credential_ref_conflict")
-            os.replace(temporary, destination)
-        finally:
-            temporary.unlink(missing_ok=True)
+        encrypted = self._protect(secret.reveal().encode("utf-8"), self._entropy(reference))
+        write_credential_file(self._path(reference), base64.b64encode(encrypted))
 
     def get(self, reference: CredentialRef) -> SecretValue | None:
         if reference.backend != self.backend_id:
@@ -453,28 +461,20 @@ def validate_persisted_credential_ref(value: object) -> CredentialRef:
         raise CredentialVaultError("credential_storage_requires_ref") from error
 
 
+def configured_credential_backend_name() -> str:
+    """The normalized PROVIDER_CREDENTIAL_BACKEND selection; empty when unconfigured."""
+    return (os.getenv("PROVIDER_CREDENTIAL_BACKEND") or "").strip().lower()
+
+
+def credential_backend_from_environment() -> CredentialBackend:
+    """Select the configured backend without a plaintext fallback."""
+    from services.provider_credential_backends import backend_from_environment
+    return backend_from_environment()
+
+
 def provider_credential_vault_from_environment() -> ProviderCredentialVault:
     """Build the configured production backend without a plaintext fallback."""
-
-    backend = (os.getenv("PROVIDER_CREDENTIAL_BACKEND") or "").strip().lower()
-    if backend == "desktop_vault":
-        root = Path(
-            os.getenv("PROVIDER_DESKTOP_VAULT_DIRECTORY")
-            or Path(os.getenv("APP_DATA_DIRECTORY") or "app_data")
-            / "provider-credential-vault"
-        )
-        return ProviderCredentialVault(WindowsDpapiCredentialBackend(root))
-    if backend == "server_kms":
-        return ProviderCredentialVault(
-            AwsSecretsManagerCredentialBackend(
-                region=(os.getenv("AWS_REGION") or "").strip() or None,
-                prefix=(
-                    os.getenv("PROVIDER_SERVER_KMS_PREFIX")
-                    or "presenton/provider"
-                ),
-            )
-        )
-    raise CredentialVaultError("credential_backend_not_configured")
+    return ProviderCredentialVault(credential_backend_from_environment())
 
 
 __all__ = [
@@ -489,6 +489,10 @@ __all__ = [
     "SecretValue",
     "ServerKmsBackend",
     "WindowsDpapiCredentialBackend",
+    "configured_credential_backend_name",
+    "credential_backend_from_environment",
+    "credential_entry_path",
     "provider_credential_vault_from_environment",
     "validate_persisted_credential_ref",
+    "write_credential_file",
 ]
