@@ -1,0 +1,248 @@
+{
+ "source-slide:22:text:3": {
+  "text": "3주차 실습 | 영업 리스트 만들기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "3주차 실습",
+    "begin": 0,
+    "end": 6,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "영업 리스트 만들기",
+    "begin": 9,
+    "end": 19,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:22:text:4": {
+  "text": "22",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "22",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:22:text:5": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:22:text:6": {
+  "text": "업종",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "업종",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:22:text:7": {
+  "text": "가게/업체명",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "가게/업체명",
+    "begin": 0,
+    "end": 6,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:22:text:8": {
+  "text": "접촉 채널",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "접촉 채널",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:22:text:9": {
+  "text": "상태",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "상태",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:22:text:32": {
+  "text": "오늘 목표",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "오늘 목표",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:22:text:33": {
+  "text": "10곳 찾기 → 3곳 연락",
+  "run_count": 4,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "10곳",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "찾기",
+    "begin": 4,
+    "end": 6,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "→ ",
+    "body": "3곳",
+    "begin": 7,
+    "end": 11,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "",
+    "body": "연락",
+    "begin": 12,
+    "end": 14,
+    "order_free_before": false
+   }
+  ]
+ }
+}

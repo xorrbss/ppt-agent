@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:105px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:56px;top:24px;width:900px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:984px;top:24px;width:240px;text-align:right}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:129px;height:519px}
+.content-inner{margin-left:56px;width:1168px}
+.identity{height:74px;display:flex;align-items:center;padding:0 28px;background:#00140E;border-radius:12px;color:#FFFFFF}
+.identity-label{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#89D6C2}
+.identity-name{margin-left:24px;font-size:26px;line-height:38px;font-weight:700;color:#FFFFFF}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px}
+.form-card{height:126px;padding:20px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.form-label{font-size:22px;line-height:30px;font-weight:700;color:#1D1D1B}
+.form-line{margin-top:14px;font-family:"IBM Plex Mono","Consolas",monospace;font-size:20px;line-height:28px;letter-spacing:.02em;color:#08916E}
+.check-card{height:96px;margin-top:24px;padding:20px 28px;background:#EAF7F4;border-radius:12px;border-left:6px solid #08916E}
+.check-label{font-size:20px;line-height:28px;font-weight:700;color:#08795E}
+.check-items{margin-top:8px;font-size:18px;line-height:28px;font-weight:500;color:#1D1D1B}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="105" class="header-band" style="height:105px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-51e30f078c7abc44" data-source-block-id="source-slide:10:text:3:run:0">1주차 실습</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-fbb09bd58915c235" data-source-block-id="source-slide:10:text:3:run:1">내 사업 한 장으로 정리</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-qid="q-div-73774be43d12" data-semantic-role="decoration"></div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:129px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-inner" data-qid="q-div-a985ffc51e86" data-semantic-role="decoration">
+    <div class="identity" data-semantic-role="decoration" data-qid="q-identity-9a73">
+      <div class="identity-label" data-semantic-role="supporting" data-qid="q-identity-label-9a74">사업자</div>
+      <div class="identity-name" data-semantic-role="body" data-qid="source-block-5d1d31da2869c1c1" data-source-block-id="source-slide:10:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    </div>
+
+    <div class="form-grid" data-qid="q-div-15ac06c72fa3" data-semantic-role="decoration">
+      <div class="form-card" data-semantic-role="decoration" data-qid="q-card-target-9a76">
+        <div class="form-label" data-semantic-role="supporting" data-qid="source-block-3f00417bd48c7668" data-source-block-id="source-slide:10:text:6">타깃 업종</div>
+        <div class="form-line" data-semantic-role="body" data-qid="source-block-5a9628e2fa6cc085" data-source-block-id="source-slide:10:text:7">______________________________</div>
+      </div>
+      <div class="form-card" data-semantic-role="decoration" data-qid="q-card-service-9a79">
+        <div class="form-label" data-semantic-role="supporting" data-qid="source-block-c3370afa72895052" data-source-block-id="source-slide:10:text:8">서비스</div>
+        <div class="form-line" data-semantic-role="body" data-qid="source-block-669369122b4aa2a8" data-source-block-id="source-slide:10:text:9">______________________________</div>
+      </div>
+      <div class="form-card" data-semantic-role="decoration" data-qid="q-card-price-9a82">
+        <div class="form-label" data-semantic-role="supporting" data-qid="source-block-fd509e8d70477383" data-source-block-id="source-slide:10:text:10">가격</div>
+        <div class="form-line" data-semantic-role="body" data-qid="source-block-9f269f39aad030f5" data-source-block-id="source-slide:10:text:11">______________________________</div>
+      </div>
+      <div class="form-card" data-semantic-role="decoration" data-qid="q-card-intro-9a85">
+        <div class="form-label" data-semantic-role="supporting" data-qid="source-block-13a718856d44bca1" data-source-block-id="source-slide:10:text:12">한 줄 소개</div>
+        <div class="form-line" data-semantic-role="body" data-qid="source-block-625ae8ac20dd9be1" data-source-block-id="source-slide:10:text:13">______________________________</div>
+      </div>
+    </div>
+
+    <div class="check-card" data-semantic-role="decoration" data-qid="q-check-card-9a88">
+      <div class="check-label" data-semantic-role="supporting" data-qid="source-block-d0e09424ddc39590" data-source-block-id="source-slide:10:text:16">체크</div>
+      <div class="check-items" data-semantic-role="body" data-qid="source-block-3e464ca90148cc93" data-source-block-id="source-slide:10:text:17">□ 인스타 프로필  □ 블로그 방향  □ 상품  □ 가격  □ 타깃</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-c8160e59d0d88d5b" data-source-block-id="source-slide:10:text:4">10</div>
+</body>
+</html>

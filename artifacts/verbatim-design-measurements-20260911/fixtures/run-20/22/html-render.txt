@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:108px;background:#08916E}
+.header-left{position:absolute;left:64px;top:24px;width:760px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:8px;font-size:32px;line-height:38px;font-weight:700;color:#FFFFFF}
+.header-right{position:absolute;left:916px;top:24px;width:300px;text-align:right;font-size:15px;line-height:20px;color:#FFFFFF}
+.body-wrap{position:absolute;left:0;right:0;top:132px;height:516px}
+.content-inner{width:1152px;height:516px;margin-left:64px}
+.claim{height:68px;display:flex;align-items:flex-start;justify-content:space-between}
+.claim-text{font-size:26px;line-height:38px;font-weight:700;color:#1D1D1B;letter-spacing:-.03em}
+.claim-text strong{color:#08916E}
+.claim-mark{width:92px;height:8px;background:#08916E;margin-top:15px;border-radius:12px}
+.main-grid{display:grid;grid-template-columns:520px 1fr;gap:24px;height:430px}
+.task-panel{height:430px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:28px}
+.panel-label{font-size:15px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.panel-heading{margin-top:8px;font-size:22px;line-height:31px;font-weight:700;color:#00140E}
+.task-list{display:flex;flex-direction:column;gap:14px;margin-top:25px}
+.task-card{min-height:68px;display:flex;align-items:center;gap:16px;padding:14px 16px;background:#F9F9F9;border:1px solid #E2E8F0;border-radius:12px}
+.task-bar{width:7px;height:38px;flex:none;background:#219F88;border-radius:12px}
+.task-card:nth-child(2) .task-bar{background:#08916E}
+.task-card:nth-child(3) .task-bar{background:#219F88}
+.task-card:nth-child(4) .task-bar{background:#08916E}
+.task-text{font-size:18px;line-height:27px;font-weight:600;color:#1D1D1B}
+.image-panel{height:430px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:14px}
+.image-caption{font-size:15px;line-height:22px;font-weight:700;color:#00140E;margin:2px 4px 12px}
+.image-frame{width:528px;height:364px;border-radius:12px;background:#EAEDF2;display:flex;align-items:center;justify-content:center}
+.image-frame img{display:block;width:500px;height:281px;border-radius:12px;object-fit:cover;background:#E0F3FF}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="108" class="header-band" style="height:108px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div data-header-part="eyebrow" class="header-left eyebrow" data-semantic-role="supporting" data-qid="q-div-1f3f328eda4d" style="top: 8px; color: rgb(0, 20, 14)">실행 과제</div>
+  <div data-header-part="title" class="header-left title" data-semantic-role="title" data-qid="source-block-5c533cf0c695d050" data-source-block-id="source-slide:23:text:3">3주차 과제</div>
+  <div data-header-part="right" class="header-right" data-qid="q-div-73774be43d12" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:132px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-inner" data-qid="q-div-a985ffc51e86" data-semantic-role="decoration">
+    <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+      <div class="claim-text" data-semantic-role="body" data-qid="source-block-de2cb24234f4325a" data-source-block-id="source-slide:23:text:4">강의가 끝난 뒤 실제 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">영업</strong>이 시작됩니다.</div>
+      <div class="claim-mark" data-semantic-role="decoration" data-qid="q-div-3c33bf7ca3c5"></div>
+    </div>
+
+    <div class="main-grid" data-qid="q-div-948c49f110fb" data-semantic-role="decoration">
+      <div class="task-panel" data-semantic-role="decoration" data-qid="q-div-d3030bca01da">
+        <div class="panel-label" data-semantic-role="supporting" data-qid="source-block-fd1b4b21d626adf5" data-source-block-id="source-slide:23:text:6" style="color: rgb(0, 110, 80)">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+        <div class="panel-heading" data-semantic-role="body" data-qid="q-div-03c4887ff911">실행해야 할 네 가지</div>
+        <div class="task-list" data-qid="source-block-fa920147c34170ca" data-semantic-role="decoration" data-source-block-id="source-slide:23:text:7">
+          <div class="task-card" data-semantic-role="decoration" data-qid="q-div-550f44c8606a">
+            <div class="task-bar" data-semantic-role="decoration" data-qid="q-div-1c5166482e62"></div>
+            <div class="task-text" data-semantic-role="body" data-qid="q-div-db7ad925a92f">타깃 업체 30곳 리스트업</div>
+          </div>
+          <div class="task-card" data-semantic-role="decoration" data-qid="q-div-9926ab68201d">
+            <div class="task-bar" data-semantic-role="decoration" data-qid="q-div-39b46548da45"></div>
+            <div class="task-text" data-semantic-role="body" data-qid="q-div-d609edfdcd4a">전화/DM 중 하나를 선택해 최소 10곳 시도</div>
+          </div>
+          <div class="task-card" data-semantic-role="decoration" data-qid="q-div-23970233e42a">
+            <div class="task-bar" data-semantic-role="decoration" data-qid="q-div-7c5ac2538459"></div>
+            <div class="task-text" data-semantic-role="body" data-qid="q-div-f15e297384c2">무료 샘플 1곳 기획</div>
+          </div>
+          <div class="task-card" data-semantic-role="decoration" data-qid="q-div-568b821e8d2e">
+            <div class="task-bar" data-semantic-role="decoration" data-qid="q-div-dc51300e6124"></div>
+            <div class="task-text" data-semantic-role="body" data-qid="q-div-3fd043dbbdf6">거절 이유를 기록하고 멘트를 수정</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="image-panel" data-qid="q-div-5e0d969fd99d" data-semantic-role="decoration">
+        <div class="image-caption" data-semantic-role="supporting" data-qid="q-div-7db014dad3ff">실제 영업이 시작됩니다.</div>
+        <div class="image-frame" data-qid="q-div-8f65eb62c07f" data-semantic-role="decoration">
+          
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="source-block-780036fd9a2ca8f2" data-source-block-id="source-slide:23:text:5" style="top: 672px; color: rgb(100, 105, 110)">23</div>
+</body>
+</html>

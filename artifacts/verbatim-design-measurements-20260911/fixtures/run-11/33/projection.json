@@ -1,0 +1,301 @@
+{
+ "source-slide:34:text:3": {
+  "text": "마지막 체크리스트",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "마지막 체크리스트",
+    "begin": 0,
+    "end": 9,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:34:text:4": {
+  "text": "이제 혼자서 시작할 수 있는가?",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "이제 혼자서 시작할 수 있는가?",
+    "begin": 0,
+    "end": 17,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:34:text:5": {
+  "text": "34",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "34",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:34:text:6": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:34:text:7": {
+  "text": "• □ 누구에게 팔지 안다 • □ 무엇을 팔지 안다 • □ 가격을 말할 수 있다 • □ 숏폼 1개를 만들 수 있다 • □ 영업할 곳을 찾을 수 있다 • □ 샘플을 제안할 수 있다 • □ 상담과 계약의 기본을 안다 • □ 다음 달 콘텐츠를 제안할 수 있다",
+  "run_count": 8,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    4,
+    4
+   ],
+   [
+    5,
+    5
+   ],
+   [
+    6,
+    6
+   ],
+   [
+    7,
+    7
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "□ ",
+    "body": "누구에게 팔지 안다",
+    "begin": 2,
+    "end": 14,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "□ ",
+    "body": "무엇을 팔지 안다",
+    "begin": 17,
+    "end": 28,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "□ ",
+    "body": "가격을 말할 수 있다",
+    "begin": 31,
+    "end": 44,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "□ ",
+    "body": "숏폼 1개를 만들 수 있다",
+    "begin": 47,
+    "end": 63,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 4,
+    "marker": "□ ",
+    "body": "영업할 곳을 찾을 수 있다",
+    "begin": 66,
+    "end": 82,
+    "order_free_before": false
+   },
+   {
+    "index": 5,
+    "line": 5,
+    "marker": "□ ",
+    "body": "샘플을 제안할 수 있다",
+    "begin": 85,
+    "end": 99,
+    "order_free_before": false
+   },
+   {
+    "index": 6,
+    "line": 6,
+    "marker": "□ ",
+    "body": "상담과 계약의 기본을 안다",
+    "begin": 102,
+    "end": 118,
+    "order_free_before": false
+   },
+   {
+    "index": 7,
+    "line": 7,
+    "marker": "□ ",
+    "body": "다음 달 콘텐츠를 제안할 수 있다",
+    "begin": 121,
+    "end": 141,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:34:text:10": {
+  "text": "기억하세요",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "기억하세요",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:34:text:11": {
+  "text": "작게 시작하고 빠르게 만들고 많이 영업하고 한 명의 고객을 장기 고객으로.",
+  "run_count": 5,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    4,
+    4
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "작게 시작하고",
+    "begin": 0,
+    "end": 7,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "빠르게 만들고",
+    "begin": 8,
+    "end": 15,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "",
+    "body": "많이 영업하고",
+    "begin": 16,
+    "end": 23,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "",
+    "body": "한 명의 고객을",
+    "begin": 24,
+    "end": 32,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 4,
+    "marker": "",
+    "body": "장기 고객으로.",
+    "begin": 33,
+    "end": 41,
+    "order_free_before": false
+   }
+  ]
+ }
+}

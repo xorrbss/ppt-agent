@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:108px;background:#08916E}
+.header-left{position:absolute;left:64px;top:24px;width:760px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:8px;font-size:32px;line-height:38px;font-weight:700;color:#FFFFFF}
+.header-right{position:absolute;left:916px;top:0;width:300px;height:108px;padding:24px 28px;background:#00140E;color:#FFFFFF;text-align:right;font-size:15px;line-height:20px;font-weight:700}
+.body-wrap{position:absolute;left:0;right:0;top:132px;margin:0 64px;width:1152px;height:492px}
+.intro-row{display:grid;grid-template-columns:760px 368px;gap:24px;height:92px}
+.goal-card{height:92px;padding:20px 28px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px}
+.goal-text{font-size:22px;line-height:32px;font-weight:700;color:#002060}
+.standard-card{height:92px;padding:17px 24px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.standard-label{font-size:15px;line-height:22px;font-weight:700;color:#08916E}
+.standard-line{margin-top:3px;font-size:18px;line-height:25px;font-weight:700;color:#00140E}
+.standard-line strong{color:#08916E}
+.architecture-field{position:relative;height:376px;margin-top:24px;padding:24px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.field-title{font-size:20px;line-height:28px;font-weight:700;color:#002060}
+.field-rule{width:100%;height:1px;margin-top:14px;background:#E2E8F0}
+.module-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-top:25px}
+.module{position:relative;height:202px;padding:22px 16px 18px;background:#F9F9F9;border:1px solid #CCECFF;border-radius:12px}
+.module-one{border-top:6px solid #08916E}
+.module-two{border-top:6px solid #219F88}
+.module-three{border-top:6px solid #00828E}
+.module-four{border-top:6px solid #1B469C}
+.module-five{border-top:6px solid #002060}
+.module-index{font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:20px;font-weight:700;color:#08916E}
+.module-text{margin-top:20px;font-size:18px;line-height:30px;font-weight:700;color:#002060}
+.connector{position:absolute;top:154px;width:16px;height:2px;background:#00828E}
+.c1{left:228px}.c2{left:443px}.c3{left:658px}.c4{left:873px}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="108" class="header-band" style="height:108px" data-semantic-role="decoration" data-qid="q-band-11">
+  <div class="header-left" data-semantic-role="decoration" data-qid="q-header-left-11">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-11">숏폼 제작</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-4fa73e5d453f6213" data-source-block-id="source-slide:12:text:3">2주차 | 숏폼 제작의 핵심</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-c6a4d602bf6b9e9d" data-source-block-id="source-slide:12:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:132px" data-semantic-role="decoration" data-qid="q-body-11">
+  <div class="intro-row" data-semantic-role="decoration" data-qid="q-intro-11">
+    <div class="goal-card" data-semantic-role="body" data-qid="source-block-9b5a4183fd82a0c1" data-source-block-id="source-slide:12:text:4">목표: 포트폴리오로 보여줄 영상 1~2개 완성</div>
+    <div class="standard-card" data-semantic-role="decoration" data-qid="q-standard-card-11">
+      <div class="standard-label" data-semantic-role="supporting" data-qid="source-block-8cceaa7d9e37d877" data-source-block-id="source-slide:12:text:10">오늘의 기준</div>
+      <div class="standard-line" data-semantic-role="body" data-qid="source-block-3909d331443054fb" data-source-block-id="source-slide:12:text:11:run:0">완벽한 영상 <strong data-semantic-role="body" data-qid="q-standard-x-mark-11">X</strong></div>
+      <div class="standard-line" data-semantic-role="body" data-qid="source-block-51cf375f63828054" data-source-block-id="source-slide:12:text:11:run:1">팔 수 있는 영상 <strong data-semantic-role="body" data-qid="q-standard-o-mark-11">O</strong></div>
+    </div>
+  </div>
+
+  <div class="architecture-field" data-semantic-role="decoration" data-qid="q-architecture-11">
+    <div class="field-title" data-semantic-role="supporting" data-qid="q-field-title-11">숏폼 제작의 핵심</div>
+    <div class="field-rule" data-semantic-role="decoration" data-qid="q-field-rule-11"></div>
+
+    <div class="module-grid" data-semantic-role="decoration" data-qid="q-module-grid-11">
+      <div class="module module-one" data-semantic-role="decoration" data-qid="q-module-1-11">
+        <div class="module-index" data-semantic-role="supporting" data-qid="q-index-1-11">01</div>
+        <div class="module-text" data-semantic-role="body" data-qid="source-block-7c357a77b2a16292" data-source-block-id="source-slide:12:text:7:run:0-2">후킹 → 본문 → 유도 구조</div>
+      </div>
+      <div class="module module-two" data-semantic-role="decoration" data-qid="q-module-2-11">
+        <div class="module-index" data-semantic-role="supporting" data-qid="q-index-2-11">02</div>
+        <div class="module-text" data-semantic-role="body" data-qid="source-block-5a0dccd50dc8e558" data-source-block-id="source-slide:12:text:7:run:3">조회수 높은 콘텐츠 벤치마킹</div>
+      </div>
+      <div class="module module-three" data-semantic-role="decoration" data-qid="q-module-3-11">
+        <div class="module-index" data-semantic-role="supporting" data-qid="q-index-3-11">03</div>
+        <div class="module-text" data-semantic-role="body" data-qid="source-block-3ee022f46b02f1fa" data-source-block-id="source-slide:12:text:7:run:4">스마트폰 촬영 기본</div>
+      </div>
+      <div class="module module-four" data-semantic-role="decoration" data-qid="q-module-4-11">
+        <div class="module-index" data-semantic-role="supporting" data-qid="q-index-4-11">04</div>
+        <div class="module-text" data-semantic-role="body" data-qid="source-block-f56757dead09964a" data-source-block-id="source-slide:12:text:7:run:5">AI 활용</div>
+      </div>
+      <div class="module module-five" data-semantic-role="decoration" data-qid="q-module-5-11">
+        <div class="module-index" data-semantic-role="supporting" data-qid="q-index-5-11">05</div>
+        <div class="module-text" data-semantic-role="body" data-qid="source-block-32ec190d0d6378bc" data-source-block-id="source-slide:12:text:7:run:6">캡컷 핵심 기능</div>
+      </div>
+    </div>
+
+    <div class="connector c1" data-semantic-role="decoration" data-qid="q-connector-1-11"></div>
+    <div class="connector c2" data-semantic-role="decoration" data-qid="q-connector-2-11"></div>
+    <div class="connector c3" data-semantic-role="decoration" data-qid="q-connector-3-11"></div>
+    <div class="connector c4" data-semantic-role="decoration" data-qid="q-connector-4-11"></div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-e016b77742690b0b" data-source-block-id="source-slide:12:text:5">12</div>
+</body>
+</html>

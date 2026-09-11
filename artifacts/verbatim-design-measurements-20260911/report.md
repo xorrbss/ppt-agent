@@ -164,11 +164,40 @@ the manifest and its snapshot id are enough to re-derive it through the normal
 
 ---
 
+## Per-slide fixtures for the gate work (T2)
+
+`fixtures/<run>/<slide-index>/` carries one directory per slide, exported by
+`export_verbatim_fixtures.py` (read-only; no generation, no provider call, no database write,
+no secret value in the output). 187 slide directories, 739 files, 8.3 MiB.
+
+| file | content | when absent |
+|---|---|---|
+| `manifest.json` | that slide's source unit and its blocks | no unit for the index |
+| `projection.json` | `project_source_runs` per text block: runs, markers, char spans, lines | same |
+| `html-render.txt` | the published bytes (`slides.html_content`) | deck did not publish |
+| `html-author.txt` | checkpoint `author_html` | null — **cleared after publication, so published decks have none** |
+| `html-illustrated.txt` | checkpoint `illustrated_html` | null |
+| `verdict.json` | job id and the basis for it, job state, checkpoint status/failed stage/error, what the run directory recorded, and an `absent` list naming every artefact that does not exist | — |
+| `metrics.json` | **never produced** | browser metrics are not persisted anywhere: `authored_slide_checkpoints` has no metrics column, `artifact_refs` is null, and `authored_evidence_*_v3` are empty |
+
+Coverage: all 35 slides of each published deck (runs 11, 15, 16, 20, 21) and the failing slides
+of each failed deck — run-13 `22, 29`; run-14 `02`; run-17 `09`; run-18 `30`; run-19 `02, 12, 33`;
+run-23 `01, 08, 11, 29`. A failing slide is any slide the record names: an explicit slide index,
+the slide owning a failing source block (mapped through the manifest), a checkpoint with a failed
+stage, or a slide that never authored while its neighbours did.
+
+Job ids: runs 11, 13, 14, 15 are the ids recorded in `repeatability-20260911.md`; runs 18 and 19
+come from their own failure artefacts; runs 16, 17, 20, 21, 23 were placed by `created_at` order
+between confirmed neighbours over the same 35-slide input, since every run shares one
+`request_sha256` and the hash cannot separate them. **Each slide's `verdict.json` records which
+basis was used for its run**, so a wrong placement is visible rather than silent.
+
 ## Limits of this pass
 
-- 3.2 recovered job ids for two of the six failed runs from the artifacts; the other four need a
-  time correlation against `presentation_generation_jobs.created_at`, which was not done here.
-  No checkpoint HTML was extracted to disk — only its presence was verified.
+- 3.2's job ids are now resolved for all eleven runs and the checkpoint HTML is exported, but
+  five of the eleven rest on `created_at` ordering rather than a recorded id (see above).
+- No browser metrics exist to export, so a gate that needs them cannot be tested against these
+  fixtures without re-rendering.
 - 3.3's token delta is an estimate with a stated range, not a measurement, because the
   production tokenizer is not installed. The measured half (receipt totals) is exact.
 - 3.1 excluded bound blocks whose text is not in a stored manifest (the pooled manifest set

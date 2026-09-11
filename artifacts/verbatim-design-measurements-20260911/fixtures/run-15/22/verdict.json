@@ -1,0 +1,588 @@
+{
+ "run": "run-15",
+ "slide_index": 22,
+ "job_id": "89cf6fc9-579c-4c92-ae4c-234cc62d3d6c",
+ "job_id_basis": "repeatability-20260911.md",
+ "job_state": "published",
+ "presentation_id": "c499f11e-9e72-494f-9739-04f4137bc61a",
+ "completed_slides": 35,
+ "created_at": "2026-09-11 12:51:44.074283+09:00",
+ "checkpoint": {
+  "render_sha256": "40a9b2ed2b8717b7fb1f5b4a006e90837fd636aa8a7d83c727ffa454234706ef",
+  "failed_stage": null,
+  "error": {
+   "provider_attempt_count": 1,
+   "provider_attempt_epoch": 1,
+   "provider_attempt_total": 0
+  },
+  "author_status": "completed",
+  "render_status": "completed"
+ },
+ "run_artifacts": {
+  "files": [
+   "01-upload.json",
+   "02-snapshot.json",
+   "03-analysis.json",
+   "04-generate-request.json",
+   "05-admission.json",
+   "06-final-status.json",
+   "07-download-evidence.json",
+   "08-audit.json",
+   "e0c29382-2627-4d42-b1e3-c8d26642d007.pptx"
+  ],
+  "06-final-status.json": {
+   "detail": "Large empty painted media container: remove the placeholder and its reserved layout space; recompose existing source content without inventing an image.",
+   "visibilityFailures": [
+    "source-slide:12:text:11",
+    "source-slide:21:text:6",
+    "source-slide:21:text:9",
+    "source-slide:27:text:8",
+    "source-slide:27:text:12",
+    "source-slide:35:text:6"
+   ],
+   "missingBlockIds": [],
+   "integrityFailures": [],
+   "orderViolations": 0,
+   "flaggedSlides": [
+    {
+     "index": 6,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "c0d7db6c-4282-4ab8-b1cb-40b125c719f2"
+    },
+    {
+     "index": 8,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "23c8ea54-911f-4dd0-9fa1-3a99a4bbcb21"
+    },
+    {
+     "index": 10,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "0c2f954f-81fe-4b0d-9529-51ff184789e6"
+    },
+    {
+     "index": 11,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "ad522cad-72f3-46ba-b065-82bc082e05cc",
+     "sourceVisibilityBlockIds": [
+      "source-slide:12:text:11"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 12,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "ed8aa60d-6e78-4555-82c9-d2ca08b44d1c"
+    },
+    {
+     "index": 14,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "4727035d-d2bf-4e6d-b74b-f919a393a964"
+    },
+    {
+     "index": 16,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "36f9acf0-e066-4657-b5cb-d055972c3b64"
+    },
+    {
+     "index": 18,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "20768ea0-b312-4d2b-a1f3-5054f0ebfe7c"
+    },
+    {
+     "index": 20,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "ce91e11f-87a7-4f1e-9737-b775cd5409e5",
+     "sourceVisibilityBlockIds": [
+      "source-slide:21:text:6",
+      "source-slide:21:text:9"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 21,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "d4dc4abd-c47b-42aa-8cd6-2568aaf541a2"
+    },
+    {
+     "index": 22,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "f4b2c870-9ade-4c58-9bd2-3cbee35232f4"
+    },
+    {
+     "index": 24,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "bf2b405b-7fbb-4c78-8086-9557cfc68800"
+    },
+    {
+     "index": 25,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "c6f54cf3-8abc-4851-bb42-a2f01ba92447"
+    },
+    {
+     "index": 26,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "674f4789-7d27-4d1d-8e9b-50af3f448a9d",
+     "sourceVisibilityBlockIds": [
+      "source-slide:27:text:8",
+      "source-slide:27:text:12"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 29,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "3a3936b2-7e2c-4531-9f9b-24ee783f0d0c"
+    },
+    {
+     "index": 30,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "f3493111-8946-472b-9485-837ee1f03e65"
+    },
+    {
+     "index": 34,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "1447a89d-e54c-44b9-82bd-a463a8047b35",
+     "sourceVisibilityBlockIds": [
+      "source-slide:35:text:6"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    }
+   ],
+   "reviewPages": [
+    {
+     "index": 6,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 8,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 10,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 11,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 12,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 14,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 16,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 18,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 20,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 21,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 22,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 24,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 25,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 26,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 29,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 30,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 34,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    }
+   ],
+   "residualIssues": [
+    {
+     "slide_index": 18,
+     "issues": [
+      {
+       "category": "empty_media_panel",
+       "severity": "medium",
+       "detail": "Large empty painted media container: remove the placeholder and its reserved layout space; recompose existing source content without inventing an image.",
+       "qids": [
+        "q-image-panel-18"
+       ],
+       "policy": "style_reference"
+      }
+     ]
+    },
+    {
+     "slide_index": 21,
+     "issues": [
+      {
+       "category": "text_escapes_card",
+       "severity": "medium",
+       "detail": "text of q-connect-contact-21 prints 11px below the bottom of its card q-card-list-21",
+       "qids": [
+        "q-connect-contact-21"
+       ],
+       "policy": "style_reference",
+       "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.0234,
+        "excess_px_x": 0.0,
+        "excess_px_y": 11.0,
+        "card_qid": "q-card-list-21",
+        "element_kind": "text"
+       }
+      },
+      {
+       "category": "text_escapes_card",
+       "severity": "medium",
+       "detail": "text of q-connect-find-21 prints 11px below the bottom of its card q-card-list-21",
+       "qids": [
+        "q-connect-find-21"
+       ],
+       "policy": "style_reference",
+       "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.0234,
+        "excess_px_x": 0.0,
+        "excess_px_y": 11.0,
+        "card_qid": "q-card-list-21",
+        "element_kind": "text"
+       }
+      }
+     ]
+    },
+    {
+     "slide_index": 22,
+     "issues": [
+      {
+       "category": "text_escapes_card",
+       "severity": "medium",
+       "detail": "text of q-action-note-22 prints 27px below the bottom of its card q-card-panel-22",
+       "qids": [
+        "q-action-note-22"
+       ],
+       "policy": "style_reference",
+       "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.0616,
+        "excess_px_x": 0.0,
+        "excess_px_y": 27.0,
+        "card_qid": "q-card-panel-22",
+        "element_kind": "text"
+       }
+      }
+     ]
+    },
+    {
+     "slide_index": 24,
+     "issues": [
+      {
+       "category": "clipping",
+       "severity": "medium",
+       "detail": "browser reports clipped visible content",
+       "qids": [
+        "q-principle-copy-24"
+       ],
+       "policy": "style_reference",
+       "magnitude": {
+        "hidden_fraction": 0.351,
+        "element_kind": "text"
+       }
+      },
+      {
+       "category": "clipping",
+       "severity": "medium",
+       "detail": "browser reports clipped visible content",
+       "qids": [
+        "q-principle-emphasis-24"
+       ],
+       "policy": "style_reference",
+       "magnitude": {
+        "hidden_fraction": 0.705,
+        "element_kind": "text"
+       }
+      },
+      {
+       "category": "off_canvas",
+       "severity": "high",
+       "detail": "element extends outside the slide canvas",
+       "qids": [
+        "q-pillar-column-b-24"
+       ],
+       "policy": "style_reference",
+       "magnitude": {
+        "overshoot_px_left": 0.0,
+        "overshoot_px_top": 0.0,
+        "overshoot_px_right": 0.0,
+        "overshoot_px_bottom": 148.0,
+        "element_kind": "container"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "08-audit.json": {
+   "visibilityFailures": 6,
+   "missingBlockIds": 0,
+   "orderViolations": 0,
+   "flaggedSlides": [
+    {
+     "index": 6,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "c0d7db6c-4282-4ab8-b1cb-40b125c719f2"
+    },
+    {
+     "index": 8,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "23c8ea54-911f-4dd0-9fa1-3a99a4bbcb21"
+    },
+    {
+     "index": 10,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "0c2f954f-81fe-4b0d-9529-51ff184789e6"
+    },
+    {
+     "index": 11,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "ad522cad-72f3-46ba-b065-82bc082e05cc",
+     "sourceVisibilityBlockIds": [
+      "source-slide:12:text:11"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 12,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "ed8aa60d-6e78-4555-82c9-d2ca08b44d1c"
+    },
+    {
+     "index": 14,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "4727035d-d2bf-4e6d-b74b-f919a393a964"
+    },
+    {
+     "index": 16,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "36f9acf0-e066-4657-b5cb-d055972c3b64"
+    },
+    {
+     "index": 18,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "20768ea0-b312-4d2b-a1f3-5054f0ebfe7c"
+    },
+    {
+     "index": 20,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "ce91e11f-87a7-4f1e-9737-b775cd5409e5",
+     "sourceVisibilityBlockIds": [
+      "source-slide:21:text:6",
+      "source-slide:21:text:9"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 21,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "d4dc4abd-c47b-42aa-8cd6-2568aaf541a2"
+    },
+    {
+     "index": 22,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "f4b2c870-9ade-4c58-9bd2-3cbee35232f4"
+    },
+    {
+     "index": 24,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "bf2b405b-7fbb-4c78-8086-9557cfc68800"
+    },
+    {
+     "index": 25,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "c6f54cf3-8abc-4851-bb42-a2f01ba92447"
+    },
+    {
+     "index": 26,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "674f4789-7d27-4d1d-8e9b-50af3f448a9d",
+     "sourceVisibilityBlockIds": [
+      "source-slide:27:text:8",
+      "source-slide:27:text:12"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 29,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "3a3936b2-7e2c-4531-9f9b-24ee783f0d0c"
+    },
+    {
+     "index": 30,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "f3493111-8946-472b-9485-837ee1f03e65"
+    },
+    {
+     "index": 34,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "1447a89d-e54c-44b9-82bd-a463a8047b35",
+     "sourceVisibilityBlockIds": [
+      "source-slide:35:text:6"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    }
+   ]
+  }
+ },
+ "absent": [
+  "html-author.txt: checkpoint author_html is null (cleared after publication on published decks)",
+  "html-illustrated.txt: checkpoint illustrated_html is null",
+  "metrics.json: browser metrics are not persisted anywhere (authored_slide_checkpoints has no metrics column, artifact_refs is null, authored_evidence_*_v3 are empty)"
+ ]
+}

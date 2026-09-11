@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#08916E}
+.header-left{position:absolute;left:64px;top:24px;width:760px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:8px;font-size:32px;line-height:38px;font-weight:700;color:#FFFFFF}
+.header-right{position:absolute;left:916px;top:24px;width:300px;text-align:right;font-size:15px;line-height:20px;color:#FFFFFF}
+.body-wrap{width:1152px;margin-left:64px}
+.identity{height:48px;margin-bottom:24px;display:flex;align-items:center}
+.identity-text{font-size:26px;line-height:36px;font-weight:700;color:#1D1D1B}
+.identity-text strong{color:#08916E}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;height:414px}
+.card{height:414px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:28px;position:relative}
+.card-top{height:58px;display:flex;align-items:center;gap:14px;border-bottom:1px solid #E2E8F0}
+.card-index{width:36px;height:36px;border-radius:12px;background:#002060;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:24px;font-weight:700}
+.card-label{font-size:22px;line-height:30px;font-weight:700;color:#002060}
+.steps{margin-top:24px;display:flex;flex-direction:column;gap:18px}
+.step{min-height:43px;display:flex;align-items:center;gap:12px;padding:9px 12px;background:#F9F9F9;border-radius:12px;border-left:5px solid #219F88}
+.step-arrow{font-size:20px;line-height:25px;color:#08916E;font-weight:700}
+.step-text{font-size:18px;line-height:25px;font-weight:600;color:#1D1D1B}
+.card-foot{position:absolute;left:28px;right:28px;bottom:22px;height:5px;border-radius:12px;background:#E2E8F0}
+.card-foot-fill{height:100%;width:100%;border-radius:12px;background:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="108" class="header-band" style="height:108px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div data-header-part="eyebrow" class="header-left eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-19">핵심 영업</div>
+  <div data-header-part="title" class="header-left title" data-semantic-role="title" data-qid="source-block-69c116e93defbdc5" data-source-block-id="source-slide:20:text:3">3주차 PART 2 | 핵심 영업 3종</div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="q-right-19"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="identity" data-qid="q-div-ca97991e836c" data-semantic-role="decoration">
+    <div class="identity-text" data-semantic-role="body" data-qid="source-block-52f3ff5b7504ce76" data-source-block-id="source-slide:20:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  </div>
+
+  <div class="cards" data-qid="q-div-beb8611456c7" data-semantic-role="decoration">
+    <div class="card" data-qid="q-card-phone-19" data-semantic-role="decoration">
+      <div class="card-top" data-qid="q-div-aeebf6f63e53" data-semantic-role="decoration">
+        <div class="card-index" data-semantic-role="supporting" data-qid="q-card-phone-index-19">01</div>
+        <div class="card-label" data-semantic-role="supporting" data-qid="source-block-86b3b5d52d2f7fe6" data-source-block-id="source-slide:20:text:8">📞 전화</div>
+      </div>
+      <div class="steps" data-qid="q-div-17e8625ebe5f" data-semantic-role="decoration">
+        <div class="step" data-qid="q-div-76997843ad4f" data-semantic-role="decoration">
+          <div class="step-arrow" data-semantic-role="supporting" data-qid="q-phone-arrow-1-19">→</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-eeb45a11cc5b3eb4" data-source-block-id="source-slide:20:text:9:run:0">짧게 소개</div>
+        </div>
+        <div class="step" data-qid="q-div-99a28a82e8a1" data-semantic-role="decoration">
+          <div class="step-arrow" data-semantic-role="supporting" data-qid="q-phone-arrow-2-19">→</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-25c52ebec6658bd9" data-source-block-id="source-slide:20:text:9:run:1">문제 제시</div>
+        </div>
+        <div class="step" data-qid="q-div-0bbae897b6f1" data-semantic-role="decoration">
+          <div class="step-arrow" data-semantic-role="supporting" data-qid="q-phone-arrow-3-19">→</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-ddf77f576142e342" data-source-block-id="source-slide:20:text:9:run:2">샘플 제안</div>
+        </div>
+        <div class="step" data-qid="q-div-111d3d12a08f" data-semantic-role="decoration">
+          <div class="step-arrow" data-semantic-role="supporting" data-qid="q-phone-arrow-4-19">→</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-dc751d50f3f6cd27" data-source-block-id="source-slide:20:text:9:run:3">상담 약속</div>
+        </div>
+      </div>
+      <div class="card-foot" data-qid="q-div-aaa67f63589e" data-semantic-role="decoration"><div class="card-foot-fill" data-qid="q-div-b21cb9fd8c4b" data-semantic-role="decoration"></div></div>
+    </div>
+
+    <div class="card" data-qid="q-card-dm-19" data-semantic-role="decoration">
+      <div class="card-top" data-qid="q-div-bcdfe0915c1f" data-semantic-role="decoration">
+        <div class="card-index" data-semantic-role="supporting" data-qid="q-card-dm-index-19">02</div>
+        <div class="card-label" data-semantic-role="supporting" data-qid="source-block-bc9b99a313aeef8f" data-source-block-id="source-slide:20:text:12">💬 인스타 DM</div>
+      </div>
+      <div class="steps" data-qid="q-div-3d3494bf3d8a" data-semantic-role="decoration">
+        <div class="step" data-qid="q-div-47d0e3875972" data-semantic-role="decoration">
+          <div class="step-arrow" data-semantic-role="supporting" data-qid="q-dm-arrow-1-19">→</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-e6cb761d480c200f" data-source-block-id="source-slide:20:text:13:run:0">가게 관찰</div>
+        </div>
+        <div class="step" data-qid="q-div-b232018c81d3" data-semantic-role="decoration">
+          <div class="step-arrow" data-semantic-role="supporting" data-qid="q-dm-arrow-2-19">→</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-02c560f58f0e06df" data-source-block-id="source-slide:20:text:13:run:1">맞춤 제안</div>
+        </div>
+        <div class="step" data-qid="q-div-7f974262228e" data-semantic-role="decoration">
+          <div class="step-arrow" data-semantic-role="supporting" data-qid="q-dm-arrow-3-19">→</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-96aca67fc2ffbcdc" data-source-block-id="source-slide:20:text:13:run:2">샘플/포트폴리오</div>
+        </div>
+        <div class="step" data-qid="q-div-1cee72d38f5d" data-semantic-role="decoration">
+          <div class="step-arrow" data-semantic-role="supporting" data-qid="q-dm-arrow-4-19">→</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-00221b9db9a43a22" data-source-block-id="source-slide:20:text:13:run:3">답변 유도</div>
+        </div>
+      </div>
+      <div class="card-foot" data-qid="q-div-5783b72a50a5" data-semantic-role="decoration"><div class="card-foot-fill" data-qid="q-div-bb0289eb2420" data-semantic-role="decoration"></div></div>
+    </div>
+
+    <div class="card" data-qid="q-card-visit-19" data-semantic-role="decoration">
+      <div class="card-top" data-qid="q-div-557e73025730" data-semantic-role="decoration">
+        <div class="card-index" data-semantic-role="supporting" data-qid="q-card-visit-index-19">03</div>
+        <div class="card-label" data-semantic-role="supporting" data-qid="source-block-1e10c5bb5e08300c" data-source-block-id="source-slide:20:text:16">🏃 직접 방문</div>
+      </div>
+      <div class="steps" data-qid="q-div-73ba28ebeaf8" data-semantic-role="decoration">
+        <div class="step" data-qid="q-div-193505f84e87" data-semantic-role="decoration">
+          <div class="step-arrow" data-semantic-role="supporting" data-qid="q-visit-arrow-1-19">→</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-e175e658bd77f112" data-source-block-id="source-slide:20:text:17:run:0">짧게 인사</div>
+        </div>
+        <div class="step" data-qid="q-div-86cca4553e36" data-semantic-role="decoration">
+          <div class="step-arrow" data-semantic-role="supporting" data-qid="q-visit-arrow-2-19">→</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-47a8d585ceca7730" data-source-block-id="source-slide:20:text:17:run:1">포트폴리오 보여주기</div>
+        </div>
+        <div class="step" data-qid="q-div-98f94b564e54" data-semantic-role="decoration">
+          <div class="step-arrow" data-semantic-role="supporting" data-qid="q-visit-arrow-3-19">→</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-4720c8458ce4584b" data-source-block-id="source-slide:20:text:17:run:2">담당자 확인</div>
+        </div>
+        <div class="step" data-qid="q-div-47289aa7fa85" data-semantic-role="decoration">
+          <div class="step-arrow" data-semantic-role="supporting" data-qid="q-visit-arrow-4-19">→</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-af9e27546f6a7742" data-source-block-id="source-slide:20:text:17:run:3">후속 연락</div>
+        </div>
+      </div>
+      <div class="card-foot" data-qid="q-div-f26f339dddd7" data-semantic-role="decoration"><div class="card-foot-fill" data-qid="q-div-41f24962ba5f" data-semantic-role="decoration"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-c78ed5381f160ce0" data-source-block-id="source-slide:20:text:4">20</div>
+</body>
+</html>

@@ -1,0 +1,266 @@
+{
+ "source-slide:17:text:3": {
+  "text": "2주차 PART 5 | 캡컷은 딱 이것만",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "2주차 PART 5",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "캡컷은 딱 이것만",
+    "begin": 13,
+    "end": 22,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:17:text:4": {
+  "text": "17",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "17",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:17:text:5": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:17:text:6": {
+  "text": "• 자르기 / 분할 • 자동자막 / 자막 스타일 • 음악 / 기본 효과 • 화면 확대·축소 • 기본 키프레임 • 최종 저장과 납품",
+  "run_count": 6,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    4,
+    4
+   ],
+   [
+    5,
+    5
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "• ",
+    "body": "자르기 / 분할",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "• ",
+    "body": "자동자막 / 자막 스타일",
+    "begin": 11,
+    "end": 26,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "• ",
+    "body": "음악 / 기본 효과",
+    "begin": 27,
+    "end": 39,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "• ",
+    "body": "화면 확대·축소",
+    "begin": 40,
+    "end": 50,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 4,
+    "marker": "• ",
+    "body": "기본 키프레임",
+    "begin": 51,
+    "end": 60,
+    "order_free_before": false
+   },
+   {
+    "index": 5,
+    "line": 5,
+    "marker": "• ",
+    "body": "최종 저장과 납품",
+    "begin": 61,
+    "end": 72,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:17:text:9": {
+  "text": "고급 기능은?",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "고급 기능은?",
+    "begin": 0,
+    "end": 7,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:17:text:10": {
+  "text": "필요한 만큼만. 처음부터 모든 기능을 외우지 않습니다.",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "필요한 만큼만.",
+    "begin": 0,
+    "end": 8,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "처음부터 모든 기능을 외우지 않습니다.",
+    "begin": 9,
+    "end": 30,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:17:text:13": {
+  "text": "실습 목표",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "실습 목표",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:17:text:14": {
+  "text": "10~15초 영상 1개 완성",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "10~15초 영상 1개 완성",
+    "begin": 0,
+    "end": 15,
+    "order_free_before": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#F9F9F9;word-break:keep-all;overflow-wrap:break-word;background:#00140E}
+.cover{position:relative;width:1280px;height:720px;padding:64px;background:linear-gradient(118deg,#00140E 0%,#003426 58%,#00140E 100%)}
+.rule{position:absolute;height:2px;background:#08916E}
+.rule-a{left:64px;top:64px;width:78px}
+.rule-b{right:64px;bottom:64px;width:112px;opacity:.7}
+.grid-mark{position:absolute;right:64px;top:64px;width:122px;height:122px;border:1px solid rgba(33,159,136,.38);border-radius:12px}
+.grid-mark span{position:absolute;background:#219F88;opacity:.65}
+.grid-mark .v{left:60px;top:0;width:1px;height:122px}
+.grid-mark .h{left:0;top:60px;width:122px;height:1px}
+.badge{display:flex;align-items:center;gap:12px;height:28px;color:#72CDB5;font-size:16px;line-height:24px;font-weight:700;letter-spacing:.04em}
+.badge-mark{width:9px;height:9px;background:#219F88;border-radius:12px}
+.main{position:absolute;left:64px;top:160px;width:760px}
+.kicker{font-size:18px;line-height:28px;color:#72CDB5;font-weight:700;letter-spacing:.02em}
+.title{margin-top:22px;font-size:52px;line-height:1.25;font-weight:700;letter-spacing:-.045em;color:#FFFFFF}
+.title-line{display:block}
+.emphasis{color:#72CDB5}
+.meta{margin-top:30px;padding-top:22px;border-top:1px solid rgba(114,205,181,.42);font-size:21px;line-height:32px;color:#F9F9F9;font-weight:500}
+.claim{position:absolute;left:64px;bottom:108px;width:710px;padding-left:20px;border-left:4px solid #08916E;font-size:22px;line-height:35px;color:#DDF5EE;font-weight:500}
+.author{position:absolute;right:64px;bottom:72px;width:300px;text-align:right;font-size:17px;line-height:28px;color:#A8D8CC;font-weight:500}
+.corner-label{position:absolute;right:64px;top:224px;width:180px;text-align:right;font-size:15px;line-height:24px;color:#6DAA9D;letter-spacing:.08em}
+</style>
+</head>
+<body>
+<div class="cover" data-qid="q-div-45f6c33b0728" data-semantic-role="decoration">
+  <div class="rule rule-a" data-qid="q-div-d40af9f2b3a9" data-semantic-role="decoration"></div>
+  <div class="rule rule-b" data-qid="q-div-b7c53df5c107" data-semantic-role="decoration"></div>
+  <div class="grid-mark" data-qid="q-div-b53ba6d49676" data-semantic-role="decoration"><span class="v" data-qid="q-span-c38ce69d7e15" data-semantic-role="decoration"></span><span class="h" data-qid="q-span-a3a9db163389" data-semantic-role="decoration"></span></div>
+
+  <div class="badge" data-semantic-role="supporting" data-qid="q-support-0a17">
+    <span class="badge-mark" data-qid="q-span-e14247f95237" data-semantic-role="supporting"></span><span data-qid="source-block-98846a3732f14a05" data-semantic-role="title" data-source-block-id="source-slide:1:text:6">🐝 꿀벌쌤</span>
+  </div>
+
+  <div class="corner-label" data-semantic-role="supporting" data-qid="q-div-883b068f5d81">온라인 실전 창업 과정</div>
+
+  <div class="main" data-qid="q-div-e469d0ff63c9" data-semantic-role="decoration">
+    <div class="kicker" data-semantic-role="supporting" data-qid="q-support-7c42">숏폼대행</div>
+    <div class="title" data-semantic-role="decoration" data-qid="source-block-fb8ed3c6b1083cb4" data-source-block-id="source-slide:1:text:7">
+      <span class="title-line" data-qid="q-span-3fa79da04575" data-semantic-role="body">숏폼대행</span>
+      <span class="title-line emphasis" data-qid="q-span-6e02e6a14f13" data-semantic-role="body">1인사업자 홀로서기</span>
+    </div>
+    <div class="meta" data-semantic-role="supporting" data-qid="source-block-33e774472066bd01" data-source-block-id="source-slide:1:text:8">4주 · 총 8시간 · 온라인 실전 창업 과정</div>
+  </div>
+
+  <div class="claim" data-semantic-role="body" data-qid="source-block-81b3a560fe0b0a76" data-source-block-id="source-slide:1:text:9">
+    영상 하나를 만드는 사람이 아니라<br>숏폼으로 돈을 버는 1인사업자가 되는 과정
+  </div>
+
+  <div class="author" data-semantic-role="supporting" data-qid="source-block-d998a880c1825a65" data-source-block-id="source-slide:1:text:10">꿀벌쌤 강의용 마스터 PPT</div>
+</div>
+</body>
+</html>

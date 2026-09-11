@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:104px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:28px;width:980px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:6px;font-size:28px;line-height:35px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:3px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:126px;height:522px}
+.main-grid{display:grid;grid-template-columns:490px 638px;gap:24px;margin-left:64px;width:1152px;height:430px}
+.left-panel,.right-panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.left-panel{padding:28px 28px 24px}
+.right-panel{padding:28px 28px 24px}
+.panel-label{font-size:15px;line-height:21px;letter-spacing:.02em;font-weight:700;color:#08916E}
+.panel-title{margin-top:8px;font-size:24px;line-height:34px;font-weight:700;color:#002060}
+.pillar-list{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;margin-top:22px;border-top:1px solid #E2E8F0}
+.pillar{height:58px;display:flex;align-items:center;border-bottom:1px solid #E2E8F0;font-size:18px;line-height:27px;color:#1D1D1B}
+.pillar strong{color:#08916E;font-weight:700;margin-right:8px}
+.pillar span{white-space:nowrap}
+.pillar:nth-child(5),.pillar:nth-child(6){height:62px}
+.note{margin-top:20px;padding:13px 16px;background:#E0F3FF;border-radius:12px;font-size:16px;line-height:25px;font-weight:700;color:#002060}
+.note-mark{display:inline-block;width:7px;height:22px;margin-right:9px;vertical-align:-5px;background:#08916E;border-radius:12px}
+.timeline-head{display:flex;align-items:end;justify-content:space-between;border-bottom:2px solid #00828E;padding-bottom:13px}
+.timeline-title{font-size:24px;line-height:34px;font-weight:700;color:#002060}
+.timeline-sub{font-size:15px;line-height:21px;color:#6B7280}
+.days{margin-top:16px}
+.day-row{display:grid;grid-template-columns:84px 1fr;align-items:center;height:47px;border-bottom:1px solid #E2E8F0}
+.day{font-family:"IBM Plex Mono","Consolas",monospace;font-size:16px;line-height:22px;font-weight:700;color:#00828E}
+.task{position:relative;padding-left:18px;font-size:18px;line-height:27px;color:#1D1D1B}
+.task:before{;position:absolute;left:0;top:8px;width:8px;height:8px;background:#219F88;border-radius:12px}
+.day-row:last-child .task{font-weight:700}
+.priority{display:inline-block;margin-left:12px;padding:4px 9px;background:#E5A93D;border-radius:12px;color:#00140E;font-size:15px;line-height:20px;font-weight:700}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" style="height:104px" class="header-band" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-final-practice" class="eyebrow">최종 실습</div>
+    <div data-header-part="title" data-semantic-role="title" data-qid="source-block-b590e161dbbfa858" class="title" data-source-block-id="source-slide:30:text:3">최종 실습 | 나의 숏폼 대행사업 설계</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" style="position:absolute;left:0;right:0;top:126px" class="body-wrap" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="main-grid" data-qid="q-div-948c49f110fb" data-semantic-role="decoration">
+    <section class="left-panel" data-qid="q-card-business-pillars" data-semantic-role="decoration">
+      <div data-semantic-role="supporting" data-qid="source-block-fe2f3ef23cb0df8b" class="panel-label" data-source-block-id="source-slide:30:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      <div data-semantic-role="body" data-qid="q-heading-business-design" class="panel-title">나의 숏폼 대행사업 설계</div>
+      <div class="pillar-list" data-qid="source-block-359c1df618d2f538" data-semantic-role="decoration" data-source-block-id="source-slide:30:text:6">
+        <div class="pillar" data-semantic-role="decoration" data-qid="q-pillar-target"><strong data-qid="q-strong-663977331dde" data-semantic-role="body">①</strong><span data-qid="q-span-f32986c526a1" data-semantic-role="body">타깃: __________________</span></div>
+        <div class="pillar" data-semantic-role="decoration" data-qid="q-pillar-product"><strong data-qid="q-strong-f213b54d7db8" data-semantic-role="body">②</strong><span data-qid="q-span-c83eac29f2ad" data-semantic-role="body">상품: __________________</span></div>
+        <div class="pillar" data-semantic-role="decoration" data-qid="q-pillar-price"><strong data-qid="q-strong-f2342e01f838" data-semantic-role="body">③</strong><span data-qid="q-span-eedec0ea8962" data-semantic-role="body">가격: __________________</span></div>
+        <div class="pillar" data-semantic-role="decoration" data-qid="q-pillar-portfolio"><strong data-qid="q-strong-20e9cb03b149" data-semantic-role="body">④</strong><span data-qid="q-span-2af01d53a93e" data-semantic-role="body">포트폴리오: _____________</span></div>
+        <div class="pillar" data-semantic-role="decoration" data-qid="q-pillar-channel"><strong data-qid="q-strong-f2092292903b" data-semantic-role="body">⑤</strong><span data-qid="q-span-0856754b8eb9" data-semantic-role="body">영업 채널: ______________</span></div>
+        <div class="pillar" data-semantic-role="decoration" data-qid="q-pillar-first-customer"><strong data-qid="q-strong-37603f74ce3f" data-semantic-role="body">⑥</strong><span data-qid="q-span-ff27a5abbc91" data-semantic-role="body">첫 고객 목표: ____________</span></div>
+      </div>
+      <div class="note" data-semantic-role="body" data-qid="q-note-six-pillars"><span class="note-mark" data-qid="q-span-10d07e03ae86" data-semantic-role="decoration"></span>6개 항목을 채우며 나만의 대행사업을 구체화합니다.</div>
+    </section>
+
+    <section class="right-panel" data-qid="q-card-seven-day-action" data-semantic-role="decoration">
+      <div class="timeline-head" data-qid="q-div-3580bd821c42" data-semantic-role="decoration">
+        <div data-semantic-role="body" data-qid="source-block-ff244c782a5f7ca6" class="timeline-title" data-source-block-id="source-slide:30:text:9">첫 7일 실행</div>
+        <div data-semantic-role="supporting" data-qid="q-label-seven-day" class="timeline-sub">7일 실행 순서</div>
+      </div>
+      <div class="days" data-qid="q-div-91191e509ab0" data-semantic-role="decoration">
+        <div class="day-row" data-qid="q-div-8385c2167e73" data-semantic-role="decoration"><div data-semantic-role="supporting" data-qid="source-block-bcabfee30d689b20" class="day" data-source-block-id="source-slide:30:text:10:run:0">Day 1</div><div data-semantic-role="body" data-qid="source-block-a95e0b1a68de971f" class="task" data-source-block-id="source-slide:30:text:10:run:1">업체 10곳 찾기</div></div>
+        <div class="day-row" data-qid="q-div-84626c278cc7" data-semantic-role="decoration"><div data-semantic-role="supporting" data-qid="source-block-11e22348b17bd4c5" class="day" data-source-block-id="source-slide:30:text:10:run:2">Day 2</div><div data-semantic-role="body" data-qid="source-block-2b11302d30b67650" class="task" data-source-block-id="source-slide:30:text:10:run:3">샘플 1개 기획</div></div>
+        <div class="day-row" data-qid="q-div-3483a9cc0c69" data-semantic-role="decoration"><div data-semantic-role="supporting" data-qid="source-block-6856880b5cd38faf" class="day" data-source-block-id="source-slide:30:text:10:run:4">Day 3</div><div data-semantic-role="body" data-qid="source-block-418c082a74b32bab" class="task" data-source-block-id="source-slide:30:text:10:run:5">영상 제작</div></div>
+        <div class="day-row" data-qid="q-div-53ac0a69e658" data-semantic-role="decoration"><div data-semantic-role="supporting" data-qid="source-block-61fc8561c7946b38" class="day" data-source-block-id="source-slide:30:text:10:run:6">Day 4</div><div data-semantic-role="body" data-qid="source-block-40d7e4135164cc91" class="task" data-source-block-id="source-slide:30:text:10:run:7">전화/DM</div></div>
+        <div class="day-row" data-qid="q-div-2be9dee9a48d" data-semantic-role="decoration"><div data-semantic-role="supporting" data-qid="source-block-bca31bced5434e5d" class="day" data-source-block-id="source-slide:30:text:10:run:8">Day 5</div><div data-semantic-role="body" data-qid="source-block-c05affc596c413f8" class="task" data-source-block-id="source-slide:30:text:10:run:9">추가 영업</div></div>
+        <div class="day-row" data-qid="q-div-9a40ef8d24a1" data-semantic-role="decoration"><div data-semantic-role="supporting" data-qid="source-block-ffc10990243c92d1" class="day" data-source-block-id="source-slide:30:text:10:run:10">Day 6</div><div data-semantic-role="body" data-qid="source-block-e1b02bc0e5e8a545" class="task" data-source-block-id="source-slide:30:text:10:run:11">상담/제안</div></div>
+        <div class="day-row" data-qid="q-div-291d346cc694" data-semantic-role="decoration"><div data-semantic-role="supporting" data-qid="source-block-eb4b338e380ebdc5" class="day" data-source-block-id="source-slide:30:text:10:run:12">Day 7</div><div data-semantic-role="body" data-qid="source-block-cf64a7ed8a53d28c" class="task" data-source-block-id="source-slide:30:text:10:run:13">복기.<span class="priority" data-semantic-role="supporting" data-qid="q-priority-review">마무리</span></div></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="source-block-1eff9208123cbcb2" data-source-block-id="source-slide:30:text:4">30</div>
+</body>
+</html>

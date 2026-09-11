@@ -1,0 +1,329 @@
+{
+ "source-slide:10:text:3": {
+  "text": "1주차 실습 | 내 사업 한 장으로 정리",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "1주차 실습",
+    "begin": 0,
+    "end": 6,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "내 사업 한 장으로 정리",
+    "begin": 9,
+    "end": 22,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:10:text:4": {
+  "text": "10",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "10",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:10:text:5": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:10:text:6": {
+  "text": "타깃 업종",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "타깃 업종",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:10:text:7": {
+  "text": "______________________________",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "______________________________",
+    "begin": 0,
+    "end": 30,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:10:text:8": {
+  "text": "서비스",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "서비스",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:10:text:9": {
+  "text": "______________________________",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "______________________________",
+    "begin": 0,
+    "end": 30,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:10:text:10": {
+  "text": "가격",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "가격",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:10:text:11": {
+  "text": "______________________________",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "______________________________",
+    "begin": 0,
+    "end": 30,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:10:text:12": {
+  "text": "한 줄 소개",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "한 줄 소개",
+    "begin": 0,
+    "end": 6,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:10:text:13": {
+  "text": "______________________________",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "______________________________",
+    "begin": 0,
+    "end": 30,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:10:text:16": {
+  "text": "체크",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "체크",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:10:text:17": {
+  "text": "□ 인스타 프로필 □ 블로그 방향 □ 상품 □ 가격 □ 타깃",
+  "run_count": 5,
+  "lines": [
+   [
+    0,
+    4
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "□ ",
+    "body": "인스타 프로필",
+    "begin": 0,
+    "end": 9,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "□ ",
+    "body": "블로그 방향",
+    "begin": 10,
+    "end": 18,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 0,
+    "marker": "□ ",
+    "body": "상품",
+    "begin": 19,
+    "end": 23,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 0,
+    "marker": "□ ",
+    "body": "가격",
+    "begin": 24,
+    "end": 28,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 0,
+    "marker": "□ ",
+    "body": "타깃",
+    "begin": 29,
+    "end": 33,
+    "order_free_before": false
+   }
+  ]
+ }
+}

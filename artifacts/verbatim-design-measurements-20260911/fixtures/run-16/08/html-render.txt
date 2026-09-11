@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:104px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:1000px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.04em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:132px;height:516px}
+.claim{margin-left:64px;width:1152px;padding-bottom:18px;border-bottom:1px solid #E2E8F0}
+.claim-text{font-size:24px;line-height:36px;font-weight:700;color:#1D1D1B}
+.claim-text strong{color:#08916E}
+.content-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:24px 64px 0;width:1152px;height:394px}
+.panel{height:394px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:28px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;height:48px;padding-bottom:16px;border-bottom:2px solid #219F88}
+.panel-title{font-size:26px;line-height:32px;font-weight:700;color:#002060}
+.panel-index{font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:22px;color:#08916E;font-weight:700}
+.list{margin-top:18px}
+.list-row{display:flex;align-items:flex-start;min-height:51px;padding:11px 0;border-bottom:1px solid #E2E8F0}
+.list-row:last-child{border-bottom:0}
+.node{width:8px;height:8px;margin:9px 14px 0 2px;background:#08916E;flex:none}
+.list-text{font-size:18px;line-height:28px;color:#1D1D1B}
+.insight{margin-top:18px;padding:14px 16px;border-radius:12px;background:#E0F3FF;color:#002060;font-size:18px;line-height:28px;font-weight:700}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" class="header-band" style="height:104px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-11d112fd8056d0af" data-source-block-id="source-slide:9:text:3:run:0" style="color: rgb(0, 105, 80)">1주차 PART 3</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-e54af0af13d35938" data-source-block-id="source-slide:9:text:3:run:1">인스타·블로그 세팅</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:132px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+    <div class="claim-text" data-semantic-role="body" data-qid="source-block-15201f2eb3dc9ead" data-source-block-id="source-slide:9:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <section class="panel" data-qid="q-card-instagram-8d64" data-semantic-role="decoration">
+      <div class="panel-head" data-qid="q-div-e25ca81e908c" data-semantic-role="decoration">
+        <div class="panel-title" data-semantic-role="body" data-qid="source-block-aa4b2d03edba2cb9" data-source-block-id="source-slide:9:text:8">인스타</div>
+        <div class="panel-index" data-semantic-role="supporting" data-qid="q-index-instagram-8f86" style="color: rgb(0, 105, 80)">01</div>
+      </div>
+      <div class="list" data-qid="source-block-50365cd15243490e" data-semantic-role="decoration" data-source-block-id="source-slide:9:text:9">
+        <div class="list-row" data-qid="q-div-9cb14d7a5066" data-semantic-role="decoration">
+          <div class="node" data-qid="q-div-956b9abdf526" data-semantic-role="decoration"></div>
+          <div class="list-text" data-semantic-role="body" data-qid="q-insta-01-9017">프로필 사진</div>
+        </div>
+        <div class="list-row" data-qid="q-div-cddc99cd4be9" data-semantic-role="decoration">
+          <div class="node" data-qid="q-div-761ee8778d46" data-semantic-role="decoration"></div>
+          <div class="list-text" data-semantic-role="body" data-qid="q-insta-02-9128">한 줄 소개</div>
+        </div>
+        <div class="list-row" data-qid="q-div-06436c09ca6a" data-semantic-role="decoration">
+          <div class="node" data-qid="q-div-d05a86cb5969" data-semantic-role="decoration"></div>
+          <div class="list-text" data-semantic-role="body" data-qid="q-insta-03-9239">어떤 업체를 돕는지</div>
+        </div>
+        <div class="list-row" data-qid="q-div-d883babd7648" data-semantic-role="decoration">
+          <div class="node" data-qid="q-div-6edaa20ac2ad" data-semantic-role="decoration"></div>
+          <div class="list-text" data-semantic-role="body" data-qid="q-insta-04-934a">문의 동선</div>
+        </div>
+        <div class="list-row" data-qid="q-div-0e990766d0ba" data-semantic-role="decoration">
+          <div class="node" data-qid="q-div-40bebb80c034" data-semantic-role="decoration"></div>
+          <div class="list-text" data-semantic-role="body" data-qid="q-insta-05-945b">포트폴리오 게시 방향</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" data-qid="q-card-blog-956c" data-semantic-role="decoration" style="height: 402px">
+      <div class="panel-head" data-qid="q-div-c1270e537d0c" data-semantic-role="decoration">
+        <div class="panel-title" data-semantic-role="body" data-qid="source-block-ca2994d25b217aa1" data-source-block-id="source-slide:9:text:12">블로그</div>
+        <div class="panel-index" data-semantic-role="supporting" data-qid="q-index-blog-977e" style="color: rgb(0, 105, 80)">02</div>
+      </div>
+      <div class="list" data-qid="source-block-51382338cbb20cfd" data-semantic-role="decoration" data-source-block-id="source-slide:9:text:13">
+        <div class="list-row" data-qid="q-div-40ede8d5479d" data-semantic-role="decoration">
+          <div class="node" data-qid="q-div-af2836901eda" data-semantic-role="decoration"></div>
+          <div class="list-text" data-semantic-role="body" data-qid="q-blog-01-988f">기본 프로필</div>
+        </div>
+        <div class="list-row" data-qid="q-div-4d0d4c7748c8" data-semantic-role="decoration">
+          <div class="node" data-qid="q-div-753c19fadf81" data-semantic-role="decoration"></div>
+          <div class="list-text" data-semantic-role="body" data-qid="q-blog-02-9990">지역 + 업종 키워드</div>
+        </div>
+        <div class="list-row" data-qid="q-div-e0a9dbd574e8" data-semantic-role="decoration">
+          <div class="node" data-qid="q-div-721973ea7717" data-semantic-role="decoration"></div>
+          <div class="list-text" data-semantic-role="body" data-qid="q-blog-03-9a01">검색형 제목</div>
+        </div>
+        <div class="list-row" data-qid="q-div-dd42f3ed9d7f" data-semantic-role="decoration">
+          <div class="node" data-qid="q-div-8264cef07c79" data-semantic-role="decoration"></div>
+          <div class="list-text" data-semantic-role="body" data-qid="q-blog-04-9b12">포트폴리오 글</div>
+        </div>
+        <div class="list-row" data-qid="q-div-7c5a42d7c01e" data-semantic-role="decoration">
+          <div class="node" data-qid="q-div-c0b720526f42" data-semantic-role="decoration"></div>
+          <div class="list-text" data-semantic-role="body" data-qid="q-blog-05-9c23">장기 영업자산으로 운영</div>
+        </div>
+      </div>
+      <div class="insight" data-semantic-role="body" data-qid="q-insight-9d34" style="line-height: 20px; padding-top: 6px; padding-bottom: 6px">장기 영업자산으로 운영.</div>
+    </section>
+  </div>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="source-block-2161fd2854b648a9" data-source-block-id="source-slide:9:text:4" style="color: rgb(90, 90, 90); top: 672px">09</div>
+</body>
+</html>

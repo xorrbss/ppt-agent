@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF;border-bottom:0 solid #08916E}
+.header-left{position:absolute;left:64px;top:24px;width:880px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:956px;top:0;width:260px;height:103px;padding:24px 22px 0 18px;text-align:right;background:#00140E;color:#FFFFFF;font-size:15px;line-height:20px}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px}
+.claim{height:58px;display:flex;align-items:center;margin-bottom:18px}
+.claim-text{font-size:26px;line-height:36px;font-weight:700;color:#1D1D1B}
+.claim-text strong{color:#08916E}
+.content-grid{display:grid;grid-template-columns:520px 608px;gap:24px;height:410px}
+.left-panel,.right-panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.left-panel{padding:28px}
+.scene-row{display:flex;align-items:flex-start;gap:18px;padding-bottom:22px;border-bottom:1px solid #E2E8F0}
+.metric{width:106px;min-height:100px;padding:17px 14px;background:#08916E;border-radius:12px;color:#FFFFFF;text-align:center}
+.metric-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:35px;line-height:40px;font-weight:700}
+.metric-label{font-size:15px;line-height:22px;font-weight:700}
+.scene-copy{padding-top:5px}
+.scene-head{font-size:24px;line-height:34px;font-weight:700;color:#00140E}
+.scene-note{margin-top:8px;font-size:18px;line-height:29px;color:#4B5563}
+.bullet-list{display:flex;flex-direction:column;gap:13px;margin-top:22px}
+.bullet-item{display:flex;align-items:flex-start;gap:12px;font-size:18px;line-height:27px;color:#1D1D1B}
+.bullet-mark{width:8px;height:8px;margin-top:10px;flex:none;background:#219F88;border-radius:12px}
+.right-panel{padding:28px}
+.formula-title{font-size:24px;line-height:34px;font-weight:700;color:#00140E;padding-bottom:18px;border-bottom:1px solid #E2E8F0}
+.formula-flow{display:flex;flex-direction:column;align-items:center;margin-top:22px}
+.flow-box{width:360px;min-height:62px;padding:16px 20px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px;text-align:center;font-size:20px;line-height:29px;font-weight:700;color:#002060}
+.flow-box.final{background:#EAF7F4;border-color:#B9E5D9;color:#08916E}
+.flow-arrow{height:31px;display:flex;align-items:center;justify-content:center;color:#00828E;font-size:27px;line-height:27px}
+.takeaway{margin-top:22px;padding:15px 18px;background:#EAEDF2;border-radius:12px;text-align:center;font-size:18px;line-height:28px;font-weight:700;color:#1D1D1B}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="105" class="header-band" style="height:105px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" data-semantic-role="supporting" class="eyebrow" data-qid="q-div-16db2223612a">릴스 기획</div>
+    <div data-header-part="title" data-semantic-role="title" class="title" data-qid="source-block-48ed582637691060" data-source-block-id="source-slide:13:text:3">2주차 PART 1 | 릴스 기획</div>
+  </div>
+  <div data-header-part="right" data-semantic-role="supporting" class="header-right" data-qid="source-block-a1581def94dc75ee" data-source-block-id="source-slide:13:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+    <div data-semantic-role="body" class="claim-text" data-qid="q-div-25e394bb022b"><strong data-qid="source-block-fe8f22469e5a4536" data-semantic-role="body" data-source-block-id="source-slide:13:text:6">3초</strong> 안에 사람을 멈추게 하는 첫 장면이 필요합니다.</div>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <section data-semantic-role="decoration" data-qid="q-card-hooking" class="left-panel">
+      <div class="scene-row" data-qid="q-div-0b6b095cbbf6" data-semantic-role="decoration">
+        <div data-semantic-role="supporting" data-qid="q-metric-three-seconds" class="metric">
+          <div class="metric-number" data-qid="q-div-e43ea1a2d6ed" data-semantic-role="supporting">3초</div>
+          <div class="metric-label" data-qid="q-div-d8ca15c82372" data-semantic-role="supporting">첫 장면</div>
+        </div>
+        <div class="scene-copy" data-qid="q-div-a28cb02a27e6" data-semantic-role="decoration">
+          <div data-semantic-role="body" data-qid="source-block-9992ecb1bc1f6711" class="scene-head" data-source-block-id="source-slide:13:text:7">사람을 멈추게 하는 첫 장면</div>
+          <div data-semantic-role="supporting" data-qid="q-scene-note" class="scene-note">한 번에 시선을 잡고, 다음 장면으로 연결합니다.</div>
+        </div>
+      </div>
+      <div class="bullet-list" data-qid="source-block-424c834f87ab1716" data-semantic-role="decoration" data-source-block-id="source-slide:13:text:8">
+        <div data-semantic-role="decoration" data-qid="q-bullet-hooking" class="bullet-item"><span class="bullet-mark" data-qid="q-span-42f15cbbf745" data-semantic-role="decoration"></span><span data-qid="q-span-f32986c526a1" data-semantic-role="body">후킹: 궁금증 · 문제 · 반전</span></div>
+        <div data-semantic-role="decoration" data-qid="q-bullet-message" class="bullet-item"><span class="bullet-mark" data-qid="q-span-b5961728f975" data-semantic-role="decoration"></span><span data-qid="q-span-c83eac29f2ad" data-semantic-role="body">본문: 한 가지 메시지만</span></div>
+        <div data-semantic-role="decoration" data-qid="q-bullet-action" class="bullet-item"><span class="bullet-mark" data-qid="q-span-e331268f35e2" data-semantic-role="decoration"></span><span data-qid="q-span-eedec0ea8962" data-semantic-role="body">마무리: 댓글 · 문의 · 방문 등 유도</span></div>
+        <div data-semantic-role="decoration" data-qid="q-bullet-type" class="bullet-item"><span class="bullet-mark" data-qid="q-span-9f77a5cecf39" data-semantic-role="decoration"></span><span data-qid="q-span-2af01d53a93e" data-semantic-role="body">정보형 / 홍보형 / 공감형 / 코믹형</span></div>
+      </div>
+    </section>
+
+    <section data-semantic-role="decoration" data-qid="q-card-formula" class="right-panel">
+      <div data-semantic-role="body" data-qid="source-block-68a66258f75a76f1" class="formula-title" data-source-block-id="source-slide:13:text:11">기획 공식</div>
+      <div class="formula-flow" data-qid="q-div-daf51947bfd1" data-semantic-role="decoration">
+        <div data-semantic-role="body" data-qid="source-block-3e82c6dbce688fa8" class="flow-box" data-source-block-id="source-slide:13:text:12:run:0">문제 제시</div>
+        <div class="flow-arrow" data-qid="q-div-502df5a3ff33" data-semantic-role="body">↓</div>
+        <div data-semantic-role="body" data-qid="source-block-7e15cb6f8358ca13" class="flow-box" data-source-block-id="source-slide:13:text:12:run:1">해결/정보</div>
+        <div class="flow-arrow" data-qid="q-div-17a2a1bad702" data-semantic-role="body">↓</div>
+        <div data-semantic-role="body" data-qid="source-block-89c22b8655163bf6" class="flow-box final" data-source-block-id="source-slide:13:text:12:run:2">행동 유도</div>
+      </div>
+      <div data-semantic-role="supporting" data-qid="q-takeaway" class="takeaway">관심을 멈추게 하고, 이해시키고, 움직이게 합니다.</div>
+    </section>
+  </div>
+</div>
+
+<div data-semantic-role="supporting" data-qid="source-block-927a431dd72ca024" class="page-number" data-source-block-id="source-slide:13:text:4">13</div>
+</body>
+</html>

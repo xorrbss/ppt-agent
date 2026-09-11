@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:104px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:24px;width:1000px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.04em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px;padding-top:28px}
+.topline{display:flex;align-items:stretch;gap:24px;height:94px;margin-bottom:24px}
+.identity{width:330px;padding:20px 24px;background:#00140E;border-radius:12px;color:#FFFFFF}
+.identity-text{font-size:20px;line-height:30px;font-weight:700}
+.goal{flex:1;padding:18px 24px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px}
+.goal-label{font-size:15px;line-height:22px;font-weight:700;color:#08916E;letter-spacing:.04em}
+.goal-text{margin-top:5px;font-size:21px;line-height:31px;font-weight:700;color:#1D1D1B}
+.claim{height:46px;display:flex;align-items:center;margin-bottom:14px}
+.claim-text{font-size:25px;line-height:34px;font-weight:700;color:#1D1D1B}
+.claim-text strong{color:#08916E}
+.formula{height:104px;display:flex;align-items:center;padding:0 22px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;margin-bottom:24px}
+.formula-step{height:58px;display:flex;align-items:center;justify-content:center;padding:0 21px;background:#EAF7F4;border:1px solid #B9E5D9;border-radius:12px;font-size:20px;line-height:28px;font-weight:700;color:#002060;white-space:nowrap}
+.formula-arrow{width:38px;height:2px;background:#00828E;margin:0 10px;position:relative;flex:none}
+.formula-arrow span{position:absolute;right:-1px;top:-5px;width:10px;height:10px;border-top:2px solid #00828E;border-right:2px solid #00828E;transform:rotate(45deg)}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;height:164px}
+.card{position:relative;padding:30px 24px 20px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.tab{position:absolute;left:20px;top:-14px;min-width:44px;height:30px;padding:4px 11px;border-radius:12px;background:#002060;color:#FFFFFF;text-align:center;font-family:"IBM Plex Mono","Consolas",monospace;font-size:16px;line-height:22px;font-weight:700}
+.card-title{font-size:21px;line-height:30px;font-weight:700;color:#1D1D1B}
+.card-line{position:absolute;left:24px;right:24px;bottom:20px;height:5px;border-radius:12px;background:#B9E5D9}
+.card-line span{display:block;height:5px;border-radius:12px;background:#08916E}
+.card:nth-child(2) .card-line span{width:66%;background:#219F88}
+.card:nth-child(3) .card-line span{width:100%;background:#00828E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" style="height:104px" data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-qid="q-eyebrow-17" data-semantic-role="supporting">3주차</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-33a3b1889548cf0f" data-source-block-id="source-slide:18:text:3">3주차 | 첫 고객 만들기</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:28px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="topline" data-qid="q-div-ae5367147281" data-semantic-role="decoration">
+    <div class="identity" data-qid="q-identity-17" data-semantic-role="decoration">
+      <div class="identity-text" data-semantic-role="supporting" data-qid="source-block-285b277e4b806eb3" data-source-block-id="source-slide:18:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    </div>
+    <div class="goal" data-qid="q-goal-17" data-semantic-role="decoration">
+      <div class="goal-label" data-semantic-role="supporting" data-qid="q-goal-label-17">목표</div>
+      <div class="goal-text" data-semantic-role="body" data-qid="source-block-5e6d01541e5f27c9" data-source-block-id="source-slide:18:text:4">목표: 실제 영업할 대상과 접근 방법을 만든다.</div>
+    </div>
+  </div>
+
+  <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+    <div class="claim-text" data-semantic-role="body" data-qid="source-block-36f232f6ed4b8365" data-source-block-id="source-slide:18:text:7">첫 고객의 <strong data-semantic-role="body" data-qid="q-keyword-17">공식</strong></div>
+  </div>
+
+  <div class="formula" data-qid="q-formula-17" data-semantic-role="decoration">
+    <div class="formula-step" data-semantic-role="body" data-qid="source-block-980e1ae983e2b346" data-source-block-id="source-slide:18:text:8:run:0">포트폴리오</div>
+    <div class="formula-arrow" data-semantic-role="decoration" data-qid="q-div-ef8a5f5910a4"><span data-qid="q-span-f32986c526a1" data-semantic-role="decoration"></span></div>
+    <div class="formula-step" data-semantic-role="body" data-qid="source-block-840f7bb97b86d673" data-source-block-id="source-slide:18:text:8:run:1">무료 샘플</div>
+    <div class="formula-arrow" data-semantic-role="decoration" data-qid="q-div-9de30dd8b7de"><span data-qid="q-span-c83eac29f2ad" data-semantic-role="decoration"></span></div>
+    <div class="formula-step" data-semantic-role="body" data-qid="source-block-0c084315a632e847" data-source-block-id="source-slide:18:text:8:run:2">영업</div>
+    <div class="formula-arrow" data-semantic-role="decoration" data-qid="q-div-f27f591abddf"><span data-qid="q-span-eedec0ea8962" data-semantic-role="decoration"></span></div>
+    <div class="formula-step" data-semantic-role="body" data-qid="source-block-b8d2b1747e429894" data-source-block-id="source-slide:18:text:8:run:3">상담</div>
+  </div>
+
+  <div class="cards" data-qid="q-div-beb8611456c7" data-semantic-role="decoration">
+    <div class="card" data-qid="q-card-1-17" data-semantic-role="decoration">
+      <div class="tab" data-semantic-role="supporting" data-qid="source-block-45b2aa014283bf2e" data-source-block-id="source-slide:18:text:11">1</div>
+      <div class="card-title" data-semantic-role="body" data-qid="source-block-c2f1224d2b6ae403" data-source-block-id="source-slide:18:text:12">보여줄 영상 준비</div>
+      <div class="card-line" data-semantic-role="decoration" data-qid="q-div-2e427aa60b81"><span data-qid="q-span-2af01d53a93e" data-semantic-role="decoration"></span></div>
+    </div>
+    <div class="card" data-qid="q-card-2-17" data-semantic-role="decoration">
+      <div class="tab" data-semantic-role="supporting" data-qid="source-block-668dddc946364571" data-source-block-id="source-slide:18:text:15">2</div>
+      <div class="card-title" data-semantic-role="body" data-qid="source-block-2a04996e31460b1f" data-source-block-id="source-slide:18:text:16">가게 하나 선정</div>
+      <div class="card-line" data-semantic-role="decoration" data-qid="q-div-f6ec014e2911"><span data-qid="q-span-0856754b8eb9" data-semantic-role="decoration"></span></div>
+    </div>
+    <div class="card" data-qid="q-card-3-17" data-semantic-role="decoration">
+      <div class="tab" data-semantic-role="supporting" data-qid="source-block-a174ff1d95299915" data-source-block-id="source-slide:18:text:19">3</div>
+      <div class="card-title" data-semantic-role="body" data-qid="source-block-cc8a8d02d5c9ef57" data-source-block-id="source-slide:18:text:20">직접 제안</div>
+      <div class="card-line" data-semantic-role="decoration" data-qid="q-div-0da7b5a5d0eb"><span data-qid="q-span-ff27a5abbc91" data-semantic-role="decoration"></span></div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-e1533f01db2c7974" data-source-block-id="source-slide:18:text:5">18</div>
+</body>
+</html>

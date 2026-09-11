@@ -1,0 +1,147 @@
+{
+ "source-slide:35:text:3": {
+  "text": "🐝 꿀벌쌤",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "🐝 꿀벌쌤",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:35:text:4": {
+  "text": "이제, 홀로서기 시작입니다.",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "이제,",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "홀로서기 시작입니다.",
+    "begin": 4,
+    "end": 15,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:35:text:5": {
+  "text": "숏폼대행 1인사업자 홀로서기 · 4주 8시간",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기 · 4주 8시간",
+    "begin": 0,
+    "end": 24,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:35:text:6": {
+  "text": "실행 → 경험 → 고객 → 성장",
+  "run_count": 4,
+  "lines": [
+   [
+    0,
+    3
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "실행",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "경험",
+    "begin": 5,
+    "end": 7,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 0,
+    "marker": "",
+    "body": "고객",
+    "begin": 10,
+    "end": 12,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 0,
+    "marker": "",
+    "body": "성장",
+    "begin": 15,
+    "end": 17,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:35:text:7": {
+  "text": "꿀벌쌤 강의용 마스터 PPT",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤 강의용 마스터 PPT",
+    "begin": 0,
+    "end": 15,
+    "order_free_before": false
+   }
+  ]
+ }
+}

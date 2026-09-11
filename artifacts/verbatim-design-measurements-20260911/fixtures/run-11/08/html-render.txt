@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:104px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:28px;width:980px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:6px;font-size:28px;line-height:35px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:3px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:126px;height:522px}
+.intro{margin-left:64px;width:1152px;height:62px;display:flex;align-items:flex-start;justify-content:space-between}
+.intro-title{font-size:26px;line-height:36px;font-weight:700;color:#1D1D1B}
+.intro-title strong{color:#08916E}
+.client-line{padding-top:6px;font-size:18px;line-height:28px;font-weight:700;color:#002060;text-align:right}
+.content-grid{margin-left:64px;width:1152px;height:376px;display:grid;grid-template-columns:552px 552px;gap:48px}
+.panel{height:376px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:28px}
+.panel-head{height:55px;display:flex;align-items:flex-start;gap:16px;border-bottom:3px solid #219F88}
+.panel-index{width:42px;height:42px;border-radius:12px;background:#002060;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:24px;font-weight:700;flex:none}
+.panel-title{font-size:26px;line-height:38px;font-weight:700;color:#002060}
+.list{padding-top:20px;display:flex;flex-direction:column;gap:12px}
+.list-row{display:flex;align-items:flex-start;min-height:32px;font-size:18px;line-height:28px;color:#1D1D1B}
+.list-mark{width:8px;height:8px;background:#08916E;margin:10px 14px 0 4px;flex:none}
+.list-row:last-child .list-mark{background:#E5A93D}
+.keyword-zone{margin-left:64px;width:1152px;height:64px;margin-top:18px;background:#EAF7F4;border-radius:12px;display:flex;align-items:center;padding:0 24px}
+.keyword{font-size:22px;line-height:32px;font-weight:700;color:#1D1D1B}
+.keyword strong{font-size:27px;color:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" class="header-band" style="height:104px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-8a71">1주차</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-549f280aef7b6446" data-source-block-id="source-slide:9:text:3">1주차 PART 3 | 인스타·블로그 세팅</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:126px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="intro" data-qid="q-div-2ec4c83af859" data-semantic-role="decoration">
+    <div class="intro-title" data-semantic-role="decoration" data-qid="q-intro-8c13"><strong data-qid="source-block-2161fd2854b648a9" data-semantic-role="body" data-source-block-id="source-slide:9:text:4">09</strong></div>
+    <div class="client-line" data-semantic-role="body" data-qid="source-block-15201f2eb3dc9ead" data-source-block-id="source-slide:9:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="panel" data-semantic-role="decoration" data-qid="q-card-instagram-8e35">
+      <div class="panel-head" data-qid="q-div-e25ca81e908c" data-semantic-role="decoration">
+        <div class="panel-index" data-semantic-role="supporting" data-qid="q-index-instagram-8f46">01</div>
+        <div class="panel-title" data-semantic-role="body" data-qid="source-block-aa4b2d03edba2cb9" data-source-block-id="source-slide:9:text:8">인스타</div>
+      </div>
+      <div class="list" data-qid="source-block-50365cd15243490e" data-semantic-role="decoration" data-source-block-id="source-slide:9:text:9">
+        <div class="list-row" data-semantic-role="decoration" data-qid="q-instagram-1-8h68"><span class="list-mark" data-qid="q-span-6e3ea3a8ff28" data-semantic-role="decoration"></span><span data-qid="q-span-f32986c526a1" data-semantic-role="body">프로필 사진</span></div>
+        <div class="list-row" data-semantic-role="decoration" data-qid="q-instagram-2-8i79"><span class="list-mark" data-qid="q-span-83fa1e0938be" data-semantic-role="decoration"></span><span data-qid="q-span-c83eac29f2ad" data-semantic-role="body">한 줄 소개</span></div>
+        <div class="list-row" data-semantic-role="decoration" data-qid="q-instagram-3-8j80"><span class="list-mark" data-qid="q-span-ffbfcaddca3c" data-semantic-role="decoration"></span><span data-qid="q-span-eedec0ea8962" data-semantic-role="body">어떤 업체를 돕는지</span></div>
+        <div class="list-row" data-semantic-role="decoration" data-qid="q-instagram-4-8k91"><span class="list-mark" data-qid="q-span-70de94ae31d9" data-semantic-role="decoration"></span><span data-qid="q-span-2af01d53a93e" data-semantic-role="body">문의 동선</span></div>
+        <div class="list-row" data-semantic-role="decoration" data-qid="q-instagram-5-8l02"><span class="list-mark" data-qid="q-span-1a26cacc1ffe" data-semantic-role="decoration"></span><span data-qid="q-span-0856754b8eb9" data-semantic-role="body">포트폴리오 게시 방향</span></div>
+      </div>
+    </div>
+
+    <div class="panel" data-semantic-role="decoration" data-qid="q-card-blog-8m13">
+      <div class="panel-head" data-qid="q-div-c1270e537d0c" data-semantic-role="decoration">
+        <div class="panel-index" data-semantic-role="supporting" data-qid="q-index-blog-8n24">02</div>
+        <div class="panel-title" data-semantic-role="body" data-qid="source-block-ca2994d25b217aa1" data-source-block-id="source-slide:9:text:12">블로그</div>
+      </div>
+      <div class="list" data-qid="source-block-51382338cbb20cfd" data-semantic-role="decoration" data-source-block-id="source-slide:9:text:13">
+        <div class="list-row" data-semantic-role="decoration" data-qid="q-blog-1-8p46"><span class="list-mark" data-qid="q-span-3f7129ed8f13" data-semantic-role="decoration"></span><span data-qid="q-span-ff27a5abbc91" data-semantic-role="body">기본 프로필</span></div>
+        <div class="list-row" data-semantic-role="decoration" data-qid="q-blog-2-8q57"><span class="list-mark" data-qid="q-span-f2c1ecb34dd6" data-semantic-role="decoration"></span><span data-qid="q-span-5fba4a1b38e4" data-semantic-role="body">지역 + 업종 키워드</span></div>
+        <div class="list-row" data-semantic-role="decoration" data-qid="q-blog-3-8r68"><span class="list-mark" data-qid="q-span-e48402c344ba" data-semantic-role="decoration"></span><span data-qid="q-span-d7940611100c" data-semantic-role="body">검색형 제목</span></div>
+        <div class="list-row" data-semantic-role="decoration" data-qid="q-blog-4-8s79"><span class="list-mark" data-qid="q-span-561186d0783c" data-semantic-role="decoration"></span><span data-qid="q-span-ea628152fecd" data-semantic-role="body">포트폴리오 글</span></div>
+        <div class="list-row" data-semantic-role="decoration" data-qid="q-blog-5-8t80"><span class="list-mark" data-qid="q-span-6d5536da4e91" data-semantic-role="decoration"></span><span data-qid="q-span-5ecaffe7eb14" data-semantic-role="body">장기 영업자산으로 운영</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="keyword-zone" data-qid="q-div-dbd43f196b5c" data-semantic-role="decoration">
+    <div class="keyword" data-semantic-role="supporting" data-qid="q-keyword-8u91"><strong data-qid="q-strong-f213b54d7db8" data-semantic-role="body">인스타</strong>와 <strong data-qid="q-strong-f2342e01f838" data-semantic-role="body">블로그</strong>를 함께 세팅해 문의와 장기 영업자산을 연결합니다.</div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="q-page-8v02">09</div>
+</body>
+</html>

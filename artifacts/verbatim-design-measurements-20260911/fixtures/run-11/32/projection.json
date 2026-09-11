@@ -1,0 +1,297 @@
+{
+ "source-slide:33:text:3": {
+  "text": "수료 후 실행 공식",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "수료 후 실행 공식",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:33:text:4": {
+  "text": "완벽해질 때까지 기다리지 않습니다.",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "완벽해질 때까지 기다리지 않습니다.",
+    "begin": 0,
+    "end": 19,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:33:text:5": {
+  "text": "33",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "33",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:33:text:6": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:33:text:7": {
+  "text": "배우기",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "배우기",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:33:text:8": {
+  "text": "→",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "→",
+    "begin": 0,
+    "end": 1,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:33:text:9": {
+  "text": "만들기",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "만들기",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:33:text:10": {
+  "text": "→",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "→",
+    "begin": 0,
+    "end": 1,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:33:text:11": {
+  "text": "영업하기",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "영업하기",
+    "begin": 0,
+    "end": 4,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:33:text:12": {
+  "text": "→",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "→",
+    "begin": 0,
+    "end": 1,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:33:text:13": {
+  "text": "계약하기",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "계약하기",
+    "begin": 0,
+    "end": 4,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:33:text:16": {
+  "text": "첫 번째 목표",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "첫 번째 목표",
+    "begin": 0,
+    "end": 7,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:33:text:17": {
+  "text": "‘대단한 회사’가 되는 것이 아니라 첫 고객 한 명을 만들어보는 것.",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "‘대단한 회사’가 되는 것이 아니라",
+    "begin": 0,
+    "end": 19,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "첫 고객 한 명을 만들어보는 것.",
+    "begin": 20,
+    "end": 38,
+    "order_free_before": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden}
+body{
+  font-family:"Noto Sans KR","Malgun Gothic",sans-serif;
+  color:#F9F9F9;
+  background:linear-gradient(135deg,#00140E 0%,#00281E 58%,#004437 100%);
+  word-break:keep-all;
+  overflow-wrap:break-word;
+}
+.frame{
+  position:relative;
+  width:1280px;
+  height:720px;
+  padding:64px;
+}
+.mark{
+  position:absolute;
+  top:62px;
+  right:64px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  color:#F9F9F9;
+  font-size:18px;
+  line-height:28px;
+  font-weight:700;
+}
+.mark-line{
+  width:34px;
+  height:2px;
+  background:#08916E;
+}
+.center{
+  position:absolute;
+  left:190px;
+  top:148px;
+  width:900px;
+  height:438px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  text-align:center;
+}
+.tab{
+  width:128px;
+  height:42px;
+  border-radius:12px 12px 0 0;
+  background:#08916E;
+  color:#00140E;
+  font-size:17px;
+  line-height:42px;
+  font-weight:700;
+  letter-spacing:.08em;
+}
+.rule{
+  width:72px;
+  height:2px;
+  margin-top:48px;
+  background:#219F88;
+}
+.title{
+  margin-top:26px;
+  color:#FFFFFF;
+  font-size:52px;
+  line-height:1.35;
+  font-weight:700;
+  letter-spacing:-.06em;
+}
+.subtitle{
+  margin-top:30px;
+  color:#B9E5D9;
+  font-size:20px;
+  line-height:32px;
+  font-weight:500;
+}
+.steps{
+  display:flex;
+  align-items:center;
+  gap:18px;
+  margin-top:36px;
+  color:#FFFFFF;
+  font-size:20px;
+  line-height:30px;
+  font-weight:700;
+}
+.step{
+  padding:12px 22px;
+  border:1px solid rgba(185,229,217,.42);
+  border-radius:12px;
+  background:rgba(0,20,14,.24);
+}
+.arrow{
+  color:#08916E;
+  font-size:24px;
+  line-height:30px;
+  font-weight:700;
+}
+.author{
+  margin-top:42px;
+  color:#FFFFFF;
+  font-size:18px;
+  line-height:28px;
+  font-weight:500;
+  letter-spacing:.02em;
+}
+.footer-mark{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:14px;
+  text-align:center;
+  color:#A7ACB3;
+  font-size:15px;
+  line-height:16px;
+  font-weight:500;
+}
+</style>
+</head>
+<body>
+<div class="frame" data-qid="q-div-8a2568219d64" data-semantic-role="decoration">
+  <div class="mark" data-qid="q-div-683ac442adbd" data-semantic-role="decoration">
+    <span class="mark-line" data-qid="q-span-52270f89a195" data-semantic-role="decoration"></span>
+    <span data-semantic-role="supporting" data-qid="source-block-5137d489be601f9d" data-source-block-id="source-slide:35:text:3">🐝 꿀벌쌤</span>
+  </div>
+  <main class="center" data-qid="q-main-6f340f977bb0" data-semantic-role="decoration">
+    <div class="tab" data-semantic-role="supporting" data-qid="q-tab-001">CLOSING</div>
+    <div class="rule" data-qid="q-div-cbd8ff350888" data-semantic-role="decoration"></div>
+    <div class="title" data-semantic-role="title" data-qid="source-block-396ed15ac83e4af0" data-source-block-id="source-slide:35:text:4">이제, 홀로서기 시작입니다.</div>
+    <div class="subtitle" data-semantic-role="body" data-qid="source-block-776ff9a28e9acf4f" data-source-block-id="source-slide:35:text:5">숏폼대행 1인사업자 홀로서기 · 4주 8시간</div>
+    <div class="steps" data-qid="source-block-82c049ab0dbb1bbe" data-semantic-role="decoration" data-source-block-id="source-slide:35:text:6">
+      <div class="step" data-semantic-role="body" data-qid="q-step-001">실행</div>
+      <div class="arrow" data-semantic-role="supporting" data-qid="q-arrow-001">→</div>
+      <div class="step" data-semantic-role="body" data-qid="q-step-002">경험</div>
+      <div class="arrow" data-semantic-role="supporting" data-qid="q-arrow-002">→</div>
+      <div class="step" data-semantic-role="body" data-qid="q-step-003">고객</div>
+      <div class="arrow" data-semantic-role="supporting" data-qid="q-arrow-003">→</div>
+      <div class="step" data-semantic-role="body" data-qid="q-step-004">성장</div>
+    </div>
+    <div class="author" data-semantic-role="body" data-qid="source-block-c8d33f4e1c121d7a" data-source-block-id="source-slide:35:text:7">꿀벌쌤 강의용 마스터 PPT</div>
+  </main>
+  <div class="footer-mark" data-semantic-role="supporting" data-qid="q-page-035">35</div>
+</div>
+</body>
+</html>

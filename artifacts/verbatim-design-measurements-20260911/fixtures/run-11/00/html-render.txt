@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden}
+body{
+  background:#00140E;
+  color:#FFFFFF;
+  font-family:"Noto Sans KR","Malgun Gothic",sans-serif;
+  word-break:keep-all;
+  overflow-wrap:break-word;
+}
+.cover{
+  position:relative;
+  width:1280px;
+  height:720px;
+  background:linear-gradient(118deg,#00140E 0%,#00251B 58%,#00382A 100%);
+}
+.frame{
+  position:absolute;
+  left:64px;
+  right:64px;
+  top:48px;
+  bottom:48px;
+  border:1px solid rgba(33,159,136,.42);
+  border-radius:12px;
+}
+.brand{
+  position:absolute;
+  left:92px;
+  top:78px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  font-size:20px;
+  line-height:30px;
+  font-weight:700;
+  letter-spacing:.02em;
+}
+.brand-mark{
+  width:12px;
+  height:12px;
+  border-radius:12px;
+  background:#08916E;
+}
+.meta{
+  position:absolute;
+  right:92px;
+  top:82px;
+  font-family:"IBM Plex Mono","Consolas",monospace;
+  font-size:15px;
+  line-height:22px;
+  color:#9AD9C8;
+  letter-spacing:.06em;
+}
+.content{
+  position:absolute;
+  left:92px;
+  top:188px;
+  width:780px;
+}
+.kicker{
+  margin-bottom:20px;
+  font-size:17px;
+  line-height:26px;
+  font-weight:700;
+  color:#65C9B1;
+  letter-spacing:.15em;
+}
+.title{
+  margin:0;
+  font-size:58px;
+  line-height:1.18;
+  font-weight:700;
+  letter-spacing:-.045em;
+  color:#FFFFFF;
+}
+.title-line{
+  display:block;
+}
+.rule{
+  width:96px;
+  height:3px;
+  margin-top:30px;
+  background:#08916E;
+}
+.subtitle{
+  margin-top:26px;
+  font-size:24px;
+  line-height:38px;
+  font-weight:700;
+  color:#D9F1EA;
+}
+.claim{
+  position:absolute;
+  left:92px;
+  bottom:82px;
+  width:630px;
+  padding-left:20px;
+  border-left:3px solid #219F88;
+  font-size:20px;
+  line-height:34px;
+  font-weight:500;
+  color:#FFFFFF;
+}
+.claim-line{
+  display:block;
+}
+.side-note{
+  position:absolute;
+  right:92px;
+  bottom:86px;
+  width:270px;
+  padding:18px 20px;
+  border-radius:12px;
+  background:rgba(8,145,110,.16);
+  border:1px solid rgba(33,159,136,.48);
+  font-size:15px;
+  line-height:25px;
+  color:#B8E6D9;
+}
+</style>
+</head>
+<body>
+<div class="cover" data-qid="q-div-45f6c33b0728" data-semantic-role="decoration">
+  <div class="frame" data-qid="q-div-8a2568219d64" data-semantic-role="decoration"></div>
+  <div class="brand" data-qid="q-brand-7a31" data-semantic-role="supporting">
+    <span class="brand-mark" data-qid="q-span-62e5a043e16d" data-semantic-role="decoration"></span>
+    <span data-qid="source-block-98846a3732f14a05" data-semantic-role="title" data-source-block-id="source-slide:1:text:6">🐝 꿀벌쌤</span>
+  </div>
+  <div class="meta" data-qid="source-block-d998a880c1825a65" data-semantic-role="supporting" data-source-block-id="source-slide:1:text:10">꿀벌쌤 강의용 마스터 PPT</div>
+  <main class="content" data-qid="q-main-26687018ddf0" data-semantic-role="decoration">
+    <div class="kicker" data-qid="q-kicker-7a34" data-semantic-role="supporting">숏폼 실전 창업 과정</div>
+    <h1 class="title" data-qid="source-block-fb8ed3c6b1083cb4" data-semantic-role="decoration" data-source-block-id="source-slide:1:text:7">
+      <span class="title-line" data-qid="q-span-3fa79da04575" data-semantic-role="body">숏폼대행</span>
+      <span class="title-line" data-qid="q-span-3b692f16ec0b" data-semantic-role="body">1인사업자 홀로서기</span>
+    </h1>
+    <div class="rule" data-qid="q-div-cbd8ff350888" data-semantic-role="decoration"></div>
+    <div class="subtitle" data-qid="source-block-33e774472066bd01" data-semantic-role="body" data-source-block-id="source-slide:1:text:8">4주 · 총 8시간 · 온라인 실전 창업 과정</div>
+  </main>
+  <div class="claim" data-qid="source-block-81b3a560fe0b0a76" data-semantic-role="decoration" data-source-block-id="source-slide:1:text:9">
+    <span class="claim-line" data-qid="q-span-2e4587cd3374" data-semantic-role="body">영상 하나를 만드는 사람이 아니라</span>
+    <span class="claim-line" data-qid="q-span-0fc8cb5ce04c" data-semantic-role="body">숏폼으로 돈을 버는 1인사업자가 되는 과정</span>
+  </div>
+  <div class="side-note" data-qid="q-note-7a38" data-semantic-role="supporting">4주 완주<br>총 8시간<br>온라인 실전 창업 과정</div>
+</div>
+</body>
+</html>

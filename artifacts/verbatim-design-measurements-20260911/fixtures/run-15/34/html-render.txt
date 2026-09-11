@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#00140E}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#F9F9F9;word-break:keep-all;overflow-wrap:break-word}
+.slide{position:relative;width:1280px;height:720px;background:linear-gradient(135deg,#00140E 0%,#00281E 100%)}
+.top-line{position:absolute;left:64px;right:64px;top:56px;height:2px;background:#08916E}
+.author-mark{position:absolute;right:64px;top:78px;color:#A7ACB3;font-size:18px;line-height:28px;font-weight:700;letter-spacing:.02em}
+.hero{position:absolute;left:0;right:0;top:174px;text-align:center}
+.title{margin:0;color:#F9F9F9;font-size:52px;line-height:1.28;font-weight:700;letter-spacing:-.04em}
+.title span{color:#08916E}
+.rule{width:72px;height:4px;margin:28px auto 0;background:#08916E;border-radius:12px}
+.subtitle{margin-top:28px;color:#F9F9F9;font-size:22px;line-height:34px;font-weight:500}
+.process{position:absolute;left:188px;right:188px;top:438px;height:108px;display:grid;grid-template-columns:1fr 34px 1fr 34px 1fr 34px 1fr;align-items:center}
+.step{height:82px;padding:22px 14px;background:rgba(8,145,110,.14);border:1px solid #08916E;border-radius:12px;text-align:center;color:#F9F9F9;font-size:21px;line-height:30px;font-weight:700}
+.connector{height:2px;background:#219F88;position:relative}
+.connector span{position:absolute;right:-1px;top:-5px;width:10px;height:10px;border-top:2px solid #219F88;border-right:2px solid #219F88;transform:rotate(45deg)}
+.bottom-note{position:absolute;left:0;right:0;top:592px;text-align:center;color:#A7ACB3;font-size:18px;line-height:28px;font-weight:500}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div class="slide" data-qid="q-div-f18d7f4bae9b" data-semantic-role="decoration">
+  <div class="top-line" data-qid="q-div-6386f71b9cd9" data-semantic-role="decoration"></div>
+  <div class="author-mark" data-semantic-role="supporting" data-qid="source-block-5137d489be601f9d" data-source-block-id="source-slide:35:text:3">🐝 꿀벌쌤</div>
+
+  <div class="hero" data-qid="q-div-19a94afde0da" data-semantic-role="decoration">
+    <div class="title" data-semantic-role="title" data-qid="source-block-396ed15ac83e4af0" data-source-block-id="source-slide:35:text:4"><span data-qid="q-span-now-34" data-semantic-role="body">이제,</span> 홀로서기 시작입니다.</div>
+    <div class="rule" data-qid="q-div-cbd8ff350888" data-semantic-role="decoration"></div>
+    <div class="subtitle" data-semantic-role="body" data-qid="source-block-776ff9a28e9acf4f" data-source-block-id="source-slide:35:text:5">숏폼대행 1인사업자 홀로서기 · 4주 8시간</div>
+  </div>
+
+  <div class="process" data-qid="q-div-process-34" data-semantic-role="decoration">
+    <div class="step" data-semantic-role="body" data-qid="source-block-c13f14acad4dde72" data-source-block-id="source-slide:35:text:6:run:0">실행</div>
+    <div class="connector" data-qid="q-div-1bfec761b021" data-semantic-role="decoration"><span data-qid="q-span-c83eac29f2ad" data-semantic-role="decoration"></span></div>
+    <div class="step" data-semantic-role="body" data-qid="source-block-73d0b44bcd0f588f" data-source-block-id="source-slide:35:text:6:run:1">경험</div>
+    <div class="connector" data-qid="q-div-f954d062b2c8" data-semantic-role="decoration"><span data-qid="q-span-eedec0ea8962" data-semantic-role="decoration"></span></div>
+    <div class="step" data-semantic-role="body" data-qid="source-block-44d6f33ea1bf68d7" data-source-block-id="source-slide:35:text:6:run:2">고객</div>
+    <div class="connector" data-qid="q-div-d70e41e2467e" data-semantic-role="decoration"><span data-qid="q-span-2af01d53a93e" data-semantic-role="decoration"></span></div>
+    <div class="step" data-semantic-role="body" data-qid="source-block-a23adb9942fc9fba" data-source-block-id="source-slide:35:text:6:run:3">성장</div>
+  </div>
+
+  <div class="bottom-note" data-semantic-role="supporting" data-qid="source-block-c8d33f4e1c121d7a" data-source-block-id="source-slide:35:text:7">꿀벌쌤 강의용 마스터 PPT</div>
+  <div class="page-number" data-semantic-role="supporting" data-qid="q-div-page-34">35</div>
+</div>
+</body>
+</html>

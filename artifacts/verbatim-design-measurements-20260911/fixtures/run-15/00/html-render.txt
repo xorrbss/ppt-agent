@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#00140E}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#FFFFFF;word-break:keep-all;overflow-wrap:break-word}
+.cover{position:relative;width:1280px;height:720px;background:linear-gradient(118deg,#00140E 0%,#00281D 58%,#004734 100%)}
+.glow{position:absolute;right:72px;top:98px;width:410px;height:410px;border:1px solid rgba(33,159,136,.24);border-radius:12px;transform:rotate(22deg)}
+.glow-inner{position:absolute;right:142px;top:166px;width:270px;height:270px;border:1px solid rgba(8,145,110,.32);border-radius:12px;transform:rotate(22deg)}
+.rule{position:absolute;left:72px;top:88px;width:72px;height:4px;background:#08916E}
+.brand{position:absolute;left:72px;top:112px;font-size:20px;line-height:30px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.brand-mark{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;margin-right:10px;border-radius:12px;background:#08916E;color:#00140E;font-size:22px;line-height:30px;vertical-align:middle}
+.main{position:absolute;left:72px;top:190px;width:720px}
+.eyebrow{font-size:15px;line-height:22px;font-weight:700;letter-spacing:.15em;color:#219F88}
+.title{margin-top:22px;font-size:54px;line-height:1.18;font-weight:700;letter-spacing:-.055em;color:#FFFFFF}
+.title-line{display:block}
+.title-accent{color:#08916E}
+.subtitle{margin-top:30px;font-size:23px;line-height:36px;font-weight:500;color:#D4EEE8}
+.statement{margin-top:42px;padding-left:20px;border-left:4px solid #08916E;font-size:21px;line-height:34px;font-weight:500;color:#FFFFFF}
+.statement-line{display:block}
+.meta{position:absolute;left:72px;bottom:60px;font-size:16px;line-height:26px;font-weight:500;color:#9CCDC2}
+.meta-label{display:block;margin-bottom:8px;font-size:15px;line-height:20px;letter-spacing:.12em;color:#219F88}
+.author{position:absolute;right:72px;top:54px;text-align:right;font-size:17px;line-height:27px;font-weight:700;color:#FFFFFF}
+.author-mark{display:block;margin-bottom:9px;font-size:15px;line-height:20px;letter-spacing:.14em;color:#219F88}
+.corner{position:absolute;right:72px;bottom:60px;width:142px;height:48px;padding:10px 14px;border:1px solid rgba(33,159,136,.55);border-radius:12px;color:#BDE5DC;font-size:15px;line-height:25px;text-align:center}
+</style>
+</head>
+<body>
+<div class="cover" data-qid="q-div-45f6c33b0728" data-semantic-role="decoration">
+  <div class="glow" data-qid="q-div-5f9be5222e1c" data-semantic-role="decoration"></div>
+  <div class="glow-inner" data-qid="q-div-4f25fe803b40" data-semantic-role="decoration"></div>
+  <div class="rule" data-qid="q-div-cbd8ff350888" data-semantic-role="decoration"></div>
+  <div class="brand" data-semantic-role="title" data-qid="source-block-98846a3732f14a05" data-source-block-id="source-slide:1:text:6"> <span class="brand-mark" data-qid="q-mark-7c42" data-semantic-role="body">🐝</span>꿀벌쌤</div>
+  <div class="author" data-semantic-role="supporting" data-qid="source-block-d998a880c1825a65" data-source-block-id="source-slide:1:text:10">
+    <span class="author-mark" data-qid="q-author-mark-8f26" data-semantic-role="body">MASTER PRESENTATION</span>
+    꿀벌쌤 강의용 마스터 PPT.
+  </div>
+  <main class="main" data-qid="q-main-00a00c0a8e84" data-semantic-role="decoration">
+    <div class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-1d90">실전 창업 과정</div>
+    <div class="title" data-semantic-role="decoration" data-qid="source-block-fb8ed3c6b1083cb4" data-source-block-id="source-slide:1:text:7">
+      <span class="title-line" data-qid="q-span-3fa79da04575" data-semantic-role="body">숏폼대행</span>
+      <span class="title-line" data-qid="q-span-3b692f16ec0b" data-semantic-role="body"><span class="title-accent" data-qid="q-span-a638668b0393" data-semantic-role="body">1인사업자</span> 홀로서기</span>
+    </div>
+    <div class="subtitle" data-semantic-role="body" data-qid="source-block-33e774472066bd01" data-source-block-id="source-slide:1:text:8">4주 · 총 8시간 · 온라인 실전 창업 과정</div>
+    <div class="statement" data-semantic-role="decoration" data-qid="source-block-81b3a560fe0b0a76" data-source-block-id="source-slide:1:text:9">
+      <span class="statement-line" data-qid="q-span-0358f6beacaf" data-semantic-role="body">영상 하나를 만드는 사람이 아니라</span>
+      <span class="statement-line" data-qid="q-span-7fef64daac27" data-semantic-role="body">숏폼으로 돈을 버는 1인사업자가 되는 과정</span>
+    </div>
+  </main>
+  <div class="meta" data-semantic-role="supporting" data-qid="q-meta-2b76">
+    <span class="meta-label" data-qid="q-meta-label-5f10" data-semantic-role="supporting">교육 설계</span>
+    4주 · 총 8시간 · 온라인
+  </div>
+  <div class="corner" data-semantic-role="supporting" data-qid="q-corner-6a12">온라인<br>실전형</div>
+</div>
+</body>
+</html>

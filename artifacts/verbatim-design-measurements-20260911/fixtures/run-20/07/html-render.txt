@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:24px;width:760px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:32px;line-height:38px;font-weight:700;color:#1D1D1B}
+.header-tag{position:absolute;right:64px;top:0;width:196px;height:108px;padding:25px 22px;background:#00140E;color:#FFFFFF;border-radius:0 0 12px 12px}
+.header-tag-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:22px;line-height:28px;font-weight:700;color:#08916E}
+.header-tag-label{margin-top:5px;font-size:15px;line-height:22px;font-weight:700}
+.body-wrap{position:absolute;left:0;right:0;top:132px}
+.content{margin-left:64px;width:1152px}
+.intro{height:58px;display:flex;align-items:flex-start;justify-content:space-between}
+.intro-line{font-size:24px;line-height:34px;font-weight:700;color:#1D1D1B}
+.intro-line strong{color:#08916E}
+.intro-rule{width:168px;height:5px;margin-top:14px;background:#08916E;border-radius:12px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:22px;height:316px}
+.card{position:relative;height:316px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:28px}
+.card-tab{position:absolute;left:28px;top:-14px;height:42px;min-width:82px;padding:8px 14px;background:#00140E;border-radius:12px;color:#FFFFFF}
+.card-tab-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:25px;font-weight:700;color:#08916E}
+.card-title{margin-top:34px;font-size:26px;line-height:36px;font-weight:700;color:#00140E}
+.card-divider{width:48px;height:4px;margin-top:22px;background:#08916E;border-radius:12px}
+.card-copy{margin-top:24px;font-size:20px;line-height:1.6;font-weight:500;color:#1D1D1B}
+.card-copy span{display:block}
+.takeaway{display:flex;align-items:center;height:84px;margin-top:24px;padding:0 24px;background:#EAF7F4;border-radius:12px}
+.takeaway-mark{width:8px;height:38px;background:#08916E;border-radius:12px;margin-right:16px}
+.takeaway-text{font-size:21px;line-height:32px;font-weight:700;color:#00140E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="108" class="header-band" style="height:108px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-7">1주차 PART 2</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-25a5564dfd7a8a37" data-source-block-id="source-slide:8:text:3">1주차 PART 2 | 나만의 상품 만들기</div>
+  </div>
+  <div class="header-tag" data-qid="q-div-787f321246ec" data-semantic-role="decoration">
+    <div class="header-tag-number" data-semantic-role="supporting" data-qid="source-block-faf5e732e24aaba9" data-source-block-id="source-slide:8:text:4">08</div>
+    <div class="header-tag-label" data-semantic-role="supporting" data-qid="q-header-label-7">상품 만들기</div>
+  </div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:132px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <main class="content" data-qid="q-main-26687018ddf0" data-semantic-role="decoration">
+    <div class="intro" data-qid="q-div-2ec4c83af859" data-semantic-role="decoration">
+      <div class="intro-line" data-semantic-role="body" data-qid="q-intro-7">나만의 상품은 <strong data-qid="source-block-a1f7bcfcd567df57" data-semantic-role="body" data-source-block-id="source-slide:8:text:8">누구에게</strong>, 무엇을, 얼마에 제공할지 정하는 일입니다.</div>
+      <div class="intro-rule" data-semantic-role="decoration" data-qid="q-div-112400f4dbb4"></div>
+    </div>
+
+    <section class="cards" data-qid="q-section-1c644bfe0c15" data-semantic-role="decoration">
+      <article class="card" data-qid="q-card-who-7" data-semantic-role="decoration">
+        <div class="card-tab" data-qid="q-div-e0f1dfa421f6" data-semantic-role="decoration">
+          <span class="card-tab-number" data-semantic-role="supporting" data-qid="q-card-who-number-7">①</span>
+        </div>
+        <div class="card-title" data-semantic-role="body" data-qid="q-card-who-title-7">누구에게</div>
+        <div class="card-divider" data-semantic-role="decoration" data-qid="q-div-aa6f48f71ad1"></div>
+        <div class="card-copy" data-semantic-role="decoration" data-qid="source-block-c1c7fc143bd6800e" data-source-block-id="source-slide:8:text:9">
+          <span data-qid="q-span-f32986c526a1" data-semantic-role="body">식당 / 미용 / 학원 / 쇼핑몰 / 기업 등</span>
+          <span data-qid="q-span-c83eac29f2ad" data-semantic-role="body">처음에는 한두 업종에 집중</span>
+        </div>
+      </article>
+
+      <article class="card" data-qid="q-card-what-7" data-semantic-role="decoration">
+        <div class="card-tab" data-qid="q-div-d81ee0082b8b" data-semantic-role="decoration">
+          <span class="card-tab-number" data-semantic-role="supporting" data-qid="q-card-what-number-7">②</span>
+        </div>
+        <div class="card-title" data-semantic-role="body" data-qid="source-block-00069fd52457dad6" data-source-block-id="source-slide:8:text:12">무엇을</div>
+        <div class="card-divider" data-semantic-role="decoration" data-qid="q-div-61c46564af6b"></div>
+        <div class="card-copy" data-semantic-role="decoration" data-qid="source-block-64c885822e33507c" data-source-block-id="source-slide:8:text:13">
+          <span data-qid="q-span-eedec0ea8962" data-semantic-role="body">월 4개 / 8개 / 12개 등</span>
+          <span data-qid="q-span-2af01d53a93e" data-semantic-role="body">기획 · 촬영 · 편집 범위 설정</span>
+        </div>
+      </article>
+
+      <article class="card" data-qid="q-card-price-7" data-semantic-role="decoration">
+        <div class="card-tab" data-qid="q-div-8a08d760c9de" data-semantic-role="decoration">
+          <span class="card-tab-number" data-semantic-role="supporting" data-qid="q-card-price-number-7">③</span>
+        </div>
+        <div class="card-title" data-semantic-role="body" data-qid="source-block-ffdbd2c094d96567" data-source-block-id="source-slide:8:text:16">얼마에</div>
+        <div class="card-divider" data-semantic-role="decoration" data-qid="q-div-0364e44801ff"></div>
+        <div class="card-copy" data-semantic-role="decoration" data-qid="source-block-881c86a9688e81ca" data-source-block-id="source-slide:8:text:17">
+          <span data-qid="q-span-0856754b8eb9" data-semantic-role="body">초기에는 단순한 패키지</span>
+          <span data-qid="q-span-ff27a5abbc91" data-semantic-role="body">수정 횟수와 납품일 명확히</span>
+        </div>
+      </article>
+    </section>
+
+    <div class="takeaway" data-qid="q-div-45499f8e6b25" data-semantic-role="decoration">
+      <div class="takeaway-mark" data-semantic-role="decoration" data-qid="q-div-e93b4a5ae3db"></div>
+      <div class="takeaway-text" data-semantic-role="body" data-qid="source-block-e464e54f3dceb8cd" data-source-block-id="source-slide:8:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    </div>
+  </main>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="q-page-7">08</div>
+</body>
+</html>

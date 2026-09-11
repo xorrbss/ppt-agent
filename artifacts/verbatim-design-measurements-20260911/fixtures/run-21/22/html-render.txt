@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;height:105px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:880px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:956px;top:24px;width:260px;text-align:right;font-size:15px;line-height:20px;color:#FFFFFF}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:129px;margin:0 64px;width:auto}
+.claim{height:50px;display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.claim-text{font-size:25px;line-height:36px;font-weight:700;letter-spacing:-.02em}
+.claim-text strong{color:#08916E}
+.claim-tag{display:flex;align-items:center;gap:10px;color:#002060;font-size:15px;line-height:22px;font-weight:700}
+.claim-tag-mark{width:8px;height:8px;border-radius:4px;background:#E5A93D;display:block}
+.content-grid{display:grid;grid-template-columns:584px 480px;gap:24px;height:404px}
+.left-panel{height:404px;padding:24px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.panel-title{font-size:20px;line-height:30px;font-weight:700;color:#002060}
+.panel-label{padding:6px 12px;background:#E0F3FF;border-radius:12px;color:#1B469C;font-size:15px;line-height:22px;font-weight:700}
+.task-list{display:flex;flex-direction:column;gap:12px}
+.task{min-height:68px;display:flex;align-items:center;border:1px solid #E2E8F0;border-radius:12px;background:#F9F9F9;padding:12px 16px}
+.task-num{width:38px;height:38px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:12px;background:#002060;color:#FFFFFF;font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:20px;font-weight:700}
+.task-copy{margin-left:16px;font-size:18px;line-height:28px;font-weight:500;color:#1D1D1B}
+.image-panel{height:404px;padding:10px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.image-panel img{display:block;width:458px;height:382px;border-radius:12px;object-fit:cover;background:#E0F3FF}
+.takeaway{height:44px;margin-top:16px;padding:9px 16px;background:#EAF7F4;border-left:6px solid #08916E;border-radius:12px;color:#164F43;font-size:17px;line-height:26px;font-weight:700}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="105" class="header-band" style="height:105px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-qid="q-eyebrow-22" data-semantic-role="supporting">영업 실행</div>
+    <div data-header-part="title" class="title" data-qid="source-block-5c533cf0c695d050" data-semantic-role="title" data-source-block-id="source-slide:23:text:3">3주차 과제</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-qid="q-div-73774be43d12" data-semantic-role="decoration"></div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:129px;margin:0 64px;width:auto" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+    <div class="claim-text" data-qid="source-block-de2cb24234f4325a" data-semantic-role="body" data-source-block-id="source-slide:23:text:4">강의가 끝난 뒤 실제 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">영업</strong>이 시작됩니다.</div>
+    <div class="claim-tag" data-qid="source-block-fd1b4b21d626adf5" data-semantic-role="body" data-source-block-id="source-slide:23:text:6"><span class="claim-tag-mark" data-qid="q-span-0f6628751fda" data-semantic-role="decoration"></span>꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="left-panel" data-qid="q-card-22" data-semantic-role="decoration">
+      <div class="panel-head" data-qid="q-div-e25ca81e908c" data-semantic-role="decoration">
+        <div class="panel-title" data-qid="q-panel-title-22" data-semantic-role="body">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+        <div class="panel-label" data-qid="q-panel-label-22" data-semantic-role="supporting">실행 순서</div>
+      </div>
+      <div class="task-list" data-qid="q-div-ed88754d3b8a" data-semantic-role="decoration">
+        <div class="task" data-qid="q-task-1-22" data-semantic-role="decoration">
+          <div class="task-num" data-qid="q-num-1-22" data-semantic-role="supporting">01</div>
+          <div class="task-copy" data-qid="source-block-22038928f4c8b519" data-semantic-role="body" data-source-block-id="source-slide:23:text:7:run:0">타깃 업체 30곳 리스트업</div>
+        </div>
+        <div class="task" data-qid="q-task-2-22" data-semantic-role="decoration">
+          <div class="task-num" data-qid="q-num-2-22" data-semantic-role="supporting">02</div>
+          <div class="task-copy" data-qid="source-block-c3749e1faffaecb6" data-semantic-role="body" data-source-block-id="source-slide:23:text:7:run:1">전화/DM 중 하나를 선택해 최소 10곳 시도</div>
+        </div>
+        <div class="task" data-qid="q-task-3-22" data-semantic-role="decoration">
+          <div class="task-num" data-qid="q-num-3-22" data-semantic-role="supporting">03</div>
+          <div class="task-copy" data-qid="source-block-c2164d272b855c34" data-semantic-role="body" data-source-block-id="source-slide:23:text:7:run:2">무료 샘플 1곳 기획</div>
+        </div>
+        <div class="task" data-qid="q-task-4-22" data-semantic-role="decoration">
+          <div class="task-num" data-qid="q-num-4-22" data-semantic-role="supporting">04</div>
+          <div class="task-copy" data-qid="source-block-c9a0b248517b82b9" data-semantic-role="body" data-source-block-id="source-slide:23:text:7:run:3">거절 이유를 기록하고 멘트를 수정</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="image-panel" data-qid="q-div-5e0d969fd99d" data-semantic-role="decoration">
+      
+    </div>
+  </div>
+
+  <div class="takeaway" data-qid="q-takeaway-22" data-semantic-role="body">리스트업부터 기록과 수정까지, 실제 영업 행동을 한 주 안에 완주합니다.</div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-780036fd9a2ca8f2" data-source-block-id="source-slide:23:text:5">23</div>
+</body>
+</html>

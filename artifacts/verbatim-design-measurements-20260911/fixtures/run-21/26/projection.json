@@ -1,0 +1,352 @@
+{
+ "source-slide:27:text:3": {
+  "text": "4주차 PART 3 | 계약·납품 시스템",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "4주차 PART 3",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "계약·납품 시스템",
+    "begin": 13,
+    "end": 22,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:27:text:4": {
+  "text": "27",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "27",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:27:text:5": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:27:text:8": {
+  "text": "계약",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "계약",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:27:text:9": {
+  "text": "제작 개수 수정 횟수 납품일 촬영 범위 선금/잔금",
+  "run_count": 5,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    4,
+    4
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "제작 개수",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "수정 횟수",
+    "begin": 6,
+    "end": 11,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "",
+    "body": "납품일",
+    "begin": 12,
+    "end": 15,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "",
+    "body": "촬영 범위",
+    "begin": 16,
+    "end": 21,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 4,
+    "marker": "",
+    "body": "선금/잔금",
+    "begin": 22,
+    "end": 27,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:27:text:12": {
+  "text": "제작",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "제작",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:27:text:13": {
+  "text": "촬영 가이드 콘텐츠 기획 편집 검수 수정",
+  "run_count": 5,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    4,
+    4
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "촬영 가이드",
+    "begin": 0,
+    "end": 6,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "콘텐츠 기획",
+    "begin": 7,
+    "end": 13,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "",
+    "body": "편집",
+    "begin": 14,
+    "end": 16,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "",
+    "body": "검수",
+    "begin": 17,
+    "end": 19,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 4,
+    "marker": "",
+    "body": "수정",
+    "begin": 20,
+    "end": 22,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:27:text:16": {
+  "text": "납품",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "납품",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:27:text:17": {
+  "text": "파일 전달 최종 확인 성과 기록 다음 콘텐츠 제안",
+  "run_count": 4,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "파일 전달",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "최종 확인",
+    "begin": 6,
+    "end": 11,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "",
+    "body": "성과 기록",
+    "begin": 12,
+    "end": 17,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "",
+    "body": "다음 콘텐츠 제안",
+    "begin": 18,
+    "end": 27,
+    "order_free_before": false
+   }
+  ]
+ }
+}

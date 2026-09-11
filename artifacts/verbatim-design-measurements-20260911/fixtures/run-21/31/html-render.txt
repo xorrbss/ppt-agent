@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:105px;background:#08916E;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:880px}
+.eyebrow{height:21px;font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#FFFFFF}
+.header-right{position:absolute;left:956px;top:24px;width:260px;min-height:36px;padding:7px 12px;background:#00140E;color:#FFFFFF;text-align:right;font-size:15px;line-height:20px;font-weight:500;border-radius:12px}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px;margin-top:24px}
+.claim{display:grid;grid-template-columns:480px 1fr;gap:48px;align-items:start;height:106px}
+.claim-main{padding-top:3px;font-size:27px;line-height:1.55;font-weight:700;letter-spacing:-.025em}
+.claim-main strong{color:#08916E}
+.claim-support{padding:16px 22px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;font-size:20px;line-height:1.55;font-weight:600;color:#1D1D1B}
+.process{position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:24px;height:285px}
+.card{position:relative;padding:0 22px 22px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-tab{height:48px;margin:0 -22px 20px;padding:10px 22px;background:#002060;color:#FFFFFF;border-radius:12px 12px 0 0;font-size:22px;line-height:28px;font-weight:700}
+.card-tab span{color:#8DD8C2}
+.card-copy{font-size:21px;line-height:1.6;font-weight:600}
+.card-copy strong{color:#08916E}
+.connector{position:absolute;top:138px;width:24px;height:2px;background:#219F88}
+.connector.one{left:376px}
+.connector.two{left:776px}
+.connector:after{;position:absolute;right:-1px;top:-4px;width:9px;height:9px;border-top:2px solid #219F88;border-right:2px solid #219F88;transform:rotate(45deg)}
+.takeaway{height:70px;margin-top:24px;padding:16px 24px;border-radius:12px;background:#E2F3EF;border-left:8px solid #08916E;font-size:21px;line-height:1.7;font-weight:700;color:#00140E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;height:16px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+  <div data-header-part="band" data-header-band="105" class="header-band" style="height:105px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="header-left eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-31">핵심 철학</div>
+    <div data-header-part="title" class="header-left title" data-semantic-role="title" data-qid="source-block-431d0f51556f7f2e" data-source-block-id="source-slide:32:text:3">꿀벌쌤의 핵심 철학</div>
+    <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-d8646047d6db0557" data-source-block-id="source-slide:32:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+  </div>
+
+  <div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+    <div class="claim" data-qid="source-block-edd002fb909d4be5" data-semantic-role="decoration" data-source-block-id="source-slide:32:text:8">
+      <div class="claim-main" data-semantic-role="body" data-qid="source-block-946de5a396e7c2ab" data-source-block-id="source-slide:32:text:4">숏폼 대행사업자는 ‘<strong data-qid="q-strong-663977331dde" data-semantic-role="body">편집자</strong>’에서 끝나면 안 됩니다.</div>
+      <div class="claim-support" data-semantic-role="body" data-qid="source-block-46db606268409532" data-source-block-id="source-slide:32:text:7">사장님들이 숏폼을 못 만드는 이유는 편집이 어려워서만이 아닙니다.<br><br>무엇을 찍어야 할지 모르기 때문입니다.</div>
+    </div>
+
+    <div class="process" data-qid="q-div-c9d7a1a95df0" data-semantic-role="decoration">
+      <div class="card" data-qid="q-card-plan-31" data-semantic-role="decoration">
+        <div class="card-tab" data-semantic-role="body" data-qid="source-block-38d76d9a430fc708" data-source-block-id="source-slide:32:text:11"><span data-qid="q-span-f32986c526a1" data-semantic-role="body">01</span>&nbsp;&nbsp;기획</div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-41021f16f79a95f3" data-source-block-id="source-slide:32:text:12">무엇을 찍을지</div>
+      </div>
+
+      <div class="card" data-qid="q-card-guide-31" data-semantic-role="decoration">
+        <div class="card-tab" data-semantic-role="body" data-qid="source-block-d1670c3495e2f87c" data-source-block-id="source-slide:32:text:15"><span data-qid="q-span-c83eac29f2ad" data-semantic-role="body">02</span>&nbsp;&nbsp;가이드</div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-440c1c19486cb4b2" data-source-block-id="source-slide:32:text:16">어떻게 찍을지</div>
+      </div>
+
+      <div class="card" data-qid="q-card-production-31" data-semantic-role="decoration">
+        <div class="card-tab" data-semantic-role="body" data-qid="source-block-77e4473d79d43d37" data-source-block-id="source-slide:32:text:19"><span data-qid="q-span-eedec0ea8962" data-semantic-role="body">03</span>&nbsp;&nbsp;제작</div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-69816ce05eb54687" data-source-block-id="source-slide:32:text:20">어떻게 보여줄지</div>
+      </div>
+
+      <div class="connector one" data-qid="q-div-4ef5a01146fb" data-semantic-role="decoration"></div>
+      <div class="connector two" data-qid="q-div-d63f3e8c8f23" data-semantic-role="decoration"></div>
+    </div>
+
+    <div class="takeaway" data-semantic-role="body" data-qid="q-takeaway-31">기획 · 가이드 · 제작</div>
+  </div>
+
+  <div class="page-number" data-semantic-role="supporting" data-qid="source-block-b4ae44f14aa00d73" data-source-block-id="source-slide:32:text:5">32</div>
+</body>
+</html>

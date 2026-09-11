@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:56px;top:24px;width:1000px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.04em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{width:1168px;margin-left:56px}
+.lead{height:66px;display:flex;align-items:center;border-bottom:1px solid #E2E8F0}
+.lead-text{font-size:26px;line-height:36px;font-weight:700;color:#00140E}
+.lead-text strong{color:#08916E}
+.content-grid{display:grid;grid-template-columns:430px 714px;gap:24px;margin-top:24px;height:430px}
+.left-panel{height:430px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.panel-kicker{font-size:15px;line-height:22px;font-weight:700;letter-spacing:.04em;color:#08916E}
+.opportunity{margin-top:18px;font-size:25px;line-height:35px;font-weight:700;color:#002060}
+.opportunity-line{width:64px;height:4px;margin-top:18px;background:#219F88;border-radius:12px}
+.opportunity-note{margin-top:24px;padding:20px;background:#E0F3FF;border-radius:12px;font-size:20px;line-height:32px;font-weight:700;color:#002060}
+.right-panel{height:430px;padding:24px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.panel-title{font-size:22px;line-height:31px;font-weight:700;color:#002060}
+.roles{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+.role-card{min-height:136px;padding:20px;background:#F9F9F9;border:1px solid #E2E8F0;border-radius:12px}
+.role-title{font-size:20px;line-height:28px;font-weight:700;color:#08916E}
+.role-list{margin-top:12px;display:flex;flex-direction:column;gap:7px}
+.role-item{font-size:16px;line-height:25px;color:#1D1D1B}
+.role-item span{display:inline-block;width:7px;height:7px;margin:0 9px 3px 0;background:#219F88;border-radius:12px}
+.position-card{margin-top:16px;padding:19px 22px;background:#00140E;border-radius:12px}
+.position-label{font-size:15px;line-height:22px;font-weight:700;letter-spacing:.04em;color:#219F88}
+.position-text{margin-top:8px;font-size:22px;line-height:32px;font-weight:700;color:#FFFFFF}
+.page-marker{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" class="header-band" style="height:104px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-8a04c78f5b523a6a" data-source-block-id="source-slide:16:text:3:run:0">2주차 PART 4</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-7ac91c67ab49908e" data-source-block-id="source-slide:16:text:3:run:1">자영업자 꽁트</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:28px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="lead" data-qid="q-div-426fcf6ea640" data-semantic-role="decoration">
+    <div class="lead-text" data-semantic-role="body" data-qid="source-block-37399f8f319f4882" data-source-block-id="source-slide:16:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="left-panel" data-semantic-role="decoration" data-qid="q-card-opportunity-15">
+      <div class="panel-kicker" data-semantic-role="supporting" data-qid="source-block-819d68ef86ea0559" data-source-block-id="source-slide:16:text:6">요즘 자영업자 숏폼의 기회</div>
+      <div class="opportunity" data-semantic-role="body" data-qid="source-block-11276ae48abc015b" data-source-block-id="source-slide:16:text:7">사장님 + 직원</div>
+      <div class="opportunity-line" data-qid="q-div-7cd93bef606a" data-semantic-role="decoration"></div>
+      <div class="opportunity-note" data-semantic-role="body" data-qid="q-opportunity-note-15">사장님과 직원 사이의 숏폼 제작 공백을 해결합니다.</div>
+    </div>
+
+    <div class="right-panel" data-semantic-role="decoration" data-qid="q-card-problem-15">
+      <div class="panel-title" data-semantic-role="supporting" data-qid="q-panel-title-15">사장님 + 직원</div>
+      <div class="roles" data-qid="q-div-3d4466471aac" data-semantic-role="decoration">
+        <div class="role-card" data-semantic-role="decoration" data-qid="q-role-card-idea-15">
+          <div class="role-title" data-semantic-role="supporting" data-qid="q-role-title-idea-15">사장님</div>
+          <div class="role-list" data-qid="source-block-f1fec1d07fc96b1a" data-semantic-role="decoration" data-source-block-id="source-slide:16:text:8:run:0-1">
+            <div class="role-item" data-semantic-role="body" data-qid="q-item-idea-15"><span data-qid="q-span-f32986c526a1" data-semantic-role="decoration"></span>사장님은 아이디어가 부족하다</div>
+            <div class="role-item" data-semantic-role="body" data-qid="q-item-work-15"><span data-qid="q-span-c83eac29f2ad" data-semantic-role="decoration"></span>직원에게 무엇을 시킬지 모른다</div>
+          </div>
+        </div>
+        <div class="role-card" data-semantic-role="decoration" data-qid="q-role-card-production-15">
+          <div class="role-title" data-semantic-role="supporting" data-qid="q-role-title-production-15">직원</div>
+          <div class="role-list" data-qid="source-block-131088b8f89f2da1" data-semantic-role="decoration" data-source-block-id="source-slide:16:text:8:run:2-3">
+            <div class="role-item" data-semantic-role="body" data-qid="q-item-scene-15"><span data-qid="q-span-eedec0ea8962" data-semantic-role="decoration"></span>촬영할 장면과 대사를 정하기 어렵다</div>
+            <div class="role-item" data-semantic-role="body" data-qid="q-item-guide-15"><span data-qid="q-span-2af01d53a93e" data-semantic-role="decoration"></span>대행사는 ‘촬영 가이드’까지 제공할 수 있다</div>
+          </div>
+        </div>
+      </div>
+      <div class="position-card" data-semantic-role="decoration" data-qid="q-position-card-15">
+        <div class="position-label" data-semantic-role="supporting" data-qid="source-block-d4506884aaf33c49" data-source-block-id="source-slide:16:text:11">핵심 포지션</div>
+        <div class="position-text" data-semantic-role="body" data-qid="source-block-3ee08a8d487c2e74" data-source-block-id="source-slide:16:text:12">‘편집자’가 아니라 기획 + 촬영가이드 + 제작 파트너</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-marker" data-semantic-role="supporting" data-qid="source-block-7240bc536b1ffb64" data-source-block-id="source-slide:16:text:4">16</div>
+</body>
+</html>

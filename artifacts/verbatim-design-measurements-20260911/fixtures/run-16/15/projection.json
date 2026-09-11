@@ -1,0 +1,227 @@
+{
+ "source-slide:16:text:3": {
+  "text": "2주차 PART 4 | 자영업자 꽁트",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "2주차 PART 4",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "자영업자 꽁트",
+    "begin": 13,
+    "end": 20,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:16:text:4": {
+  "text": "16",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "16",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:16:text:5": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:16:text:6": {
+  "text": "요즘 자영업자 숏폼의 기회",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "요즘 자영업자 숏폼의 기회",
+    "begin": 0,
+    "end": 14,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:16:text:7": {
+  "text": "사장님 + 직원",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "사장님 + 직원",
+    "begin": 0,
+    "end": 8,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:16:text:8": {
+  "text": "• 사장님은 아이디어가 부족하다 • 직원에게 무엇을 시킬지 모른다 • 촬영할 장면과 대사를 정하기 어렵다 • 대행사는 ‘촬영 가이드’까지 제공할 수 있다",
+  "run_count": 4,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "• ",
+    "body": "사장님은 아이디어가 부족하다",
+    "begin": 0,
+    "end": 17,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "• ",
+    "body": "직원에게 무엇을 시킬지 모른다",
+    "begin": 18,
+    "end": 36,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "• ",
+    "body": "촬영할 장면과 대사를 정하기 어렵다",
+    "begin": 37,
+    "end": 58,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "• ",
+    "body": "대행사는 ‘촬영 가이드’까지 제공할 수 있다",
+    "begin": 59,
+    "end": 85,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:16:text:11": {
+  "text": "핵심 포지션",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "핵심 포지션",
+    "begin": 0,
+    "end": 6,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:16:text:12": {
+  "text": "‘편집자’가 아니라 기획 + 촬영가이드 + 제작 파트너",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "‘편집자’가 아니라 기획 + 촬영가이드 + 제작 파트너",
+    "begin": 0,
+    "end": 30,
+    "order_free_before": false
+   }
+  ]
+ }
+}

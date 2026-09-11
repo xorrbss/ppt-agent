@@ -1,0 +1,386 @@
+{
+ "sourceUnitId": "source-slide:9",
+ "sourceIndex": 8,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:9:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:9:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "1주차 PART 3 | 인스타·블로그 세팅",
+    "paragraphs": [
+     {
+      "runs": [
+       "1주차 PART 3 | 인스타·블로그 세팅"
+      ],
+      "text": "1주차 PART 3 | 인스타·블로그 세팅"
+     }
+    ],
+    "runs": [
+     "1주차 PART 3 | 인스타·블로그 세팅"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:3628242d3cf9884cd29abdce68bcf7ce04f52ea0f8e172f94922750eb6797b38",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:9:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "09",
+    "paragraphs": [
+     {
+      "runs": [
+       "09"
+      ],
+      "text": "09"
+     }
+    ],
+    "runs": [
+     "09"
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:6a46003acdf2dbf2c774ee6390957173a24b36d3986bb9a94e077b2a66ff4880",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:9:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:74f52ea3fedff52018a6c922ae9f9a5650ace6385c0dd96cc4f477c74504ce90",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:9:shape:6",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 4,
+   "payload": {
+    "shapeName": "Rounded Rectangle 5",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 731520,
+     "y": 1508760,
+     "cx": 5120640,
+     "cy": 3840480
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:b6b95824e97baeb47ad1fbbbab3c63f000623956889bf611ddd57b9c845922b1",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:9:shape:7",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 5,
+   "payload": {
+    "shapeName": "Rectangle 6",
+    "preset": "rect",
+    "geometry": {
+     "x": 731520,
+     "y": 1508760,
+     "cx": 73152,
+     "cy": 3840480
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:65426397cac32942a2e434875fdbe9511843be22cd8221ac77555cf45a9be70e",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:9:text:8",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 6,
+   "payload": {
+    "text": "인스타",
+    "paragraphs": [
+     {
+      "runs": [
+       "인스타"
+      ],
+      "text": "인스타"
+     }
+    ],
+    "runs": [
+     "인스타"
+    ],
+    "shapeName": "TextBox 7",
+    "geometry": {
+     "x": 932688,
+     "y": 1645919,
+     "cx": 4754879,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:74e2e33057092316b7c3c39c69554deff186f8f4a6fe44f5e33c383378eb0b03",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:9:text:9",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 7,
+   "payload": {
+    "text": "• 프로필 사진\n• 한 줄 소개\n• 어떤 업체를 돕는지\n• 문의 동선\n• 포트폴리오 게시 방향",
+    "paragraphs": [
+     {
+      "runs": [
+       "• ",
+       "프로필",
+       " ",
+       "사진",
+       "\n• 한 줄 ",
+       "소개",
+       "\n• ",
+       "어떤",
+       " ",
+       "업체를",
+       " ",
+       "돕는지",
+       "\n• ",
+       "문의",
+       " ",
+       "동선",
+       "\n• ",
+       "포트폴리오",
+       " ",
+       "게시",
+       " ",
+       "방향"
+      ],
+      "text": "• 프로필 사진\n• 한 줄 소개\n• 어떤 업체를 돕는지\n• 문의 동선\n• 포트폴리오 게시 방향"
+     }
+    ],
+    "runs": [
+     "• ",
+     "프로필",
+     " ",
+     "사진",
+     "\n• 한 줄 ",
+     "소개",
+     "\n• ",
+     "어떤",
+     " ",
+     "업체를",
+     " ",
+     "돕는지",
+     "\n• ",
+     "문의",
+     " ",
+     "동선",
+     "\n• ",
+     "포트폴리오",
+     " ",
+     "게시",
+     " ",
+     "방향"
+    ],
+    "shapeName": "TextBox 8",
+    "geometry": {
+     "x": 932688,
+     "y": 2075688,
+     "cx": 4754879,
+     "cy": 3154680
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:621a93135d84ed0a7a6b6da44ad7fd266cc12fcdb6023d0387a3c3f5f515773f",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:9:shape:10",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 8,
+   "payload": {
+    "shapeName": "Rounded Rectangle 9",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 6309360,
+     "y": 1508760,
+     "cx": 5120640,
+     "cy": 3840480
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:fdc6edad52c190f05e63e18b7f8114e84b1029f4393aac9ea700d264eccd5efd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:9:shape:11",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 9,
+   "payload": {
+    "shapeName": "Rectangle 10",
+    "preset": "rect",
+    "geometry": {
+     "x": 6309360,
+     "y": 1508760,
+     "cx": 73152,
+     "cy": 3840480
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:7c1f50931a295ea0576b18a3043115065f4a180377ecc9f464cf9380942451b6",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:9:text:12",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 10,
+   "payload": {
+    "text": "블로그",
+    "paragraphs": [
+     {
+      "runs": [
+       "블로그"
+      ],
+      "text": "블로그"
+     }
+    ],
+    "runs": [
+     "블로그"
+    ],
+    "shapeName": "TextBox 11",
+    "geometry": {
+     "x": 6510528,
+     "y": 1645919,
+     "cx": 4754879,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:57d479fe905c631875b026c46ded28e2174f6938251fd838ca7f1cd9687dc151",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:9:text:13",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 11,
+   "payload": {
+    "text": "• 기본 프로필\n• 지역 + 업종 키워드\n• 검색형 제목\n• 포트폴리오 글\n• 장기 영업자산으로 운영",
+    "paragraphs": [
+     {
+      "runs": [
+       "• 기본 프로필\n• 지역 + 업종 키워드\n• 검색형 제목\n• 포트폴리오 글\n• 장기 영업자산으로 운영"
+      ],
+      "text": "• 기본 프로필\n• 지역 + 업종 키워드\n• 검색형 제목\n• 포트폴리오 글\n• 장기 영업자산으로 운영"
+     }
+    ],
+    "runs": [
+     "• 기본 프로필\n• 지역 + 업종 키워드\n• 검색형 제목\n• 포트폴리오 글\n• 장기 영업자산으로 운영"
+    ],
+    "shapeName": "TextBox 12",
+    "geometry": {
+     "x": 6510528,
+     "y": 2075688,
+     "cx": 4754879,
+     "cy": 3154680
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:f3e676349ef29c6124363ca939f2b7bb3335504bcdee628a863445bd44eea834",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

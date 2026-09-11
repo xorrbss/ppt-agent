@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:880px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:956px;top:24px;width:260px;text-align:right;font-size:15px;line-height:20px;color:#FFFFFF}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px}
+.identity{height:42px;padding:0 0 14px;border-bottom:1px solid #E2E8F0;font-size:20px;line-height:28px;font-weight:700;color:#002060}
+.identity strong{color:#08916E}
+.pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:24px;height:390px}
+.pillar{position:relative;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:28px 26px 24px}
+.pillar-tab{display:inline-flex;align-items:center;justify-content:center;min-width:78px;height:34px;padding:0 14px;border-radius:12px;background:#002060;color:#FFFFFF;font-size:18px;line-height:24px;font-weight:700}
+.pillar-title{margin:22px 0 24px;font-size:28px;line-height:36px;color:#002060;font-weight:700}
+.pillar-rule{width:100%;height:4px;border-radius:12px;background:#E2E8F0;margin-bottom:22px}
+.pillar-copy{margin:0;font-size:18px;line-height:1.6;color:#1D1D1B;font-weight:500}
+.pillar-copy.emphasis{color:#08916E;font-weight:700}
+.pillar-foot{position:absolute;left:26px;right:26px;bottom:24px;height:6px;border-radius:12px;background:#EAF7F4}
+.pillar-foot span{display:block;height:6px;border-radius:12px;background:#08916E}
+.pillar:nth-child(1) .pillar-foot span{width:38%}
+.pillar:nth-child(2) .pillar-foot span{width:62%}
+.pillar:nth-child(3) .pillar-foot span{width:86%}
+.footer-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="105" class="header-band" style="height:105px" data-qid="q-band-7-01" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-header-left-7-01" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-7-01">상품 만들기</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-25a5564dfd7a8a37" data-source-block-id="source-slide:8:text:3">1주차 PART 2 | 나만의 상품 만들기</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-divider-7-01" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-body-7-01" data-semantic-role="decoration">
+  <div class="identity" data-semantic-role="supporting" data-qid="source-block-e464e54f3dceb8cd" data-source-block-id="source-slide:8:text:5">꿀벌쌤 | <strong data-semantic-role="supporting" data-qid="q-identity-7-02">숏폼대행 1인사업자 홀로서기</strong></div>
+
+  <div class="pillars" data-qid="q-pillars-7-01" data-semantic-role="decoration">
+    <div class="pillar" data-qid="q-card-7-01" data-semantic-role="decoration">
+      <div class="pillar-tab" data-semantic-role="supporting" data-qid="q-tab-7-01">①</div>
+      <div class="pillar-title" data-semantic-role="body" data-qid="source-block-a1f7bcfcd567df57" data-source-block-id="source-slide:8:text:8">누구에게</div>
+      <div class="pillar-rule" data-qid="q-rule-7-01" data-semantic-role="decoration"></div>
+      <div class="pillar-copy" data-semantic-role="body" data-qid="source-block-b910c54ca2d4480e" data-source-block-id="source-slide:8:text:9:run:0">식당 / 미용 / 학원 / 쇼핑몰 / 기업 등</div>
+      <div class="pillar-copy emphasis" data-semantic-role="body" data-qid="source-block-e42554687b39b8d2" data-source-block-id="source-slide:8:text:9:run:1">처음에는 한두 업종에 집중</div>
+      <div class="pillar-foot" data-qid="q-foot-7-01" data-semantic-role="decoration"><span data-qid="q-foot-fill-7-01" data-semantic-role="decoration"></span></div>
+    </div>
+
+    <div class="pillar" data-qid="q-card-7-02" data-semantic-role="decoration">
+      <div class="pillar-tab" data-semantic-role="supporting" data-qid="q-tab-7-02">②</div>
+      <div class="pillar-title" data-semantic-role="body" data-qid="source-block-00069fd52457dad6" data-source-block-id="source-slide:8:text:12">무엇을</div>
+      <div class="pillar-rule" data-qid="q-rule-7-02" data-semantic-role="decoration"></div>
+      <div class="pillar-copy emphasis" data-semantic-role="body" data-qid="source-block-05f1e918e5b6d993" data-source-block-id="source-slide:8:text:13:run:0">월 4개 / 8개 / 12개 등</div>
+      <div class="pillar-copy" data-semantic-role="body" data-qid="source-block-1fa1ffa17a8f156d" data-source-block-id="source-slide:8:text:13:run:1">기획 · 촬영 · 편집 범위 설정</div>
+      <div class="pillar-foot" data-qid="q-foot-7-02" data-semantic-role="decoration"><span data-qid="q-foot-fill-7-02" data-semantic-role="decoration"></span></div>
+    </div>
+
+    <div class="pillar" data-qid="q-card-7-03" data-semantic-role="decoration">
+      <div class="pillar-tab" data-semantic-role="supporting" data-qid="q-tab-7-03">③</div>
+      <div class="pillar-title" data-semantic-role="body" data-qid="source-block-ffdbd2c094d96567" data-source-block-id="source-slide:8:text:16">얼마에</div>
+      <div class="pillar-rule" data-qid="q-rule-7-03" data-semantic-role="decoration"></div>
+      <div class="pillar-copy" data-semantic-role="body" data-qid="source-block-2f5954e847d006b3" data-source-block-id="source-slide:8:text:17:run:0">초기에는 <span class="emphasis" data-semantic-role="body" data-qid="q-copy-7-06">단순한 패키지</span></div>
+      <div class="pillar-copy" data-semantic-role="body" data-qid="source-block-59bfc8d77c9a6045" data-source-block-id="source-slide:8:text:17:run:1">수정 횟수와 납품일 명확히</div>
+      <div class="pillar-foot" data-qid="q-foot-7-03" data-semantic-role="decoration"><span data-qid="q-foot-fill-7-03" data-semantic-role="decoration"></span></div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-number" data-semantic-role="supporting" data-qid="source-block-faf5e732e24aaba9" data-source-block-id="source-slide:8:text:4">08</div>
+</body>
+</html>

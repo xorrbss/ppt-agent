@@ -1,0 +1,362 @@
+{
+ "sourceUnitId": "source-slide:6",
+ "sourceIndex": 5,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:6:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:6:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "1주차 | 숏폼 대행사업 시작하기",
+    "paragraphs": [
+     {
+      "runs": [
+       "1주차 | 숏폼 대행사업 시작하기"
+      ],
+      "text": "1주차 | 숏폼 대행사업 시작하기"
+     }
+    ],
+    "runs": [
+     "1주차 | 숏폼 대행사업 시작하기"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:ac762c5484c69525780b1a59fead9a758198757473e60c62860db30f0483fe52",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:6:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "목표: 내가 무엇을 누구에게 얼마에 팔지 결정",
+    "paragraphs": [
+     {
+      "runs": [
+       "목표: 내가 무엇을 누구에게 얼마에 팔지 결정"
+      ],
+      "text": "목표: 내가 무엇을 누구에게 얼마에 팔지 결정"
+     }
+    ],
+    "runs": [
+     "목표: 내가 무엇을 누구에게 얼마에 팔지 결정"
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 658368,
+     "y": 987552,
+     "cx": 10424160,
+     "cy": 365760
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:0899ef94703e0b78c2729a3377b8a2b6d3f5c5eab55ddfa4ebb02ae7809e4466",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:6:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "06",
+    "paragraphs": [
+     {
+      "runs": [
+       "06"
+      ],
+      "text": "06"
+     }
+    ],
+    "runs": [
+     "06"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:669e0f41b7905a25ee6cfc91dde13db884648e58a0b757e39b4950b8c982d9bf",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:6:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:36fd55bab03eb0480d24a03055e21590393daa37f1e868df1a69112f2d6294dd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:6:text:7",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 5,
+   "payload": {
+    "text": "120분",
+    "paragraphs": [
+     {
+      "runs": [
+       "120분"
+      ],
+      "text": "120분"
+     }
+    ],
+    "runs": [
+     "120분"
+    ],
+    "shapeName": "TextBox 6",
+    "geometry": {
+     "x": 731520,
+     "y": 1508760,
+     "cx": 1828800,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:b1d945c25194fd3a17690c0a37807d177d1a911177f7be10439e6265e49c0a2c",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:6:text:8",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 6,
+   "payload": {
+    "text": "• 숏폼 대행사업의 구조 이해\n• 타깃 업종과 상품 정하기\n• 가격과 작업 범위 정하기\n• 인스타·블로그 기본 세팅",
+    "paragraphs": [
+     {
+      "runs": [
+       "• 숏폼 대행사업의 구조 이해"
+      ],
+      "text": "• 숏폼 대행사업의 구조 이해"
+     },
+     {
+      "runs": [
+       "• 타깃 업종과 상품 정하기"
+      ],
+      "text": "• 타깃 업종과 상품 정하기"
+     },
+     {
+      "runs": [
+       "• 가격과 작업 범위 정하기"
+      ],
+      "text": "• 가격과 작업 범위 정하기"
+     },
+     {
+      "runs": [
+       "• 인스타·블로그 기본 세팅"
+      ],
+      "text": "• 인스타·블로그 기본 세팅"
+     }
+    ],
+    "runs": [
+     "• 숏폼 대행사업의 구조 이해",
+     "\n",
+     "• 타깃 업종과 상품 정하기",
+     "\n",
+     "• 가격과 작업 범위 정하기",
+     "\n",
+     "• 인스타·블로그 기본 세팅"
+    ],
+    "shapeName": "TextBox 7",
+    "geometry": {
+     "x": 2743200,
+     "y": 1371600,
+     "cx": 8046720,
+     "cy": 3474720
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:a724372fdef39319fd18b14132574803062fa02edc18752018ed4744e1d2dfb7",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:6:shape:9",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 7,
+   "payload": {
+    "shapeName": "Rounded Rectangle 8",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 731520,
+     "y": 5166360,
+     "cx": 10698480,
+     "cy": 822960
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:ccd8d4f1ab33b068023d09812a609dcb301988f19b1fd2f81073b538173042a3",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:6:shape:10",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 8,
+   "payload": {
+    "shapeName": "Rectangle 9",
+    "preset": "rect",
+    "geometry": {
+     "x": 731520,
+     "y": 5166360,
+     "cx": 73152,
+     "cy": 822960
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:64970bb145b0339b02928f471da69fb97c3f7a00ae3051634c0263ee7e0be91f",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:6:text:11",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 9,
+   "payload": {
+    "text": "오늘의 결과물",
+    "paragraphs": [
+     {
+      "runs": [
+       "오늘의 결과물"
+      ],
+      "text": "오늘의 결과물"
+     }
+    ],
+    "runs": [
+     "오늘의 결과물"
+    ],
+    "shapeName": "TextBox 10",
+    "geometry": {
+     "x": 932688,
+     "y": 5303520,
+     "cx": 10332719,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:b7f7a510f2a4f5f43143e63394fb175cf9a1cc8ee0accd58ae4777f1b9f770bd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:6:text:12",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 10,
+   "payload": {
+    "text": "내 서비스 한 줄 소개 + 기본 상품 1개",
+    "paragraphs": [
+     {
+      "runs": [
+       "내 서비스 한 줄 소개 + 기본 상품 1개"
+      ],
+      "text": "내 서비스 한 줄 소개 + 기본 상품 1개"
+     }
+    ],
+    "runs": [
+     "내 서비스 한 줄 소개 + 기본 상품 1개"
+    ],
+    "shapeName": "TextBox 11",
+    "geometry": {
+     "x": 932688,
+     "y": 5733288,
+     "cx": 10332719,
+     "cy": 137160
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:0d653cfc3a6e8d473559d862c54cfc78298f9bdf371ba4b786dd913b5d4f69f4",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

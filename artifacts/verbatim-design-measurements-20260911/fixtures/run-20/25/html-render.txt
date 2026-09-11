@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:108px;background:#08916E}
+.header-left{position:absolute;left:64px;top:24px;width:760px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:8px;font-size:32px;line-height:38px;font-weight:700;color:#FFFFFF}
+.header-right{position:absolute;left:916px;top:24px;width:300px;text-align:right;font-size:15px;line-height:20px;color:#FFFFFF}
+.project-tag{position:absolute;right:64px;bottom:0;width:300px;height:28px;padding:4px 12px;background:#00140E;text-align:right;font-size:15px;line-height:20px;font-weight:700;color:#FFFFFF}
+.body-wrap{position:absolute;left:0;right:0;top:132px;height:516px}
+.content-field{display:grid;grid-template-columns:604px 524px;gap:24px;margin-left:64px;width:1152px;height:492px}
+.panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.left-panel{height:492px;padding:28px}
+.panel-title{font-size:24px;line-height:34px;font-weight:700;color:#002060}
+.title-rule{width:42px;height:4px;margin-top:12px;background:#08916E;border-radius:12px}
+.timeline{position:relative;margin-top:25px;height:350px;padding-left:28px}
+.timeline-rail{position:absolute;left:6px;top:8px;width:4px;height:328px;background:#00828E;border-radius:12px}
+.step{position:relative;display:flex;align-items:center;height:50px;margin-bottom:10px}
+.step-node{position:absolute;left:-28px;width:16px;height:16px;background:#FFFFFF;border:4px solid #08916E;border-radius:12px}
+.step-copy{width:500px;padding:11px 16px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px;font-size:18px;line-height:27px;font-weight:600;color:#002060}
+.step:last-child{margin-bottom:0}
+.step:last-child .step-copy{background:#E5F6F1;border-color:#B9E5D9;color:#006B55}
+.right-panel{height:492px;padding:28px}
+.right-head{display:flex;align-items:flex-start;justify-content:space-between}
+.right-title{font-size:24px;line-height:34px;font-weight:700;color:#002060}
+.priority{padding:6px 12px;background:#E5A93D;border-radius:12px;font-size:15px;line-height:22px;font-weight:700;color:#00140E}
+.quote-box{margin-top:25px;padding:24px 24px 22px;background:#00140E;border-radius:12px}
+.quote-line{font-size:25px;line-height:37px;font-weight:700;color:#FFFFFF}
+.quote-line strong{color:#71CDB5}
+.quote-sub{margin-top:10px;font-size:18px;line-height:28px;font-weight:600;color:#D5F2EA}
+.scope-list{margin-top:22px}
+.scope-row{display:flex;align-items:center;gap:14px;min-height:56px;padding:12px 0;border-bottom:1px solid #E2E8F0}
+.scope-row:last-child{border-bottom:0}
+.scope-mark{width:10px;height:10px;background:#219F88;border-radius:12px;flex:none}
+.scope-text{font-size:18px;line-height:27px;font-weight:600;color:#1D1D1B}
+.takeaway{margin-top:22px;padding:14px 16px;background:#EAF7F4;border-left:5px solid #08916E;border-radius:12px;font-size:18px;line-height:27px;font-weight:700;color:#006B55}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="108" class="header-band" style="height:108px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-25" style="color: rgb(0, 20, 14)">4주차 상담 설계</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-6c4e25d764ba2e08" data-source-block-id="source-slide:26:text:3">4주차 PART 2 | 상담과 가격 제시</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-71aeff1efc7cad63" data-source-block-id="source-slide:26:text:5" style="color: rgb(0, 20, 14)">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  <div class="project-tag" data-semantic-role="supporting" data-qid="q-tag-25">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:132px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-field" data-qid="q-div-f437b86905e0" data-semantic-role="decoration">
+    <div class="panel left-panel" data-semantic-role="decoration" data-qid="q-card-consult-25">
+      <div class="panel-title" data-semantic-role="body" data-qid="source-block-26c17f246a8fca6c" data-source-block-id="source-slide:26:text:6">상담 순서</div>
+      <div class="title-rule" data-qid="q-div-1c556e09ff14" data-semantic-role="decoration"></div>
+      <div class="timeline" data-qid="source-block-edd35f7098d10262" data-semantic-role="decoration" data-source-block-id="source-slide:26:text:7">
+        <div class="timeline-rail" data-qid="q-div-9dc6ee825083" data-semantic-role="decoration"></div>
+        <div class="step" data-qid="q-div-76997843ad4f" data-semantic-role="decoration">
+          <div class="step-node" data-qid="q-div-8aa028e3d2c4" data-semantic-role="decoration"></div>
+          <div class="step-copy" data-semantic-role="body" data-qid="q-step-1-25">현재 SNS 운영 상황</div>
+        </div>
+        <div class="step" data-qid="q-div-99a28a82e8a1" data-semantic-role="decoration">
+          <div class="step-node" data-qid="q-div-d6d3ac040fbb" data-semantic-role="decoration"></div>
+          <div class="step-copy" data-semantic-role="body" data-qid="q-step-2-25">가장 알리고 싶은 상품/서비스</div>
+        </div>
+        <div class="step" data-qid="q-div-0bbae897b6f1" data-semantic-role="decoration">
+          <div class="step-node" data-qid="q-div-0ab65f344374" data-semantic-role="decoration"></div>
+          <div class="step-copy" data-semantic-role="body" data-qid="q-step-3-25">촬영 가능 여부</div>
+        </div>
+        <div class="step" data-qid="q-div-111d3d12a08f" data-semantic-role="decoration">
+          <div class="step-node" data-qid="q-div-b160e2ea9eb1" data-semantic-role="decoration"></div>
+          <div class="step-copy" data-semantic-role="body" data-qid="q-step-4-25">원하는 콘텐츠 스타일</div>
+        </div>
+        <div class="step" data-qid="q-div-47d0e3875972" data-semantic-role="decoration">
+          <div class="step-node" data-qid="q-div-c7632e233403" data-semantic-role="decoration"></div>
+          <div class="step-copy" data-semantic-role="body" data-qid="q-step-5-25">예산/업로드 빈도</div>
+        </div>
+        <div class="step" data-qid="q-div-b232018c81d3" data-semantic-role="decoration">
+          <div class="step-node" data-qid="q-div-14c2f05b4048" data-semantic-role="decoration"></div>
+          <div class="step-copy" data-semantic-role="body" data-qid="q-step-6-25">내 서비스 제안</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel right-panel" data-semantic-role="decoration" data-qid="q-card-price-25" style="height: 524px">
+      <div class="right-head" data-qid="q-div-f2bca9bf446d" data-semantic-role="decoration">
+        <div class="right-title" data-semantic-role="body" data-qid="source-block-5b075dcf56decd86" data-source-block-id="source-slide:26:text:10">가격을 말할 때</div>
+        <div class="priority" data-semantic-role="supporting" data-qid="q-priority-25">핵심 원칙</div>
+      </div>
+      <div class="quote-box" data-qid="source-block-f0aea015e8d5b858" data-semantic-role="decoration" data-source-block-id="source-slide:26:text:11">
+        <div class="quote-line" data-semantic-role="body" data-qid="q-quote-25">‘영상 1개 얼마’보다<br><strong data-qid="q-strong-663977331dde" data-semantic-role="body">패키지와 관리 범위</strong>를 보여준다.</div>
+        <div class="quote-sub" data-semantic-role="body" data-qid="q-quote-sub-25">수정 횟수 · 촬영 · 납품일을 함께 명확히.</div>
+      </div>
+      <div class="scope-list" data-qid="q-div-ddc7bc3ea717" data-semantic-role="decoration">
+        <div class="scope-row" data-qid="q-div-53b5bcb45bed" data-semantic-role="decoration">
+          <div class="scope-mark" data-qid="q-div-ddbc4726b1ee" data-semantic-role="decoration"></div>
+          <div class="scope-text" data-semantic-role="body" data-qid="q-scope-1-25">수정 횟수</div>
+        </div>
+        <div class="scope-row" data-qid="q-div-d280a895bab9" data-semantic-role="decoration">
+          <div class="scope-mark" data-qid="q-div-a39d73f5d542" data-semantic-role="decoration"></div>
+          <div class="scope-text" data-semantic-role="body" data-qid="q-scope-2-25">촬영</div>
+        </div>
+        <div class="scope-row" data-qid="q-div-edf50bde6b60" data-semantic-role="decoration">
+          <div class="scope-mark" data-qid="q-div-7d85318574f4" data-semantic-role="decoration"></div>
+          <div class="scope-text" data-semantic-role="body" data-qid="q-scope-3-25">납품일</div>
+        </div>
+      </div>
+      <div class="takeaway" data-semantic-role="body" data-qid="q-takeaway-25" style="padding-top: 3px; padding-bottom: 3px">수정 횟수 · 촬영 · 납품일을 함께 명확히..</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-48d017663bef934e" data-source-block-id="source-slide:26:text:4" style="top: 672px; color: rgb(80, 80, 80)">26</div>
+</body>
+</html>

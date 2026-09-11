@@ -1,0 +1,336 @@
+{
+ "sourceUnitId": "source-slide:12",
+ "sourceIndex": 11,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:12:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:12:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "2주차 | 숏폼 제작의 핵심",
+    "paragraphs": [
+     {
+      "runs": [
+       "2주차 | 숏폼 제작의 핵심"
+      ],
+      "text": "2주차 | 숏폼 제작의 핵심"
+     }
+    ],
+    "runs": [
+     "2주차 | 숏폼 제작의 핵심"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:81624d0022f82cf46b5d052aa8ea20edf2ba8f7fb1538b1ca1aa4a8929e6ecba",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:12:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "목표: 포트폴리오로 보여줄 영상 1~2개 완성",
+    "paragraphs": [
+     {
+      "runs": [
+       "목표: 포트폴리오로 보여줄 영상 1~2개 완성"
+      ],
+      "text": "목표: 포트폴리오로 보여줄 영상 1~2개 완성"
+     }
+    ],
+    "runs": [
+     "목표: 포트폴리오로 보여줄 영상 1~2개 완성"
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 658368,
+     "y": 987552,
+     "cx": 10424160,
+     "cy": 365760
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:7a6180e6fed32d1baeb97845b287f43cce0324e08f1851b594fc178bc8f0661f",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:12:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "12",
+    "paragraphs": [
+     {
+      "runs": [
+       "12"
+      ],
+      "text": "12"
+     }
+    ],
+    "runs": [
+     "12"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:c892f88b8983516dfe8861250ecc13420ae77663326186d09f4f7a3700ef34f0",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:12:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:36fd55bab03eb0480d24a03055e21590393daa37f1e868df1a69112f2d6294dd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:12:text:7",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 5,
+   "payload": {
+    "text": "• 후킹 → 본문 → 유도 구조\n• 조회수 높은 콘텐츠 벤치마킹\n• 스마트폰 촬영 기본\n• AI 활용\n• 캡컷 핵심 기능",
+    "paragraphs": [
+     {
+      "runs": [
+       "• 후킹 → 본문 → 유도 구조"
+      ],
+      "text": "• 후킹 → 본문 → 유도 구조"
+     },
+     {
+      "runs": [
+       "• 조회수 높은 콘텐츠 벤치마킹"
+      ],
+      "text": "• 조회수 높은 콘텐츠 벤치마킹"
+     },
+     {
+      "runs": [
+       "• 스마트폰 촬영 기본"
+      ],
+      "text": "• 스마트폰 촬영 기본"
+     },
+     {
+      "runs": [
+       "• AI 활용"
+      ],
+      "text": "• AI 활용"
+     },
+     {
+      "runs": [
+       "• 캡컷 핵심 기능"
+      ],
+      "text": "• 캡컷 핵심 기능"
+     }
+    ],
+    "runs": [
+     "• 후킹 → 본문 → 유도 구조",
+     "\n",
+     "• 조회수 높은 콘텐츠 벤치마킹",
+     "\n",
+     "• 스마트폰 촬영 기본",
+     "\n",
+     "• AI 활용",
+     "\n",
+     "• 캡컷 핵심 기능"
+    ],
+    "shapeName": "TextBox 6",
+    "geometry": {
+     "x": 914400,
+     "y": 1554480,
+     "cx": 6858000,
+     "cy": 4114800
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:22368964bd596728e9660be1cf03ecfca79f30d20b9467b4072d018a553c71a3",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:12:shape:8",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 6,
+   "payload": {
+    "shapeName": "Rounded Rectangle 7",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 8046720,
+     "y": 1645920,
+     "cx": 3017520,
+     "cy": 1828800
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:343cae4f24b690a0b2ae0efcd23f8616033926b900d73e57068049710754df9d",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:12:shape:9",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 7,
+   "payload": {
+    "shapeName": "Rectangle 8",
+    "preset": "rect",
+    "geometry": {
+     "x": 8046720,
+     "y": 1645920,
+     "cx": 73152,
+     "cy": 1828800
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:a57b40416a6ab64c5b9156764d161dec2056e681cb4d7cc75fa72fb18ff1bc62",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:12:text:10",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 8,
+   "payload": {
+    "text": "오늘의 기준",
+    "paragraphs": [
+     {
+      "runs": [
+       "오늘의 기준"
+      ],
+      "text": "오늘의 기준"
+     }
+    ],
+    "runs": [
+     "오늘의 기준"
+    ],
+    "shapeName": "TextBox 9",
+    "geometry": {
+     "x": 8247888,
+     "y": 1783080,
+     "cx": 2651760,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:2893491ce5b3970e21a312c654fe617263525e500f657df7be9aff0e68b952e0",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:12:text:11",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 9,
+   "payload": {
+    "text": "완벽한 영상 X\n팔 수 있는 영상 O",
+    "paragraphs": [
+     {
+      "runs": [
+       "완벽한 영상 X\n팔 수 있는 영상 O"
+      ],
+      "text": "완벽한 영상 X\n팔 수 있는 영상 O"
+     }
+    ],
+    "runs": [
+     "완벽한 영상 X\n팔 수 있는 영상 O"
+    ],
+    "shapeName": "TextBox 10",
+    "geometry": {
+     "x": 8247888,
+     "y": 2212848,
+     "cx": 2651760,
+     "cy": 1143000
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:033dce5369d74305a377b9dfb5c7261a7875884081cf05ab95d2e18d06fa7c71",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:104px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:1000px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.04em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:132px;height:516px}
+.content{width:1152px;margin-left:64px}
+.intro-row{height:52px;display:flex;align-items:flex-start;justify-content:space-between}
+.claim{font-size:25px;line-height:36px;font-weight:700;letter-spacing:-.02em}
+.claim strong{color:#08916E}
+.identity{font-size:16px;line-height:24px;color:#5C6670;text-align:right;padding-top:5px}
+.stage{display:grid;grid-template-columns:760px 368px;gap:24px;height:426px}
+.process-panel,.goal-panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.process-panel{padding:28px}
+.panel-label{font-size:15px;line-height:22px;letter-spacing:.04em;font-weight:700;color:#08916E}
+.process-title{margin-top:7px;font-size:22px;line-height:31px;font-weight:700;color:#002060}
+.flow{display:flex;align-items:center;margin-top:46px;width:100%}
+.flow-card{width:142px;height:146px;padding:24px 18px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px;display:flex;flex-direction:column;justify-content:space-between}
+.flow-no{font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:22px;font-weight:700;color:#1B469C}
+.flow-name{font-size:23px;line-height:32px;font-weight:700;color:#002060}
+.flow-arrow{width:35px;height:2px;margin:0 8px;background:#00828E;position:relative;flex:none}
+.flow-arrow span{position:absolute;right:-1px;top:-6px;width:12px;height:12px;border-top:2px solid #00828E;border-right:2px solid #00828E;transform:rotate(45deg)}
+.process-foot{margin-top:52px;padding:18px 20px;border-left:6px solid #08916E;background:#F9F9F9;border-radius:12px;font-size:18px;line-height:29px;font-weight:700;color:#1D1D1B}
+.goal-panel{padding:28px;display:flex;flex-direction:column;justify-content:space-between}
+.goal-top{font-size:15px;line-height:22px;letter-spacing:.04em;font-weight:700;color:#08916E}
+.goal-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:64px;line-height:70px;font-weight:700;color:#08916E}
+.goal-copy{font-size:22px;line-height:36px;font-weight:700;color:#002060}
+.goal-copy em{font-style:normal;color:#08916E}
+.goal-rule{height:8px;width:100%;background:#E2E8F0;border-radius:12px}
+.goal-fill{height:8px;width:38%;background:#00828E;border-radius:12px}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" class="header-band" style="height:104px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-32">수료 후 실행</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-7e1905ce7c35aa78" data-source-block-id="source-slide:33:text:3">수료 후 실행 공식</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:132px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content" data-qid="q-div-47393e46fbcd" data-semantic-role="decoration">
+    <div class="intro-row" data-qid="q-div-bbfcd0dc9122" data-semantic-role="decoration">
+      <div class="claim" data-semantic-role="body" data-qid="source-block-7622a952d8dc338b" data-source-block-id="source-slide:33:text:4">완벽해질 때까지 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">기다리지 않습니다.</strong></div>
+      <div class="identity" data-semantic-role="supporting" data-qid="source-block-bc82bac02b65c54c" data-source-block-id="source-slide:33:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    </div>
+
+    <div class="stage" data-qid="source-block-df199fd4fbca8304" data-semantic-role="decoration" data-source-block-id="source-slide:33:text:12">
+      <div class="process-panel" data-semantic-role="decoration" data-qid="source-block-0b28b1ea94c8980f" data-source-block-id="source-slide:33:text:10">
+        <div class="panel-label" data-semantic-role="supporting" data-qid="source-block-4e4768fb963fdd11" data-source-block-id="source-slide:33:text:5">33</div>
+        <div class="process-title" data-semantic-role="body" data-qid="source-block-ba4f196bb7091795" data-source-block-id="source-slide:33:text:8">배우기 → 만들기 → 영업하기 → 계약하기</div>
+        <div class="flow" data-qid="q-div-7fd902b74613" data-semantic-role="decoration">
+          <div class="flow-card" data-semantic-role="decoration" data-qid="q-flow-learn-32">
+            <div class="flow-no" data-semantic-role="supporting" data-qid="q-flow-no-1-32">01</div>
+            <div class="flow-name" data-semantic-role="body" data-qid="source-block-de67ffd6dc2f72d9" data-source-block-id="source-slide:33:text:7">배우기</div>
+          </div>
+          <div class="flow-arrow" data-qid="q-div-502df5a3ff33" data-semantic-role="decoration"><span data-qid="q-span-f32986c526a1" data-semantic-role="decoration"></span></div>
+          <div class="flow-card" data-semantic-role="decoration" data-qid="q-flow-make-32">
+            <div class="flow-no" data-semantic-role="supporting" data-qid="q-flow-no-2-32">02</div>
+            <div class="flow-name" data-semantic-role="body" data-qid="source-block-3803d8241d52288a" data-source-block-id="source-slide:33:text:9">만들기</div>
+          </div>
+          <div class="flow-arrow" data-qid="q-div-17a2a1bad702" data-semantic-role="decoration"><span data-qid="q-span-c83eac29f2ad" data-semantic-role="decoration"></span></div>
+          <div class="flow-card" data-semantic-role="decoration" data-qid="q-flow-sales-32">
+            <div class="flow-no" data-semantic-role="supporting" data-qid="q-flow-no-3-32">03</div>
+            <div class="flow-name" data-semantic-role="body" data-qid="source-block-74b19d6160f650ef" data-source-block-id="source-slide:33:text:11">영업하기</div>
+          </div>
+          <div class="flow-arrow" data-qid="q-div-75a8fef0eb0c" data-semantic-role="decoration"><span data-qid="q-span-eedec0ea8962" data-semantic-role="decoration"></span></div>
+          <div class="flow-card" data-semantic-role="decoration" data-qid="q-flow-contract-32">
+            <div class="flow-no" data-semantic-role="supporting" data-qid="q-flow-no-4-32">04</div>
+            <div class="flow-name" data-semantic-role="body" data-qid="source-block-6aa960a03424f4fe" data-source-block-id="source-slide:33:text:13">계약하기</div>
+          </div>
+        </div>
+        <div class="process-foot" data-semantic-role="body" data-qid="q-process-foot-32">배우고, 직접 만들고, 먼저 제안해야 계약으로 이어집니다.</div>
+      </div>
+
+      <div class="goal-panel" data-semantic-role="decoration" data-qid="q-goal-card-32">
+        <div class="goal-top" data-semantic-role="supporting" data-qid="source-block-993f49c1f51f00ac" data-source-block-id="source-slide:33:text:16">첫 번째 목표</div>
+        <div class="goal-number" data-semantic-role="supporting" data-qid="q-goal-number-32">01</div>
+        <div class="goal-copy" data-semantic-role="body" data-qid="source-block-f76c3a31c6f50d9d" data-source-block-id="source-slide:33:text:17">‘대단한 회사’가 되는 것이 아니라<br><em data-qid="q-em-324970b590cd" data-semantic-role="body">첫 고객 한 명</em>을 만들어보는 것.</div>
+        <div class="goal-rule" data-qid="q-div-7cce56367dc6" data-semantic-role="decoration"><div class="goal-fill" data-qid="q-div-664fe7c58f11" data-semantic-role="decoration"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="q-page-32">33</div>
+</body>
+</html>

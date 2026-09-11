@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:880px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:956px;top:24px;width:260px;text-align:right;font-size:15px;line-height:20px;color:#FFFFFF}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.header-band:after{;position:absolute;right:64px;top:0;width:260px;height:105px;background:#00140E;z-index:0}
+.header-left,.header-right{z-index:1}
+.body-wrap{position:absolute;left:0;right:0;top:129px;width:1280px}
+.inner{width:1152px;margin-left:64px}
+.meta-row{height:48px;display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.claim{font-size:24px;line-height:34px;font-weight:700;letter-spacing:-.02em}
+.claim strong{color:#08916E}
+.duration{font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:24px;font-weight:700;color:#00828E;border-left:4px solid #E5A93D;padding-left:12px}
+.architecture{height:388px;display:grid;grid-template-columns:250px 1fr 250px;gap:24px;align-items:stretch}
+.side-card,.map-panel,.outcome-card{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.side-card{padding:24px 22px;display:flex;flex-direction:column;justify-content:space-between}
+.side-label{font-size:15px;line-height:22px;font-weight:700;color:#08916E;letter-spacing:.02em}
+.side-title{font-size:22px;line-height:32px;font-weight:700;color:#002060}
+.side-copy{font-size:18px;line-height:29px;font-weight:500}
+.brand{padding-top:18px;border-top:1px solid #E2E8F0;font-size:16px;line-height:26px;font-weight:700;color:#1D1D1B}
+.map-panel{padding:22px 24px;background:#EAEDF2}
+.map-title{font-size:19px;line-height:28px;font-weight:700;color:#002060;margin-bottom:16px}
+.flow{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+.module{min-height:112px;padding:18px 18px;background:#FFFFFF;border:1px solid #219F88;border-radius:12px;display:flex;align-items:center;position:relative}
+.module:nth-child(1),.module:nth-child(4){background:#E0F3FF;border-color:#1B469C}
+.module-text{font-size:18px;line-height:29px;font-weight:700;color:#002060}
+.node{position:absolute;width:10px;height:10px;background:#08916E;border-radius:2px}
+.module:nth-child(1) .node,.module:nth-child(2) .node{right:-21px;top:50%;margin-top:-5px}
+.module:nth-child(3) .node,.module:nth-child(4) .node{left:50%;bottom:-21px;margin-left:-5px}
+.connector-h{position:absolute;left:50%;top:0;width:16px;height:1px;background:#00828E}
+.connector-v{position:absolute;left:50%;top:0;width:1px;height:14px;background:#00828E}
+.outcome-card{padding:24px 22px;display:flex;flex-direction:column;justify-content:center;background:#00140E}
+.outcome-label{font-size:15px;line-height:22px;font-weight:700;color:#219F88;letter-spacing:.02em}
+.outcome-title{margin-top:16px;font-size:24px;line-height:35px;font-weight:700;color:#FFFFFF}
+.outcome-rule{width:56px;height:4px;background:#08916E;margin-top:22px}
+.bottom-line{height:58px;margin-top:18px;padding:14px 20px;border-radius:12px;background:#E0F3FF;border-left:6px solid #08916E;display:flex;align-items:center;gap:18px}
+.bottom-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:22px;line-height:28px;font-weight:700;color:#1B469C}
+.bottom-text{font-size:19px;line-height:29px;font-weight:700;color:#002060}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="105" style="height:105px" data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-qid="q-div-16db2223612a" data-semantic-role="supporting">1주차</div>
+    <div data-header-part="title" class="title" data-qid="source-block-07e96953a5114377" data-semantic-role="title" data-source-block-id="source-slide:6:text:3">1주차 | 숏폼 대행사업 시작하기</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-qid="q-div-73774be43d12" data-semantic-role="decoration"></div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:129px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="inner" data-qid="q-div-c9c4d24a38ca" data-semantic-role="decoration">
+    <div class="meta-row" data-qid="q-div-5565576497bd" data-semantic-role="supporting">
+      <div class="claim" data-semantic-role="body" data-qid="source-block-159a6af902a66574" data-source-block-id="source-slide:6:text:4">목표: 내가 무엇을 누구에게 얼마에 팔지 결정</div>
+      <div class="duration" data-semantic-role="supporting" data-qid="source-block-3249496b5d212ba2" data-source-block-id="source-slide:6:text:7">120분</div>
+    </div>
+
+    <div class="architecture" data-qid="q-div-9eabd7e66260" data-semantic-role="decoration">
+      <div class="side-card" data-semantic-role="decoration" data-qid="q-div-8f33627fed79">
+        <div data-qid="q-div-621f91553489" data-semantic-role="decoration">
+          <div class="side-label" data-semantic-role="supporting" data-qid="source-block-c7af960e0b3ca87d" data-source-block-id="source-slide:6:text:5">06</div>
+          <div class="side-title" data-semantic-role="body" data-qid="q-div-c358963bdeda">숏폼 대행사업</div>
+          <div class="side-copy" data-semantic-role="body" data-qid="q-div-76541d0d8118">사업의 구조를 이해하고, 판매할 상품과 범위를 구체화합니다.</div>
+        </div>
+        <div class="brand" data-semantic-role="supporting" data-qid="source-block-3665c00af2a3ff55" data-source-block-id="source-slide:6:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      </div>
+
+      <div class="map-panel" data-qid="q-div-92fee66b6a7e" data-semantic-role="decoration">
+        <div class="map-title" data-semantic-role="supporting" data-qid="source-block-d31e95c95ec45d04" data-source-block-id="source-slide:6:text:8:run:0">숏폼 대행사업의 구조 이해</div>
+        <div class="flow" data-qid="q-div-7fd902b74613" data-semantic-role="decoration">
+          <div class="module" data-semantic-role="decoration" data-qid="q-div-c2c6246d3cbe">
+            <div class="module-text" data-qid="source-block-2c4e88cecd913260" data-semantic-role="body" data-source-block-id="source-slide:6:text:8:run:1">타깃 업종과 상품 정하기</div>
+            <span class="node" data-qid="q-span-fe7e6bfeb16a" data-semantic-role="decoration"></span>
+          </div>
+          <div class="module" data-semantic-role="decoration" data-qid="q-div-2ddc3ac90f39">
+            <div class="module-text" data-qid="source-block-755be68b1c616066" data-semantic-role="body" data-source-block-id="source-slide:6:text:8:run:2">가격과 작업 범위 정하기</div>
+            <span class="node" data-qid="q-span-d3833b9d86e5" data-semantic-role="decoration"></span>
+          </div>
+          <div class="module" data-semantic-role="decoration" data-qid="q-div-c38b1532c1f5">
+            <div class="module-text" data-qid="source-block-0fe56ca467d038bf" data-semantic-role="body" data-source-block-id="source-slide:6:text:8:run:3">인스타·블로그 기본 세팅</div>
+            <span class="node" data-qid="q-span-f0bd9a27e2e1" data-semantic-role="decoration"></span>
+          </div>
+          <div class="module" data-semantic-role="decoration" data-qid="q-div-c6336be2dafe">
+            <div class="module-text" data-qid="q-div-c73cbe5c6ee2" data-semantic-role="body">숏폼 대행사업의 구조 이해</div>
+            <span class="node" data-qid="q-span-51ad756a24b4" data-semantic-role="decoration"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="outcome-card" data-semantic-role="decoration" data-qid="q-div-cfdc0d6b8310">
+        <div class="outcome-label" data-semantic-role="supporting" data-qid="source-block-361d54eef27a5102" data-source-block-id="source-slide:6:text:11">오늘의 결과물</div>
+        <div class="outcome-title" data-semantic-role="body" data-qid="source-block-0ee117f64c0eeb67" data-source-block-id="source-slide:6:text:12">내 서비스 한 줄 소개 + 기본 상품 1개</div>
+        <div class="outcome-rule" data-qid="q-div-69cd7d57ae25" data-semantic-role="decoration"></div>
+      </div>
+    </div>
+
+    <div class="bottom-line" data-qid="q-div-de4cbe208cea" data-semantic-role="decoration">
+      <div class="bottom-number" data-semantic-role="supporting" data-qid="q-div-9c2a31b1ecc9">결과</div>
+      <div class="bottom-text" data-semantic-role="body" data-qid="q-div-ce48f96a7fe7">내 서비스 한 줄 소개 + 기본 상품 1개.</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="q-div-512d1ba19764">06</div>
+</body>
+</html>

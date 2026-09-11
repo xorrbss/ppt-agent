@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:104px;background:#FFFFFF}
+.header-left{position:absolute;left:56px;top:24px;width:1000px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.04em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:132px;height:516px}
+.intro{margin-left:56px;width:1168px;height:54px;display:flex;align-items:center;border-bottom:1px solid #E2E8F0}
+.intro-text{font-size:21px;line-height:32px;font-weight:700;color:#002060}
+.content-grid{display:grid;grid-template-columns:610px 510px;gap:24px;margin:24px 56px 0;width:1168px;height:416px}
+.cards{display:flex;flex-direction:column;gap:16px;height:416px}
+.card{position:relative;height:128px;padding:20px 24px 18px 30px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-tab{position:absolute;left:0;top:0;width:8px;height:100%;background:#08916E;border-radius:12px 0 0 12px}
+.card-head{display:flex;align-items:center;gap:16px;height:30px}
+.card-label{font-size:22px;line-height:30px;font-weight:700;color:#002060}
+.card-line{height:1px;flex:1;background:#E2E8F0}
+.card-main{margin-top:10px;font-size:20px;line-height:30px;font-weight:700;color:#1D1D1B}
+.card-sub{margin-top:3px;font-size:17px;line-height:25px;color:#4B5563}
+.image-panel{height:416px;padding:16px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.image-caption{height:31px;margin-bottom:12px;font-size:18px;line-height:27px;font-weight:700;color:#002060}
+.image-panel img{display:block;width:476px;height:341px;border-radius:12px;object-fit:cover;background:#E0F3FF}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" class="header-band" style="height:104px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-14" style="color: #006b52">2주차 PART 3</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-f06e4b7484efcaf0" data-source-block-id="source-slide:15:text:3">2주차 PART 3 | 스마트폰 촬영</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:132px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="intro" data-qid="q-div-2ec4c83af859" data-semantic-role="decoration">
+    <div class="intro-text" data-semantic-role="body" data-qid="source-block-392a7709af5deaf6" data-source-block-id="source-slide:15:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="cards" data-qid="q-div-beb8611456c7" data-semantic-role="decoration">
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-product-14">
+        <div class="card-tab" data-qid="q-div-e0f1dfa421f6" data-semantic-role="decoration"></div>
+        <div class="card-head" data-qid="q-div-034f0ac30718" data-semantic-role="decoration">
+          <div class="card-label" data-semantic-role="supporting" data-qid="source-block-7f41015711774905" data-source-block-id="source-slide:15:text:8">제품</div>
+          <div class="card-line" data-qid="q-div-2e427aa60b81" data-semantic-role="decoration"></div>
+        </div>
+        <div class="card-main" data-semantic-role="body" data-qid="source-block-4df5c396254dd297" data-source-block-id="source-slide:15:text:9:run:0-2">전체샷 → 디테일 → 사용 장면</div>
+        <div class="card-sub" data-semantic-role="body" data-qid="source-block-d6ac3e4482b65929" data-source-block-id="source-slide:15:text:9:run:3">손을 활용해 자연스럽게</div>
+      </div>
+
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-person-14">
+        <div class="card-tab" style="background:#219F88" data-qid="q-div-d81ee0082b8b" data-semantic-role="decoration"></div>
+        <div class="card-head" data-qid="q-div-e0ec27d7e711" data-semantic-role="decoration">
+          <div class="card-label" data-semantic-role="supporting" data-qid="source-block-d99a431195b181f6" data-source-block-id="source-slide:15:text:12">사람</div>
+          <div class="card-line" data-qid="q-div-f6ec014e2911" data-semantic-role="decoration"></div>
+        </div>
+        <div class="card-main" data-semantic-role="body" data-qid="source-block-adac05b902ea3adc" data-source-block-id="source-slide:15:text:13:run:0-2">전신 → 상반신 → 행동 장면</div>
+        <div class="card-sub" data-semantic-role="body" data-qid="source-block-ea0835cc7128002b" data-source-block-id="source-slide:15:text:13:run:3">자연스러운 대화와 리액션</div>
+      </div>
+
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-movement-14" style="height: 144px">
+        <div class="card-tab" style="background:#00828E" data-qid="q-div-8a08d760c9de" data-semantic-role="decoration"></div>
+        <div class="card-head" data-qid="q-div-9ef34f94f24e" data-semantic-role="decoration">
+          <div class="card-label" data-semantic-role="supporting" data-qid="source-block-fe3fdc72d22ae54d" data-source-block-id="source-slide:15:text:16">이동</div>
+          <div class="card-line" data-qid="q-div-0da7b5a5d0eb" data-semantic-role="decoration"></div>
+        </div>
+        <div class="card-main" data-semantic-role="body" data-qid="source-block-8e63eaf3915e1891" data-source-block-id="source-slide:15:text:17:run:0">좌→우 / 우→좌</div>
+        <div class="card-sub" data-semantic-role="body" data-qid="source-block-5e2b7ad261c1edbb" data-source-block-id="source-slide:15:text:17:run:1-2">상→하 / 하→상<br>천천히, 흔들림 최소화</div>
+      </div>
+    </div>
+
+    <div class="image-panel" data-qid="q-div-5e0d969fd99d" data-semantic-role="decoration">
+      <div class="image-caption" data-semantic-role="supporting" data-qid="q-caption-14">전체샷 → 디테일 → 사용 장면</div>
+      
+    </div>
+  </div>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="source-block-82ae953b023eea4f" data-source-block-id="source-slide:15:text:4" style="color: #4b5563; top: 672px">15</div>
+</body>
+</html>

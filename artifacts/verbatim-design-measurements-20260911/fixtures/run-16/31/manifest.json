@@ -1,0 +1,554 @@
+{
+ "sourceUnitId": "source-slide:32",
+ "sourceIndex": 31,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:32:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "꿀벌쌤의 핵심 철학",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤의 핵심 철학"
+      ],
+      "text": "꿀벌쌤의 핵심 철학"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤의 핵심 철학"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:23f12181a1cb3be03af90fa5e8f5037b72f2c8cd1cca03da0682260a633a7176",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "숏폼 대행사업자는 ‘편집자’에서 끝나면 안 됩니다.",
+    "paragraphs": [
+     {
+      "runs": [
+       "숏폼 대행사업자는 ‘편집자’에서 끝나면 안 됩니다."
+      ],
+      "text": "숏폼 대행사업자는 ‘편집자’에서 끝나면 안 됩니다."
+     }
+    ],
+    "runs": [
+     "숏폼 대행사업자는 ‘편집자’에서 끝나면 안 됩니다."
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 658368,
+     "y": 987552,
+     "cx": 10424160,
+     "cy": 365760
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:66cc8ad59934f64f09bfdaa47b017bd1aa30dff1fd92571683fc80dcd3236194",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "32",
+    "paragraphs": [
+     {
+      "runs": [
+       "32"
+      ],
+      "text": "32"
+     }
+    ],
+    "runs": [
+     "32"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:1885631e5b8c68f6bf37e5e556f0e82ae4a64e5ce63ee0429815482835e04ef7",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:36fd55bab03eb0480d24a03055e21590393daa37f1e868df1a69112f2d6294dd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:text:7",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 5,
+   "payload": {
+    "text": "사장님들이 숏폼을 못 만드는 이유는\n편집이 어려워서만이 아닙니다.",
+    "paragraphs": [
+     {
+      "runs": [
+       "사장님들이 숏폼을 못 만드는 이유는\n편집이 어려워서만이 아닙니다."
+      ],
+      "text": "사장님들이 숏폼을 못 만드는 이유는\n편집이 어려워서만이 아닙니다."
+     }
+    ],
+    "runs": [
+     "사장님들이 숏폼을 못 만드는 이유는\n편집이 어려워서만이 아닙니다."
+    ],
+    "shapeName": "TextBox 6",
+    "geometry": {
+     "x": 822960,
+     "y": 1508760,
+     "cx": 10241280,
+     "cy": 914400
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:5935685cd68cac803b2cbf05a3269b421eefa822e478882f53f874e8d15c8a50",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:text:8",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 6,
+   "payload": {
+    "text": "무엇을 찍어야 할지 모르기 때문입니다.",
+    "paragraphs": [
+     {
+      "runs": [
+       "무엇을 찍어야 할지 모르기 때문입니다."
+      ],
+      "text": "무엇을 찍어야 할지 모르기 때문입니다."
+     }
+    ],
+    "runs": [
+     "무엇을 찍어야 할지 모르기 때문입니다."
+    ],
+    "shapeName": "TextBox 7",
+    "geometry": {
+     "x": 822960,
+     "y": 2514600,
+     "cx": 10241280,
+     "cy": 640080
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:e317198b1ba28cadcf1b24997408db001f97d13b09c663fa5f15466d9113976a",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:shape:9",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 7,
+   "payload": {
+    "shapeName": "Rounded Rectangle 8",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 822960,
+     "y": 3703320,
+     "cx": 3200400,
+     "cy": 1325880
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:df1cccb6a9020bf3854306f02d3f7c3fa711a7faf7dfb4c56df1dc28e1a6c4df",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:shape:10",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 8,
+   "payload": {
+    "shapeName": "Rectangle 9",
+    "preset": "rect",
+    "geometry": {
+     "x": 822960,
+     "y": 3703320,
+     "cx": 73152,
+     "cy": 1325880
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:79b2f8311ff7498f8fe110a05a636c363774d9988a0c4e81e950f6ac897e0ef4",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:text:11",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 9,
+   "payload": {
+    "text": "기획",
+    "paragraphs": [
+     {
+      "runs": [
+       "기획"
+      ],
+      "text": "기획"
+     }
+    ],
+    "runs": [
+     "기획"
+    ],
+    "shapeName": "TextBox 10",
+    "geometry": {
+     "x": 1024128,
+     "y": 3840480,
+     "cx": 2834640,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:e05d7f8fc038918abe4c24af4726ae6e2e2458bb5aa8b2e25d494ff564e68611",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:text:12",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 10,
+   "payload": {
+    "text": "무엇을 찍을지",
+    "paragraphs": [
+     {
+      "runs": [
+       "무엇을 찍을지"
+      ],
+      "text": "무엇을 찍을지"
+     }
+    ],
+    "runs": [
+     "무엇을 찍을지"
+    ],
+    "shapeName": "TextBox 11",
+    "geometry": {
+     "x": 1024128,
+     "y": 4270248,
+     "cx": 2834640,
+     "cy": 640080
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:1af0f5589617b8cba46aea349450517e99f1181ac6ad2e9a8a35ed16911dd76b",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:shape:13",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 11,
+   "payload": {
+    "shapeName": "Rounded Rectangle 12",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 4434840,
+     "y": 3703320,
+     "cx": 3200400,
+     "cy": 1325880
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:8b89a09da4b87ce741580044a43948229f690cc4e1581c8e160bf8212c0f9a98",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:shape:14",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 12,
+   "payload": {
+    "shapeName": "Rectangle 13",
+    "preset": "rect",
+    "geometry": {
+     "x": 4434840,
+     "y": 3703320,
+     "cx": 73152,
+     "cy": 1325880
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:29a69eab92054a5b9b1c6d72d7c2c46b15176473a32525e3750f1eacc6a17e9c",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:text:15",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 13,
+   "payload": {
+    "text": "가이드",
+    "paragraphs": [
+     {
+      "runs": [
+       "가이드"
+      ],
+      "text": "가이드"
+     }
+    ],
+    "runs": [
+     "가이드"
+    ],
+    "shapeName": "TextBox 14",
+    "geometry": {
+     "x": 4636007,
+     "y": 3840480,
+     "cx": 2834640,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:6f986fcea33ed37992b095c72ec431ed8f4997d151badfc5c8d767da8a7ae969",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:text:16",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 14,
+   "payload": {
+    "text": "어떻게 찍을지",
+    "paragraphs": [
+     {
+      "runs": [
+       "어떻게 찍을지"
+      ],
+      "text": "어떻게 찍을지"
+     }
+    ],
+    "runs": [
+     "어떻게 찍을지"
+    ],
+    "shapeName": "TextBox 15",
+    "geometry": {
+     "x": 4636007,
+     "y": 4270248,
+     "cx": 2834640,
+     "cy": 640080
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:5a0b665a86b000f9f1e6aa8be336a4c7c27ba29c30549bc0bd4477008ee464af",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:shape:17",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 15,
+   "payload": {
+    "shapeName": "Rounded Rectangle 16",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 8046720,
+     "y": 3703320,
+     "cx": 3200400,
+     "cy": 1325880
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:6de6c925ad987577856042f766059e04de20b93990bcb60c24bceb7c6c8a9da9",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:shape:18",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 16,
+   "payload": {
+    "shapeName": "Rectangle 17",
+    "preset": "rect",
+    "geometry": {
+     "x": 8046720,
+     "y": 3703320,
+     "cx": 73152,
+     "cy": 1325880
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:21d7739776e6673d3e9e2fe1026dad8b213b3b272d27460f1cf9b28a8fa2b77c",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:text:19",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 17,
+   "payload": {
+    "text": "제작",
+    "paragraphs": [
+     {
+      "runs": [
+       "제작"
+      ],
+      "text": "제작"
+     }
+    ],
+    "runs": [
+     "제작"
+    ],
+    "shapeName": "TextBox 18",
+    "geometry": {
+     "x": 8247888,
+     "y": 3840480,
+     "cx": 2834640,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:12d7f8701cad9e51234ff20a708696ea4a4875a96000314197b924425700f218",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:32:text:20",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 18,
+   "payload": {
+    "text": "어떻게 보여줄지",
+    "paragraphs": [
+     {
+      "runs": [
+       "어떻게 보여줄지"
+      ],
+      "text": "어떻게 보여줄지"
+     }
+    ],
+    "runs": [
+     "어떻게 보여줄지"
+    ],
+    "shapeName": "TextBox 19",
+    "geometry": {
+     "x": 8247888,
+     "y": 4270248,
+     "cx": 2834640,
+     "cy": 640080
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:7cba57459c340898ceb5c59d732165c0235f5a333975407c3c46fae2d059e476",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}
