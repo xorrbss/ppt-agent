@@ -31,6 +31,28 @@ def get_authored_admission_gate_mode(settings: RuntimeSettings | None = None) ->
     return mode
 
 
+def get_authored_composition_envelope_profile(
+    settings: RuntimeSettings | None = None,
+) -> str:
+    """Which density contract an ordinary authored deck is authored under.
+
+    ``current`` (default) is today's behaviour exactly; ``august`` is the
+    pre-2026-08-28 contract: no server-frozen envelope, no blocking DOM
+    quality gate, no deck-wide figure plan.
+
+    The key is registered as an ``enum``, so the settings snapshot already
+    rejects any value outside the two choices — exactly, including case and
+    surrounding space — before it reaches this function. The guard below is
+    therefore only reached by a caller that bypassed the registry, and it
+    still refuses rather than falling back to ``current``: a silently wrong
+    profile would invalidate the A/B this switch exists to make possible.
+    """
+    name = get_setting_env("AUTHORED_COMPOSITION_ENVELOPE_PROFILE", settings) or "current"
+    if name not in {"current", "august"}:
+        raise ValueError("authored_composition_envelope_profile_invalid")
+    return name
+
+
 def get_image_generation_concurrency(settings: RuntimeSettings | None = None) -> int:
     """Concurrent image provider calls per process, clamped to 1..8."""
     return _clamped_int("IMAGE_GENERATION_CONCURRENCY", 3, 1, 8, settings)
@@ -288,6 +310,7 @@ __all__ = [
     "is_authored_verbatim_placeholder_authoring_enabled",
     "is_authored_verbatim_single_repair_loop_enabled",
     "get_authored_admission_gate_mode",
+    "get_authored_composition_envelope_profile",
     "get_authored_illustration_share",
     "get_authored_metrics_cache_entries",
     "get_authored_metrics_cache_mb",

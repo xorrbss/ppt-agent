@@ -894,6 +894,16 @@
       "description": "Bind ordinary authored decks to the server-frozen composition envelope (text/qid budgets, 15px floor); off leaves composition to the model as before 2026-08-28."
     },
     {
+      "key": "AUTHORED_COMPOSITION_ENVELOPE_PROFILE",
+      "type": "enum",
+      "default": "current",
+      "secret": false,
+      "choices": ["current", "august"],
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Density contract for ordinary authored decks: current keeps today's behaviour exactly; august restores the pre-2026-08-28 contract (no server-frozen envelope, no blocking DOM quality gate, no deck-wide figure plan). Source-verbatim and source-outline decks keep their envelope and gate under both."
+    },
+    {
       "key": "AUTHORED_VISUAL_STORY_PLAN_ENABLED",
       "type": "boolean",
       "default": false,

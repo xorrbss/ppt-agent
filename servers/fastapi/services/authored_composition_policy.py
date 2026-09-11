@@ -25,6 +25,12 @@ from services.authored_semantic_role_policy import (
     plan_title_roles as _plan_title_roles,
     resolve_semantic_role as _resolve_semantic_role,
 )
+from services.authored_composition_envelope_profile import (
+    CompositionEnvelopeProfile,
+    ordinary_envelope_enforced as _ordinary_envelope_enforced,
+    resolve_envelope_profile,
+    role_budget as _role_budget,
+)
 from services.authored_vnext.capability_registry import AUTHORED_FONT_FLOOR_PX
 from utils.authored_dom_categories import BLOCKING_SAFETY_CATEGORIES
 from utils.authored_dom_quality import (
@@ -32,8 +38,6 @@ from utils.authored_dom_quality import (
     ensure_authored_qids,
     normalize_browser_metrics,
 )
-from utils.get_env import is_authored_composition_envelope_enabled
-
 
 CompositionProfileId = Literal["ordinary", "source-verbatim", "source-outline"]
 QualityProfileId = Literal["development", "release"]
@@ -219,37 +223,12 @@ class AuthoredCapacityPlan:
         return tuple(item.prompt_brief(self.profile) for item in self.slides)
 
 
-_ROLE_BUDGETS: dict[str, tuple[int, int, int, int]] = {
-    # Cover slides commonly carry presenter/date metadata plus one compact
-    # evidence panel. Count browser-owned content targets, not layout wrappers.
-    "COVER": (58, 220, 280, 22),
-    # Closing slides combine the final claim, release rule, and audit/operations
-    # copy. Chromium geometry remains the hard overflow authority.
-    # Dense Korean proposal styles use many short editable labels rather than
-    # a few long paragraphs.  Keep the 15px/Chromium geometry gates as the
-    # visual authority, but do not reject those legitimate semantic owners
-    # before the first render merely because the generic prose envelope was
-    # tuned for sparse keynote layouts.
-    "CLOSING": (62, 380, 460, 36),
-    "SECTION": (46, 150, 220, 12),
-    "AGENDA": (58, 330, 420, 36),
-    "PROBLEM": (64, 380, 460, 40),
-    "PILLARS": (58, 380, 460, 40),
-    "OUTCOMES": (54, 340, 420, 36),
-    "ROADMAP": (56, 360, 450, 40),
-    "ARCHITECTURE": (54, 390, 460, 48),
-}
-
-
-def _role_budget(role: str) -> tuple[int, int, int, int]:
-    normalized = (role or "").strip().upper()
-    return _ROLE_BUDGETS.get(normalized, (60, 380, 460, 40))
-
-
 def build_authored_capacity_plan(
     contents: Sequence[str],
     roles: Sequence[str],
     profile: CompositionProfile,
+    *,
+    envelope: CompositionEnvelopeProfile | None = None,
 ) -> AuthoredCapacityPlan:
     """Build slide envelopes without consulting a provider or mutable state."""
 
@@ -262,9 +241,9 @@ def build_authored_capacity_plan(
     # supporting type those decks were set in. Source-verbatim and
     # source-outline keep their envelope: theirs is a fidelity contract, not a
     # density preference.
-    relaxed = (
-        profile.profile_id == "ordinary"
-        and not is_authored_composition_envelope_enabled()
+    resolved_envelope = envelope or resolve_envelope_profile()
+    relaxed = profile.profile_id == "ordinary" and not _ordinary_envelope_enforced(
+        resolved_envelope
     )
     slides: list[SlideCapacity] = []
     for index, role in enumerate(roles):
@@ -305,8 +284,19 @@ def build_authored_capacity_plan(
     return AuthoredCapacityPlan(profile=profile, slides=tuple(slides))
 
 
-def resolve_composition_profile(request: Any) -> CompositionProfile:
-    """Resolve one profile for both first-pass authoring and later repairs."""
+def resolve_composition_profile(
+    request: Any,
+    *,
+    envelope: CompositionEnvelopeProfile | None = None,
+) -> CompositionProfile:
+    """Resolve one profile for both first-pass authoring and later repairs.
+
+    The strict DOM gate is the ordinary deck's only density ceiling with no
+    switch of its own, so it is taken from the envelope profile here — the one
+    place every consumer of ``strict_dom_gate`` reads it from. The source
+    fidelity profiles keep the gate under every envelope profile: for them it
+    is what makes a lost or clipped source page fail closed.
+    """
 
     quality_profile_id = _resolve_quality_profile_id(request)
     if bool(getattr(request, "_source_content_authored_reflow", False)):
@@ -321,8 +311,15 @@ def resolve_composition_profile(request: Any) -> CompositionProfile:
             CompositionProfile("source-outline", "outline", True, True, 2),
             quality_profile_id,
         )
+    resolved_envelope = envelope or resolve_envelope_profile()
     return _with_quality_profile(
-        CompositionProfile("ordinary", "authored", True, True, 1),
+        CompositionProfile(
+            "ordinary",
+            "authored",
+            True,
+            resolved_envelope.ordinary_strict_dom_gate,
+            1,
+        ),
         quality_profile_id,
     )
 
