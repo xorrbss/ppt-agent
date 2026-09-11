@@ -3154,7 +3154,6 @@ async function main() {
     const childEnvironment = {
       ...process.env, ...authoredLiveEnvironment(),
       NEXT_TELEMETRY_DISABLED: "1",
-      NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: "true",
       DISABLE_AUTH: "true",
       CAN_CHANGE_KEYS: "false",
       DISABLE_ANONYMOUS_TRACKING: "true",

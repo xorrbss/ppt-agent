@@ -75,7 +75,6 @@ def _configure_production_environment(
             # so no credentialed wildcard request is permitted or required.
             "CORS_ALLOWED_ORIGINS": "*",
             "ENABLE_TEMPLATE_V2": "false",
-            "CHAT_FIRST_WORKSPACE_ENABLED": "true",
             "CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE": "sqlite-local",
             "CHAT_FIRST_WORKSPACE_ROLLOUT_PERCENT": "100",
             "CHAT_FIRST_WORKSPACE_SHADOW_ENABLED": "false",
