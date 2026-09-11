@@ -68,37 +68,43 @@ later series.
 
 ## 2. How the knobs are set (sanctioned path only)
 
-These are DB-backed runtime settings (`docs/runtime-settings-multiworker-sync.md`), not environment
-variables and not files. There is exactly one sanctioned write path: the admin settings endpoint
-(`servers/fastapi/api/v1/admin/router.py`), which merges a partial JSON body into the singleton
-`provider_settings` row under an optimistic-concurrency revision and immediately publishes the committed
-snapshot to the receiving process; other processes converge through the existing revision-poll monitor.
-Direct DB writes to `provider_settings.config` are not sanctioned — always go through the endpoint so
-validation (`utils/runtime_settings.py` coercion, enum/int clamping) and the CAS/audit path run.
+**Not DB-backed for these five keys.** They were originally assumed to be reachable through
+`PUT /api/v1/admin/provider-settings` like the rest of `docs/runtime-settings-multiworker-sync.md`'s
+DB-backed runtime settings; that assumption was checked and is wrong. `sanitize_provider_settings`
+(`servers/fastapi/services/provider_settings_values.py`) keeps only registry keys whose `targets` include
+`start.user_config` / `user_config.managed` / `user_config.ui`. `AUTHORED_ADMISSION_GATE_MODE`,
+`AUTHORED_HTML_NORMALIZATION`, `AUTHORED_VERBATIM_PLACEHOLDER_AUTHORING`,
+`AUTHORED_VERBATIM_SINGLE_REPAIR_LOOP`, `AUTHORED_VERBATIM_REPAIR_LOOP_MODEL_CALLS` (and, for the same
+reason, `AUTHORED_AUTHOR_PROMPT_PROFILE`, `AUTHORED_AUTHOR_PROMPT_MODEL`,
+`AUTHORED_COMPOSITION_ENVELOPE_PROFILE`) are registered with `targets: ["fastapi.runtime"]` only — a
+`PUT` carrying one of them returns 200 and silently drops the key; a `GET` afterwards shows it was never
+written. `RuntimeSettings.from_sources` (`servers/fastapi/utils/runtime_settings.py`) resolves
+`fastapi.runtime` keys from the *process environment* (or a persisted `user_config` value, which cannot
+be written for these keys through the endpoint above). On this fork's Windows stack the process
+environment is not ad hoc per shell — it is the DPAPI-protected environment store owned by
+`scripts/start-local-stack.ps1` (`scripts/local-stack-lib.ps1`'s `Read-StackEnvironment` /
+`Save-StackEnvironment`, one SecureString per component: `api`, `worker-generation`, `worker-export`,
+`next`, `proxy`). That store is the sanctioned write path for these five keys. Do not use
+`-ImportEnvironment` for a single-knob change — it replaces the *entire* store from a directory of JSON
+files and is only for the one-time seed.
 
 Steps, for each stage in order:
 
-1. **Read current config** (redacted, safe to print): `GET {base}/api/v1/admin/provider-settings`
-   (`base` = `http://localhost:5000` through the local single-origin proxy, or direct to FastAPI). In
-   this fork's local/Electron stack `DISABLE_AUTH=true`, so no admin session cookie is required
-   (`require_settings_admin` short-circuits on `is_disable_auth_enabled()`); against an auth-enabled
-   deployment, an authenticated superuser session cookie is required. Confirm `CAN_CHANGE_KEYS` is not
-   `"false"` for the stack (`_ensure_settings_are_mutable`) — if it is, the endpoint returns 403 and no
-   further step in this runbook is possible; escalate rather than working around it.
-2. **Write only the keys that change for this stage** as a partial JSON body, e.g. for stage 2:
-   `PUT {base}/api/v1/admin/provider-settings` with body `{"AUTHORED_ADMISSION_GATE_MODE": "enforce"}`.
-   The endpoint merges (`save_provider_settings_record`, `replace=False` by default) — it does not
-   require restating every other key, but restate the full cumulative table row for the stage anyway
-   (belt-and-suspenders) rather than relying on merge semantics silently carrying stage 1's values
-   forward.
-3. **Confirm the response body** reflects the intended values (the response is the redacted committed
-   config for these non-secret keys).
-4. **Restart the full local stack**: `scripts/start-local-stack.ps1` (coordinator-only; this agent does
-   not run it and did not run it while preparing this harness). The multi-worker sync design means a
-   restart is not strictly required for the setting to take effect cluster-wide (the poll monitor would
-   converge on its own), but this runbook requires it anyway, per explicit instruction, so that:
-   - every worker process starts the stage on a freshly loaded settings snapshot rather than a mid-poll
-     window,
+1. **Write only the keys that change for this stage**, one call per key, using
+   `scripts/set-local-stack-knob.ps1` (reads the store, sets the key on `api` + `worker-generation` +
+   `worker-export` in memory, writes the store back; never prints a stored value):
+   ```powershell
+   pwsh scripts/set-local-stack-knob.ps1 -Key AUTHORED_ADMISSION_GATE_MODE -Value enforce
+   ```
+   Restate the full cumulative table row for the stage (belt-and-suspenders), not just the one key that
+   changed since the previous stage, the same rationale as before: don't rely on a previous stage's value
+   silently carrying forward.
+2. **Restart the full local stack**: `scripts/start-local-stack.ps1` (coordinator-only; this agent does
+   not run it and did not run it while preparing this harness). Unlike the DB-backed settings this
+   runbook originally assumed, there is no revision-poll monitor for `fastapi.runtime` env-sourced keys —
+   a restart is not merely belt-and-suspenders here, it is the *only* way a running worker process picks
+   up the new value, because `RuntimeSettings.from_sources` reads the process environment once at
+   process start. The restart also still buys the same secondary properties as before:
    - the capture ledger, admission-shadow ledger and any other in-process, session-scoped state
      (`services/authored_admission_session.py`, `services/authored_admission_capture.py`) starts empty
      for the stage instead of carrying rows from the previous stage's shadow parity into this stage's
@@ -107,14 +113,22 @@ Steps, for each stage in order:
      file (`start-local-stack.ps1` timestamps worker logs per process start:
      `app_data/logs/worker-generation-<stamp>.stdout.log`), so a stage's shadow-parity rows are never
      mixed with another stage's.
-5. **Re-read** `GET {base}/api/v1/admin/provider-settings` after the restart to confirm the values
-   persisted across the restart (proves the write landed in the DB-backed row, not only in the writing
-   process's in-memory snapshot).
-6. **Record provenance**: save the step-3 and step-5 response bodies as
-   `artifacts/authored-live-series-20260915/<stage>/00-provider-settings.json` (coordinator step, not
-   scripted here — these are redacted and non-secret, safe to keep in the artifacts tree) and note the
-   worker-log filename for that stage's window in `<stage>/00-stage-manifest.json` (see `series.ps1`
-   below, which writes the run-facing half of that manifest).
+3. **Verify post-restart**, per component, with `scripts/verify-local-stack-knobs.ps1`. It reuses the
+   same in-process wrapper pattern as
+   `servers/fastapi/scripts/run_authored_checkpoint_repair_probe.ps1` — the store is decrypted in
+   memory only, exported to a child `uv run python` process, and the parent environment restored
+   immediately after — and prints only the *resolved* knob values (not the raw store) via the production
+   accessors in `servers/fastapi/utils/get_env_programme.py`, so this checks what the running code will
+   actually see, not just what was written:
+   ```powershell
+   pwsh scripts/verify-local-stack-knobs.ps1
+   ```
+4. **Record provenance**: the knob names and values written in step 1, plus the full
+   `verify-local-stack-knobs.ps1` output from step 3, go into
+   `artifacts/authored-live-series-20260915/<stage>/00-stage-manifest.json` (see `series.ps1` below,
+   which writes the run-facing half of that manifest) — this replaces the old plan of saving redacted
+   `GET`/`PUT` response bodies as `00-provider-settings.json`, since that endpoint was never the real
+   write path for these keys.
 
 ## 3. Runs per stage
 
@@ -132,11 +146,22 @@ pwsh artifacts/authored-live-series-20260915/series.ps1 `
 ```
 
 `-StageKnobs` is recorded into the stage manifest for provenance; `series.ps1` never sets the knobs
-itself (see section 2 — that is a coordinator action against the admin endpoint, done *before* invoking
-`series.ps1`, followed by a stack restart). `series.ps1` only asserts that what it can observe
-(`GET /api/v1/admin/provider-settings`, redacted) matches `-StageKnobs` before starting run 1, and stops
-immediately (no provider call) if it does not — this catches "forgot to restart the stack" or "forgot to
-write the knob" before spending quota.
+itself (see section 2 — that is now a coordinator action against the DPAPI environment store via
+`scripts/set-local-stack-knob.ps1`, done *before* invoking `series.ps1`, followed by a stack restart).
+`series.ps1` only asserts that what it can observe (`GET /api/v1/admin/provider-settings`, redacted)
+matches `-StageKnobs` before starting run 1, and stops immediately (no provider call) if it does not —
+this catches "forgot to restart the stack" or "forgot to write the knob" before spending quota.
+
+> **Known gap, not fixed by this pass:** section 2 no longer writes these five keys through
+> `PUT /api/v1/admin/provider-settings` (that endpoint silently drops `fastapi.runtime`-only keys — see
+> section 2), so `series.ps1`'s own `GET`-based precheck above will not observe them either: it can only
+> corroborate whatever subset of `-StageKnobs` *is* DB-backed (none, for this series' four knobs), not
+> the actual env-sourced values. Until `series.ps1` is updated to call
+> `scripts/verify-local-stack-knobs.ps1` (or equivalent) for its precheck, the coordinator must treat
+> step 3 of section 2 — running `verify-local-stack-knobs.ps1` after the restart — as the real
+> precondition check, done by hand before invoking `series.ps1`, not something `series.ps1` itself still
+> guarantees. This is a script change outside this runbook's own scope; flag it to whoever owns
+> `series.ps1` rather than silently relying on its current (now partly meaningless) precheck.
 
 ## 4. What to check between stages
 
@@ -297,8 +322,9 @@ artifacts/authored-live-series-20260915/
   dry-run-verification/
     stage-table.md                 # produced today, see report
   <stage>/                         # e.g. gate-shadow, gate-enforce, normalization-tree, ...
-    00-stage-manifest.json         # -StageKnobs as series.ps1 observed them, start/end timestamps, stop reason if any
-    00-provider-settings.json      # coordinator-saved GET responses (redacted), before/after restart
+    00-stage-manifest.json         # -StageKnobs as series.ps1 observed them, start/end timestamps, stop reason if any,
+                                    # plus (section 2) the knob names/values set via set-local-stack-knob.ps1 and the
+                                    # verify-local-stack-knobs.ps1 output taken after the restart
     series-summary.json            # per-run summary array (series.ps1)
     run-1/ .. run-5/                # run.ps1 output (01-07 json + pptx) plus:
       audit.json                    # audit-full-run.ps1 output

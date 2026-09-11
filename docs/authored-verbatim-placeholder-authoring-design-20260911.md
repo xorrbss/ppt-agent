@@ -255,6 +255,10 @@ N=1 against the current behavior on the same input.
 
 ## 4. Rollout — four independent switches, in this order
 
+For how these switches are actually flipped on a running stack (all five are `fastapi.runtime`-only
+registry keys, not reachable through the admin settings endpoint), see
+`artifacts/authored-live-series-20260915/RUNBOOK.md` section 2.
+
 1. **Centralize on the current representation.** Implement the gate and the receipt enforcement with
    the existing binder as the text step. Shadow: run the gate beside every per-path check on the same
    expanded HTML and metrics; target zero unexplained verdict differences over one repeatability
