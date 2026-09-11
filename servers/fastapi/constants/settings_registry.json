@@ -950,6 +950,24 @@
       "description": "Ceiling for the authored author concurrency under the api rate profile (the token profile keeps 8)."
     },
     {
+      "key": "AUTHORED_JOB_CONCURRENCY",
+      "type": "integer",
+      "default": 1,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "In-process authored job semaphore size: how many authored generation jobs run concurrently inside one FastAPI process. Read once at import time; changing it needs a process restart."
+    },
+    {
+      "key": "AUTHORED_CLUSTER_JOB_CONCURRENCY",
+      "type": "integer",
+      "default": 1,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Database-backed cluster-wide authored job cap, enforced across every FastAPI worker/process so adding workers does not silently multiply provider concurrency and spend. Unset takes AUTHORED_JOB_CONCURRENCY. Read once at import time; changing it needs a process restart."
+    },
+    {
       "key": "AUTHORED_AUTHOR_CONCURRENCY",
       "type": "integer",
       "default": null,
@@ -1137,6 +1155,24 @@
       "targets": ["fastapi.runtime"],
       "group": "runtime",
       "description": "Require the durable, PostgreSQL-backed cross-process provider admission path instead of best-effort in-process admission; multi-process deployments (API and worker processes sharing PostgreSQL) must set this to true."
+    },
+    {
+      "key": "WORKSPACE_OPERATION_MAX_CONCURRENCY",
+      "type": "integer",
+      "default": 2,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "runtime",
+      "description": "Max workspace operations one WorkspaceOperationRunner runs concurrently. Read once at runner construction time; changing it needs a process restart."
+    },
+    {
+      "key": "PUBLIC_EXPORT_SCHEDULER_GLOBAL_CAP",
+      "type": "integer",
+      "default": 4,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "runtime",
+      "description": "Trusted-executor weighted scheduler's global concurrency cap for the public export/generation worker pool (SchedulerCaps.global_cap). Read once at scheduler-policy composition time; changing it needs a process restart."
     },
     {
       "key": "WORKSPACE_OPERATION_WORKER_LAUNCH",
