@@ -68,6 +68,12 @@ content; the output contract is one placeholder token per block, never the text.
   `source_placeholder_cover`). Run tokens are not offered: projected runs follow delimiters, not style
   boundaries. These two forms are the model's only way to place source text.
 - Inline styling is expressed by wrapping a token; the model cannot split or retype text.
+- What a token expands to is decided by the existing readback contract, not by the raw string: the
+  projection's canonical accepted rendering (`project_source_runs(raw).accepts(...)`). Presentational
+  markers the projection classifies as markers (bullets, checkboxes, leading glyphs) are not inserted
+  as text; the block table exposes them as furniture hints so the model can render them with markup
+  or CSS. Character-range offsets are defined over that canonical text. (Found on the run-16 slide 33
+  fixture, block `source-slide:34:text:7`, double markers on eight lines.)
 - Rationale is correctness, not speed: measurement 3.3 showed the output-token saving is about 1-3% of
   deck output (Korean blocks average 20 characters; an id plus wrapper is 28). The model's output is
   dominated by the HTML/CSS it writes.
