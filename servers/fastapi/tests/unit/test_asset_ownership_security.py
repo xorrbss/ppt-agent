@@ -12,7 +12,6 @@ from utils.owner_context import (
     set_current_owner_is_admin,
 )
 from services.export_task_service import ExportTaskService
-from services.pptx_import_conversions import PptxImportConversionsService
 from utils.asset_directory_utils import resolve_app_path_to_filesystem
 
 
@@ -121,7 +120,7 @@ def test_conversion_artifacts_are_moved_into_the_owner_namespace(
 
     owner_token = set_current_owner_id(owner_id)
     try:
-        rewritten = PptxImportConversionsService._scope_conversion_artifacts(
+        rewritten = ExportTaskService._scope_conversion_artifacts(
             str(output_path),
             {
                 "layouts": [
@@ -159,7 +158,7 @@ def test_conversion_artifacts_cannot_move_an_unrelated_app_data_directory(
     owner_token = set_current_owner_id(owner_id)
     try:
         with pytest.raises(HTTPException, match="outside its asset directory"):
-            PptxImportConversionsService._scope_conversion_artifacts(
+            ExportTaskService._scope_conversion_artifacts(
                 str(output_path),
                 {},
                 "pptx-to-json",

@@ -23,7 +23,7 @@ from models.sql.template_v2 import TemplateV2
 from models.sql.template_v2_local_state import TemplateV2LocalState
 from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from services.database import async_session_maker
-from services.pptx_import_conversions import EXPORT_TASK_SERVICE
+from services.export_task_service import EXPORT_TASK_SERVICE
 from services.template_v2_pptx_retention_service import (
     maybe_cleanup_expired_private_sources,
     terminal_source_retention,

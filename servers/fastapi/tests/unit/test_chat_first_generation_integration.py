@@ -34,7 +34,6 @@ from models.sql.public_admission import (
     PublicQuotaCounter,
     PublicResourceLease,
 )
-from models.sql.public_artifact import PublicArtifact
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceArtifact,
@@ -52,10 +51,6 @@ from services import (
     workspace_legacy_write_gate,
     workspace_operation_runner,
 )
-from services.compatibility_migration.admission import (
-    stamp_new_authored_presentation,
-)
-from services.public_policy_versions import PUBLIC_DEFAULT_POLICY_VERSION
 from services.source_content.errors import SourceContentError
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
@@ -188,10 +183,7 @@ def test_v1_async_generation_uses_strict_v2_admission_before_claim(
                 assert observed["operation_id"] == operation.id
                 assert operation.contract_version == "public-operation/v2"
                 assert operation.execution_profile_version == "public-generation-export/v2"
-                # Admission is the only phase the route may reach: the
-                # runner is what claims the operation and moves it to
-                # "active" (services/public_operation_admission.py).
-                assert operation.phase == "admitted"
+                assert operation.phase == "active"
                 assert operation.deadline_at is not None
                 assert operation.fencing_token == 1
                 assert observed["operation_kind"] == "generation"
@@ -204,19 +196,6 @@ def test_v1_async_generation_uses_strict_v2_admission_before_claim(
 
 async def _async_return(value):
     return value
-
-
-class _DialectOnlySession:
-    """A session the deprecated async route may only inspect for its dialect.
-
-    ``generate_presentation_async`` admits the local SQLite runtime before
-    it reaches ``queue_presentation_generation``.  The tests below stub that
-    call, so the route must never touch the session for anything else; any
-    other attribute access fails loudly instead of being silently tolerated.
-    """
-
-    def get_bind(self):
-        return "sqlite"
 
 
 def test_recovery_expires_phase1_partial_before_lease_and_releases_quota(
@@ -327,9 +306,6 @@ def test_recovery_expires_phase1_partial_before_lease_and_releases_quota(
                         active_resource_units=1,
                     )
                     for scope, key in (
-                        # Every admission reserves one slot in all three
-                        # scopes, so recovery must release all three.
-                        ("global", "global"),
                         ("tenant", "default"),
                         ("owner", str(OWNER_A)),
                     )
@@ -373,7 +349,6 @@ OWNER_A = uuid.UUID("11111111-1111-4111-8111-111111111111")
 OWNER_B = uuid.UUID("22222222-2222-4222-8222-222222222222")
 TABLES = [
     User.__table__,
-    PublicArtifact.__table__,
     PublicPolicyProfile.__table__,
     PublicQuotaCounter.__table__,
     PublicOperationAdmission.__table__,
@@ -626,10 +601,7 @@ def test_create_persists_theme_but_only_safe_theme_metadata_in_first_message(
                     idempotency_key=key,
                     theme=theme,
                 )
-            # The server stamps its own authored mode marker on top of the
-            # admitted theme; nothing else about the caller theme changes.
-            stamped_theme = {**theme, "mode": "authored"}
-            assert first.theme == stamped_theme
+            assert first.theme == theme
 
             async with maker() as session:
                 stored = await session.get(PresentationModel, presentation_id)
@@ -637,7 +609,7 @@ def test_create_persists_theme_but_only_safe_theme_metadata_in_first_message(
                     await session.execute(select(WorkspaceMessage))
                 ).scalar_one()
                 assert stored is not None
-                assert stored.theme == stamped_theme
+                assert stored.theme == theme
                 settings = message.message_metadata["generation_settings"]
                 assert settings["theme_id"] == "customer-brand"
                 assert settings["theme_name"] == "Customer Brand"
@@ -719,9 +691,7 @@ def test_legacy_create_ignores_chat_first_theme_admission(tmp_path: Path, monkey
                     theme={"unexpected": "legacy clients do not admit themes"},
                 )
             assert created.lifecycle_status == PRESENTATION_LIFECYCLE_PUBLISHED
-            # The legacy path drops the caller theme entirely: what remains is
-            # only the server-issued authored marker.
-            assert created.theme == {"mode": "authored"}
+            assert created.theme is None
             async with maker() as session:
                 assert await session.scalar(
                     select(func.count()).select_from(WorkspaceMessage)
@@ -863,10 +833,6 @@ def test_create_copies_attachments_to_durable_workspace_storage(
 def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkeypatch):
     async def scenario():
         engine, maker = await _database(tmp_path / "activate-generation.db")
-        async with maker() as session, session.begin():
-            session.add(User(id=OWNER_A, username="owner-a", hashed_password="x"))
-            session.add(_public_policy_profile(PUBLIC_DEFAULT_POLICY_VERSION))
-        owner_token = set_current_owner_id(OWNER_A)
         monkeypatch.setattr(
             presentation_crud,
             "_chat_first_create_enabled",
@@ -899,7 +865,7 @@ def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkey
             content="Build a durable strategy deck",
             n_slides=8,
             language="en",
-            strategy="authored",
+            strategy="adaptive",
             files=["C:/temporary-upload/source.txt"],
         )
         validated_files: list[list[str]] = []
@@ -977,7 +943,6 @@ def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkey
                 ) == 1
             assert validated_files == [["C:/workspace-assets/durable-source.txt"]]
         finally:
-            reset_current_owner_id(owner_token)
             await engine.dispose()
 
     asyncio.run(scenario())
@@ -989,10 +954,6 @@ def test_bare_generate_bootstrap_persists_and_claims_reference_snapshots(
 ):
     async def scenario():
         engine, maker = await _database(tmp_path / "bare-reference-generation.db")
-        async with maker() as session, session.begin():
-            session.add(User(id=OWNER_A, username="owner-a", hashed_password="x"))
-            session.add(_public_policy_profile(PUBLIC_DEFAULT_POLICY_VERSION))
-        owner_token = set_current_owner_id(OWNER_A)
         monkeypatch.setattr(
             presentation_generate,
             "_chat_first_generation_enabled",
@@ -1086,7 +1047,6 @@ def test_bare_generate_bootstrap_persists_and_claims_reference_snapshots(
                 ] == [str(snapshot_id)]
                 assert claimed == [([snapshot_id], conversation.id)]
         finally:
-            reset_current_owner_id(owner_token)
             await engine.dispose()
 
     asyncio.run(scenario())
@@ -1098,10 +1058,6 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
 ):
     async def scenario():
         engine, maker = await _database(tmp_path / "admission-rejected.db")
-        async with maker() as session, session.begin():
-            session.add(User(id=OWNER_A, username="owner-a", hashed_password="x"))
-            session.add(_public_policy_profile(PUBLIC_DEFAULT_POLICY_VERSION))
-        owner_token = set_current_owner_id(OWNER_A)
         monkeypatch.setattr(
             presentation_crud,
             "_chat_first_create_enabled",
@@ -1139,7 +1095,7 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
             content="Keep this first message after rejected admission",
             n_slides=8,
             language="en",
-            strategy="authored",
+            strategy="adaptive",
         )
         try:
             async with maker() as session:
@@ -1275,7 +1231,6 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
                 ) == 1
             assert validation_calls == 1
         finally:
-            reset_current_owner_id(owner_token)
             await engine.dispose()
 
     asyncio.run(scenario())
@@ -1287,10 +1242,6 @@ def test_raw_path_admission_failure_requires_reattach_without_persisting_locator
 ):
     async def scenario():
         engine, maker = await _database(tmp_path / "admission-retry.db")
-        async with maker() as session, session.begin():
-            session.add(User(id=OWNER_A, username="owner-a", hashed_password="x"))
-            session.add(_public_policy_profile(PUBLIC_DEFAULT_POLICY_VERSION))
-        owner_token = set_current_owner_id(OWNER_A)
         monkeypatch.setattr(
             presentation_crud,
             "_chat_first_create_enabled",
@@ -1330,7 +1281,7 @@ def test_raw_path_admission_failure_requires_reattach_without_persisting_locator
             content="Retry document admission safely",
             n_slides=8,
             language="en",
-            strategy="authored",
+            strategy="adaptive",
             files=["C:/temporary-upload/source.txt"],
         )
         try:
@@ -1415,7 +1366,6 @@ def test_raw_path_admission_failure_requires_reattach_without_persisting_locator
                 assert status.status == "error"
                 assert status.error == caught.value.detail
         finally:
-            reset_current_owner_id(owner_token)
             await engine.dispose()
 
     asyncio.run(scenario())
@@ -1427,10 +1377,6 @@ def test_admission_projection_race_does_not_mark_the_response(
 ):
     async def scenario():
         engine, maker = await _database(tmp_path / "admission-projection-race.db")
-        async with maker() as session, session.begin():
-            session.add(User(id=OWNER_A, username="owner-a", hashed_password="x"))
-            session.add(_public_policy_profile(PUBLIC_DEFAULT_POLICY_VERSION))
-        owner_token = set_current_owner_id(OWNER_A)
         monkeypatch.setattr(
             presentation_crud,
             "_chat_first_create_enabled",
@@ -1467,7 +1413,7 @@ def test_admission_projection_race_does_not_mark_the_response(
             content="Do not claim a projection that lost its race",
             n_slides=8,
             language="en",
-            strategy="authored",
+            strategy="adaptive",
         )
         try:
             async with maker() as session:
@@ -1489,7 +1435,6 @@ def test_admission_projection_race_does_not_mark_the_response(
                 assert caught.value.detail == "template_v2_generation_invalid"
                 assert not caught.value.headers
         finally:
-            reset_current_owner_id(owner_token)
             await engine.dispose()
 
     asyncio.run(scenario())
@@ -1535,7 +1480,7 @@ def test_generate_async_wraps_unprojected_non_http_failure_without_marker(
                 request,
                 BackgroundTasks(),
                 idempotency_key="unprojected-failure",
-                sql_session=_DialectOnlySession(),
+                sql_session=object(),
             )
         assert caught.value.status_code == 500
         assert caught.value.detail == "Presentation generation failed"
@@ -1599,7 +1544,7 @@ def test_generate_async_preserves_unprojected_http_failure_without_marker(
                 request,
                 BackgroundTasks(),
                 idempotency_key="unprojected-http-failure",
-                sql_session=_DialectOnlySession(),
+                sql_session=object(),
             )
         assert caught.value.status_code == status_code
         assert caught.value.detail == detail
@@ -1631,7 +1576,7 @@ def test_chat_first_generate_rejects_unlinked_legacy_idempotency_replay(
             content="Build a durable strategy deck",
             n_slides=8,
             language="en",
-            strategy="authored",
+            strategy="adaptive",
         )
         try:
             async with maker() as session:
@@ -1698,10 +1643,6 @@ async def _seed_running_operation(
             lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
             revision=0,
         )
-        # Every persisted presentation must carry a resolvable profile
-        # identity; the server stamps it on creation, so the fixture uses
-        # the same helper instead of hand-writing the columns.
-        stamp_new_authored_presentation(presentation)
         session.add(presentation)
         await session.flush()
         conversation = WorkspaceConversation(presentation_id=presentation.id)
@@ -2061,7 +2002,7 @@ def test_source_content_admission_defers_manifest_rejection_to_validation(
     asyncio.run(scenario())
 
 
-def _public_policy_profile(version: str) -> PublicPolicyProfile:
+def _invalid_admission_policy(version: str) -> PublicPolicyProfile:
     return PublicPolicyProfile(
         version=version,
         max_slides=100,
@@ -2173,14 +2114,9 @@ async def _seed_v2_operation_with_phase1_admission(
                 operation_kind="generation",
                 **counter_kwargs,
             )
-            # An admission reserves one slot in every scope, global included.
-            for scope, key in (
-                ("global", "global"),
-                ("tenant", "default"),
-                ("owner", str(OWNER_A)),
-            )
+            for scope, key in (("tenant", "default"), ("owner", str(OWNER_A)))
         ]
-        session.add(_public_policy_profile(policy_version))
+        session.add(_invalid_admission_policy(policy_version))
         await session.flush()
         session.add_all([task, job, admission, *counters])
         await session.commit()

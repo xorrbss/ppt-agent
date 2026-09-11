@@ -1,4 +1,4 @@
-"""`PptxImportConversionsService.convert_pptx_to_json` transport contract.
+"""`ExportTaskService.convert_pptx_to_json` transport contract.
 
 Both details pinned here were measured against the pinned runtime (v0.4.2) rather
 than read from upstream, because upstream's own caller disagrees with the binary:
@@ -12,28 +12,25 @@ import os
 import pytest
 from fastapi import HTTPException
 
-from services.export_task_contracts import PptxToJsonDocument
-from services.pptx_import_conversions import PptxImportConversionsService
+from services.export_task_service import ExportTaskService, PptxToJsonDocument
 
 
 @pytest.fixture
 def service(monkeypatch):
     monkeypatch.setattr(
-        PptxImportConversionsService,
-        "_resolve_export_dir",
-        staticmethod(lambda: "/export"),
+        ExportTaskService, "_resolve_export_dir", staticmethod(lambda: "/export")
     )
     monkeypatch.setattr(
-        PptxImportConversionsService,
+        ExportTaskService,
         "_resolve_entrypoint_path",
         staticmethod(lambda _d: "/export/index.cjs"),
     )
     monkeypatch.setattr(
-        PptxImportConversionsService,
+        ExportTaskService,
         "_resolve_converter_path",
         staticmethod(lambda _d: "/export/py/convert"),
     )
-    return PptxImportConversionsService()
+    return ExportTaskService()
 
 
 def _capture(service, monkeypatch, output_path):
@@ -46,9 +43,7 @@ def _capture(service, monkeypatch, output_path):
 
     monkeypatch.setattr(service, "_run_task", fake_run_task)
     monkeypatch.setattr(
-        PptxImportConversionsService,
-        "_resolve_output_path",
-        staticmethod(lambda _r: str(output_path)),
+        ExportTaskService, "_resolve_output_path", staticmethod(lambda _r: str(output_path))
     )
     return seen
 

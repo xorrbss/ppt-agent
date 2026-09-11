@@ -50,10 +50,6 @@ from services.public_workstation_runtime_profile import (
     PublicWorkstationProfileError,
     resolve_enabled_workstation_runtime_profile,
 )
-from utils.get_env_concurrency import (
-    get_authored_cluster_job_concurrency_env,
-    get_public_export_scheduler_global_cap_env,
-)
 
 
 from services.public_operation_admission_models import (
@@ -200,18 +196,12 @@ def _require_phase2_workspace_model() -> type[object]:
     return model
 
 
-def _scope_key(scope_type: str, *, owner_id: uuid.UUID, tenant_id: str) -> str:
+def _resource_lease_scope_key(scope_type: str, principal: PrincipalContext) -> str:
     return {
         "global": "global",
-        "tenant": tenant_id,
-        "owner": str(owner_id),
+        "tenant": principal.tenant_id,
+        "owner": str(principal.owner_id),
     }[scope_type]
-
-
-def _resource_lease_scope_key(scope_type: str, principal: PrincipalContext) -> str:
-    return _scope_key(
-        scope_type, owner_id=principal.owner_id, tenant_id=principal.tenant_id
-    )
 
 
 def _assert_deadline_remaining(deadline_at: datetime, *, now: datetime) -> None:
@@ -357,16 +347,6 @@ def _effective_runtime_quota_limits(
     except PublicWorkstationProfileError as error:
         raise PublicAdmissionRejected(str(error), retry_after_seconds=15) from error
     if profile is None:
-        # No profile: the row is still bounded by the knobs that run the work
-        # (cluster authored job cap, executor scheduler cap).  Admitting more
-        # than they can run only grows the queue behind them.
-        if scope_type == "global":
-            knob = (
-                get_authored_cluster_job_concurrency_env()
-                if operation_kind == "generation"
-                else get_public_export_scheduler_global_cap_env()
-            )
-            active = min(active, knob)
         return active, queued
     capacity = profile.admission_capacity(operation_kind)
     if scope_type == "owner":
@@ -443,10 +423,42 @@ async def _ensure_counter(
         return
 
 
-#: The only quota hierarchy either admission entry point may account.  Both
-#: paths walk it in this order so the global scope is locked first and no two
-#: transactions can acquire the counters in an order that deadlocks.
-_QUOTA_SCOPES: tuple[str, ...] = ("global", "tenant", "owner")
+async def _locked_counters(
+    session: AsyncSession,
+    *,
+    policy_version: str,
+    owner_id: uuid.UUID,
+    tenant_id: str,
+    operation_kind: str,
+) -> tuple[PublicQuotaCounter, PublicQuotaCounter]:
+    # Every transition follows the global/tenant/owner hierarchy.  Phase 1
+    # does not have a global counter, so its compatible subset is tenant/owner.
+    identities = (("tenant", tenant_id), ("owner", str(owner_id)))
+    for scope_type, scope_key in identities:
+        await _ensure_counter(
+            session,
+            policy_version=policy_version,
+            scope_type=scope_type,
+            scope_key=scope_key,
+            operation_kind=operation_kind,
+        )
+    by_type: dict[str, PublicQuotaCounter] = {}
+    for scope_type, scope_key in identities:
+        row = await session.scalar(
+            select(PublicQuotaCounter)
+            .where(
+                PublicQuotaCounter.policy_version == policy_version,
+                PublicQuotaCounter.scope_type == scope_type,
+                PublicQuotaCounter.scope_key == scope_key,
+                PublicQuotaCounter.operation_kind == operation_kind,
+            )
+            .with_for_update()
+        )
+        if row is not None:
+            by_type[scope_type] = row
+    if set(by_type) != {"owner", "tenant"}:
+        raise RuntimeError("public_quota_counter_missing")
+    return by_type["owner"], by_type["tenant"]
 
 
 async def _locked_phase2_counters(
@@ -458,17 +470,12 @@ async def _locked_phase2_counters(
     operation_kind: str,
     create_missing: bool = True,
 ) -> dict[str, PublicQuotaCounter]:
-    """Create and lock all scheduler axes in the only permitted order.
+    """Create and lock all scheduler axes in the only permitted order."""
 
-    This is the single counter-locking helper.  The compatibility (Phase-1)
-    entry point uses it too, so ``global_active_*``/``global_queued_*`` are
-    authoritative for every operation kind on every product path rather than
-    only for the kinds that happen to reach the strict v2 admission.
-    """
-
-    identities = tuple(
-        (scope_type, _scope_key(scope_type, owner_id=owner_id, tenant_id=tenant_id))
-        for scope_type in _QUOTA_SCOPES
+    identities = (
+        ("global", "global"),
+        ("tenant", tenant_id),
+        ("owner", str(owner_id)),
     )
     if create_missing:
         for scope_type, scope_key in identities:
@@ -577,23 +584,27 @@ async def admit_public_operation(
             raise PublicAdmissionRejected("public_operation_identity_conflict")
         return existing
 
-    counters = await _locked_phase2_counters(
+    owner_counter, tenant_counter = await _locked_counters(
         session,
         policy_version=policy_version,
         owner_id=principal.owner_id,
         tenant_id=principal.tenant_id,
         operation_kind=operation_kind,
     )
-    # Reject before the first mutation so a refused admission stays
-    # observationally read-only and leaks no slot in any scope.
-    for scope_type in _QUOTA_SCOPES:
-        _, queued_limit = _effective_runtime_quota_limits(
-            policy, scope_type=scope_type, operation_kind=operation_kind
+    owner_limits = _quota_limits(
+        policy, scope_type="owner", operation_kind=operation_kind
+    )
+    tenant_limits = _quota_limits(
+        policy, scope_type="tenant", operation_kind=operation_kind
+    )
+    if owner_counter.queued_count >= owner_limits[1]:
+        raise PublicAdmissionRejected(
+            "public_owner_queue_limit_exceeded", retry_after_seconds=15
         )
-        if counters[scope_type].queued_count >= queued_limit:
-            raise PublicAdmissionRejected(
-                f"public_{scope_type}_queue_limit_exceeded", retry_after_seconds=15
-            )
+    if tenant_counter.queued_count >= tenant_limits[1]:
+        raise PublicAdmissionRejected(
+            "public_tenant_queue_limit_exceeded", retry_after_seconds=15
+        )
 
     now = get_current_utc_datetime()
     legacy_deadline_seconds = max(
@@ -626,13 +637,11 @@ async def admit_public_operation(
         queued_at=now,
         updated_at=now,
     )
-    # Exactly one queued slot per scope, and only on the branch that inserts
-    # the admission row; the idempotent early return above never re-counts.
-    for scope_type in _QUOTA_SCOPES:
-        counter = counters[scope_type]
-        counter.queued_count += 1
-        counter.version += 1
-        counter.updated_at = now
+    owner_counter.queued_count += 1
+    tenant_counter.queued_count += 1
+    owner_counter.version += 1
+    tenant_counter.version += 1
+    owner_counter.updated_at = tenant_counter.updated_at = now
     session.add(row)
     await session.flush()
     return row
@@ -782,7 +791,7 @@ async def _admit_public_operation_v2(
         tenant_id=principal.tenant_id,
         operation_kind=operation_kind,
     )
-    for scope_type in _QUOTA_SCOPES:
+    for scope_type in ("global", "tenant", "owner"):
         counter = counters[scope_type]
         _, queued_count_limit = _effective_runtime_quota_limits(
             policy, scope_type=scope_type, operation_kind=operation_kind
@@ -826,7 +835,7 @@ async def _admit_public_operation_v2(
     operation.fencing_token = fence
     session.add(row)
     await session.flush()
-    for scope_type in _QUOTA_SCOPES:
+    for scope_type in ("global", "tenant", "owner"):
         counter = counters[scope_type]
         counter.queued_count += 1
         counter.queued_resource_units += resource_units
@@ -1006,10 +1015,8 @@ async def _locked_phase2_leases(
             )
         ).scalars()
     )
-    expected = set(_QUOTA_SCOPES)
-    if len(leases) != len(expected) or {
-        lease.scope_type for lease in leases
-    } != expected:
+    expected = {"global", "tenant", "owner"}
+    if len(leases) != 3 or {lease.scope_type for lease in leases} != expected:
         raise PublicAdmissionRejected("public_resource_lease_authority_unavailable")
     if any(
         lease.operation_id != admission.operation_id
@@ -1170,7 +1177,7 @@ async def activate_public_operation_v2(
     # three counters and all three leases before changing the first row; a
     # later-scope capacity failure must not autoflush partial activation when
     # the caller inspects another queued candidate in the same transaction.
-    for scope_type in _QUOTA_SCOPES:
+    for scope_type in ("global", "tenant", "owner"):
         counter = counters[scope_type]
         active_count_limit, _ = _effective_runtime_quota_limits(
             policy, scope_type=scope_type, operation_kind=admission.operation_kind
@@ -1193,7 +1200,7 @@ async def activate_public_operation_v2(
         next_attempt = requested_attempt if requested_attempt is not None else lease.attempt + 1
         if next_attempt < 1:
             raise PublicAdmissionRejected("public_resource_lease_attempt_invalid")
-    for scope_type in _QUOTA_SCOPES:
+    for scope_type in ("global", "tenant", "owner"):
         counter = counters[scope_type]
         counter.queued_count -= 1
         counter.queued_resource_units -= admission.resource_units
@@ -1266,7 +1273,7 @@ async def requeue_public_operation_v2(
     )
     leases = await _locked_phase2_leases(session, lease_model=lease_model, admission=admission)
     next_fence = admission.fence + 1
-    for scope_type in _QUOTA_SCOPES:
+    for scope_type in ("global", "tenant", "owner"):
         counter = counters[scope_type]
         if (
             counter.active_count < 1
@@ -1372,7 +1379,7 @@ async def finish_public_operation_v2(
         create_missing=False,
     )
     leases = await _locked_phase2_leases(session, lease_model=lease_model, admission=admission)
-    for scope_type in _QUOTA_SCOPES:
+    for scope_type in ("global", "tenant", "owner"):
         counter = counters[scope_type]
         if (
             getattr(counter, source_count) < 1
@@ -1426,28 +1433,27 @@ async def activate_public_operation(
     if row.state != "queued":
         raise PublicAdmissionRejected("public_operation_not_queued")
     policy = await load_public_policy(session, row.policy_version)
-    counters = await _locked_phase2_counters(
+    owner_counter, tenant_counter = await _locked_counters(
         session,
         policy_version=row.policy_version,
         owner_id=row.owner_id,
         tenant_id=row.tenant_id,
         operation_kind=row.operation_kind,
     )
-    # Validate every scope before mutating the first one: a later-scope
-    # capacity refusal must leave the transaction clean for the next
-    # candidate the caller inspects.
-    for scope_type in _QUOTA_SCOPES:
-        counter = counters[scope_type]
-        active_limit, _ = _effective_runtime_quota_limits(
-            policy, scope_type=scope_type, operation_kind=row.operation_kind
-        )
-        if counter.active_count >= active_limit:
-            raise PublicAdmissionRejected(f"public_{scope_type}_active_limit_exceeded")
-        if counter.queued_count < 1:
-            raise RuntimeError("public_quota_counter_underflow")
+    owner_active, _ = _quota_limits(
+        policy, scope_type="owner", operation_kind=row.operation_kind
+    )
+    tenant_active, _ = _quota_limits(
+        policy, scope_type="tenant", operation_kind=row.operation_kind
+    )
+    if owner_counter.active_count >= owner_active:
+        raise PublicAdmissionRejected("public_owner_active_limit_exceeded")
+    if tenant_counter.active_count >= tenant_active:
+        raise PublicAdmissionRejected("public_tenant_active_limit_exceeded")
+    if owner_counter.queued_count < 1 or tenant_counter.queued_count < 1:
+        raise RuntimeError("public_quota_counter_underflow")
     now = get_current_utc_datetime()
-    for scope_type in _QUOTA_SCOPES:
-        counter = counters[scope_type]
+    for counter in (owner_counter, tenant_counter):
         counter.queued_count -= 1
         counter.active_count += 1
         counter.last_activated_at = now
@@ -1511,18 +1517,15 @@ async def finish_public_operation(
         if row.state != state:
             raise PublicAdmissionRejected("public_operation_terminal_conflict")
         return row
-    counters = await _locked_phase2_counters(
+    owner_counter, tenant_counter = await _locked_counters(
         session,
         policy_version=row.policy_version,
         owner_id=row.owner_id,
         tenant_id=row.tenant_id,
         operation_kind=row.operation_kind,
     )
-    # One release per scope for every terminal state -- success, failure,
-    # cancellation and deadline alike -- so no scope can leak a slot.
     source = "active_count" if row.state == "active" else "queued_count"
-    for scope_type in _QUOTA_SCOPES:
-        counter = counters[scope_type]
+    for counter in (owner_counter, tenant_counter):
         current = int(getattr(counter, source))
         if current < 1:
             raise RuntimeError("public_quota_counter_underflow")
@@ -1599,8 +1602,8 @@ async def claim_next_public_operation(
             return await activate_public_operation(session, candidate.id)
         except PublicAdmissionRejected as error:
             if error.code not in {
-                f"public_{scope_type}_active_limit_exceeded"
-                for scope_type in _QUOTA_SCOPES
+                "public_owner_active_limit_exceeded",
+                "public_tenant_active_limit_exceeded",
             }:
                 raise
     return None

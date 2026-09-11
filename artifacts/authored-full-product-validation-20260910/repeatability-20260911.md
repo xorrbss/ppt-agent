@@ -173,3 +173,20 @@ Code 40599846f, `AUTHORED_ADMISSION_GATE_MODE=enforce` via the DPAPI env store (
 | 30 | failed — same shape, slide 30, attempt count 2 |
 
 Stopped after two identical failures (stop condition). Root cause (`artifacts/authored-live-series-20260915/stage-2-gate-enforce/run-29-analysis.md`): enforce moves the rejection to the in-batch provider entry, and `Admission.require()` raises a bare error that drops the admission's `retryable` and the rejected candidate HTML; the deferral layer therefore never routes the slide to the third (rescue) attempt and the operation-level retry falls back to "retryable". Enforce also recorded zero admission rows (the session returned before `shadow.record`). One-point fix in progress; the stage restarts after it.
+
+## Live series stage 2 — gate enforce (runs 36-40, 2026-09-12 07:10-08:20 KST)
+
+Code `be4dfb544` (the third attempt; attempts 1 and 2 were stopped by two gate defects the live runs exposed — see `artifacts/authored-live-series-20260915/stage-2-gate-enforce/`). `AUTHORED_ADMISSION_GATE_MODE=enforce` through the DPAPI env store; the other four switches at defaults.
+
+| run | outcome | wall | flagged (review_required / repair_not_admitted) | captures / reuse |
+|---|---|---|---|---|
+| 36 | published | 689 s | 9 (8 / 1) | 42 / 3 |
+| 37 | published | 746 s | 12 (6 / 6) | 45 / 5 |
+| 38 | failed — `authored_slide_author_failed`, slide 29, binder class, 3 provider attempts, retryable false | 689 s | - | - |
+| 39 | failed — same class, 3 attempts, retryable false | 656 s | - | - |
+| 40 | published | 772 s | 12 (3 / 9) | 43 / 5 |
+
+- **Publish rate 3/5 (60%)** under enforce, versus 4/5 in stage 1 (shadow) and 2/5 in the two pre-design series. The two failures are the text-binder class (`source_content_browser_readback_failed` on a source block the binder cannot bind), which is exactly what token mode (stage 4) removes by construction.
+- Both failures now spend the full three author attempts (the rescue runs) and are correctly classified non-retryable — that is the `02af972a8` fix working; before it the same class died after two attempts and then burned a ~700 s retry.
+- Captures 42-45 per 35-slide deck (1.2-1.3 per slide) with 3-5 reuses, so the capture owner is active in enforce as designed.
+- Two gate defects were found only by running live: `Admission.require()` dropped the verdict's `retryable` and rejected candidate (`02af972a8`), and the rollout-switch freeze shadowed the composition profile so terminal-fallback eligibility was always false (`be4dfb544`). Neither was visible in shadow, because in shadow the publication path had been falling back to legacy.
