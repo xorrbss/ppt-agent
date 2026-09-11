@@ -134,3 +134,14 @@ generation_attempt_v2_flagged_slides_invalid` in
 - Follow-ups dispatched (Codex): W23 (run-17 integrity), W24 (run-18 void end tag), W25 (run-19 rescue-path readback routing). None of those fixes were live during this series; the stack ran the same code for all five runs.
 - Flagged-slide count on the published runs keeps swinging (7, 17, 11, 18). Per the offline local-fit replay (f7 session, `artifacts/local-fit-source-reflow-replay-20260911/`), only about a third of flagged slides carry a blocking defect in the published bytes; the rest are `gate_repair_not_admitted` flags.
 - Series-1 hybrid export follow-through: W20 (throughput, 6cc0b78ce) and W22 (line-break integrity + per-slide fallback, f48c8a6f3) brought the run-11 deck to `editable-hybrid`, 35/35 native slides, `slideFallbacks: []`, 893 s worker time inside the 1,740 s grant (evidence `run-11-hybrid-export/47-evidence.json`, `48-hybrid-export.pptx`).
+
+## Series 3 (runs 21-23) — stack restarted 17:23 with W23/W24/W25 fixes; interrupted by the account usage limit
+
+| run | outcome | stage of failure | code / cause | flagged (0-based) | wall |
+|---|---|---|---|---|---|
+| 21 | published | - | - | 13: [1,2,14,16,18,22,24,25,26,28,29,31,32], visibility 11 | 775 s |
+| 22 | failed | author rescue, slide 22 | `public_provider_bridge_exception`: two rescue calls answered HTTP 429; first `usage_limit_reached` (plan pro, resets 2026-09-15 01:53Z) | - | 655 s |
+| 23 | failed | author, slide 2 | `source_content_browser_readback_failed`: binder found no unique DOM element for run 0 of the title block (`꿀벌쌤`); ran under escalating 429 cooldowns | - | 3,464 s |
+
+- run-23 is the text-binder failure class (model split or restyled a block so the search-based binder could not bind it) — the class that `docs/authored-verbatim-placeholder-authoring-design-20260911.md` §2.1 removes by construction.
+- The series cannot continue until the provider usage limit resets or the account is reset; W26 (rescue overload cooldown, 127d3d4a8) was not live for runs 22-23.
