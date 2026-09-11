@@ -1,0 +1,129 @@
+{
+  "schemaVersion": "authored-rescue-overload-evidence/v1",
+  "capturedAt": "2026-09-11T09:13:00Z",
+  "operation": {
+    "operationId": "606b6253-231c-4b79-b3a7-5ed0058d8d3e",
+    "taskId": "task-11ee9d37e6adcfe5420f86709799166af7b401105783672e940707c13b402281",
+    "createdAt": "2026-09-11T08:45:48.111587Z",
+    "terminalAt": "2026-09-11T08:56:42.423764Z",
+    "statusWindowMilliseconds": 654312.177,
+    "workspaceObservationDurationMilliseconds": 655496,
+    "completedSlides": 33,
+    "totalSlides": 35
+  },
+  "sources": [
+    {
+      "path": "app_data/logs/worker-generation-20260911-172315.stderr.log",
+      "lines": "567-578"
+    },
+    {
+      "path": "artifacts/authored-full-product-validation-20260910/run-22/06-final-status.json"
+    }
+  ],
+  "pathTaken": [
+    {
+      "sequence": 1,
+      "logLine": 567,
+      "slideNumber": 7,
+      "outcome": "deferred_to_tail_rescue",
+      "reason": "BrowserSourceReadbackError:source_content_browser_readback_failed"
+    },
+    {
+      "sequence": 2,
+      "logLine": 568,
+      "slideNumber": 22,
+      "outcome": "deferred_to_tail_rescue",
+      "reason": "ValueError:authored_header_contract_rejected"
+    },
+    {
+      "sequence": 3,
+      "logLines": "569-570",
+      "slideNumbers": [7, 22],
+      "outcome": "single_simplified_rescue_started"
+    },
+    {
+      "sequence": 4,
+      "logLines": "571-572",
+      "outcome": "two_provider_calls_reserved"
+    },
+    {
+      "sequence": 5,
+      "logLines": "573-574",
+      "outcome": "two_http_429_responses"
+    },
+    {
+      "sequence": 6,
+      "logLine": 577,
+      "slideNumber": 22,
+      "outcome": "terminal_author_failure_observed",
+      "observabilityCodeBeforeFix": "authored_unexpected_failure",
+      "providerAttemptCount": 3
+    }
+  ],
+  "providerCalls": [
+    {
+      "reservationLogLine": 571,
+      "responseLogLine": 573,
+      "httpStatus": 429,
+      "responseText": "Too Many Requests"
+    },
+    {
+      "reservationLogLine": 572,
+      "responseLogLine": 574,
+      "httpStatus": 429,
+      "responseText": "Too Many Requests"
+    }
+  ],
+  "terminalFailure": {
+    "slideIndex": 21,
+    "slideNumber": 22,
+    "stage": "author",
+    "exceptionType": "ProviderOutcomeError",
+    "apiCode": "public_provider_bridge_exception",
+    "cause": "public_provider_bridge_exception",
+    "retryable": false,
+    "providerAttemptCount": 3
+  },
+  "existingPolicy": {
+    "predicate": "services.authored_batch_policy.is_authored_provider_overload",
+    "statusCodes": [429, 500, 503],
+    "durableCodes": [
+      "provider_circuit_open",
+      "public_provider_bridge_exception",
+      "public_provider_call_timeout"
+    ],
+    "alsoRecognizes": [
+      "TimeoutError",
+      "timeout text",
+      "rate-limit text",
+      "usage-limit text",
+      "resource-exhausted text"
+    ],
+    "cooldownBaseSeconds": 30.0,
+    "cooldownMaxSeconds": 300.0,
+    "backoff": "min(30 * 2^(consecutive_overloads - 1), 300)",
+    "batchRecoveryCallsPerFailedSlide": 1
+  },
+  "beforeFix": {
+    "rescueProviderCallsPerSlide": 1,
+    "overloadCooldownApplied": false,
+    "overloadRecoveryApplied": false
+  },
+  "afterFixOfflineContract": {
+    "implementationCommit": "127d3d4a8935985f764c57df12bb836bc7069858",
+    "overloadRecoveryCalls": 1,
+    "sharedState": "AuthoredWaveSchedule from the batch author path",
+    "providerAttemptOrdinalForInitialAndRecoveryCall": 3,
+    "providerAttemptCountAfterRecovery": 3,
+    "terminalCodesPreserved": [
+      "public_provider_bridge_exception",
+      "public_provider_call_timeout"
+    ]
+  },
+  "evidenceLimits": {
+    "perCallTimestampAvailable": false,
+    "perCallSlideAttributionAvailable": false,
+    "explanation": "The retained worker log has no timestamps or slide identifier on call_reserved/httpx lines; ordering proves two concurrent rescue calls and two 429 responses but not a one-to-one line mapping.",
+    "liveConfirmation": "Requires a coordinator-scheduled generation-worker restart and a fresh identical product run. No stack process or live operation was touched by W26."
+  }
+}
