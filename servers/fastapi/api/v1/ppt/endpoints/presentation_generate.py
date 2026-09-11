@@ -1948,14 +1948,6 @@ async def queue_presentation_generation(
                 ) from error
             raise
         request = admitted_request
-    else:
-        if request.files:
-            # Reject oversized extracted input before persisting a durable job,
-            # and before validation canonicalizes the paths away.
-            await _load_document_context(request.files, request.language)
-        (presentation_id,) = await check_if_api_request_is_valid(
-            request, sql_session
-        )
 
     # Persist the exact admitted request that the worker will execute. The fingerprint remains
     # tied to the caller's canonical submitted payload for stable replay.
@@ -2142,12 +2134,6 @@ async def queue_presentation_generation(
 
     if workspace_operation_id is not None:
         wake_workspace_operation_runner()
-    else:
-        background_tasks.add_task(
-            launch_generation_job,
-            job.id,
-            export_cookie_header,
-        )
     return async_status
 
 
