@@ -95,7 +95,8 @@ content; the output contract is one placeholder token per block, never the text.
 ### 2.2 Normalization on a parsed tree, semantic policy kept
 
 1. Parse model output with an HTML5-conformant parser (browser-equivalent tree construction) and pin
-   the fragment/namespace behavior.
+   the fragment/namespace behavior. Decision 2026-09-11: `html5lib` is added as a runtime dependency
+   (pure Python, BSD-3, reference tree builder); `lxml` is not used for tree construction.
 2. Run an **enumerated DOM rewrite pass** carrying today's semantic normalizers unchanged:
    disallowed CSS declarations (including every `content:`), hidden-bound-text handling, title line
    breaks, name-attribute stripping. Parsing replaces only the syntax-level fixes (void end tags and
@@ -139,7 +140,11 @@ distinguishes three representations and says which stage may hold which:
   fails visibility is rejected (the frozen pre-repair HTML stays), and the terminal policy decides
   flag-only publication exactly as today.
 - Enforcement: the checkpoint writer refuses HTML without an admission receipt whose digest matches the
-  HTML **and** whose context matches the checkpoint's fenced revision. Metrics/PNG are reused only on
+  HTML **and** whose context matches the checkpoint's fenced revision. Two persistence classes:
+  an **evidence checkpoint** may hold any captured admission, including `rejected` verdicts (the
+  first-pass render before repair is evidence; the repair loop consumes it), marked
+  `publishable=false`; a **publishable checkpoint** requires `admitted`, or `flag_only` granted by the
+  terminal policy on an already-flagged slide. Publication reads publishable checkpoints only. Metrics/PNG are reused only on
   identical expanded-HTML and capture identity.
 - Evidence: the receipt carries `code`, the predicate, block ids, digests and the context above; it is
   mapped into the existing quality/E4 timing/operation receipts (counts and bounded reasons preserved,
