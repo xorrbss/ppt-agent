@@ -132,7 +132,8 @@ SEARCH_MEMBERS = r"""
   },
   _regionBaseline(region, qids) {
     const cardBox = this._box(region.card), outside = new Map();
-    for (const node of qids) if (node !== region.card && !region.card.contains(node)) outside.set(node, this._box(node));
+    for (const node of qids)
+      if (node !== region.card && !region.card.contains(node)) outside.set(node, this._box(node));
     const nested = Array.from(region.card.querySelectorAll('[data-qid]')).filter((node) => this._isCardLike(node));
     const nestedEscapes = new Map(nested.map((node) => [node, this._escape(node, this._regionLeaves(node), 0)]));
     const movable = [region.card].concat(Array.from(region.card.querySelectorAll('[data-qid]')));
@@ -302,14 +303,29 @@ SEARCH_MEMBERS = r"""
       this._last.candidates.push(record);
       this._last.telemetry.policy_removed += 1; return null;
     }
+    // Floor and spacing clamps make distinct factors emit byte-identical plans.
+    // Decide duplicates from the declarations alone, before any DOM write or
+    // measured parent plan; the same base plan from the same snapshot yields
+    // the same parent plan, except where a morph also reads the font factor.
+    const baseSignature = this._signature(region, candidate.plan);
+    const morphable = region.collisions.some(seed => seed.kind === 'absolute_rows');
+    const spaceKey = useSpace ? 'space:' + (morphable ? fontFactor : '') + '|' + baseSignature : null;
+    const duplicate = () => {
+      record.outcome = 'removed:duplicate_declarations';
+      record.rejection = this._candidateRejection('duplicate_declarations', 'deduplicate');
+      this._last.candidates.push(record);
+      this._last.telemetry.duplicates += 1; return null;
+    };
+    if (useSpace ? seen.has(spaceKey) : seen.has(baseSignature)) return duplicate();
     const saved = this._save(Array.from(baseline.boxes.keys()));
     this._applyPlan(candidate.plan);
     if (useSpace) {
       let space = this._parentPlan(region, baseline); record.space = space.measurements || [];
-      if (space.invalid === 'parent_space_unavailable' && region.collisions.some(seed => seed.kind === 'absolute_rows')) {
+      if (space.invalid === 'parent_space_unavailable' && morphable) {
         space = this._morphPlan(region, baseline, candidate.plan, fontFactor); record.morph = space.diagnostic;
         if (space.morph) candidate.morph = space.morph;
       }
+      if (space.invalid !== 'budget_exhausted') seen.add(spaceKey);
       if (space.invalid) {
         this._restore(saved); record.outcome = 'removed:' + space.invalid;
         record.rejection = this._candidateRejection(space.invalid, 'parent_plan', {
@@ -320,14 +336,10 @@ SEARCH_MEMBERS = r"""
       if (space.rootGrowth) candidate.rootGrowth = space.rootGrowth;
       candidate.plan = this._mergePlans(candidate.plan, space.plan); this._applyPlan(candidate.plan);
     }
+    // A measured parent plan can add nothing, collapsing onto a base plan
+    // that a font/spacing-only candidate already evaluated.
     const signature = this._signature(region, candidate.plan);
-    if (seen.has(signature)) {
-      this._restore(saved);
-      record.outcome = 'removed:duplicate_declarations';
-      record.rejection = this._candidateRejection('duplicate_declarations', 'deduplicate');
-      this._last.candidates.push(record);
-      this._last.telemetry.duplicates += 1; return null;
-    }
+    if (seen.has(signature)) { this._restore(saved); return duplicate(); }
     seen.add(signature);
     const lower = this._candidateLowerBound(candidate); record.lower_bound = this._round(lower, 8);
     if (best && lower > best.cost.total) {
@@ -432,10 +444,12 @@ SEARCH_MEMBERS = r"""
         record.extended_shrink_basis = comparison;
       }
       if (best && best.candidate.extendedShrink)
-        best = comparable.reduce((selected, candidate) => this._better(candidate, selected) ? candidate : selected, null);
+        best = comparable.reduce((selected, candidate) =>
+          this._better(candidate, selected) ? candidate : selected, null);
     } else if (best && best.candidate.extendedShrink) {
       if (comparable.some(candidate => candidate.cost.total <= best.cost.total + 1e-10))
-        best = comparable.reduce((selected, candidate) => this._better(candidate, selected) ? candidate : selected, null);
+        best = comparable.reduce((selected, candidate) =>
+          this._better(candidate, selected) ? candidate : selected, null);
       else best.record.extended_shrink_basis = Object.assign({}, comparison, {
         preferred_max_shrink: this._preferredMaxShrink(),
         floor_pt: this._number(this.P.floor_pt, this.C.default_floor_pt)});
