@@ -162,3 +162,14 @@ Code f6db6f33d (all five rollout switches at defaults: gate shadow, legacy norma
 - Captures per slide 1.2-1.8 with the capture owner active in shadow (reuse 3-12 per deck); the fit verification render is the legitimate second capture.
 - Shadow parity (run-24 scope, `artifacts/authored-live-series-20260915/shadow-parity-run-24.md`): 16 mismatches where the gate is correctly stricter (legacy comparator is empty at the raw/expanded provider entry points), 2 render-checkpoint mismatches that are evidence-only under enforce, and one swallowed `authored_admission_internal_error` on a deck that published (would have killed it under enforce) — fixed before stage 2, together with predicate/blockCount fields on the shadow log line.
 - Series-harness table: `artifacts/authored-live-series-20260915/stage-1-gate-shadow/`.
+
+## Live series stage 2 — gate enforce, first attempt (runs 29-30, 2026-09-12 05:30-05:54 KST) — stopped
+
+Code 40599846f, `AUTHORED_ADMISSION_GATE_MODE=enforce` via the DPAPI env store (the runbook's admin-endpoint path was wrong and is corrected in e273af1ec).
+
+| run | outcome |
+|---|---|
+| 29 | failed — `authored_slide_author_failed`, slide 33 (and 24), BrowserSourceReadbackError, provider_attempt_count 2, misclassified retryable → operation retried once (712 s) and failed again |
+| 30 | failed — same shape, slide 30, attempt count 2 |
+
+Stopped after two identical failures (stop condition). Root cause (`artifacts/authored-live-series-20260915/stage-2-gate-enforce/run-29-analysis.md`): enforce moves the rejection to the in-batch provider entry, and `Admission.require()` raises a bare error that drops the admission's `retryable` and the rejected candidate HTML; the deferral layer therefore never routes the slide to the third (rescue) attempt and the operation-level retry falls back to "retryable". Enforce also recorded zero admission rows (the session returned before `shadow.record`). One-point fix in progress; the stage restarts after it.

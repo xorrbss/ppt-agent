@@ -1,0 +1,21 @@
+{
+  "stage": "gate-enforce",
+  "runs": [
+    "run-29",
+    "run-30",
+    "run-31",
+    "run-32",
+    "run-33"
+  ],
+  "knobs": {
+    "AUTHORED_ADMISSION_GATE_MODE": "enforce",
+    "AUTHORED_HTML_NORMALIZATION": "legacy(default)",
+    "AUTHORED_VERBATIM_PLACEHOLDER_AUTHORING": "false(default)",
+    "AUTHORED_VERBATIM_SINGLE_REPAIR_LOOP": "false(default)",
+    "AUTHORED_VERBATIM_REPAIR_LOOP_MODEL_CALLS": "1(default)"
+  },
+  "knob_path": "DPAPI env store via Read-/Save-StackEnvironment (api, worker-generation, worker-export), stack restarted 05:27:45 KST",
+  "code": "40599846f",
+  "worker_log": "app_data/logs/worker-generation-20260912-052740.stderr.log",
+  "started_at": "2026-09-12T05:30:36"
+}
