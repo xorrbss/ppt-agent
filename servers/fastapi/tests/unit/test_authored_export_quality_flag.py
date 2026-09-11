@@ -115,27 +115,3 @@ def test_an_older_exporter_without_element_detail_still_counts_the_ids():
 
     assert result.failed_slide_numbers == (9,)
     assert result.to_dict()["slides"][0]["countedElementIds"] == ["a", "b", "c", "d"]
-
-
-def test_the_export_result_carries_the_verdict_to_its_caller(monkeypatch):
-    from utils import export_utils
-
-    quality = {
-        "status": "partially-editable",
-        "editableSlides": 3,
-        "slides": [_slide(1, ["a", "b", "c"])],
-    }
-
-    verdict = export_utils.evaluate_export_fallback_quality(quality)
-
-    assert verdict.to_dict()["failed"] is True
-    model = export_utils.AuthoredHybridPresentationAndPath(
-        presentation_id="00000000-0000-0000-0000-000000000001",
-        path="deck.pptx",
-        coverage_manifest={},
-        renderer_source_sha256="sha256:0",
-        fallback_quality=verdict.to_dict(),
-    )
-    assert model.fallback_quality["failedSlideNumbers"] == [1]
-    # The flag is reporting only: the export model is still a valid artifact.
-    assert model.path == "deck.pptx"

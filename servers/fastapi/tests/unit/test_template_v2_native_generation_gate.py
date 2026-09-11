@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 import uuid
@@ -8,7 +7,6 @@ import uuid
 import pytest
 
 from models.sql.slide import SlideModel
-from api.v1.ppt.endpoints import presentation_generate as endpoint
 from services import template_v2_generation_service as generation
 from templates.v2.models.layouts import SlideLayout
 from templates.v2.pptx.native_compiler import TemplateV2NativePptxCompileError
@@ -180,68 +178,3 @@ def test_native_preflight_selected_for_export_is_explicit(
     assert preflight.selected_for_export is expected_selected
     assert preflight.pptx == payload
     assert preflight.to_provenance()["selected_for_export"] is expected_selected
-
-
-def test_generation_publication_passes_exact_router_digest_and_size(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    captured: dict = {}
-    target_id = uuid.uuid4()
-    operation_id = uuid.uuid4()
-    attempt_id = uuid.uuid4()
-    artifact_id = uuid.uuid4()
-    expected_digest = "a" * 64
-
-    async def prepare(_session, **kwargs):
-        captured.update(kwargs)
-        return SimpleNamespace(
-            artifact_id=artifact_id,
-            public_path="/app_data/exact.pptx",
-            source_revision=5,
-        )
-
-    async def publish(_session, **_kwargs):
-        return 5
-
-    monkeypatch.setattr(endpoint, "prepare_workspace_generation_artifact", prepare)
-    monkeypatch.setattr(endpoint, "publish_workspace_generation_artifact", publish)
-
-    class Session:
-        async def rollback(self):
-            return None
-
-    execution = SimpleNamespace(
-        attempt_id=attempt_id,
-        source_snapshot_sha256="b" * 64,
-        provenance={"schema_version": 1},
-        route=SimpleNamespace(
-            result=SimpleNamespace(
-                artifact_sha256=expected_digest,
-                artifact_size_bytes=1234,
-                selected_adapter="general",
-            )
-        ),
-    )
-    presentation = SimpleNamespace(
-        id=target_id,
-        revision=4,
-        lifecycle_status="staging",
-    )
-    generation_job = SimpleNamespace(
-        workspace_operation_id=operation_id,
-        attempt_token="attempt",
-    )
-
-    published = asyncio.run(
-        endpoint._publish_staged_presentation(
-            Session(),
-            presentation,
-            "C:/temp/rendered.pptx",
-            generation_job,
-            export_execution=execution,
-        )
-    )
-
-    assert published == "/app_data/exact.pptx"
-    assert captured["expected_source_sha256"] == expected_digest
-    assert captured["expected_source_size_bytes"] == 1234

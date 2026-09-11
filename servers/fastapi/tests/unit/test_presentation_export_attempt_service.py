@@ -13,7 +13,6 @@ from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
-from models.presentation_and_path import PresentationAndPath
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import (
     ExportPowerPointQaEvidence,
@@ -49,16 +48,10 @@ from services.presentation_export_direct_attempt_service import (
 )
 import services.presentation_export_direct_attempt_service as direct_attempt_service
 import services.presentation_export_powerpoint_qa as powerpoint_qa_service
-from services.presentation_export_adapters import PresentationExportAdapterResult
 from services.presentation_export_capabilities import (
     PresentationExportContractError,
     PresentationExportFreshnessError,
     analyze_presentation_export_capabilities,
-)
-from services.presentation_export_router import (
-    PresentationExportExecution,
-    PresentationExportRouteResult,
-    terminalize_standalone_presentation_export,
 )
 
 
@@ -1337,79 +1330,6 @@ def test_terminalization_is_owner_operation_scoped_and_asset_fresh(
             async with maker() as session:
                 stored = await session.get(PresentationExportAttempt, attempt.id)
                 assert stored is not None and stored.state == "running"
-        finally:
-            await engine.dispose()
-
-    asyncio.run(scenario())
-
-
-def test_standalone_terminalization_rejects_concurrently_overwritten_artifact(
-    tmp_path: Path,
-) -> None:
-    async def scenario():
-        engine, maker = await _database(tmp_path / "standalone-toctou.db")
-        try:
-            presentation_id = await _seed_attempt_presentation(maker)
-            attempt = await _begin(maker, presentation_id)
-            artifact_path = tmp_path / "standalone.pptx"
-            original = b"verified standalone bytes"
-            artifact_path.write_bytes(original)
-            expected_digest = sha256(original).hexdigest()
-            execution = PresentationExportExecution(
-                attempt_id=attempt.id,
-                attempt_presentation_id=presentation_id,
-                owner_id=None,
-                owner_scope="anonymous",
-                workspace_operation_id=None,
-                source_revision=4,
-                source_snapshot_sha256="c" * 64,
-                html_source_sha256="d" * 64,
-                composition_sha256="e" * 64,
-                asset_manifest_sha256="f" * 64,
-                route=PresentationExportRouteResult(
-                    result=PresentationExportAdapterResult(
-                        presentation=PresentationAndPath(
-                            presentation_id=presentation_id,
-                            path=str(artifact_path),
-                        ),
-                        selected_adapter="general",
-                        artifact_sha256=expected_digest,
-                        artifact_size_bytes=len(original),
-                        compiler="presentation-export",
-                        compiler_version="0.4.3",
-                        runtime="chromium-dom-export",
-                        runtime_version="presenton.render-artifact/v1",
-                        package_sha256=None,
-                    ),
-                    adapter_chain=("general",),
-                    fallback_reason=None,
-                    capability_evidence={"selected_adapter": "general"},
-                    asset_digests={},
-                    asset_digests_verified=True,
-                ),
-            )
-
-            artifact_path.write_bytes(b"concurrently overwritten")
-            async with maker() as session:
-                with pytest.raises(
-                    PresentationExportFreshnessError,
-                    match="presentation_export_artifact_digest_mismatch",
-                ):
-                    await terminalize_standalone_presentation_export(
-                        session,
-                        execution,
-                    )
-
-            async with maker() as session:
-                stored = await session.get(PresentationExportAttempt, attempt.id)
-                assert stored is not None
-                assert stored.state == "failed"
-                assert (
-                    stored.failure_code
-                    == "presentation_export_artifact_digest_mismatch"
-                )
-                assert stored.artifact_sha256 is None
-                assert stored.artifact_size_bytes is None
         finally:
             await engine.dispose()
 

@@ -1,11 +1,12 @@
-"""Pure input derivations shared by the presentation export router.
+"""Pure input derivations shared by the presentation export paths.
 
-These helpers own the deterministic, side-effect-free parts of routing an
+These helpers own the deterministic, side-effect-free parts of preparing an
 export: hashing a finished artifact, reading template provenance off a
 presentation theme, and pairing persisted slides with their template layouts.
-They were split out of ``services/presentation_export_router.py`` so the router
-module keeps only the async orchestration; each helper here is synchronous,
-depends on nothing the router owns, and is therefore unit-testable on its own.
+They are kept apart from the async orchestration that consumes them
+(``services/presentation_export_direct_attempt_service.py`` and
+``services/public_export_operation.py``); each helper here is synchronous,
+owns no state, and is therefore unit-testable on its own.
 """
 
 from __future__ import annotations

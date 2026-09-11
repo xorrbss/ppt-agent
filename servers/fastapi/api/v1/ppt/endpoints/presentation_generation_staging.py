@@ -21,13 +21,8 @@ from utils.authored_styles import AuthoredStyle
 from services.database import sql_engine
 from services.authored_local_fit_policy import POLICY_REVISION, font_policy
 from services.presentation_generation_export_orchestration import (
-    execute_generation_export,
     publish_staged_presentation,
-    record_generation_export_failure,
 )
-from services.presentation_export_attempt_service import terminalize_export_attempt_failed
-from services.presentation_export_router import PresentationExportExecution, execute_presentation_export
-from services.template_v2_generation_service import TemplateV2GenerationTarget
 from services.workspace_artifact_publication_service import (
     PreparedWorkspaceArtifact,
     PreparedWorkspaceChatArtifactStaging,
@@ -246,7 +241,6 @@ async def _publish_staged_presentation(
     generated_assets: tuple[ImageAsset, ...] = (),
     image_staging: PreparedWorkspaceChatArtifactStaging | None = None,
     image_artifacts: tuple[PreparedWorkspaceArtifact, ...] = (),
-    export_execution: PresentationExportExecution | None = None,
     *,
     prepare_artifact=prepare_workspace_generation_artifact,
     publish_artifact=publish_workspace_generation_artifact,
@@ -263,47 +257,10 @@ async def _publish_staged_presentation(
         generated_assets,
         image_staging,
         image_artifacts,
-        export_execution,
         prepare_artifact=prepare_artifact,
         publish_artifact=publish_artifact,
         compensate_artifact=compensate_artifact,
         stage_image_artifacts=stage_image_artifacts,
-    )
-
-
-async def _execute_generation_export(
-    sql_session: AsyncSession,
-    *,
-    publication_target: PresentationModel,
-    render_presentation: PresentationModel,
-    request: GeneratePresentationRequest,
-    export_cookie_header: str | None,
-    generation_job: PresentationGenerationJob | None,
-    template_target: TemplateV2GenerationTarget | None = None,
-    execute_export=execute_presentation_export,
-) -> PresentationExportExecution:
-    return await execute_generation_export(
-        sql_session,
-        publication_target=publication_target,
-        render_presentation=render_presentation,
-        request=request,
-        export_cookie_header=export_cookie_header,
-        generation_job=generation_job,
-        template_target=template_target,
-        execute_export=execute_export,
-    )
-
-
-async def _record_generation_export_failure(
-    sql_session: AsyncSession,
-    execution: PresentationExportExecution | None,
-    error: BaseException,
-) -> None:
-    await record_generation_export_failure(
-        sql_session,
-        execution,
-        error,
-        terminalize_failure=terminalize_export_attempt_failed,
     )
 
 

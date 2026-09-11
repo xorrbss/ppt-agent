@@ -1328,6 +1328,13 @@
         "reasonCode": "auth-ownership-transaction"
       },
       {
+        "path": "servers/fastapi/models/presentation_and_path.py",
+        "upstreamMode": "100644",
+        "upstreamBlob": "3f2cd7abd48b50c33d6117961d2ecf8e10acf236",
+        "localState": "modified",
+        "reasonCode": "auth-ownership-transaction"
+      },
+      {
         "path": "servers/fastapi/models/presentation_from_template.py",
         "upstreamMode": "100644",
         "upstreamBlob": "9674485750c79a074394deb03443209d91851224",
@@ -2255,7 +2262,7 @@
         "path": "servers/fastapi/utils/export_utils.py",
         "upstreamMode": "100644",
         "upstreamBlob": "6099983d04772402e33b8cba34307d76bf6d0d3e",
-        "localState": "modified",
+        "localState": "deleted",
         "reasonCode": "auth-ownership-transaction"
       },
       {
@@ -7087,7 +7094,6 @@
       "servers/fastapi/services/presentation_access_service.py",
       "servers/fastapi/services/presentation_deletion_operation_handler.py",
       "servers/fastapi/services/presentation_deletion_service.py",
-      "servers/fastapi/services/presentation_export_adapters.py",
       "servers/fastapi/services/presentation_export_attempt_service.py",
       "servers/fastapi/services/presentation_export_capabilities.py",
       "servers/fastapi/services/presentation_export_direct_attempt_evidence.py",
@@ -7098,8 +7104,8 @@
       "servers/fastapi/services/presentation_export_projection.py",
       "servers/fastapi/services/presentation_export_release_receipt.py",
       "servers/fastapi/services/presentation_export_route_inputs.py",
-      "servers/fastapi/services/presentation_export_router.py",
       "servers/fastapi/services/presentation_generation_attempt_timing.py",
+      "servers/fastapi/services/presentation_generation_export_chain.py",
       "servers/fastapi/services/presentation_generation_export_orchestration.py",
       "servers/fastapi/services/presentation_generation_job_service.py",
       "servers/fastapi/services/presentation_generation_operation_handler.py",
@@ -7528,7 +7534,6 @@
       "servers/fastapi/tests/unit/test_authored_exact_provenance_migration.py",
       "servers/fastapi/tests/unit/test_authored_exact_source_snapshot.py",
       "servers/fastapi/tests/unit/test_authored_export_quality_flag.py",
-      "servers/fastapi/tests/unit/test_authored_fidelity_export_utils.py",
       "servers/fastapi/tests/unit/test_authored_figure_variants.py",
       "servers/fastapi/tests/unit/test_authored_final_gate_deck_scope.py",
       "servers/fastapi/tests/unit/test_authored_final_metrics_remake_scope.py",
@@ -7770,8 +7775,8 @@
       "servers/fastapi/tests/unit/test_presentation_export_attempt_service.py",
       "servers/fastapi/tests/unit/test_presentation_export_powerpoint_qa.py",
       "servers/fastapi/tests/unit/test_presentation_export_projection.py",
-      "servers/fastapi/tests/unit/test_presentation_export_router.py",
       "servers/fastapi/tests/unit/test_presentation_flagged_slides_read.py",
+      "servers/fastapi/tests/unit/test_presentation_generation_export_chain.py",
       "servers/fastapi/tests/unit/test_presentation_generation_info.py",
       "servers/fastapi/tests/unit/test_presentation_generation_jobs.py",
       "servers/fastapi/tests/unit/test_presentation_generation_operation_handler.py",
@@ -9333,9 +9338,9 @@
     },
     "counts": {
       "upstreamOwned": 10163,
-      "identical": 9393,
-      "exceptions": 770,
-      "localOnly": 3905
+      "identical": 9392,
+      "exceptions": 771,
+      "localOnly": 3903
     },
     "policySha256": "5c7df12c5ebef04d46267bef270f45d9b5af56b566cb6171ab79250431554607"
   }

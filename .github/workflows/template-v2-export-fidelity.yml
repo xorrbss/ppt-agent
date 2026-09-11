@@ -8,7 +8,6 @@ on:
       - "scripts/sync-presentation-export.cjs"
       - "compatibility/upstream-compatibility.json"
       - "servers/nextjs/app/(export)/**"
-      - "servers/nextjs/app/api/export-presentation/**"
       - "servers/nextjs/lib/export-fidelity/**"
       - "servers/nextjs/lib/template-v2-general-renderer.*"
       - "servers/nextjs/lib/template-v2-render-plan.*"
