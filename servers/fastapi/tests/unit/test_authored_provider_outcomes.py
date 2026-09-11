@@ -21,6 +21,7 @@ from models.sql.workspace import (
     WorkspaceOutbox,
 )
 from utils.llm_calls import author_deck as author_deck_mod
+from utils.llm_calls import author_slide as author_slide_mod
 from utils.llm_calls.author_slide import Brand
 from services import authored_provider_attempt_ledger as attempt_ledger
 from services.authored_author_stage_deferral import author_stage_failure
@@ -455,6 +456,86 @@ def test_an_authored_call_consumes_its_reservation_exactly_once():
     assert second_receipt["replayUnavailable"] == "attempt_reservation_unavailable"
 
 
+# --- R2: the wrapper that spends the reservation must match the call that runs -----
+
+
+_AUTHOR_CALL_VALID_HTML = (
+    "<!DOCTYPE html><html lang='ko'><head><meta charset='utf-8'></head>"
+    "<body><h1>제목</h1></body></html>"
+)
+
+
+def _patch_author_call_environment(monkeypatch, *, streaming: bool, client) -> None:
+    """Install a fake provider client and pin the streaming switch for one call."""
+
+    async def no_rate_limit() -> None:
+        return None
+
+    monkeypatch.setattr(author_slide_mod, "get_client", lambda **_kwargs: client)
+    monkeypatch.setattr(author_slide_mod, "get_llm_config", lambda: {})
+    monkeypatch.setattr(author_slide_mod, "get_model", lambda: "fake-model")
+    monkeypatch.setattr(author_slide_mod, "get_generate_kwargs", lambda **kwargs: kwargs)
+    monkeypatch.setattr(author_slide_mod, "is_codex_selected", lambda: False)
+    monkeypatch.setattr(author_slide_mod, "enforce_llm_egress_policy", lambda: None)
+    monkeypatch.setattr(author_slide_mod, "_wait_for_author_rate_slot", no_rate_limit)
+    monkeypatch.setattr(
+        author_slide_mod, "is_authored_author_streaming_enabled", lambda: streaming
+    )
+
+
+def test_streaming_author_call_leaves_the_reservation_intact(monkeypatch):
+    """R2: building the non-stream wrapper unconditionally spent the reservation
+    on a call ``stream_author_call`` then ran instead. The wrapper must only be
+    built on the path that actually uses it, so a pending reservation survives
+    the streaming call untouched."""
+
+    class _RefusingClient:
+        def generate(self, **_kwargs):
+            raise AssertionError("the non-streaming client must not be called")
+
+    async def fake_stream_author_call(_client, _kwargs, **_extra):
+        return SimpleNamespace(content=_AUTHOR_CALL_VALID_HTML)
+
+    _patch_author_call_environment(monkeypatch, streaming=True, client=_RefusingClient())
+    monkeypatch.setattr(author_slide_mod, "stream_author_call", fake_stream_author_call)
+
+    async def scenario():
+        attempt_ledger._PENDING.set((_reservation(),))
+        html = await author_slide_mod.author_slide_html(
+            "content", "DESIGN", Brand(topic="주제"), "COVER", 0, 1,
+        )
+        return html, current_provider_attempt_reservations()
+
+    html, remaining = asyncio.run(scenario())
+
+    assert "제목" in html
+    assert len(remaining) == 1
+
+
+def test_non_streaming_author_call_consumes_the_reservation_exactly_once(monkeypatch):
+    calls: list[dict] = []
+
+    class _FakeClient:
+        def generate(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(content=_AUTHOR_CALL_VALID_HTML)
+
+    _patch_author_call_environment(monkeypatch, streaming=False, client=_FakeClient())
+
+    async def scenario():
+        attempt_ledger._PENDING.set((_reservation(),))
+        html = await author_slide_mod.author_slide_html(
+            "content", "DESIGN", Brand(topic="주제"), "COVER", 0, 1,
+        )
+        return html, current_provider_attempt_reservations()
+
+    html, remaining = asyncio.run(scenario())
+
+    assert "제목" in html
+    assert len(calls) == 1
+    assert remaining == ()
+
+
 def test_codex_transport_records_that_no_replay_was_available():
     """An unconfirmed transport still gets its one call, and says why only one."""
 
@@ -500,6 +581,40 @@ def test_a_message_only_overload_still_classifies_from_its_text():
 
     assert raised.value.code == "public_provider_overload"
     assert is_provider_overload(raised.value) is True
+
+
+# --- R3: a non-overload status code still yields to an unambiguous message ---------
+
+
+def test_a_non_429_status_with_a_usage_limit_message_is_still_overload():
+    """A 400 that carries llmai's ``usage_limit_reached`` text must not be lost
+    just because it does not use the 429 status code."""
+
+    class UsageLimit(RuntimeError):
+        status_code = 400
+
+    assert is_provider_overload(UsageLimit("usage limit reached")) is True
+
+
+def test_a_non_5xx_status_with_a_timeout_message_is_still_overload():
+    """A 408 with an explicit timeout message must classify as overload even
+    though 408 is not in the structured overload status set."""
+
+    class RequestTimeout(RuntimeError):
+        status_code = 408
+
+    assert is_provider_overload(RequestTimeout("Request timed out.")) is True
+
+
+def test_a_non_overload_status_with_an_unrelated_number_stays_non_overload():
+    """The motivating case: a bare number in the message must not, on its own,
+    make a 400 read as overload once the bare HTTP-number pattern is
+    suppressed for a structured status."""
+
+    class InvalidRequest(RuntimeError):
+        status_code = 400
+
+    assert is_provider_overload(InvalidRequest("max_output_tokens must be <= 500")) is False
 
 
 def test_run22_usage_limit_shape_is_a_durable_deck_pause():

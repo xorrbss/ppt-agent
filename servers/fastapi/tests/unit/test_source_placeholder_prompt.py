@@ -56,6 +56,74 @@ def test_43_page_real_manifest_size_limit():
         assert len(encode_block_table(table_from_manifest(unit))) < 64_000
 
 
+# --- R4: prompt-construction rejections must not leak uncoded ---------------
+
+
+def test_placeholder_prompt_boundary_recodes_a_duplicate_rejection(monkeypatch):
+    """A ``reject()``ed ``BrowserSourceReadbackError`` from ``build_block_table``
+    must not leak out of prompt construction as a readback-shaped exception:
+    the boundary re-codes it into a bounded, explicitly non-retryable failure
+    the author stage can map directly to a coded slide outcome."""
+
+    import services.authored_admission_session as session_module
+    from services.source_content.placeholder.prompt import (
+        AuthoredPlaceholderPromptRejected,
+        placeholder_prompt_for_slide,
+    )
+
+    context = SimpleNamespace(
+        source_reflow=True,
+        reference_mode="source_content_restyle",
+        bindings=(("a", "one"), ("a", "two")),
+    )
+    monkeypatch.setattr(
+        session_module, "current_session", lambda: SimpleNamespace(contexts=(context,))
+    )
+    monkeypatch.setattr(prompt, "is_authored_verbatim_placeholder_authoring_enabled", lambda: True)
+
+    with pytest.raises(AuthoredPlaceholderPromptRejected) as excinfo:
+        placeholder_prompt_for_slide(0)
+
+    assert excinfo.value.code == "source_placeholder_duplicate"
+    assert excinfo.value.retryable is False
+
+
+def test_placeholder_prompt_boundary_recodes_the_size_bound(monkeypatch):
+    """The 64,000-char table bound is a bare ``ValueError`` at the source
+    (``placeholder_prompt_contract``); the prompt boundary must still recode
+    it into a coded, non-retryable rejection instead of letting it escape as
+    an uncaught, uncoded failure."""
+
+    import services.authored_admission_session as session_module
+    from services.source_content.placeholder.prompt import (
+        AuthoredPlaceholderPromptRejected,
+        placeholder_prompt_for_slide,
+    )
+
+    directory = FIXTURES / "manifest-43p"
+    manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+    bindings = tuple(
+        (block["sourceBlockId"], block["payload"]["text"])
+        for unit in manifest["units"]
+        for block in unit.get("blocks", ())
+        if block.get("kind") == "text"
+    )
+    context = SimpleNamespace(
+        source_reflow=True, reference_mode="source_content_restyle", bindings=bindings,
+    )
+    monkeypatch.setattr(
+        session_module, "current_session", lambda: SimpleNamespace(contexts=(context,))
+    )
+    monkeypatch.setattr(prompt, "is_authored_verbatim_placeholder_authoring_enabled", lambda: True)
+
+    with pytest.raises(AuthoredPlaceholderPromptRejected) as excinfo:
+        placeholder_prompt_for_slide(0)
+
+    assert excinfo.value.code == "authored_placeholder_prompt_rejected"
+    assert excinfo.value.retryable is False
+    assert "split by source unit" in excinfo.value.detail
+
+
 def test_prompt_switch_uses_pinned_slide_context(monkeypatch):
     import services.authored_admission_session as session_module
     from utils.llm_calls.author_slide_prompt import author_prompt

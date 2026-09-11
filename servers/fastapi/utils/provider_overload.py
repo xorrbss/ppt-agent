@@ -10,6 +10,8 @@ from typing import Any, Callable, Mapping
 from services.authored_batch_policy import (
     OVERLOAD_COOLDOWN_BASE_SECONDS,
     OVERLOAD_COOLDOWN_MAX_SECONDS,
+    _RATE_LIMIT_PATTERN,
+    _TIMEOUT_PATTERN,
     is_authored_provider_overload,
 )
 from services.workspace_operation_handler_registry import WorkspaceOperationDeferred
@@ -79,16 +81,49 @@ def provider_status_code(error: BaseException | None) -> int | None:
     return None
 
 
+def _overload_message_signal(error: BaseException) -> bool:
+    """Rate-limit / usage-limit / timeout text signals only -- never the bare
+    HTTP-number pattern.
+
+    Called only once a structured status code is already known and is not
+    itself an overload code, so a coincidental number elsewhere in the
+    message (``max_output_tokens must be <= 500``) must not match. The
+    rate-limit and timeout text patterns cannot false-positive on that text
+    and remain valid positive signals (e.g. a ``400`` ``usage limit
+    reached``, or a ``408`` ``Request timed out.``).
+    """
+
+    candidates = [str(error)]
+    for attribute in ("code", "status_code"):
+        value = getattr(error, attribute, None)
+        if value is not None:
+            candidates.append(str(value))
+    response = getattr(error, "response", None)
+    response_status = getattr(response, "status_code", None)
+    if response_status is not None:
+        candidates.append(str(response_status))
+    for candidate in candidates:
+        normalized = candidate.strip().casefold()
+        if _TIMEOUT_PATTERN.search(normalized) or _RATE_LIMIT_PATTERN.search(normalized):
+            return True
+    return False
+
+
 def is_provider_overload(error: BaseException | None) -> bool:
     """Classify overload from structured signals first, from text only as a fallback.
 
     A transport that reports a durable outcome or a status code has already
-    said what happened, so its message is not read as well: a rejection like
-    ``400 max_output_tokens must be <= 500`` otherwise matches the free-text
-    ``500`` pattern and buys an identical, certainly-failing replay.  The
-    scheduling predicate (``is_authored_provider_overload``) still owns which
-    statuses and which message shapes count, so this narrows the inputs it is
-    given and never widens them.
+    said what happened, so its message is not read the same way: a rejection
+    like ``400 max_output_tokens must be <= 500`` must not match the free-text
+    ``500`` pattern and buy an identical, certainly-failing replay. But a
+    structured status that is not itself an overload code can still carry an
+    unambiguous rate-limit / usage-limit / timeout message (the transport
+    encodes those as prose, not as a distinct status), so those two text
+    patterns stay live even once a status code is known -- only the bare
+    HTTP-number pattern is suppressed.  The scheduling predicate
+    (``is_authored_provider_overload``) still owns which statuses and which
+    message shapes count, so this narrows the inputs it is given and never
+    widens them.
     """
 
     if error is None:
@@ -99,7 +134,9 @@ def is_provider_overload(error: BaseException | None) -> bool:
         return True
     status_code = provider_status_code(error)
     if status_code is not None:
-        return is_authored_provider_overload(status_code)
+        if is_authored_provider_overload(status_code):
+            return True
+        return _overload_message_signal(error)
     return is_authored_provider_overload(error)
 
 

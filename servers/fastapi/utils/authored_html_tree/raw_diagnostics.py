@@ -42,6 +42,7 @@ class RawAuthoredHtmlViolation(ValueError):
     def __init__(self, diagnostics: RawDiagnostics) -> None:
         self.diagnostics = diagnostics
         codes = ",".join(finding.code for finding in diagnostics.violations)
+        self.code = diagnostics.violations[0].code if diagnostics.violations else "authored_html_raw_diagnostics_failed"
         super().__init__(codes or "authored_html_raw_diagnostics_failed")
 
 

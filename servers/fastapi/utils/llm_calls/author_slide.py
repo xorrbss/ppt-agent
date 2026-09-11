@@ -1109,15 +1109,19 @@ async def author_slide_html(
             ):
                 spans.mark_admitted()
                 enforce_llm_egress_policy()
+                # SPEED-9: streaming keeps the socket busy and returns the same
+                # response shape, so it replaces the executor hand-off entirely.
+                # The bounded-call wrapper is built only on the path that uses
+                # it: building it unconditionally would consume this attempt's
+                # retry reservation for a wrapper the streaming branch then
+                # discards, leaving the call that actually runs without one.
+                if is_authored_author_streaming_enabled():
+                    response = await stream_author_call(client, generate_kwargs)
+                    return response
                 generate_call = provider_generate_call(
                     client, provider_id=provider, kwargs=generate_kwargs,
                     idempotency_key=current_provider_idempotency_key(), outcome_scope="authored",
                 )
-                # SPEED-9: streaming keeps the socket busy and returns the same
-                # response shape, so it replaces the executor hand-off entirely.
-                if is_authored_author_streaming_enabled():
-                    response = await stream_author_call(client, generate_kwargs)
-                    return response
                 response = await loop.run_in_executor(_AUTHOR_EXECUTOR, spans.wrap(generate_call))
                 # The openai API-key transport has no terminal-event guard, so a
                 # document the provider cut at its output ceiling is named here

@@ -99,6 +99,21 @@ def test_tree_normalization_rejects_raw_findings_the_tree_would_erase() -> None:
             normalize_authored_html_tree(source, profile="document")
 
 
+def test_raw_authored_html_violation_carries_a_stable_code() -> None:
+    with pytest.raises(RawAuthoredHtmlViolation) as excinfo:
+        normalize_authored_html_tree('<p id="a" id="b">x</p>', profile="document")
+
+    error = excinfo.value
+    assert error.code == "duplicate_html_attribute"
+    assert error.code == error.diagnostics.violations[0].code
+
+    try:
+        raise error
+    except ValueError as caught:
+        assert hasattr(caught, "code")
+        assert caught.code == "duplicate_html_attribute"
+
+
 def test_tree_normalization_does_not_rewrite_comments_as_markup() -> None:
     source = '<!-- <p name="x" style="content: \'bad\'"> --><p>safe</p>'
 
