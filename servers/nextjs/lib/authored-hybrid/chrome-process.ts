@@ -3,6 +3,8 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs/promises";
 
+import { traceEvent } from "./capture-trace.ts";
+
 import {
   WindowsCleanupCoordinator,
   parseWindowsProfileScan,
@@ -70,7 +72,19 @@ async function runWindowsHelper(
 ): Promise<Buffer> {
   // The slot is taken before the child is spawned, so the timeout below starts
   // when this helper starts rather than while it waits behind other helpers.
-  return cleanupCoordinator.runHelper(() => spawnWindowsHelper(command, args, options));
+  const queuedAt = performance.now();
+  return cleanupCoordinator.runHelper(async () => {
+    const startedAt = performance.now();
+    try {
+      return await spawnWindowsHelper(command, args, options);
+    } finally {
+      traceEvent("helper", {
+        command,
+        queueMs: Math.round(startedAt - queuedAt),
+        ms: Math.round(performance.now() - startedAt),
+      });
+    }
+  });
 }
 
 function spawnWindowsHelper(

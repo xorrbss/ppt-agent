@@ -27,6 +27,7 @@ import {
 } from "./export-admission.ts";
 import { BACKPLATE_SCALE } from "./capture-scale.ts";
 import { CdpPipe, MAX_CAPTURE_OUTPUT_BYTES, stringResult } from "./cdp-pipe.ts";
+import { traceEvent, tracePhase } from "./capture-trace.ts";
 
 export { resolveAuthoredHybridChromeExecutable } from "./chrome-runtime-discovery.ts";
 export {
@@ -75,13 +76,32 @@ function domCompletionPattern(token: string): RegExp {
  * temp dir. A grace timer guarantees we never hang if `exit` is never reported. */
 async function terminateChrome(
   child: ChildProcess,
-  profilePath?: string
+  profilePath?: string,
+  gracefulCloseRequested = false,
+  dependencies: {
+    platform: NodeJS.Platform;
+    waitForExit: typeof waitForChildExit;
+    taskkill: typeof taskkillProcessTree;
+    terminateProfile: typeof terminateWindowsProfileProcesses;
+  } = {
+    platform: process.platform,
+    waitForExit: waitForChildExit,
+    taskkill: taskkillProcessTree,
+    terminateProfile: terminateWindowsProfileProcesses,
+  }
 ): Promise<void> {
-  if (process.platform === "win32") {
+  if (dependencies.platform === "win32") {
     let launcherTerminationError: unknown;
+    // A completed capture asks Chrome to close over CDP before entering this
+    // path. Give that graceful shutdown one bounded chance to finish before
+    // spawning taskkill and process-table helpers. Those helper processes are
+    // disproportionately expensive under the supervised Python worker tree.
+    if (gracefulCloseRequested) {
+      await tracePhase("terminate.waitGraceful", () => dependencies.waitForExit(child));
+    }
     if (child.pid && child.exitCode === null && child.signalCode === null) {
       try {
-        await taskkillProcessTree(child.pid);
+        await tracePhase("terminate.taskkill", () => dependencies.taskkill(child.pid as number));
       } catch (error) {
         // chrome.exe can hand off to another process or exit between the state
         // check and taskkill. Keep the error until the unique-profile cleanup
@@ -90,16 +110,7 @@ async function terminateChrome(
       }
     }
 
-    let profileTerminationError: unknown;
-    if (profilePath) {
-      try {
-        await terminateWindowsProfileProcesses(profilePath);
-      } catch (error) {
-        profileTerminationError = error;
-      }
-    }
-
-    await waitForChildExit(child);
+    await tracePhase("terminate.waitExit", () => dependencies.waitForExit(child));
 
     if (child.exitCode === null && child.signalCode === null) {
       try {
@@ -109,13 +120,15 @@ async function terminateChrome(
         // scan is authoritative for captures, because every Chrome process in
         // this run receives the unique --user-data-dir argument.
       }
-      await waitForChildExit(child);
+      await dependencies.waitForExit(child);
     }
 
+    let profileTerminationError: unknown;
     if (profilePath) {
       try {
-        await terminateWindowsProfileProcesses(profilePath);
-        profileTerminationError = undefined;
+        await tracePhase("terminate.profileScan", () =>
+          dependencies.terminateProfile(profilePath)
+        );
       } catch (error) {
         profileTerminationError = error;
       }
@@ -144,8 +157,10 @@ async function terminateChrome(
   if (child.pid && child.exitCode === null && child.signalCode === null) {
     child.kill("SIGKILL");
   }
-  await waitForChildExit(child);
+  await dependencies.waitForExit(child);
 }
+
+export const __testOnlyTerminateChrome = terminateChrome;
 
 async function waitForTrustedCompletion(
   cdp: CdpPipe,
@@ -183,7 +198,9 @@ async function captureThroughCdp(
   options: ChromeRunOptions
 ): Promise<ChromeRunResult> {
   const cdp = new CdpPipe(child);
-  const context = await cdp.send("Target.createBrowserContext", { disposeOnDetach: true });
+  const context = await tracePhase("cdp.createBrowserContext", () =>
+    cdp.send("Target.createBrowserContext", { disposeOnDetach: true })
+  );
   const browserContextId = context.browserContextId;
   if (typeof browserContextId !== "string") throw new Error("Chrome did not create an isolated browser context.");
   const target = await cdp.send("Target.createTarget", { url: "about:blank", browserContextId });
@@ -217,17 +234,23 @@ async function captureThroughCdp(
   const frames = await cdp.send("Page.getFrameTree", {}, sessionId);
   const frameId = (frames.frameTree as { frame?: { id?: unknown } } | undefined)?.frame?.id;
   if (typeof frameId !== "string") throw new Error("Chrome did not expose the isolated root frame.");
-  await cdp.send("Page.setDocumentContent", { frameId, html: applyAuthoredRendererCsp(html) }, sessionId);
-  await waitForTrustedCompletion(cdp, sessionId, options.domCompletionToken);
+  await tracePhase("cdp.setDocumentContent", () =>
+    cdp.send("Page.setDocumentContent", { frameId, html: applyAuthoredRendererCsp(html) }, sessionId)
+  );
+  await tracePhase("cdp.awaitCompletion", () =>
+    waitForTrustedCompletion(cdp, sessionId, options.domCompletionToken)
+  );
   if (cdp.blockedRequests.length > 0) {
     throw new Error(`Authored renderer blocked ${cdp.blockedRequests.length} network or host request(s).`);
   }
   const result: ChromeRunResult = { blockedRequestCount: 0 };
   if (options.dumpDom) {
-    const evaluated = await cdp.send(
-      "Runtime.evaluate",
-      { expression: "document.documentElement.outerHTML", returnByValue: true },
-      sessionId
+    const evaluated = await tracePhase("cdp.dumpDom", () =>
+      cdp.send(
+        "Runtime.evaluate",
+        { expression: "document.documentElement.outerHTML", returnByValue: true },
+        sessionId
+      )
     );
     result.serializedDom = stringResult(evaluated);
     if (!result.serializedDom) throw new Error("Chrome did not serialize the authored document.");
@@ -239,10 +262,12 @@ async function captureThroughCdp(
     }
   }
   if (options.screenshot) {
-    const capture = await cdp.send(
-      "Page.captureScreenshot",
-      { format: "png", fromSurface: true, captureBeyondViewport: false },
-      sessionId
+    const capture = await tracePhase("cdp.captureScreenshot", () =>
+      cdp.send(
+        "Page.captureScreenshot",
+        { format: "png", fromSurface: true, captureBeyondViewport: false },
+        sessionId
+      )
     );
     if (typeof capture.data !== "string") throw new Error("Chrome did not return the authored screenshot.");
     result.screenshotPng = Buffer.from(capture.data, "base64");
@@ -251,6 +276,7 @@ async function captureThroughCdp(
     }
   }
   await cdp.send("Target.disposeBrowserContext", { browserContextId });
+  await tracePhase("cdp.closeBrowser", () => cdp.send("Browser.close"));
   return result;
 }
 
@@ -285,7 +311,10 @@ async function runIsolatedAuthoredHybridChrome(
     throw new Error(`Configured authored hybrid Chrome is not accessible: ${executable}`);
   }
 
-  const admission = await acquireAuthoredExportProcess();
+  const captureStartedAt = performance.now();
+  const admission = await tracePhase("capture.admission", () =>
+    acquireAuthoredExportProcess()
+  );
   const baseTempDirectory =
     process.env.TEMP_DIRECTORY?.trim() || path.join(os.tmpdir(), "presenton");
   let workDirectory: string | undefined;
@@ -311,8 +340,9 @@ async function runIsolatedAuthoredHybridChrome(
       env: authoredRendererEnvironment(),
     });
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    traceEvent("chrome.spawned", { pid: child.pid ?? null });
     result = await Promise.race([
-      captureThroughCdp(child, options.html, options),
+      tracePhase("capture.cdp", () => captureThroughCdp(child as ChildProcess, options.html, options)),
       new Promise<never>((_, reject) => {
         const timer = setTimeout(
           () => reject(new Error(`Chrome authored hybrid capture timed out after ${timeoutMs}ms.`)),
@@ -330,7 +360,9 @@ async function runIsolatedAuthoredHybridChrome(
 
   if (child) {
     try {
-      await terminateChrome(child, profilePath);
+      await tracePhase("capture.terminate", () =>
+        terminateChrome(child as ChildProcess, profilePath, result !== undefined)
+      );
     } catch (error) {
       captureError = captureError === undefined
         ? error
@@ -343,7 +375,8 @@ async function runIsolatedAuthoredHybridChrome(
   // caller's Chrome capture originally failed.
   let cleanupError: unknown;
   try {
-    await fs
+    await tracePhase("capture.rmWorkDir", () =>
+      fs
       .rm(workDirectory, {
         recursive: true,
         force: true,
@@ -351,11 +384,17 @@ async function runIsolatedAuthoredHybridChrome(
         // success. Node retries only transient filesystem errors here.
         maxRetries: process.platform === "win32" ? 5 : 0,
         retryDelay: 100,
-      });
+      })
+    );
   } catch (error) {
     cleanupError = error;
   } finally {
     admission.release();
+    traceEvent("capture.done", {
+      ms: Math.round(performance.now() - captureStartedAt),
+      dom: options.dumpDom,
+      shot: options.screenshot,
+    });
   }
   if (captureError !== undefined) {
     if (cleanupError !== undefined) {
