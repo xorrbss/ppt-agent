@@ -120,6 +120,7 @@ from services.authored_vnext.generation.effective_style import (
     resolve_authored_composition,
 )
 from services.authored_vnext.generation.legacy_pin import generation_repository_for_owner
+from services.authored_vnext.generation.repository import async_generation_repository
 from services.authored_vnext.generation.internal_authored_composition import (
     build_internal_authored_composition,
 )

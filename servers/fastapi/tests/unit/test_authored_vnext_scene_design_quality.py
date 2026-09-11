@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import threading
 
 import pytest
 from PIL import Image
@@ -975,19 +976,30 @@ def test_semantic_import_retry_reuses_only_identical_scene_and_retained_telemetr
     class ImportedRepository:
         current = None
         append_count = 0
+        # This repository is synchronous.  Publication must reach it through
+        # the async boundary, never on the event loop: with one shared
+        # database, a blocked loop cannot let its own async writer commit and
+        # release SQLite's write lock, so the CAS deadlocks against it.
+        threads: set[int] = set()
+
+        def _record_thread(self):
+            self.threads.add(threading.get_ident())
 
         def get_deck(self, deck_id):
+            self._record_thread()
             assert deck_id == f"deck:semantic-{presentation_id.hex}"
             if self.current is None:
                 raise GenerationNotFoundError()
             return self.current
 
         def get_master(self, master_id, revision):
+            self._record_thread()
             assert master_id == contract.master_id
             assert revision == 1
             return SimpleNamespace(contract=contract, visual_direction=None)
 
         def append_imported_deck(self, deck):
+            self._record_thread()
             assert self.current is None
             self.current = deck
             self.append_count += 1
@@ -1106,6 +1118,9 @@ def test_semantic_import_retry_reuses_only_identical_scene_and_retained_telemetr
             await generation._persist_master_pinned_editable_scene_deck(
                 **{**arguments, "browser_metrics_by_slide": []}
             )
+
+        assert repository.threads
+        assert threading.get_ident() not in repository.threads
 
     asyncio.run(scenario())
 

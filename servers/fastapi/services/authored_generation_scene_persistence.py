@@ -66,7 +66,8 @@ async def _persist_master_pinned_editable_scene_deck(
         raise ValueError("authored_scene_envelope_publication_projection_mismatch")
     if tuple(semantic_components) != scene_envelope.semantic_components:
         raise ValueError("authored_scene_envelope_publication_semantics_mismatch")
-    repository = generation_repository_for_owner(owner_id)
+    # Async boundary: nothing below may touch the synchronous CAS on the loop.
+    repository = async_generation_repository(generation_repository_for_owner(owner_id))
     resolved = request._authored_master_resolution
     composition_pin = request._authored_composition_pin
     if resolved is None:
@@ -77,10 +78,10 @@ async def _persist_master_pinned_editable_scene_deck(
             style=style,
             metadata=request._authored_deck_metadata,
         )
-        repository.append_imported_master(internal.master)
+        await repository.append_imported_master(internal.master)
         resolved = internal.resolved
         composition_pin = internal.composition
-    master = repository.get_master(
+    master = await repository.get_master(
         resolved.pin.master_id, resolved.pin.master_revision
     )
     if composition_pin is None:
@@ -215,11 +216,7 @@ async def _persist_master_pinned_editable_scene_deck(
         slides=sealed_slides,
         canonical_scene=scene,
     )
-    return await asyncio.to_thread(
-        _persist_or_reuse_identical_semantic_deck,
-        repository,
-        deck,
-    )
+    return await repository.run(_persist_or_reuse_identical_semantic_deck, deck)
 
 
 _LOCAL_NAMES = frozenset(globals())
