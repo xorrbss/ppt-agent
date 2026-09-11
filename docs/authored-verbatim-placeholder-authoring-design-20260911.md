@@ -61,12 +61,16 @@ The model never emits source text. The prompt carries a compact **block table** 
 full text, character count, hard line breaks, marker/pipe semantics — so the model can size and group
 content; the output contract is one placeholder token per block, never the text.
 
-- Token form: `{{q:<sourceBlockId>}}` for a whole block. Sub-block tokens (character-range emphasis)
-  are **not** part of the initial contract: the review showed that projected runs follow delimiters,
-  not style boundaries, so run tokens cannot express in-sentence emphasis anyway. Whether a bounded
-  character-range form (`{{q:<id>@<start>-<end>}}`, grapheme-safe, disjoint, covering the whole block)
-  is added is decided by measurement 3.1.
-- Inline styling is expressed by wrapping a whole-block token; the model cannot split text.
+- Token form: `{{q:<sourceBlockId>}}` for a whole block, and — because measurement 3.1 showed that
+  101 of 125 partial-emphasis spans in published decks cross projected-run boundaries — a bounded
+  character-range form `{{q:<id>@<start>-<end>}}` (offsets in the normalized block text, grapheme-safe,
+  disjoint; the ranges of one block must cover it exactly, otherwise coded rejection
+  `source_placeholder_cover`). Run tokens are not offered: projected runs follow delimiters, not style
+  boundaries. These two forms are the model's only way to place source text.
+- Inline styling is expressed by wrapping a token; the model cannot split or retype text.
+- Rationale is correctness, not speed: measurement 3.3 showed the output-token saving is about 1-3% of
+  deck output (Korean blocks average 20 characters; an id plus wrapper is 28). The model's output is
+  dominated by the HTML/CSS it writes.
 - Tokens are recognized **only in text nodes** of the parsed tree. A token in an attribute, a `<style>`
   block, a comment, or hidden content is a coded rejection. Substitution is a single non-recursive pass
   over the original text nodes using a server-controlled id table; source text that happens to look like
@@ -153,6 +157,9 @@ distinguishes three representations and says which stage may hold which:
   test asserts every attribute a consumer reads is admitted by the renderer policy.
 - Consumers that count characters (capacity gate, `authored_composition_policy.py:1516-1547`) and the
   Hybrid text-run assembler always see expanded HTML; `token` state never leaves the author stage.
+- Browser metrics are persisted with the captured admission. Today they are persisted nowhere (the T1
+  fixture export found no metrics column, `artifact_refs` null, evidence v3 tables empty), which is why
+  historical decks cannot be replayed through the captured checks without re-rendering.
 - **Capture once per digest.** The gate owns Chromium capture. A `captured` admission is keyed by
   (expanded-HTML digest, capture profile); any later consumer that needs metrics or a PNG for the same
   key reuses the admission instead of rendering again. Today one slide can be captured up to five times
@@ -235,7 +242,10 @@ N=1 against the current behavior on the same input.
    series produces the number. Current run directories carry no usage receipts.
 4. The bound 43-page / 96-image-occurrence contract
    (`source-content.template-restyle-contract.7.json`) is added to the fixture set; the 35-slide deck
-   alone is not sufficient acceptance material.
+   alone is not sufficient acceptance material. Found 2026-09-11: a stored manifest with units=43 and
+   96 image blocks (965 text blocks, 22,940 characters). Results of 3.1-3.4 are in
+   `artifacts/verbatim-design-measurements-20260911/report.md`; per-slide fixtures for 187 slides are
+   under `fixtures/` there.
 
 ## 4. Rollout — four independent switches, in this order
 
@@ -277,7 +287,7 @@ Flagged slides remain a layout metric, not a correctness one.
 
 ## 6. Decisions (answered 2026-09-11)
 
-Answers: (1) approved; (2) whole-block tokens, character-range only if 3.1 demands; (3) ledger aligned to code: three ordinals, the third is the last author attempt that replaces rescue; (4) binder removed after one passing token-mode series and no unfinished legacy jobs; (5) N=1 default, N=2 compared in (c).
+Answers: (1) approved; (2) whole-block tokens **plus** character-range tokens (measurement 3.1, 2026-09-11: 101/125 emphasis spans cross run boundaries); (3) ledger aligned to code: three ordinals, the third is the last author attempt that replaces rescue; (4) binder removed after one passing token-mode series and no unfinished legacy jobs; (5) N=1 default, N=2 compared in (c).
 
 Original questions:
 
