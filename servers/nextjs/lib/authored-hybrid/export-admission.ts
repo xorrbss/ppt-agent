@@ -30,10 +30,45 @@ function positiveInt(value: string | undefined, fallback: number): number {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+const MAXIMUM_ADMITTED_PROCESSES = 12;
+const MINIMUM_ADMITTED_PROCESSES = 2;
+
+/**
+ * Chrome instances this process may run at once for authored export.
+ *
+ * **Do not lower this to reduce contention.** That was measured on 2026-09-11
+ * and is wrong: an authored slide fans out into many captures (a declared
+ * pass, a PowerPoint-layout pass, a backplate and one render per raster paint
+ * band), so the deck is admission-bound and throughput rises with the limit
+ * rather than falling. On a 22-CPU host, the run-11 35-slide deck through the
+ * product launch chain gave
+ *
+ * | limit | wall  | slides attempted | s/slide | peak processes |
+ * |------:|------:|-----------------:|--------:|---------------:|
+ * |    12 | 1565s |               24 |    65.2 |             81 |
+ * |     6 | 1586s |               16 |    99.1 |             40 |
+ * |     4 | 1640s |               14 |   117.1 |             29 |
+ *
+ * Raising it is bounded by something outside this file: an admitted capture
+ * costs about 6.75 observed processes, and the isolated export role's Job
+ * Object allows 96 (`_ROLE_RESOURCE_BUDGETS["export"]` in
+ * `services/trusted_executor/worker_dispatcher.py`). Twelve captures already
+ * peak at 81 of those 96, so this ceiling is set by the lane's process budget,
+ * not by CPU count. `AUTHORED_EXPORT_PROCESS_WEIGHT_LIMIT` overrides it for a
+ * host that has measured something different.
+ *
+ * See `artifacts/authored-full-product-validation-20260910/run-11-hybrid-export/w17-throughput.md`.
+ */
 export function defaultExportProcessWeightLimit(
   cpuCount: number = cpus().length,
 ): number {
-  return Math.min(12, Math.max(2, cpuCount - 2));
+  // A container can report 0 or a non-integer CPU count; treat that as the
+  // smallest honest machine rather than admitting nothing.
+  const usable = Number.isSafeInteger(cpuCount) && cpuCount > 0 ? cpuCount : 1;
+  return Math.min(
+    MAXIMUM_ADMITTED_PROCESSES,
+    Math.max(MINIMUM_ADMITTED_PROCESSES, usable - 2),
+  );
 }
 
 /**

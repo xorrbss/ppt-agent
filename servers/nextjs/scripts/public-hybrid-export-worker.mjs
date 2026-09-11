@@ -21,6 +21,7 @@ import {
   describeHybridErrorChain,
   mapHybridSlideFallbackCode,
 } from "./lib/hybrid-slide-fallback-code.mjs";
+import { mapWithDeckBudget } from "./lib/hybrid-deck-budget.mjs";
 
 // Re-exported so the worker keeps naming its own classification surface.
 export { describeHybridErrorChain, mapHybridSlideFallbackCode };
@@ -185,19 +186,9 @@ async function loadHybridModules() {
   };
 }
 
-async function mapWithBudget(items, concurrency, deadline, callback, onExpired) {
-  const output = new Array(items.length);
-  let next = 0;
-  async function pump() {
-    while (next < items.length) {
-      const index = next++;
-      output[index] =
-        Date.now() >= deadline ? onExpired(items[index]) : await callback(items[index]);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, pump));
-  return output;
-}
+// Deck-budget scheduling lives in ./lib/hybrid-deck-budget.mjs; see the note
+// there for why a slide is no longer started when its estimated cost does not
+// fit the remaining budget.
 
 function summarizeStructural(structural) {
   const slides = structural.slides.map((slide) => ({
@@ -333,7 +324,7 @@ async function run() {
 
   const deadline = Date.now() + job.budgetMillis;
   const glyphAvailable = modules.embeddedGlyphAvailable(fontPlan);
-  const outcomes = await mapWithBudget(
+  const { output: outcomes, telemetry: budget } = await mapWithDeckBudget(
     job.slides.map((slide, index) => ({
       ...slide,
       html: htmls[index],
@@ -391,6 +382,12 @@ async function run() {
     }),
   );
 
+  process.stderr.write(
+    `[public-hybrid] deck budget ${job.budgetMillis}ms: attempted=${budget.attempted} `
+      + `skippedByEstimate=${budget.skippedByEstimate} pastDeadline=${budget.skippedPastDeadline} `
+      + `medianSlideMs=${budget.observedMedianMillis ?? "n/a"} maxSlideMs=${budget.observedMaxMillis ?? "n/a"}
+`,
+  );
   const layers = outcomes.map((outcome) => outcome.layer).filter(Boolean);
   const report = modules.createPresentationExportQuality(
     "hybrid",
