@@ -10,14 +10,12 @@ import time
 from types import MethodType
 from typing import Any, Callable, Mapping
 
-from services.authored_batch_policy import (
-    OVERLOAD_COOLDOWN_BASE_SECONDS,
-    is_authored_provider_overload,
-)
+from services.authored_batch_policy import OVERLOAD_COOLDOWN_BASE_SECONDS
 from utils.provider_overload import (
     BoundedProviderCall,
     ProviderOutcomeError,
     ProviderQuotaPause,
+    is_provider_overload,
     usage_limit_reset_epoch,
 )
 from utils.provider_terminal_outcome import (
@@ -242,21 +240,27 @@ def supports_provider_idempotency(client: Any, *, provider_id: str) -> bool:
 
 
 def _authored_retry_reserver() -> Callable[[int], None] | None:
-    """Bridge the async checkpoint ledger into the blocking SDK thread."""
+    """Take this authored call's attempt reservations into a retry closure.
+
+    The reservations are consumed, not snapshotted.  They authorize one
+    physical replay of the call being built here, so leaving them in the
+    context would hand the same physical ordinal to whatever this task calls
+    next -- a different slide, a fallback request, or an unrelated structured
+    call -- and spend another slide's provider budget under its attempt token.
+    Consumption happens here, in the caller's own task, because the returned
+    closure runs on an SDK thread whose context is a different one.
+    """
 
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return None
     from services.authored_checkpoint_state import (
-        current_provider_attempt_reservations,
         reserve_provider_overload_retry,
+        take_provider_attempt_reservations,
     )
 
-    # Streaming authoring constructs a non-stream wrapper before selecting its
-    # actual stream wrapper. Snapshot rather than consume so only the wrapper
-    # that is invoked can spend the retry reservation.
-    reservations = current_provider_attempt_reservations()
+    reservations = take_provider_attempt_reservations()
     if not reservations:
         return None
 
@@ -300,13 +304,16 @@ def provider_generate_call(
     if outcome_scope not in {None, _AUTHORED_OUTCOME_SCOPE}:
         raise ValueError("provider outcome scope is unsupported")
     generate_kwargs = dict(kwargs)
+    # ``outcome_scope`` is the only authority for the authored guards.  A
+    # pending attempt reservation is not one: the streaming author path omits
+    # the scope deliberately (the guard reads a document's text and a stream
+    # returns an iterator), and every unrelated call a task makes while an
+    # authored attempt is open would otherwise inherit the authored outcome
+    # mapping, the quota pause and another slide's retry reservation.
+    authored_request = outcome_scope == _AUTHORED_OUTCOME_SCOPE
     selected_retry_reserver = retry_reserver
-    if selected_retry_reserver is None:
+    if selected_retry_reserver is None and authored_request:
         selected_retry_reserver = _authored_retry_reserver()
-    authored_request = (
-        outcome_scope == _AUTHORED_OUTCOME_SCOPE
-        or selected_retry_reserver is not None
-    )
     is_chatgpt = type(client).__module__.startswith(_LLMAI_CHATGPT_MODULE_PREFIX)
     can_clone_raw_client = callable(
         getattr(getattr(client, "_client", None), "with_options", None)
@@ -425,7 +432,7 @@ def provider_generate_call(
                     recovery_allowed=True,
                     overload=True,
                 ) from error
-            if is_authored_provider_overload(error):
+            if is_provider_overload(error):
                 raise ProviderOutcomeError(
                     "public_provider_overload",
                     recovery_allowed=True,
@@ -445,17 +452,26 @@ def provider_generate_call(
             )
         return response
 
+    idempotency_capable = authored_request and supports_provider_idempotency(
+        client, provider_id=provider_id
+    )
+    replay_unavailable: str | None = None
+    if authored_request and not idempotency_capable:
+        # The chatgpt/codex transport confirms no request-level idempotency, so
+        # replaying an overload could bill and publish a second document.  The
+        # call still runs once -- the rescue keeps its one bounded attempt --
+        # and the receipt names the reason instead of reading as a call that
+        # simply never needed a replay.
+        replay_unavailable = "transport_idempotency_unconfirmed"
+    elif authored_request and selected_retry_reserver is None:
+        replay_unavailable = "attempt_reservation_unavailable"
     return BoundedProviderCall(
         generate_once,
         abort_event,
         terminal,
-        idempotency_capable=(
-            authored_request
-            and supports_provider_idempotency(client, provider_id=provider_id)
-        ),
-        reserve_retry=(
-            selected_retry_reserver
-        ),
+        idempotency_capable=idempotency_capable,
+        replay_unavailable=replay_unavailable,
+        reserve_retry=selected_retry_reserver,
         clock=clock,
         sleep=sleep,
         deadline_seconds=(

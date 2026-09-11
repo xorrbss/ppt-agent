@@ -63,6 +63,46 @@ class ProviderQuotaPause(ProviderOutcomeError, WorkspaceOperationDeferred):
         RuntimeError.__init__(self, self.code)
 
 
+def provider_status_code(error: BaseException | None) -> int | None:
+    """Return the HTTP-like status a provider SDK exposes, or ``None``.
+
+    ``None`` means the transport said nothing structured about this failure --
+    only then may a caller fall back to reading the message.
+    """
+
+    for candidate in (error, getattr(error, "response", None)):
+        if candidate is None:
+            continue
+        value = getattr(candidate, "status_code", None)
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+    return None
+
+
+def is_provider_overload(error: BaseException | None) -> bool:
+    """Classify overload from structured signals first, from text only as a fallback.
+
+    A transport that reports a durable outcome or a status code has already
+    said what happened, so its message is not read as well: a rejection like
+    ``400 max_output_tokens must be <= 500`` otherwise matches the free-text
+    ``500`` pattern and buys an identical, certainly-failing replay.  The
+    scheduling predicate (``is_authored_provider_overload``) still owns which
+    statuses and which message shapes count, so this narrows the inputs it is
+    given and never widens them.
+    """
+
+    if error is None:
+        return False
+    if isinstance(error, ProviderOutcomeError):
+        return bool(error.overload)
+    if isinstance(error, TimeoutError):
+        return True
+    status_code = provider_status_code(error)
+    if status_code is not None:
+        return is_authored_provider_overload(status_code)
+    return is_authored_provider_overload(error)
+
+
 class BoundedProviderCall:
     """One provider call with a bounded, receipt-visible overload replay."""
 
@@ -85,6 +125,7 @@ class BoundedProviderCall:
         terminal: ProviderTerminalOutcomeRecorder | None = None,
         *,
         idempotency_capable: bool = False,
+        replay_unavailable: str | None = None,
         reserve_retry: Callable[[int], None] | None = None,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
@@ -105,7 +146,24 @@ class BoundedProviderCall:
             "cooldownWaitSeconds": 0.0,
             "deadlineExhausted": False,
             "quotaPauseResetAt": None,
+            # A transport whose idempotency nobody confirmed still gets its one
+            # bounded call; it just never gets a second.  Both facts are stated
+            # here so a run that never replayed is not read as a run that had
+            # nothing to replay.
+            "idempotencyCapable": bool(idempotency_capable),
+            "replayUnavailable": replay_unavailable,
         }
+
+    def _replay_declined_reason(self) -> str | None:
+        """Why this overload cannot be replayed, or ``None`` when it can be."""
+
+        if not self._idempotency_capable:
+            return "transport_idempotency_unconfirmed"
+        if self._reserve_retry is None:
+            return "attempt_reservation_unavailable"
+        if int(self._receipt["physicalCallCount"]) >= _MAX_OVERLOAD_PHYSICAL_CALLS:
+            return "physical_call_budget_exhausted"
+        return None
 
     def __call__(self) -> Any:
         deadline = (
@@ -131,13 +189,11 @@ class BoundedProviderCall:
                 self._receipt["quotaPauseResetAt"] = pause.reset_at
                 raise
             except Exception as error:
-                if (
-                    not is_authored_provider_overload(error)
-                    or not self._idempotency_capable
-                    or self._reserve_retry is None
-                    or int(self._receipt["physicalCallCount"])
-                    >= _MAX_OVERLOAD_PHYSICAL_CALLS
-                ):
+                if not is_provider_overload(error):
+                    raise
+                declined = self._replay_declined_reason()
+                if declined is not None:
+                    self._receipt["replayUnavailable"] = declined
                     raise
                 retry_ordinal = int(self._receipt["physicalCallCount"]) + 1
                 cooldown = min(
@@ -146,9 +202,9 @@ class BoundedProviderCall:
                 )
                 if deadline is not None and self._clock() + cooldown >= deadline:
                     self._receipt["deadlineExhausted"] = True
+                    self._receipt["replayUnavailable"] = "deadline_exhausted"
                     raise
-                if self._reserve_retry is not None:
-                    self._reserve_retry(retry_ordinal)
+                self._reserve_retry(retry_ordinal)
                 self._sleep(cooldown)
                 self._receipt["overloadRetryCount"] = (
                     int(self._receipt["overloadRetryCount"]) + 1
@@ -227,5 +283,7 @@ __all__ = [
     "BoundedProviderCall",
     "ProviderOutcomeError",
     "ProviderQuotaPause",
+    "is_provider_overload",
+    "provider_status_code",
     "usage_limit_reset_epoch",
 ]

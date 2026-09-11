@@ -55,12 +55,26 @@ def _publish(reservation: ProviderAttemptReservation) -> None:
 
 
 def take_provider_attempt_reservations() -> tuple[ProviderAttemptReservation, ...]:
+    """Hand the pending reservations to one caller and clear the context.
+
+    This is the only supported way to spend them.  A reservation authorizes a
+    single physical replay of the provider call that the reserving attempt is
+    about to make, so it must leave the context with that call: anything still
+    pending afterwards would let the next call in the same task -- another
+    slide, a fallback request, an unrelated structured call -- reserve a
+    physical ordinal against an attempt token that is not its own.  Callers run
+    this in the task that reserved, because the consuming context is the one
+    that published.
+    """
+
     pending = _PENDING.get()
     _PENDING.set(())
     return pending
 
 
 def current_provider_attempt_reservations() -> tuple[ProviderAttemptReservation, ...]:
+    """Inspect the pending reservations without spending them (tests, logging)."""
+
     return _PENDING.get()
 
 

@@ -22,8 +22,13 @@ from models.sql.workspace import (
 )
 from utils.llm_calls import author_deck as author_deck_mod
 from utils.llm_calls.author_slide import Brand
+from services import authored_provider_attempt_ledger as attempt_ledger
 from services.authored_author_stage_deferral import author_stage_failure
 from services.authored_batch_policy import is_authored_provider_overload
+from services.authored_provider_attempt_ledger import (
+    ProviderAttemptReservation,
+    current_provider_attempt_reservations,
+)
 from services.workspace_operation_handler_registry import (
     WorkspaceOperationClaim,
     WorkspaceOperationDeferred,
@@ -39,6 +44,7 @@ from utils.provider_idempotency import (
     ProviderQuotaPause,
     provider_generate_call,
 )
+from utils.provider_overload import is_provider_overload
 
 
 _VALID_HTML = (
@@ -289,6 +295,8 @@ def test_idempotent_overload_retry_reserves_and_stays_inside_deadline():
         "cooldownWaitSeconds": 30.0,
         "deadlineExhausted": False,
         "quotaPauseResetAt": None,
+        "idempotencyCapable": True,
+        "replayUnavailable": None,
     }
 
 
@@ -337,6 +345,161 @@ def test_unsupported_transport_never_replays_inside_one_admission():
 
     assert client._client.cloned_options["max_retries"] == 0
     assert call.receipt["physicalCallCount"] == 1
+
+
+class _StreamingChatGPTClient:
+    """The shape the streaming author path calls: ``generate`` yields events."""
+
+    def __init__(self, events):
+        self._client = _RawClient(events)
+        self.events = list(events)
+
+    def generate(self, **_kwargs):
+        return (event for event in self.events)
+
+
+_StreamingChatGPTClient.__module__ = "llmai.chatgpt.client"
+
+
+def _reservation(slide_index: int = 0) -> ProviderAttemptReservation:
+    return ProviderAttemptReservation(
+        job_id=uuid.uuid4(),
+        slide_index=slide_index,
+        attempt_token="attempt-a",
+        ordinal=1,
+        fencing_token=1,
+    )
+
+
+def test_a_pending_reservation_does_not_impose_the_authored_document_guard():
+    """A stream has no ``.content``: the empty-output guard must not read it.
+
+    The streaming author path omits ``outcome_scope`` on purpose.  When a
+    pending attempt reservation could turn the guard back on, every streamed
+    slide died as ``public_provider_empty_output`` before its first event.
+    """
+
+    events = [SimpleNamespace(type="response.output_text.delta")]
+    client = _StreamingChatGPTClient(events)
+
+    async def scenario():
+        attempt_ledger._PENDING.set((_reservation(),))
+        call = provider_generate_call(
+            client,
+            provider_id="codex",
+            kwargs={"stream": True},
+            idempotency_key=None,
+        )
+        return list(call())
+
+    assert asyncio.run(scenario()) == events
+
+
+def test_a_generic_call_is_untouched_by_a_pending_authored_reservation():
+    """An unrelated structured call keeps its own error and the author's budget."""
+
+    class Unavailable(RuntimeError):
+        status_code = 503
+
+    client = _PlainClient(error=Unavailable("private"))
+
+    async def scenario():
+        attempt_ledger._PENDING.set((_reservation(),))
+        call = provider_generate_call(
+            client,
+            provider_id="anthropic",
+            kwargs={},
+            idempotency_key=None,
+        )
+        with pytest.raises(Unavailable):
+            call()
+        return dict(call.receipt), current_provider_attempt_reservations()
+
+    receipt, still_pending = asyncio.run(scenario())
+
+    # No authored outcome mapping, no authored retry pinning, and the slide's
+    # reservation was never spent by a call that does not belong to it.
+    assert receipt["physicalCallCount"] == 1
+    assert receipt["idempotencyCapable"] is False
+    assert client._client.cloned_options == {"timeout": PROVIDER_CALL_TIMEOUT_SECONDS}
+    assert len(still_pending) == 1
+
+
+def test_an_authored_call_consumes_its_reservation_exactly_once():
+    """The second call in the same task must not inherit the first's replay."""
+
+    async def scenario():
+        attempt_ledger._PENDING.set((_reservation(),))
+        first = provider_generate_call(
+            _OpenAIClient(["ok"]),
+            provider_id="openai",
+            kwargs={},
+            idempotency_key="stable-key",
+            outcome_scope="authored",
+        )
+        after_first = current_provider_attempt_reservations()
+        second = provider_generate_call(
+            _OpenAIClient(["ok"]),
+            provider_id="openai",
+            kwargs={},
+            idempotency_key="stable-key",
+            outcome_scope="authored",
+        )
+        return after_first, dict(first.receipt), dict(second.receipt)
+
+    after_first, first_receipt, second_receipt = asyncio.run(scenario())
+
+    assert after_first == ()
+    assert first_receipt["replayUnavailable"] is None
+    assert second_receipt["idempotencyCapable"] is True
+    assert second_receipt["replayUnavailable"] == "attempt_reservation_unavailable"
+
+
+def test_codex_transport_records_that_no_replay_was_available():
+    """An unconfirmed transport still gets its one call, and says why only one."""
+
+    class Unavailable(RuntimeError):
+        status_code = 503
+
+    client = _ChatGPTClient([], error=Unavailable("private"))
+    call = _call(client)
+
+    with pytest.raises(ProviderOutcomeError, match="public_provider_overload"):
+        call()
+
+    assert call.receipt["physicalCallCount"] == 1
+    assert call.receipt["idempotencyCapable"] is False
+    assert call.receipt["replayUnavailable"] == "transport_idempotency_unconfirmed"
+
+
+def test_a_status_coded_rejection_is_not_overload_for_a_number_in_its_message():
+    """``400 ... must be <= 500`` must not buy an identical, certain failure."""
+
+    class InvalidRequest(RuntimeError):
+        status_code = 400
+
+    client = _ChatGPTClient(
+        [], error=InvalidRequest("max_output_tokens must be <= 500")
+    )
+
+    with pytest.raises(ProviderOutcomeError) as raised:
+        _call(client)()
+
+    assert raised.value.code == "public_provider_bridge_exception"
+    assert raised.value.recovery_allowed is False
+    assert is_provider_overload(raised.value) is False
+
+
+def test_a_message_only_overload_still_classifies_from_its_text():
+    """Transports that expose no status keep the free-text fallback."""
+
+    client = _ChatGPTClient([], error=RuntimeError("Rate limit reached for gpt-5.2"))
+
+    with pytest.raises(ProviderOutcomeError) as raised:
+        _call(client)()
+
+    assert raised.value.code == "public_provider_overload"
+    assert is_provider_overload(raised.value) is True
 
 
 def test_run22_usage_limit_shape_is_a_durable_deck_pause():
