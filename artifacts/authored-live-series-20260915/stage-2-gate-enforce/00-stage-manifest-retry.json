@@ -1,0 +1,19 @@
+{
+  "stage": "gate-enforce-retry",
+  "runs": [
+    "run-31",
+    "run-32",
+    "run-33",
+    "run-34",
+    "run-35"
+  ],
+  "knobs": {
+    "AUTHORED_ADMISSION_GATE_MODE": "enforce",
+    "others": "defaults"
+  },
+  "code": "02af972a8",
+  "previous_attempt": "runs 29-30 stopped; root cause artifacts/authored-live-series-20260915/stage-2-gate-enforce/run-29-analysis.md",
+  "worker_log": "app_data/logs/worker-generation-20260912-060758.stderr.log",
+  "stack_restarted": "06:08:03 KST",
+  "started_at": "2026-09-12T06:10:12"
+}
