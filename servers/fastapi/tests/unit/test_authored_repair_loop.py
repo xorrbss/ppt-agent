@@ -7,6 +7,7 @@ Everything here is offline: no provider call, no browser, no database.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from functools import wraps
 from types import SimpleNamespace
 
@@ -34,6 +35,7 @@ from services.authored_structural_repair import (
     _digest,
     _json_digest,
 )
+from services.authored_rollout_profile import RolloutProfile, current_rollout_profile
 from utils.get_env_programme import (
     get_authored_verbatim_repair_loop_model_calls,
     is_authored_verbatim_single_repair_loop_enabled,
@@ -222,6 +224,62 @@ async def test_a_failing_candidate_does_not_end_the_deck():
     assert result.final_status == "unresolved"
 
 
+# --- B6: the loop's own baseline capture and binding steps must not end the deck
+
+
+@sync_async
+async def test_a_failing_baseline_evaluation_does_not_end_the_deck():
+    """An exception raised evaluating the slide's own frozen input (before
+    any candidate exists) is a coded loop outcome for that slide, not an
+    exception that ends the deck: the frozen admission stays and the
+    terminal policy decides, exactly like a failing candidate already does."""
+
+    async def evaluate(index, html, metrics):
+        raise RuntimeError("evaluator unavailable")
+
+    recorder = Recorder()
+    [result] = await run_repair_loop(
+        [slide()], deps=deps_for(recorder, evaluators={0: evaluate})
+    )
+    assert result.html == ORIGINAL
+    assert result.png == b"png-original"
+    assert result.final_status == "unresolved"
+    assert result.cycle_history[-1]["stop_reason"] == "baseline_evaluation_failed"
+    assert result.cycle_history[-1]["error_type"] == "RuntimeError"
+    # The loop never got past the baseline: no candidate work was attempted.
+    assert recorder.captured == []
+    assert recorder.proposed == []
+
+
+@sync_async
+async def test_a_failing_candidate_binding_does_not_end_the_deck():
+    """`bind_repair_candidate` raising (an internal evidence mismatch, or an
+    empty PNG) is a coded loop outcome for that slide too -- the frozen
+    admission is what publishes, never a deck-ending exception."""
+
+    async def evaluate(index, html, metrics):
+        assessment = assessment_for(html, metrics, "admitted")
+        # Tamper with the bound evidence so bind_repair_candidate's own
+        # consistency check is the thing that fails, not the evaluator.
+        evidence = dict(assessment.evidence)
+        evidence["html_digest"] = "sha256:not-this-html"
+        return replace(assessment, evidence=evidence)
+
+    recorder = Recorder()
+    [result] = await run_repair_loop(
+        [slide()], deps=deps_for(recorder, evaluators={0: evaluate})
+    )
+    assert result.html == ORIGINAL
+    assert result.png == b"png-original"
+    assert result.final_status == "unresolved"
+    assert result.cycle_history[-1]["stop_reason"] == "repair_candidate_binding_failed"
+    assert result.cycle_history[-1]["error_type"] == "ValueError"
+    # The assessment admitted on tampered evidence; the result must not
+    # carry that admission forward.
+    assert recorder.captured == []
+    assert recorder.proposed == []
+
+
 def test_loop_slides_carry_the_callers_order_and_frozen_inputs():
     slides = loop_slides(
         flagged=[3, 1],
@@ -248,7 +306,9 @@ def test_the_knob_is_off_by_default_and_owns_the_verbatim_path_only(monkeypatch)
     assert single_repair_loop_enabled(source_reflow=True) is False
     import services.authored_repair_loop as loop
 
-    monkeypatch.setattr(loop, "is_authored_verbatim_single_repair_loop_enabled", lambda: True)
+    monkeypatch.setattr(
+        loop, "current_rollout_profile", lambda: RolloutProfile(single_repair_loop=True)
+    )
     assert single_repair_loop_enabled(source_reflow=True) is True
     assert single_repair_loop_enabled(source_reflow=False) is False
 
@@ -324,7 +384,7 @@ def test_the_repair_prompt_carries_the_placeholder_contract(monkeypatch):
         session_module, "current_session", lambda: SimpleNamespace(contexts=(context,))
     )
     monkeypatch.setattr(
-        prompt, "is_authored_verbatim_placeholder_authoring_enabled", lambda: True
+        prompt, "current_rollout_profile", lambda: RolloutProfile(placeholder_authoring=True)
     )
     assert "MAY NOT write" in repair_correction_hint(("overflow",), role="BODY", index=0)
     built = author_prompt(
@@ -365,10 +425,12 @@ def test_the_repair_brief_agrees_with_the_authoring_contract(monkeypatch, placeh
         session_module, "current_session", lambda: SimpleNamespace(contexts=(context,))
     )
     monkeypatch.setattr(
-        prompt, "is_authored_verbatim_placeholder_authoring_enabled", lambda: placeholder_on
+        prompt,
+        "current_rollout_profile",
+        lambda: RolloutProfile(placeholder_authoring=placeholder_on),
     )
     monkeypatch.setattr(
-        loop_module, "is_authored_verbatim_single_repair_loop_enabled", lambda: loop_on
+        loop_module, "current_rollout_profile", lambda: RolloutProfile(single_repair_loop=loop_on)
     )
 
     assert single_repair_loop_enabled(source_reflow=True) is loop_on
@@ -413,14 +475,14 @@ def token_context():
         operation_id="op1",
         slide_index=0,
         source_unit_id="u1",
-        policy_revision="test/v1",
+        policy_revision=current_rollout_profile().policy_revision,
         fenced_revision=1,
         attempt_token="attempt-1",
         reference_mode="source_content_restyle",
         source_reflow=True,
         terminal_fallback_eligible=False,
         bindings=(("b1", "원문 제목"),),
-        state="token",
+        html_repr="token",
     )
 
 
@@ -429,13 +491,9 @@ def test_a_candidate_that_retypes_source_text_is_rejected_by_the_gate(monkeypatc
 
     from services.source_content.placeholder import text_step
 
-    monkeypatch.setattr(gate, "get_authored_html_normalization", lambda: "legacy")
-    monkeypatch.setattr(
-        gate, "is_authored_verbatim_placeholder_authoring_enabled", lambda: True
-    )
-    monkeypatch.setattr(
-        text_step, "is_authored_verbatim_placeholder_authoring_enabled", lambda: True
-    )
+    placeholder = RolloutProfile(placeholder_authoring=True)
+    monkeypatch.setattr(gate, "current_rollout_profile", lambda: placeholder)
+    monkeypatch.setattr(text_step, "current_rollout_profile", lambda: placeholder)
     retyped = gate.admit_slide_html(token_context(), ORIGINAL)
     assert retyped.verdict == "rejected"
     assert retyped.code == "source_placeholder_missing"
@@ -468,20 +526,45 @@ async def test_the_vision_review_is_an_evidence_source_and_writes_no_html(monkey
         await vqa.review_slides_for_evidence([b"a"], slide_indices=[1, 2])
 
 
-def test_evidence_only_review_records_unresolved_slides_as_residual():
+# --- B9: evidence-only VQA receipts attribute outcomes to the right stage --
+
+
+def test_evidence_only_review_reports_only_what_it_reviewed():
+    """The review writes no HTML and decides no slide's fate: its own
+    `succeeded`/`status` must not depend on whether a slide was later fixed
+    -- that conflation was the over-report (a slide the *loop* admitted read
+    back as a vision-review success)."""
     payload = visual_review_evidence_only(
         reviewed_indices=[0, 1, 2],
-        unresolved_indices=[1],
         model_reviewed=3,
     )
-    assert payload["status"] == "failed"
-    assert payload["residualSlideIndices"] == [1]
+    assert payload["status"] == "passed"
+    assert payload["residualSlideIndices"] == []
     assert payload["modelReviewedSlideCount"] == 3
-    assert payload["fixedSlideCount"] == 0
     assert payload["reviewedSlideCount"] == 3
-    assert visual_review_evidence_only(
-        reviewed_indices=[], unresolved_indices=[], model_reviewed=0
-    )["fullDeck"] is False
+    assert payload["visionReview"] == {"slidesReviewed": 3}
+    assert payload["repairLoop"] == {"modelCalls": 0, "admitted": []}
+    assert visual_review_evidence_only(reviewed_indices=[], model_reviewed=0)["fullDeck"] is False
+
+
+def test_evidence_only_review_attributes_admitted_candidates_to_the_loop():
+    """Fixture: the loop admits a candidate on slide 5, the review reviewed
+    3 flagged slides (2, 5, 9). The loop's admission must land under
+    `repairLoop`, never under `visionReview` or the per-slide review detail."""
+    payload = visual_review_evidence_only(
+        reviewed_indices=[2, 5, 9],
+        model_reviewed=2,
+        repair_loop_model_calls=4,
+        repair_loop_admitted_indices=[5],
+    )
+    assert payload["visionReview"] == {"slidesReviewed": 3}
+    assert payload["repairLoop"] == {"modelCalls": 4, "admitted": [5]}
+    assert payload["reviewedSlideCount"] == 3
+    assert payload["modelReviewedSlideCount"] == 2
+    # The loop's admission does not leak into the review's own outcome: the
+    # review status/residual stay a function of the review alone.
+    assert payload["status"] == "passed"
+    assert payload["residualSlideIndices"] == []
 
 
 def test_evidence_is_bounded_and_deduplicated():

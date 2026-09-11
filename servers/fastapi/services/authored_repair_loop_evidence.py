@@ -167,30 +167,35 @@ async def vision_evidence_for_flagged(
 def visual_review_evidence_only(
     *,
     reviewed_indices: Sequence[int],
-    unresolved_indices: Sequence[int],
     model_reviewed: int,
+    repair_loop_model_calls: int = 0,
+    repair_loop_admitted_indices: Sequence[int] = (),
 ) -> dict[str, object]:
     """Receipt evidence for a vision review that produced no HTML.
 
-    The review still ran and still found what it found; the repair loop, not
-    the reviewer, decided what happened to the slide. A slide the loop left
-    unresolved is recorded as residual exactly as a rejected VQA fix was.
+    The review reports only what it reviewed (B9): it writes no HTML and
+    decides no slide's fate, so a detail's own ``succeeded`` means "this
+    slide's evidence pass completed", never "the slide was fixed" -- there is
+    nothing here for the review to have fixed. Whatever the repair loop
+    admitted is attributed to the loop alone, under ``repairLoop``, never
+    folded into the review's own accounting; that conflation was the
+    over-report this removes (evidence-only VQA receipts previously reported
+    a slide the *loop* fixed as a vision-review success).
     """
 
     from services.authored_visual_review_evidence import visual_review_outcome
 
-    unresolved = {int(index) for index in unresolved_indices}
     details = [
         {
             "slide_index": int(index),
             "path": "evidence_only",
             "attempted": True,
-            "succeeded": int(index) not in unresolved,
+            "succeeded": True,
             "critique_source": "vision_review",
         }
         for index in reviewed_indices
     ]
-    return visual_review_outcome(
+    outcome = visual_review_outcome(
         # Slides that entered the review stage, not the deck: with the loop on
         # only the flagged slides are reviewed, and claiming the whole deck was
         # is exactly the over-report this programme is removing.
@@ -200,6 +205,12 @@ def visual_review_evidence_only(
         repair_details=details,
         review_stats={"vqaReviewedSlideCount": int(model_reviewed)},
     )
+    outcome["repairLoop"] = {
+        "modelCalls": int(repair_loop_model_calls),
+        "admitted": sorted({int(index) for index in repair_loop_admitted_indices}),
+    }
+    outcome["visionReview"] = {"slidesReviewed": len(details)}
+    return outcome
 
 
 def evidence_for_slide(

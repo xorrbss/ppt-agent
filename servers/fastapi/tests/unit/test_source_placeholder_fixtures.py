@@ -19,7 +19,13 @@ PUBLISHED = [(run, index) for run in ("run-16", "run-20", "run-21") for index in
 
 
 @pytest.mark.parametrize("run,index", PUBLISHED)
-def test_published_stamping_structure_and_canonical_readback_parity(run, index):
+def test_published_stamping_structure_and_canonical_readback_parity(run, index, monkeypatch):
+    # This test's own assertion (`serialize_authored_html(parsed) == result.html`)
+    # is a tree-mode-only invariant: `result.html` must already be the
+    # canonical HTML5 serialization. Pin tree mode explicitly rather than
+    # relying on whatever AUTHORED_HTML_NORMALIZATION defaults to (B5/R8:
+    # `legacy` mode now splices onto the raw string instead).
+    monkeypatch.setenv("AUTHORED_HTML_NORMALIZATION", "tree")
     directory = FIXTURES / run / f"{index:02d}"
     html = (directory / "html-render.txt").read_text(encoding="utf-8")
     table = table_from_manifest(json.loads((directory / "manifest.json").read_text(encoding="utf-8")))

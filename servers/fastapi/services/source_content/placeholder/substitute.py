@@ -10,11 +10,13 @@ from xml.etree.ElementTree import Element
 from services.source_content.placeholder.block_table import SourceBlock
 from services.source_content.placeholder.stamping import stamp_owner
 from services.source_content.placeholder.static_checks import check_coverage
+from services.source_content.placeholder.substitute_legacy import expand_placeholders_legacy
 from services.source_content.placeholder.tokens import TOKEN, reject
 from services.source_content.placeholder.tree_slots import TextSlot, original_text_slots
 from services.source_content.source_runs import source_run_binding_id
 from utils.authored_html_tree.parser_adapter import parse_authored_html
 from utils.authored_html_tree.serializer import serialize_authored_html
+from utils.get_env_programme import get_authored_html_normalization
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,7 +132,17 @@ def _owners(root: Element, table: Sequence[SourceBlock], placements: list[_Place
 
 
 def expand_placeholders(html: str, block_table: Sequence[SourceBlock], *, context) -> ExpandedHtml:
-    """Expand only original visible text nodes; final policy/readback remain T2's."""
+    """Expand only original visible text nodes; final policy/readback remain T2's.
+
+    Structural validation (which tokens exist, in which order, covering which
+    blocks) always runs on the parsed tree. The *serialization* the caller
+    receives back must match the active ``AUTHORED_HTML_NORMALIZATION`` mode
+    (B5/R8): ``tree`` mode adopts the canonical HTML5 serializer, exactly as
+    admission does elsewhere for that mode; ``legacy`` mode instead splices
+    the same substitutions directly into ``html``'s own bytes, so a call with
+    nothing to expand -- and every byte outside a token or a stamped owner
+    attribute -- stays byte-identical to the input.
+    """
     profile = getattr(context, "normalization_profile", "document")
     parsed = parse_authored_html(html, profile=profile)
     slots = original_text_slots(parsed.root)
@@ -143,11 +155,19 @@ def expand_placeholders(html: str, block_table: Sequence[SourceBlock], *, contex
         parent_text = "".join(slot.parent.itertext())
         ids = {match[1] for match in TOKEN.finditer(parent_text)}
         direct.append(len(slot.tokens) == 1 and len(ids) == 1 and not TOKEN.sub("", parent_text).strip())
-    placements = []
-    for slot, use_parent in zip(slots, direct, strict=True):
-        placements.extend(_insert(slot, blocks, use_parent))
-    owners = _owners(parsed.root, block_table, placements)
-    expanded = serialize_authored_html(parsed)
+
+    if get_authored_html_normalization() == "legacy":
+        token_direct = tuple(
+            is_direct for slot, is_direct in zip(slots, direct, strict=True) for _ in slot.tokens
+        )
+        expanded, owners = expand_placeholders_legacy(html, tokens, token_direct, blocks, block_table)
+    else:
+        placements = []
+        for slot, use_parent in zip(slots, direct, strict=True):
+            placements.extend(_insert(slot, blocks, use_parent))
+        owners = _owners(parsed.root, block_table, placements)
+        expanded = serialize_authored_html(parsed)
+
     return ExpandedHtml(expanded, deviations, {
         "rule": "source_placeholder_expanded", "blocks": len(block_table),
         "tokens": len(tokens), "owners": owners, "deviations": len(deviations),

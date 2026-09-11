@@ -10,6 +10,7 @@ from services.source_content.placeholder import prompt, text_step
 from services.source_content.placeholder.block_table import (
     build_block_table, encode_block_table, placeholder_prompt_contract, table_from_manifest,
 )
+from services.authored_rollout_profile import RolloutProfile
 from utils.get_env_programme import is_authored_verbatim_placeholder_authoring_enabled
 from utils.runtime_settings import RuntimeSettings
 
@@ -79,7 +80,7 @@ def test_placeholder_prompt_boundary_recodes_a_duplicate_rejection(monkeypatch):
     monkeypatch.setattr(
         session_module, "current_session", lambda: SimpleNamespace(contexts=(context,))
     )
-    monkeypatch.setattr(prompt, "is_authored_verbatim_placeholder_authoring_enabled", lambda: True)
+    monkeypatch.setattr(prompt, "current_rollout_profile", lambda: RolloutProfile(placeholder_authoring=True))
 
     with pytest.raises(AuthoredPlaceholderPromptRejected) as excinfo:
         placeholder_prompt_for_slide(0)
@@ -114,7 +115,7 @@ def test_placeholder_prompt_boundary_recodes_the_size_bound(monkeypatch):
     monkeypatch.setattr(
         session_module, "current_session", lambda: SimpleNamespace(contexts=(context,))
     )
-    monkeypatch.setattr(prompt, "is_authored_verbatim_placeholder_authoring_enabled", lambda: True)
+    monkeypatch.setattr(prompt, "current_rollout_profile", lambda: RolloutProfile(placeholder_authoring=True))
 
     with pytest.raises(AuthoredPlaceholderPromptRejected) as excinfo:
         placeholder_prompt_for_slide(0)
@@ -130,11 +131,11 @@ def test_prompt_switch_uses_pinned_slide_context(monkeypatch):
 
     context = SimpleNamespace(source_reflow=True, reference_mode="source_content_restyle", bindings=(("a", "안녕"),))
     monkeypatch.setattr(session_module, "current_session", lambda: SimpleNamespace(contexts=(context,)))
-    monkeypatch.setattr(prompt, "is_authored_verbatim_placeholder_authoring_enabled", lambda: False)
+    monkeypatch.setattr(prompt, "current_rollout_profile", lambda: RolloutProfile())
     brand = SimpleNamespace(wordmark="", topic="topic")
     old = author_prompt("body", "design", brand, "BODY", 0, 2)
     assert "VERBATIM SOURCE PLACEHOLDERS" not in old
-    monkeypatch.setattr(prompt, "is_authored_verbatim_placeholder_authoring_enabled", lambda: True)
+    monkeypatch.setattr(prompt, "current_rollout_profile", lambda: RolloutProfile(placeholder_authoring=True))
     new = author_prompt("body", "design", brand, "BODY", 0, 2)
     assert placeholder_prompt_contract(build_block_table(context.bindings)) in new
     assert 'render exactly "01" once' in new
@@ -147,9 +148,9 @@ def test_text_step_switch_and_nonrecursive_expanded_lifecycle(monkeypatch):
         presentation_id="p", operation_id="o", slide_index=0, source_unit_id="u",
         manifest_digest="m", projection_digest="p", policy_revision="r", fenced_revision=1,
         attempt_token="t", reference_mode="source_content_restyle", source_reflow=True,
-        terminal_fallback_eligible=False, bindings=(("a", "{{q:source-data}}"),), state="token",
+        terminal_fallback_eligible=False, bindings=(("a", "{{q:source-data}}"),), html_repr="token",
     )
-    monkeypatch.setattr(text_step, "is_authored_verbatim_placeholder_authoring_enabled", lambda: True)
+    monkeypatch.setattr(text_step, "current_rollout_profile", lambda: RolloutProfile(placeholder_authoring=True))
     result = text_step.select_text_step(context, "<p>{{q:a}}</p>")
     assert "{{q:source-data}}" in result.html
     assert result.normalizations[0]["rule"] == "source_placeholder_expanded"
@@ -157,6 +158,57 @@ def test_text_step_switch_and_nonrecursive_expanded_lifecycle(monkeypatch):
     assert text_step.select_text_step(context.for_state("captured"), result.html).html == result.html
     with pytest.raises(ValueError, match="source_placeholder_context"):
         text_step.check_placeholder_context(context, "<p hidden>{{q:a}}</p>")
-    monkeypatch.setattr(text_step, "is_authored_verbatim_placeholder_authoring_enabled", lambda: False)
+    monkeypatch.setattr(text_step, "current_rollout_profile", lambda: RolloutProfile())
     legacy = text_step.select_text_step(context, "<p>{{q:source-data}}</p>")
     assert 'data-source-block-id="a"' in legacy.html
+
+
+# --- B5/R8: normalization mode and the placeholder switch are independent --
+
+
+@pytest.mark.parametrize("normalization", ["legacy", "tree"])
+def test_text_step_placeholder_off_ignores_normalization_mode(monkeypatch, normalization):
+    """Placeholder off always binds through the byte-preserving legacy string
+    primitive; ``AUTHORED_HTML_NORMALIZATION`` must not change that path."""
+    from services.authored_admission_context import AdmissionContext
+
+    monkeypatch.setenv("AUTHORED_HTML_NORMALIZATION", normalization)
+    monkeypatch.setattr(text_step, "current_rollout_profile", lambda: RolloutProfile())
+    context = AdmissionContext(
+        presentation_id="p", operation_id="o", slide_index=0, source_unit_id="u",
+        manifest_digest="m", projection_digest="p", policy_revision="r", fenced_revision=1,
+        attempt_token="t", reference_mode="source_content_restyle", source_reflow=True,
+        terminal_fallback_eligible=False, bindings=(("a", "가나다"),), html_repr="expanded",
+    )
+    result = text_step.select_text_step(context, "<div>  <p>가나다</p>  <!-- x --></div>")
+    assert result.html.startswith("<div>  <p")
+    assert result.html.endswith("</p>  <!-- x --></div>")
+    assert 'data-source-block-id="a"' in result.html
+
+
+@pytest.mark.parametrize("normalization", ["legacy", "tree"])
+def test_text_step_placeholder_on_matches_active_normalization_mode(monkeypatch, normalization):
+    """Placeholder on must serialize per the active normalization mode: the
+    two switches are independent (R8), so legacy still leaves non-token
+    bytes untouched even with the placeholder path engaged."""
+    from services.authored_admission_context import AdmissionContext
+    from utils.authored_html_tree.parser_adapter import parse_authored_html
+    from utils.authored_html_tree.serializer import serialize_authored_html
+
+    monkeypatch.setenv("AUTHORED_HTML_NORMALIZATION", normalization)
+    monkeypatch.setattr(text_step, "current_rollout_profile", lambda: RolloutProfile(placeholder_authoring=True))
+    context = AdmissionContext(
+        presentation_id="p", operation_id="o", slide_index=0, source_unit_id="u",
+        manifest_digest="m", projection_digest="p", policy_revision="r", fenced_revision=1,
+        attempt_token="t", reference_mode="source_content_restyle", source_reflow=True,
+        terminal_fallback_eligible=False, bindings=(("a", "가나다"),), html_repr="token",
+    )
+    html = "<div class='x'>  <p>{{q:a}}</p>  <!-- keep --></div>"
+    result = text_step.select_text_step(context, html)
+    assert "가나다" in result.html
+    if normalization == "legacy":
+        assert result.html.startswith("<div class='x'>  <p")
+        assert result.html.endswith("</p>  <!-- keep --></div>")
+    else:
+        parsed = parse_authored_html(result.html, profile="document")
+        assert serialize_authored_html(parsed) == result.html

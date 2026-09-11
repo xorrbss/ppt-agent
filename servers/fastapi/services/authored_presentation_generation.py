@@ -2417,13 +2417,21 @@ async def _generate_authored_presentation(
     # governs it like any other authored deck.
     if single_loop and getattr(request, "vision_qa", False):
         # Rev-3 2.5: the review already ran, as evidence for the loop's prompt.
+        # B9: what the loop admitted is attributed to the loop, from its own
+        # results -- never inferred from what the review happened to see.
         visual_review_evidence = visual_review_evidence_only(
             reviewed_indices=sorted(vqa_evidence),
-            unresolved_indices=[
-                int(entry["index"]) for entry in predeclared_terminal
-                if isinstance(entry.get("index"), int)
-            ],
             model_reviewed=sum(1 for value in vqa_evidence.values() if value is not None),
+            repair_loop_model_calls=sum(
+                int(entry.get("proposal_calls") or 0)
+                for result in structural_results
+                for entry in result.cycle_history
+            ),
+            repair_loop_admitted_indices=[
+                result.slide_index
+                for result in structural_results
+                if result.final_status == "admitted"
+            ],
         )
     if getattr(request, "vision_qa", False) and not single_loop:
         pre_vqa_htmls = tuple(htmls)

@@ -37,10 +37,7 @@ from typing import Any, Awaitable, Callable
 from services.authored_repair_loop_deterministic import deterministic_candidate, digest
 from services.authored_repair_loop_evidence import merge_evidence, reason_evidence
 from services.authored_structural_repair import SlideRepairResult, bind_repair_candidate
-from utils.get_env_programme import (
-    get_authored_verbatim_repair_loop_model_calls,
-    is_authored_verbatim_single_repair_loop_enabled,
-)
+from services.authored_rollout_profile import current_rollout_profile
 from utils.llm_calls.author_structural_repair_evidence import _advance_repair_evaluator
 
 LOGGER = logging.getLogger(__name__)
@@ -53,11 +50,11 @@ REPAIR_LOOP_PATH = "single_repair_loop"
 def single_repair_loop_enabled(*, source_reflow: bool) -> bool:
     """The loop owns the verbatim path only; ordinary decks are untouched."""
 
-    return bool(source_reflow) and is_authored_verbatim_single_repair_loop_enabled()
+    return bool(source_reflow) and current_rollout_profile().single_repair_loop
 
 
 def repair_loop_model_calls() -> int:
-    return get_authored_verbatim_repair_loop_model_calls()
+    return current_rollout_profile().repair_loop_model_calls
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,13 +174,57 @@ async def _model_cycle(
         selection.history.append(receipt)
 
 
+def _unresolved_result(
+    slide: RepairLoopSlide, *, baseline_digest: str, history: list[dict[str, Any]]
+) -> SlideRepairResult:
+    """The frozen previous admission, wrapped as a coded (never raised) outcome.
+
+    Used when the loop's own baseline capture or candidate-binding step fails:
+    those are not a candidate rejection (already handled inside `_model_cycle`
+    without ending the deck), but they must not end the deck either. The
+    terminal policy decides flag-only publication or a coded failure from
+    here, exactly as it does for any other unresolved slide.
+    """
+    return SlideRepairResult(
+        local_index=slide.local_index,
+        slide_index=slide.slide_index,
+        baseline_html_digest=baseline_digest,
+        html=slide.html,
+        png=slide.png,
+        metrics=dict(slide.metrics or {}),
+        assessment=None,
+        changed=False,
+        cycle_history=history,
+    )
+
+
 async def _repair_slide(slide: RepairLoopSlide, *, deps: RepairLoopDeps) -> SlideRepairResult:
     index = slide.slide_index
     evaluator = deps.evaluators[index]
     metrics = dict(slide.metrics or {})
-    assessment = await evaluator(index, slide.html, metrics)
+    initial_digest = digest(slide.html)
+    started = time.monotonic()
+    try:
+        assessment = await evaluator(index, slide.html, metrics)
+    except Exception as error:
+        LOGGER.warning(
+            "[authored-repair-loop] slide %d baseline evaluation failed (%s)",
+            index + 1,
+            type(error).__name__,
+        )
+        return _unresolved_result(
+            slide,
+            baseline_digest=initial_digest,
+            history=[{
+                "cycle": 0,
+                "path": REPAIR_LOOP_PATH,
+                "stop_reason": "baseline_evaluation_failed",
+                "error_type": type(error).__name__,
+                "elapsed_ms": round((time.monotonic() - started) * 1000, 3),
+            }],
+        )
     baseline_digest = str(
-        assessment.evidence.get("baseline_html_digest") or digest(slide.html)
+        assessment.evidence.get("baseline_html_digest") or initial_digest
     )
     selection = _Selection(slide.html, slide.png, metrics, assessment)
     seen = {digest(slide.html)}
@@ -225,9 +266,25 @@ async def _repair_slide(slide: RepairLoopSlide, *, deps: RepairLoopDeps) -> Slid
             slide, selection, cycle=cycle, deps=deps, evaluator=evaluator, seen=seen
         ):
             break
-    bound = bind_repair_candidate(
-        selection.assessment, selection.html, selection.png, selection.metrics
-    )
+    try:
+        bound = bind_repair_candidate(
+            selection.assessment, selection.html, selection.png, selection.metrics
+        )
+    except Exception as error:
+        LOGGER.warning(
+            "[authored-repair-loop] slide %d candidate binding failed (%s)",
+            index + 1,
+            type(error).__name__,
+        )
+        selection.history.append({
+            "cycle": len(selection.history),
+            "path": REPAIR_LOOP_PATH,
+            "stop_reason": "repair_candidate_binding_failed",
+            "error_type": type(error).__name__,
+        })
+        return _unresolved_result(
+            slide, baseline_digest=baseline_digest, history=selection.history
+        )
     return SlideRepairResult(
         local_index=slide.local_index,
         slide_index=index,

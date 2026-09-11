@@ -102,7 +102,13 @@ def test_nonrecursive_data_insertion_and_escaping():
     ('<p>{{q:a@0-2}}<strong>{{q:a@2-4}}</strong></p>', "가나다라"),
     ('<p data-role="body">{{q:a}}</p>', "① 질문 | 답변"),
 ])
-def test_stamping_parity(html, text):
+def test_stamping_parity(html, text, monkeypatch):
+    # The comparison below round-trips through the canonical serializer twice
+    # (once to drop the owner's binding id, once to re-derive it via the
+    # legacy string primitive) and expects a stable attribute order across
+    # both passes -- a canonical-serializer property, not something legacy
+    # mode's byte-preserving splice promises. Pin tree mode explicitly (B5).
+    monkeypatch.setenv("AUTHORED_HTML_NORMALIZATION", "tree")
     result = expand(html, {"a": text})
     root = parse_authored_html(result.html, profile="fragment").root
     owner = next(node for node in root.iter() if node.get("data-source-block-id"))
@@ -160,3 +166,54 @@ def test_bounded_error_receipt():
         check_coverage([], table)
     assert len(caught.value.block_ids) == 32
     assert len(caught.value.detail) <= 240
+
+
+# --- B5/R8: the normalization switch and the placeholder switch are independent
+
+
+def test_legacy_mode_noop_expansion_is_byte_identical(monkeypatch):
+    monkeypatch.setenv("AUTHORED_HTML_NORMALIZATION", "legacy")
+    html = "<div class='x'>  <p>no tokens here</p>  <!-- x --></div>"
+    result = expand_placeholders(html, build_block_table({}), context=CONTEXT)
+    assert result.html == html
+
+
+def test_legacy_mode_preserves_non_token_bytes(monkeypatch):
+    monkeypatch.setenv("AUTHORED_HTML_NORMALIZATION", "legacy")
+    html = "<div class='x'>  <p>{{q:a}}</p>  <!-- keep --></div>"
+    result = expand(html, {"a": "가나다"})
+    # Everything outside the stamped <p ...> tag and the substituted token
+    # text is exactly the input, byte for byte: single-quoted attribute,
+    # whitespace and comment all survive unchanged.
+    assert result.html.startswith("<div class='x'>  <p")
+    assert result.html.endswith("</p>  <!-- keep --></div>")
+    assert "가나다" in result.html
+    assert "{{q:a}}" not in result.html
+
+
+def test_legacy_mode_preserves_bytes_around_a_range_split(monkeypatch):
+    monkeypatch.setenv("AUTHORED_HTML_NORMALIZATION", "legacy")
+    html = "<div>불필요  <p>{{q:a@0-2}}<strong>{{q:a@2-4}}</strong></p>  후기</div>"
+    result = expand(html, {"a": "가나다라"})
+    assert result.html.startswith("<div>불필요  <p")
+    assert result.html.endswith("</p>  후기</div>")
+    assert "가나" in result.html and "다라" in result.html
+
+
+@pytest.mark.parametrize("normalization", ["legacy", "tree"])
+def test_expand_placeholders_respects_active_normalization_mode(monkeypatch, normalization):
+    """Same input, both modes: structural validation (tokens/coverage/owners)
+    agrees, but the byte-level serialization differs -- legacy keeps the
+    caller's own single-quoted attribute, tree canonicalizes it."""
+    monkeypatch.setenv("AUTHORED_HTML_NORMALIZATION", normalization)
+    html = "<p class='x'>{{q:a}}</p>"
+    result = expand(html, {"a": "가나다"})
+    assert result.receipt["tokens"] == 1
+    assert result.receipt["owners"] == 1
+    assert "가나다" in result.html
+    if normalization == "legacy":
+        assert "class='x'" in result.html
+    else:
+        assert 'class="x"' in result.html
+        parsed = parse_authored_html(result.html, profile="fragment")
+        assert serialize_authored_html(parsed) == result.html
