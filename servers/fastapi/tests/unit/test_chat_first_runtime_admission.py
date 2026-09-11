@@ -8,6 +8,7 @@ from fastapi import BackgroundTasks, HTTPException
 import pytest
 
 from api.v1.ppt.endpoints import presentation_crud, presentation_generate
+from api.v1.ppt.endpoints import presentation_generate_admission
 from api.v1.ppt.endpoints import workspace as workspace_endpoint
 from enums.tone import Tone
 from enums.verbosity import Verbosity
@@ -80,7 +81,11 @@ def test_generation_queue_fails_before_validation_or_job_mutation(
     reason,
     status_code,
 ):
-    _configure_invalid_runtime(monkeypatch, presentation_generate, database_url)
+    # The generate endpoint delegates the runtime guard to its admission
+    # module, which reads its own ``sql_engine`` binding.
+    _configure_invalid_runtime(
+        monkeypatch, presentation_generate_admission, database_url
+    )
     validation_calls: list[object] = []
     monkeypatch.setattr(
         presentation_generate,
