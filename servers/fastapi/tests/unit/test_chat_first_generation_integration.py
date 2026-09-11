@@ -865,7 +865,7 @@ def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkey
             content="Build a durable strategy deck",
             n_slides=8,
             language="en",
-            strategy="adaptive",
+            strategy="authored",
             files=["C:/temporary-upload/source.txt"],
         )
         validated_files: list[list[str]] = []
@@ -1095,7 +1095,7 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
             content="Keep this first message after rejected admission",
             n_slides=8,
             language="en",
-            strategy="adaptive",
+            strategy="authored",
         )
         try:
             async with maker() as session:
@@ -1281,7 +1281,7 @@ def test_raw_path_admission_failure_requires_reattach_without_persisting_locator
             content="Retry document admission safely",
             n_slides=8,
             language="en",
-            strategy="adaptive",
+            strategy="authored",
             files=["C:/temporary-upload/source.txt"],
         )
         try:
@@ -1413,7 +1413,7 @@ def test_admission_projection_race_does_not_mark_the_response(
             content="Do not claim a projection that lost its race",
             n_slides=8,
             language="en",
-            strategy="adaptive",
+            strategy="authored",
         )
         try:
             async with maker() as session:
@@ -1576,7 +1576,7 @@ def test_chat_first_generate_rejects_unlinked_legacy_idempotency_replay(
             content="Build a durable strategy deck",
             n_slides=8,
             language="en",
-            strategy="adaptive",
+            strategy="authored",
         )
         try:
             async with maker() as session:
