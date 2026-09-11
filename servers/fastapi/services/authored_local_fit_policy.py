@@ -133,6 +133,29 @@ def font_size_allowed(
     ) and (original < float(policy.floor_pt) or final <= original)
 
 
+def local_fit_applies(
+    *, reference_mode: str, source_reflow: bool, settings: Any | None = None
+) -> bool:
+    """Whether this deck runs the deterministic local fit at all.
+
+    One predicate for every entry point in an attempt. The pipeline decides
+    whether to fit, and generation requires one receipt per slide when it did;
+    if those two disagree a fitted deck fails with
+    ``authored_local_fit_evidence_incomplete`` and an unfitted one publishes
+    without evidence. Exact reconstruction never fits -- reproducing a source
+    slide may not move its geometry. Source reflow is off by default behind
+    ``AUTHORED_LOCAL_FIT_SOURCE_REFLOW``.
+    """
+    from utils.get_env_programme import is_authored_local_fit_source_reflow_enabled
+    from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION
+
+    if reference_mode == EXACT_RECONSTRUCTION:
+        return False
+    if source_reflow:
+        return is_authored_local_fit_source_reflow_enabled(settings)
+    return True
+
+
 def local_fit_policy(*, author_revision: str, original_html_digest: str,
                      export_width_pt: float = 960, export_height_pt: float = 540,
                      baseline: Mapping[str, Any] | None = None,

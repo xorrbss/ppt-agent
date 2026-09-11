@@ -83,6 +83,19 @@ def is_authored_header_deterministic_repair_enabled(
     return _bool_setting("AUTHORED_HEADER_DETERMINISTIC_REPAIR", True, settings)
 
 
+def is_authored_local_fit_source_reflow_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Whether a verbatim source-reflow deck also runs the deterministic local fit.
+
+    Off by default: the fitter may shrink type within its own floor and cap, and
+    whether a verbatim deck may carry that is a product decision. Use
+    ``services.authored_local_fit_policy.local_fit_applies`` rather than this
+    accessor, so every gate in one attempt agrees about one deck.
+    """
+    return _bool_setting("AUTHORED_LOCAL_FIT_SOURCE_REFLOW", False, settings)
+
+
 def is_authored_text_scale_rung_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:

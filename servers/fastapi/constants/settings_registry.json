@@ -837,6 +837,17 @@
       "description": "Publish a verbatim source-reflow deck with geometry-defective slides flagged after strict whole-deck source readback passes, without re-authoring those slides."
     },
     {
+      "key": "AUTHORED_LOCAL_FIT_SOURCE_REFLOW",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": [
+        "fastapi.runtime"
+      ],
+      "group": "authored.quality",
+      "description": "Run the deterministic local fit on verbatim source-reflow decks as well. Off by default: the fitter may shrink type within its 9pt floor and 10% cap, which is a product decision for verbatim source text."
+    },
+    {
       "key": "AUTHORED_RETAIN_CHECKPOINT_HTML",
       "type": "boolean",
       "default": false,

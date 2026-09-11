@@ -84,6 +84,7 @@ from services.authored_local_fit_evidence import (
 from services.authored_local_fit_policy import (
     POLICY_REVISION,
     html_digest,
+    local_fit_applies,
     local_fit_policy,
     slide_budget,
 )
@@ -1655,11 +1656,9 @@ async def _generate_authored_presentation(
         for item in getattr(pipeline, "local_fit_receipts", ())
         if isinstance(item, Mapping) and item
     ]
-    if (
-        reference_mode != EXACT_RECONSTRUCTION
-        and not source_reflow
-        and len(local_fit_receipts) != len(htmls)
-    ):
+    if local_fit_applies(
+        reference_mode=reference_mode, source_reflow=source_reflow
+    ) and len(local_fit_receipts) != len(htmls):
         raise AuthoredStageError(
             slide_index=0,
             stage="render",

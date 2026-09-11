@@ -3,6 +3,7 @@ from __future__ import annotations
 from services.authored_presentation_pipeline_deps import *
 from services import authored_presentation_author_batch as author_batch_impl
 from services import authored_presentation_pipeline_helpers as _pipeline_helpers
+from services.authored_local_fit_policy import local_fit_applies
 
 LOGGER = logging.getLogger(__name__)
 
@@ -179,8 +180,8 @@ async def _author_illustrate_render_pipeline(
         or source_image_block_bindings is not None
         or source_images_locked_to_source_slide
     )
-    local_fit_enabled = (
-        plan_reference_mode != EXACT_RECONSTRUCTION and not source_reflow
+    local_fit_enabled = local_fit_applies(
+        reference_mode=plan_reference_mode, source_reflow=source_reflow
     )
     # D7 author-stage flags, keyed by slide index so parallel slide workers
     # produce one deterministic, index-ordered list for the receipt.
