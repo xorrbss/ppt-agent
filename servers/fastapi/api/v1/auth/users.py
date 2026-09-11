@@ -19,9 +19,9 @@ from services.database import get_async_session
 from api.v1.auth.config import (
     SESSION_COOKIE_NAME,
     SESSION_TTL_SECONDS,
-    get_or_create_auth_secret,
     verify_legacy_password_hash,
 )
+from api.v1.auth.secret_store import get_or_create_auth_secret
 
 
 class LegacyAwarePasswordHelper(PasswordHelperProtocol):
