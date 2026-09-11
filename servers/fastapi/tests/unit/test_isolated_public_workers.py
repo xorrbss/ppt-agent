@@ -29,7 +29,11 @@ from services.isolated_worker_process import (
     IsolatedWorkerProcessError,
     NETWORK_NONE_ATTESTATION,
     execute_isolated_worker_job,
+    install_trusted_worker_dispatcher,
     worker_environment,
+)
+from services.trusted_executor.composition import (
+    create_trusted_worker_executor_runtime,
 )
 from services.trusted_executor.contracts import (
     ExecutionIdentity,
@@ -542,8 +546,70 @@ def test_export_worker_builds_digest_verified_pptx_from_artifact_refs(
         assert "ppt/presentation.xml" in archive.namelist()
 
 
+class _StagedArtifactAuthority:
+    """Filesystem byte authority standing in for the product object store.
+
+    The trusted transport takes its bytes from an injected streaming
+    authority (in production `ArtifactObjectStoreWireAdapter` over the durable
+    object store).  Here the object store is the directory the fixture already
+    wrote, so staging is a copy and publishing keeps the bytes addressable.
+    """
+
+    def __init__(self, root: Path) -> None:
+        self._root = root
+
+    @staticmethod
+    def _copy(source: Path, destination: Path) -> None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(source.read_bytes())
+
+    async def stage(self, *, reference: ArtifactRef, destination: Path) -> None:
+        await asyncio.to_thread(
+            self._copy, self._root / reference.storage_key, destination
+        )
+
+    async def publish(self, *, reference: ArtifactRef, source: Path) -> None:
+        await asyncio.to_thread(
+            self._copy, source, self._root / "published" / reference.storage_key
+        )
+
+
+@pytest.fixture
+def trusted_worker_runtime(tmp_path: Path):
+    """Compose the real trusted-worker runtime and install it for one test.
+
+    `execute_isolated_worker_job` fails closed without a dispatcher, so the
+    supervision contract can only be exercised through a composed runtime.
+    The Windows-local backend is the development composition that supervises
+    with a Job Object; the dispatcher is uninstalled again on teardown so no
+    other test inherits a process-launching wire port.
+    """
+
+    runtime = create_trusted_worker_executor_runtime(
+        staging_root=tmp_path / "trusted-staging",
+        node_id="isolated-public-worker-test",
+        artifact_authority=_StagedArtifactAuthority(tmp_path),
+        environment={
+            "PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND": "windows-local",
+            "PUBLIC_TRUSTED_WORKER_LOCAL_POLICY": "development",
+            "ENVIRONMENT": "test",
+        },
+    )
+    install_trusted_worker_dispatcher(runtime.dispatcher)
+    try:
+        yield runtime
+    finally:
+        install_trusted_worker_dispatcher(None)
+        asyncio.run(runtime.close())
+
+
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="the windows-local trusted backend supervises with a Job Object",
+)
 def test_export_subprocess_limit_kills_descendants_and_reports_recycle(
     tmp_path: Path,
+    trusted_worker_runtime: object,
 ) -> None:
     launcher = (
         Path(__file__).resolve().parents[4] / "scripts" / "start-authored-vnext-dev.ps1"
@@ -591,6 +657,9 @@ def test_export_subprocess_limit_kills_descendants_and_reports_recycle(
     key_path = tmp_path / "capability.key"
     key_path.write_bytes(b"r" * 32)
     now = int(time.time())
+    # A short immutable deadline is the limit this backend can actually
+    # enforce, and it is what terminates a child that never exits.
+    deadline_seconds = 5
     job = IsolatedWorkerJob(
         role="export",
         operation_id=operation_id,
@@ -599,14 +668,14 @@ def test_export_subprocess_limit_kills_descendants_and_reports_recycle(
         input_digest=bundle.sha256,
         input_artifact=bundle,
         capability="pending",
-        deadline_epoch_seconds=now + 60,
+        deadline_epoch_seconds=now + deadline_seconds,
     )
     job = replace(
         job,
         capability=issue_worker_capability(
             job,
             signing_key=key_path.read_bytes(),
-            ttl_seconds=60,
+            ttl_seconds=deadline_seconds,
             now=now,
             nonce="b" * 32,
         ),
@@ -624,11 +693,28 @@ def test_export_subprocess_limit_kills_descendants_and_reports_recycle(
         "PPT_WORKER_WALL_CLOCK_SECONDS": "60",
     }
 
-    child_script = (
-        "import subprocess,sys,time;"
-        "subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)']);"
-        "handles=[open(sys.executable,'rb') for _ in range(32)];"
-        "sys.stdin.buffer.read();time.sleep(60)"
+    # A descendant that keeps writing for far longer than the job deadline, so
+    # its own file is direct evidence of whether the Job Object recycled it.
+    heartbeat = tmp_path / "descendant-heartbeat"
+    descendant_script = tmp_path / "descendant.py"
+    descendant_script.write_text(
+        "import sys, time\n"
+        "from pathlib import Path\n"
+        "marker = Path(sys.argv[1])\n"
+        "for _ in range(10000):\n"
+        "    with marker.open('ab') as stream:\n"
+        "        stream.write(b'.')\n"
+        "    time.sleep(0.02)\n",
+        encoding="utf-8",
+    )
+    child_script = tmp_path / "child.py"
+    child_script.write_text(
+        "import subprocess, sys, time\n"
+        "subprocess.Popen([sys.executable, sys.argv[1], sys.argv[2]])\n"
+        "handles = [open(sys.executable, 'rb') for _ in range(32)]\n"
+        "sys.stdin.buffer.read()\n"
+        "time.sleep(600)\n",
+        encoding="utf-8",
     )
     with pytest.raises(IsolatedWorkerProcessError) as raised:
         asyncio.run(
@@ -636,17 +722,53 @@ def test_export_subprocess_limit_kills_descendants_and_reports_recycle(
                 job,
                 presentation_id=uuid.uuid4(),
                 source_environment=environment,
-                command=[sys.executable, "-c", child_script],
+                command=[
+                    sys.executable,
+                    str(child_script),
+                    str(descendant_script),
+                    str(heartbeat),
+                ],
             )
         )
 
-    assert "resource_limit_exceeded" in raised.value.code
-    assert raised.value.resource_metrics["resource_limits_enforced"] is True
-    assert raised.value.resource_metrics["worker_limit_triggered"] is True
-    assert raised.value.resource_metrics["worker_peak_handle_count"] > 8
-    assert raised.value.resource_metrics["worker_peak_process_count"] >= 2
-    assert raised.value.resource_metrics["worker_final_process_count"] == 0
-    assert raised.value.resource_metrics["worker_recycle_failure_count"] == 0
+    from services.public_export_operation import _resource_summary
+
+    # The enforcing limit is the Job Object's immutable deadline. The
+    # userspace handle/pid sampler that used to raise
+    # `public_worker_resource_limit_exceeded` lived in the deleted
+    # `services/public_worker_resource_boundary.py`, alongside the direct
+    # subprocess path; the supervisor now reports the kernel's own reason.
+    assert raised.value.code == "deadline_exceeded"
+    metrics = raised.value.resource_metrics
+    assert metrics["resourceLimitsEnforced"] is True
+    assert metrics["enforcementLayer"] == "windows-job-object"
+    assert metrics["deadlineExceeded"] is True
+
+    # Unchanged intent, proved by the descendant itself rather than by a count:
+    # it ran (so the Job really did own a grandchild), and it stopped writing
+    # the moment the Job was recycled.
+    assert heartbeat.exists(), "the child never started its descendant"
+    beats = heartbeat.stat().st_size
+    assert beats > 0
+    time.sleep(0.5)
+    assert heartbeat.stat().st_size == beats, "the descendant outlived its Job"
+
+    # Job accounting agrees: nothing is left to recycle.
+    assert metrics["peakProcessCount"] >= 2
+    assert metrics["finalProcessCount"] == 0
+    assert metrics["recycledWithinBaseline"] is True
+
+    # The durable projection the workspace runner persists keeps the names the
+    # operation timeline has always carried.
+    summary = _resource_summary([{**metrics, "role": job.role}])
+    assert summary["worker_peak_process_count"] >= 2
+    assert summary["worker_recycle_failure_count"] == 0
+    assert summary["resource_limits_enforced"] is True
+    assert summary["worker_enforcement_layer"] == "windows-job-object"
+    assert summary["worker_resource_samples"][0]["finalProcessCount"] == 0
+    # A Job Object meters processes, memory and CPU, never open handles, so on
+    # this backend the durable handle name exists and can only project zero.
+    assert summary["worker_peak_handle_count"] == 0
 
 
 def test_artifact_ref_rejects_paths_and_session_fields() -> None:
