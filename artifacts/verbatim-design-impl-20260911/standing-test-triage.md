@@ -184,3 +184,104 @@ directly built `RolloutProfile` stays a plain value.
 ## Environment note
 
 At task start, the shared worktree (`C:/project/PPT-agent/ppt-agent`) had uncommitted, in-progress edits from a concurrent session to `services/authored_admission_policy.py` and `services/authored_presentation_pipeline.py` that transiently broke the import chain (`ImportError: cannot import name 'POLICY_REVISION'`). Per the shared-worktree co-tenancy playbook, all investigation and fixes here were done in an isolated worktree pinned to `serve/main-20260902`'s last committed SHA (`adeb6b8d1`) rather than against the shared tree's moving state. The final commit (below) was built in the shared worktree via a private index against whatever its `HEAD` was at that time, not this pinned SHA.
+
+## `test_authored_worker_lane_e2e_overload.py` retriage after `e291173a1` (2026-09-12)
+
+Task: `e291173a1` ("fix(authored-vnext): stop calling the synchronous CAS on the
+event loop") fixed the deadlock the row above this note was left waiting on.
+With that fixed, `tests/integration/test_authored_worker_lane_e2e_overload.py`
+was reported as having two failing assertions on `recorder.waves`, in
+`test_overload_halves_concurrency_and_recovers_after_three_successes` and
+`test_overload_does_not_lose_a_slide_without_the_wave_barrier`. Re-verified
+against this worktree's `HEAD` (`353821dd4`), CI-parity env (`DATABASE_URL`
+sqlite+aiosqlite temp file, `APP_DATA_DIRECTORY` temp,
+`DISABLE_IMAGE_GENERATION=true`).
+
+**`test_overload_does_not_lose_a_slide_without_the_wave_barrier` — could not
+reproduce; left unchanged.** Ran isolated 3/3 and as part of the full file
+2/2 (6/6 total): passes every time, `recorder.waves == []` holds as written
+(that scheduler path, `_run_admission` in
+`services/authored_wave_scheduler.py`, never calls `plan_authored_batch_wave`,
+so the recorder — which hooks that function — never appends a wave regardless
+of the timing defect below). The one failure resembling this test that this
+retriage saw was a *different* symptom (`worker lane did not settle`, an
+empty `provider.calls` list, i.e. the deck never got past its first status
+poll) inside a single 150s-timeout `Bash` invocation running the whole file
+plus another command back-to-back — resource contention in this sandbox's
+background-command timeout wrapper, not this test's own logic. Not changed:
+(c)-style "do not touch a test that is actually asserting the right thing,"
+even though the symptom that motivated re-checking it doesn't reproduce
+deterministically enough to call it fixed either. If this recurs, capture
+`provider.calls` and the operation's timeline, not `recorder.waves` — the
+symptom was upstream of anything this test observes.
+
+**`test_overload_halves_concurrency_and_recovers_after_three_successes` — (b)
+environment; skipped with a precise, causally-scoped guard, not touched
+structurally.** Reproduces deterministically, 4/4 full-file runs and 1/1
+isolated run, always the same diff: `recorder.waves` has 7 entries instead of
+6, `((6,),) , ((7,),)` where `((6,), (7,))` is expected — the concurrency cap
+never restores from 1 back to the profile's steady value of 2.
+
+Root cause, traced with an instrumented standalone script (not committed;
+called `_overload_scenario` directly and printed
+`recorder.states_after_wave`): `advance_authored_batch_policy`'s
+`consecutive_successes` never leaves 0 and `cooldown_until` never clears past
+wave 2, even though the scheduler *does* keep calling
+`AuthoredWaveSchedule.wait_out_cooldown` before every later wave and *does*
+get past it each time (7 waves still cover all 8 slides — nothing hangs, no
+slide is lost, no deadlock). The two pieces:
+
+- `services/authored_presentation_pipeline.py:254` constructs
+  `AuthoredWaveSchedule(new_authored_batch_policy_state())` with no `clock=`
+  or `sleep=` override, so `self._clock` is the real `time.monotonic`, both
+  in production and under this test.
+- `tests/support/authored_worker_lane_harness.py`'s `_install_sleep_recorder`
+  (lines ~411-441) monkeypatches `asyncio.sleep` at module scope for any
+  caller inside an `authored_*`/`services.authored_*` module — including
+  `wait_out_cooldown` — so the awaited cooldown never actually blocks in real
+  time; it returns via `real_sleep(0)`.
+- `wait_out_cooldown`'s exit check (`services/authored_wave_scheduler.py:90`,
+  added with the function itself in commit `127d3d4a8`, "Recover authored
+  rescue calls after provider overload"), `if self._clock() <= now: return
+  waited`, is the seam meant to let a *paired* no-op clock + no-op sleep test
+  double skip a real wait — its own comment says "Test/no-op sleepers may
+  deliberately leave the clock fixed." Here the sleep is faked but the clock
+  is real and un-injected, so the seam is unpaired.
+
+Measured directly (`time.get_clock_info("monotonic")` in this worktree's
+`uv run python`): `implementation='GetTickCount64()'`,
+`resolution=0.015625` (~15.6 ms), and a 200,000-sample loop of back-to-back
+`time.monotonic()` calls returned the *same* value on 199,998/199,999 of the
+adjacent pairs. So on this platform, two real (unfaked) `self._clock()` reads
+a few microseconds apart routinely compare equal — the escape valve fires on
+the first spin after the faked sleep returns, long before the real 30 s
+cooldown (`OVERLOAD_COOLDOWN_BASE_SECONDS`) has elapsed, `advance()` then runs
+with a `now` still inside `cooldown_until`, and "success during cooldown
+doesn't count toward recovery" (`services/authored_batch_policy.py`'s own
+docstring) permanently suppresses the 3-consecutive-success recovery this
+test is asserting. CI runs on `ubuntu-latest`
+(`.github/workflows/test-all.yml:16`), where `time.monotonic()` is
+nanosecond-scale and two real reads essentially never compare equal, so the
+escape valve there only fires for genuine no-op test doubles and this
+assertion is expected to hold — this is a Windows-sandbox-only artifact of an
+un-injected clock meeting a faked sleep, not a change in the scheduler's
+intended contract (recovery-after-three-successes is still what
+`services/authored_batch_policy.py:advance_authored_batch_policy` implements
+and is still what every other assertion in this same test — `after_overload`,
+`states[2]`/`states[3]` consecutive-success counts, `after_recovery`, the
+final `provider.calls_by_index` — is written to check on the correctly-timed
+path). Per this task's brief, not weakened and not rewritten as if the wave
+shape were now intentionally 7-wide.
+
+Action taken (owned file only,
+`tests/integration/test_authored_worker_lane_e2e_overload.py`): added
+`@pytest.mark.skipif(time.get_clock_info("monotonic").resolution > 1e-3, ...)`
+directly on this test, with an in-file comment citing the same file:line
+evidence as above, so it keeps running (and keeps proving the contract) on
+CI's finer-resolution clock and only skips where the platform clock itself
+cannot support the harness's no-op-sleeper assumption. This does not fix the
+harness/production gap — that requires either injecting a test-controlled
+clock into the one production `AuthoredWaveSchedule(...)` call site
+(`services/authored_presentation_pipeline.py:254`) or changing
+`wait_out_cooldown`'s escape valve to not use "clock didn't advance" as its
+no-op-sleeper signal — both outside this test file's ownership for this task.
