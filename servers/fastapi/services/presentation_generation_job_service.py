@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
 import logging
-import os
 import secrets
 from typing import Any
 import uuid
@@ -23,6 +22,7 @@ from services.authored_generation_observability import (
 )
 from services.database import async_session_maker
 from utils.datetime_utils import as_utc
+from utils.get_env import get_authored_cluster_job_concurrency_env
 from utils.owner_context import get_current_owner_id
 from utils.runtime_settings import create_runtime_settings_task as create_config_task
 
@@ -33,21 +33,14 @@ GENERATION_JOB_HEARTBEAT_SECONDS = 30
 GENERATION_JOB_DISPATCH_SECONDS = 1
 
 
-def _positive_int_env(name: str, default: int) -> int:
-    try:
-        return max(1, int(os.getenv(name, str(default))))
-    except (TypeError, ValueError):
-        return default
-
-
 # The in-process authored semaphore defaults to one job. Apply the same default
 # to the database-backed admission gate so adding FastAPI workers does not
 # silently multiply provider concurrency and spend. Operators can raise this
 # independently after validating provider quotas.
-AUTHORED_CLUSTER_JOB_CONCURRENCY = _positive_int_env(
-    "AUTHORED_CLUSTER_JOB_CONCURRENCY",
-    _positive_int_env("AUTHORED_JOB_CONCURRENCY", 1),
-)
+#
+# Read once at import time; changing AUTHORED_CLUSTER_JOB_CONCURRENCY or
+# AUTHORED_JOB_CONCURRENCY needs a process restart to take effect.
+AUTHORED_CLUSTER_JOB_CONCURRENCY = get_authored_cluster_job_concurrency_env()
 GENERATION_JOB_CAPACITY_POLL_SECONDS = 1.0
 # Stable, application-specific PostgreSQL advisory-lock namespace. The lock is
 # transaction-scoped, so it is always released on commit, rollback or disconnect.

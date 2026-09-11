@@ -113,6 +113,7 @@ from services.workspace_operation_observability import (
 from services.workspace_poll_backoff import IdleCycle
 from services.workspace_worker_lane_probe import workspace_operation_work_pending
 from utils.datetime_utils import get_current_utc_datetime
+from utils.get_env import get_workspace_operation_max_concurrency_env
 from utils.owner_context import (
     get_current_owner_id,
     reset_current_owner_id,
@@ -125,7 +126,9 @@ from models.sql.workspace import get_workspace_owner_scope
 LOGGER = logging.getLogger(__name__)
 
 WORKSPACE_OPERATION_POLL_SECONDS = 1.0
-WORKSPACE_OPERATION_MAX_CONCURRENCY = 2
+# Read once at import time; changing WORKSPACE_OPERATION_MAX_CONCURRENCY
+# needs a process restart to take effect.
+WORKSPACE_OPERATION_MAX_CONCURRENCY = get_workspace_operation_max_concurrency_env()
 _MAX_OBSERVATION_DURATION_MS = 30 * 24 * 60 * 60 * 1000
 _PUBLIC_OPERATION_CONTRACT_VERSION = "public-operation/v2"
 _PUBLIC_OPERATION_EXECUTION_PROFILE_VERSION = "public-generation-export/v2"
@@ -4227,10 +4230,7 @@ class WorkspaceOperationRunner:
     ) -> None:
         self.session_factory = session_factory
         self.registry = registry
-        self.max_concurrency = max_concurrency or _positive_int_env(
-            "WORKSPACE_OPERATION_MAX_CONCURRENCY",
-            WORKSPACE_OPERATION_MAX_CONCURRENCY,
-        )
+        self.max_concurrency = max_concurrency or WORKSPACE_OPERATION_MAX_CONCURRENCY
         self.lease_seconds = lease_seconds or _positive_int_env(
             "WORKSPACE_OPERATION_LEASE_SECONDS", WORKSPACE_OPERATION_LEASE_SECONDS
         )

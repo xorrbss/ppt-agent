@@ -43,15 +43,16 @@ from utils.authored_styles import (
     validate_exact_reconstruction_style,
 )
 from utils.authored_dom_quality import ensure_authored_qids
+from utils.get_env import get_authored_job_concurrency_env
 from utils.llm_calls.author_deck import author_planned_slide, prepare_authored_deck
 from utils.llm_calls.author_slide import is_fallback_slide_html
 from utils.llm_calls.author_vision_qa import revise_authored_deck
 from utils.slide_capture import find_chrome, render_html_to_png
 
 
-_AUTHORED_JOB_SEMAPHORE = asyncio.Semaphore(
-    max(1, int(os.getenv("AUTHORED_JOB_CONCURRENCY", "1")))
-)
+# Read once at import time; changing AUTHORED_JOB_CONCURRENCY needs a
+# process restart to take effect.
+_AUTHORED_JOB_SEMAPHORE = asyncio.Semaphore(get_authored_job_concurrency_env())
 _AUTHORED_SLIDE_WORKERS = max(
     1, int(os.getenv("AUTHORED_SLIDE_PIPELINE_CONCURRENCY", "8"))
 )
