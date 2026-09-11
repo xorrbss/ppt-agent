@@ -120,7 +120,7 @@ def test_publication_reader_ignores_evidence_and_stale_receipts(session):
 async def test_final_publication_is_strict_except_already_flagged_visibility(session, flagged):
     session.contexts = (replace(context(), terminal_fallback_eligible=True),)
     html = author_html(HTML, index=0)
-    request = SimpleNamespace(_source_document_outline=OUTLINE)
+    request = SimpleNamespace(_source_document_outline=OUTLINE, _source_content_manifest=MANIFEST)
     kwargs = dict(
         pngs=[b"png"],
         generation_job=None,
@@ -140,6 +140,81 @@ async def test_final_publication_is_strict_except_already_flagged_visibility(ses
     else:
         _, payload, _ = await final_readback(**kwargs)
         assert payload["integrityVerified"] and payload["flaggedVisibilityFailures"] == ["b1"]
+
+
+@sync_async
+@pytest.mark.parametrize("mode", ["shadow", "enforce"])
+async def test_a_deck_missing_a_source_page_cannot_publish(session, mode):
+    """B2: the deck-level cardinality assertion holds in shadow and in enforce.
+
+    Each surviving slide validates against its own one-unit manifest, so only a
+    whole-deck predicate can see that a source page was dropped. It runs before
+    any per-slide work, on the same implementation the slide inspector uses.
+    """
+
+    session.mode = mode
+    html = author_html(HTML, index=0)
+    two_units = {"units": [*MANIFEST["units"], {**MANIFEST["units"][0], "sourceUnitId": "u2", "sourceIndex": 1}]}
+    two_slides = {"slides": [*OUTLINE["slides"], {**OUTLINE["slides"][0], "sourceUnitId": "u2", "sourceIndex": 1}]}
+    kwargs = dict(
+        pngs=[b"png"],
+        generation_job=None,
+        request=SimpleNamespace(_source_document_outline=two_slides, _source_content_manifest=two_units),
+        htmls=[html],
+        source_reflow=True,
+        composition_profile=SimpleNamespace(text_mode="verbatim"),
+        terminal_fallback_enabled=False,
+        evidence_ledger=object(),
+        final_browser_metrics=[metrics(html)],
+        flagged_slides=[],
+        _merge_flagged_slide_entries=lambda entries: list(entries),
+    )
+    with pytest.raises(Exception, match="cardinality") as raised:
+        await final_readback(**kwargs)
+    assert raised.value.code == "source_content_browser_readback_failed"
+
+
+@sync_async
+async def test_a_session_less_producer_is_admitted_at_the_writer(monkeypatch):
+    """B1: enforce must not turn "no admission session" into a missing receipt.
+
+    The authored-vNext legacy bridge and the workspace page-remake writers call
+    ``complete_stage`` outside ``admission_scope``. The write goes through, and
+    the receipt it persists is one the gate minted for those exact bytes.
+    """
+
+    from services import authored_checkpoint_state as state
+    from services import authored_admission_checkpoint as checkpoint
+    from services.authored_admission_context import digest_html
+
+    monkeypatch.setattr(gate, "text_step", gate.bind_current_source)
+    monkeypatch.setattr(gate, "placeholder_authoring_enabled", lambda: False)
+    monkeypatch.setattr(checkpoint, "admission_gate_mode", lambda: "enforce")
+    assert checkpoint.current_session() is None
+    row = SimpleNamespace(error=None)
+    database = SimpleNamespace(add_all=lambda _: None, commit=AsyncMock())
+
+    @asynccontextmanager
+    async def transaction(_):
+        yield database, True
+
+    monkeypatch.setattr(state, "_checkpoint_mutation_session", transaction)
+    monkeypatch.setattr(state, "_owned_job", AsyncMock(return_value=SimpleNamespace()))
+    monkeypatch.setattr(state, "_checkpoint", AsyncMock(return_value=row))
+    result = await state.complete_stage(
+        job_id="job",
+        slide_index=0,
+        stage="author",
+        attempt_token="attempt-1",
+        fencing_token=4,
+        html=HTML,
+    )
+    receipt = result.error["admission"]
+    assert receipt["verdict"] == "admitted" and receipt["publishable"] is True
+    assert receipt["htmlRepr"] == "expanded"
+    assert receipt["htmlDigest"] == digest_html(result.author_html)
+    assert receipt["attemptToken"] == "attempt-1" and receipt["fencedRevision"] == 4
+    database.commit.assert_awaited_once()
 
 
 @sync_async

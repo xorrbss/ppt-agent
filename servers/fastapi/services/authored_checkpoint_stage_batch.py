@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from services.authored_admission_checkpoint import (
-    checkpoint_receipt_metadata, enforce_receipts, validate_checkpoint_write,
+    admit_checkpoint_write, checkpoint_receipt_metadata, enforce_receipts,
 )
 from services.authored_admission_receipt import AdmissionReceipt
 from services.authored_checkpoint_artifacts import (
@@ -161,7 +161,7 @@ async def complete_render_stage_batched(
     handle.
     """
 
-    validate_checkpoint_write(
+    html, admission_receipt = admit_checkpoint_write(
         admission_receipt=admission_receipt, html=html, stage="render",
         slide_index=slide_index, attempt_token=attempt_token, fencing_token=fencing_token,
         browser_metrics=browser_metrics, png=png,

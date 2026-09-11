@@ -9,6 +9,7 @@ from services.authored_checkpoint_errors import AuthoredStageError
 from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
     BrowserSourceReadbackResult,
+    assert_deck_source_cardinality,
     inspect_browser_source_readback,
     verify_browser_source_readback,
     log_browser_source_readback_failure,
@@ -104,7 +105,47 @@ def _legacy_final_readback(
     return source_readback_receipt, source_readback_payload, flagged_slides
 
 
+def _assert_deck_cardinality(
+    *,
+    request,
+    htmls,
+    source_reflow,
+    composition_profile,
+    terminal_fallback_enabled,
+    final_browser_metrics,
+    **_,
+) -> None:
+    """One deck-level source assertion, in every mode, before any per-slide work.
+
+    The enforce path admits each slide against its own one-unit manifest, so a
+    deck that rendered fewer (or more) slides than the source has units would
+    otherwise publish with every slide individually valid.  The legacy path
+    asserts the same thing inside ``verify_source_verbatim_readback``; running
+    it here first keeps shadow and enforce on the identical predicate.
+    """
+
+    if not (source_reflow and composition_profile.text_mode == "verbatim"):
+        return
+    try:
+        assert_deck_source_cardinality(
+            manifest=getattr(request, "_source_content_manifest", None),
+            outline=getattr(request, "_source_document_outline", None),
+            browser_metrics=final_browser_metrics,
+            htmls=htmls,
+        )
+    except BrowserSourceReadbackError as error:
+        raise AuthoredStageError(
+            slide_index=error.slide_indices[0] if error.slide_indices else 0,
+            stage="render",
+            code=error.code,
+            cause=error,
+            retryable=not terminal_fallback_enabled,
+            message=error.detail,
+        ) from error
+
+
 async def final_readback(*, pngs, generation_job, **kwargs):
+    _assert_deck_cardinality(**kwargs)
     session = current_session()
     if session is None or not session.contexts:
         return _legacy_final_readback(**kwargs)
@@ -193,8 +234,21 @@ async def final_readback(*, pngs, generation_job, **kwargs):
         checked_slide_count=sum(result.checked_slide_count for result in results),
         checked_block_count=sum(result.checked_block_count for result in results),
         evidence=tuple(item for result in results for item in result.evidence),
+        # Every counter the per-slide results carry is aggregated, so the
+        # published receipt can be audited for order/integrity/telemetry the
+        # way the legacy deck-wide receipt could.
+        missing_block_ids=tuple(
+            dict.fromkeys(item for result in results for item in result.missing_block_ids)
+        ),
+        order_violations=sum(result.order_violations for result in results),
         visibility_failures=tuple(item for result in results for item in result.visibility_failures),
         binding_deviations=sum(result.binding_deviations for result in results),
+        integrity_failures=tuple(
+            dict.fromkeys(item for result in results for item in result.integrity_failures)
+        ),
+        telemetry_failures=tuple(
+            dict.fromkeys(item for result in results for item in result.telemetry_failures)
+        ),
         failed_slide_indices=tuple(i for i, result in enumerate(results) if not result.passed),
     )
     payload = combined.as_dict()

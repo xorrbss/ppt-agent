@@ -269,30 +269,30 @@ def test_rejected_capture_can_only_be_nonpublishable_evidence():
 
 
 @sync_async
-@pytest.mark.parametrize("batched", [False, True])
-async def test_checkpoint_writer_refuses_missing_receipt_before_io(monkeypatch, batched):
+async def test_checkpoint_writer_refuses_unadmitted_html_before_io(monkeypatch):
+    """B1: a producer without a session is admitted at the writer, not exempted.
+
+    ``enforce_receipts`` falls back to the global knob when no admission session
+    is open, which is how the authored-vNext legacy bridge and the workspace
+    page-remake handlers reach ``complete_stage``. The writer obtains their
+    receipt by admitting the HTML on the same predicate, so bytes the gate
+    rejects still never reach the database -- ``job_id`` here is not a real job,
+    so any database access would fail loudly instead.
+    """
+
     from services import authored_checkpoint_state as state
-    from services import authored_checkpoint_stage_batch as batch
     from services import authored_admission_checkpoint as checkpoint
 
     monkeypatch.setattr(checkpoint, "enforce_receipts", lambda: True)
-    writer = batch.complete_render_stage_batched if batched else state.complete_stage
-    kwargs = dict(
-        job_id="job",
-        slide_index=0,
-        attempt_token="attempt-1",
-        html=HTML,
-        png=b"png",
-        browser_metrics={},
-        checkpoint_revision=0,
-        skipped=False,
-        fencing_token=4,
-        session=None,
-    )
-    if not batched:
-        kwargs["stage"] = "render"
-    with pytest.raises(AdmissionReceiptError, match="receipt_missing"):
-        await writer(**kwargs)
+    with pytest.raises(AdmissionReceiptError, match="receipt_rejected"):
+        await state.complete_stage(
+            job_id="job",
+            slide_index=0,
+            stage="author",
+            attempt_token="attempt-1",
+            fencing_token=4,
+            html=HTML.replace("<h1>", '<h1 id="a" id="b">'),
+        )
 
 
 def test_same_profile_capture_reuse_is_attempt_bound():

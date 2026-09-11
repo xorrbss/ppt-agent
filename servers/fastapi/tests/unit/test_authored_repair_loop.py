@@ -22,6 +22,8 @@ from services.authored_repair_loop import (
     single_repair_loop_enabled,
 )
 from services.authored_repair_loop_evidence import (
+    TOKEN_TEXT_RULE,
+    VERBATIM_TEXT_RULE,
     merge_evidence,
     repair_correction_hint,
     visual_review_evidence_only,
@@ -284,7 +286,10 @@ async def test_the_model_step_asks_for_layout_change_and_forbids_source_text():
     hint = str(captured["correction_hint"])
     assert "overflow: body overflows" in hint
     assert "MAY move, resize, restyle" in hint
-    assert "placeholder token" in hint and "MAY NOT write" in hint
+    # No placeholder contract is in scope here, so the brief carries the
+    # verbatim boundary rather than instructing the model to place tokens that
+    # were never defined for it.
+    assert VERBATIM_TEXT_RULE in hint and TOKEN_TEXT_RULE not in hint
     assert captured["receipt_retry_class"] == "recovery"
     assert captured["capacity_brief"] == "b1"
 
@@ -321,7 +326,7 @@ def test_the_repair_prompt_carries_the_placeholder_contract(monkeypatch):
     monkeypatch.setattr(
         prompt, "is_authored_verbatim_placeholder_authoring_enabled", lambda: True
     )
-    assert "MAY NOT write" in repair_correction_hint(("overflow",), role="BODY")
+    assert "MAY NOT write" in repair_correction_hint(("overflow",), role="BODY", index=0)
     built = author_prompt(
         "content",
         "design",
@@ -331,6 +336,54 @@ def test_the_repair_prompt_carries_the_placeholder_contract(monkeypatch):
         2,
     )
     assert placeholder_prompt_contract(build_block_table(context.bindings)) in built
+
+
+@pytest.mark.parametrize("placeholder_on", [False, True])
+@pytest.mark.parametrize("loop_on", [False, True])
+def test_the_repair_brief_agrees_with_the_authoring_contract(monkeypatch, placeholder_on, loop_on):
+    """B3: the two knobs can never produce a self-contradictory repair prompt.
+
+    The repair brief's text boundary is derived from the same source the
+    authoring prompt uses, so "place every source occurrence through its
+    placeholder token" is emitted exactly when a placeholder block table is
+    actually in that prompt -- for all four knob combinations, the loop knob
+    included.
+    """
+
+    from services.source_content.placeholder import prompt
+    from services.source_content.placeholder.prompt import placeholder_prompt_for_slide
+    from utils.llm_calls.author_slide_prompt import author_prompt
+    import services.authored_admission_session as session_module
+    import services.authored_repair_loop as loop_module
+
+    context = SimpleNamespace(
+        source_reflow=True,
+        reference_mode="source_content_restyle",
+        bindings=(("b1", "원문 제목"),),
+    )
+    monkeypatch.setattr(
+        session_module, "current_session", lambda: SimpleNamespace(contexts=(context,))
+    )
+    monkeypatch.setattr(
+        prompt, "is_authored_verbatim_placeholder_authoring_enabled", lambda: placeholder_on
+    )
+    monkeypatch.setattr(
+        loop_module, "is_authored_verbatim_single_repair_loop_enabled", lambda: loop_on
+    )
+
+    assert single_repair_loop_enabled(source_reflow=True) is loop_on
+    contract = placeholder_prompt_for_slide(0)
+    assert bool(contract) is placeholder_on
+
+    hint = repair_correction_hint(("overflow",), role="BODY", index=0)
+    authored = author_prompt(
+        "content", "design", SimpleNamespace(wordmark="", topic="topic"), "BODY", 0, 2
+    )
+    assert (TOKEN_TEXT_RULE in hint) is placeholder_on
+    assert (VERBATIM_TEXT_RULE in hint) is not placeholder_on
+    # The brief never names a token contract the authoring prompt does not carry.
+    assert ("{{q:" in authored) is placeholder_on
+    assert ("placeholder token" in hint) is ("{{q:" in authored)
 
 
 MANIFEST = {

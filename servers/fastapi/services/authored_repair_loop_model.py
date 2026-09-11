@@ -2,11 +2,14 @@
 
 There is exactly one authoring prompt in this system, and the repair loop uses
 it. The call carries the gate's bounded evidence as the correction hint; the
-placeholder block table and the token rules are appended to that same prompt by
-the gate's own prompt path, so the repair is bound by the identical source
-contract as authoring. It may move, restyle and restructure; it cannot emit
-source text, and a candidate that retypes source text instead of placing its
-tokens is rejected by the gate's static checks inside ``author_slide_html``.
+source contract -- the placeholder block table and the token rules where the
+placeholder knob puts them there, the verbatim text itself where it does not --
+is appended to that same prompt by the gate's own prompt path, and the hint
+restates whichever of the two boundaries that prompt actually carries
+(``authored_repair_loop_evidence.source_text_rule``). So the repair is bound by
+the identical source contract as authoring under every knob combination. It may
+move, restyle and restructure; a candidate that violates the contract is
+rejected by the gate's static checks inside ``author_slide_html``.
 
 Nothing here repairs a failure. A refused, invalid or unavailable candidate
 returns ``None`` and the loop keeps the frozen previous admission; only a
@@ -103,7 +106,7 @@ def build_repair_author(
             "receipt_retry_class": REPAIR_RETRY_CLASS,
             "receipt_attempt_ordinal": REPAIR_ATTEMPT_ORDINAL,
             "allow_provider_fallback": False,
-            "correction_hint": repair_correction_hint(evidence, role=role),
+            "correction_hint": repair_correction_hint(evidence, role=role, index=index),
             "page_number_mode": page_number_mode,
             "instructions": instructions,
             **_slide_plan_kwargs(

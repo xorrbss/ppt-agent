@@ -792,6 +792,20 @@ def _inspect_browser_source_readback(
     )
 
 
+def assert_deck_source_cardinality(*, manifest: Any, outline: Any, browser_metrics: Any, htmls: Sequence[str] | None = None) -> None:
+    """Raise unless the deck has one rendered slide per source unit, in order.
+
+    The per-slide admission gate can never see this: it inspects a one-unit
+    manifest.  Publication therefore asserts the deck predicate once, through
+    the same implementation the slide inspector uses.
+    """
+    from services.source_content.browser_readback_inspection import (
+        assert_deck_source_cardinality as assert_impl,
+    )
+
+    assert_impl(manifest=manifest, outline=outline, browser_metrics=browser_metrics, htmls=htmls)
+
+
 def inspect_browser_source_readback(*, manifest: Any, outline: Any, browser_metrics: Any, htmls: Sequence[str] | None = None) -> BrowserSourceReadbackResult:
     """Return diagnostics without turning damaged input into admission evidence.
 
@@ -830,6 +844,7 @@ __all__ = [
     "BrowserSourceBlockEvidence",
     "BrowserSourceReadbackError",
     "BrowserSourceReadbackResult",
+    "assert_deck_source_cardinality",
     "deterministic_source_block_id",
     "deterministic_source_image_block_id",
     "deterministic_source_qid",

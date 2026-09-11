@@ -25,14 +25,15 @@ from services.source_content.source_runs import parse_source_binding_id
 from services.source_content.text_stamping import deterministic_source_qid
 
 
-def inspect_browser_source_readback(*, manifest: Any, outline: Any, browser_metrics: Any, htmls: Sequence[str] | None = None) -> BrowserSourceReadbackResult:
-    """Validate source IDs, rendered text, geometry, order, and visibility.
+def assert_deck_source_cardinality(
+    *, manifest: Any, outline: Any, browser_metrics: Any, htmls: Sequence[str] | None = None
+) -> tuple[Sequence[Any], Sequence[Any], list[Any]]:
+    """The deck-level predicate: one source unit, one outline slide, one render.
 
-    ``browser_metrics`` is the payload emitted by ``ensure_browser_metrics``
-    (one object per slide, or ``{"slides": [...]}``). Every admitted text block
-    must have one explicit source-block binding (or a complete run partition)
-    and measured, visible DOM boxes.  Missing telemetry, clipping, occlusion,
-    duplicate/unknown IDs, and rendered text mismatches all fail closed.
+    This is the only assertion that can see a deck which dropped or duplicated a
+    source page, because it is the only one that compares whole-deck lengths.
+    The per-slide admission gate inspects a one-unit manifest by construction,
+    so publication has to call this once for the deck as well.
     """
 
     manifest_value = _mapping(manifest, "source manifest")
@@ -44,6 +45,22 @@ def inspect_browser_source_readback(*, manifest: Any, outline: Any, browser_metr
     metric_slides = _slides_metrics(browser_metrics)
     if len(units) != len(slides) or len(metric_slides) != len(slides) or (htmls is not None and len(htmls) != len(slides)):
         raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="source and browser slide cardinality differs", slide_indices=tuple(range(max(len(slides), len(metric_slides)))))
+    return units, slides, metric_slides
+
+
+def inspect_browser_source_readback(*, manifest: Any, outline: Any, browser_metrics: Any, htmls: Sequence[str] | None = None) -> BrowserSourceReadbackResult:
+    """Validate source IDs, rendered text, geometry, order, and visibility.
+
+    ``browser_metrics`` is the payload emitted by ``ensure_browser_metrics``
+    (one object per slide, or ``{"slides": [...]}``). Every admitted text block
+    must have one explicit source-block binding (or a complete run partition)
+    and measured, visible DOM boxes.  Missing telemetry, clipping, occlusion,
+    duplicate/unknown IDs, and rendered text mismatches all fail closed.
+    """
+
+    units, slides, metric_slides = assert_deck_source_cardinality(
+        manifest=manifest, outline=outline, browser_metrics=browser_metrics, htmls=htmls
+    )
     blocks_by_unit, ordered_ids_by_unit, expected_unit_order = _manifest_index(units)
 
     evidence: list[BrowserSourceBlockEvidence] = []

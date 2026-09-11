@@ -65,13 +65,47 @@ def merge_evidence(*groups: Sequence[str]) -> tuple[str, ...]:
     return tuple(merged)[:MAX_EVIDENCE_ITEMS]
 
 
-def repair_correction_hint(evidence: Sequence[str], *, role: str) -> str:
+#: Restated for a slide whose authoring prompt carries the placeholder block
+#: table: the model never writes source text, it places the table's tokens.
+TOKEN_TEXT_RULE = (
+    "You MAY NOT write, retype, shorten, summarize, translate or invent any "
+    "source text: place every source occurrence through its placeholder token "
+    "exactly once, exactly as the source contract above requires."
+)
+
+#: Restated for a slide whose authoring prompt carries the source text itself
+#: (``AUTHORED_VERBATIM_PLACEHOLDER_AUTHORING`` off). There is no token contract
+#: to refer to, so the boundary is the one the source-locked author brief uses.
+VERBATIM_TEXT_RULE = (
+    "You MAY NOT shorten, summarize, translate, merge or invent any source text: "
+    "reproduce every source text block exactly as it was given to you, including "
+    "punctuation and ordering, and give every source block exactly one visible owner."
+)
+
+
+def source_text_rule(index: int) -> str:
+    """Derive the repair's text boundary from the authoring prompt's own contract.
+
+    ``placeholder_prompt_for_slide`` is the single source that decides whether
+    this slide's authoring prompt carries a placeholder block table, so asking
+    it here keeps the repair brief and the authoring brief consistent by
+    construction under every combination of the rollout knobs.  Telling a model
+    to place tokens that were never defined, while handing it the source text,
+    is the contradiction this removes.
+    """
+
+    from services.source_content.placeholder.prompt import placeholder_prompt_for_slide
+
+    return TOKEN_TEXT_RULE if placeholder_prompt_for_slide(index) else VERBATIM_TEXT_RULE
+
+
+def repair_correction_hint(evidence: Sequence[str], *, role: str, index: int) -> str:
     """The loop's single correction brief: layout may change, text may not.
 
-    The source contract (the block table and the placeholder token rules) is
-    appended to the authoring prompt by the gate's own prompt path, so this
-    brief only has to state what this call is for and restate the one boundary
-    the repair may not cross.
+    The source contract (the block table and the placeholder token rules, when
+    they exist) is appended to the authoring prompt by the gate's own prompt
+    path, so this brief only has to state what this call is for and restate the
+    one boundary the repair may not cross -- in the same terms that prompt uses.
     """
 
     measured = "; ".join(evidence[:MAX_EVIDENCE_ITEMS]) or "measured layout defects"
@@ -83,10 +117,7 @@ def repair_correction_hint(evidence: Sequence[str], *, role: str) -> str:
         "typography and spacing. Keep every element inside the 1280x720 frame with "
         "no overflow, clipping or overlap, and keep the same role, language, header "
         "contract and design system as the rest of the deck.\n"
-        "You MAY NOT write, retype, shorten, summarize, translate or invent any "
-        "source text: place every source occurrence through its placeholder token "
-        "exactly once, exactly as the source contract above requires. Keep every "
-        "source picture the slide was offered."
+        f"{source_text_rule(index)} Keep every source picture the slide was offered."
     )
 
 
@@ -206,12 +237,15 @@ def evidence_for_slide(
 __all__ = [
     "MAX_EVIDENCE_CHARS",
     "MAX_EVIDENCE_ITEMS",
+    "TOKEN_TEXT_RULE",
+    "VERBATIM_TEXT_RULE",
     "critique_evidence",
     "evidence_for_slide",
     "issue_evidence",
     "merge_evidence",
     "reason_evidence",
     "repair_correction_hint",
+    "source_text_rule",
     "vision_evidence_for_flagged",
     "visual_review_evidence_only",
 ]
