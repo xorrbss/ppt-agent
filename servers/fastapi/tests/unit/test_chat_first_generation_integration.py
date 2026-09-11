@@ -199,6 +199,19 @@ async def _async_return(value):
     return value
 
 
+class _DialectOnlySession:
+    """A session the deprecated async route may only inspect for its dialect.
+
+    ``generate_presentation_async`` admits the local SQLite runtime before
+    it reaches ``queue_presentation_generation``.  The tests below stub that
+    call, so the route must never touch the session for anything else; any
+    other attribute access fails loudly instead of being silently tolerated.
+    """
+
+    def get_bind(self):
+        return "sqlite"
+
+
 def test_recovery_expires_phase1_partial_before_lease_and_releases_quota(
     tmp_path: Path,
     monkeypatch,
@@ -1506,7 +1519,7 @@ def test_generate_async_wraps_unprojected_non_http_failure_without_marker(
                 request,
                 BackgroundTasks(),
                 idempotency_key="unprojected-failure",
-                sql_session=object(),
+                sql_session=_DialectOnlySession(),
             )
         assert caught.value.status_code == 500
         assert caught.value.detail == "Presentation generation failed"
@@ -1570,7 +1583,7 @@ def test_generate_async_preserves_unprojected_http_failure_without_marker(
                 request,
                 BackgroundTasks(),
                 idempotency_key="unprojected-http-failure",
-                sql_session=object(),
+                sql_session=_DialectOnlySession(),
             )
         assert caught.value.status_code == status_code
         assert caught.value.detail == detail
