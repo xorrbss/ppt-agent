@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "authored-integrity-readback-evidence/v1",
+  "run": 17,
+  "operationId": "72e0a06e-bb7f-4c84-90a8-87fe4d537c5f",
+  "presentationId": "311c2959-9906-4d36-a082-6d7532b3aef6",
+  "generationJobId": "ce953f11-df1b-4216-bfe4-a0744ce8f8ec",
+  "sourceSlideNumber": 10,
+  "slideIndex": 9,
+  "blockIds": [
+    "source-slide:10:text:17"
+  ],
+  "observation": {
+    "sourceBlockId": "source-slide:10:text:17",
+    "sourceText": "□ 인스타 프로필  □ 블로그 방향  □ 상품  □ 가격  □ 타깃",
+    "renderedText": "□ 인스타 프로필\n□ 블로그 방향\n□ 상품\n□ 가격",
+    "observedQids": [
+      "source-block-3e464ca90148cc93"
+    ],
+    "deterministicSourceQid": "source-block-3e464ca90148cc93",
+    "qidCount": 1,
+    "semanticRole": "decoration",
+    "integrityFailed": true,
+    "visibilityFailed": true
+  },
+  "integrityPredicates": {
+    "renderedTextSpanMismatch": true,
+    "missingQid": false,
+    "duplicateOrPreviouslySeenQid": false,
+    "qidDiffersFromDeterministicSourceQid": false,
+    "qidCountNotOne": false,
+    "missingSemanticRole": false
+  },
+  "mutation": {
+    "producingStage": "VQA repair",
+    "authorHtml": {
+      "digest": "sha256:a800fdf8afc6ce1485e56cc2cde04c0e61584b6777613b34d380eba47f34979a",
+      "boundRenderedText": "□ 인스타 프로필\n□ 블로그 방향\n□ 상품\n□ 가격\n□ 타깃",
+      "targetChild": {
+        "qid": "q-check-5-9a93",
+        "semanticRole": "body",
+        "renderedText": "□ 타깃"
+      }
+    },
+    "finalCheckpointHtml": {
+      "digest": "sha256:784fbe76cb49509381baa5943b6c4b270e4bcfc0720d2773d892eeaf199fa37e",
+      "boundRenderedText": "□ 인스타 프로필\n□ 블로그 방향\n□ 상품\n□ 가격",
+      "targetChild": {
+        "qid": "q-check-5-9a93",
+        "semanticRole": "decoration",
+        "renderedText": ""
+      }
+    },
+    "gateRepairProcessedSlide": false,
+    "terminalFlagOnlyMutatesHtml": false,
+    "reason": "The author checkpoint retained the fifth checklist item. The persisted render checkpoint, which was updated by the accepted post-VQA candidate, replaced it with an empty decoration element. Run-17 gate-repair candidate readbacks did not include slide 10, and the terminal flag-only path records flags without rewriting HTML."
+  },
+  "offlineReproduction": {
+    "probe": "servers/fastapi/scripts/run_authored_checkpoint_repair_probe.ps1 --scan-only",
+    "databaseTransaction": "SET TRANSACTION READ ONLY",
+    "checkpointDigestBefore": "a843a3335cc8e7df7ef6465e5fda3d1a697ffe2578c380d5149597dda2f53b59",
+    "checkpointDigestAfter": "a843a3335cc8e7df7ef6465e5fda3d1a697ffe2578c380d5149597dda2f53b59",
+    "originalJobMutated": false,
+    "readback": "inspect_browser_source_readback",
+    "result": {
+      "integrityFailures": [
+        "source-slide:10:text:17"
+      ],
+      "visibilityFailures": [
+        "source-slide:10:text:17"
+      ],
+      "missingBlockIds": [],
+      "orderViolations": 0,
+      "telemetryFailures": [],
+      "diagnosticError": ""
+    }
+  },
+  "sourceEvidence": {
+    "workerLog": "app_data/logs/worker-generation-20260911-145547.stderr.log",
+    "perSlideCandidateReadbackLines": "187-194",
+    "finalDeckReadbackLine": 397,
+    "finalStatus": "artifacts/authored-full-product-validation-20260910/run-17/06-final-status.json"
+  }
+}

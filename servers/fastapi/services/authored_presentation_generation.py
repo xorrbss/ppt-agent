@@ -66,6 +66,7 @@ from services.authored_deck_plan_checkpoint import (
 from utils.llm_calls.author_slide import TEMPLATE_PAGE_NUMBER_MODE as _TEMPLATE_PAGE_NUMBER_MODE
 from utils.slide_capture_deck_scope import set_render_deck_scope
 from services.source_content.header_pages import source_pages_are_numbered
+from services.authored_vqa_source_integrity import source_vqa_candidate_integrity_passes
 from services.authored_header_contract_service import (
     page_number_mode_for,
     resolve_header_contract,
@@ -2544,6 +2545,10 @@ async def _generate_authored_presentation(
                         # Measure the exact correction instead of consulting a
                         # potentially stale capture cache.
                         candidate_metrics = await ensure_browser_metrics(candidate_html)
+                    if not await source_vqa_candidate_integrity_passes(
+                        index, candidate_html, candidate_metrics, validate_source_repair_candidate
+                    ):
+                        continue
                     (
                         selected_html,
                         selected_png,
