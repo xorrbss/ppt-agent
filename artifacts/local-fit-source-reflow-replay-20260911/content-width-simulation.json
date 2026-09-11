@@ -1,0 +1,901 @@
+{
+ "generated": "2026-09-11",
+ "question": "does exempting content-sized text boxes from the fixed_horizontal width verdict unblock the failing slides?",
+ "method": "simulate_content_width_exemption.py; geometry fragment patched in-process only; production policy authored-local-fit/v1.5 otherwise unchanged",
+ "arms": {
+  "baseline": "unpatched production",
+  "inline": "width forgiven on inline-family text leaves",
+  "shrink": "also shrink-to-fit flex/grid items",
+  "measured": "measured content-width, restricted to a text leaf",
+  "box": "measured content-width, container or leaf (widest reading)"
+ },
+ "rejecting_element_shifts": {
+  "run-11/16": {
+   "baseline": "source-block-f67d8c2c0cf8f503 x27",
+   "box": "source-block-c15e81177b2c6741 x27"
+  },
+  "run-11/29": {
+   "baseline": "q-pillar-target x30",
+   "box": "q-pillar-product x18 + q-pillar-target x12"
+  },
+  "run-16/9": {
+   "baseline": "q-span-8e4418d14ca4 x35",
+   "box": "q-span-fa338f43ced6 x35"
+  }
+ },
+ "slides": [
+  {
+   "run": "run-11",
+   "slide": 16,
+   "before": {},
+   "arms": [
+    {
+     "arm": "baseline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 1,
+      "parent_growth_cap": 14,
+      "reject.flow_box_escape": 5,
+      "fixed_horizontal": 27,
+      "vertical_movement_cap": 4
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {},
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "inline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 1,
+      "parent_growth_cap": 14,
+      "reject.flow_box_escape": 5,
+      "fixed_horizontal": 27,
+      "vertical_movement_cap": 4
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {},
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "shrink",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 1,
+      "parent_growth_cap": 14,
+      "reject.flow_box_escape": 5,
+      "fixed_horizontal": 27,
+      "vertical_movement_cap": 4
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {},
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "measured",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 1,
+      "parent_growth_cap": 14,
+      "reject.flow_box_escape": 5,
+      "fixed_horizontal": 27,
+      "vertical_movement_cap": 4
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {},
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "box",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 1,
+      "parent_growth_cap": 14,
+      "reject.flow_box_escape": 5,
+      "fixed_horizontal": 27,
+      "vertical_movement_cap": 4
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {},
+     "verdict": "unchanged"
+    }
+   ]
+  },
+  {
+   "run": "run-11",
+   "slide": 26,
+   "before": {
+    "overlap": 1
+   },
+   "arms": [
+    {
+     "arm": "baseline",
+     "fit_status": "unchanged",
+     "unresolved": [],
+     "rules": {},
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "inline",
+     "fit_status": "unchanged",
+     "unresolved": [],
+     "rules": {},
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "shrink",
+     "fit_status": "unchanged",
+     "unresolved": [],
+     "rules": {},
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "measured",
+     "fit_status": "unchanged",
+     "unresolved": [],
+     "rules": {},
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "box",
+     "fit_status": "unchanged",
+     "unresolved": [],
+     "rules": {},
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 1
+     },
+     "verdict": "unchanged"
+    }
+   ]
+  },
+  {
+   "run": "run-11",
+   "slide": 29,
+   "before": {
+    "overlap": 3,
+    "text_escapes_card": 3
+   },
+   "arms": [
+    {
+     "arm": "baseline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_growth_cap": 4,
+      "reject.flow_box_escape": 2,
+      "fixed_horizontal": 30,
+      "reject.text_escape": 3,
+      "vertical_movement_cap": 1
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 3,
+      "text_escapes_card": 3
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "inline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_growth_cap": 4,
+      "reject.flow_box_escape": 2,
+      "fixed_horizontal": 30,
+      "reject.text_escape": 3,
+      "vertical_movement_cap": 1
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 3,
+      "text_escapes_card": 3
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "shrink",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_growth_cap": 4,
+      "reject.flow_box_escape": 2,
+      "fixed_horizontal": 30,
+      "reject.text_escape": 3,
+      "vertical_movement_cap": 1
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 3,
+      "text_escapes_card": 3
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "measured",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_growth_cap": 4,
+      "reject.flow_box_escape": 2,
+      "fixed_horizontal": 30,
+      "reject.text_escape": 3,
+      "vertical_movement_cap": 1
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 3,
+      "text_escapes_card": 3
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "box",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_growth_cap": 4,
+      "reject.flow_box_escape": 2,
+      "fixed_horizontal": 30,
+      "reject.text_escape": 3,
+      "vertical_movement_cap": 1
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 3,
+      "text_escapes_card": 3
+     },
+     "verdict": "unchanged"
+    }
+   ]
+  },
+  {
+   "run": "run-15",
+   "slide": 21,
+   "before": {
+    "text_escapes_card": 2
+   },
+   "arms": [
+    {
+     "arm": "baseline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 17,
+      "reject.flow_box_escape": 26,
+      "reject.nested_escape": 8
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "text_escapes_card": 2
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "inline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 17,
+      "reject.flow_box_escape": 26,
+      "reject.nested_escape": 8
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "text_escapes_card": 2
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "shrink",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 17,
+      "reject.flow_box_escape": 26,
+      "reject.nested_escape": 8
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "text_escapes_card": 2
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "measured",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 17,
+      "reject.flow_box_escape": 26,
+      "reject.nested_escape": 8
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "text_escapes_card": 2
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "box",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 17,
+      "reject.flow_box_escape": 26,
+      "reject.nested_escape": 8
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "text_escapes_card": 2
+     },
+     "verdict": "unchanged"
+    }
+   ]
+  },
+  {
+   "run": "run-15",
+   "slide": 24,
+   "before": {
+    "clipping": 2,
+    "off_canvas": 1
+   },
+   "arms": [
+    {
+     "arm": "baseline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 19,
+      "reject.text_escape": 6,
+      "fixed_horizontal": 32
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "clipping": 2,
+      "off_canvas": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "inline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 19,
+      "reject.text_escape": 38
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "clipping": 2,
+      "off_canvas": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "shrink",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 19,
+      "reject.text_escape": 38
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "clipping": 2,
+      "off_canvas": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "measured",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 19,
+      "reject.text_escape": 38
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "clipping": 2,
+      "off_canvas": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "box",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 19,
+      "reject.text_escape": 38
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "clipping": 2,
+      "off_canvas": 1
+     },
+     "verdict": "unchanged"
+    }
+   ]
+  },
+  {
+   "run": "run-16",
+   "slide": 9,
+   "before": {
+    "overlap": 1
+   },
+   "arms": [
+    {
+     "arm": "baseline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 21,
+      "reject.flow_box_escape": 4,
+      "fixed_horizontal": 35,
+      "vertical_movement_cap": 3
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "inline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 21,
+      "reject.flow_box_escape": 4,
+      "fixed_horizontal": 35,
+      "vertical_movement_cap": 3
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "shrink",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 21,
+      "reject.flow_box_escape": 4,
+      "fixed_horizontal": 35,
+      "vertical_movement_cap": 3
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "measured",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 21,
+      "reject.flow_box_escape": 4,
+      "fixed_horizontal": 35,
+      "vertical_movement_cap": 3
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "box",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 21,
+      "reject.flow_box_escape": 4,
+      "fixed_horizontal": 35,
+      "vertical_movement_cap": 3
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 1
+     },
+     "verdict": "unchanged"
+    }
+   ]
+  },
+  {
+   "run": "run-16",
+   "slide": 19,
+   "before": {},
+   "arms": [
+    {
+     "arm": "baseline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 1,
+      "reject.overlap": 1
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {},
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "inline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 1,
+      "reject.overlap": 1
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {},
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "shrink",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 1,
+      "reject.overlap": 1
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {},
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "measured",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 1,
+      "reject.overlap": 1
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {},
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "box",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 1,
+      "reject.overlap": 1
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {},
+     "verdict": "unchanged"
+    }
+   ]
+  },
+  {
+   "run": "run-16",
+   "slide": 25,
+   "before": {
+    "overlap": 1
+   },
+   "arms": [
+    {
+     "arm": "baseline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 3,
+      "reject.flow_box_escape": 2,
+      "fixed_horizontal": 24,
+      "reject.text_escape": 1,
+      "vertical_movement_cap": 5
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "inline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 3,
+      "reject.flow_box_escape": 2,
+      "fixed_horizontal": 24,
+      "reject.text_escape": 1,
+      "vertical_movement_cap": 5
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "shrink",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 3,
+      "reject.flow_box_escape": 16,
+      "reject.text_escape": 2,
+      "vertical_movement_cap": 14
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "measured",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 3,
+      "reject.flow_box_escape": 16,
+      "reject.text_escape": 2,
+      "vertical_movement_cap": 14
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 1
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "box",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 3,
+      "reject.flow_box_escape": 16,
+      "reject.text_escape": 2,
+      "vertical_movement_cap": 14
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "overlap": 1
+     },
+     "verdict": "unchanged"
+    }
+   ]
+  },
+  {
+   "run": "run-16",
+   "slide": 26,
+   "before": {
+    "empty_media_panel": 1,
+    "overlap": 3
+   },
+   "arms": [
+    {
+     "arm": "baseline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 16,
+      "reject.overlap": 32
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "empty_media_panel": 1,
+      "overlap": 3
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "inline",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 16,
+      "reject.overlap": 32
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "empty_media_panel": 1,
+      "overlap": 3
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "shrink",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 16,
+      "reject.overlap": 32
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "empty_media_panel": 1,
+      "overlap": 3
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "measured",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 16,
+      "reject.overlap": 32
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "empty_media_panel": 1,
+      "overlap": 3
+     },
+     "verdict": "unchanged"
+    },
+    {
+     "arm": "box",
+     "fit_status": "unresolved",
+     "unresolved": [
+      "candidates_exhausted"
+     ],
+     "rules": {
+      "parent_space_unavailable": 16,
+      "reject.overlap": 32
+     },
+     "worst_shrink": 0.0,
+     "min_final_pt": 11.25,
+     "after": {
+      "empty_media_panel": 1,
+      "overlap": 3
+     },
+     "verdict": "unchanged"
+    }
+   ]
+  }
+ ]
+}

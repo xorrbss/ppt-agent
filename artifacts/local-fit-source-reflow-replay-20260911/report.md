@@ -132,3 +132,86 @@ All nine `overlap` instances were checked against the intentional-overlap marker
 always live (only the fitter read a dead name, fixed in `453bece2d`).
 **None of the nine elements is marked intentional, in the metrics or in the HTML.**
 They are real defects, not mis-flagged decoration.
+
+## (c) simulation — exempting content-sized boxes from the width verdict
+
+The section above named the blocker but not its size, so the exemption was
+simulated directly. `simulate_content_width_exemption.py` patches the geometry
+fragment **in this process only** — no file in `servers/` changes — and re-runs
+the nine failing slides under five definitions of "content-sized". `left` stays
+preserved throughout; only the width half of the verdict is relaxed.
+
+| arm | what is forgiven a width change |
+|---|---|
+| `baseline` | nothing (production `authored-local-fit/v1.5`) |
+| `inline` | inline-family text leaves |
+| `shrink` | also shrink-to-fit flex/grid items |
+| `measured` | any **text leaf** measured as wide as its own content and narrower than its parent offers |
+| `box` | the same measurement, container or leaf — the widest reading of (c) |
+
+### Result: no slide changes verdict, in any arm
+
+| arm | verdicts over the 9 slides | `fixed_horizontal` rejections |
+|---|---|---|
+| `baseline` | 9 × `unchanged` | 148 |
+| `inline` | 9 × `unchanged` | 116 |
+| `shrink` | 9 × `unchanged` | 92 |
+| `measured` | 9 × `unchanged` | 92 |
+| `box` | 9 × `unchanged` | 92 |
+
+The patch demonstrably ran — the rejection count falls — but no candidate ever
+survives to produce an edit, so every arm ships the same bytes. Worst shrink stays
+0.000 and the minimum type stays 11.25pt in all five arms.
+
+### Why: the rejection moves to the next box
+
+Two slides clear the rule outright (run-15 s24 at `inline`, run-16 s25 at
+`shrink`) and immediately fail on a different one — s24 on `reject.text_escape`
+×38, because the narrowed box now spills its card; s25 on `reject.flow_box_escape`
+×16 and `vertical_movement_cap` ×14.
+
+On the other three the count does not move at all, and the reason is sharper. The
+rejecting **element** changes while the rule does not:
+
+| run / slide | rejecting element, `baseline` | rejecting element, `box` |
+|---|---|---|
+| run-11 s16 | `source-block-f67d8c2c0cf8f503` ×27 | `source-block-c15e81177b2c6741` ×27 |
+| run-11 s29 | `q-pillar-target` ×30 | `q-pillar-product` ×18, `q-pillar-target` ×12 |
+| run-16 s9 | `q-span-8e4418d14ca4` ×35 | `q-span-fa338f43ced6` ×35 |
+
+Forgiving one content-sized box hands the veto to its sibling. A type change
+ripples across every box in the scope, and the contract is **all-or-nothing per
+candidate**: one preserved box that genuinely must hold its width rejects the
+whole candidate no matter how many others were exempted.
+
+Measured mechanism of the three, from the fitter's own probe: `.goal-label` in a
+`display:flex;flex-direction:row;align-items:center` parent, `.pillar` in a
+`display:grid` parent whose tracks are `244.578px 244.578px`, and
+`span.check-option` (`display:block;white-space:nowrap`) in a flex row. In each
+case the box after the candidate is **exactly** as wide as its own content
+(69.47, 244.58, 129.19 px), so these are content-sized in fact, not by guess.
+
+### What this settles
+
+- **(c) as an element-level exemption is dead.** It buys 0 of 9 slides under the
+  most permissive reading available. Do not implement it.
+- The decision is therefore not "which boxes may change width" but **whether a
+  scope may reflow horizontally at all** — a scope-level contract change, with
+  `reject.text_escape` and `reject.flow_box_escape` waiting behind it on the two
+  slides that do get past the width rule.
+- The residual mix at `box` is `fixed_horizontal` 26.5%, `parent_space_unavailable`
+  22.5%, `reject.flow_box_escape` 15.3%, `reject.text_escape` 12.4%,
+  `reject.overlap` 9.5%. No single remaining rule dominates.
+
+### Scope of the evidence
+
+Nine slides, three runs, **one source document** (`sha256:7746aaed…`, 35 slides,
+Korean PPTX, `content_policy.text=verbatim`). Every number above comes from that
+document. It is the same basis as the rest of this report and is **not** a
+document-independent measurement.
+
+Reproduce: `python simulate_content_width_exemption.py <validation-dir> <out.json>`
+from `servers/fastapi`, with `LOCAL_FIT_DB_URL_FILE` pointing at a file holding the
+database URL and `SIM_ARMS` selecting the arms. Per-slide records in
+`content-width-simulation.json`. No generation, no provider call, no database
+write, no stack contact.
