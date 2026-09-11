@@ -7809,7 +7809,6 @@
       "servers/fastapi/tests/unit/test_public_export_deadline.py",
       "servers/fastapi/tests/unit/test_public_export_identity_contract.py",
       "servers/fastapi/tests/unit/test_public_generation_deadline_policy.py",
-      "servers/fastapi/tests/unit/test_public_runtime_quota_clamp.py",
       "servers/fastapi/tests/unit/test_public_operation_admission.py",
       "servers/fastapi/tests/unit/test_public_operation_control_plane_races.py",
       "servers/fastapi/tests/unit/test_public_operation_correlation.py",

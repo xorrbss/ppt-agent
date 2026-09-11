@@ -145,3 +145,20 @@ generation_attempt_v2_flagged_slides_invalid` in
 
 - run-23 is the text-binder failure class (model split or restyled a block so the search-based binder could not bind it) — the class that `docs/authored-verbatim-placeholder-authoring-design-20260911.md` §2.1 removes by construction.
 - The series cannot continue until the provider usage limit resets or the account is reset; W26 (rescue overload cooldown, 127d3d4a8) was not live for runs 22-23.
+
+## Live series stage 1 — gate shadow (runs 24-28, 2026-09-12 03:10-04:17 KST)
+
+Code f6db6f33d (all five rollout switches at defaults: gate shadow, legacy normalization, placeholder off, single repair loop off), stack restarted 02:59. Same 35-slide input. Concurrent load on the host: seven agent sessions running test suites, plus two Hybrid exports.
+
+| run | outcome | flagged (review_required / repair_not_admitted) | captures / reuse | wall |
+|---|---|---|---|---|
+| 24 | failed — legacy binder `source block text has no unique DOM element (꿀벌쌤)` at slide 20 after 3 author attempts (prior: header contract rejected) | - | - | 611 s |
+| 25 | published | 8 (5 / 3) | 41 / 3 | 886 s |
+| 26 | published | 15 (7 / 8) | 64 / 12 | 879 s |
+| 27 | published | 12 (7 / 5) | 50 / 6 | 691 s |
+| 28 | published | 13 (9 / 4) | 47 / 4 | 877 s |
+
+- Publish rate 4/5 (80%) versus 2/5 in series 1 and 2. The single failure is the text-binder class that token mode (stage 4) removes by construction; nothing died in a repair or rescue path.
+- Captures per slide 1.2-1.8 with the capture owner active in shadow (reuse 3-12 per deck); the fit verification render is the legitimate second capture.
+- Shadow parity (run-24 scope, `artifacts/authored-live-series-20260915/shadow-parity-run-24.md`): 16 mismatches where the gate is correctly stricter (legacy comparator is empty at the raw/expanded provider entry points), 2 render-checkpoint mismatches that are evidence-only under enforce, and one swallowed `authored_admission_internal_error` on a deck that published (would have killed it under enforce) — fixed before stage 2, together with predicate/blockCount fields on the shadow log line.
+- Series-harness table: `artifacts/authored-live-series-20260915/stage-1-gate-shadow/`.
