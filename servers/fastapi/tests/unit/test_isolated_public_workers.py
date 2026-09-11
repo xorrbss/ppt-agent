@@ -634,6 +634,7 @@ def test_export_subprocess_limit_kills_descendants_and_reports_recycle(
         asyncio.run(
             execute_isolated_worker_job(
                 job,
+                presentation_id=uuid.uuid4(),
                 source_environment=environment,
                 command=[sys.executable, "-c", child_script],
             )
