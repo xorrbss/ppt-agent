@@ -1,0 +1,5247 @@
+[
+ {
+  "run": "run-11",
+  "slide": 16,
+  "fit_status": "unresolved",
+  "unresolved": [
+   "candidates_exhausted"
+  ],
+  "termination": [
+   {
+    "code": "search.candidates_exhausted",
+    "root_qid": "q-div-66757db28fba",
+    "evaluated_candidates": 36,
+    "unevaluated_candidates": 0,
+    "rejection_counts": {
+     "reject.parent_space_unfit": 15,
+     "reject.flow_box_escape": 5,
+     "reject.scope_exceeded": 31,
+     "reject.duplicate_declarations": 6
+    },
+    "remaining_issue": "defect.text_clipped"
+   }
+  ],
+  "scopes": [
+   {
+    "root": "q-div-66757db28fba",
+    "targets": [
+     "q-answer-body-16",
+     "source-block-f67d8c2c0cf8f503",
+     "source-block-c15e81177b2c6741"
+    ]
+   }
+  ],
+  "parent_exclusions": [
+   {
+    "qid": "q-div-a985ffc51e86",
+    "seed_qid": "q-div-948c49f110fb",
+    "ancestor_distance": 1,
+    "reason": "fixed_boundary_unavailable"
+   }
+  ],
+  "geometry_seeds": [],
+  "rejection_counts": {
+   "reject.parent_space_unfit": 15,
+   "reject.flow_box_escape": 5,
+   "reject.scope_exceeded": 31
+  },
+  "rule_counts": {
+   "parent_space_unavailable": 1,
+   "parent_growth_cap": 14,
+   "-": 5,
+   "fixed_horizontal": 27,
+   "vertical_movement_cap": 4
+  },
+  "candidates": [
+   {
+    "id": "q-div-66757db28fba:E:0",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 103,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:1",
+    "font_factor": 1,
+    "spacing_factor": 0.85,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 85.547,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:2",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:3",
+    "font_factor": 1,
+    "spacing_factor": 0.85,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:4",
+    "font_factor": 0.975,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:5",
+    "font_factor": 0.95,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:6",
+    "font_factor": 0.925,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:7",
+    "font_factor": 0.9,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:8",
+    "font_factor": 1,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:9",
+    "font_factor": 1,
+    "spacing_factor": 0.55,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:10",
+    "font_factor": 1,
+    "spacing_factor": 0.5,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:11",
+    "font_factor": 1,
+    "spacing_factor": 0.4,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "vertical_movement_cap",
+    "qid": "q-div-767bc451cfa7",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:12",
+    "font_factor": 0.975,
+    "spacing_factor": 0.85,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:13",
+    "font_factor": 0.95,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:14",
+    "font_factor": 0.925,
+    "spacing_factor": 0.55,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:15",
+    "font_factor": 0.9,
+    "spacing_factor": 0.4,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "vertical_movement_cap",
+    "qid": "q-div-767bc451cfa7",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:16",
+    "font_factor": 1,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 68.172,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:17",
+    "font_factor": 1,
+    "spacing_factor": 0.4,
+    "uses_parent_space": true,
+    "outcome": "rejected:parent_preservation",
+    "rule": "vertical_movement_cap",
+    "qid": "q-div-767bc451cfa7",
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 33.375,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:18",
+    "font_factor": 0.975,
+    "spacing_factor": 0.85,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 85.547,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:19",
+    "font_factor": 0.95,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 68.172,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:20",
+    "font_factor": 0.9,
+    "spacing_factor": 0.4,
+    "uses_parent_space": true,
+    "outcome": "rejected:parent_preservation",
+    "rule": "vertical_movement_cap",
+    "qid": "q-div-767bc451cfa7",
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 33.375,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:21",
+    "font_factor": 0.875,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:22",
+    "font_factor": 0.875,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:23",
+    "font_factor": 0.875,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 68.172,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:24",
+    "font_factor": 0.85,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:25",
+    "font_factor": 0.85,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:26",
+    "font_factor": 0.85,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 68.172,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:27",
+    "font_factor": 0.825,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:28",
+    "font_factor": 0.825,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:29",
+    "font_factor": 0.825,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 68.172,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:30",
+    "font_factor": 0.8,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:31",
+    "font_factor": 0.8,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:32",
+    "font_factor": 0.8,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 68.172,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:33",
+    "font_factor": 0.775,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:34",
+    "font_factor": 0.775,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:35",
+    "font_factor": 0.775,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 68.172,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:36",
+    "font_factor": 0.75,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:37",
+    "font_factor": 0.75,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:38",
+    "font_factor": 0.75,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 68.172,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:39",
+    "font_factor": 0.7,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:40",
+    "font_factor": 0.7,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:41",
+    "font_factor": 0.7,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 68.172,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:42",
+    "font_factor": 0.66666667,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:43",
+    "font_factor": 0.66666667,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:44",
+    "font_factor": 0.66666667,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 68.172,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:45",
+    "font_factor": 0.65,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:46",
+    "font_factor": 0.65,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:47",
+    "font_factor": 0.65,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 68.172,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:48",
+    "font_factor": 0.6,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:49",
+    "font_factor": 0.6,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "source-block-f67d8c2c0cf8f503",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:50",
+    "font_factor": 0.6,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 68.172,
+      "available_growth_px": 86,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     }
+    ]
+   }
+  ],
+  "overlaps": []
+ },
+ {
+  "run": "run-11",
+  "slide": 26,
+  "fit_status": "unchanged",
+  "unresolved": [],
+  "termination": [],
+  "scopes": [],
+  "parent_exclusions": [],
+  "geometry_seeds": [],
+  "rejection_counts": {},
+  "rule_counts": {},
+  "candidates": [],
+  "overlaps": [
+   {
+    "qids": [
+     "q-support-copy-26"
+    ],
+    "detail": "browser pixel-area probe reports a continuous occluding layer",
+    "severity": "medium",
+    "marked": {
+     "q-support-copy-26": {
+      "metrics_intentional": false,
+      "attribute_in_html": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "run": "run-11",
+  "slide": 29,
+  "fit_status": "unresolved",
+  "unresolved": [
+   "candidates_exhausted"
+  ],
+  "termination": [
+   {
+    "code": "search.candidates_exhausted",
+    "root_qid": "q-div-66757db28fba",
+    "evaluated_candidates": 36,
+    "unevaluated_candidates": 0,
+    "rejection_counts": {
+     "reject.parent_space_unfit": 4,
+     "reject.flow_box_escape": 2,
+     "reject.scope_exceeded": 31,
+     "reject.text_escape": 3,
+     "reject.duplicate_declarations": 17
+    },
+    "remaining_issue": "defect.text_clipped"
+   }
+  ],
+  "scopes": [
+   {
+    "root": "q-div-66757db28fba",
+    "targets": [
+     "q-span-c83eac29f2ad",
+     "q-span-2af01d53a93e",
+     "q-span-ff27a5abbc91"
+    ]
+   }
+  ],
+  "parent_exclusions": [],
+  "geometry_seeds": [],
+  "rejection_counts": {
+   "reject.parent_space_unfit": 4,
+   "reject.flow_box_escape": 2,
+   "reject.scope_exceeded": 31,
+   "reject.text_escape": 3
+  },
+  "rule_counts": {
+   "parent_growth_cap": 4,
+   "-": 5,
+   "fixed_horizontal": 30,
+   "vertical_movement_cap": 1
+  },
+  "candidates": [
+   {
+    "id": "q-div-66757db28fba:E:0",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 18,
+      "available_growth_px": 92,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     },
+     {
+      "qid": "q-card-business-pillars",
+      "required_growth_px": 59.125,
+      "available_growth_px": 74,
+      "growth_cap_px": 52.2,
+      "shared_row_qids": [
+       "q-card-business-pillars",
+       "q-card-seven-day-action"
+      ],
+      "merged_required_growth_px": [
+       59.125
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:1",
+    "font_factor": 1,
+    "spacing_factor": 0.85,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 5.829,
+      "available_growth_px": 92,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     },
+     {
+      "qid": "q-card-business-pillars",
+      "required_growth_px": 59.125,
+      "available_growth_px": 86.172,
+      "growth_cap_px": 52.2,
+      "shared_row_qids": [
+       "q-card-business-pillars",
+       "q-card-seven-day-action"
+      ],
+      "merged_required_growth_px": [
+       59.125
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:2",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:3",
+    "font_factor": 1,
+    "spacing_factor": 0.85,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:4",
+    "font_factor": 0.975,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:5",
+    "font_factor": 0.95,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:6",
+    "font_factor": 0.925,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:7",
+    "font_factor": 0.9,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:8",
+    "font_factor": 1,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:text_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:9",
+    "font_factor": 1,
+    "spacing_factor": 0.55,
+    "uses_parent_space": false,
+    "outcome": "rejected:text_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:10",
+    "font_factor": 1,
+    "spacing_factor": 0.5,
+    "uses_parent_space": false,
+    "outcome": "rejected:text_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:11",
+    "font_factor": 1,
+    "spacing_factor": 0.4,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "vertical_movement_cap",
+    "qid": "q-span-10d07e03ae86",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:12",
+    "font_factor": 0.975,
+    "spacing_factor": 0.85,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:13",
+    "font_factor": 0.95,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:14",
+    "font_factor": 0.925,
+    "spacing_factor": 0.55,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:15",
+    "font_factor": 0.9,
+    "spacing_factor": 0.4,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:16",
+    "font_factor": 1,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-business-pillars",
+      "required_growth_px": 59.125,
+      "available_growth_px": 92,
+      "growth_cap_px": 52.2,
+      "shared_row_qids": [
+       "q-card-business-pillars",
+       "q-card-seven-day-action"
+      ],
+      "merged_required_growth_px": [
+       59.125
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:17",
+    "font_factor": 1,
+    "spacing_factor": 0.4,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_growth_cap",
+    "rule": "parent_growth_cap",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-business-pillars",
+      "required_growth_px": 59.125,
+      "available_growth_px": 92,
+      "growth_cap_px": 52.2,
+      "shared_row_qids": [
+       "q-card-business-pillars",
+       "q-card-seven-day-action"
+      ],
+      "merged_required_growth_px": [
+       59.125
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:18",
+    "font_factor": 0.975,
+    "spacing_factor": 0.85,
+    "uses_parent_space": true,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 5.829,
+      "available_growth_px": 92,
+      "growth_cap_px": 52.2,
+      "safe_bottom_px": 648
+     },
+     {
+      "qid": "q-card-business-pillars",
+      "required_growth_px": 47.656,
+      "available_growth_px": 86.172,
+      "growth_cap_px": 52.2,
+      "shared_row_qids": [
+       "q-card-business-pillars",
+       "q-card-seven-day-action"
+      ],
+      "merged_required_growth_px": [
+       47.656
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:19",
+    "font_factor": 0.95,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": [
+     {
+      "qid": "q-card-business-pillars",
+      "required_growth_px": 36.688,
+      "available_growth_px": 92,
+      "growth_cap_px": 52.2,
+      "shared_row_qids": [
+       "q-card-business-pillars",
+       "q-card-seven-day-action"
+      ],
+      "merged_required_growth_px": [
+       36.688
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:20",
+    "font_factor": 0.9,
+    "spacing_factor": 0.4,
+    "uses_parent_space": true,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": [
+     {
+      "qid": "q-card-business-pillars",
+      "required_growth_px": 14.25,
+      "available_growth_px": 92,
+      "growth_cap_px": 52.2,
+      "shared_row_qids": [
+       "q-card-business-pillars",
+       "q-card-seven-day-action"
+      ],
+      "merged_required_growth_px": [
+       14.25
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:21",
+    "font_factor": 0.875,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:22",
+    "font_factor": 0.875,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:23",
+    "font_factor": 0.875,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": [
+     {
+      "qid": "q-card-business-pillars",
+      "required_growth_px": 3.031,
+      "available_growth_px": 92,
+      "growth_cap_px": 52.2,
+      "shared_row_qids": [
+       "q-card-business-pillars",
+       "q-card-seven-day-action"
+      ],
+      "merged_required_growth_px": [
+       3.031
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:24",
+    "font_factor": 0.85,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:25",
+    "font_factor": 0.85,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:27",
+    "font_factor": 0.825,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:28",
+    "font_factor": 0.825,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:30",
+    "font_factor": 0.8,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:31",
+    "font_factor": 0.8,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:33",
+    "font_factor": 0.775,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:34",
+    "font_factor": 0.775,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:36",
+    "font_factor": 0.75,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:37",
+    "font_factor": 0.75,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:39",
+    "font_factor": 0.7,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:40",
+    "font_factor": 0.7,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:42",
+    "font_factor": 0.66666667,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:43",
+    "font_factor": 0.66666667,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:45",
+    "font_factor": 0.65,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:46",
+    "font_factor": 0.65,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-pillar-target",
+    "space": null
+   }
+  ],
+  "overlaps": [
+   {
+    "qids": [
+     "q-span-2af01d53a93e"
+    ],
+    "detail": "browser pixel-area probe reports a continuous occluding layer",
+    "severity": "medium",
+    "marked": {
+     "q-span-2af01d53a93e": {
+      "metrics_intentional": false,
+      "attribute_in_html": false
+     }
+    }
+   },
+   {
+    "qids": [
+     "q-span-c83eac29f2ad"
+    ],
+    "detail": "browser pixel-area probe reports a continuous occluding layer",
+    "severity": "medium",
+    "marked": {
+     "q-span-c83eac29f2ad": {
+      "metrics_intentional": false,
+      "attribute_in_html": false
+     }
+    }
+   },
+   {
+    "qids": [
+     "q-span-ff27a5abbc91"
+    ],
+    "detail": "browser pixel-area probe reports a continuous occluding layer",
+    "severity": "medium",
+    "marked": {
+     "q-span-ff27a5abbc91": {
+      "metrics_intentional": false,
+      "attribute_in_html": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "run": "run-15",
+  "slide": 21,
+  "fit_status": "unresolved",
+  "unresolved": [
+   "candidates_exhausted"
+  ],
+  "termination": [
+   {
+    "code": "search.candidates_exhausted",
+    "root_qid": "q-card-list-21",
+    "evaluated_candidates": 34,
+    "unevaluated_candidates": 0,
+    "rejection_counts": {
+     "reject.parent_space_unfit": 17,
+     "reject.flow_box_escape": 26,
+     "reject.nested_escape": 8,
+     "reject.duplicate_declarations": 6
+    },
+    "remaining_issue": "defect.text_clipped"
+   }
+  ],
+  "scopes": [
+   {
+    "root": "q-card-list-21",
+    "targets": [
+     "q-connect-find-21",
+     "q-connect-contact-21"
+    ]
+   }
+  ],
+  "parent_exclusions": [
+   {
+    "qid": "q-div-a985ffc51e86",
+    "seed_qid": "q-div-00b4218e31f3",
+    "ancestor_distance": 3,
+    "reason": "fixed_boundary_unavailable"
+   },
+   {
+    "qid": "q-div-a985ffc51e86",
+    "seed_qid": "q-connect-find-21",
+    "ancestor_distance": 4,
+    "reason": "fixed_boundary_unavailable"
+   },
+   {
+    "qid": "q-div-a985ffc51e86",
+    "seed_qid": "q-connect-contact-21",
+    "ancestor_distance": 4,
+    "reason": "fixed_boundary_unavailable"
+   }
+  ],
+  "geometry_seeds": [],
+  "rejection_counts": {
+   "reject.parent_space_unfit": 17,
+   "reject.flow_box_escape": 26,
+   "reject.nested_escape": 8
+  },
+  "rule_counts": {
+   "parent_space_unavailable": 17,
+   "-": 34
+  },
+  "candidates": [
+   {
+    "id": "q-card-list-21:E:0",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-connect-contact-21",
+      "kind": "terminal_card",
+      "required_growth_px": 15,
+      "available_growth_px": 0,
+      "growth_cap_px": 32,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:E:1",
+    "font_factor": 1,
+    "spacing_factor": 0.85,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-connect-contact-21",
+      "kind": "terminal_card",
+      "required_growth_px": 14.994,
+      "available_growth_px": 0,
+      "growth_cap_px": 32,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:B:2",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:3",
+    "font_factor": 1,
+    "spacing_factor": 0.85,
+    "uses_parent_space": false,
+    "outcome": "rejected:nested_escape",
+    "rule": null,
+    "qid": "q-connect-find-21",
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:B:4",
+    "font_factor": 0.975,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:B:5",
+    "font_factor": 0.95,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:B:6",
+    "font_factor": 0.925,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:B:7",
+    "font_factor": 0.9,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:8",
+    "font_factor": 1,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:nested_escape",
+    "rule": null,
+    "qid": "q-connect-find-21",
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:9",
+    "font_factor": 1,
+    "spacing_factor": 0.55,
+    "uses_parent_space": false,
+    "outcome": "rejected:nested_escape",
+    "rule": null,
+    "qid": "q-connect-find-21",
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:10",
+    "font_factor": 1,
+    "spacing_factor": 0.5,
+    "uses_parent_space": false,
+    "outcome": "rejected:nested_escape",
+    "rule": null,
+    "qid": "q-connect-find-21",
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:11",
+    "font_factor": 1,
+    "spacing_factor": 0.4,
+    "uses_parent_space": false,
+    "outcome": "rejected:nested_escape",
+    "rule": null,
+    "qid": "q-connect-find-21",
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:12",
+    "font_factor": 0.975,
+    "spacing_factor": 0.85,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:13",
+    "font_factor": 0.95,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:nested_escape",
+    "rule": null,
+    "qid": "q-connect-find-21",
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:14",
+    "font_factor": 0.925,
+    "spacing_factor": 0.55,
+    "uses_parent_space": false,
+    "outcome": "rejected:nested_escape",
+    "rule": null,
+    "qid": "q-connect-find-21",
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:15",
+    "font_factor": 0.9,
+    "spacing_factor": 0.4,
+    "uses_parent_space": false,
+    "outcome": "rejected:nested_escape",
+    "rule": null,
+    "qid": "q-connect-find-21",
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:E:16",
+    "font_factor": 1,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-connect-contact-21",
+      "kind": "terminal_card",
+      "required_growth_px": 15.004,
+      "available_growth_px": 0,
+      "growth_cap_px": 32,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:E:17",
+    "font_factor": 1,
+    "spacing_factor": 0.4,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-00b4218e31f3",
+      "kind": "child_boundary",
+      "required_growth_px": 12.594,
+      "available_growth_px": 0,
+      "growth_cap_px": 22,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:E:18",
+    "font_factor": 0.975,
+    "spacing_factor": 0.85,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-connect-contact-21",
+      "kind": "terminal_card",
+      "required_growth_px": 13.554,
+      "available_growth_px": 0,
+      "growth_cap_px": 32,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:E:19",
+    "font_factor": 0.95,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-connect-contact-21",
+      "kind": "terminal_card",
+      "required_growth_px": 12.622,
+      "available_growth_px": 0,
+      "growth_cap_px": 32,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:E:20",
+    "font_factor": 0.9,
+    "spacing_factor": 0.4,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-connect-contact-21",
+      "kind": "terminal_card",
+      "required_growth_px": 10.26,
+      "available_growth_px": 0,
+      "growth_cap_px": 32,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:B:21",
+    "font_factor": 0.875,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:22",
+    "font_factor": 0.875,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:E:23",
+    "font_factor": 0.875,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-00b4218e31f3",
+      "kind": "child_boundary",
+      "required_growth_px": 11.594,
+      "available_growth_px": 0,
+      "growth_cap_px": 22,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:B:24",
+    "font_factor": 0.85,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:25",
+    "font_factor": 0.85,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:E:26",
+    "font_factor": 0.85,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-00b4218e31f3",
+      "kind": "child_boundary",
+      "required_growth_px": 11.594,
+      "available_growth_px": 0,
+      "growth_cap_px": 22,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:B:27",
+    "font_factor": 0.825,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:28",
+    "font_factor": 0.825,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:E:29",
+    "font_factor": 0.825,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-00b4218e31f3",
+      "kind": "child_boundary",
+      "required_growth_px": 11.594,
+      "available_growth_px": 0,
+      "growth_cap_px": 22,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:B:30",
+    "font_factor": 0.8,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:31",
+    "font_factor": 0.8,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:E:32",
+    "font_factor": 0.8,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-00b4218e31f3",
+      "kind": "child_boundary",
+      "required_growth_px": 11.594,
+      "available_growth_px": 0,
+      "growth_cap_px": 22,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:B:33",
+    "font_factor": 0.775,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:34",
+    "font_factor": 0.775,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:E:35",
+    "font_factor": 0.775,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-00b4218e31f3",
+      "kind": "child_boundary",
+      "required_growth_px": 11.594,
+      "available_growth_px": 0,
+      "growth_cap_px": 22,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:B:36",
+    "font_factor": 0.75,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:37",
+    "font_factor": 0.75,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:E:38",
+    "font_factor": 0.75,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-00b4218e31f3",
+      "kind": "child_boundary",
+      "required_growth_px": 11.594,
+      "available_growth_px": 0,
+      "growth_cap_px": 22,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:B:39",
+    "font_factor": 0.7,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:40",
+    "font_factor": 0.7,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:E:41",
+    "font_factor": 0.7,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-00b4218e31f3",
+      "kind": "child_boundary",
+      "required_growth_px": 11.594,
+      "available_growth_px": 0,
+      "growth_cap_px": 22,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:B:42",
+    "font_factor": 0.65,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:43",
+    "font_factor": 0.65,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:E:44",
+    "font_factor": 0.65,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-00b4218e31f3",
+      "kind": "child_boundary",
+      "required_growth_px": 11.594,
+      "available_growth_px": 0,
+      "growth_cap_px": 22,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:B:45",
+    "font_factor": 0.63157895,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:46",
+    "font_factor": 0.63157895,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:E:47",
+    "font_factor": 0.63157895,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-00b4218e31f3",
+      "kind": "child_boundary",
+      "required_growth_px": 11.594,
+      "available_growth_px": 0,
+      "growth_cap_px": 22,
+      "safe_bottom_px": 571
+     }
+    ]
+   },
+   {
+    "id": "q-card-list-21:B:48",
+    "font_factor": 0.6,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:C:49",
+    "font_factor": 0.6,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-card-list-21:E:50",
+    "font_factor": 0.6,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-00b4218e31f3",
+      "kind": "child_boundary",
+      "required_growth_px": 11.594,
+      "available_growth_px": 0,
+      "growth_cap_px": 22,
+      "safe_bottom_px": 571
+     }
+    ]
+   }
+  ],
+  "overlaps": []
+ },
+ {
+  "run": "run-15",
+  "slide": 24,
+  "fit_status": "unresolved",
+  "unresolved": [
+   "candidates_exhausted"
+  ],
+  "termination": [
+   {
+    "code": "search.candidates_exhausted",
+    "root_qid": "q-body-24",
+    "evaluated_candidates": 38,
+    "unevaluated_candidates": 0,
+    "rejection_counts": {
+     "reject.parent_space_unfit": 19,
+     "reject.text_escape": 6,
+     "reject.scope_exceeded": 32
+    },
+    "remaining_issue": "defect.text_clipped"
+   }
+  ],
+  "scopes": [
+   {
+    "root": "q-body-24",
+    "targets": [
+     "q-principle-label-24",
+     "q-principle-copy-24",
+     "q-principle-emphasis-24"
+    ]
+   }
+  ],
+  "parent_exclusions": [
+   {
+    "qid": "q-content-inner-24",
+    "seed_qid": "q-pillars-24",
+    "ancestor_distance": 1,
+    "reason": "fixed_boundary_unavailable"
+   }
+  ],
+  "geometry_seeds": [],
+  "rejection_counts": {
+   "reject.parent_space_unfit": 19,
+   "reject.text_escape": 6,
+   "reject.scope_exceeded": 32
+  },
+  "rule_counts": {
+   "parent_space_unavailable": 19,
+   "-": 6,
+   "fixed_horizontal": 32
+  },
+  "candidates": [
+   {
+    "id": "q-body-24:E:0",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 162,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       162
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:E:1",
+    "font_factor": 1,
+    "spacing_factor": 0.85,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 152.813,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       152.813
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:B:2",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:text_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:3",
+    "font_factor": 1,
+    "spacing_factor": 0.85,
+    "uses_parent_space": false,
+    "outcome": "rejected:text_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-body-24:B:4",
+    "font_factor": 0.975,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:B:5",
+    "font_factor": 0.95,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:B:6",
+    "font_factor": 0.925,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:B:7",
+    "font_factor": 0.9,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:8",
+    "font_factor": 1,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:text_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:9",
+    "font_factor": 1,
+    "spacing_factor": 0.55,
+    "uses_parent_space": false,
+    "outcome": "rejected:text_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:10",
+    "font_factor": 1,
+    "spacing_factor": 0.5,
+    "uses_parent_space": false,
+    "outcome": "rejected:text_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:11",
+    "font_factor": 1,
+    "spacing_factor": 0.4,
+    "uses_parent_space": false,
+    "outcome": "rejected:text_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:12",
+    "font_factor": 0.975,
+    "spacing_factor": 0.85,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:13",
+    "font_factor": 0.95,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:14",
+    "font_factor": 0.925,
+    "spacing_factor": 0.55,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:15",
+    "font_factor": 0.9,
+    "spacing_factor": 0.4,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:E:16",
+    "font_factor": 1,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 143.688,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       143.688
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:E:17",
+    "font_factor": 1,
+    "spacing_factor": 0.4,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 125.375,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       125.375
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:E:18",
+    "font_factor": 0.975,
+    "spacing_factor": 0.85,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 151.194,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       151.194
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:E:19",
+    "font_factor": 0.95,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 141.466,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       141.466
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:E:20",
+    "font_factor": 0.9,
+    "spacing_factor": 0.4,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 120.916,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       120.916
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:B:21",
+    "font_factor": 0.875,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:22",
+    "font_factor": 0.875,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:E:23",
+    "font_factor": 0.875,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 138.125,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       138.125
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:B:24",
+    "font_factor": 0.85,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:25",
+    "font_factor": 0.85,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:E:26",
+    "font_factor": 0.85,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 136.506,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       136.506
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:B:27",
+    "font_factor": 0.825,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:28",
+    "font_factor": 0.825,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:E:29",
+    "font_factor": 0.825,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 135.903,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       135.903
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:B:30",
+    "font_factor": 0.8,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:31",
+    "font_factor": 0.8,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:E:32",
+    "font_factor": 0.8,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 134.784,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       134.784
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:B:33",
+    "font_factor": 0.775,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:34",
+    "font_factor": 0.775,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:E:35",
+    "font_factor": 0.775,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 133.947,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       133.947
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:B:36",
+    "font_factor": 0.75,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:37",
+    "font_factor": 0.75,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:E:38",
+    "font_factor": 0.75,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 133.109,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       133.109
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:B:39",
+    "font_factor": 0.7,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:40",
+    "font_factor": 0.7,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:E:41",
+    "font_factor": 0.7,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 131.434,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       131.434
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:B:42",
+    "font_factor": 0.65,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:43",
+    "font_factor": 0.65,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:E:44",
+    "font_factor": 0.65,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 129.759,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       129.759
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:B:45",
+    "font_factor": 0.6,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:46",
+    "font_factor": 0.6,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:E:47",
+    "font_factor": 0.6,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 127.584,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       127.584
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:B:48",
+    "font_factor": 0.55,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:49",
+    "font_factor": 0.55,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:E:50",
+    "font_factor": 0.55,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 126.409,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       126.409
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:B:51",
+    "font_factor": 0.5,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:52",
+    "font_factor": 0.5,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:E:53",
+    "font_factor": 0.5,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 124.234,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       124.234
+      ]
+     }
+    ]
+   },
+   {
+    "id": "q-body-24:B:54",
+    "font_factor": 0.44444444,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:C:55",
+    "font_factor": 0.44444444,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-principle-emphasis-24",
+    "space": null
+   },
+   {
+    "id": "q-body-24:E:56",
+    "font_factor": 0.44444444,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-pillars-24",
+      "required_growth_px": 121.984,
+      "available_growth_px": 68,
+      "growth_cap_px": 51.9,
+      "shared_row_qids": [
+       "q-pillars-24"
+      ],
+      "merged_required_growth_px": [
+       121.984
+      ]
+     }
+    ]
+   }
+  ],
+  "overlaps": []
+ },
+ {
+  "run": "run-16",
+  "slide": 9,
+  "fit_status": "unresolved",
+  "unresolved": [
+   "candidates_exhausted"
+  ],
+  "termination": [
+   {
+    "code": "search.candidates_exhausted",
+    "root_qid": "q-div-66757db28fba",
+    "evaluated_candidates": 42,
+    "unevaluated_candidates": 0,
+    "rejection_counts": {
+     "reject.parent_space_unfit": 21,
+     "reject.flow_box_escape": 4,
+     "reject.scope_exceeded": 38
+    },
+    "remaining_issue": "defect.text_clipped"
+   }
+  ],
+  "scopes": [
+   {
+    "root": "q-div-66757db28fba",
+    "targets": [
+     "source-block-d0e09424ddc39590",
+     "q-span-8e4418d14ca4",
+     "q-span-59d3462195fe",
+     "q-span-fa338f43ced6",
+     "q-span-59ba0a1d34d0",
+     "q-span-98b5f466adf7",
+     "q-span-5bc00ee8cefd",
+     "q-span-5af708e06889",
+     "q-span-ee774363b464",
+     "q-span-d90f564532c8",
+     "q-span-4ee8f04e495d"
+    ]
+   }
+  ],
+  "parent_exclusions": [],
+  "geometry_seeds": [],
+  "rejection_counts": {
+   "reject.parent_space_unfit": 21,
+   "reject.flow_box_escape": 4,
+   "reject.scope_exceeded": 38
+  },
+  "rule_counts": {
+   "parent_space_unavailable": 21,
+   "-": 4,
+   "fixed_horizontal": 35,
+   "vertical_movement_cap": 3
+  },
+  "candidates": [
+   {
+    "id": "q-div-66757db28fba:E:0",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 24,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 272
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:1",
+    "font_factor": 1,
+    "spacing_factor": 0.85,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 16.782,
+      "available_growth_px": 18.391,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 268.390625
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 129.782,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 542.390625
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:2",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:3",
+    "font_factor": 1,
+    "spacing_factor": 0.85,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:4",
+    "font_factor": 0.975,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:5",
+    "font_factor": 0.95,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:6",
+    "font_factor": 0.925,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:7",
+    "font_factor": 0.9,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:8",
+    "font_factor": 1,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:9",
+    "font_factor": 1,
+    "spacing_factor": 0.55,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:10",
+    "font_factor": 1,
+    "spacing_factor": 0.5,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "vertical_movement_cap",
+    "qid": "source-block-3e464ca90148cc93",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:11",
+    "font_factor": 1,
+    "spacing_factor": 0.4,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "vertical_movement_cap",
+    "qid": "source-block-d0e09424ddc39590",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:12",
+    "font_factor": 0.975,
+    "spacing_factor": 0.85,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:13",
+    "font_factor": 0.95,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:14",
+    "font_factor": 0.925,
+    "spacing_factor": 0.55,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:15",
+    "font_factor": 0.9,
+    "spacing_factor": 0.4,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "vertical_movement_cap",
+    "qid": "source-block-d0e09424ddc39590",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:16",
+    "font_factor": 1,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:17",
+    "font_factor": 1,
+    "spacing_factor": 0.4,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 108.188,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 531.59375
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:18",
+    "font_factor": 0.975,
+    "spacing_factor": 0.85,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 16.782,
+      "available_growth_px": 18.391,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 268.390625
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 129.782,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 542.390625
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:19",
+    "font_factor": 0.95,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:20",
+    "font_factor": 0.9,
+    "spacing_factor": 0.4,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 108.188,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 531.59375
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:21",
+    "font_factor": 0.875,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:22",
+    "font_factor": 0.875,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:23",
+    "font_factor": 0.875,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:24",
+    "font_factor": 0.85,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:25",
+    "font_factor": 0.85,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:26",
+    "font_factor": 0.85,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:27",
+    "font_factor": 0.825,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:28",
+    "font_factor": 0.825,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:29",
+    "font_factor": 0.825,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:30",
+    "font_factor": 0.8,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:31",
+    "font_factor": 0.8,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:32",
+    "font_factor": 0.8,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:33",
+    "font_factor": 0.775,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:34",
+    "font_factor": 0.775,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:35",
+    "font_factor": 0.775,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:36",
+    "font_factor": 0.75,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:37",
+    "font_factor": 0.75,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:38",
+    "font_factor": 0.75,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:39",
+    "font_factor": 0.7,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:40",
+    "font_factor": 0.7,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:41",
+    "font_factor": 0.7,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:42",
+    "font_factor": 0.66666667,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:43",
+    "font_factor": 0.66666667,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:44",
+    "font_factor": 0.66666667,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:45",
+    "font_factor": 0.65,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:46",
+    "font_factor": 0.65,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:47",
+    "font_factor": 0.65,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:48",
+    "font_factor": 0.63157895,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:49",
+    "font_factor": 0.63157895,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:50",
+    "font_factor": 0.63157895,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:51",
+    "font_factor": 0.6,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:52",
+    "font_factor": 0.6,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:53",
+    "font_factor": 0.6,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:54",
+    "font_factor": 0.55,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:55",
+    "font_factor": 0.55,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:56",
+    "font_factor": 0.55,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:57",
+    "font_factor": 0.54545455,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:58",
+    "font_factor": 0.54545455,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:59",
+    "font_factor": 0.54545455,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:60",
+    "font_factor": 0.5,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:61",
+    "font_factor": 0.5,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-8e4418d14ca4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:62",
+    "font_factor": 0.5,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-card-identity-9a73",
+      "kind": "child_boundary",
+      "required_growth_px": 9.594,
+      "available_growth_px": 14.797,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 264.796875
+     },
+     {
+      "qid": "q-div-15ac06c72fa3",
+      "kind": "child_boundary",
+      "required_growth_px": 122.594,
+      "available_growth_px": 22,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 538.796875
+     }
+    ]
+   }
+  ],
+  "overlaps": [
+   {
+    "qids": [
+     "source-block-d0e09424ddc39590"
+    ],
+    "detail": "browser pixel-area probe reports a continuous occluding layer",
+    "severity": "high",
+    "marked": {
+     "source-block-d0e09424ddc39590": {
+      "metrics_intentional": false,
+      "attribute_in_html": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "run": "run-16",
+  "slide": 19,
+  "fit_status": "unresolved",
+  "unresolved": [
+   "candidates_exhausted"
+  ],
+  "termination": [
+   {
+    "code": "search.candidates_exhausted",
+    "root_qid": "q-card-phone-19",
+    "evaluated_candidates": 1,
+    "unevaluated_candidates": 0,
+    "rejection_counts": {
+     "reject.parent_space_unfit": 1,
+     "reject.duplicate_declarations": 52,
+     "reject.overlap": 1
+    },
+    "remaining_issue": "defect.content_occluded"
+   }
+  ],
+  "scopes": [
+   {
+    "root": "q-card-phone-19",
+    "targets": []
+   },
+   {
+    "root": "q-card-dm-19",
+    "targets": []
+   },
+   {
+    "root": "q-card-visit-19",
+    "targets": []
+   }
+  ],
+  "parent_exclusions": [],
+  "geometry_seeds": [
+   {
+    "qid": "source-block-0d298484b20206a0",
+    "other_qid": "q-phone-number-19",
+    "kind": "bottom_band",
+    "measurement": "painted_band_intersection",
+    "intersection_px": 9,
+    "intentional_overlap": false
+   },
+   {
+    "qid": "source-block-cf8e278cddd926e4",
+    "other_qid": "q-dm-number-19",
+    "kind": "bottom_band",
+    "measurement": "painted_band_intersection",
+    "intersection_px": 9,
+    "intentional_overlap": false
+   },
+   {
+    "qid": "source-block-0b50ad5119aedc7f",
+    "other_qid": "q-visit-number-19",
+    "kind": "bottom_band",
+    "measurement": "painted_band_intersection",
+    "intersection_px": 9,
+    "intentional_overlap": false
+   }
+  ],
+  "rejection_counts": {
+   "reject.parent_space_unfit": 1,
+   "reject.overlap": 1
+  },
+  "rule_counts": {
+   "parent_space_unavailable": 1,
+   "-": 1
+  },
+  "candidates": [
+   {
+    "id": "q-card-phone-19:E:0",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-phone-number-19",
+      "required_growth_px": 12,
+      "available_growth_px": -4,
+      "growth_cap_px": 41
+     }
+    ]
+   },
+   {
+    "id": "q-card-phone-19:B:2",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "source-block-0d298484b20206a0",
+    "space": null
+   }
+  ],
+  "overlaps": []
+ },
+ {
+  "run": "run-16",
+  "slide": 25,
+  "fit_status": "unresolved",
+  "unresolved": [
+   "candidates_exhausted"
+  ],
+  "termination": [
+   {
+    "code": "search.candidates_exhausted",
+    "root_qid": "q-div-66757db28fba",
+    "evaluated_candidates": 32,
+    "unevaluated_candidates": 0,
+    "rejection_counts": {
+     "reject.parent_space_unfit": 3,
+     "reject.flow_box_escape": 2,
+     "reject.scope_exceeded": 29,
+     "reject.text_escape": 1,
+     "reject.duplicate_declarations": 22
+    },
+    "remaining_issue": "defect.text_clipped"
+   }
+  ],
+  "scopes": [
+   {
+    "root": "q-div-66757db28fba",
+    "targets": [
+     "q-span-ea628152fecd"
+    ]
+   }
+  ],
+  "parent_exclusions": [
+   {
+    "qid": "q-div-c9c4d24a38ca",
+    "seed_qid": "q-div-948c49f110fb",
+    "ancestor_distance": 1,
+    "reason": "fixed_boundary_unavailable"
+   }
+  ],
+  "geometry_seeds": [],
+  "rejection_counts": {
+   "reject.parent_space_unfit": 3,
+   "reject.flow_box_escape": 2,
+   "reject.scope_exceeded": 29,
+   "reject.text_escape": 1
+  },
+  "rule_counts": {
+   "parent_space_unavailable": 3,
+   "-": 3,
+   "fixed_horizontal": 24,
+   "vertical_movement_cap": 5
+  },
+  "candidates": [
+   {
+    "id": "q-div-66757db28fba:E:0",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 45,
+      "available_growth_px": 16,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 636
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:1",
+    "font_factor": 1,
+    "spacing_factor": 0.85,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 18.985,
+      "available_growth_px": 16,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 636
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:2",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:3",
+    "font_factor": 1,
+    "spacing_factor": 0.85,
+    "uses_parent_space": false,
+    "outcome": "rejected:flow_box_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:4",
+    "font_factor": 0.975,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:5",
+    "font_factor": 0.95,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:6",
+    "font_factor": 0.925,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:7",
+    "font_factor": 0.9,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:8",
+    "font_factor": 1,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:text_escape",
+    "rule": null,
+    "qid": null,
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:9",
+    "font_factor": 1,
+    "spacing_factor": 0.55,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "vertical_movement_cap",
+    "qid": "q-div-1699171f6c53",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:10",
+    "font_factor": 1,
+    "spacing_factor": 0.5,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "vertical_movement_cap",
+    "qid": "q-div-a7af5115ff2f",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:11",
+    "font_factor": 1,
+    "spacing_factor": 0.4,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "vertical_movement_cap",
+    "qid": "q-div-a7af5115ff2f",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:12",
+    "font_factor": 0.975,
+    "spacing_factor": 0.85,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:13",
+    "font_factor": 0.95,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:14",
+    "font_factor": 0.925,
+    "spacing_factor": 0.55,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "vertical_movement_cap",
+    "qid": "q-div-1699171f6c53",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:15",
+    "font_factor": 0.9,
+    "spacing_factor": 0.4,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "vertical_movement_cap",
+    "qid": "q-div-a7af5115ff2f",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:18",
+    "font_factor": 0.975,
+    "spacing_factor": 0.85,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q-div-948c49f110fb",
+      "kind": "child_boundary",
+      "required_growth_px": 16.969,
+      "available_growth_px": 16,
+      "growth_cap_px": 51.6,
+      "safe_bottom_px": 636
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:21",
+    "font_factor": 0.875,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:22",
+    "font_factor": 0.875,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:24",
+    "font_factor": 0.85,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:25",
+    "font_factor": 0.85,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:27",
+    "font_factor": 0.825,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:28",
+    "font_factor": 0.825,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:30",
+    "font_factor": 0.8,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:31",
+    "font_factor": 0.8,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:33",
+    "font_factor": 0.775,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:34",
+    "font_factor": 0.775,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:36",
+    "font_factor": 0.75,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:37",
+    "font_factor": 0.75,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:39",
+    "font_factor": 0.7,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:40",
+    "font_factor": 0.7,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:42",
+    "font_factor": 0.66666667,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:43",
+    "font_factor": 0.66666667,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:45",
+    "font_factor": 0.65,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:46",
+    "font_factor": 0.65,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:parent_preservation",
+    "rule": "fixed_horizontal",
+    "qid": "q-span-5fba4a1b38e4",
+    "space": null
+   }
+  ],
+  "overlaps": [
+   {
+    "qids": [
+     "q-25-takeaway"
+    ],
+    "detail": "browser pixel-area probe reports a continuous occluding layer",
+    "severity": "medium",
+    "marked": {
+     "q-25-takeaway": {
+      "metrics_intentional": false,
+      "attribute_in_html": false
+     }
+    }
+   }
+  ]
+ },
+ {
+  "run": "run-16",
+  "slide": 26,
+  "fit_status": "unresolved",
+  "unresolved": [
+   "candidates_exhausted"
+  ],
+  "termination": [
+   {
+    "code": "search.candidates_exhausted",
+    "root_qid": "q-div-66757db28fba",
+    "evaluated_candidates": 32,
+    "unevaluated_candidates": 0,
+    "rejection_counts": {
+     "reject.parent_space_unfit": 16,
+     "reject.overlap": 32,
+     "reject.duplicate_declarations": 9
+    },
+    "remaining_issue": "defect.content_occluded"
+   }
+  ],
+  "scopes": [
+   {
+    "root": "q-div-66757db28fba",
+    "targets": [
+     "q26-contract-05",
+     "q26-production-05"
+    ]
+   }
+  ],
+  "parent_exclusions": [],
+  "geometry_seeds": [
+   {
+    "qid": "q-div-63e3d960f805",
+    "other_qid": "q26-takeaway",
+    "kind": "bottom_band",
+    "measurement": "painted_band_intersection",
+    "intersection_px": 48,
+    "intentional_overlap": false
+   }
+  ],
+  "rejection_counts": {
+   "reject.parent_space_unfit": 16,
+   "reject.overlap": 32
+  },
+  "rule_counts": {
+   "parent_space_unavailable": 16,
+   "-": 32
+  },
+  "candidates": [
+   {
+    "id": "q-div-66757db28fba:E:0",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 50,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:1",
+    "font_factor": 1,
+    "spacing_factor": 0.85,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 46.375,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:2",
+    "font_factor": 1,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:3",
+    "font_factor": 1,
+    "spacing_factor": 0.85,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:4",
+    "font_factor": 0.975,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:5",
+    "font_factor": 0.95,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:6",
+    "font_factor": 0.925,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:B:7",
+    "font_factor": 0.9,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:8",
+    "font_factor": 1,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:9",
+    "font_factor": 1,
+    "spacing_factor": 0.55,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:10",
+    "font_factor": 1,
+    "spacing_factor": 0.5,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:11",
+    "font_factor": 1,
+    "spacing_factor": 0.4,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:12",
+    "font_factor": 0.975,
+    "spacing_factor": 0.85,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:13",
+    "font_factor": 0.95,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:14",
+    "font_factor": 0.925,
+    "spacing_factor": 0.55,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:15",
+    "font_factor": 0.9,
+    "spacing_factor": 0.4,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:16",
+    "font_factor": 1,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 42.78125,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:17",
+    "font_factor": 1,
+    "spacing_factor": 0.4,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 35.59375,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:18",
+    "font_factor": 0.975,
+    "spacing_factor": 0.85,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 46.375,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:19",
+    "font_factor": 0.95,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 42.78125,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:E:20",
+    "font_factor": 0.9,
+    "spacing_factor": 0.4,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 35.59375,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:21",
+    "font_factor": 0.875,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:22",
+    "font_factor": 0.875,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:23",
+    "font_factor": 0.875,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 42.78125,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:24",
+    "font_factor": 0.85,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:25",
+    "font_factor": 0.85,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:26",
+    "font_factor": 0.85,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 42.78125,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:27",
+    "font_factor": 0.825,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:28",
+    "font_factor": 0.825,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:29",
+    "font_factor": 0.825,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 42.78125,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:30",
+    "font_factor": 0.8,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:31",
+    "font_factor": 0.8,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:32",
+    "font_factor": 0.8,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 42.78125,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:33",
+    "font_factor": 0.775,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:34",
+    "font_factor": 0.775,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:35",
+    "font_factor": 0.775,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 42.78125,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:36",
+    "font_factor": 0.75,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:37",
+    "font_factor": 0.75,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:38",
+    "font_factor": 0.75,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 42.78125,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:39",
+    "font_factor": 0.7,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:40",
+    "font_factor": 0.7,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:41",
+    "font_factor": 0.7,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 42.78125,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:42",
+    "font_factor": 0.66666667,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:43",
+    "font_factor": 0.66666667,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:44",
+    "font_factor": 0.66666667,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 42.78125,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   },
+   {
+    "id": "q-div-66757db28fba:B:45",
+    "font_factor": 0.65,
+    "spacing_factor": 1,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:C:46",
+    "font_factor": 0.65,
+    "spacing_factor": 0.7,
+    "uses_parent_space": false,
+    "outcome": "rejected:overlap",
+    "rule": null,
+    "qid": "q-div-63e3d960f805",
+    "space": null
+   },
+   {
+    "id": "q-div-66757db28fba:E:47",
+    "font_factor": 0.65,
+    "spacing_factor": 0.7,
+    "uses_parent_space": true,
+    "outcome": "removed:parent_space_unavailable",
+    "rule": "parent_space_unavailable",
+    "qid": null,
+    "space": [
+     {
+      "qid": "q26-takeaway",
+      "required_growth_px": 42.78125,
+      "available_growth_px": 14,
+      "growth_cap_px": 51.6
+     }
+    ]
+   }
+  ],
+  "overlaps": [
+   {
+    "qids": [
+     "q-div-63e3d960f805",
+     "q26-takeaway"
+    ],
+    "detail": "visible element boxes substantially overlap",
+    "severity": "medium",
+    "marked": {
+     "q-div-63e3d960f805": {
+      "metrics_intentional": false,
+      "attribute_in_html": false
+     },
+     "q26-takeaway": {
+      "metrics_intentional": false,
+      "attribute_in_html": false
+     }
+    }
+   },
+   {
+    "qids": [
+     "q26-contract-05"
+    ],
+    "detail": "browser pixel-area probe reports a continuous occluding layer",
+    "severity": "medium",
+    "marked": {
+     "q26-contract-05": {
+      "metrics_intentional": false,
+      "attribute_in_html": false
+     }
+    }
+   },
+   {
+    "qids": [
+     "q26-production-05"
+    ],
+    "detail": "browser pixel-area probe reports a continuous occluding layer",
+    "severity": "medium",
+    "marked": {
+     "q26-production-05": {
+      "metrics_intentional": false,
+      "attribute_in_html": false
+     }
+    }
+   }
+  ]
+ }
+]

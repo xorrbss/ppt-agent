@@ -1,0 +1,138 @@
+[
+ {
+  "run": "run-11",
+  "slide": 10,
+  "before": {},
+  "fit_status": "unchanged",
+  "changed": false,
+  "operations": [],
+  "unresolved": [],
+  "termination": [],
+  "shrunk_runs": 0,
+  "worst_shrink": 0.0,
+  "min_final_pt": 11.25,
+  "after": {},
+  "verdict": "unchanged"
+ },
+ {
+  "run": "run-11",
+  "slide": 14,
+  "before": {
+   "empty_media_panel": 1
+  },
+  "fit_status": "unchanged",
+  "changed": false,
+  "operations": [],
+  "unresolved": [],
+  "termination": [],
+  "shrunk_runs": 0,
+  "worst_shrink": 0.0,
+  "min_final_pt": 11.25,
+  "after": {
+   "empty_media_panel": 1
+  },
+  "verdict": "unchanged"
+ },
+ {
+  "run": "run-11",
+  "slide": 16,
+  "before": {},
+  "fit_status": "unresolved",
+  "changed": false,
+  "operations": [],
+  "unresolved": [
+   "candidates_exhausted"
+  ],
+  "termination": [
+   "search.candidates_exhausted"
+  ],
+  "shrunk_runs": 0,
+  "worst_shrink": 0.0,
+  "min_final_pt": 11.25,
+  "after": {},
+  "verdict": "unchanged"
+ },
+ {
+  "run": "run-11",
+  "slide": 26,
+  "before": {
+   "overlap": 1
+  },
+  "fit_status": "unchanged",
+  "changed": false,
+  "operations": [],
+  "unresolved": [],
+  "termination": [],
+  "shrunk_runs": 0,
+  "worst_shrink": 0.0,
+  "min_final_pt": 11.25,
+  "after": {
+   "overlap": 1
+  },
+  "verdict": "unchanged"
+ },
+ {
+  "run": "run-11",
+  "slide": 28,
+  "before": {},
+  "fit_status": "spacing_adjusted",
+  "changed": true,
+  "operations": [
+   {
+    "kind": "parent_reflow",
+    "qid": "q-div-66757db28fba"
+   }
+  ],
+  "unresolved": [],
+  "termination": [],
+  "shrunk_runs": 0,
+  "worst_shrink": 0.0,
+  "min_final_pt": 11.25,
+  "after": {},
+  "verdict": "no_change"
+ },
+ {
+  "run": "run-11",
+  "slide": 29,
+  "before": {
+   "overlap": 3,
+   "text_escapes_card": 3
+  },
+  "fit_status": "unresolved",
+  "changed": false,
+  "operations": [],
+  "unresolved": [
+   "candidates_exhausted"
+  ],
+  "termination": [
+   "search.candidates_exhausted"
+  ],
+  "shrunk_runs": 0,
+  "worst_shrink": 0.0,
+  "min_final_pt": 11.25,
+  "after": {
+   "overlap": 3,
+   "text_escapes_card": 3
+  },
+  "verdict": "unchanged"
+ },
+ {
+  "run": "run-11",
+  "slide": 30,
+  "before": {
+   "empty_media_panel": 1
+  },
+  "fit_status": "unchanged",
+  "changed": false,
+  "operations": [],
+  "unresolved": [],
+  "termination": [],
+  "shrunk_runs": 0,
+  "worst_shrink": 0.0,
+  "min_final_pt": 11.25,
+  "after": {
+   "empty_media_panel": 1
+  },
+  "verdict": "unchanged"
+ }
+]
