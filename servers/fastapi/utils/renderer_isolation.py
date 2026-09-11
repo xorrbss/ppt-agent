@@ -113,6 +113,21 @@ class AdmittedHtml:
     node_count: int
 
 
+def duplicate_attribute_counts(
+    attrs: list[tuple[str, str | None]],
+) -> list[tuple[str, int]]:
+    """Return duplicate attribute names in first-seen order with occurrence counts."""
+
+    counts: dict[str, int] = {}
+    duplicate_order: list[str] = []
+    for raw_name, _raw_value in attrs:
+        name = raw_name.lower()
+        counts[name] = counts.get(name, 0) + 1
+        if counts[name] == 2:
+            duplicate_order.append(name)
+    return [(name, counts[name]) for name in duplicate_order]
+
+
 def _validate_css(css: str) -> set[str]:
     normalized = html_lib.unescape(_CSS_COMMENT.sub("", css))
     if len(normalized.encode("utf-8")) > MAX_HTML_BYTES:

@@ -35,6 +35,13 @@ def is_export_font_embedding_default_cjk_enabled(
     return _bool_setting("EXPORT_FONT_EMBEDDING_DEFAULT_CJK", True, settings)
 
 
+def get_authored_html_normalization(settings: RuntimeSettings | None = None) -> str:
+    """Select legacy source-span or canonical HTML5-tree normalization."""
+
+    mode = (get_setting_env("AUTHORED_HTML_NORMALIZATION", settings) or "legacy").strip().lower()
+    return mode if mode in {"legacy", "tree"} else "legacy"
+
+
 def is_authored_style_anchor_enabled(settings: RuntimeSettings | None = None) -> bool:
     """Author one anchor slide first and hand its stylesheet to the rest."""
     return _bool_setting("AUTHORED_STYLE_ANCHOR_ENABLED", True, settings)
@@ -258,6 +265,7 @@ __all__ = [
     "get_llm_light_model_env",
     "get_openai_reasoning_effort_env",
     "get_outline_density_floor_chars",
+    "get_authored_html_normalization",
     "get_workspace_poll_idle_ceiling_seconds",
     "is_authored_author_streaming_enabled",
     "is_authored_checkpoint_batching_enabled",

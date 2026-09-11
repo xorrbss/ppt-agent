@@ -65,4 +65,25 @@ def drop_void_element_end_tags(html: str) -> tuple[str, list[dict]]:
     return result, receipts
 
 
-__all__ = ["drop_void_element_end_tags"]
+def html5_void_end_tag_receipts(errors: tuple[object, ...]) -> list[dict]:
+    """Map html5lib void-end-tag corrections to bounded compatibility receipts."""
+
+    counts: Counter[tuple[str, str]] = Counter()
+    for error in errors:
+        code = str(getattr(error, "code", ""))
+        data = getattr(error, "data", {})
+        if code == "unexpected-end-tag":
+            tag = str(data.get("name", "")).lower()
+            if tag in VOID_TAGS:
+                counts[("html_void_end_tag_dropped", tag)] += 1
+        elif code == "unexpected-end-tag-treated-as":
+            tag = str(data.get("originalName", "")).lower()
+            if tag in VOID_TAGS:
+                counts[("html_void_end_tag_reparsed", tag)] += 1
+    return [
+        {"rule": rule, "detail": tag, "count": count}
+        for (rule, tag), count in sorted(counts.items())
+    ]
+
+
+__all__ = ["drop_void_element_end_tags", "html5_void_end_tag_receipts"]

@@ -783,6 +783,16 @@
       "description": "Strip a whitelist of harmless authored-HTML admission findings (break/page-break CSS declarations, a hidden attribute on bound or unbound elements) before the renderer admission gate."
     },
     {
+      "key": "AUTHORED_HTML_NORMALIZATION",
+      "type": "enum",
+      "default": "legacy",
+      "secret": false,
+      "choices": ["legacy", "tree"],
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Authored HTML normalization representation: legacy keeps source-span rewrites; tree uses pinned HTML5 parsing and canonical serialization."
+    },
+    {
       "key": "AUTHORED_QUALITY_LOOP_ENABLED",
       "type": "boolean",
       "default": false,

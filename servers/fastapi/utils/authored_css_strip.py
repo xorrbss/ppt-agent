@@ -61,6 +61,26 @@ import re
 
 from utils.renderer_css_policy import ALLOWED_CSS_PROPERTIES
 
+#: The earlier A2 normalizer gives these pagination declarations their own
+#: receipt.  Keep the predicate here so the legacy source-span pass and the
+#: tree pass cannot drift.
+BREAK_CONTROL_PROPERTIES: tuple[str, ...] = (
+    "break-inside",
+    "break-before",
+    "break-after",
+    "page-break-inside",
+    "page-break-before",
+    "page-break-after",
+    "orphans",
+    "widows",
+)
+
+_BREAK_CONTROL_DECLARATION = re.compile(
+    r"(?i)(?:^|(?<=[;{]))\s*(?:"
+    + "|".join(re.escape(prop) for prop in BREAK_CONTROL_PROPERTIES)
+    + r")\s*:\s*[^;}]*"
+)
+
 #: Refused by the renderer for correctness reasons, not because the parser
 #: cannot handle them -- see ``renderer_css_policy`` module docstring. Never
 #: stripped: a slide using them keeps failing admission on its own terms.
@@ -238,6 +258,21 @@ def _content_value_class(value: str) -> str:
     return "empty" if _NON_RENDERING_CONTENT_VALUE.fullmatch(value) else "text"
 
 
+def strip_break_control_declarations(text: str) -> tuple[str, int, set[str]]:
+    """Remove the A2 pagination declarations from one declaration list."""
+
+    count = 0
+    properties: set[str] = set()
+
+    def _replace(match: re.Match[str]) -> str:
+        nonlocal count
+        count += 1
+        properties.add(match.group(0).split(":", 1)[0].strip().lower())
+        return ""
+
+    return _BREAK_CONTROL_DECLARATION.sub(_replace, text), count, properties
+
+
 def _strip_declarations(text: str) -> tuple[str, dict[_PropertyKey, int]]:
     """Remove every declaration whose property is not allowed or exempt.
 
@@ -324,6 +359,54 @@ def _strip_style_blocks(
     return _STYLE_BLOCK.sub(_replace_block, html)
 
 
+def _records(
+    property_counts: dict[_PropertyKey, int],
+    hoisted_counts: dict[str, int] | None = None,
+    removed_counts: dict[str, int] | None = None,
+) -> list[dict]:
+    records: list[dict] = []
+    for key in sorted(property_counts, key=lambda entry: (entry[0], entry[1] or "")):
+        name, value_class = key
+        record: dict = {"rule": "css_property_stripped", "property": name}
+        if value_class is not None:
+            record["value_class"] = value_class
+        record["count"] = property_counts[key]
+        records.append(record)
+    for keyword in sorted(hoisted_counts or {}):
+        records.append(
+            {
+                "rule": "css_at_rule_hoisted",
+                "at_rule": keyword,
+                "count": (hoisted_counts or {})[keyword],
+            }
+        )
+    for keyword in sorted(removed_counts or {}):
+        records.append(
+            {
+                "rule": "css_at_rule_removed",
+                "at_rule": keyword,
+                "count": (removed_counts or {})[keyword],
+            }
+        )
+    return records
+
+
+def strip_disallowed_declaration_list(css: str) -> tuple[str, list[dict]]:
+    """Tree-pass adapter for one decoded inline ``style`` value."""
+
+    rewritten, property_counts = _strip_declarations(css)
+    return rewritten, _records(property_counts)
+
+
+def strip_disallowed_stylesheet(css: str) -> tuple[str, list[dict]]:
+    """Tree-pass adapter for the decoded text of one ``style`` element."""
+
+    rewritten, hoisted_counts, removed_counts = _process_at_rules(css)
+    property_counts: dict[_PropertyKey, int] = {}
+    rewritten = _strip_flat_rules(rewritten, property_counts)
+    return rewritten, _records(property_counts, hoisted_counts, removed_counts)
+
+
 def strip_disallowed_css(html: str) -> tuple[str, list[dict]]:
     """Strip CSS declarations/at-rules ``admit_authored_html`` would refuse.
 
@@ -345,23 +428,13 @@ def strip_disallowed_css(html: str) -> tuple[str, list[dict]]:
     result = _strip_style_blocks(html, property_counts, hoisted_counts, removed_counts)
     result = _strip_style_attributes(result, property_counts)
 
-    records: list[dict] = []
-    for key in sorted(property_counts, key=lambda entry: (entry[0], entry[1] or "")):
-        name, value_class = key
-        record: dict = {"rule": "css_property_stripped", "property": name}
-        if value_class is not None:
-            record["value_class"] = value_class
-        record["count"] = property_counts[key]
-        records.append(record)
-    for keyword in sorted(hoisted_counts):
-        records.append(
-            {"rule": "css_at_rule_hoisted", "at_rule": keyword, "count": hoisted_counts[keyword]}
-        )
-    for keyword in sorted(removed_counts):
-        records.append(
-            {"rule": "css_at_rule_removed", "at_rule": keyword, "count": removed_counts[keyword]}
-        )
-    return result, records
+    return result, _records(property_counts, hoisted_counts, removed_counts)
 
 
-__all__ = ["strip_disallowed_css"]
+__all__ = [
+    "BREAK_CONTROL_PROPERTIES",
+    "strip_break_control_declarations",
+    "strip_disallowed_css",
+    "strip_disallowed_declaration_list",
+    "strip_disallowed_stylesheet",
+]
