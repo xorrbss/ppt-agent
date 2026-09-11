@@ -1807,16 +1807,12 @@ async def create_workspace_command(
                     operation_id=operation.id,
                     operation_kind="export",
                     request_plan=None,
-                    # The deck size scales the export deadline; ``n_slides``
-                    # is rewritten by authored publication to the published
-                    # slide count, so it is the row's own account of the deck.
+                    # Scales the export deadline; authored publication rewrites n_slides to the published count.
                     planned_slide_count=presentation.n_slides,
                 )
             except PublicAdmissionRejected as error:
                 raise WorkspaceServiceError(
-                    error.code,
-                    status_code=429,
-                    retryable=True,
+                    error.code, status_code=429, retryable=True,
                     retry_after_seconds=error.retry_after_seconds or 15,
                 ) from error
         assets = await _materialize_attachments(
