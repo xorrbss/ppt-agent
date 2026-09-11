@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}html,body{margin:0;width:1280px;height:720px;overflow:hidden;font-family:Arial,sans-serif;background:#fff}
+.root{position:absolute;left:80px;top:100px;width:600px;height:300px;border:1px solid #cbd5e1;background:#fff;padding:16px;display:flex;flex-direction:column;gap:8px}
+.text{height:60px;font-size:16px;line-height:22px;color:#111827}
+.locked{height:80px;background:#fee2e2;border:1px solid #fca5a5;padding:8px;font-size:14px;line-height:20px;color:#7f1d1d}
+.rest{height:100px;background:#f1f5f9;padding:8px;font-size:14px;line-height:20px;color:#334155}
+</style></head><body>
+<main class="root" data-qid="root">
+  <div class="text" data-qid="text">Line one of the paragraph.<br>Line two of the paragraph.<br>Line three of the paragraph.<br>Line four of the paragraph.</div>
+  <section class="locked" data-qid="locked" data-local-fit-protected="true">Protected block</section>
+  <section class="rest" data-qid="rest">Trailing block</section>
+</main>
+</body></html>
