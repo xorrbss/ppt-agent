@@ -331,7 +331,7 @@ def _extended_shrink_basis(
         try:
             selected_total = float(selected_cost["total"])
         except (KeyError, TypeError, ValueError):
-            raise AuthoredLocalFitRejected("extended_comparison_incomplete")
+            raise AuthoredLocalFitRejected("extended_comparison_incomplete") from None
         if not math.isfinite(selected_total):
             raise AuthoredLocalFitRejected("extended_comparison_incomplete")
         related = [
@@ -351,7 +351,7 @@ def _extended_shrink_basis(
                 try:
                     total = float(cost["total"])
                 except (KeyError, TypeError, ValueError):
-                    raise AuthoredLocalFitRejected("extended_comparison_incomplete")
+                    raise AuthoredLocalFitRejected("extended_comparison_incomplete") from None
                 if not math.isfinite(total) or total <= selected_total + 1e-10:
                     raise AuthoredLocalFitRejected("extended_comparison_incomplete")
                 passed_ids.add(candidate_id)
@@ -573,7 +573,7 @@ def _delivery_receipt(
     """Bind a fit-disabled original render without claiming quality approval."""
 
     policy_revision = _policy_revision(policy)
-    png = bytes(getattr(capture, "png"))
+    png = bytes(capture.png)
     width, height = _validated_png_dimensions(png, policy=policy)
     render_key = _render_key(
         metrics,
@@ -744,6 +744,17 @@ def accept_unchanged_capture(
     report, metrics = _report(capture), _metrics(capture)
     policy_revision = _policy_revision(policy)
     unresolved = report.get("unresolved_reasons")
+    fitter_reasons = tuple(
+        str(reason).strip()
+        for reason in (unresolved if isinstance(unresolved, (list, tuple)) else ())
+        if str(reason).strip()
+    )
+    if report.get("status") == "unresolved" and fitter_reasons:
+        # The fitter restored the original and named why its search stopped
+        # (``candidates_exhausted``, ``budget_exhausted``, ...). That is a
+        # search outcome, not a reconstruction failure: keep the fitter's own
+        # word so the receipt does not read as a renderer identity mismatch.
+        raise AuthoredLocalFitRejected(fitter_reasons[0])
     if (
         report.get("requested") is not True
         or report.get("fit_state") != "final"
@@ -776,7 +787,7 @@ def accept_unchanged_capture(
         final_html=original_html,
         report=report,
         final_metrics=metrics,
-        final_png=bytes(getattr(capture, "png")),
+        final_png=bytes(capture.png),
         changed=False,
         verified=False,
         max_bbox_delta_px=0.0,
@@ -784,7 +795,7 @@ def accept_unchanged_capture(
         verify_ms=0.0,
     )
     metrics[RECEIPT_KEY] = receipt
-    return AcceptedLocalFit(original_html, bytes(getattr(capture, "png")), metrics, receipt)
+    return AcceptedLocalFit(original_html, bytes(capture.png), metrics, receipt)
 
 
 def retain_publishable_unresolved_capture(
@@ -826,7 +837,7 @@ def retain_publishable_unresolved_capture(
     fitted_html = getattr(capture, "fitted_html", None)
     if fitted_html is not None:
         raise AuthoredLocalFitRejected("reconstruction_mismatch")
-    png = bytes(getattr(capture, "png"))
+    png = bytes(capture.png)
     receipt = _delivery_receipt(
         capture=capture,
         original_html=original_html,
@@ -956,7 +967,7 @@ def accept_verified_capture(
         final_html=final_html,
         report=report,
         final_metrics=verify_metrics,
-        final_png=bytes(getattr(verify_capture, "png")),
+        final_png=bytes(verify_capture.png),
         changed=True,
         verified=True,
         max_bbox_delta_px=max_delta,
@@ -965,7 +976,7 @@ def accept_verified_capture(
     )
     verify_metrics[RECEIPT_KEY] = receipt
     return AcceptedLocalFit(
-        final_html, bytes(getattr(verify_capture, "png")), verify_metrics, receipt
+        final_html, bytes(verify_capture.png), verify_metrics, receipt
     )
 
 
