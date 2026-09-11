@@ -62,6 +62,12 @@ LLM이 생성한 Authored HTML의 내용과 디자인을 유지하면서 잘림�
 `parent_preservation_failed`만 허용한다. 다른 local-fit 예외는 `AuthoredStageError`로 전파될 수 있다.
 이번 개정은 이 제한적 경고 보존을 원본 출력 가능 여부에 따른 일반적인 보정 실패 격리로 확장한다.
 
+> **2026-09-11 갱신:** 위 확장은 반영됐고 화이트리스트는 더 이상 참조되지 않아
+> `PUBLISHABLE_VISUAL_REASONS` 상수를 삭제했다(`453bece2d`). 미해결 사유는 제한 없이
+> 영수증에 보존되며, `accept_unchanged_capture`가 모든 미해결 보고를
+> `reconstruction_mismatch`로 덮어쓰던 문제도 고쳐 fitter 자신의 종료 코드가 남는다(`58e70b6d5`).
+> 2026-09-09 덱 7개·56장 실측에서 미해결 12장은 전부 `candidates_exhausted`였다.
+
 ## 3. 설계 평가와 해결해야 할 위험
 
 직전 설계 검토 점수는 78/100이다. 정성적 설계 평가이며 복구율·성능 측정 점수가 아니다.

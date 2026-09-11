@@ -5,6 +5,7 @@
 - 제안 정책 revision: `authored-local-fit/v1.4`. 현재 제품 코드는 v1.3 / 9.5pt다.
 - 선행 문서: [폰트·원본 보존](authored-local-fit-font-floor-design-20260908.md), [부모 영역 재배분](authored-local-fit-parent-reflow-design-20260908.md).
 - 이번 산출물은 설계 문서다. 제품 코드 수정, 기존 발표 자료 변경, 생성·게시·내보내기는 후속 구현 범위다.
+- **2026-09-11 갱신: §1~§9는 09-09 시점의 기록이다. 구현된 속성 이름과 미지원으로 확정된 범위는 §10을 먼저 읽는다.**
 
 ## 1. 목표와 결정
 
@@ -237,3 +238,53 @@ v1.3 게시물은 기존 9.5pt 정책으로 해석한다. 글자 축소는 결�
 
 `compiled-spec-memory` 자동 기록은 필수 PowerShell 7 실행 파일이 없어 수행하지 못했다.
 사용자의 9pt 허용 결정과 이번 확인 범위는 이 문서에 기록한다.
+
+## 10. 2026-09-11 갱신: 속성 이름 정합과 미지원 확정 범위
+
+§1~§9는 09-09 시점의 설계·검증 기록이며 그대로 둔다. 이 절은 그 뒤 구현에서 확정된 사실만 덧붙인다.
+근거 커밋: `960425090`(scope root), `174bf79bb`(미지원 xfail), `453bece2d`(속성 이름 정합).
+
+### 10.1 §5.1의 "의도적 겹침"·"보호 경계"가 읽는 실제 속성
+
+§5.1·§5.3은 "의도적 겹침 여부", "보호 경계", "서버 헤더/푸터 잠금"을 개념으로만 서술했고,
+구현은 한동안 렌더러가 거부하는 이름을 읽고 있었다. `utils/renderer_markup_policy.py`의
+`GLOBAL_ATTRIBUTES`가 허용하지 않는 속성이 담긴 HTML은 `RendererPolicyError`로 거부되므로,
+아래 여섯 이름은 실제 덱에서 한 번도 평가된 적이 없다(생산자도 없었다).
+
+| 개념 | 읽던 이름 (전부 미허용·미생산) | 확정된 이름 |
+| --- | --- | --- |
+| 의도적 겹침 | `data-intentional-overlap` | **`data-allow-overlap`** — 정책 허용, `services/authored_vnext/source_native_generation.py`가 스탬프 |
+| 보호 경계 | `data-local-fit-protected`, `data-source-locked` | 없음. 대응 개념은 속성이 아니다(`services/source_locked/`는 파이썬 측 개념) |
+| 푸터 잠금 | `data-footer-part` | `<footer>` 태그와 정책의 `fixed_slots`(`_slotFor`)가 이미 담당 |
+| 헤더 잠금 | — | **`data-header-part`**(값이 `body`가 아닌 경우) — 정책 허용, 이미 동작 |
+| 라벨 의미 가드 | `data-status`, `data-state`, `data-semantic-color`, `aria-pressed/checked/selected/current`, `tabindex` | **`role`**, **`data-semantic-role`**, `aria-label`, `aria-hidden`, 인터랙티브 요소 선택자 |
+
+정책 파일은 보안 경계이므로 넓히지 않는다. 새 의미 신호가 필요하면 위 허용 목록 안에서 고른다.
+`PUBLISHABLE_VISUAL_REASONS`(parent_region_unavailable 등 3종 화이트리스트)는
+[원본 보존 일반화 설계](authored-local-repair-design-20260909.md)가 이를 일반 규칙으로 바꾼 뒤
+참조가 없어 삭제했다. 미해결 사유는 화이트리스트로 제한되지 않고 그대로 영수증에 보존된다.
+
+### 10.2 §5.3 지원 구조 표에 추가: 미지원으로 확정된 두 구조
+
+설계 결정 대기 상태이며, 각각 strict xfail로 고정되어 있다
+(`servers/fastapi/tests/integration/test_authored_infographic_fit_chrome.py`).
+두 테스트는 조각과 함께 `bd72851e4`에 들어온 뒤 한 번도 통과한 적이 없다. 회귀가 아니라 미구현이다.
+
+| 구조 | 막히는 지점 | 지원하려면 바꿔야 하는 계약 |
+| --- | --- | --- |
+| auto-height flow 컨테이너가 충돌 당사자 둘을 함께 담는 경우 (grid + 후행 band를 감싼 height 없는 `<main>`) | 그 컨테이너가 `_parentRootEligible`의 `explicitHeight !== null` 조건에 걸려 scope root가 될 수 없다. 다른 조상이 없으면 성장 여지가 8px로 측정된다 | scope root 자체의 성장 허용 → §5.2 "문서 전체 높이·viewport 확대는 허용하지 않는다"와 `_scopeHard`의 `_sameBox(baseline.rootBox, …)` 계약 |
+| grid의 직계 부모 밖, 선행 형제, 또는 ink 없는 섹션에 slack이 있는 경우 | `materializeGrowth`는 `grid.parentElement === root`인 경우의 **후행** 형제만, 그중 ink가 있는 것만 회수한다 | §5.3 초기 지원 구조 표 자체의 확장(회수 대상 방향·ink 조건) |
+
+### 10.3 함께 확정된 것
+
+- scope root 선택: nearest root-eligible 조상이 grid이고 그 부모도 eligible이면 한 단계 올린다
+  (`_slackRoot`, `utils/slide_capture_fit_parent.py`). grid가 root이면 `materializeGrowth`의
+  `sharedGrid`(grid ≠ root 요구)가 성립하지 않아 후행 형제 slack이 보이지 않았다.
+- §6의 "선언이 같은 후보는 제거한다"는 측정 **전**에 판정한다. 한 픽스처에서 브라우저 측정이
+  26 → 12로 줄었다. 단 후보 소진(`search.candidates_exhausted`)은 예산 부족이 아니라 시행 목록의
+  끝이며, 9pt 바닥 아래에서는 확장 배율이 모두 같은 px로 clamp되어 구별되는 후보가 존재하지 않는다.
+- 미해결 사유는 fitter 자신의 종료 코드를 보존한다. 이전에는 `accept_unchanged_capture`가
+  모든 미해결 보고를 `reconstruction_mismatch`로 올려 영수증이 원인을 가렸다.
+- v1.4/v1.5 동작은 `tests/unit/test_slide_capture_fit_v14_chrome.py`와
+  `…_rejections.py`(픽스처 `tests/fixtures/local_fit_v14/`)가 고정한다: 충돌 seed 종류, 해소,
+  거절 코드, 9pt 바닥·10% 상한, morph 의미·대비 가드, 보고서 결정성.
