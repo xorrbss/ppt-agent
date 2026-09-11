@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from services.authored_admission_policy import INTERNAL_ERROR, SOURCE_READBACK_FAILED
 
-from services.authored_admission_session import current_session
+from services.authored_admission_session import current_session, record_enforced_admission
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
@@ -219,6 +219,13 @@ async def final_readback(*, pngs, generation_job, **kwargs):
         ]
     except Exception as error:
         if session.mode == "enforce":
+            record_enforced_admission(
+                session,
+                producer="publication",
+                gate_verdict="error",
+                gate_code=INTERNAL_ERROR,
+                error=error,
+            )
             raise
         # Instrumentation cannot become a new failure in the shadow rollout.
         # The class and a digest of the message travel with the row: without
@@ -259,6 +266,15 @@ async def final_readback(*, pngs, generation_job, **kwargs):
                 block_count=len(admission.block_ids),
             )
         return result
+    for i, admission in enumerate(admissions):
+        record_enforced_admission(
+            session,
+            producer="terminal_flag_only" if i in flagged else "publication",
+            gate_verdict=admission.verdict,
+            gate_code=admission.code,
+            predicate=admission.predicate,
+            block_count=len(admission.block_ids),
+        )
     for admission in admissions:
         if admission.verdict == "rejected":
             raise AuthoredStageError(

@@ -305,6 +305,38 @@ def test_shadow_report_aggregates_content_free_lines():
     assert "| author | admitted | rejected | 2 |" in report.markdown(rows)
 
 
+def test_enforce_emits_the_rows_the_stage_is_measured_by(session):
+    """Stage 2's deliverable is the shadow/enforce comparison of these rows.
+
+    Enforce returned before recording, so its half of the table was empty by
+    construction: the one mode the rollout exists to measure emitted no
+    measurements, and a rejected slide left no code, predicate or block count
+    anywhere in the log.
+    """
+
+    html = author_html(HTML, index=0)
+    bindings = (("b1", "원문 제목"),)
+    source_candidate(html, index=0, metrics=metrics(html), manifest=MANIFEST, outline=OUTLINE, bindings=bindings)
+    with pytest.raises(gate.BrowserSourceReadbackError):
+        source_candidate(
+            html,
+            index=0,
+            metrics=metrics(html, renderedText="changed"),
+            manifest=MANIFEST,
+            outline=OUTLINE,
+            bindings=bindings,
+        )
+    rows = session.shadow.as_dict()["rows"]
+    # Enforce runs one path, so there is no existing verdict to compare against.
+    assert rows and all(row["existingVerdict"] == "unobserved" for row in rows)
+    assert {row["producer"] for row in rows} == {"author", "gate_repair"}
+    rejected = [row for row in rows if row["gateVerdict"] == "rejected"]
+    assert [(row["producer"], row["predicate"], row["blockCount"]) for row in rejected] == [
+        ("gate_repair", "rendered_integrity", 1)
+    ]
+    assert rejected[0]["gateCode"] == "source_content_browser_readback_failed"
+
+
 def test_shadow_report_scopes_to_one_operation_and_names_the_predicate():
     """One worker log holds several decks; a parity table is per operation.
 
@@ -432,7 +464,14 @@ async def test_publication_admits_the_evidence_ledger_s_frozen_metrics(session, 
     )
     _, payload, _ = await final_readback(**kwargs)
     assert payload["verified"] is True
-    assert not [row for row in session.shadow.as_dict()["rows"] if row["gateVerdict"] == "error"]
+    rows = session.shadow.as_dict()["rows"]
+    assert not [row for row in rows if row["gateVerdict"] == "error"]
+    # Both modes record the publication verdict, so the deck-level row exists
+    # on the enforce side of the comparison too.
+    published = [row for row in rows if row["producer"] in {"publication", "terminal_flag_only"}]
+    assert [row["existingVerdict"] for row in published] == [
+        "unobserved" if mode == "enforce" else "admitted"
+    ]
 
 
 @sync_async

@@ -15,7 +15,11 @@ import pytest
 from services import authored_admission as gate
 from services.authored_admission_capture import capture_once
 from services.authored_admission_context import context_from_source, digest_html
-from services.authored_admission_policy import CONSUMED_GLOBAL_ATTRIBUTES, SOURCE_BLOCK_ATTRIBUTE
+from services.authored_admission_policy import (
+    CONSUMED_GLOBAL_ATTRIBUTES,
+    SOURCE_BLOCK_ATTRIBUTE,
+    SOURCE_READBACK_FAILED,
+)
 from services.authored_admission_receipt import (
     AdmissionCaptureStore,
     AdmissionReceiptError,
@@ -371,6 +375,84 @@ def test_shadow_keeps_legacy_verdict_and_enforce_uses_gate_only(mode):
             assert not calls
     finally:
         _SESSION.reset(token)
+
+
+def _enforced(producer="author_batch", contexts=None):
+    session = AdmissionSession(mode="enforce", contexts=contexts or (context(),))
+    return session, producer
+
+
+@pytest.mark.parametrize("entry", ["token", "expanded"])
+def test_enforce_rejection_carries_the_admission_s_classification_and_candidate(entry):
+    """run-29: the gate's own verdict must survive becoming an exception.
+
+    Under enforce the in-batch producer entries raise where the legacy path
+    rewrote, which is upstream of the seam that used to attach the rejected
+    candidate. ``author_failure_is_rescuable`` reads ``rejected_html`` to tell a
+    refused answer from no answer, and the operation's retry policy reads
+    ``retryable``; with neither on the error the third (rescue) attempt was
+    unreachable and a deterministic content rejection bought a full deck retry.
+    """
+
+    session, producer = _enforced()
+    token = _SESSION.set(session)
+    dropped = HTML.replace("원문 제목", "다른 제목")
+    try:
+        with pytest.raises(gate.BrowserSourceReadbackError) as caught:
+            check_producer(dropped, index=0, producer=producer, legacy=lambda html: html, representation=entry)
+    finally:
+        _SESSION.reset(token)
+    error = caught.value
+    assert error.code == SOURCE_READBACK_FAILED
+    # The gate classified this as deterministic; it must not read as transport.
+    assert error.retryable is False
+    # The candidate travels with its rejection, on either entry.
+    assert isinstance(error.rejected_html, str) and "다른 제목" in error.rejected_html
+    assert error.predicate == error.detail == "static_bindings"
+    assert error.slide_indices == (0,)
+
+
+def test_enforce_forwards_a_transient_rejection_as_retryable(monkeypatch):
+    """Only the telemetry predicate is the operation retry's to own."""
+
+    monkeypatch.setattr(
+        gate,
+        "inspect_browser_source_readback",
+        lambda **_: BrowserSourceReadbackResult(1, 1, telemetry_failures=("b1",)),
+    )
+    html = gate.admit_slide_html(context(), HTML).html
+    admission = gate.admit_slide_html(context(html_repr="captured"), html, metrics=metrics(html))
+    with pytest.raises(gate.BrowserSourceReadbackError) as caught:
+        admission.require()
+    assert caught.value.retryable is True and caught.value.predicate == "telemetry"
+    admitted = gate.admit_slide_html(context(), HTML)
+    assert admitted.require() is admitted
+
+
+def test_enforce_records_the_admission_row_it_used_to_swallow():
+    """Stage 2's own evidence: enforce ran one path, so it records that path."""
+
+    session, producer = _enforced()
+    token = _SESSION.set(session)
+    try:
+        check_producer(HTML, index=0, producer=producer, legacy=lambda html: html, representation="token")
+        with pytest.raises(gate.BrowserSourceReadbackError):
+            check_producer(
+                HTML.replace("원문 제목", "다른 제목"),
+                index=0,
+                producer=producer,
+                legacy=lambda html: html,
+                representation="token",
+            )
+    finally:
+        _SESSION.reset(token)
+    rows = session.shadow.as_dict()["rows"]
+    assert [row["existingVerdict"] for row in rows] == ["unobserved", "unobserved"]
+    assert [(row["gateVerdict"], row["gateCode"], row["predicate"]) for row in rows] == [
+        ("admitted", "", "complete"),
+        ("rejected", SOURCE_READBACK_FAILED, "static_bindings"),
+    ]
+    assert all(row["producer"] == producer for row in rows)
 
 
 def test_shadow_bound_and_stable_error_codes():

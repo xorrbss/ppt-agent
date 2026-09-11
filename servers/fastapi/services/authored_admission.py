@@ -82,14 +82,37 @@ class Admission:
         }
 
     def require(self) -> Admission:
-        if self.verdict == "rejected":
-            raise BrowserSourceReadbackError(
-                self.code,
-                detail=self.predicate,
-                block_ids=self.block_ids,
-                slide_indices=(self.receipt.context.slide_index,),
-            )
-        return self
+        """Raise a rejection that still carries what this admission decided.
+
+        This is the single boundary where a verdict becomes an exception, so it
+        is the only place the recovery layers can learn two things the
+        ``Admission`` already holds. ``retryable`` is the gate's own
+        classification -- a rendered-integrity or visibility rejection is
+        deterministic, only telemetry is transient -- and without it the
+        operation retry policy falls back to ``is_retryable_exception``, whose
+        uncoded tail answers ``True``, so a content rejection buys a full deck
+        retry. ``rejected_html`` is the candidate that was rejected, which is
+        how the author-stage deferral and the per-slide rescue tell "the
+        provider answered and the deck refused the answer" (the dead end a
+        third, simplified call answers) from "nothing came back" (the
+        operation's own retry). Both lanes already key on these names, so
+        forwarding them here keeps the recovery generic instead of teaching
+        each lane about this rejection source.
+        """
+
+        if self.verdict != "rejected":
+            return self
+        error = BrowserSourceReadbackError(
+            self.code,
+            detail=self.predicate,
+            block_ids=self.block_ids,
+            slide_indices=(self.receipt.context.slide_index,),
+        )
+        error.predicate = self.predicate
+        error.retryable = self.retryable
+        if isinstance(self.html, str) and self.html:
+            error.rejected_html = self.html
+        raise error
 
 
 @dataclass(frozen=True, slots=True)

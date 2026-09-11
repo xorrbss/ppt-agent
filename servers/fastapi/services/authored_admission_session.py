@@ -195,6 +195,36 @@ def configure_admission(
     session.contexts = tuple(contexts)
 
 
+def record_enforced_admission(
+    session: AdmissionSession,
+    *,
+    producer: str,
+    gate_verdict: str,
+    gate_code: str,
+    predicate: str = "",
+    block_count: int = 0,
+    error: BaseException | None = None,
+) -> None:
+    """Record one enforce-mode admission as its own evidence row.
+
+    Enforce never runs the legacy comparator, so the existing verdict is
+    ``unobserved`` -- the same word the publication adapter already uses for a
+    row it could not compare. Every other field is the shadow row's, so one
+    parser and one report read both modes.
+    """
+
+    session.shadow.record(
+        producer=producer,
+        existing_verdict="unobserved",
+        existing_code="",
+        gate_verdict=gate_verdict,
+        gate_code=gate_code,
+        predicate=predicate,
+        block_count=block_count,
+        error=error,
+    )
+
+
 def check_producer(
     html: str,
     *,
@@ -224,14 +254,29 @@ def check_producer(
     try:
         result = session.admit(context, html, metrics=metrics, png=png)
     except Exception as error:
+        gate_code = bounded_code(getattr(error, "code", INTERNAL_ERROR))
         # A shadow instrumentation bug must not change existing producer behavior.
         if session.mode == "enforce":
+            record_enforced_admission(
+                session, producer=producer, gate_verdict="error", gate_code=gate_code, error=error
+            )
             raise
         result, gate_error = None, error
-        gate_code = bounded_code(getattr(error, "code", INTERNAL_ERROR))
     else:
         gate_code = result.code
     if session.mode == "enforce":
+        # Enforce runs one path, so there is no existing verdict to compare
+        # against -- but the row is this mode's only per-call evidence, and
+        # without it the rollout's own comparison has nothing to read on the
+        # enforce side. Recorded before ``require`` so a rejection is logged.
+        record_enforced_admission(
+            session,
+            producer=producer,
+            gate_verdict=result.verdict,
+            gate_code=gate_code,
+            predicate=result.predicate,
+            block_count=len(result.block_ids),
+        )
         if not evidence:
             result.require()
         elif context.state == "captured":
