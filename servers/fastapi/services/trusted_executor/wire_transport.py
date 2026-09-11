@@ -15,15 +15,14 @@ import os
 from pathlib import Path
 import threading
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import time
 from typing import BinaryIO, Protocol
 
 from services.isolated_worker_contracts import ArtifactRef, IsolatedWorkerJob
-from services.trusted_executor.isolation_policy import PlatformIsolationReport
-from services.trusted_executor.isolation_policy import SandboxFilesystemSpec
+from services.trusted_executor.isolation_policy import PlatformIsolationReport, SandboxFilesystemSpec
 from services.trusted_executor.process_supervisor import (
     OperationProcessSupervisor,
     ProcessDeadlineExceeded,
@@ -166,14 +165,14 @@ class SupervisedStdioWireTransport:
         isolation_report: PlatformIsolationReport,
         allow_local_development_isolation_gap: bool = False,
         zero_timeout_seconds: float = 5.0,
+        supervisor_factory: Callable[..., OperationProcessSupervisor] = OperationProcessSupervisor,
     ) -> None:
         if zero_timeout_seconds <= 0:
             raise ValueError("zero timeout must be positive")
         self._artifact_authority = artifact_authority
         self._isolation_report = isolation_report
-        self._allow_local_development_isolation_gap = (
-            allow_local_development_isolation_gap
-        )
+        self._allow_local_development_isolation_gap = allow_local_development_isolation_gap
+        self._supervisor_factory = supervisor_factory
         self._zero_timeout_seconds = zero_timeout_seconds
         self._closed = False
         self._active: set[OperationProcessSupervisor] = set()
@@ -248,7 +247,7 @@ class SupervisedStdioWireTransport:
         if not capability_key or not Path(capability_key).is_absolute():
             raise TrustedWorkerWireError("trusted_worker_capability_key_unavailable")
 
-        supervisor = OperationProcessSupervisor(spec.identity, spec.limits)
+        supervisor = self._supervisor_factory(spec.identity, spec.limits)
         resource_metrics: Mapping[str, object] = {}
         async with self._active_lock:
             if self._closed:
