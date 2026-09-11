@@ -99,6 +99,18 @@ def test_a_six_node_figure_stays_inside_a_1138x386_box(archetype: str) -> None:
         )
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="UNIMPLEMENTED, awaiting a design decision. The scope root here is the "
+    "grid itself and its only ancestor, the auto-height <main>, is excluded as "
+    "fixed_boundary_unavailable, so the space that growing the map needs (84px "
+    "against 8px available) is never reachable: it would come from pushing the "
+    "band down, and only <main> holds both. Allowing an auto-height flow "
+    "container as a scope root means letting that root grow, which changes v1.4 "
+    "design 5.2 ('the document height and viewport may not grow') and the "
+    "_sameBox(baseline.rootBox, ...) contract in _scopeHard. Red since the "
+    "fragments and this test landed together in bd72851e4.",
+)
 @pytest.mark.skipif(find_chrome() is None, reason="headless Chrome is required")
 def test_local_fit_compacts_intrinsic_grid_rows_before_they_cover_a_following_band() -> None:
     panels = "".join(
@@ -163,6 +175,18 @@ def test_local_fit_compacts_intrinsic_grid_rows_before_they_cover_a_following_ba
     assert blocking_safety_issues(quality) == ()
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="UNIMPLEMENTED, awaiting a design decision. The zone needs 24.5px "
+    "against 1px available and the slack sits in the empty 100px 'top' section: "
+    "materializeGrowth only scans the siblings that follow the grid and only "
+    "those that carry ink, and raising the scope root does not help because the "
+    "grid's parent is the zone rather than the root. Reclaiming slack from "
+    "outside the grid's immediate parent, from preceding siblings, or from "
+    "ink-less sections is outside the v1.4 design 5.3 table of initially "
+    "supported structures. Red since the fragments and this test landed "
+    "together in bd72851e4.",
+)
 @pytest.mark.skipif(find_chrome() is None, reason="headless Chrome is required")
 def test_local_fit_parent_reflows_a_55px_three_line_grid_card_without_font_or_outer_geometry_drift() -> None:
     cards = "".join(
