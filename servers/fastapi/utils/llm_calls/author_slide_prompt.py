@@ -27,6 +27,7 @@ from utils.llm_calls.author_slide_brief import (
 )
 from services.authored_vnext.capability_registry import prompt_capability_clause
 from services.source_images.models import SourceImageCandidate
+from services.source_content.placeholder.prompt import placeholder_prompt_for_slide
 from utils.prompt_safety import format_untrusted_source_documents
 
 
@@ -456,6 +457,9 @@ def author_prompt(
             "If the contract cannot be satisfied, return no invented "
             "content."
         )
+    placeholder_contract = placeholder_prompt_for_slide(index)
+    if placeholder_contract:
+        structured_contract += "\n\n" + placeholder_contract
     marker = requirement_marker(requirements_enabled=requirements_enabled)
     requirement_block = f"{marker}\n\n" if marker else ""
     chapter = chapter_marker(

@@ -254,7 +254,15 @@ def is_authored_prompt_bundle_enabled(
     return _bool_setting("AUTHORED_PROMPT_BUNDLE_ENABLED", False, settings)
 
 
+def is_authored_verbatim_placeholder_authoring_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Opt into source-token authoring; existing jobs keep the legacy binder."""
+    return _bool_setting("AUTHORED_VERBATIM_PLACEHOLDER_AUTHORING", False, settings)
+
+
 __all__ = [
+    "is_authored_verbatim_placeholder_authoring_enabled",
     "get_authored_illustration_share",
     "get_authored_metrics_cache_entries",
     "get_authored_metrics_cache_mb",

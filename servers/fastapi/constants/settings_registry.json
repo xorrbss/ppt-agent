@@ -1444,6 +1444,15 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
       "description": "Ship the 2026-09-05 composition-shaping prompt bundle: the COMPOSITION INTENT block and the type ramp. Off because a blind paired rating of 24 slides preferred the pre-bundle parent 13 to 7 with 4 ties, and the bundle's 18px body floor plus its fill-the-page direction overflowed the card and footer band on 17 of 24 bench slides. With it off a deck reads the parent's pre-bundle type-scale wording and no intent block; the bundle's mechanical half (semantic-role vocabulary, SVG contract, shared universals, deck tokens) ships either way."
+    },
+    {
+      "key": "AUTHORED_VERBATIM_PLACEHOLDER_AUTHORING",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Author source-reflow verbatim slides with whole-block or grapheme-safe exact-cover character-range tokens; substitute trusted source text in the admission gate. Off preserves legacy text binding."
     }
   ]
 }
