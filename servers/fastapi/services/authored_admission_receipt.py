@@ -21,6 +21,21 @@ from typing import Any, Mapping
 from services.authored_admission_context import AdmissionContext, canonical_json, digest_bytes, digest_html
 
 
+#: A receipt minted from a live admission session carries the deck's real
+#: identity: presentation, operation and source-unit ids, the manifest and
+#: projection digests, and whether the deck reflows its source verbatim.
+COMPLETE_IDENTITY = "complete"
+#: A receipt minted at a checkpoint writer that had no session carries none of
+#: that.  It is enough to admit the write -- the bytes were judged by a real
+#: policy -- and never enough to publish one, because the fields a publication
+#: reader would check were never observed, only defaulted.
+INCOMPLETE_IDENTITY = "incomplete"
+#: Raised instead of minting an incomplete-identity receipt for a deck whose
+#: HTML carries source bindings: a verbatim deck's guarantee is the rendered
+#: readback against its manifest, and there is no manifest without a session.
+SESSION_IDENTITY_REQUIRED = "authored_admission_session_identity_required"
+
+
 @dataclass(frozen=True, slots=True)
 class AdmissionReceipt:
     context: AdmissionContext
@@ -35,6 +50,9 @@ class AdmissionReceipt:
     capture_count: int = 0
     persistence_class: str = "publishable"
     normalizations: tuple[dict[str, Any], ...] = ()
+    #: Whether the context above was observed or defaulted.  See the two
+    #: identity constants: only ``COMPLETE_IDENTITY`` may publish.
+    identity: str = COMPLETE_IDENTITY
 
     def as_dict(self) -> dict[str, Any]:
         context = self.context
@@ -65,7 +83,12 @@ class AdmissionReceipt:
             "captureReused": self.capture_reused,
             "captureCount": self.capture_count,
             "persistenceClass": self.persistence_class,
-            "publishable": self.persistence_class == "publishable" and self.verdict != "rejected",
+            "identity": self.identity,
+            "publishable": (
+                self.persistence_class == "publishable"
+                and self.verdict != "rejected"
+                and self.identity == COMPLETE_IDENTITY
+            ),
             "normalizations": list(self.normalizations[:32]),
             "normalizationCount": len(self.normalizations),
             "normalizationDigest": digest_html(canonical_json(self.normalizations)),

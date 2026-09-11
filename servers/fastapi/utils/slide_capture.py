@@ -44,9 +44,6 @@ from utils.renderer_isolation import (
     AdmittedHtml,
     RendererDisabledError,
     RendererPolicyError,
-    admit_authored_html,
-    admit_internal_instrumented_html,
-    admit_static_output_html,
     build_worker_environment,
     encode_request,
     ensure_renderer_enabled,
@@ -55,6 +52,7 @@ from utils.renderer_isolation import (
     renderer_requires_external_worker,
     worker_command,
 )
+from utils.renderer_profile import select_render_profile
 from utils.slide_capture_assets import (
     _asset_fingerprint,
     # Re-exported: `authored_presentation_generation` collects a slide's asset
@@ -192,18 +190,20 @@ def _register_internal_render_source(source: str) -> None:
             _internal_capabilities.popitem(last=False)
 
 
-def _admit_render_source(source: str) -> AdmittedHtml:
-    """Select a fail-closed admission profile for the exact in-memory source."""
+def _take_probe_capability(source: str) -> str | None:
+    """Consume this source's single-use internal probe capability, if any."""
+    digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
+    with _internal_capability_lock:
+        return _internal_capabilities.pop(digest, None)
 
-    try:
-        return admit_authored_html(source)
-    except RendererPolicyError:
-        digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
-        with _internal_capability_lock:
-            capability = _internal_capabilities.pop(digest, None)
-        if capability is not None:
-            return admit_internal_instrumented_html(source, capability)
-        return admit_static_output_html(source)
+
+def _admit_render_source(source: str) -> AdmittedHtml:
+    """Select a fail-closed admission profile for the exact in-memory source.
+
+    The selection lives in ``utils.renderer_profile``, so the checkpoint gate
+    judges these bytes under the policy the renderer accepted them under.
+    """
+    return select_render_profile(source, internal_capability=lambda: _take_probe_capability(source)).require()
 
 
 def _source_render_digests(html: str) -> tuple[str, str]:

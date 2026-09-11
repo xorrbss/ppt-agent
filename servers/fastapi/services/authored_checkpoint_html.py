@@ -44,11 +44,20 @@ def checkpoint_stage_html(checkpoint: Any, *, stage: str = "render", publishable
     if publishable:
         from services.authored_admission_checkpoint import enforce_receipts
         from services.authored_admission_context import digest_html
+        from services.authored_admission_receipt import COMPLETE_IDENTITY
 
         if enforce_receipts():
             receipt = (getattr(checkpoint, "error", None) or {}).get("admission", {})
             html = checkpoint_stage_html(checkpoint, stage=stage)
-            if (not receipt.get("publishable") or html is None or receipt.get("htmlDigest") != digest_html(html)
+            # A receipt minted at a writer that had no admission session asserts
+            # an identity it never observed -- empty presentation/operation/unit
+            # ids, no manifest, and the ordinary-authored column.  It is enough
+            # to admit that write and never enough to publish it.  Receipts
+            # written before the field existed carry the identity they were
+            # minted under, which was always a session's.
+            if (not receipt.get("publishable")
+                    or receipt.get("identity", COMPLETE_IDENTITY) != COMPLETE_IDENTITY
+                    or html is None or receipt.get("htmlDigest") != digest_html(html)
                     or receipt.get("attemptToken") != getattr(checkpoint, "attempt_token", None)):
                 return None
     stored = _text(getattr(checkpoint, "illustrated_html", None))

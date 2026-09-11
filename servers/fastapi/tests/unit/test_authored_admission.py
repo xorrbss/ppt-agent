@@ -14,7 +14,7 @@ import pytest
 from services import authored_admission as gate
 from services.authored_admission_capture import capture_once
 from services.authored_admission_context import context_from_source, digest_html
-from services.authored_admission_policy import CONSUMED_GLOBAL_ATTRIBUTES
+from services.authored_admission_policy import CONSUMED_GLOBAL_ATTRIBUTES, SOURCE_BLOCK_ATTRIBUTE
 from services.authored_admission_receipt import (
     AdmissionCaptureStore,
     AdmissionReceiptError,
@@ -414,3 +414,187 @@ def test_consumer_attribute_vocabulary_is_in_renderer_policy():
         assert names <= GLOBAL_ATTRIBUTES | set(SERVER_STAMPED_ATTRIBUTES) | KNOWN_DEAD_READS.get(relative, set()), (
             relative
         )
+
+
+# --- N1/N2: the session-less writer admission -------------------------------
+
+#: A 1x1 PNG, the smallest asset a renderer-produced CSS ``url(data:)`` can
+#: carry.  The static-output policy re-encodes it; the authored policy refuses
+#: the declaration outright, which is exactly the disagreement under test.
+ONE_PIXEL_PNG = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+#: Shaped like renderer output, not like authored HTML: the authored policy
+#: rejects it and the static-output policy admits it.
+RENDERER_PROFILE_HTML = (
+    "<!doctype html><html><head><style>body{margin:0}"
+    f".scene{{background:url(data:image/png;base64,{ONE_PIXEL_PNG})}}"
+    '</style></head><body><div class="scene">장면</div></body></html>'
+)
+#: Refused by every profile, so the gate must still refuse it.
+UNRENDERABLE_HTML = (
+    "<!doctype html><html><head><style>body{margin:0}</style></head>"
+    "<body><iframe></iframe></body></html>"
+)
+
+
+def vnext_preview_html(root):
+    """A real ``build_preview`` document, reached through the master service."""
+
+    from models.authored_vnext.master.contract import DeckMasterContract
+    from models.authored_vnext.master.operations import (
+        CreateDraftRequest,
+        MasterCasRequest,
+        PreviewRequest,
+    )
+    from services.authored_vnext.master.file_repository import (
+        FileAuthoredVNextMasterRepository,
+    )
+    from services.authored_vnext.master.service import AuthoredVNextMasterService
+    from tests.support.authored_vnext_master_fixture import (
+        long_title_slide_payload,
+        master_contract_payload,
+    )
+
+    service = AuthoredVNextMasterService(
+        FileAuthoredVNextMasterRepository(root / "authored-vnext-store")
+    )
+    draft = service.create_draft(
+        CreateDraftRequest(
+            contract=DeckMasterContract.model_validate(master_contract_payload())
+        )
+    )
+    published = service.publish(
+        draft.master_id,
+        MasterCasRequest(expected_revision=draft.revision, expected_digest=draft.digest),
+    )
+    return service.preview(
+        PreviewRequest(
+            master_id=published.master_id,
+            master_revision=published.revision,
+            master_digest=published.digest,
+            slide=long_title_slide_payload(),
+        )
+    ).html
+
+
+def enforcing_gate(monkeypatch):
+    from services import authored_admission_checkpoint as checkpoint
+
+    monkeypatch.setattr(checkpoint, "enforce_receipts", lambda: True)
+    return checkpoint
+
+
+def author_checkpoint_write(checkpoint, html, **changes):
+    kwargs = dict(
+        admission_receipt=None,
+        html=html,
+        stage="author",
+        slide_index=0,
+        attempt_token="attempt-1",
+        fencing_token=4,
+    )
+    kwargs.update(changes)
+    return checkpoint.admit_checkpoint_write(**kwargs)
+
+
+@pytest.mark.parametrize("document", ["vnext_preview", "renderer_profile", "authored"])
+def test_rendered_bytes_are_admissible_at_a_session_less_writer(document, tmp_path, monkeypatch):
+    """N1: the gate and the renderer select the profile with the same function.
+
+    A vNext / page-remake producer renders its slide and then writes it to a
+    checkpoint outside ``admission_scope``.  Judging that document by the strict
+    authored policy while the renderer had accepted it under the static-output
+    policy would refuse a deck the product had already rendered.  Whatever
+    ``select_render_profile`` admits, ``admit_checkpoint_write`` admits.
+    """
+
+    from utils.renderer_profile import STATIC_OUTPUT_PROFILE, select_render_profile
+
+    html = {
+        "vnext_preview": lambda: vnext_preview_html(tmp_path),
+        "renderer_profile": lambda: RENDERER_PROFILE_HTML,
+        "authored": lambda: HTML,
+    }[document]()
+    assert SOURCE_BLOCK_ATTRIBUTE not in html
+    profile = select_render_profile(html)
+    assert profile.renderable
+
+    checkpoint = enforcing_gate(monkeypatch)
+    admitted, receipt = author_checkpoint_write(checkpoint, html)
+    assert receipt.verdict == "admitted"
+    assert receipt.html_digest == digest_html(admitted)
+    if profile.name == STATIC_OUTPUT_PROFILE:
+        # Renderer-profile bytes are admitted, never rewritten: the checkpoint
+        # holds the document the renderer rendered.
+        assert admitted == html
+
+
+def test_session_less_admission_still_refuses_policy_violating_html(monkeypatch):
+    """N1's inverse: sharing the selection widens no policy."""
+
+    from utils.renderer_profile import select_render_profile
+
+    assert select_render_profile(UNRENDERABLE_HTML).renderable is False
+    checkpoint = enforcing_gate(monkeypatch)
+    with pytest.raises(AdmissionReceiptError, match="receipt_rejected"):
+        author_checkpoint_write(checkpoint, UNRENDERABLE_HTML)
+
+
+def test_capture_and_gate_share_one_profile_selection():
+    """The renderer's own admission is that same selection, not a copy of it."""
+
+    from utils import slide_capture
+    from utils.renderer_profile import select_render_profile
+
+    captured = slide_capture._admit_render_source(RENDERER_PROFILE_HTML)
+    selected = select_render_profile(RENDERER_PROFILE_HTML).require()
+    assert captured.source_digest == selected.source_digest
+    assert captured.node_count == selected.node_count
+    assert captured.asset_digests == selected.asset_digests
+
+
+def test_session_less_receipt_is_admissible_but_never_publishable(monkeypatch):
+    """N2: an identity the writer never observed cannot read back as published."""
+
+    from services.authored_checkpoint_html import checkpoint_stage_html
+
+    checkpoint = enforcing_gate(monkeypatch)
+    admitted, receipt = author_checkpoint_write(checkpoint, RENDERER_PROFILE_HTML)
+    assert receipt.identity == "incomplete"
+    payload = receipt.as_dict()
+    assert payload["identity"] == "incomplete"
+    assert payload["publishable"] is False
+
+    class _Checkpoint:
+        attempt_token = "attempt-1"
+        illustrated_html = admitted
+        author_html = admitted
+        render_status = "completed"
+
+        def __init__(self, admission):
+            self.error = {"admission": admission}
+
+    assert checkpoint_stage_html(_Checkpoint(payload), publishable=True) is None
+    # The same bytes with a session's identity publish exactly as before.
+    session_identity = dict(payload, identity="complete", publishable=True)
+    assert checkpoint_stage_html(_Checkpoint(session_identity), publishable=True) == admitted
+    # A receipt written before the field existed was minted under a session.
+    legacy_identity = {key: value for key, value in session_identity.items() if key != "identity"}
+    assert checkpoint_stage_html(_Checkpoint(legacy_identity), publishable=True) == admitted
+
+
+def test_verbatim_html_is_never_admitted_without_a_session(monkeypatch):
+    """N2: a verbatim deck's guarantee is its manifest, so refuse, do not default.
+
+    The ordinary-authored column the session-less path has to assume skips the
+    rendered-integrity readback, which is the only thing holding a verbatim
+    deck to its source.  Admitting there would be a silent downgrade, so the
+    source bindings in the bytes are refused with a code instead.
+    """
+
+    bound = gate.admit_slide_html(context(), HTML).html
+    assert SOURCE_BLOCK_ATTRIBUTE in bound
+    checkpoint = enforcing_gate(monkeypatch)
+    with pytest.raises(AdmissionReceiptError, match="session_identity_required"):
+        author_checkpoint_write(checkpoint, bound)

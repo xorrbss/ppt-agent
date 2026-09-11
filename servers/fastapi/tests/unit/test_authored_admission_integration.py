@@ -210,7 +210,10 @@ async def test_a_session_less_producer_is_admitted_at_the_writer(monkeypatch):
         html=HTML,
     )
     receipt = result.error["admission"]
-    assert receipt["verdict"] == "admitted" and receipt["publishable"] is True
+    # N2: the write is admitted, and the receipt says out loud that its context
+    # was defaulted rather than observed, so no publication reader will take it.
+    assert receipt["verdict"] == "admitted"
+    assert receipt["identity"] == "incomplete" and receipt["publishable"] is False
     assert receipt["htmlRepr"] == "expanded"
     assert receipt["htmlDigest"] == digest_html(result.author_html)
     assert receipt["attemptToken"] == "attempt-1" and receipt["fencedRevision"] == 4
