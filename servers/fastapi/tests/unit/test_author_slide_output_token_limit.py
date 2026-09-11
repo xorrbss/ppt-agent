@@ -17,6 +17,8 @@ from types import SimpleNamespace
 import pytest
 
 from services import authored_author_stage_rescue as rescue_mod
+from services.authored_batch_policy import new_authored_batch_policy_state
+from services.authored_wave_scheduler import AuthoredWaveSchedule
 from services.authored_author_stage_deferral import (
     AUTHOR_BUDGET_EXHAUSTED_CODE,
     author_failure_is_rescuable,
@@ -380,6 +382,7 @@ def _rescue(monkeypatch, error, *, third_call):
             profile=_profile(),
             reference_mode="style",
             source_reflow=False,
+            schedule=AuthoredWaveSchedule(new_authored_batch_policy_state()),
         )
     )
 
