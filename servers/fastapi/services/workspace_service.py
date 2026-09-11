@@ -1807,6 +1807,10 @@ async def create_workspace_command(
                     operation_id=operation.id,
                     operation_kind="export",
                     request_plan=None,
+                    # The deck size scales the export deadline; ``n_slides``
+                    # is rewritten by authored publication to the published
+                    # slide count, so it is the row's own account of the deck.
+                    planned_slide_count=presentation.n_slides,
                 )
             except PublicAdmissionRejected as error:
                 raise WorkspaceServiceError(

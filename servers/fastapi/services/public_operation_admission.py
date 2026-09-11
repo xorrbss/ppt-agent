@@ -164,6 +164,18 @@ def _utc(value: datetime, field: str) -> datetime:
     return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
+def _planned_slide_count(
+    operation_kind: str,
+    request_plan: ProviderRequestPlan | None,
+    planned_slide_count: int | None,
+) -> int:
+    """Generation reads the provider plan; export reads the deck's own count."""
+
+    if operation_kind == "generation":
+        return request_plan.slide_count if request_plan is not None else 0
+    return _nonnegative(planned_slide_count or 0, "planned_slide_count")
+
+
 def _policy_deadline_seconds(
     *,
     policy: PublicPolicyProfile,
@@ -565,11 +577,16 @@ async def admit_public_operation(
     operation_id: uuid.UUID,
     operation_kind: str,
     request_plan: ProviderRequestPlan | None,
+    planned_slide_count: int | None = None,
     policy_version: str = PUBLIC_DEFAULT_POLICY_VERSION,
     estimated_cost_limit_microunits: int | None = None,
     actual_cost_limit_microunits: int | None = None,
 ) -> PublicOperationAdmission:
-    """Atomically bind principal/policy and consume one queued quota slot."""
+    """Atomically bind principal/policy and consume one queued quota slot.
+
+    ``planned_slide_count`` is the export deck size (generation carries its own
+    in ``request_plan``); it scales the export deadline and is persisted.
+    """
 
     principal = _principal(principal)
     if operation_kind not in {"generation", "export"}:
@@ -610,11 +627,13 @@ async def admit_public_operation(
         )
         if estimated_limit <= 0 or actual_limit <= 0:
             raise PublicAdmissionRejected("provider_cost_cap_required")
-        slide_count = request_plan.slide_count
     else:
         if request_plan is not None:
             raise ValueError("export_provider_request_plan_forbidden")
-        request_limit = retry_limit = estimated_limit = actual_limit = slide_count = 0
+        request_limit = retry_limit = estimated_limit = actual_limit = 0
+    slide_count = _planned_slide_count(
+        operation_kind, request_plan, planned_slide_count
+    )
 
     existing = await session.scalar(
         select(PublicOperationAdmission).where(
@@ -707,6 +726,7 @@ async def _admit_public_operation_v2(
     policy_version: str = PUBLIC_PHASE2_DEFAULT_POLICY_VERSION,
     estimated_cost_limit_microunits: int | None = None,
     actual_cost_limit_microunits: int | None = None,
+    planned_slide_count: int | None = None,
     _allow_sqlite_compat: bool = False,
 ) -> PublicOperationAdmission:
     """Shared v2 admission core selected only by the two explicit wrappers.
@@ -772,10 +792,8 @@ async def _admit_public_operation_v2(
         # The full request plan is validated below.  Reading only the slide
         # count here keeps every existing rejection ordering intact while the
         # deadline is still derived from the requested deck size.
-        planned_slide_count=(
-            request_plan.slide_count
-            if operation_kind == "generation" and request_plan is not None
-            else 0
+        planned_slide_count=_planned_slide_count(
+            operation_kind, request_plan, planned_slide_count
         ),
         auth_expires_at=auth_expires_at,
         server_hard_deadline_at=server_hard_deadline_at,
@@ -824,11 +842,13 @@ async def _admit_public_operation_v2(
         )
         if estimated_limit <= 0 or actual_limit <= 0:
             raise PublicAdmissionRejected("provider_cost_cap_required")
-        slide_count = request_plan.slide_count
     else:
         if request_plan is not None:
             raise ValueError("export_provider_request_plan_forbidden")
-        request_limit = retry_limit = estimated_limit = actual_limit = slide_count = 0
+        request_limit = retry_limit = estimated_limit = actual_limit = 0
+    slide_count = _planned_slide_count(
+        operation_kind, request_plan, planned_slide_count
+    )
 
     counters = await _locked_phase2_counters(
         session,
@@ -922,6 +942,7 @@ async def admit_public_operation_v2(
     policy_version: str = PUBLIC_PHASE2_DEFAULT_POLICY_VERSION,
     estimated_cost_limit_microunits: int | None = None,
     actual_cost_limit_microunits: int | None = None,
+    planned_slide_count: int | None = None,
 ) -> PublicOperationAdmission:
     """Admit only against the strict PostgreSQL public control plane."""
 
@@ -937,6 +958,7 @@ async def admit_public_operation_v2(
         policy_version=policy_version,
         estimated_cost_limit_microunits=estimated_cost_limit_microunits,
         actual_cost_limit_microunits=actual_cost_limit_microunits,
+        planned_slide_count=planned_slide_count,
         _allow_sqlite_compat=False,
     )
 
@@ -954,6 +976,7 @@ async def admit_public_operation_compatible_v2(
     policy_version: str = PUBLIC_PHASE2_DEFAULT_POLICY_VERSION,
     estimated_cost_limit_microunits: int | None = None,
     actual_cost_limit_microunits: int | None = None,
+    planned_slide_count: int | None = None,
 ) -> PublicOperationAdmission:
     """Admit the deprecated v1 browser request under the complete v2 contract.
 
@@ -977,10 +1000,8 @@ async def admit_public_operation_compatible_v2(
         .with_for_update()
     )
     if existing is not None:
-        expected_slide_count = (
-            request_plan.slide_count
-            if operation_kind == "generation" and request_plan is not None
-            else 0
+        expected_slide_count = _planned_slide_count(
+            operation_kind, request_plan, planned_slide_count
         )
         allowed_phases = (
             {"admitted", "queued"}
@@ -1036,6 +1057,7 @@ async def admit_public_operation_compatible_v2(
         policy_version=policy_version,
         estimated_cost_limit_microunits=estimated_cost_limit_microunits,
         actual_cost_limit_microunits=actual_cost_limit_microunits,
+        planned_slide_count=planned_slide_count,
         _allow_sqlite_compat=sqlite_compat,
     )
 
