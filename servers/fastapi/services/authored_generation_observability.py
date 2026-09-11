@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from math import isfinite
 from typing import Any, Literal
 
@@ -32,23 +33,6 @@ _EVENT_NAMES = {
     "stalled_recovery",
 }
 _STAGES = {"author", "illustrate", "render", "persist"}
-_FAILURE_CODES = {
-    "authored_attempt_lost",
-    "authored_injected_failure",
-    "authored_slide_author_failed",
-    "authored_slide_illustrate_failed",
-    "authored_slide_persist_failed",
-    "authored_slide_render_failed",
-    "authored_unexpected_failure",
-    "authored_slide_capacity_exceeded",
-    "authored_composition_safety_gate_failed",
-    "authored_provider_attempt_budget_exhausted",
-    "source_content_browser_readback_failed",
-    "public_provider_bridge_exception",
-    "public_provider_call_timeout",
-    "public_provider_request_limit_exceeded",
-    "public_provider_retry_limit_exceeded",
-}
 _SWEEP_OUTCOMES = {"success", "failure"}
 _STALLED_STATES = {"running", "staging"}
 _MAX_COUNT = 1_000_000
@@ -118,8 +102,8 @@ def build_authored_generation_observation(
     if name == "slide_failure":
         if stage not in _STAGES:
             raise ValueError("stage is not in the safe allowlist")
-        if code not in _FAILURE_CODES:
-            raise ValueError("code is not in the safe allowlist")
+        if not isinstance(code, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,127}", code):
+            raise ValueError("code must be a bounded stable identifier")
         if not isinstance(retryable, bool):
             raise ValueError("retryable must be boolean")
         if slide_number is None:
@@ -237,16 +221,14 @@ def log_authored_slide_failure_observation(
     """Log a slide failure without letting a new code break recovery.
 
     Error codes can evolve independently from this low-cardinality schema.
-    Unknown values therefore collapse to a safe fallback instead of leaking
-    arbitrary text or raising after the durable failure record has committed.
+    Stable identifiers propagate unchanged; arbitrary exception text is refused.
     """
 
-    safe_code = code if code in _FAILURE_CODES else "authored_unexpected_failure"
     return log_authored_generation_observation(
         logger=logger,
         name="slide_failure",
         stage=stage,
-        code=safe_code,
+        code=code,
         slide_number=slide_number,
         retryable=retryable,
         provider_attempt_count=provider_attempt_count,

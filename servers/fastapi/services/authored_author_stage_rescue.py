@@ -41,18 +41,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from collections.abc import Sequence
 from typing import Any, Mapping
 
 from services.authored_author_stage_placeholder import author_placeholder_html
-from services.authored_checkpoint_service import AuthoredStageError
-from services.authored_terminal_slide_flag_only import flagged_entry
 from services.authored_terminal_slide_policy import terminal_fallback_active
 from services.authored_wave_scheduler import AuthoredWaveSchedule
 from services.source_content.browser_readback import (
-    BrowserSourceReadbackError,
     inspect_browser_source_readback,
-    log_browser_source_readback_failure,
 )
 from utils.llm_calls.author_deck import (
     AuthoredProviderBudgetExhausted,
@@ -102,67 +97,22 @@ class AuthorStageRescue:
     prior_failure: Mapping[str, object] | None = None
 
 
-def source_reflow_rescue_readback(
-    *, index: int, html: str, metrics: Mapping[str, Any],
-    bindings: Sequence[tuple[str, str]], profile: Any, reference_mode: str,
-    prior_failure: Mapping[str, object] | None = None,
-    provider_attempt_count: int = RESCUE_ATTEMPT_ORDINAL,
-) -> dict[str, object] | None:
-    """Route a rescued source slide through the canonical browser predicate."""
+def source_reflow_rescue_readback(**kwargs):
+    from services.authored_admission_session import check_producer, current_session
+    from services.authored_admission_legacy import legacy_rescue_readback
 
-    unit_id = f"author-rescue:{int(index)}"
-    block_ids = [str(block_id) for block_id, _text in bindings]
-    result = inspect_browser_source_readback(
-        manifest={"units": [{
-            "sourceUnitId": unit_id, "sourceIndex": 0,
-            "blocks": [
-                {"sourceBlockId": block_id, "kind": "text", "order": order,
-                 "payload": {"text": text}}
-                for order, (block_id, text) in enumerate(bindings)
-            ],
-        }]},
-        outline={"slides": [{
-            "sourceUnitId": unit_id, "sourceIndex": 0, "readingOrder": block_ids,
-        }]},
-        browser_metrics=[metrics], htmls=[html],
+    session = current_session()
+    result, admission = check_producer(
+        kwargs["html"], index=kwargs["index"], producer="author_rescue",
+        legacy=lambda _html: legacy_rescue_readback(
+            **kwargs, inspector=inspect_browser_source_readback, fallback_policy=terminal_fallback_active,
+        ),
+        metrics=kwargs["metrics"], evidence=True,
     )
-    hard_failure = bool(
-        result.missing_block_ids or result.order_violations
-        or result.integrity_failures or result.telemetry_failures
-        or result.diagnostic_error
-    )
-    fallback = terminal_fallback_active(
-        profile=profile, reference_mode=reference_mode, source_reflow=True
-    )
-    if hard_failure or (result.visibility_failures and not fallback):
-        summary = log_browser_source_readback_failure(result)
-        error = BrowserSourceReadbackError(
-            "source_content_browser_readback_failed",
-            detail=f"author rescue source readback failed; {summary}",
-            block_ids=tuple(dict.fromkeys((
-                *result.missing_block_ids, *result.integrity_failures,
-                *result.telemetry_failures, *result.visibility_failures,
-            ))),
-            slide_indices=(int(index),), order_violations=result.order_violations,
-        )
-        raise AuthoredStageError(
-            slide_index=index, stage="author", code=error.code, cause=error,
-            retryable=False, message=error.detail,
-            provider_attempt_count=provider_attempt_count,
-            prior_failure=prior_failure,
-        ) from error
-    if not result.visibility_failures:
+    if session is not None and session.mode == "enforce":
+        # First-pass rejected capture stays evidence; terminal policy owns flags.
         return None
-    entry = flagged_entry(
-        index=index, reason="source_readback:visibility", attempted=False,
-        outcome="verbatim_flag_only",
-    )
-    prior_code = str((prior_failure or {}).get("code") or "").strip()
-    entry["reasons"] = [
-        "source_readback:visibility",
-        *([f"author_prior:{prior_code}"[:160]] if prior_code else []),
-    ]
-    return entry
+    return result
 
 
 class _SimplifiedPlan:

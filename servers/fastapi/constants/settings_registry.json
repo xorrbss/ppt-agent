@@ -774,6 +774,15 @@
       "description": "Brave Search API key."
     },
     {
+      "key": "AUTHORED_ADMISSION_GATE_MODE",
+      "type": "string",
+      "default": "shadow",
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Single authored HTML admission gate rollout: shadow records same-input parity; enforce requires digest-bound admission receipts."
+    },
+    {
       "key": "AUTHORED_HTML_NORMALIZE_ENABLED",
       "type": "boolean",
       "default": true,

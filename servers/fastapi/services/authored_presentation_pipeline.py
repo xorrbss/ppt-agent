@@ -4,6 +4,9 @@ from services.authored_presentation_pipeline_deps import *
 from services import authored_presentation_author_batch as author_batch_impl
 from services import authored_presentation_pipeline_helpers as _pipeline_helpers
 from services.authored_local_fit_policy import local_fit_applies
+from services.authored_admission_producers import author_html as admit_author_html, source_image_html
+from services.authored_admission_capture import capture_once, capture_png_once, captured_metrics_or_existing
+from utils.slide_capture import get_cached_browser_metrics
 
 LOGGER = logging.getLogger(__name__)
 
@@ -734,18 +737,12 @@ async def _author_illustrate_render_pipeline(
                         ),
                     )
                 try:
-                    html = validate_authored_slide_html(
-                        html,
-                        allow_illustration_slots=True,
-                        normalization_receipt=normalization_receipt,
+                    html = admit_author_html(
+                        html, index=index, normalization_receipt=normalization_receipt,
+                        bindings=source_block_bindings[index] if source_block_bindings is not None else None,
+                        validate=validate_authored_slide_html, stamp=stamp_source_blocks,
+                        producer="author_rescue" if rescue is not None else "author",
                     )
-                    if (
-                        source_block_bindings is not None
-                        and index < len(source_block_bindings)
-                    ):
-                        html = stamp_source_blocks(
-                            html, source_block_bindings[index]
-                        ).html
                 except RendererPolicyError as exc:
                     raise AuthoredStageError(
                         slide_index=index,
@@ -776,10 +773,9 @@ async def _author_illustrate_render_pipeline(
                     )
             else:
                 try:
-                    html = validate_authored_slide_html(
-                        html,
-                        allow_illustration_slots=True,
-                        normalization_receipt=normalization_receipt,
+                    html = admit_author_html(
+                        html, index=index, normalization_receipt=normalization_receipt,
+                        validate=validate_authored_slide_html, fresh=False,
                     )
                 except RendererPolicyError as exc:
                     raise AuthoredStageError(
@@ -838,19 +834,10 @@ async def _author_illustrate_render_pipeline(
                     ) from exc
             if source_block_bindings is not None and index < len(source_block_bindings):
                 try:
-                    stamped_source = stamp_source_blocks(
-                        illustrated_html, source_block_bindings[index]
+                    illustrated_html = admit_author_html(
+                        illustrated_html, index=index, bindings=source_block_bindings[index],
+                        validate_policy=False, stamp=stamp_source_blocks, producer="illustration",
                     )
-                    illustrated_html = stamped_source.html
-                    if stamped_source.deviations:
-                        # Layout compromises, not lost text: the source stayed
-                        # verbatim but no element owns it exclusively or the
-                        # template placed one block's items out of source order.
-                        LOGGER.info(
-                            "source binding deviations slide=%d %s",
-                            index,
-                            [item.as_dict() for item in stamped_source.deviations],
-                        )
                 except BrowserSourceReadbackError as exc:
                     # One slide dropped source text the model was told to copy.
                     # The other slides are authored and durable, so this is the
@@ -867,9 +854,8 @@ async def _author_illustrate_render_pipeline(
                     ) from exc
             if source_image_block_bindings is not None and index < len(source_image_block_bindings):
                 try:
-                    from services.source_content.browser_readback import stamp_source_image_block_ids
-                    illustrated_html = stamp_source_image_block_ids(
-                        illustrated_html, source_image_block_bindings[index]
+                    illustrated_html = source_image_html(
+                        illustrated_html, index=index, bindings=source_image_block_bindings[index]
                     )
                 except BrowserSourceReadbackError as exc:
                     # A picture the slide was offered and did not place is the
@@ -1159,7 +1145,10 @@ async def _author_illustrate_render_pipeline(
                             slide_index=index,
                         ):
                             if local_fit_policy_value is None:
-                                png = await render_html_to_png(illustrated_html)
+                                png = await capture_png_once(
+                                    illustrated_html, index=index, render=render_html_to_png,
+                                    read_metrics=get_cached_browser_metrics,
+                                )
                                 browser_metrics = get_cached_browser_metrics(
                                     illustrated_html
                                 )
@@ -1173,8 +1162,9 @@ async def _author_illustrate_render_pipeline(
                                     ),
                                 )
                                 async with asyncio.timeout(first_remaining):
-                                    fitted_capture = await render_html_to_png_with_metrics(
+                                    fitted_capture = await capture_once(
                                         local_fit_source_html or illustrated_html,
+                                        index=index, capture=render_html_to_png_with_metrics,
                                         timeout=max(
                                             1,
                                             min(60, int(first_remaining)),
@@ -1300,7 +1290,9 @@ async def _author_illustrate_render_pipeline(
             if require_all_source_images:
                 try:
                     if browser_metrics is None:
-                        browser_metrics = await ensure_browser_metrics(illustrated_html)
+                        browser_metrics = await captured_metrics_or_existing(
+                            illustrated_html, index=index, ensure=ensure_browser_metrics,
+                        )
                     illustrated_html = validate_visible_source_images(
                         illustrated_html,
                         offered or {},

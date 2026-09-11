@@ -67,6 +67,10 @@ from utils.llm_calls.author_slide import TEMPLATE_PAGE_NUMBER_MODE as _TEMPLATE_
 from utils.slide_capture_deck_scope import set_render_deck_scope
 from services.source_content.header_pages import source_pages_are_numbered
 from services.authored_vqa_source_integrity import source_vqa_candidate_integrity_passes
+from services.authored_admission_producers import source_candidate
+from services.authored_admission_capture import capture_once, captured_metrics_or_existing
+from services.authored_admission_publication import final_readback
+from services.authored_admission_session import admission_scope, configure_admission, admission_shadow_receipt, producer_scope
 from services.authored_header_contract_service import (
     page_number_mode_for,
     resolve_header_contract,
@@ -266,15 +270,7 @@ from services.authored_font_signal import body_font_median_signal
 from services.authored_visual_review_evidence import visual_review_not_assessed, visual_review_outcome
 from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
-    inspect_browser_source_readback,
-    log_browser_source_readback_failure,
     stamp_source_block_ids,
-    verify_browser_source_readback,
-)
-from services.authored_terminal_slide_flag_only import source_visibility_flag_entries
-from services.source_content.readback import (
-    SourceContentReadbackError,
-    verify_source_verbatim_readback,
 )
 
 
@@ -648,8 +644,8 @@ async def _fit_content_revision(
     )
     first_remaining = max(0.001, first_deadline - time.monotonic())
     async with asyncio.timeout(first_remaining):
-        fitted = await render_html_to_png_with_metrics(
-            html,
+        fitted = await capture_once(
+            html, index=slide_index, capture=render_html_to_png_with_metrics,
             timeout=max(1, min(60, int(first_remaining))),
             fit=True,
             fit_policy=policy,
@@ -672,8 +668,8 @@ async def _fit_content_revision(
     )
     verify_remaining = max(0.001, verify_deadline - time.monotonic())
     async with asyncio.timeout(verify_remaining):
-        verified = await render_html_to_png_with_metrics(
-            fitted.fitted_html,
+        verified = await capture_once(
+            fitted.fitted_html, index=slide_index, capture=render_html_to_png_with_metrics,
             timeout=max(1, min(60, int(verify_remaining))),
             fit=False,
             fit_policy={
@@ -1090,6 +1086,7 @@ async def _checkpoint_source_reflow_vqa_repairs(
         )
 
 
+@admission_scope
 async def _generate_authored_presentation(
     request: GeneratePresentationRequest,
     presentation_id: uuid.UUID,
@@ -1504,6 +1501,13 @@ async def _generate_authored_presentation(
             message="source bindings are unavailable before Chromium render",
         )
 
+    configure_admission(
+        request=request, presentation_id=presentation_id, generation_job=generation_job,
+        profile=composition_profile, reference_mode=normalize_reference_mode(getattr(style, "reference_mode", STYLE_REFERENCE)),
+        slide_count=len(outline.slides),
+        bindings=source_text_bindings, image_bindings=source_image_bindings,
+    )
+
     async def validate_source_repair_candidate(
         slide_index: int,
         candidate_html: str,
@@ -1513,47 +1517,10 @@ async def _generate_authored_presentation(
 
         if not source_reflow or source_text_bindings is None:
             return
-        _require_source_verbatim_bindings(
-            [candidate_html], (source_text_bindings[slide_index],)
-        )
-        manifest = request._source_content_manifest
-        outline = request._source_document_outline
-        manifest_dump = getattr(manifest, "model_dump", None)
-        manifest_value = (
-            manifest_dump(mode="json", by_alias=True)
-            if callable(manifest_dump)
-            else manifest
-        )
-        outline_dump = getattr(outline, "model_dump", None)
-        outline_value = (
-            outline_dump(mode="json", by_alias=True)
-            if callable(outline_dump)
-            else outline
-        )
-        units = manifest_value.get("units", ())
-        slides = outline_value.get("slides", ())
-        slide = slides[slide_index]
-        unit_id = str(slide.get("sourceUnitId") or slide.get("source_unit_id") or "")
-        unit = next(
-            (
-                item
-                for item in units
-                if str(item.get("sourceUnitId") or item.get("source_unit_id") or "")
-                == unit_id
-            ),
-            None,
-        )
-        if unit is None:
-            raise BrowserSourceReadbackError(
-                "source_content_browser_readback_failed",
-                detail="source unit is unavailable during repair admission",
-                slide_indices=(slide_index,),
-            )
-        verify_browser_source_readback(
-            manifest={"units": [unit]},
-            outline={"slides": [slide]},
-            browser_metrics=[candidate_metrics],
-            htmls=[candidate_html],
+        source_candidate(
+            candidate_html, index=slide_index, metrics=candidate_metrics,
+            manifest=request._source_content_manifest, outline=request._source_document_outline,
+            bindings=source_text_bindings[slide_index],
         )
     pipeline_kwargs = {
         "header_contract": header_contract,
@@ -1784,7 +1751,7 @@ async def _generate_authored_presentation(
             cache_accepted_capture(fitted, timeout=60)
             return fitted.html, fitted.png, fitted.metrics
         canonical = ensure_authored_semantic_roles(ensure_authored_qids(candidate_html))
-        capture = await render_html_to_png_with_metrics(canonical)
+        capture = await capture_once(canonical, index=slide_index, capture=render_html_to_png_with_metrics)
         if capture.png == _placeholder_png() or capture.browser_metrics is None:
             raise RuntimeError("source repair browser evidence unavailable")
         return canonical, capture.png, capture.browser_metrics
@@ -2002,7 +1969,7 @@ async def _generate_authored_presentation(
             ):
                 # Older checkpoints predate exact clipping intersections.
                 # Refresh only this failed slide, retaining its exact HTML.
-                capture = await render_html_to_png_with_metrics(htmls[absolute_index])
+                capture = await capture_once(htmls[absolute_index], index=absolute_index, capture=render_html_to_png_with_metrics)
                 if capture.png == _placeholder_png() or capture.browser_metrics is None:
                     raise AuthoredStageError(
                         slide_index=absolute_index, stage="render",
@@ -2054,9 +2021,10 @@ async def _generate_authored_presentation(
                     # never raised: propagating ended the whole deck over one
                     # unusable repair candidate (validation run-14).
                     try:
-                        await validate_source_repair_candidate(
-                            absolute_index, candidate_html, metrics,
-                        )
+                        with producer_scope("structural_patch"):
+                            await validate_source_repair_candidate(
+                                absolute_index, candidate_html, metrics,
+                            )
                     except BrowserSourceReadbackError as error:
                         return source_verbatim_rejection(error)
                     capacity_errors = capacity_violations(
@@ -2547,7 +2515,9 @@ async def _generate_authored_presentation(
                     else:
                         # Measure the exact correction instead of consulting a
                         # potentially stale capture cache.
-                        candidate_metrics = await ensure_browser_metrics(candidate_html)
+                        candidate_metrics = await captured_metrics_or_existing(
+                            candidate_html, index=index, ensure=ensure_browser_metrics,
+                        )
                     if not await source_vqa_candidate_integrity_passes(
                         index, candidate_html, candidate_metrics, validate_source_repair_candidate
                     ):
@@ -2851,74 +2821,13 @@ async def _generate_authored_presentation(
                 ),
             )
 
-    source_readback_receipt = None
-    source_readback_payload = None
-    readback_retryable = True
-    if source_reflow and composition_profile.text_mode == "verbatim":
-        try:
-            readback_retryable = not terminal_fallback_enabled
-            source_readback_receipt = verify_source_verbatim_readback(
-                manifest=request._source_content_manifest,
-                outline=request._source_document_outline,
-                htmls=htmls,
-            )
-            if evidence_ledger is not None:
-                browser_source_receipt = (
-                    inspect_browser_source_readback if terminal_fallback_enabled
-                    else verify_browser_source_readback
-                )(
-                    manifest=request._source_content_manifest,
-                    outline=request._source_document_outline,
-                    browser_metrics=final_browser_metrics,
-                    htmls=htmls,
-                )
-                if terminal_fallback_enabled:
-                    visibility_entries, unflagged_visibility = source_visibility_flag_entries(
-                        outline=request._source_document_outline,
-                        block_ids=browser_source_receipt.visibility_failures,
-                        flagged_indices=[entry["index"] for entry in flagged_slides],
-                    )
-                    hard_failure = bool(
-                        browser_source_receipt.missing_block_ids
-                        or browser_source_receipt.order_violations
-                        or browser_source_receipt.integrity_failures
-                        or browser_source_receipt.telemetry_failures
-                        or browser_source_receipt.diagnostic_error
-                    )
-                    readback_retryable = bool(
-                        browser_source_receipt.telemetry_failures
-                        or browser_source_receipt.diagnostic_error
-                    )
-                    if hard_failure or unflagged_visibility:
-                        failure_summary = log_browser_source_readback_failure(
-                            browser_source_receipt
-                        )
-                        raise BrowserSourceReadbackError(
-                            "source_content_browser_readback_failed",
-                            detail=f"browser source text/geometry/visibility contract failed; {failure_summary}",
-                            block_ids=tuple(dict.fromkeys((*browser_source_receipt.missing_block_ids, *browser_source_receipt.visibility_failures))),
-                            slide_indices=browser_source_receipt.failed_slide_indices,
-                            order_violations=browser_source_receipt.order_violations,
-                        )
-                    flagged_slides = _merge_flagged_slide_entries((*flagged_slides, *visibility_entries))
-                    object.__setattr__(request, "_authored_flagged_slides", flagged_slides)
-                source_readback_receipt = browser_source_receipt
-            source_readback_payload = source_readback_receipt.as_dict()
-            if terminal_fallback_enabled and evidence_ledger is not None:
-                source_readback_payload.update(
-                    integrityVerified=True,
-                    flaggedVisibilityFailures=list(browser_source_receipt.visibility_failures),
-                )
-            request._authored_source_readback_receipt = source_readback_payload
-        except (SourceContentReadbackError, BrowserSourceReadbackError) as error:
-            raise AuthoredStageError(
-                slide_index=error.slide_indices[0] if error.slide_indices else 0,
-                stage="render",
-                code=error.code,
-                cause=error,
-                retryable=readback_retryable,
-                message=error.detail,
-            ) from error
+    source_readback_receipt, source_readback_payload, flagged_slides = await final_readback(
+        request=request, htmls=htmls, pngs=pngs, generation_job=generation_job,
+        source_reflow=source_reflow, composition_profile=composition_profile,
+        terminal_fallback_enabled=terminal_fallback_enabled, evidence_ledger=evidence_ledger,
+        final_browser_metrics=final_browser_metrics, flagged_slides=flagged_slides,
+        _merge_flagged_slide_entries=_merge_flagged_slide_entries,
+    )
 
     # Final here: the readback merged its visibility sub-reasons and the gate's
     # residuals are partitioned, so a flag can be told from a review requirement.
@@ -2936,6 +2845,7 @@ async def _generate_authored_presentation(
         gate_failures=[*residual_gate_failures, *flagged_residual_failures],
         repaired_slide_indices=repaired_gate_indices,
     )
+    quality_gate_receipt["admissionShadow"] = admission_shadow_receipt()
     quality_gate_receipt["sceneEnvelope"] = scene_envelope.receipt()
     if local_fit_receipts:
         quality_gate_receipt["localFit"] = {

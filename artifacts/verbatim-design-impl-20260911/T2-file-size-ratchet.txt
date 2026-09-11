@@ -1,0 +1,15 @@
+
+> presenton@1.0.0 test:file-size-ratchet
+> node scripts/check-file-size-ratchet.mjs
+
+500-line file-size ratchet failed:
+- new oversized file: servers/fastapi/services/authored_local_fit_evidence.py (1066 lines)
+- oversized file grew: servers/fastapi/services/authored_presentation_publication.py (769 -> 779 lines)
+- oversized file grew: servers/fastapi/services/presentation_export_direct_attempt_service.py (987 -> 1028 lines)
+- oversized file grew: servers/fastapi/services/public_export_operation.py (2014 -> 2146 lines)
+- oversized file grew: servers/fastapi/services/workspace_artifact_publication_service.py (3031 -> 3059 lines)
+- oversized file grew: servers/nextjs/app/(presentation-generator)/presentation/workspace/WorkspaceOperationCard.tsx (1226 -> 1257 lines)
+- oversized file grew: servers/nextjs/app/(presentation-generator)/services/api/presentation-generation.ts (1042 -> 1044 lines)
+- oversized file grew: servers/nextjs/components/OnBoarding/PresentonMode.tsx (1288 -> 1300 lines)
+- oversized file grew: servers/nextjs/lib/authored-hybrid/export.ts (1037 -> 1048 lines)
+- oversized file grew: servers/nextjs/lib/authored-hybrid/slide-layer.ts (991 -> 1004 lines)

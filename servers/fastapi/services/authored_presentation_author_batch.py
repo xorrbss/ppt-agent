@@ -8,6 +8,7 @@ import time
 from typing import Any
 
 from services.source_content.browser_readback import BrowserSourceReadbackError
+from services.authored_admission_producers import author_html
 
 async def persist_batch_success(index: int, html: str, *, context, runtime) -> str:
     if runtime.is_fallback_slide_html(html):
@@ -17,8 +18,10 @@ async def persist_batch_success(index: int, html: str, *, context, runtime) -> s
             code="authored_slide_author_failed",
         )
     try:
-        admitted = runtime.validate_authored_slide_html(
-            html, allow_illustration_slots=True
+        admitted = author_html(
+            html, index=index, producer="author_batch",
+            bindings=context["source_block_bindings"][index] if context["source_block_bindings"] is not None else None,
+            validate=runtime.validate_authored_slide_html, stamp=runtime.stamp_source_blocks,
         )
     except runtime.RendererPolicyError as exc:
         raise runtime.AuthoredStageError(
@@ -28,11 +31,6 @@ async def persist_batch_success(index: int, html: str, *, context, runtime) -> s
             cause=exc,
             retryable=False,
         ) from exc
-    if context["source_block_bindings"] is not None and index < len(context["source_block_bindings"]):
-        # Reject missing source text before the author checkpoint publishes
-        # this slide to the streamed tail. Its existing recovery call then
-        # receives the exact source mismatch and rejected provider output.
-        admitted = runtime.stamp_source_blocks(admitted, context["source_block_bindings"][index]).html
     context["preauthored_htmls"][index] = admitted
     if context["generation_job"] is not None:
         await runtime._complete_stage_after_external_success(

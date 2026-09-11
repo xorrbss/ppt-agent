@@ -23,6 +23,14 @@ def _clamped_int(key: str, default: int, low: int, high: int, settings) -> int:
     return max(low, min(high, _int_setting(key, default, settings)))
 
 
+def get_authored_admission_gate_mode(settings: RuntimeSettings | None = None) -> str:
+    """Admission rollout is shadow until same-input parity has been measured."""
+    mode = (get_setting_env("AUTHORED_ADMISSION_GATE_MODE", settings) or "shadow").strip().lower()
+    if mode not in {"shadow", "enforce"}:
+        raise ValueError("authored_admission_gate_mode_invalid")
+    return mode
+
+
 def get_image_generation_concurrency(settings: RuntimeSettings | None = None) -> int:
     """Concurrent image provider calls per process, clamped to 1..8."""
     return _clamped_int("IMAGE_GENERATION_CONCURRENCY", 3, 1, 8, settings)
@@ -263,6 +271,7 @@ def is_authored_verbatim_placeholder_authoring_enabled(
 
 __all__ = [
     "is_authored_verbatim_placeholder_authoring_enabled",
+    "get_authored_admission_gate_mode",
     "get_authored_illustration_share",
     "get_authored_metrics_cache_entries",
     "get_authored_metrics_cache_mb",

@@ -1178,14 +1178,12 @@ async def author_slide_html(
         except Exception as fallback_error:
             reraise_author_call_error(fallback_error)
     authored_html = extract_html_document(extract_text(response.content) or "")
+    from services.authored_admission_producers import provider_raw_html, provider_expanded_html
+    authored_html = provider_raw_html(authored_html, index=index, normalization_receipt=normalization_receipt)
     authored_html = _strip_nonvisual_pointer_events(authored_html)
     if mode != EXACT_RECONSTRUCTION:
         authored_html = enforce_authored_font_floor(authored_html)
-        # A pinned data-header-part="body" wrapper with no left/right/width
-        # has no horizontal extent and collapses to zero width, taking every
-        # child anchored inside it down with it. Normalise that before the
-        # figure contract and library injection below, which assume a
-        # renderable document.
+        # Give a pinned body wrapper horizontal extent before figure finalization.
         authored_html = ensure_body_root_horizontal_extent(authored_html)
         # A planned figure is held to its contract and given the library
         # stylesheet here, before admission, so the injected CSS is validated
@@ -1229,9 +1227,8 @@ async def author_slide_html(
             authored_html,
             source_slot_candidates,
         )
-    authored_html = validate_authored_slide_html(
-        authored_html,
-        allow_illustration_slots=True,
+    authored_html = provider_expanded_html(
+        authored_html, index=index, validate=validate_authored_slide_html,
         normalization_receipt=normalization_receipt,
     )
     if authored_semantic_dual_output_mode() == "declared":

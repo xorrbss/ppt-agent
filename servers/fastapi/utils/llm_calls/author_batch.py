@@ -237,13 +237,12 @@ def _postprocess_slide(
     request = prepared.request
     mode = normalize_reference_mode(request.reference_mode)
     authored_html = extract_html_document(raw_html)
+    from services.authored_admission_producers import provider_raw_html, provider_expanded_html
+    authored_html = provider_raw_html(
+        authored_html, index=request.index, producer="author_batch", normalization_receipt=normalization_receipt)
     authored_html = _strip_nonvisual_pointer_events(authored_html)
     if mode != EXACT_RECONSTRUCTION:
         authored_html = enforce_authored_font_floor(authored_html)
-        # Same collapse guard, figure contract, and library injection as the
-        # single-slide path: a pinned data-header-part="body" wrapper with no
-        # left/right/width has no horizontal extent and collapses to zero
-        # width, taking every child anchored inside it down with it.
         authored_html = ensure_body_root_horizontal_extent(authored_html)
         authored_html = finalize_infographic_slide_html(
             authored_html, brand=brand, slide=request.infographic
@@ -285,9 +284,8 @@ def _postprocess_slide(
             authored_html,
             prepared.source_slot_candidates,
         )
-    authored_html = validate_authored_slide_html(
-        authored_html,
-        allow_illustration_slots=True,
+    authored_html = provider_expanded_html(
+        authored_html, index=request.index, producer="author_batch", validate=validate_authored_slide_html,
         normalization_receipt=normalization_receipt,
     )
     if authored_semantic_dual_output_mode() == "declared":

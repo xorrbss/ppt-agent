@@ -20,6 +20,7 @@ from services.authored_checkpoint_service import (
     clear_checkpoint_html,
     complete_stage,
 )
+from services.authored_admission_checkpoint import prepare_checkpoint_write
 from utils.asset_directory_utils import (
     filesystem_image_path_to_app_data_reference,
     get_exports_directory,
@@ -262,7 +263,7 @@ async def _complete_stage_after_external_success(**kwargs):
     lets the pipeline join all workers before its attempt token can be revoked.
     """
 
-    checkpoint_task = asyncio.create_task(complete_stage(**kwargs))
+    checkpoint_task = asyncio.create_task(complete_stage(**prepare_checkpoint_write(kwargs)))
     try:
         return await asyncio.shield(checkpoint_task)
     except asyncio.CancelledError:

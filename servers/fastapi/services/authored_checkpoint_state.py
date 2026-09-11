@@ -23,6 +23,10 @@ from services.authored_checkpoint_artifacts import (
 )
 from services.artifact_store import configured_public_artifact_service
 from services.authored_checkpoint_errors import AuthoredStageError
+from services.authored_admission_checkpoint import (
+    checkpoint_receipt_metadata, enforce_receipts, validate_checkpoint_write,
+)
+from services.authored_admission_receipt import AdmissionReceipt
 from services.authored_checkpoint_fence import (
     checkpoint_mutation_session as _checkpoint_mutation_session,
     completed_count as _completed_count,
@@ -106,7 +110,7 @@ async def get_checkpoint(
     async with async_session_maker() as session:
         job = await session.get(PresentationGenerationJob, job_id)
         checkpoint = await _checkpoint(session, job_id, slide_index)
-        recovered = recover_unreferenced_evidence(checkpoint)
+        recovered = None if enforce_receipts() else recover_unreferenced_evidence(checkpoint)
         if recovered is not None and job is not None and job.workspace_operation_id is not None:
             # A crash-orphaned render belongs to the attempt that wrote its
             # checkpoint.  Reads remain available without authority, but only
@@ -184,11 +188,17 @@ async def complete_stage(
     png: bytes | None = None,
     browser_metrics: Mapping[str, object] | None = None,
     checkpoint_revision: int | None = None,
+    admission_receipt: AdmissionReceipt | None = None,
     skipped: bool = False,
     fencing_token: int | None = None,
     session: AsyncSession | None = None,
 ) -> AuthoredSlideCheckpoint:
     _require_stage(stage)
+    validate_checkpoint_write(
+        admission_receipt=admission_receipt, html=html, stage=stage,
+        slide_index=slide_index, attempt_token=attempt_token, fencing_token=fencing_token,
+        browser_metrics=browser_metrics, png=png,
+    )
     render_path: str | None = None
     render_sha256: str | None = None
     expected_render_path: str | None = None
@@ -210,6 +220,7 @@ async def complete_stage(
             png=png,
             browser_metrics=browser_metrics,
             checkpoint_revision=checkpoint_revision,
+            admission_receipt=admission_receipt,
             skipped=skipped,
             fencing_token=fencing_token,
             session=session,
@@ -336,7 +347,9 @@ async def complete_stage(
         # provider ordinal it has bought: an extra call on an already
         # complete stage -- the style anchor's one remake -- must follow the
         # stored count rather than restart under it.
-        checkpoint.error = retained_provider_attempt_fence(checkpoint.error)
+        checkpoint.error = checkpoint_receipt_metadata(
+            checkpoint.error, retained_provider_attempt_fence(checkpoint.error), admission_receipt,
+        )
         checkpoint.attempt_token = attempt_token
         checkpoint.updated_at = get_current_utc_datetime()
         if stage == "persist":

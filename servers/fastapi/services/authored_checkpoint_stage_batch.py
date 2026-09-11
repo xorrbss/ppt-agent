@@ -26,6 +26,10 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+from services.authored_admission_checkpoint import (
+    checkpoint_receipt_metadata, enforce_receipts, validate_checkpoint_write,
+)
+from services.authored_admission_receipt import AdmissionReceipt
 from services.authored_checkpoint_artifacts import (
     read_valid_evidence_artifact,
     recover_unreferenced_evidence,
@@ -136,6 +140,7 @@ async def complete_render_stage_batched(
     skipped: bool,
     fencing_token: int | None,
     session: AsyncSession | None,
+    admission_receipt: AdmissionReceipt | None = None,
 ) -> AuthoredSlideCheckpoint:
     """Publish a render inside one transaction instead of four.
 
@@ -156,13 +161,18 @@ async def complete_render_stage_batched(
     handle.
     """
 
+    validate_checkpoint_write(
+        admission_receipt=admission_receipt, html=html, stage="render",
+        slide_index=slide_index, attempt_token=attempt_token, fencing_token=fencing_token,
+        browser_metrics=browser_metrics, png=png,
+    )
     has_evidence = html is not None and browser_metrics is not None
     async with checkpoint_mutation_session(session) as (mutation_session, owns_session):
         job = await owned_job(
             mutation_session, job_id, attempt_token, fencing_token=fencing_token
         )
         checkpoint = await load_checkpoint(mutation_session, job_id, slide_index)
-        recovered = recover_unreferenced_evidence(checkpoint)
+        recovered = None if enforce_receipts() else recover_unreferenced_evidence(checkpoint)
         if recovered is not None:
             # Adopt a crash-orphaned bundle before deciding the next revision,
             # so revisions stay monotonic across a resumed attempt.
@@ -244,7 +254,9 @@ async def complete_render_stage_batched(
             checkpoint.render_sha256 = render_sha256
             checkpoint.artifact_refs = artifact_refs
         checkpoint.failed_stage = None
-        checkpoint.error = retained_provider_attempt_fence(checkpoint.error)
+        checkpoint.error = checkpoint_receipt_metadata(
+            checkpoint.error, retained_provider_attempt_fence(checkpoint.error), admission_receipt,
+        )
         checkpoint.attempt_token = attempt_token
         checkpoint.updated_at = get_current_utc_datetime()
         job.current_stage = "render"

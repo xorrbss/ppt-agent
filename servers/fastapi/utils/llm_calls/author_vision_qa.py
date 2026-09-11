@@ -21,6 +21,9 @@ from typing import Any, Awaitable, Callable, Dict, Iterable, List, Mapping, Opti
 
 from models.authored_infographic_plan import AuthoredSlideInfographic
 from models.image_prompt import ImagePrompt
+from services.authored_admission_producers import author_html as admit_author_html
+from services.authored_admission_producers import illustrate_html as admit_expanded_html
+from services.authored_admission_capture import capture_once
 from services.authored_infographic_assets import (
     InfographicAssetContext,
     fill_scene_cutout,
@@ -123,11 +126,11 @@ class _ImageServiceLike(Protocol):
     async def generate_image(self, prompt: ImagePrompt) -> object: ...
 
 
-async def _render_correction_html(html: str) -> bytes:
+async def _render_correction_html(html: str, *, index: int | None = None) -> bytes:
     """Render and retain browser metrics for the subsequent deterministic gate."""
     if render_html_to_png is not _ORIGINAL_RENDER_HTML_TO_PNG:
         return await render_html_to_png(html)
-    png, _metrics = await render_html_to_png_with_metrics(html)
+    png, _metrics = await capture_once(html, index=index, capture=render_html_to_png_with_metrics)
     return png
 
 
@@ -660,6 +663,7 @@ async def revise_authored_deck(
             allow_provider_fallback=False,
             **reference_kwargs,
         )
+        new_html = admit_author_html(new_html, index=absolute_indices[i], producer="vqa_repair", validate_policy=False)
         new_html = _canonicalize_full_reauthor_semantic_aliases(new_html)
         if not is_valid_slide_html(new_html):
             raise ValueError("full re-author returned invalid slide HTML")
@@ -715,12 +719,7 @@ async def revise_authored_deck(
             new_html = await substitute_figure_icons(
                 new_html, slide=brief, context=infographic_assets
             )
-        finalized_html = validate_authored_slide_html(new_html, finalized=True)
-        # Real author output is already canonicalized at the author-stage boundary.
-        # Preserve the legacy lexical HTML for test doubles/older callers that return
-        # an otherwise-valid document without author-only attributes, while still
-        # running the final admission check. When finalization has work to do, its
-        # returned copy is authoritative so no marker can reach the renderer.
+        finalized_html = admit_expanded_html(new_html, index=absolute_indices[i], validate=validate_authored_slide_html, producer="vqa_repair")
         if had_authoring_only_attributes:
             new_html = finalized_html
         # Fallback may replace structure, but every resulting edit target still gets
@@ -729,7 +728,7 @@ async def revise_authored_deck(
             new_html = ensure_authored_qids(new_html)
         elif return_details:
             validate_declared_authored_qids(new_html)
-        return new_html, await _render_correction_html(new_html)
+        return new_html, await _render_correction_html(new_html, index=absolute_indices[i])
 
     async def review_and_fix(
         i: int,
@@ -914,7 +913,7 @@ async def revise_authored_deck(
                         elif applied.ok and is_valid_slide_html(applied.html):
                             try:
                                 candidate_png = await _render_correction_html(
-                                    applied.html
+                                    applied.html, index=absolute_indices[i]
                                 )
                             except Exception as error:
                                 log_failure("patch_render", error)

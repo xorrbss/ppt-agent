@@ -137,10 +137,22 @@ TAG_ATTRIBUTES: Mapping[str, set[str]] = {
 }
 
 
+# Origin inventory, not permission for model output. GLOBAL_ATTRIBUTES remains
+# the renderer-facing allowlist, including these identities where already allowed.
+SERVER_STAMPED_ATTRIBUTES: Mapping[str, str] = {
+    "data-source-block-id": "services/source_content/text_stamping.py",
+    "data-qid": "services/source_content/source_stamp_dom.py",
+    "data-semantic-role": "services/source_content/source_stamp_dom.py",
+    "data-source-image-kind": "services/authored_vnext/source_native_generation.py",
+    "data-source-image-aspect-ratio": "services/authored_vnext/source_native_generation.py",
+}
+
+
 __all__ = [
     "ALLOWED_TAGS",
     "DROP_TAGS",
     "GLOBAL_ATTRIBUTES",
+    "SERVER_STAMPED_ATTRIBUTES",
     "TAG_ATTRIBUTES",
     "VOID_TAGS",
 ]

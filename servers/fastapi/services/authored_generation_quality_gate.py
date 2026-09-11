@@ -35,27 +35,11 @@ def _source_block_bindings(request) -> tuple[tuple[tuple[str, str], ...], ...] |
         result.append(tuple(pairs))
     return tuple(result)
 
-def _require_source_verbatim_bindings(
-    htmls: list[str],
-    bindings: tuple[tuple[tuple[str, str], ...], ...] | None,
-) -> None:
-    """Require the exact source seal to have existed before Chromium render."""
+def _require_source_verbatim_bindings(htmls, bindings) -> None:
+    from services.authored_admission_producers import require_bound_source_html
 
-    if bindings is None or len(bindings) != len(htmls):
-        raise BrowserSourceReadbackError(
-            "source_content_browser_readback_failed",
-            detail="source text bindings are unavailable for the rendered deck",
-        )
-    for slide_index, (html, slide_bindings) in enumerate(
-        zip(htmls, bindings, strict=True)
-    ):
-        stamped = stamp_source_block_ids(html, slide_bindings)
-        if stamped != html:
-            raise BrowserSourceReadbackError(
-                "source_content_browser_readback_failed",
-                detail="source text was not sealed before Chromium render",
-                slide_indices=(slide_index,),
-            )
+    require_bound_source_html(htmls, bindings, stamp=stamp_source_block_ids)
+
 
 def _source_image_block_bindings(request) -> tuple[tuple[str, ...], ...] | None:
     """Project source image *occurrences* into deterministic DOM bindings."""

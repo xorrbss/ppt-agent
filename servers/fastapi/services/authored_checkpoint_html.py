@@ -31,7 +31,7 @@ def _text(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def checkpoint_stage_html(checkpoint: Any, *, stage: str = "render") -> str | None:
+def checkpoint_stage_html(checkpoint: Any, *, stage: str = "render", publishable: bool = False) -> str | None:
     """The HTML ``stage`` published for this slide, or ``None``.
 
     ``stage`` names the checkpoint stage whose completion makes the collapsed
@@ -41,6 +41,16 @@ def checkpoint_stage_html(checkpoint: Any, *, stage: str = "render") -> str | No
 
     if checkpoint is None:
         return None
+    if publishable:
+        from services.authored_admission_checkpoint import enforce_receipts
+        from services.authored_admission_context import digest_html
+
+        if enforce_receipts():
+            receipt = (getattr(checkpoint, "error", None) or {}).get("admission", {})
+            html = checkpoint_stage_html(checkpoint, stage=stage)
+            if (not receipt.get("publishable") or html is None or receipt.get("htmlDigest") != digest_html(html)
+                    or receipt.get("attemptToken") != getattr(checkpoint, "attempt_token", None)):
+                return None
     stored = _text(getattr(checkpoint, "illustrated_html", None))
     if stored is not None:
         return stored
