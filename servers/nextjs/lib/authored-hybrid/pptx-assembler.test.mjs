@@ -596,6 +596,56 @@ test("assembler preserves authored breaks, bounds text safely, and never emits C
   assert.ok(Number(transform[3]) > 120 * 9_525);
 });
 
+test("assembler ignores innerText-only flex newlines but preserves measured hard breaks", async () => {
+  const backplate = await sharp({
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: "transparent" },
+  }).png().toBuffer();
+  const run = (text, x, lineIndex, breakKind) => ({
+    text,
+    bounds: bounds(x, 100 + lineIndex * 32, text === "\n" ? 0 : 80, text === "\n" ? 0 : 28),
+    fragments: text === "\n" ? [] : [bounds(x, 100 + lineIndex * 32, 80, 28)],
+    style: textStyle,
+    script: "cjk",
+    lineIndex,
+    ...(breakKind ? { breakKind } : {}),
+  });
+  const flexInnerTextArtifact = {
+    id: "q-phone-step-1", domPath: "body > div.step", tagName: "div",
+    sourceIndex: 0, zOrder: 1, cssZIndex: 1, bounds: bounds(100, 100, 240, 32),
+    rotationDeg: 0, opacity: 1,
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "body", plainText: "짧게 소개\n→", paragraphs: ["짧게 소개", "→"], style: textStyle,
+      runs: [run("짧게 소개", 100, 0), run("→", 190, 0)],
+    },
+  };
+  const authoredBreak = {
+    ...flexInnerTextArtifact,
+    id: "authored-break",
+    sourceIndex: 1,
+    bounds: bounds(100, 180, 240, 64),
+    text: {
+      ...flexInnerTextArtifact.text,
+      plainText: "첫째\n둘째",
+      paragraphs: ["첫째", "둘째"],
+      runs: [run("첫째", 100, 0), run("\n", 180, 1, "line"), run("둘째", 100, 1)],
+    },
+  };
+  const prepared = await prepareNativeElements([flexInnerTextArtifact, authoredBreak]);
+  const output = assembleAuthoredHybridPptx(skeleton(), [
+    { slideNumber: 1, backplatePng: backplate, elements: prepared },
+  ]);
+  const slideXml = readPptxArchive(output).get("ppt/slides/slide1.xml").toString("utf8");
+  const flexStart = slideXml.indexOf("DevAX hybrid text q-phone-step-1");
+  const flexXml = slideXml.slice(flexStart, slideXml.indexOf("</p:sp>", flexStart));
+  const hardStart = slideXml.indexOf("DevAX hybrid text authored-break");
+  const hardXml = slideXml.slice(hardStart, slideXml.indexOf("</p:sp>", hardStart));
+  assert.doesNotMatch(flexXml, /<a:br\/>/);
+  assert.match(flexXml, /짧게 소개/);
+  assert.match(flexXml, /→/);
+  assert.equal((hardXml.match(/<a:br\/>/g) ?? []).length, 1);
+});
+
 test("assembler writes provenance as valid, merge-safe PPTX custom properties", () => {
   const entries = readPptxArchive(skeleton());
   entries.set("_rels/.rels", Buffer.from(`<?xml version="1.0"?>

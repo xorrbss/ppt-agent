@@ -22,6 +22,10 @@ import {
   mapHybridSlideFallbackCode,
 } from "./lib/hybrid-slide-fallback-code.mjs";
 import { mapWithDeckBudget } from "./lib/hybrid-deck-budget.mjs";
+import {
+  assembleWithPerSlideIntegrityFallback,
+  createHybridWorkerQualityReport,
+} from "./lib/hybrid-slide-assembly.mjs";
 
 // Re-exported so the worker keeps naming its own classification surface.
 export { describeHybridErrorChain, mapHybridSlideFallbackCode };
@@ -388,23 +392,12 @@ async function run() {
       + `medianSlideMs=${budget.observedMedianMillis ?? "n/a"} maxSlideMs=${budget.observedMaxMillis ?? "n/a"}
 `,
   );
-  const layers = outcomes.map((outcome) => outcome.layer).filter(Boolean);
-  const report = modules.createPresentationExportQuality(
-    "hybrid",
-    outcomes.map((outcome) => outcome.quality),
-    {
-      fontEmbeddingStatus: embedding.status,
-      fontRendering: {
-        browserFontFilesCollected: outcomes.reduce(
-          (total, outcome) => total + outcome.fontRendering.browserFontFilesCollected,
-          0,
-        ),
-        browserCollectionFailures: outcomes.reduce(
-          (total, outcome) => total + outcome.fontRendering.browserCollectionFailures,
-          0,
-        ),
-      },
-    },
+  let finalOutcomes = outcomes;
+  let layers = finalOutcomes.map((outcome) => outcome.layer).filter(Boolean);
+  let report = createHybridWorkerQualityReport(
+    modules.createPresentationExportQuality,
+    embedding.status,
+    finalOutcomes,
   );
   if (!layers.length) {
     // Every slide fell back. Report why, per slide: a bare "no layers" leaves
@@ -413,11 +406,35 @@ async function run() {
     noLayers.quality = summarizeQuality(report, job.budgetMillis);
     throw noLayers;
   }
-  const hybridBytes = await modules.assembleAuthoredHybridPptxAsync(
-    embedding.pptx,
-    layers,
-    { embeddedTypefaceFamilies: embedding.embeddedTypefaceFamilies },
+  const assembled = await assembleWithPerSlideIntegrityFallback({
+    basePptx: embedding.pptx,
+    outcomes: finalOutcomes,
+    assemblerOptions: { embeddedTypefaceFamilies: embedding.embeddedTypefaceFamilies },
+    assemble: modules.assembleAuthoredHybridPptxAsync,
+    mapFallbackCode: mapHybridSlideFallbackCode,
+    createFallbackOutcome: (slideNumber, code) => ({
+      layer: null,
+      quality: modules.imageFallbackSlide(slideNumber, code),
+      fontRendering: modules.noFontRenderingTelemetry(),
+    }),
+    onFallback: ({ code, error, slideNumber }) => process.stderr.write(
+      `[public-hybrid] slide ${slideNumber} assembler raster fallback ${code}: ` +
+        `${describeHybridErrorChain(error)}\n`,
+    ),
+  });
+  finalOutcomes = assembled.outcomes;
+  layers = assembled.layers;
+  report = createHybridWorkerQualityReport(
+    modules.createPresentationExportQuality,
+    embedding.status,
+    finalOutcomes,
   );
+  if (!assembled.hybridBytes) {
+    const noLayers = new HybridWorkerError("hybrid_no_native_layers");
+    noLayers.quality = summarizeQuality(report, job.budgetMillis);
+    throw noLayers;
+  }
+  const hybridBytes = assembled.hybridBytes;
   await writeFile(job.outputPath, hybridBytes, { flag: "wx", mode: 0o600 });
   await modules.writeLocalFitExportEvidence(job.outputPath,
     modules.createLocalFitExportEvidence(layers, htmls, job.rendererSourceDigest ?? "", hybridBytes));

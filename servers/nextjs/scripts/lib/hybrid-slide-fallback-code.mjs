@@ -26,7 +26,7 @@ export const AUTHORED_HYBRID_ERROR_CODES = Object.freeze([
   "authored_render_readiness_timeout", "authored_render_resources_unresolved",
   "authored_semantic_qid_duplicate", "authored_semantic_qid_invalid",
   "authored_semantic_qid_mismatch", "cached_hybrid_artifact_digest_mismatch",
-  "stale_render_revision",
+  "stale_render_revision", "text_break_integrity",
 ]);
 
 /** Chrome teardown, as distinct from the measurement it follows. */

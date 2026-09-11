@@ -14,6 +14,10 @@ import {
 import { serializeNativeChartPart } from "./native-chart.ts";
 import { backplatePixelSize } from "./capture-scale.ts";
 import {
+  assertSerializedTextBreakIntegrity,
+  authoredHardBreakCount,
+} from "./pptx-text-integrity.ts";
+import {
   addChartContentType,
   addPngContentType,
   allocateMediaName,
@@ -287,18 +291,6 @@ function escapeXmlAttribute(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
 }
 
-function authoredBreakCount(item: Extract<PreparedNativeElement, { kind: "text" }>): number {
-  const explicit = item.source.text.runs.reduce(
-    (count, run) => count + (
-      run.breakKind === "line" || run.breakKind === "paragraph"
-        ? (run.text.match(/\n/g) ?? []).length
-        : 0
-    ),
-    0
-  );
-  return Math.max(explicit, Math.max(0, item.source.text.paragraphs.length - 1));
-}
-
 /** Exact geometry the assembler will expose to OOXML readback. */
 export function preparedNativeElementExpectedReadbackBounds(
   item: PreparedNativeElement,
@@ -329,7 +321,7 @@ export function preparedNativeElementExpectedReadbackBounds(
     const verticalSlack = Math.round(
       Math.max(
         4,
-        Math.min(12, authoredBreakCount(item) > 0 ? 10 : 4),
+        Math.min(12, authoredHardBreakCount(item.source.text) > 0 ? 10 : 4),
       ) * 9_525,
     );
     const horizontal = item.source.text.style.horizontalAlignment;
@@ -380,7 +372,7 @@ function expandStandaloneTextBounds(
     Math.max(8, Math.min(16, item.source.text.style.fontSizePt * 0.4 + 4)) * 9_525
   );
   const verticalSlack = Math.round(
-    Math.max(4, Math.min(12, authoredBreakCount(item) > 0 ? 10 : 4)) * 9_525
+    Math.max(4, Math.min(12, authoredHardBreakCount(item.source.text) > 0 ? 10 : 4)) * 9_525
   );
   const horizontal = item.source.text.style.horizontalAlignment;
   const vertical = item.source.text.style.verticalAlignment;
@@ -400,7 +392,8 @@ function expandStandaloneTextBounds(
 function hardenTextOverlay(
   xml: string,
   item: Extract<PreparedNativeElement, { kind: "text" }>,
-  options: AuthoredHybridAssemblerOptions
+  options: AuthoredHybridAssemblerOptions,
+  slideNumber: number,
 ): string {
   const fallback = options.embeddedTypefaceFamilies?.find((family) => CJK_TYPEFACE.test(family)) ??
     "Malgun Gothic";
@@ -413,12 +406,12 @@ function hardenTextOverlay(
       )
       : runXml
   );
-  const expectedBreaks = authoredBreakCount(item);
-  const serializedBreaks = (hardened.match(/<a:br\/>/g) ?? []).length +
-    Math.max(0, (hardened.match(/<a:p>/g) ?? []).length - 1);
-  if (serializedBreaks < expectedBreaks) {
-    throw new Error(`Hybrid text ${item.source.id} lost an authored line break.`);
-  }
+  assertSerializedTextBreakIntegrity(
+    hardened,
+    item.source.text,
+    slideNumber,
+    item.source.id,
+  );
   hardened = hardened
     .replace(/\bhorzOverflow="(?:overflow|clip)"/, 'horzOverflow="clip"')
     .replace(/\bvertOverflow="(?:overflow|clip)"/, 'vertOverflow="clip"')
@@ -618,7 +611,9 @@ function assembleSlide(
       relationshipId,
       options
     );
-    if (overlay && item.kind === "text") overlay = hardenTextOverlay(overlay, item, options);
+    if (overlay && item.kind === "text") {
+      overlay = hardenTextOverlay(overlay, item, options, layer.slideNumber);
+    }
     if (underlay) {
       if (isCanvasBackgroundShape(item)) {
         if (insideGroup) {

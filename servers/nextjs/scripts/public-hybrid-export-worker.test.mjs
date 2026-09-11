@@ -10,6 +10,7 @@ import {
   describeHybridErrorChain,
   mapHybridSlideFallbackCode,
 } from "./public-hybrid-export-worker.mjs";
+import { assembleWithPerSlideIntegrityFallback } from "./lib/hybrid-slide-assembly.mjs";
 
 const WORKER = fileURLToPath(new URL("./public-hybrid-export-worker.mjs", import.meta.url));
 const DIGEST = `sha256:${"a".repeat(64)}`;
@@ -31,6 +32,10 @@ test("slide preparation errors map to bounded stable fallback codes", () => {
   );
   assert.equal(mapHybridSlideFallbackCode(new Error("unexpected qid owner conflict")), "qid-ownership-mismatch");
   assert.equal(mapHybridSlideFallbackCode(new Error("Protocol error: Target closed")), "browser-guard-rejected");
+  assert.equal(
+    mapHybridSlideFallbackCode(Object.assign(new Error("break mismatch"), { code: "text_break_integrity" })),
+    "text_break_integrity",
+  );
   assert.equal(mapHybridSlideFallbackCode(new Error("customer text must not persist")), "unknown-exception");
 });
 
@@ -116,9 +121,45 @@ test("the error chain walk is bounded and cycle safe", () => {
 
 test("the persisted per-slide code stays inside the bounded receipt shape", () => {
   const receiptCode = /^[a-z][a-z0-9_-]{0,95}$/u;
-  for (const code of ["chrome-teardown-timeout", "chrome-teardown-failed"]) {
+  for (const code of ["chrome-teardown-timeout", "chrome-teardown-failed", "text_break_integrity"]) {
     assert.match(code, receiptCode, "a new code must survive the receipt projection");
   }
+});
+
+test("a text-break integrity refusal falls back only its owning slide", async () => {
+  const outcomes = [1, 2, 3].map((slideNumber) => ({
+    layer: { slideNumber },
+    quality: { slideNumber, imageFallback: false },
+    fontRendering: { browserFontFilesCollected: 0, browserCollectionFailures: 0 },
+  }));
+  let attempts = 0;
+  const assembled = await assembleWithPerSlideIntegrityFallback({
+    basePptx: Buffer.from("base"),
+    outcomes,
+    assemblerOptions: {},
+    assemble: async (_base, layers) => {
+      attempts += 1;
+      if (layers.some((layer) => layer.slideNumber === 2)) {
+        throw Object.assign(new Error("Hybrid text q-phone-step-1 lost an authored line break."), {
+          code: "text_break_integrity",
+          slideNumber: 2,
+        });
+      }
+      return Buffer.from("hybrid");
+    },
+    mapFallbackCode: mapHybridSlideFallbackCode,
+    createFallbackOutcome: (slideNumber, code) => ({
+      layer: null,
+      quality: { slideNumber, imageFallback: true, fallbackReasons: [code] },
+      fontRendering: { browserFontFilesCollected: 0, browserCollectionFailures: 0 },
+    }),
+  });
+  assert.equal(attempts, 2);
+  assert.deepEqual(assembled.layers.map((layer) => layer.slideNumber), [1, 3]);
+  assert.equal(assembled.outcomes[0].quality.imageFallback, false);
+  assert.deepEqual(assembled.outcomes[1].quality.fallbackReasons, ["text_break_integrity"]);
+  assert.equal(assembled.outcomes[2].quality.imageFallback, false);
+  assert.equal(assembled.hybridBytes.toString("utf8"), "hybrid");
 });
 
 /** Run the worker with one job and return its single result line. */
