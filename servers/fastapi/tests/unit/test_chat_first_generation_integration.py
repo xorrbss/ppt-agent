@@ -620,7 +620,10 @@ def test_create_persists_theme_but_only_safe_theme_metadata_in_first_message(
                     idempotency_key=key,
                     theme=theme,
                 )
-            assert first.theme == theme
+            # The server stamps its own authored mode marker on top of the
+            # admitted theme; nothing else about the caller theme changes.
+            stamped_theme = {**theme, "mode": "authored"}
+            assert first.theme == stamped_theme
 
             async with maker() as session:
                 stored = await session.get(PresentationModel, presentation_id)
@@ -628,7 +631,7 @@ def test_create_persists_theme_but_only_safe_theme_metadata_in_first_message(
                     await session.execute(select(WorkspaceMessage))
                 ).scalar_one()
                 assert stored is not None
-                assert stored.theme == theme
+                assert stored.theme == stamped_theme
                 settings = message.message_metadata["generation_settings"]
                 assert settings["theme_id"] == "customer-brand"
                 assert settings["theme_name"] == "Customer Brand"
@@ -710,7 +713,9 @@ def test_legacy_create_ignores_chat_first_theme_admission(tmp_path: Path, monkey
                     theme={"unexpected": "legacy clients do not admit themes"},
                 )
             assert created.lifecycle_status == PRESENTATION_LIFECYCLE_PUBLISHED
-            assert created.theme is None
+            # The legacy path drops the caller theme entirely: what remains is
+            # only the server-issued authored marker.
+            assert created.theme == {"mode": "authored"}
             async with maker() as session:
                 assert await session.scalar(
                     select(func.count()).select_from(WorkspaceMessage)
