@@ -67,9 +67,10 @@ test("partial upload-state updates preserve independently selected source-conten
 
 test("source-content analyze-confirm flow preserves the admitted pin into the authored request", async () => {
   const nextjsRoot = path.resolve(testDirectory, "..", "..");
-  const [uploadPage, uploadState, sourceContentClient, outlineGeneration] = await Promise.all([
+  const [uploadPage, uploadState, sourceContentAdmissionHook, sourceContentClient, outlineGeneration] = await Promise.all([
     readFile(path.join(nextjsRoot, "app", "(presentation-generator)", "upload", "components", "UploadPage.tsx"), "utf8"),
     readFile(path.join(nextjsRoot, "app", "(presentation-generator)", "upload", "components", "upload-page", "useUploadPageState.ts"), "utf8"),
+    readFile(path.join(nextjsRoot, "app", "(presentation-generator)", "upload", "components", "upload-page", "useSourceContentAdmission.ts"), "utf8"),
     readFile(path.join(nextjsRoot, "app", "(presentation-generator)", "services", "api", "source-content", "contract.ts"), "utf8"),
     readFile(path.join(nextjsRoot, "app", "(presentation-generator)", "outline", "hooks", "usePresentationGeneration.ts"), "utf8"),
   ]);
@@ -78,9 +79,13 @@ test("source-content analyze-confirm flow preserves the admitted pin into the au
   assert.match(uploadPage, /<TemplateSelection\s*\/>/);
   assert.match(uploadPage, /data-testid="upload-master-selection"/);
   assert.match(uploadPage, /label=\{sourceContentMode \? "추가 디자인 지시" : undefined\}/);
-  assert.match(uploadState, /const analyzeSourceContent/);
-  assert.match(uploadState, /cleanupDocumentAdmission/);
-  assert.match(uploadState, /sourceContentMode \? sourceContentAdmission : null/);
+  // The analysis gate (analyze/cleanupDocumentAdmission) was extracted into
+  // useSourceContentAdmission.ts by commit 6da74cf8a ("redesign from a
+  // source deck in one click"); useUploadPageState.ts now only calls into it.
+  assert.match(uploadState, /sourceContentGate\.analyze\(/);
+  assert.match(sourceContentAdmissionHook, /const analyze = async/);
+  assert.match(sourceContentAdmissionHook, /cleanupDocumentAdmission/);
+  assert.match(uploadState, /sourceContentMode\s*\?\s*sourceContentGate\.admission\s*:\s*null/);
   assert.match(uploadState, /content: sourceContentMode \? ""/);
   assert.match(uploadState, /instructions: sourceContentMode/);
   assert.match(sourceContentClient, /formData\.append\("referenceSnapshotId", referenceSnapshotId\)/);

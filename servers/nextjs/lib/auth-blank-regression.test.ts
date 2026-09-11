@@ -64,13 +64,16 @@ test("template-free presentations cannot open the template slide picker", () => 
 
   assert.equal(isTemplateFreePresentation(blankPresentation), true);
   assert.equal(isTemplateFreePresentation(templatedPresentation), false);
+  // The template_v2 slide-picker path was removed with the legacy
+  // presentation sources (commit b11a92e62): `handleAddSlideClick` now only
+  // creates a slide for a template-free deck and returns; a templated deck's
+  // "add slide" button (rendered only when `isTemplateFree`, see below) has
+  // no picker to open at all any more.
   assert.match(
     source,
-    /if \(isTemplateFree\) \{[\s\S]*?createBlankPresentationSlide\([\s\S]*?return;[\s\S]*?\}\s*setShowNewSlideSelection\(true\)/
+    /if \(isTemplateFree\) \{[\s\S]*?createBlankPresentationSlide\([\s\S]*?return;[\s\S]*?\}\s*\};/
   );
-  assert.match(
-    source,
-    /showNewSlideSelection\s*&&\s*!isTemplateFree\s*&&\s*lastSlideTemplateId/
-  );
+  assert.match(source, /mutationsEnabled\s*&&\s*isTemplateFree\s*&&\s*\(/);
+  assert.doesNotMatch(source, /setShowNewSlideSelection/);
   assert.doesNotMatch(source, />\s*(?:Blocks|Use Template)\s*</);
 });

@@ -204,10 +204,14 @@ test("assembler sandwiches residual raster between the editable canvas and foreg
   const textOverlayXml = slideXml.slice(textOverlayStart, textOverlayEnd);
   assert.match(textOverlayXml, /<a:noFill\/>/);
   assert.doesNotMatch(textOverlayXml, /val="EAF2FF"/);
-  assert.match(relsXml, /hybrid-s1-backplate-[a-f0-9]{16}\.png/);
+  // Media names moved from a fixed "backplate" label to a z-band-indexed
+  // "raster-band-N" label in 2971728b6 (feat(authored): harden release
+  // generation and hybrid evidence) so a single-band slide and a
+  // multi-z-band audited slide (see the next test) share one naming scheme.
+  assert.match(relsXml, /hybrid-s1-raster-band-0-[a-f0-9]{16}\.png/);
   assert.doesNotMatch(relsXml, /Id="rId2"/);
   assert.equal(entries.has("ppt/media/image1.png"), false);
-  assert.ok([...entries.keys()].some((name) => /^ppt\/media\/hybrid-s1-backplate-/.test(name)));
+  assert.ok([...entries.keys()].some((name) => /^ppt\/media\/hybrid-s1-raster-band-0-/.test(name)));
   assert.match(entries.get("[Content_Types].xml").toString("utf8"), /Extension="png"/);
 });
 

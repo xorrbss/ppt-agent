@@ -108,6 +108,8 @@ test("browser observations become a versioned JSON-safe H2 contract", () => {
     elements: [
       {
         id: "h1-0002",
+        identityAuthority: "compatibility-ordinal",
+        parentElementId: null,
         domPath: "body > div:nth-of-type(1)",
         tagName: "div",
         sourceIndex: 4,
@@ -127,6 +129,8 @@ test("browser observations become a versioned JSON-safe H2 contract", () => {
       },
       {
         id: "h1-0001",
+        identityAuthority: "compatibility-ordinal",
+        parentElementId: null,
         domPath: "body > p:nth-of-type(1)",
         tagName: "p",
         sourceIndex: 2,

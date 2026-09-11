@@ -1131,6 +1131,8 @@ test("cursor-bearing v1 events require the complete canonical contract", () => {
     progress: undefined,
     error: undefined,
     retryable: undefined,
+    capacityWaiting: undefined,
+    queuePosition: undefined,
     result: undefined,
     createdAt: undefined,
   });

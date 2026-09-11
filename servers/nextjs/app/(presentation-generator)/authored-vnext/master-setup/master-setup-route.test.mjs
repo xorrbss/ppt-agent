@@ -25,6 +25,17 @@ const studio = readFileSync(
   path.join(routeDir, "MasterStudioCanvas.tsx"),
   "utf8",
 );
+// MasterStudioCanvas delegates pointer/toolbar interaction to these two
+// (introduced alongside it in 8c88ac2c65, replacing the raw-pointer-capture
+// design the tests below were originally written against).
+const konvaCanvas = readFileSync(
+  path.join(routeDir, "MasterKonvaCanvas.tsx"),
+  "utf8",
+);
+const wysiwygWorkspace = readFileSync(
+  path.join(routeDir, "MasterWysiwygWorkspace.tsx"),
+  "utf8",
+);
 const catalogDialog = readFileSync(
   path.join(routeDir, "MasterCatalogDialog.tsx"),
   "utf8",
@@ -67,7 +78,13 @@ test("catalog selection commits only on Apply and draft cards remain edit-only",
   assert.match(catalogDialog, /setPendingMasterId\(entry\.masterId\)/);
   assert.match(catalogDialog, /client\.getPublished\(pendingMasterId\)/);
   assert.match(catalogDialog, /await onApply\(published\)/);
-  assert.match(catalogDialog, /setPendingMasterId\(selectedMasterId\)/);
+  // The reset-to-selected effect always folds in the onClear fallback (added
+  // in the same commit, 8c88ac2c65); the plain-selectedMasterId regex here
+  // never matched that shape.
+  assert.match(
+    catalogDialog,
+    /setPendingMasterId\(selectedMasterId \?\? \(onClear \? NO_COMPANY_STANDARD : null\)\)/,
+  );
   assert.match(catalogCard, /entry\.publishedRevision !== null/);
   assert.match(catalogCard, /disabled=\{!selectable\}/);
   assert.match(gate, /client\.registerMaster/);
@@ -76,9 +93,13 @@ test("catalog selection commits only on Apply and draft cards remain edit-only",
 });
 
 test("Upload keeps master preference separate and defaults to one-shot generation", () => {
-  assert.match(uploadPage, /readStoredCompanyStandardPreference\(\)/);
-  assert.match(uploadPage, /masterClient[\s\S]*?\.getPublished\(lastUsedMasterId\)/);
-  assert.match(uploadPage, /saveLastUsedMasterId\(published\.masterId\)/);
+  // 1fc2b169a ("fix(presentation): complete authored source-content reflow")
+  // deliberately dropped last-used-preference auto-resolution: a fresh
+  // upload must never inherit browser state from another document, so the
+  // mount effect now resets and clears any stored pin instead of loading it.
+  assert.match(uploadPage, /dispatch\(setPptGenUploadState\(\{ companyStandard: null \}\)\)/);
+  assert.match(uploadPage, /clearLastUsedMasterId\(\)/);
+  assert.doesNotMatch(uploadPage, /readStoredCompanyStandardPreference/);
   assert.match(uploadPage, /onApply=\{applyMaster\}/);
   assert.match(uploadPage, /masterBlocksGeneration/);
   assert.match(uploadPage, /data-testid="master-admission-error"/);
@@ -99,17 +120,20 @@ test("Master Setup route supports an explicit emergency-disable feature flag", (
   assert.match(page, /notFound\(\)/);
 });
 
-test("published Master is a required gate with a query-driven continuation", () => {
-  assert.match(page, /params\.continue/);
-  assert.match(page, /params\.returnTo/);
-  assert.match(gate, /safeContinuePath/);
+test("published Master is a required gate with an apply-driven continuation", () => {
+  // 8c88ac2c65 ("feat: complete authored presentation workflows") — the same
+  // commit that added this test — replaced the query-param continuation
+  // (page.tsx searchParams -> continueUrl -> safeContinuePath/buildContinueHref,
+  // MasterSetupPublishPanel's onPublished(published, visualDirection) submit
+  // handler) with a plain callback prop threaded straight through the gate:
+  // MasterCatalogDialog now does `await onApply(published)` on the panel's
+  // "apply-after-publish" button, and page.tsx never reads searchParams.
+  assert.doesNotMatch(page, /searchParams/);
+  assert.doesNotMatch(gate, /safeContinuePath|masterRevision|masterDigest/);
   assert.match(publishPanel, /published && !publishedStale/);
-  assert.match(publishPanel, /data-testid="continue-after-publish"/);
-  assert.match(gate, /masterRevision/);
-  assert.match(gate, /masterDigest/);
-  assert.match(source, /remotelyValidated/);
-  assert.match(publishPanel, /onPublished\(published, visualDirection\)/);
-  assert.match(publishPanel, /event\.preventDefault\(\)/);
+  assert.match(publishPanel, /data-testid="apply-after-publish"/);
+  assert.match(gate, /onApply/);
+  assert.match(publishPanel, /onApply\(published, visualDirection\)/);
 });
 
 test("legacy Master library rail stays hidden so WYSIWYG uses the full width", () => {
@@ -156,43 +180,45 @@ test("preview uses explicit accessible React layers and never injects or persist
 });
 
 test("Master studio keeps direct canvas manipulation mapped to the existing contract", () => {
+  // 8c88ac2c65 shipped MasterStudioCanvas on a react-konva canvas
+  // (MasterKonvaCanvas) plus a toolbar shell (MasterWysiwygWorkspace) instead
+  // of the raw-pointer-capture/"furniture:*" design this test originally
+  // targeted; the raw-pointer/testid/z-index plumbing below has no current
+  // counterpart because Konva's Stage/Transformer own it internally. This
+  // rewrite checks the same intent — contract-in, transaction-out, no
+  // rebuilt preview scene, resize/reorder/undo/logo controls present —
+  // against the files that now implement it.
   assert.match(gate, /MasterStudioCanvas/);
   assert.match(gate, /client\.assetUrl\(logo\)/);
-  assert.match(gate, /buildEditingPreviewScene\(contract, selectedSlide\)/);
-  assert.match(studio, /setBounds\(contract, layoutKind/);
-  assert.match(studio, /beginDrag\(event, item, "resize"\)/);
-  assert.match(studio, /t\("addContent"\)/);
-  assert.match(studio, /activateFurniture\("furniture:header"\)/);
-  assert.match(studio, /activateFurniture\("furniture:logo", true\)/);
-  assert.match(studio, /authored-master-logo/);
-  assert.match(studio, /disabled type="button"/);
-  assert.match(studio, /activateFurniture\("furniture:divider"\)/);
-  assert.match(studio, /activateFurniture\("furniture:page-number"\)/);
-  assert.match(studio, /const setFurnitureText/);
-  assert.match(studio, /aria-label=\{t\("textAria"\)\}/);
-  assert.match(studio, /furniture\?\.text \?\? item\.role/);
-  assert.match(studio, /validateMasterSetup\(contract\)/);
-  assert.match(studio, /const conflictIds/);
-  assert.match(studio, /ring-red-500/);
+  assert.match(gate, /contract=\{contract\}/);
+  assert.match(gate, /validateMasterSetup\(persistenceContract\)/);
+  assert.match(studio, /masterContractToCanvasScene\(contract, activeLayoutId\)/);
+  assert.match(studio, /applyMasterCanvasTransaction\(currentContract, activeLayoutId, canvasTransaction\)/);
+  assert.match(studio, /onContractChange\(next\)/);
+  assert.match(studio, /hasBoundCanonicalLogo=\{Boolean\(contract\.furniture\.logo\.assetId\)\}/);
+  assert.match(studio, /type === "insertElement"/);
   assert.match(studio, /overlapWarning/);
-  assert.match(studio, /setPointerCapture\(event\.pointerId\)/);
-  assert.match(studio, /releasePointerCapture\(drag\.pointerId\)/);
-  assert.match(studio, /drag\.moved \|\| dragMoved\.current/);
-  assert.match(studio, /data-studio-role/);
-  assert.match(studio, /selectedNow \? 2_000 : 1_000/);
-  assert.match(studio, /selectedNow \? 500 : 100/);
-  assert.doesNotMatch(studio, /onPointerLeave=\{stop\}/);
-  assert.match(studio, /t\("bringFront"\)/);
-  assert.match(studio, /t\("safeArea"\)/);
-  assert.match(studio, /t\("undo"\)/);
+  assert.match(konvaCanvas, /<Transformer /);
+  assert.match(konvaCanvas, /onDragStart=\{beginDrag\}/);
+  assert.match(konvaCanvas, /onTransformEnd=\{\(\) => commitGeometry/);
+  assert.match(konvaCanvas, /aria-label=\{t\("canvasTextAria"\)\}/);
+  assert.match(konvaCanvas, /t\("bringFront"\)/);
+  assert.match(konvaCanvas, /t\("safeArea"\)/);
+  assert.match(wysiwygWorkspace, /t\("undo"\)/);
+  assert.doesNotMatch(`${studio}\n${konvaCanvas}`, /onPointerLeave=\{stop\}/);
 });
 
 test("Master operations keep the authored-vnext client contract", () => {
+  // The gate never round-trips a render through client.preview() (that
+  // client method is unused app-wide since 8c88ac2c65 replaced the
+  // server-rendered MasterPreviewScene with the live MasterKonvaCanvas
+  // WYSIWYG editor); getHead is the still-live typed-client read this gate
+  // performs to resume an existing draft.
   for (const operation of [
     "client.createDraft",
     "client.validateCanonicalDraft",
     "client.publishValidatedDraft",
-    "client.preview",
+    "client.getHead",
   ]) {
     assert.match(gate, new RegExp(operation.replace(".", "\\.")));
   }

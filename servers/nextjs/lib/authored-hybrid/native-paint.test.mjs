@@ -258,7 +258,7 @@ test("asymmetric-radius freeforms keep shadows raster and native paint de-duplic
   assert.match(xml, /rot="21240000"/);
 });
 
-test("outline-only paint emits one editable outline without a transparent duplicate shape", async () => {
+test("outline-only paint remains an audited raster owner without a grouped serializer", async () => {
   const element = rasterShape({
     id: "outline-only",
     shape: {
@@ -280,7 +280,11 @@ test("outline-only paint emits one editable outline without a transparent duplic
   });
 
   assert.equal(prepared.length, 1);
-  assert.equal(preparedNativeElementNonVisualIdCount(prepared[0]), 1);
+  // Outline-only shapes have no single base object (fill/gradient/stroke)
+  // whose geometry can carry the QID, so they stay audited raster owners
+  // with no non-visual id until a grouped native serializer lands (see
+  // native-plan.ts: shapeHasBaseObject / preparedNativeElementNonVisualIdCount).
+  assert.equal(preparedNativeElementNonVisualIdCount(prepared[0]), 0);
   const xml = serializePreparedNativeElement(prepared[0], 3);
   assert.equal((xml.match(/<p:sp>/g) ?? []).length, 1);
   assert.match(xml, /DevAX hybrid raster outline-only outline/);

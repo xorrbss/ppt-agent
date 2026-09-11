@@ -202,7 +202,7 @@ test("generation source revision drives fidelity export status and authorized do
     if (url === `/api/v2/presentations/${presentationId}/exports`) {
       assert.deepEqual(JSON.parse(String(init?.body)), {
         schemaVersion: "presentation-export-request/v2",
-        qualityPolicy: "interactive-v1",
+        qualityPolicy: "release-v1",
         sourceRevision: 7,
         output: {
           format: "pptx",

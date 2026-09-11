@@ -331,8 +331,16 @@ test("declared image asset authority uses decoded bytes and fails closed on mism
 });
 
 test("single-backplate planner reaches a fixed point and records z-band demotions", () => {
+  // identityAuthority is pinned to "compatibility-ordinal" (not the file's
+  // default "declared-qid" from base()) so this exercises the iterative
+  // single-backplate-fixed-point demotion path this test targets. Since
+  // 2971728b6 (feat(authored): harden release generation and hybrid
+  // evidence), an all-declared-qid element set takes a different
+  // "audited-multi-z-band" shortcut (see the "declared paint order..." test
+  // in native-plan.test.mjs) that does not perform overlap-based demotion.
   const nativeShape = (id, zOrder, rect) => ({
     ...base(id, zOrder, rect),
+    identityAuthority: "compatibility-ordinal",
     classification: { mode: "native", kind: "shape", confidence: "safe" },
     shape: {
       shape: "rectangle",
@@ -346,6 +354,7 @@ test("single-backplate planner reaches a fixed point and records z-band demotion
   const middle = nativeShape("native.middle", 1, [60, 0, 100, 100]);
   const upperRaster = {
     ...base("chart.raster", 2, [130, 0, 60, 100]),
+    identityAuthority: "compatibility-ordinal",
     classification: {
       mode: "raster",
       candidateKind: "complex",
