@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:111px;background:#F9F9F9;border-top:10px solid #08916E}
+.header-left{position:absolute;left:64px;top:28px;width:960px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.body-wrap{position:absolute;left:0;right:0;top:135px;height:513px}
+.intro{margin-left:64px;width:1152px;height:51px;display:flex;align-items:flex-start}
+.intro-text{font-size:20px;line-height:30px;font-weight:700;color:#002060}
+.content-grid{margin-left:64px;width:1152px;height:430px;display:grid;grid-template-columns:712px 416px;gap:24px}
+.pillar-panel{height:430px;padding:24px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.panel-kicker{font-size:18px;line-height:28px;font-weight:700;color:#002060}
+.pillar-grid{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pillar-card{height:91px;padding:17px 18px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px;display:flex;align-items:center;gap:16px}
+.pillar-mark{width:8px;height:42px;flex:none;background:#08916E;border-radius:12px}
+.pillar-text{font-size:19px;line-height:28px;font-weight:700;color:#002060}
+.side-column{height:430px;display:flex;flex-direction:column;gap:16px}
+.question-card{height:150px;padding:22px 24px;background:#00140E;border-radius:12px;color:#FFFFFF}
+.question-label{font-size:18px;line-height:28px;font-weight:700;color:#71CDB5}
+.question-text{margin-top:10px;font-size:28px;line-height:38px;font-weight:700;color:#FFFFFF}
+.answer-card{height:264px;padding:22px 24px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.answer-label{font-size:18px;line-height:28px;font-weight:700;color:#00828E}
+.answer-text{margin-top:12px;font-size:22px;line-height:34px;font-weight:700;color:#1D1D1B}
+.answer-detail{margin-top:4px;font-size:22px;line-height:34px;font-weight:700;color:#08916E}
+.target-box{margin-top:18px;padding:14px 16px;background:#EAF7F4;border-left:6px solid #08916E;border-radius:12px}
+.target-text{font-size:18px;line-height:28px;font-weight:700;color:#1D1D1B}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-family:"IBM Plex Mono","Consolas",monospace;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="111" class="header-band" style="height:111px" data-qid="q-band-16" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-header-left-16" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-qid="source-block-bd601c892ae13f2e" data-semantic-role="supporting" data-source-block-id="source-slide:17:text:3:run:0">2주차 PART 5</div>
+    <div data-header-part="title" class="title" data-qid="source-block-6b03ef8b1e53f9ac" data-semantic-role="title" data-source-block-id="source-slide:17:text:3:run:1">캡컷은 딱 이것만</div>
+  </div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:135px" data-qid="q-body-16" data-semantic-role="decoration">
+  <div class="intro" data-qid="q-intro-16" data-semantic-role="decoration">
+    <div class="intro-text" data-qid="source-block-184fc346dad447d4" data-semantic-role="supporting" data-source-block-id="source-slide:17:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  </div>
+
+  <div class="content-grid" data-qid="q-grid-16" data-semantic-role="decoration">
+    <div class="pillar-panel" data-qid="q-card-pillars-16" data-semantic-role="decoration">
+      <div class="panel-kicker" data-qid="q-kicker-16" data-semantic-role="supporting">필수 기능</div>
+      <div class="pillar-grid" data-qid="source-block-3633dea28a5a9b02" data-semantic-role="decoration" data-source-block-id="source-slide:17:text:6">
+        <div class="pillar-card" data-qid="q-card-01-16" data-semantic-role="decoration">
+          <span class="pillar-mark" data-qid="q-mark-01-16" data-semantic-role="decoration"></span>
+          <div class="pillar-text" data-qid="q-text-01-16" data-semantic-role="body">자르기 / 분할</div>
+        </div>
+        <div class="pillar-card" data-qid="q-card-02-16" data-semantic-role="decoration">
+          <span class="pillar-mark" data-qid="q-mark-02-16" data-semantic-role="decoration"></span>
+          <div class="pillar-text" data-qid="q-text-02-16" data-semantic-role="body">자동자막 / 자막 스타일</div>
+        </div>
+        <div class="pillar-card" data-qid="q-card-03-16" data-semantic-role="decoration">
+          <span class="pillar-mark" data-qid="q-mark-03-16" data-semantic-role="decoration"></span>
+          <div class="pillar-text" data-qid="q-text-03-16" data-semantic-role="body">음악 / 기본 효과</div>
+        </div>
+        <div class="pillar-card" data-qid="q-card-04-16" data-semantic-role="decoration">
+          <span class="pillar-mark" data-qid="q-mark-04-16" data-semantic-role="decoration"></span>
+          <div class="pillar-text" data-qid="q-text-04-16" data-semantic-role="body">화면 확대·축소</div>
+        </div>
+        <div class="pillar-card" data-qid="q-card-05-16" data-semantic-role="decoration">
+          <span class="pillar-mark" data-qid="q-mark-05-16" data-semantic-role="decoration"></span>
+          <div class="pillar-text" data-qid="q-text-05-16" data-semantic-role="body">기본 키프레임</div>
+        </div>
+        <div class="pillar-card" data-qid="q-card-06-16" data-semantic-role="decoration">
+          <span class="pillar-mark" data-qid="q-mark-06-16" data-semantic-role="decoration"></span>
+          <div class="pillar-text" data-qid="q-text-06-16" data-semantic-role="body">최종 저장과 납품</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-column" data-qid="q-side-16" data-semantic-role="decoration">
+      <div class="question-card" data-qid="q-card-question-16" data-semantic-role="decoration">
+        <div class="question-label" data-qid="source-block-de57255eb2aae5a2" data-semantic-role="supporting" data-source-block-id="source-slide:17:text:9">고급 기능은?</div>
+        <div class="question-text" data-qid="source-block-186448e725388e81" data-semantic-role="body" data-source-block-id="source-slide:17:text:10:run:0">필요한 만큼만.</div>
+      </div>
+      <div class="answer-card" data-qid="q-card-answer-16" data-semantic-role="decoration">
+        <div class="answer-label" data-qid="q-answer-label-16" data-semantic-role="supporting">고급 기능은?</div>
+        <div class="answer-text" data-qid="q-answer-text-16" data-semantic-role="body">필요한 만큼만.</div>
+        <div class="answer-detail" data-qid="source-block-3253d5869b1d3c1a" data-semantic-role="body" data-source-block-id="source-slide:17:text:10:run:1">처음부터 모든 기능을 외우지 않습니다.</div>
+        <div class="target-box" data-qid="source-block-c15e81177b2c6741" data-semantic-role="decoration" data-source-block-id="source-slide:17:text:14">
+          <div class="target-text" data-qid="source-block-f67d8c2c0cf8f503" data-semantic-role="body" data-source-block-id="source-slide:17:text:13">실습 목표<br>10~15초 영상 1개 완성.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-qid="source-block-70b9afd0608bb3cd" data-semantic-role="supporting" data-source-block-id="source-slide:17:text:4">17</div>
+</body>
+</html>

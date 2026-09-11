@@ -1,0 +1,772 @@
+{
+ "sourceUnitId": "source-slide:22",
+ "sourceIndex": 21,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:22:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "3주차 실습 | 영업 리스트 만들기",
+    "paragraphs": [
+     {
+      "runs": [
+       "3주차 실습 | 영업 리스트 만들기"
+      ],
+      "text": "3주차 실습 | 영업 리스트 만들기"
+     }
+    ],
+    "runs": [
+     "3주차 실습 | 영업 리스트 만들기"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:6ffd9401120fdcda78ea58596f5606f07b37f6f7d83382b0a4bb3ea1fb3833e3",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "22",
+    "paragraphs": [
+     {
+      "runs": [
+       "22"
+      ],
+      "text": "22"
+     }
+    ],
+    "runs": [
+     "22"
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:20156741ad6eeebe4d375e6ea5c3617a53cff173d3942160e4872f67701e9b87",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:74f52ea3fedff52018a6c922ae9f9a5650ace6385c0dd96cc4f477c74504ce90",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "업종",
+    "paragraphs": [
+     {
+      "runs": [
+       "업종"
+      ],
+      "text": "업종"
+     }
+    ],
+    "runs": [
+     "업종"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 822960,
+     "y": 1417320,
+     "cx": 1097280,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:f43a7005a0fa31a8d2c88236e9a2d868d8eda99c5bc1488698c00e7f6af8ff3a",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:text:7",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 5,
+   "payload": {
+    "text": "가게/업체명",
+    "paragraphs": [
+     {
+      "runs": [
+       "가게/업체명"
+      ],
+      "text": "가게/업체명"
+     }
+    ],
+    "runs": [
+     "가게/업체명"
+    ],
+    "shapeName": "TextBox 6",
+    "geometry": {
+     "x": 2286000,
+     "y": 1417320,
+     "cx": 1828800,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:6b612e55780fe4b4f4b8bce616640193d3a9ebc4c53e8b1ea28dc6b85a867fcc",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:text:8",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 6,
+   "payload": {
+    "text": "접촉 채널",
+    "paragraphs": [
+     {
+      "runs": [
+       "접촉 채널"
+      ],
+      "text": "접촉 채널"
+     }
+    ],
+    "runs": [
+     "접촉 채널"
+    ],
+    "shapeName": "TextBox 7",
+    "geometry": {
+     "x": 4937760,
+     "y": 1417320,
+     "cx": 1645920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:dadf7e9a004a8382e54e8b84e4eb35e59de7028b964322deb18f17ee945528d4",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:text:9",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 7,
+   "payload": {
+    "text": "상태",
+    "paragraphs": [
+     {
+      "runs": [
+       "상태"
+      ],
+      "text": "상태"
+     }
+    ],
+    "runs": [
+     "상태"
+    ],
+    "shapeName": "TextBox 8",
+    "geometry": {
+     "x": 7498079,
+     "y": 1417320,
+     "cx": 1188720,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:96b349ecb6d0b6e64fda5c62d45fb643fed005a4edc35cb970513572a93ed376",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:10",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 8,
+   "payload": {
+    "shapeName": "Rectangle 9",
+    "preset": "rect",
+    "geometry": {
+     "x": 822960,
+     "y": 1828800,
+     "cx": 1097280,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:a5f9f32e9fff8d9bad5a499d301a7f9fcec38dcffbb94f924367262f287de547",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:11",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 9,
+   "payload": {
+    "shapeName": "Rectangle 10",
+    "preset": "rect",
+    "geometry": {
+     "x": 2286000,
+     "y": 1828800,
+     "cx": 2194560,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:428de2680685f9908c155e10fd7e4d3d1fb4854591042adf46fcd108ed08113f",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:12",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 10,
+   "payload": {
+    "shapeName": "Rectangle 11",
+    "preset": "rect",
+    "geometry": {
+     "x": 4937760,
+     "y": 1828800,
+     "cx": 1645920,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:d21f3e24e85121850c48498a9cfd2bfaf3822e819d1d42326e84373782e2a7bd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:13",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 11,
+   "payload": {
+    "shapeName": "Rectangle 12",
+    "preset": "rect",
+    "geometry": {
+     "x": 7498079,
+     "y": 1828800,
+     "cx": 1188720,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:8b8c1d0171c58e20a0b47448e2b739bfbc4b51505393246d373e34271b275e48",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:14",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 12,
+   "payload": {
+    "shapeName": "Rectangle 13",
+    "preset": "rect",
+    "geometry": {
+     "x": 822960,
+     "y": 2514600,
+     "cx": 1097280,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:5f07d430f34c9a3ee64b0833eb4d25c015dc786bcfd1717a1f7ebe22031aacd4",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:15",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 13,
+   "payload": {
+    "shapeName": "Rectangle 14",
+    "preset": "rect",
+    "geometry": {
+     "x": 2286000,
+     "y": 2514600,
+     "cx": 2194560,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:e44a8e361809c8100b0f6e6f7e46116c247a26fc347f6dc2f4a6c92c562f9b7a",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:16",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 14,
+   "payload": {
+    "shapeName": "Rectangle 15",
+    "preset": "rect",
+    "geometry": {
+     "x": 4937760,
+     "y": 2514600,
+     "cx": 1645920,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:4340ad5a60a10197b8d89e765a5825535966399c12241b51758c1c49305a15dd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:17",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 15,
+   "payload": {
+    "shapeName": "Rectangle 16",
+    "preset": "rect",
+    "geometry": {
+     "x": 7498079,
+     "y": 2514600,
+     "cx": 1188720,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2bed480c39c5c5071f88ed9dde403deabffc2326dbcd88a9762026e9eb243d32",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:18",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 16,
+   "payload": {
+    "shapeName": "Rectangle 17",
+    "preset": "rect",
+    "geometry": {
+     "x": 822960,
+     "y": 3200400,
+     "cx": 1097280,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:5d5ffb3f8d679c207cefeddb88fde8504add0d780fd97c21fc60a7c5c53bfc90",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:19",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 17,
+   "payload": {
+    "shapeName": "Rectangle 18",
+    "preset": "rect",
+    "geometry": {
+     "x": 2286000,
+     "y": 3200400,
+     "cx": 2194560,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:59df7e28fcf9180e1510fb3c1d431ca8a134194e3ab12f9c1323030979b33051",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:20",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 18,
+   "payload": {
+    "shapeName": "Rectangle 19",
+    "preset": "rect",
+    "geometry": {
+     "x": 4937760,
+     "y": 3200400,
+     "cx": 1645920,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:408e5912668279cacd847dc95b4466d04e93714c363d1fbc6529c6820cbd0f85",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:21",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 19,
+   "payload": {
+    "shapeName": "Rectangle 20",
+    "preset": "rect",
+    "geometry": {
+     "x": 7498079,
+     "y": 3200400,
+     "cx": 1188720,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:79ca5d11a2ee6fe81b35d993d6ae8a23843cd95fd90a43b3cbe253d0744b2669",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:22",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 20,
+   "payload": {
+    "shapeName": "Rectangle 21",
+    "preset": "rect",
+    "geometry": {
+     "x": 822960,
+     "y": 3886200,
+     "cx": 1097280,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:1fa8649d60f4852b821913969b8defe0b7d3102860f701f5f91226f70868cdfd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:23",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 21,
+   "payload": {
+    "shapeName": "Rectangle 22",
+    "preset": "rect",
+    "geometry": {
+     "x": 2286000,
+     "y": 3886200,
+     "cx": 2194560,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:d7dcda8f2f8e9167b8744d4b49fa8b605e9fa688cd17e3e20796af3b1533bfcf",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:24",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 22,
+   "payload": {
+    "shapeName": "Rectangle 23",
+    "preset": "rect",
+    "geometry": {
+     "x": 4937760,
+     "y": 3886200,
+     "cx": 1645920,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:5a57287c8ae0439f0b40baef3ea8e75f6e3767a7ef6030ff829e2e7db37b4ccf",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:25",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 23,
+   "payload": {
+    "shapeName": "Rectangle 24",
+    "preset": "rect",
+    "geometry": {
+     "x": 7498079,
+     "y": 3886200,
+     "cx": 1188720,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:dfeba33630f5fafbd7eaabe69752008e094f1357460543ab29b8e76ae5f9b711",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:26",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 24,
+   "payload": {
+    "shapeName": "Rectangle 25",
+    "preset": "rect",
+    "geometry": {
+     "x": 822960,
+     "y": 4572000,
+     "cx": 1097280,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:e42a175fbf779140447fb99eacba9bca85b2e1854a99244c8171dbbf69d9fd80",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:27",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 25,
+   "payload": {
+    "shapeName": "Rectangle 26",
+    "preset": "rect",
+    "geometry": {
+     "x": 2286000,
+     "y": 4572000,
+     "cx": 2194560,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:b51235bd8aa1e425f1efb59245263ff0083f73188e0c8578d41d39a4cf404f53",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:28",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 26,
+   "payload": {
+    "shapeName": "Rectangle 27",
+    "preset": "rect",
+    "geometry": {
+     "x": 4937760,
+     "y": 4572000,
+     "cx": 1645920,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:08f3d6ffb3a1b8e2b543a6df0572a0b1cee7fc9add04e81a6d7b5c00a916b36a",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:29",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 27,
+   "payload": {
+    "shapeName": "Rectangle 28",
+    "preset": "rect",
+    "geometry": {
+     "x": 7498079,
+     "y": 4572000,
+     "cx": 1188720,
+     "cy": 502920
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:025244bd811e9cda679cc5514cbdb337d8564ccb23437e4ec91270c23e531023",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:30",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 28,
+   "payload": {
+    "shapeName": "Rounded Rectangle 29",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 9052560,
+     "y": 1828800,
+     "cx": 1828800,
+     "cy": 3246120
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:9bb49774f78ecea325af957f49b4a3f342fead5982e27685910d4df81bd1ae0f",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:shape:31",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 29,
+   "payload": {
+    "shapeName": "Rectangle 30",
+    "preset": "rect",
+    "geometry": {
+     "x": 9052560,
+     "y": 1828800,
+     "cx": 73152,
+     "cy": 3246120
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:5c6d0d28001f861aa17c2e026098eb0fd54763628b2d887877b660d860d6c090",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:text:32",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 30,
+   "payload": {
+    "text": "오늘 목표",
+    "paragraphs": [
+     {
+      "runs": [
+       "오늘 목표"
+      ],
+      "text": "오늘 목표"
+     }
+    ],
+    "runs": [
+     "오늘 목표"
+    ],
+    "shapeName": "TextBox 31",
+    "geometry": {
+     "x": 9253728,
+     "y": 1965960,
+     "cx": 1463040,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:079fc1bb9f7212e4e49e23972492e1a93b1102efab02737f1e4250ac8f855750",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:22:text:33",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 31,
+   "payload": {
+    "text": "10곳\n찾기\n\n→ 3곳\n연락",
+    "paragraphs": [
+     {
+      "runs": [
+       "10곳\n찾기\n\n→ 3곳\n연락"
+      ],
+      "text": "10곳\n찾기\n\n→ 3곳\n연락"
+     }
+    ],
+    "runs": [
+     "10곳\n찾기\n\n→ 3곳\n연락"
+    ],
+    "shapeName": "TextBox 32",
+    "geometry": {
+     "x": 9253728,
+     "y": 2395728,
+     "cx": 1463040,
+     "cy": 2560320
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:5bbbd22187c34b60e090cea1b39733b9d6219d19bc58b0334a69fd2a9e98c0d2",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

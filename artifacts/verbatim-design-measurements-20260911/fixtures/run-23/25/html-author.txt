@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+[data-header-part="band"]{position:absolute;left:0;top:0;width:1280px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:32px;width:780px}
+.eyebrow{font-size:13px;line-height:18px;font-weight:700;letter-spacing:.06em;color:#08916E}
+.title{margin-top:12px;font-size:34px;line-height:45px;font-weight:800;color:#0F172A}
+.divider{position:absolute;left:64px;right:64px;bottom:0;height:1px;background:#E2E8F0}
+.body-wrap{position:absolute;left:0;right:0;top:155px;height:493px}
+.inner{margin:0 64px;height:493px}
+.context{height:31px;font-size:15px;line-height:23px;color:#6B7280;font-weight:700}
+.main-grid{display:grid;grid-template-columns:700px 404px;gap:24px;height:450px}
+.timeline-panel,.price-panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.timeline-panel{padding:24px 28px 22px}
+.section-head{font-size:22px;line-height:31px;font-weight:800;color:#0F172A}
+.section-head strong{color:#08916E}
+.timeline{position:relative;margin-top:22px;height:335px}
+.rail{position:absolute;left:25px;top:26px;bottom:26px;width:2px;background:#B9E5D9}
+.step{position:relative;display:grid;grid-template-columns:52px 1fr;min-height:50px;margin-bottom:10px}
+.node{position:relative;z-index:2;width:18px;height:18px;margin:17px 0 0 17px;background:#08916E;border:4px solid #E5F6F1;border-radius:12px}
+.step-card{min-height:50px;padding:11px 16px;background:#F4FBF8;border:1px solid #CBE9DF;border-radius:12px;font-size:18px;line-height:27px;font-weight:700;color:#1D1D1B}
+.step-card span{color:#08916E}
+.price-panel{padding:24px 28px;background:#00140E;color:#FFFFFF}
+.price-title{font-size:22px;line-height:31px;font-weight:800;color:#FFFFFF}
+.price-title strong{color:#62CBB0}
+.quote{margin-top:24px;padding:18px 18px 19px;border-left:4px solid #08916E;background:#123328;border-radius:12px;font-size:20px;line-height:32px;font-weight:800;color:#FFFFFF}
+.quote span{display:block}
+.rule-block{margin-top:27px;padding-top:18px;border-top:1px solid #3B6256}
+.rule-label{font-size:16px;line-height:24px;font-weight:700;color:#A7DCCE}
+.rule-text{margin-top:9px;font-size:18px;line-height:29px;font-weight:700;color:#FFFFFF}
+.mark{display:inline-block;margin-right:8px;width:8px;height:8px;background:#E5A93D;border-radius:12px}
+.page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="135" style="height:135px" data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-25">상담과 가격 제시</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-6c4e25d764ba2e08" data-source-block-id="source-slide:26:text:3">4주차 PART 2 | 상담과 가격 제시</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:155px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="inner" data-qid="q-div-c9c4d24a38ca" data-semantic-role="decoration">
+    <div class="context" data-semantic-role="supporting" data-qid="source-block-71aeff1efc7cad63" data-source-block-id="source-slide:26:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    <div class="main-grid" data-qid="q-div-948c49f110fb" data-semantic-role="decoration">
+      <section class="timeline-panel" data-qid="q-card-consult-25" data-semantic-role="decoration">
+        <div class="section-head" data-semantic-role="body" data-qid="source-block-26c17f246a8fca6c" data-source-block-id="source-slide:26:text:6">상담 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">순서</strong></div>
+        <div class="timeline" data-qid="source-block-edd35f7098d10262" data-semantic-role="decoration" data-source-block-id="source-slide:26:text:7">
+          <div class="rail" data-qid="q-div-d49ca096db52" data-semantic-role="decoration"></div>
+          <div class="step" data-qid="q-div-76997843ad4f" data-semantic-role="decoration">
+            <div class="node" data-qid="q-div-956b9abdf526" data-semantic-role="decoration"></div>
+            <div class="step-card" data-semantic-role="body" data-qid="q-step-01-25">현재 SNS 운영 상황</div>
+          </div>
+          <div class="step" data-qid="q-div-99a28a82e8a1" data-semantic-role="decoration">
+            <div class="node" data-qid="q-div-761ee8778d46" data-semantic-role="decoration"></div>
+            <div class="step-card" data-semantic-role="body" data-qid="q-step-02-25">가장 알리고 싶은 상품/서비스</div>
+          </div>
+          <div class="step" data-qid="q-div-0bbae897b6f1" data-semantic-role="decoration">
+            <div class="node" data-qid="q-div-d05a86cb5969" data-semantic-role="decoration"></div>
+            <div class="step-card" data-semantic-role="body" data-qid="q-step-03-25">촬영 가능 여부</div>
+          </div>
+          <div class="step" data-qid="q-div-111d3d12a08f" data-semantic-role="decoration">
+            <div class="node" data-qid="q-div-6edaa20ac2ad" data-semantic-role="decoration"></div>
+            <div class="step-card" data-semantic-role="body" data-qid="q-step-04-25">원하는 콘텐츠 스타일</div>
+          </div>
+          <div class="step" data-qid="q-div-47d0e3875972" data-semantic-role="decoration">
+            <div class="node" data-qid="q-div-40bebb80c034" data-semantic-role="decoration"></div>
+            <div class="step-card" data-semantic-role="body" data-qid="q-step-05-25">예산/업로드 빈도</div>
+          </div>
+          <div class="step" data-qid="q-div-b232018c81d3" data-semantic-role="decoration">
+            <div class="node" data-qid="q-div-af2836901eda" data-semantic-role="decoration"></div>
+            <div class="step-card" data-semantic-role="decoration" data-qid="q-step-06-25"><span data-qid="q-span-f32986c526a1" data-semantic-role="body">내 서비스 제안</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="price-panel" data-qid="q-card-price-25" data-semantic-role="decoration">
+        <div class="price-title" data-semantic-role="body" data-qid="source-block-5b075dcf56decd86" data-source-block-id="source-slide:26:text:10">가격을 <strong data-qid="q-strong-f213b54d7db8" data-semantic-role="body">말할 때</strong></div>
+        <div class="quote" data-semantic-role="decoration" data-qid="source-block-be490a3536027943" data-source-block-id="source-slide:26:text:11:run:0-1">
+          <span data-qid="q-span-c83eac29f2ad" data-semantic-role="body">‘영상 1개 얼마’보다</span>
+          <span data-qid="q-span-eedec0ea8962" data-semantic-role="body">패키지와 관리 범위를 보여준다.</span>
+        </div>
+        <div class="rule-block" data-qid="q-div-99408282a46d" data-semantic-role="decoration">
+          <div class="rule-label" data-semantic-role="supporting" data-qid="q-rule-label-25"><span class="mark" data-qid="q-span-fa61f76be624" data-semantic-role="decoration"></span>제안 시 명확히 할 항목</div>
+          <div class="rule-text" data-semantic-role="body" data-qid="source-block-171a2d40891da0fb" data-source-block-id="source-slide:26:text:11:run:2">수정 횟수 · 촬영 · 납품일을 함께 명확히.</div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="page" data-semantic-role="supporting" data-qid="source-block-48d017663bef934e" data-source-block-id="source-slide:26:text:4">26</div>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;height:117px;background:#FFFFFF}
+.header-left{position:absolute;left:56px;top:28px;width:960px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.body-wrap{position:absolute;left:0;right:0;top:141px;height:507px}
+.content-layout{display:grid;grid-template-columns:760px 368px;gap:24px;margin:0 56px;height:475px}
+.pillars-panel{height:475px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.panel-kicker{font-size:15px;line-height:22px;font-weight:700;letter-spacing:.15em;color:#08916E}
+.kicker-rule{display:block;width:34px;height:3px;margin-top:10px;background:#08916E}
+.pillar-grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(4,1fr);gap:12px 16px;margin-top:22px;height:367px}
+.pillar-card{display:flex;align-items:center;min-height:0;padding:0 20px;background:#F9F9F9;border:1px solid #E2E8F0;border-left:6px solid #219F88;border-radius:12px}
+.pillar-card:nth-child(7){grid-column:1 / span 2;width:calc(50% - 8px)}
+.pillar-text{font-size:19px;line-height:29px;font-weight:700;color:#002060}
+.principle-panel{height:475px;padding:28px;background:#00140E;border-radius:12px;display:flex;flex-direction:column}
+.principle-label{font-size:15px;line-height:22px;font-weight:700;letter-spacing:.15em;color:#219F88}
+.principle-rule{display:block;width:34px;height:3px;margin-top:10px;background:#219F88}
+.principle-copy{margin-top:56px;font-size:27px;line-height:1.55;font-weight:700;color:#FFFFFF}
+.principle-copy strong{color:#08916E}
+.principle-mark{margin-top:auto;padding-top:18px;border-top:1px solid #31574D;font-size:18px;line-height:28px;font-weight:700;color:#CCECFF}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="117" class="header-band" style="height:117px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-24">제안서 만들기</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-32bbe90152caa564" data-source-block-id="source-slide:25:text:3">4주차 PART 1 | 제안서 만들기</div>
+  </div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:141px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-layout" data-qid="q-div-1e0a8d6d92a2" data-semantic-role="decoration">
+    <div class="pillars-panel" data-qid="q-card-pillars-24" data-semantic-role="decoration">
+      <div class="panel-kicker" data-semantic-role="supporting" data-qid="q-label-pillars-24">제안서 만들기</div>
+      <span class="kicker-rule" data-semantic-role="supporting" data-qid="q-span-998857f14aaa"></span>
+      <div class="pillar-grid" data-qid="source-block-8e52ed39bea27afd" data-semantic-role="decoration" data-source-block-id="source-slide:25:text:6">
+        <div class="pillar-card" data-qid="q-card-who-24" data-semantic-role="decoration">
+          <div class="pillar-text" data-semantic-role="body" data-qid="q-text-who-24">나는 누구인가</div>
+        </div>
+        <div class="pillar-card" data-qid="q-card-industry-24" data-semantic-role="decoration">
+          <div class="pillar-text" data-semantic-role="body" data-qid="q-text-industry-24">어떤 업종을 돕는가</div>
+        </div>
+        <div class="pillar-card" data-qid="q-card-production-24" data-semantic-role="decoration">
+          <div class="pillar-text" data-semantic-role="body" data-qid="q-text-production-24">무엇을 제작하는가</div>
+        </div>
+        <div class="pillar-card" data-qid="q-card-process-24" data-semantic-role="decoration">
+          <div class="pillar-text" data-semantic-role="body" data-qid="q-text-process-24">작업 과정</div>
+        </div>
+        <div class="pillar-card" data-qid="q-card-portfolio-24" data-semantic-role="decoration">
+          <div class="pillar-text" data-semantic-role="body" data-qid="q-text-portfolio-24">포트폴리오</div>
+        </div>
+        <div class="pillar-card" data-qid="q-card-price-24" data-semantic-role="decoration">
+          <div class="pillar-text" data-semantic-role="body" data-qid="q-text-price-24">가격과 포함 범위</div>
+        </div>
+        <div class="pillar-card" data-qid="q-card-contact-24" data-semantic-role="decoration">
+          <div class="pillar-text" data-semantic-role="body" data-qid="q-text-contact-24">문의 방법</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="principle-panel" data-qid="q-card-principle-24" data-semantic-role="decoration">
+      <div class="principle-label" data-semantic-role="supporting" data-qid="source-block-8103387515e48443" data-source-block-id="source-slide:25:text:9">원칙</div>
+      <span class="principle-rule" data-semantic-role="decoration" data-qid="q-span-5862bb889f6e"></span>
+      <div class="principle-copy" data-semantic-role="body" data-qid="source-block-35c99556c1c30c48" data-source-block-id="source-slide:25:text:10">제안서는 예쁜 문서보다<br><strong data-qid="q-strong-663977331dde" data-semantic-role="body">‘사장님이 이해하기 쉬운 문서’</strong>가 우선</div>
+      <div class="principle-mark" data-semantic-role="supporting" data-qid="source-block-ffa18080f20d7e50" data-source-block-id="source-slide:25:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-9b064af20b7dc33a" data-source-block-id="source-slide:25:text:4">25</div>
+</body>
+</html>

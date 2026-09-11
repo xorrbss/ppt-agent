@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#08916E}
+.header-left{position:absolute;left:64px;top:20px;width:820px}
+.eyebrow{height:20px;font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:6px;font-size:32px;line-height:39px;font-weight:800;color:#FFFFFF}
+.header-right{position:absolute;left:956px;top:0;width:260px;height:96px;padding:20px 20px 0 18px;background:#00140E;text-align:right;font-size:15px;line-height:22px;color:#FFFFFF}
+.body-wrap{position:absolute;left:0;right:0;top:120px;height:528px}
+.inner{width:1152px;margin-left:64px}
+.claim{height:56px;display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.claim-text{font-size:24px;line-height:34px;font-weight:800;color:#1D1D1B}
+.claim-keyword{color:#08916E}
+.time-chip{height:40px;padding:7px 16px;border-radius:12px;background:#00140E;color:#FFFFFF;font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:26px;font-weight:700}
+.architecture{height:430px;display:grid;grid-template-columns:274px 1fr;gap:24px}
+.left-rail{display:flex;flex-direction:column;gap:24px}
+.rail-card{border:1px solid #E2E8F0;border-radius:12px;padding:24px}
+.output-card{height:216px;background:#00140E;color:#FFFFFF}
+.output-label{font-size:18px;line-height:27px;font-weight:800;color:#219F88}
+.output-copy{margin-top:22px;font-size:20px;line-height:1.6;font-weight:700;color:#FFFFFF}
+.goal-card{height:190px;background:#E0F3FF}
+.goal-copy{font-size:19px;line-height:1.6;font-weight:700;color:#002060}
+.map-card{height:430px;padding:24px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.map-heading{height:34px;font-size:20px;line-height:29px;font-weight:800;color:#002060}
+.map-heading span{color:#08916E}
+.map-flow{margin-top:18px;display:flex;flex-direction:column;gap:12px}
+.map-node{min-height:62px;display:flex;align-items:center;padding:15px 20px;border-radius:12px;border:1px solid #B9D9EA;background:#E0F3FF;color:#002060;font-size:19px;line-height:30px;font-weight:700}
+.map-node.emphasis{background:#EAF7F4;border-color:#B9E5D9;color:#006D59}
+.map-node.final{background:#00140E;border-color:#00140E;color:#FFFFFF}
+.connector{width:2px;height:12px;margin-left:28px;background:#00828E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="96" class="header-band" style="height:96px" data-qid="q-band-5a01" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-header-left-5a02" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-qid="q-eyebrow-5a03" data-semantic-role="supporting">1주차</div>
+    <div data-header-part="title" class="title" data-qid="source-block-07e96953a5114377" data-semantic-role="title" data-source-block-id="source-slide:6:text:3">1주차 | 숏폼 대행사업 시작하기</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-qid="source-block-3665c00af2a3ff55" data-semantic-role="supporting" data-source-block-id="source-slide:6:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:120px" data-qid="q-body-5a06" data-semantic-role="decoration">
+  <div class="inner" data-qid="q-inner-5a07" data-semantic-role="decoration">
+    <div class="claim" data-qid="q-claim-wrap-5a08" data-semantic-role="decoration">
+      <div class="claim-text" data-qid="source-block-159a6af902a66574" data-semantic-role="body" data-source-block-id="source-slide:6:text:4">목표: 내가 무엇을 누구에게 얼마에 팔지 <span class="claim-keyword" data-qid="q-span-42fde42bf373" data-semantic-role="body">결정</span></div>
+      <div class="time-chip" data-qid="source-block-3249496b5d212ba2" data-semantic-role="supporting" data-source-block-id="source-slide:6:text:7">120분</div>
+    </div>
+
+    <div class="architecture" data-qid="q-architecture-5a11" data-semantic-role="decoration">
+      <div class="left-rail" data-qid="q-left-rail-5a12" data-semantic-role="decoration">
+        <div class="rail-card goal-card" data-qid="q-goal-card-5a13" data-semantic-role="body">내가 무엇을 누구에게 얼마에 팔지 결정</div>
+        <div class="rail-card output-card" data-qid="q-output-card-5a14" data-semantic-role="decoration">
+          <div class="output-label" data-qid="source-block-361d54eef27a5102" data-semantic-role="supporting" data-source-block-id="source-slide:6:text:11">오늘의 결과물</div>
+          <div class="output-copy" data-qid="source-block-0ee117f64c0eeb67" data-semantic-role="body" data-source-block-id="source-slide:6:text:12">내 서비스 한 줄 소개 + 기본 상품 1개</div>
+        </div>
+      </div>
+
+      <div class="map-card" data-qid="q-map-card-5a17" data-semantic-role="decoration">
+        <div class="map-heading" data-qid="source-block-d31e95c95ec45d04" data-semantic-role="supporting" data-source-block-id="source-slide:6:text:8:run:0">숏폼 대행사업의 <span data-qid="q-span-f32986c526a1" data-semantic-role="body">구조 이해</span></div>
+        <div class="map-flow" data-qid="q-map-flow-5a19" data-semantic-role="decoration">
+          <div class="map-node" data-qid="source-block-2c4e88cecd913260" data-semantic-role="body" data-source-block-id="source-slide:6:text:8:run:1">타깃 업종과 상품 정하기</div>
+          <div class="connector" data-qid="q-connector-5a21" data-semantic-role="decoration"></div>
+          <div class="map-node emphasis" data-qid="source-block-755be68b1c616066" data-semantic-role="body" data-source-block-id="source-slide:6:text:8:run:2">가격과 작업 범위 정하기</div>
+          <div class="connector" data-qid="q-connector-5a23" data-semantic-role="decoration"></div>
+          <div class="map-node" data-qid="source-block-0fe56ca467d038bf" data-semantic-role="body" data-source-block-id="source-slide:6:text:8:run:3">인스타·블로그 기본 세팅</div>
+          <div class="connector" data-qid="q-connector-5a25" data-semantic-role="decoration"></div>
+          <div class="map-node final" data-qid="q-map-node-5a26" data-semantic-role="body">내 서비스 한 줄 소개 + 기본 상품 1개.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-qid="source-block-c7af960e0b3ca87d" data-semantic-role="supporting" data-source-block-id="source-slide:6:text:5">06</div>
+</body>
+</html>

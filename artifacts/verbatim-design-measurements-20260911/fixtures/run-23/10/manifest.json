@@ -1,0 +1,220 @@
+{
+ "sourceUnitId": "source-slide:11",
+ "sourceIndex": 10,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:11:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:11:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "1주차 과제",
+    "paragraphs": [
+     {
+      "runs": [
+       "1주차 과제"
+      ],
+      "text": "1주차 과제"
+     }
+    ],
+    "runs": [
+     "1주차 과제"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:b1c506aa1d59fdd25512c20ef2169e7f4c287d1cb18852590677a7b6af11a5cf",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:11:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "30~60분 투자해서 ‘내 사업의 첫 화면’을 완성합니다.",
+    "paragraphs": [
+     {
+      "runs": [
+       "30~60분 투자해서 ‘내 사업의 첫 화면’을 완성합니다."
+      ],
+      "text": "30~60분 투자해서 ‘내 사업의 첫 화면’을 완성합니다."
+     }
+    ],
+    "runs": [
+     "30~60분 투자해서 ‘내 사업의 첫 화면’을 완성합니다."
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 658368,
+     "y": 987552,
+     "cx": 10424160,
+     "cy": 365760
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:6bbb84140a0c7c73f9a8badacee27c03e936c498d147f1e9fdb0a0184c96af18",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:11:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "11",
+    "paragraphs": [
+     {
+      "runs": [
+       "11"
+      ],
+      "text": "11"
+     }
+    ],
+    "runs": [
+     "11"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:6c64df08c500b422da552df0de9b5a2ef452c7bc6199aaf714580ccf360f4b5b",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:11:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:36fd55bab03eb0480d24a03055e21590393daa37f1e868df1a69112f2d6294dd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:11:text:7",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 5,
+   "payload": {
+    "text": "• 인스타 프로필 완성\n• 블로그 소개 및 핵심 키워드 3개 선정\n• 상품 1개와 가격 결정\n• 내가 공략할 업종 1개 선정",
+    "paragraphs": [
+     {
+      "runs": [
+       "• 인스타 프로필 완성"
+      ],
+      "text": "• 인스타 프로필 완성"
+     },
+     {
+      "runs": [
+       "• 블로그 소개 및 핵심 키워드 3개 선정"
+      ],
+      "text": "• 블로그 소개 및 핵심 키워드 3개 선정"
+     },
+     {
+      "runs": [
+       "• 상품 1개와 가격 결정"
+      ],
+      "text": "• 상품 1개와 가격 결정"
+     },
+     {
+      "runs": [
+       "• 내가 공략할 업종 1개 선정"
+      ],
+      "text": "• 내가 공략할 업종 1개 선정"
+     }
+    ],
+    "runs": [
+     "• 인스타 프로필 완성",
+     "\n",
+     "• 블로그 소개 및 핵심 키워드 3개 선정",
+     "\n",
+     "• 상품 1개와 가격 결정",
+     "\n",
+     "• 내가 공략할 업종 1개 선정"
+    ],
+    "shapeName": "TextBox 6",
+    "geometry": {
+     "x": 914400,
+     "y": 1554480,
+     "cx": 9875520,
+     "cy": 3474720
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:189a186073f7bc8f3cae99e48b0a8cd5ac460941502e6f2e8256477de366af74",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;height:96px;background:#08916E}
+.header-left{position:absolute;left:64px;top:20px;width:820px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:6px;font-size:32px;line-height:39px;font-weight:800;color:#FFFFFF}
+.header-right{position:absolute;left:956px;top:20px;width:260px;height:18px;text-align:right;font-size:15px;line-height:18px;color:#FFFFFF;background:#00140E;padding:0 10px}
+.body-wrap{position:absolute;left:0;right:0;top:120px;width:100%;height:528px}
+.content-inner{margin-left:64px;width:1152px}
+.claim{height:78px;display:flex;align-items:flex-start;justify-content:space-between;border-bottom:1px solid #E2E8F0}
+.claim-text{width:760px;font-size:25px;line-height:36px;font-weight:800;color:#1D1D1B}
+.claim-text strong{color:#08916E}
+.claim-mark{width:280px;padding:8px 16px;background:#E0F3FF;border-radius:12px;color:#002060;font-size:18px;line-height:28px;font-weight:700;text-align:right}
+.pillars{display:grid;grid-template-columns:564px 564px;grid-template-rows:172px 172px;gap:24px;margin-top:24px}
+.card{position:relative;padding:30px 28px 22px 76px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-tab{position:absolute;left:20px;top:22px;width:38px;height:38px;border-radius:12px;background:#002060;color:#FFFFFF;text-align:center;font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:38px;font-weight:700}
+.card-label{font-size:18px;line-height:28px;font-weight:700;color:#002060}
+.card-copy{margin-top:10px;font-size:20px;line-height:32px;font-weight:700;color:#1D1D1B}
+.card-copy strong{color:#08916E}
+.bottom-note{display:flex;align-items:center;gap:16px;margin-top:24px;height:72px;padding:0 24px;background:#EAEDF2;border-radius:12px;color:#1D1D1B;font-size:18px;line-height:28px;font-weight:700}
+.note-tick{width:8px;height:34px;background:#08916E;border-radius:12px;flex:none}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="96" class="header-band" style="height:96px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div data-header-part="eyebrow" class="header-left eyebrow" data-qid="source-block-4cfe6d7e66337a56" data-semantic-role="supporting" data-source-block-id="source-slide:4:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  <div data-header-part="title" class="header-left title" data-qid="source-block-51d6a43c463aba5a" data-semantic-role="title" data-source-block-id="source-slide:4:text:3">8시간의 원칙</div>
+  <div data-header-part="right" class="header-right" data-qid="source-block-b37b36733c3c1adb" data-semantic-role="body" data-source-block-id="source-slide:4:text:5">04</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:120px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-inner" data-qid="q-div-a985ffc51e86" data-semantic-role="decoration">
+    <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+      <div class="claim-text" data-semantic-role="body" data-qid="source-block-9ea436f3c989a513" data-source-block-id="source-slide:4:text:4">본 수업은 ‘필수’만. 나머지는 템플릿과 보너스 자료로 제공합니다.</div>
+      <div class="claim-mark" data-semantic-role="supporting" data-qid="q-mark-8hour">필수 실행에 집중</div>
+    </div>
+
+    <div class="pillars" data-qid="q-div-31ba150fc76b" data-semantic-role="decoration">
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-01">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-01">01</div>
+        <div class="card-label" data-semantic-role="supporting" data-qid="q-label-01">완성</div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-b1717ef4283139ee" data-source-block-id="source-slide:4:text:7:run:0">기능을 많이 배우는 것보다 실제 영상 1개를 완성한다.</div>
+      </div>
+
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-02">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-02">02</div>
+        <div class="card-label" data-semantic-role="supporting" data-qid="q-label-02">실행</div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-607b039387270d5f" data-source-block-id="source-slide:4:text:7:run:1">영업 방법을 전부 외우기보다 핵심 3개를 실제로 해본다.</div>
+      </div>
+
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-03">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-03">03</div>
+        <div class="card-label" data-semantic-role="supporting" data-qid="q-label-03">명확화</div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-24d2db609f913159" data-source-block-id="source-slide:4:text:7:run:2">강의가 끝날 때 ‘무엇을 누구에게 팔지’가 명확해야 한다.</div>
+      </div>
+
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-04">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-04">04</div>
+        <div class="card-label" data-semantic-role="supporting" data-qid="q-label-04">지속</div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-f1f67204522209cf" data-source-block-id="source-slide:4:text:7:run:3">수강생이 집에 가서 바로 실행할 수 있는 자료를 남긴다.</div>
+      </div>
+    </div>
+
+    <div class="bottom-note" data-semantic-role="decoration" data-qid="q-note-8hour">
+      <span class="note-tick" data-semantic-role="decoration" data-qid="q-span-763a2ccadf59"></span>
+      <span data-semantic-role="body" data-qid="q-note-text">실제 영상 1개와 핵심 3개의 실행으로 수업의 결과를 남긴다.</span>
+    </div>
+  </div>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="q-page-04">04</div>
+</body>
+</html>

@@ -1,0 +1,268 @@
+{
+ "sourceUnitId": "source-slide:31",
+ "sourceIndex": 30,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:31:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:31:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "꿀벌쌤 보너스 자료",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 보너스 자료"
+      ],
+      "text": "꿀벌쌤 보너스 자료"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 보너스 자료"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:297e7ad4df5270ebe69c1f88bf0930ffff7b66b0988b36111814419e3a44d6ba",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:31:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "수업 시간을 줄이고 실행력을 높이기 위해 자료로 제공합니다.",
+    "paragraphs": [
+     {
+      "runs": [
+       "수업 시간을 줄이고 실행력을 높이기 위해 자료로 제공합니다."
+      ],
+      "text": "수업 시간을 줄이고 실행력을 높이기 위해 자료로 제공합니다."
+     }
+    ],
+    "runs": [
+     "수업 시간을 줄이고 실행력을 높이기 위해 자료로 제공합니다."
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 658368,
+     "y": 987552,
+     "cx": 10424160,
+     "cy": 365760
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:6f8f5360079114d69d9b0d6fe74e1c93958dcffa5e4b9e2c2111878f148546ce",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:31:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "31",
+    "paragraphs": [
+     {
+      "runs": [
+       "31"
+      ],
+      "text": "31"
+     }
+    ],
+    "runs": [
+     "31"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:9cf67ea3b34bc740af2bfb4f0e3578a439bdd41ec56bb97821e51934cd84460a",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:31:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:36fd55bab03eb0480d24a03055e21590393daa37f1e868df1a69112f2d6294dd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:31:text:7",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 5,
+   "payload": {
+    "text": "• 캡컷 기능 가이드\n• 스냅챗 활용법 / 얼굴 노출 최소화\n• 후킹 문구 모음\n• 업종별 콘텐츠 아이디어\n• 전화영업 대본\n• DM / 문자 / 카카오톡 문구\n• 당근마켓 활용 가이드\n• 제안서 · 견적서 템플릿\n• 촬영 가이드\n• 콘텐츠 기획표",
+    "paragraphs": [
+     {
+      "runs": [
+       "• 캡컷 기능 가이드"
+      ],
+      "text": "• 캡컷 기능 가이드"
+     },
+     {
+      "runs": [
+       "• 스냅챗 활용법 / 얼굴 노출 최소화"
+      ],
+      "text": "• 스냅챗 활용법 / 얼굴 노출 최소화"
+     },
+     {
+      "runs": [
+       "• 후킹 문구 모음"
+      ],
+      "text": "• 후킹 문구 모음"
+     },
+     {
+      "runs": [
+       "• 업종별 콘텐츠 아이디어"
+      ],
+      "text": "• 업종별 콘텐츠 아이디어"
+     },
+     {
+      "runs": [
+       "• 전화영업 대본"
+      ],
+      "text": "• 전화영업 대본"
+     },
+     {
+      "runs": [
+       "• DM / 문자 / 카카오톡 문구"
+      ],
+      "text": "• DM / 문자 / 카카오톡 문구"
+     },
+     {
+      "runs": [
+       "• 당근마켓 활용 가이드"
+      ],
+      "text": "• 당근마켓 활용 가이드"
+     },
+     {
+      "runs": [
+       "• 제안서 · 견적서 템플릿"
+      ],
+      "text": "• 제안서 · 견적서 템플릿"
+     },
+     {
+      "runs": [
+       "• 촬영 가이드"
+      ],
+      "text": "• 촬영 가이드"
+     },
+     {
+      "runs": [
+       "• 콘텐츠 기획표"
+      ],
+      "text": "• 콘텐츠 기획표"
+     }
+    ],
+    "runs": [
+     "• 캡컷 기능 가이드",
+     "\n",
+     "• 스냅챗 활용법 / 얼굴 노출 최소화",
+     "\n",
+     "• 후킹 문구 모음",
+     "\n",
+     "• 업종별 콘텐츠 아이디어",
+     "\n",
+     "• 전화영업 대본",
+     "\n",
+     "• DM / 문자 / 카카오톡 문구",
+     "\n",
+     "• 당근마켓 활용 가이드",
+     "\n",
+     "• 제안서 · 견적서 템플릿",
+     "\n",
+     "• 촬영 가이드",
+     "\n",
+     "• 콘텐츠 기획표"
+    ],
+    "shapeName": "TextBox 6",
+    "geometry": {
+     "x": 822960,
+     "y": 1325880,
+     "cx": 10058400,
+     "cy": 4754880
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:038d9eab82747fcb851e31d4d2a41a207307a198b33e87589eccf560d6bdc846",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

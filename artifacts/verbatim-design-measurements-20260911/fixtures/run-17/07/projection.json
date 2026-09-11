@@ -1,0 +1,248 @@
+{
+ "source-slide:8:text:3": {
+  "text": "1주차 PART 2 | 나만의 상품 만들기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "1주차 PART 2",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "나만의 상품 만들기",
+    "begin": 13,
+    "end": 23,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:8:text:4": {
+  "text": "08",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "08",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:8:text:5": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:8:text:8": {
+  "text": "① 누구에게",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "① ",
+    "body": "누구에게",
+    "begin": 0,
+    "end": 6,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:8:text:9": {
+  "text": "식당 / 미용 / 학원 / 쇼핑몰 / 기업 등 처음에는 한두 업종에 집중",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "식당 / 미용 / 학원 / 쇼핑몰 / 기업 등",
+    "begin": 0,
+    "end": 25,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "처음에는 한두 업종에 집중",
+    "begin": 26,
+    "end": 40,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:8:text:12": {
+  "text": "② 무엇을",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "② ",
+    "body": "무엇을",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:8:text:13": {
+  "text": "월 4개 / 8개 / 12개 등 기획 · 촬영 · 편집 범위 설정",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "월 4개 / 8개 / 12개 등",
+    "begin": 0,
+    "end": 17,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "기획 · 촬영 · 편집 범위 설정",
+    "begin": 18,
+    "end": 36,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:8:text:16": {
+  "text": "③ 얼마에",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "③ ",
+    "body": "얼마에",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:8:text:17": {
+  "text": "초기에는 단순한 패키지 수정 횟수와 납품일 명확히",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "초기에는 단순한 패키지",
+    "begin": 0,
+    "end": 12,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "수정 횟수와 납품일 명확히",
+    "begin": 13,
+    "end": 27,
+    "order_free_before": false
+   }
+  ]
+ }
+}

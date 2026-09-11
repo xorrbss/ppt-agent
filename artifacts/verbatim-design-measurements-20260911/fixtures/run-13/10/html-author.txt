@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;height:117px;background:#FFFFFF;border-top:10px solid #08916E}
+.header-left{position:absolute;left:64px;top:18px;width:960px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.body-wrap{position:absolute;left:0;right:0;top:141px;height:507px}
+.content-inner{width:1152px;margin-left:64px}
+.claim{height:72px;display:flex;align-items:center;border-bottom:1px solid #E2E8F0}
+.claim-text{font-size:26px;line-height:40px;font-weight:700;letter-spacing:-.02em}
+.claim-text strong{color:#08916E}
+.main-grid{display:grid;grid-template-columns:520px 608px;gap:24px;margin-top:24px;height:387px}
+.left-panel{height:387px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.owner{font-size:18px;line-height:28px;font-weight:700;color:#002060}
+.owner-rule{height:1px;background:#E2E8F0;margin:22px 0 20px}
+.task-list{display:flex;flex-direction:column;gap:17px}
+.task-card{height:55px;display:flex;align-items:center;gap:16px;padding:0 16px;border:1px solid #E2E8F0;border-radius:12px;background:#F9F9F9}
+.task-mark{width:10px;height:10px;flex:none;background:#219F88;border-radius:2px}
+.task-text{font-size:18px;line-height:27px;font-weight:600}
+.image-panel{height:315px;padding:12px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.image-panel img{display:block;width:584px;height:289px;border-radius:12px;object-fit:cover;background:#E0F3FF}
+.takeaway{margin-top:20px;padding:14px 18px;background:#E0F3FF;border-radius:12px;color:#002060;font-size:18px;line-height:28px;font-weight:700}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="117" class="header-band" style="height:117px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-10">사업 첫 화면</div>
+  <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-b81dc1621dacc617" data-source-block-id="source-slide:11:text:3">1주차 과제</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:141px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-inner" data-qid="q-div-a985ffc51e86" data-semantic-role="decoration">
+    <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+      <div class="claim-text" data-semantic-role="body" data-qid="source-block-c99474ef3121add8" data-source-block-id="source-slide:11:text:4">30~60분 투자해서 ‘내 사업의 첫 화면’을 <strong data-semantic-role="body" data-qid="q-claim-keyword-10">완성합니다.</strong></div>
+    </div>
+
+    <div class="main-grid" data-qid="q-div-948c49f110fb" data-semantic-role="decoration">
+      <div class="left-panel" data-qid="q-card-group-10" data-semantic-role="decoration">
+        <div class="owner" data-semantic-role="body" data-qid="source-block-7edc6420f9ce5f3b" data-source-block-id="source-slide:11:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+        <div class="owner-rule" data-qid="q-div-f4253b0f487c" data-semantic-role="decoration"></div>
+        <div class="task-list" data-qid="source-block-1904209ecf595de3" data-semantic-role="decoration" data-source-block-id="source-slide:11:text:7">
+          <div class="task-card" data-qid="q-task-1-10" data-semantic-role="decoration">
+            <span class="task-mark" data-qid="q-span-1882d174bb39" data-semantic-role="decoration"></span>
+            <div class="task-text" data-semantic-role="body" data-qid="q-task-text-1-10">인스타 프로필 완성</div>
+          </div>
+          <div class="task-card" data-qid="q-task-2-10" data-semantic-role="decoration">
+            <span class="task-mark" data-qid="q-span-b6ad601663d4" data-semantic-role="decoration"></span>
+            <div class="task-text" data-semantic-role="body" data-qid="q-task-text-2-10">블로그 소개 및 핵심 키워드 3개 선정</div>
+          </div>
+          <div class="task-card" data-qid="q-task-3-10" data-semantic-role="decoration">
+            <span class="task-mark" data-qid="q-span-7ad0daac1782" data-semantic-role="decoration"></span>
+            <div class="task-text" data-semantic-role="body" data-qid="q-task-text-3-10">상품 1개와 가격 결정</div>
+          </div>
+          <div class="task-card" data-qid="q-task-4-10" data-semantic-role="decoration">
+            <span class="task-mark" data-qid="q-span-a3bcc1d429c9" data-semantic-role="decoration"></span>
+            <div class="task-text" data-semantic-role="body" data-qid="q-task-text-4-10">내가 공략할 업종 1개 선정</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="image-panel" data-qid="q-image-panel-10" data-semantic-role="decoration">
+        <img data-semantic-role="image" data-qid="q-image-10" data-illust-prompt="A premium editorial illustration of a solo short-form marketing business owner at a clean desk, arranging a first business screen plan with a smartphone profile, a blog page, one product price card, and a target industry note, viewed from a slightly elevated three-quarter angle, no people faces, no decorative text, labels:">
+      </div>
+    </div>
+
+    <div class="takeaway" data-semantic-role="body" data-qid="q-takeaway-10">첫 화면을 완성하면 다음 실행이 선명해집니다.</div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-afd42c07c4e9491d" data-source-block-id="source-slide:11:text:5">11</div>
+</body>
+</html>

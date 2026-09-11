@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:117px;background:#FFFFFF;border-top:8px solid #08916E}
+.header-left{position:absolute;left:64px;top:18px;width:960px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.body-wrap{position:absolute;left:0;right:0;top:141px;height:507px}
+.content-inner{margin-left:64px;width:1152px}
+.identity{font-size:17px;line-height:26px;font-weight:700;color:#00828E}
+.claim{margin-top:18px;font-size:29px;line-height:40px;font-weight:700;letter-spacing:-.03em}
+.claim strong{color:#08916E}
+.explain{margin-top:14px;font-size:20px;line-height:33px;color:#1D1D1B}
+.process{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:34px}
+.card{height:190px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:26px 28px;position:relative}
+.card:after{;position:absolute;left:28px;right:28px;bottom:24px;height:5px;border-radius:12px;background:#E0F3FF}
+.card:nth-child(1):after{background:#B9E5D9}
+.card:nth-child(2):after{background:#8BD5C2}
+.card:nth-child(3):after{background:#08916E}
+.card-label{font-size:23px;line-height:32px;font-weight:700;color:#002060}
+.card-copy{margin-top:20px;font-size:20px;line-height:31px;font-weight:700;color:#1D1D1B}
+.footer-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="117" class="header-band" style="height:117px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-31">핵심 철학</div>
+    <div data-header-part="title" data-semantic-role="title" data-qid="source-block-431d0f51556f7f2e" data-source-block-id="source-slide:32:text:3">꿀벌쌤의 핵심 철학</div>
+  </div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:141px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-inner" data-qid="q-div-a985ffc51e86" data-semantic-role="decoration">
+    <div class="identity" data-semantic-role="supporting" data-qid="source-block-d8646047d6db0557" data-source-block-id="source-slide:32:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+
+    <div class="claim" data-semantic-role="body" data-qid="source-block-946de5a396e7c2ab" data-source-block-id="source-slide:32:text:4">숏폼 대행사업자는 <strong data-semantic-role="body" data-qid="q-keyword-31">‘편집자’</strong>에서 끝나면 안 됩니다.</div>
+
+    <div class="explain" data-semantic-role="decoration" data-qid="q-explain-31">
+      <div data-semantic-role="body" data-qid="source-block-0b47e46550f7bc8a" data-source-block-id="source-slide:32:text:7:run:0">사장님들이 숏폼을 못 만드는 이유는</div>
+      <div data-semantic-role="body" data-qid="source-block-0f300bfd68c2d42a" data-source-block-id="source-slide:32:text:7:run:1">편집이 어려워서만이 아닙니다.</div>
+      <div data-semantic-role="body" data-qid="source-block-edd002fb909d4be5" data-source-block-id="source-slide:32:text:8">무엇을 찍어야 할지 모르기 때문입니다.</div>
+    </div>
+
+    <div class="process" data-qid="q-div-c9d7a1a95df0" data-semantic-role="decoration">
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-plan-31">
+        <div class="card-label" data-semantic-role="supporting" data-qid="source-block-38d76d9a430fc708" data-source-block-id="source-slide:32:text:11">기획</div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-41021f16f79a95f3" data-source-block-id="source-slide:32:text:12">무엇을 찍을지</div>
+      </div>
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-guide-31">
+        <div class="card-label" data-semantic-role="supporting" data-qid="source-block-d1670c3495e2f87c" data-source-block-id="source-slide:32:text:15">가이드</div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-440c1c19486cb4b2" data-source-block-id="source-slide:32:text:16">어떻게 찍을지</div>
+      </div>
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-production-31">
+        <div class="card-label" data-semantic-role="supporting" data-qid="source-block-77e4473d79d43d37" data-source-block-id="source-slide:32:text:19">제작</div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-69816ce05eb54687" data-source-block-id="source-slide:32:text:20">어떻게 보여줄지</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-number" data-semantic-role="supporting" data-qid="source-block-b4ae44f14aa00d73" data-source-block-id="source-slide:32:text:5">32</div>
+</body>
+</html>

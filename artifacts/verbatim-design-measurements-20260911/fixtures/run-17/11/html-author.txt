@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#08916E;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:20px;width:820px}
+.eyebrow{font-size:14px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:6px;font-size:32px;line-height:39px;font-weight:800;color:#FFFFFF}
+.header-right{position:absolute;left:956px;top:20px;width:260px;min-height:76px;padding:14px 18px;background:#00140E;color:#FFFFFF;text-align:right;font-size:15px;line-height:23px;font-weight:700;border-radius:12px}
+.body-wrap{position:absolute;left:0;right:0;top:120px;width:1152px;margin-left:64px}
+.claim{height:51px;display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
+.claim-text{font-size:24px;line-height:34px;font-weight:800;color:#1D1D1B}
+.claim-text strong{color:#08916E}
+.claim-side{padding-top:5px;font-size:15px;line-height:22px;color:#00828E;font-weight:700}
+.arch-grid{display:grid;grid-template-columns:274px 1fr 274px;gap:24px;height:448px}
+.panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:24px}
+.panel-label{font-size:15px;line-height:22px;letter-spacing:.02em;color:#08916E;font-weight:800;margin-bottom:15px}
+.goal-panel{display:flex;flex-direction:column;justify-content:space-between}
+.goal-copy{font-size:22px;line-height:1.55;font-weight:800;color:#00140E}
+.goal-copy strong{color:#08916E}
+.goal-band{padding:14px 16px;background:#E0F3FF;border-left:6px solid #08916E;border-radius:12px;font-size:17px;line-height:1.6;font-weight:700;color:#00140E}
+.flow-panel{padding:20px 22px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.flow-title{font-size:19px;line-height:28px;font-weight:800;color:#00140E;margin-bottom:18px}
+.flow-row{display:flex;align-items:stretch;gap:10px}
+.flow-box{position:relative;flex:1;min-height:116px;padding:17px 13px;background:#E0F3FF;border:1px solid #B9DCEA;border-radius:12px;display:flex;flex-direction:column;justify-content:space-between}
+.flow-box:nth-child(3),.flow-box:nth-child(5){background:#CCECFF}
+.flow-num{font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:20px;font-weight:700;color:#00828E}
+.flow-text{font-size:17px;line-height:1.5;font-weight:700;color:#00140E}
+.connector{width:12px;flex:none;align-self:center;height:2px;background:#219F88;position:relative}
+.connector span{position:absolute;right:-1px;top:-4px;width:9px;height:9px;background:#219F88;transform:rotate(45deg)}
+.flow-note{margin-top:22px;padding:16px 18px;background:#F0FAF7;border-radius:12px;border:1px solid #B9E5D9;font-size:18px;line-height:1.6;font-weight:700;color:#00140E}
+.flow-note strong{color:#08916E}
+.criteria-panel{background:#00140E;color:#FFFFFF;padding:24px}
+.criteria-panel .panel-label{color:#8BD8C4}
+.criteria-copy{display:flex;flex-direction:column;gap:20px;margin-top:30px}
+.criteria-line{padding:18px 16px;border-radius:12px;background:#0B3025;font-size:21px;line-height:1.55;font-weight:800}
+.criteria-line:first-child{color:#FFFFFF}
+.criteria-line:last-child{color:#8BD8C4;border:1px solid #08916E}
+.footer-brand{position:absolute;left:64px;bottom:14px;width:40px;height:16px;background:#08916E;border-radius:12px}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="96" class="header-band" style="height:96px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div data-header-part="eyebrow" class="header-left eyebrow" data-qid="q-eyebrow-11" data-semantic-role="supporting">숏폼 제작 역량</div>
+  <div data-header-part="title" class="header-left title" data-qid="source-block-4fa73e5d453f6213" data-semantic-role="title" data-source-block-id="source-slide:12:text:3">2주차 | 숏폼 제작의 핵심</div>
+  <div data-header-part="right" class="header-right" data-qid="source-block-c6a4d602bf6b9e9d" data-semantic-role="body" data-source-block-id="source-slide:12:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:120px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+    <div class="claim-text" data-qid="source-block-9b5a4183fd82a0c1" data-semantic-role="body" data-source-block-id="source-slide:12:text:4">목표: 포트폴리오로 보여줄 영상 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">1~2개 완성</strong></div>
+    <div class="claim-side" data-qid="q-claim-side-11" data-semantic-role="body">완성도보다 판매 가능성</div>
+  </div>
+
+  <div class="arch-grid" data-qid="q-div-58500264fd31" data-semantic-role="decoration">
+    <div class="panel goal-panel" data-qid="q-goal-card-11" data-semantic-role="decoration">
+      <div data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+        <div class="panel-label" data-qid="q-goal-label-11" data-semantic-role="supporting">목표</div>
+        <div class="goal-copy" data-qid="q-goal-copy-11" data-semantic-role="body">포트폴리오로 보여줄<br><strong data-qid="q-strong-f213b54d7db8" data-semantic-role="body">영상 1~2개 완성</strong></div>
+      </div>
+      <div class="goal-band" data-qid="source-block-5a0dccd50dc8e558" data-semantic-role="body" data-source-block-id="source-slide:12:text:7:run:3">조회수 높은 콘텐츠<br>벤치마킹</div>
+    </div>
+
+    <div class="flow-panel" data-qid="q-flow-card-11" data-semantic-role="decoration">
+      <div class="flow-title" data-qid="q-flow-title-11" data-semantic-role="body">숏폼 제작의 핵심</div>
+      <div class="flow-row" data-qid="q-div-7700ecb2253c" data-semantic-role="decoration">
+        <div class="flow-box" data-qid="q-flow-1-11" data-semantic-role="decoration">
+          <div class="flow-num" data-qid="q-flow-num-1-11" data-semantic-role="supporting">01</div>
+          <div class="flow-text" data-qid="source-block-7c357a77b2a16292" data-semantic-role="body" data-source-block-id="source-slide:12:text:7:run:0-2">후킹 → 본문 → 유도 구조</div>
+        </div>
+        <div class="connector" data-qid="q-div-1bfec761b021" data-semantic-role="decoration"><span data-qid="q-span-f32986c526a1" data-semantic-role="decoration"></span></div>
+        <div class="flow-box" data-qid="q-flow-2-11" data-semantic-role="decoration">
+          <div class="flow-num" data-qid="q-flow-num-2-11" data-semantic-role="supporting">02</div>
+          <div class="flow-text" data-qid="source-block-3ee022f46b02f1fa" data-semantic-role="body" data-source-block-id="source-slide:12:text:7:run:4">스마트폰 촬영 기본</div>
+        </div>
+        <div class="connector" data-qid="q-div-f954d062b2c8" data-semantic-role="decoration"><span data-qid="q-span-c83eac29f2ad" data-semantic-role="decoration"></span></div>
+        <div class="flow-box" data-qid="q-flow-3-11" data-semantic-role="decoration">
+          <div class="flow-num" data-qid="q-flow-num-3-11" data-semantic-role="supporting">03</div>
+          <div class="flow-text" data-qid="source-block-f56757dead09964a" data-semantic-role="body" data-source-block-id="source-slide:12:text:7:run:5">AI 활용</div>
+        </div>
+        <div class="connector" data-qid="q-div-d70e41e2467e" data-semantic-role="decoration"><span data-qid="q-span-eedec0ea8962" data-semantic-role="decoration"></span></div>
+        <div class="flow-box" data-qid="q-flow-4-11" data-semantic-role="decoration">
+          <div class="flow-num" data-qid="q-flow-num-4-11" data-semantic-role="supporting">04</div>
+          <div class="flow-text" data-qid="source-block-32ec190d0d6378bc" data-semantic-role="body" data-source-block-id="source-slide:12:text:7:run:6">캡컷 핵심 기능</div>
+        </div>
+      </div>
+      <div class="flow-note" data-qid="q-flow-note-11" data-semantic-role="body">오늘의 기준<br><strong data-qid="source-block-423bc1ef63d38cd3" data-semantic-role="body" data-source-block-id="source-slide:12:text:11">완벽한 영상 X<br>팔 수 있는 영상 O</strong></div>
+    </div>
+
+    <div class="criteria-panel panel" data-qid="q-criteria-card-11" data-semantic-role="decoration">
+      <div class="panel-label" data-qid="source-block-8cceaa7d9e37d877" data-semantic-role="supporting" data-source-block-id="source-slide:12:text:10">오늘의 기준</div>
+      <div class="criteria-copy" data-qid="q-div-c52eb96d0710" data-semantic-role="decoration">
+        <div class="criteria-line" data-qid="q-criteria-1-11" data-semantic-role="body">완벽한 영상 X</div>
+        <div class="criteria-line" data-qid="q-criteria-2-11" data-semantic-role="body">팔 수 있는 영상 O.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-brand" data-qid="q-div-166053ffd4b5" data-semantic-role="decoration"></div>
+<div class="page-number" data-qid="source-block-e016b77742690b0b" data-semantic-role="supporting" data-source-block-id="source-slide:12:text:5">12</div>
+</body>
+</html>

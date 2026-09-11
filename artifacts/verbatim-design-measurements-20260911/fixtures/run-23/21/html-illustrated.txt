@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:32px;width:780px}
+.eyebrow{font-size:15px;line-height:18px;font-weight:700;letter-spacing:.06em;color:#08916E}
+.title{margin-top:12px;font-size:34px;line-height:45px;font-weight:800;color:#0F172A}
+.divider{position:absolute;left:64px;right:64px;bottom:0;height:1px;background:#E2E8F0}
+.body-wrap{position:absolute;left:0;right:0;top:155px;height:493px}
+.content-inner{margin-left:64px;width:1152px;height:493px}
+.claim{height:54px;display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.brand-line{font-size:17px;line-height:26px;font-weight:700;color:#4B5563}
+.claim-text{font-size:26px;line-height:36px;font-weight:800;color:#0F172A}
+.claim-text strong{color:#08916E}
+.main-grid{display:grid;grid-template-columns:430px 698px;gap:24px;height:390px}
+.list-panel{height:390px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.field-card{height:112px;padding:20px;background:#F9F9F9;border:1px solid #E2E8F0;border-radius:12px}
+.field-name{font-size:20px;line-height:30px;font-weight:800;color:#002060}
+.field-line{height:1px;background:#CCECFF;margin-top:18px}
+.goal-panel{height:390px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.goal-top{height:28px;display:flex;align-items:center;justify-content:flex-end}
+.status{padding:6px 12px;border-radius:12px;background:#EAF7F4;color:#08916E;font-size:15px;line-height:22px;font-weight:700}
+.goal-flow{height:232px;margin-top:24px;display:grid;grid-template-columns:220px 62px 220px;gap:24px;align-items:center;justify-content:center}
+.goal-step{height:180px;padding:24px 18px;border-radius:12px;background:#E0F3FF;border:1px solid #CCECFF;text-align:center}
+.goal-step:last-child{background:#EAF7F4;border-color:#B9E5D9}
+.goal-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:48px;line-height:58px;font-weight:700;color:#002060}
+.goal-word{margin-top:12px;font-size:22px;line-height:32px;font-weight:800;color:#0F172A}
+.flow-arrow{font-size:34px;line-height:40px;font-weight:800;color:#00828E;text-align:center}
+.goal-note{height:46px;padding:10px 16px;background:#F9F9F9;border-left:6px solid #08916E;border-radius:12px;font-size:18px;line-height:26px;font-weight:700;color:#1D1D1B}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="135" style="height:135px" class="header-band" data-qid="q-band-21" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-header-left-21" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-21" class="eyebrow">3주차 실습</div>
+    <div data-header-part="title" data-semantic-role="title" data-qid="source-block-62ef8a6e9d934480" class="title" data-source-block-id="source-slide:22:text:3">3주차 실습 | 영업 리스트 만들기</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-divider-21" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" style="position:absolute;left:0;right:0;top:155px" class="body-wrap" data-qid="q-body-21" data-semantic-role="decoration">
+  <div class="content-inner" data-qid="q-content-21" data-semantic-role="decoration">
+    <div class="claim" data-qid="q-claim-row-21" data-semantic-role="decoration">
+      <div data-semantic-role="supporting" data-qid="source-block-293777d6592e370c" class="brand-line" data-source-block-id="source-slide:22:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      <div data-semantic-role="body" data-qid="source-block-c8fc727f852631c3" class="claim-text" data-source-block-id="source-slide:22:text:32">오늘 <strong data-qid="q-claim-keyword-21" data-semantic-role="body">목표</strong></div>
+    </div>
+
+    <div class="main-grid" data-qid="q-main-grid-21" data-semantic-role="decoration">
+      <div data-qid="q-list-panel-21" class="list-panel" data-semantic-role="decoration">
+        <div class="field-grid" data-qid="q-field-grid-21" data-semantic-role="decoration">
+          <div data-qid="q-field-card-1-21" class="field-card" data-semantic-role="decoration">
+            <div data-semantic-role="body" data-qid="source-block-6919fa9967aee553" class="field-name" data-source-block-id="source-slide:22:text:6">업종</div>
+            <div class="field-line" data-qid="q-field-line-1-21" data-semantic-role="decoration"></div>
+          </div>
+          <div data-qid="q-field-card-2-21" class="field-card" data-semantic-role="decoration">
+            <div data-semantic-role="body" data-qid="source-block-09c900aca5bbfe57" class="field-name" data-source-block-id="source-slide:22:text:7">가게/업체명</div>
+            <div class="field-line" data-qid="q-field-line-2-21" data-semantic-role="decoration"></div>
+          </div>
+          <div data-qid="q-field-card-3-21" class="field-card" data-semantic-role="decoration">
+            <div data-semantic-role="body" data-qid="source-block-1f55142d959f0dbb" class="field-name" data-source-block-id="source-slide:22:text:8">접촉 채널</div>
+            <div class="field-line" data-qid="q-field-line-3-21" data-semantic-role="decoration"></div>
+          </div>
+          <div data-qid="q-field-card-4-21" class="field-card" data-semantic-role="decoration">
+            <div data-semantic-role="body" data-qid="source-block-8ee9010f2da32c32" class="field-name" data-source-block-id="source-slide:22:text:9">상태</div>
+            <div class="field-line" data-qid="q-field-line-4-21" data-semantic-role="decoration"></div>
+          </div>
+        </div>
+      </div>
+
+      <div data-qid="q-goal-panel-21" class="goal-panel" data-semantic-role="decoration">
+        <div class="goal-top" data-qid="q-goal-top-21" data-semantic-role="decoration">
+          <div data-semantic-role="supporting" data-qid="q-status-21" class="status">상태</div>
+        </div>
+        <div class="goal-flow" data-qid="source-block-5c24da57470ad386" data-semantic-role="decoration" data-source-block-id="source-slide:22:text:33">
+          <div data-qid="q-step-find-21" class="goal-step" data-semantic-role="decoration">
+            <div data-semantic-role="supporting" data-qid="q-find-count-21" class="goal-number">10곳</div>
+            <div data-semantic-role="body" data-qid="q-find-word-21" class="goal-word">찾기</div>
+          </div>
+          <div data-semantic-role="supporting" data-qid="q-arrow-21" class="flow-arrow">→</div>
+          <div data-qid="q-step-contact-21" class="goal-step" data-semantic-role="decoration">
+            <div data-semantic-role="supporting" data-qid="q-contact-count-21" class="goal-number">3곳</div>
+            <div data-semantic-role="body" data-qid="q-contact-word-21" class="goal-word">연락</div>
+          </div>
+        </div>
+        <div data-semantic-role="body" data-qid="q-goal-note-21" class="goal-note">10곳 찾기 → 3곳 연락.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div data-semantic-role="supporting" data-qid="source-block-25a71ea0cc222d83" class="footer-page" data-source-block-id="source-slide:22:text:4">22</div>
+</body>
+</html>

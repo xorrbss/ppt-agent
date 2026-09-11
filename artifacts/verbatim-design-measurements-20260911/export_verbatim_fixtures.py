@@ -72,10 +72,12 @@ JOBS: dict[str, tuple[str, str]] = {
 PUBLISHED = ("run-11", "run-15", "run-16", "run-20", "run-21")
 FAILED = ("run-13", "run-14", "run-17", "run-18", "run-19", "run-23")
 #: Runs exported in full rather than only at their failing slides: every slide that
-#: kept authoring output. These are the only stored model output for the
-#: "model output -> static checks" path, because a published deck's author_html is
-#: cleared once it publishes.
-FULL_AUTHOR_EXPORT = ("run-18", "run-19")
+#: kept authoring output, plus every slide that failed. A deck that published has its
+#: author_html cleared, so the failed runs hold the only stored model output for the
+#: "model output -> static checks" path -- which is why all six are in full.
+FULL_AUTHOR_EXPORT = (
+    "run-13", "run-14", "run-17", "run-18", "run-19", "run-23",
+)
 
 
 def walk(obj: Any, key: str, acc: list | None = None) -> list:

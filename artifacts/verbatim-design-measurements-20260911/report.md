@@ -168,7 +168,7 @@ the manifest and its snapshot id are enough to re-derive it through the normal
 
 `fixtures/<run>/<slide-index>/` carries one directory per slide, exported by
 `export_verbatim_fixtures.py` (read-only; no generation, no provider call, no database write,
-no secret value in the output). 253 slide directories, 1,065 files, 7.7 MiB.
+no secret value in the output). 385 slide directories, 1,725 files, 11.6 MiB.
 
 | file | content | when absent |
 |---|---|---|
@@ -180,25 +180,42 @@ no secret value in the output). 253 slide directories, 1,065 files, 7.7 MiB.
 | `verdict.json` | job id and the basis for it, job state, checkpoint status/failed stage/error, what the run directory recorded, and an `absent` list naming every artefact that does not exist | — |
 | `metrics.json` | **never produced** | browser metrics are not persisted anywhere: `authored_slide_checkpoints` has no metrics column, `artifact_refs` is null, and `authored_evidence_*_v3` are empty |
 
-Coverage: 253 slide directories, each tagged with a `fixture_role` so a consumer need not
+Coverage: 385 slide directories, each tagged with a `fixture_role` so a consumer need not
 re-derive why it is there.
 
 | role | slides | what it is |
 |---|---|---|
 | `published_slide` | 175 | all 35 slides of each published deck (runs 11, 15, 16, 20, 21) — final bytes only |
-| `authoring_passed` | 66 | runs 18 and 19 in full: every slide whose authoring output survived |
+| `authoring_passed` | 198 | all six failed runs in full: every slide whose authoring output survived |
 | `failing_slide` | 12 | run-13 `22,29`; run-14 `02`; run-17 `09`; run-18 `30`; run-19 `02,12,33`; run-23 `01,08,11,29` |
 
-**Runs 18 and 19 are the only stored model output for the "model output → static checks" path**,
-because a published deck's `author_html` is cleared once it publishes. They are therefore exported
-in full: 34 and 32 slides with `html-author.txt` (30 and 32 also with `html-illustrated.txt`).
+**The failed runs hold the only stored model output for the "model output → static checks"
+path**, because a published deck's `author_html` is cleared once it publishes. All six are
+therefore exported in full — **199 slides carry `html-author.txt`**:
+
+| run | author HTML | illustrated | failing |
+|---|---|---|---|
+| run-13 | 33 | 33 | `22, 29` |
+| run-14 | 34 | 34 | `02` |
+| run-17 | 35 | 35 | `09` |
+| run-18 | 34 | 30 | `30` |
+| run-19 | 32 | 32 | `02, 12, 33` |
+| run-23 | 31 | 31 | `01, 08, 11, 29` |
 
 A failing slide is any slide the record names: an explicit slide index, the slide owning a failing
 source block (mapped through the manifest), a checkpoint with a failed stage, or a slide that
-produced no authoring output while its neighbours did. **That last case is why a `failing_slide`
-directory can hold no HTML at all** — run-18 `30` and run-19 `02, 12, 33` never authored, which is
-exactly what makes them negative fixtures; they keep their manifest, projection and verdict, and
-`absent` names each missing artefact.
+produced no authoring output while its neighbours did. The two kinds look different on disk and
+both matter:
+
+- **A failing slide with HTML** — run-17 `09` authored fine and then failed the readback on
+  `source-slide:10:text:17`. Its `html-author.txt` is the input a static check must accept or
+  reject deliberately.
+- **A failing slide with no HTML** — run-18 `30`, run-19 `02, 12, 33` never authored at all. They
+  keep their manifest, projection and verdict, and `absent` names each missing artefact; "authoring
+  produced nothing" is itself the negative fixture.
+
+Selecting by "has authoring output" alone would have dropped the second kind, which is how the
+first pass of this export lost every one of them.
 
 Job ids are resolved authoritatively: each run directory's `05-admission.json` records an
 `operation_id`, which joins to `presentation_generation_jobs.workspace_operation_id`. **All

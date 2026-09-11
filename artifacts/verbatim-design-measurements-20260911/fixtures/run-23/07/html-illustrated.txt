@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:135px;background:#FFFFFF;border-top:8px solid #08916E}
+.header-left{position:absolute;left:64px;top:24px;width:780px}
+.eyebrow{font-size:15px;line-height:18px;font-weight:700;letter-spacing:.06em;color:#08916E}
+.title{margin-top:12px;font-size:34px;line-height:45px;font-weight:800;color:#0F172A}
+.divider{position:absolute;left:64px;right:64px;bottom:0;height:1px;background:#E2E8F0}
+.body-wrap{position:absolute;left:0;right:0;top:155px;height:493px}
+.identity{margin-left:64px;width:1152px;height:48px;display:flex;align-items:center}
+.identity-text{font-size:24px;line-height:34px;font-weight:800;color:#00140E}
+.identity-text strong{color:#08916E}
+.pillars{margin-left:64px;margin-top:20px;width:1152px;height:348px;display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.card{position:relative;height:348px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:28px 28px 24px}
+.card-tab{position:absolute;left:28px;top:-16px;height:34px;min-width:94px;padding:5px 14px;border-radius:12px;background:#00140E;color:#FFFFFF;font-size:18px;line-height:24px;font-weight:800}
+.card-number{margin-top:16px;font-family:"IBM Plex Mono","Consolas",monospace;font-size:44px;line-height:54px;font-weight:700;color:#08916E}
+.card-title{margin-top:12px;font-size:26px;line-height:36px;font-weight:800;color:#002060}
+.card-rule{margin-top:18px;width:48px;height:4px;background:#219F88;border-radius:12px}
+.card-copy{margin-top:20px;font-size:19px;line-height:1.65;font-weight:500;color:#1D1D1B}
+.card-copy strong{font-weight:800;color:#08916E}
+.card-note{position:absolute;left:28px;right:28px;bottom:24px;padding-top:14px;border-top:1px solid #E2E8F0;font-size:18px;line-height:1.6;font-weight:700;color:#00140E}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="135" class="header-band" style="height:135px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-qid="q-eyebrow-7" data-semantic-role="supporting">1주차 PART 2</div>
+    <div data-header-part="title" class="title" data-qid="source-block-25a5564dfd7a8a37" data-semantic-role="title" data-source-block-id="source-slide:8:text:3">1주차 PART 2 | 나만의 상품 만들기</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:155px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="identity" data-qid="q-div-ca97991e836c" data-semantic-role="decoration">
+    <div class="identity-text" data-semantic-role="body" data-qid="source-block-e464e54f3dceb8cd" data-source-block-id="source-slide:8:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  </div>
+
+  <div class="pillars" data-qid="q-div-31ba150fc76b" data-semantic-role="decoration">
+    <div class="card" data-qid="q-card-who-7" data-semantic-role="decoration">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="source-block-a1f7bcfcd567df57" data-source-block-id="source-slide:8:text:8">누구에게</div>
+      <div class="card-number" data-semantic-role="supporting" data-qid="q-number-who-7">①</div>
+      <div class="card-title" data-semantic-role="body" data-qid="q-title-who-7">누구에게</div>
+      <div class="card-rule" data-qid="q-div-e24a51b44c9c" data-semantic-role="decoration"></div>
+      <div class="card-copy" data-semantic-role="body" data-qid="source-block-b910c54ca2d4480e" data-source-block-id="source-slide:8:text:9:run:0">식당 / 미용 / 학원 / 쇼핑몰 / 기업 등</div>
+      <div class="card-note" data-semantic-role="body" data-qid="source-block-e42554687b39b8d2" data-source-block-id="source-slide:8:text:9:run:1">처음에는 한두 업종에 집중</div>
+    </div>
+
+    <div class="card" data-qid="q-card-what-7" data-semantic-role="decoration">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="source-block-00069fd52457dad6" data-source-block-id="source-slide:8:text:12">무엇을</div>
+      <div class="card-number" data-semantic-role="supporting" data-qid="q-number-what-7">②</div>
+      <div class="card-title" data-semantic-role="body" data-qid="q-title-what-7">무엇을</div>
+      <div class="card-rule" data-qid="q-div-0b8bad9e5967" data-semantic-role="decoration"></div>
+      <div class="card-copy" data-semantic-role="body" data-qid="source-block-05f1e918e5b6d993" data-source-block-id="source-slide:8:text:13:run:0">월 4개 / 8개 / 12개 등</div>
+      <div class="card-note" data-semantic-role="body" data-qid="source-block-1fa1ffa17a8f156d" data-source-block-id="source-slide:8:text:13:run:1">기획 · 촬영 · 편집 범위 설정</div>
+    </div>
+
+    <div class="card" data-qid="q-card-price-7" data-semantic-role="decoration">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="source-block-ffdbd2c094d96567" data-source-block-id="source-slide:8:text:16">얼마에</div>
+      <div class="card-number" data-semantic-role="supporting" data-qid="q-number-price-7">③</div>
+      <div class="card-title" data-semantic-role="body" data-qid="q-title-price-7">얼마에</div>
+      <div class="card-rule" data-qid="q-div-7a9c3ff3b470" data-semantic-role="decoration"></div>
+      <div class="card-copy" data-semantic-role="body" data-qid="source-block-2f5954e847d006b3" data-source-block-id="source-slide:8:text:17:run:0">초기에는 단순한 패키지</div>
+      <div class="card-note" data-semantic-role="body" data-qid="source-block-59bfc8d77c9a6045" data-source-block-id="source-slide:8:text:17:run:1">수정 횟수와 납품일 명확히</div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="source-block-faf5e732e24aaba9" data-source-block-id="source-slide:8:text:4">08</div>
+</body>
+</html>

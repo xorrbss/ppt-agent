@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden}
+body{
+  background:linear-gradient(135deg,#00140E 0%,#003D2B 58%,#00140E 100%);
+  color:#F9F9F9;
+  font-family:"Noto Sans KR","Malgun Gothic",sans-serif;
+  word-break:keep-all;
+  overflow-wrap:break-word;
+}
+.cover{
+  position:relative;
+  width:1280px;
+  height:720px;
+  padding:64px;
+}
+.rule{
+  position:absolute;
+  left:64px;
+  top:64px;
+  width:56px;
+  height:4px;
+  background:#08916E;
+  border-radius:12px;
+}
+.marker{
+  position:absolute;
+  left:64px;
+  top:91px;
+  width:9px;
+  height:9px;
+  background:#219F88;
+  border-radius:12px;
+}
+.eyebrow{
+  position:absolute;
+  left:88px;
+  top:84px;
+  font-size:18px;
+  line-height:28px;
+  font-weight:700;
+  letter-spacing:.08em;
+  color:#8BD6C2;
+}
+.author{
+  position:absolute;
+  right:64px;
+  top:64px;
+  font-size:16px;
+  line-height:25px;
+  font-weight:600;
+  color:#B8D9D0;
+  text-align:right;
+}
+.main{
+  position:absolute;
+  left:64px;
+  top:184px;
+  width:840px;
+}
+.title{
+  margin:0;
+  font-size:52px;
+  line-height:1.25;
+  font-weight:800;
+  letter-spacing:-.055em;
+  color:#FFFFFF;
+}
+.title span{
+  color:#5AD0B0;
+}
+.sub{
+  margin-top:30px;
+  font-size:22px;
+  line-height:34px;
+  font-weight:600;
+  color:#D6EEE8;
+}
+.claim{
+  position:absolute;
+  left:64px;
+  bottom:82px;
+  width:730px;
+  padding-left:24px;
+  border-left:3px solid #08916E;
+  font-size:23px;
+  line-height:1.65;
+  font-weight:600;
+  color:#FFFFFF;
+}
+.claim strong{
+  color:#63D5B8;
+  font-weight:800;
+}
+.footer-line{
+  position:absolute;
+  right:64px;
+  bottom:86px;
+  width:230px;
+  height:1px;
+  background:#317A67;
+}
+</style>
+</head>
+<body>
+  <main class="cover" data-qid="q-main-6dbd16069cde" data-semantic-role="decoration">
+    <div class="rule" data-semantic-role="decoration" data-qid="q-shape-rule-01"></div>
+    <div class="marker" data-semantic-role="decoration" data-qid="q-shape-marker-01"></div>
+    <div class="eyebrow" data-semantic-role="supporting" data-qid="source-block-98846a3732f14a05" data-source-block-id="source-slide:1:text:6">🐝 꿀벌쌤</div>
+    <div class="author" data-semantic-role="supporting" data-qid="source-block-d998a880c1825a65" data-source-block-id="source-slide:1:text:10">꿀벌쌤 강의용 마스터 PPT</div>
+
+    <div class="main" data-qid="q-block-main-01" data-semantic-role="decoration">
+      <h1 class="title" data-semantic-role="title" data-qid="source-block-fb8ed3c6b1083cb4" data-source-block-id="source-slide:1:text:7">숏폼대행 <span data-qid="q-span-f32986c526a1" data-semantic-role="body">1인사업자 홀로서기</span></h1>
+      <div class="sub" data-semantic-role="body" data-qid="source-block-33e774472066bd01" data-source-block-id="source-slide:1:text:8">4주 · 총 8시간 · 온라인 실전 창업 과정</div>
+    </div>
+
+    <div class="claim" data-semantic-role="body" data-qid="source-block-81b3a560fe0b0a76" data-source-block-id="source-slide:1:text:9">영상 하나를 만드는 사람이 아니라<br><strong data-qid="q-strong-663977331dde" data-semantic-role="body">숏폼으로 돈을 버는 1인사업자</strong>가 되는 과정</div>
+    <div class="footer-line" data-semantic-role="decoration" data-qid="q-shape-line-01"></div>
+  </main>
+</body>
+</html>

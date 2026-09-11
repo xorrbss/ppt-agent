@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:135px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:32px;width:780px}
+.eyebrow{font-size:15px;line-height:18px;font-weight:700;letter-spacing:.06em;color:#08916E}
+.title{margin-top:12px;font-size:34px;line-height:45px;font-weight:800;color:#0F172A;letter-spacing:-.04em}
+.divider{position:absolute;left:64px;right:64px;bottom:0;height:1px;background:#E2E8F0}
+.body-wrap{position:absolute;left:0;right:0;top:155px;height:493px}
+.project-line{position:absolute;left:64px;top:0;font-size:18px;line-height:29px;font-weight:700;color:#002060}
+.content-grid{position:absolute;left:64px;right:64px;top:48px;height:421px;display:grid;grid-template-columns:760px 344px;gap:24px}
+.pillar-area{height:421px;padding:24px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.pillar-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:24px;row-gap:16px}
+.pillar-card{height:75px;display:flex;align-items:center;gap:18px;padding:0 20px;background:#F9F9F9;border:1px solid #E2E8F0;border-radius:12px}
+.pillar-index{width:8px;height:38px;flex:none;background:#08916E;border-radius:12px}
+.pillar-text{font-size:21px;line-height:31px;font-weight:700;color:#002060}
+.principle-panel{height:421px;padding:28px;background:#00140E;border-radius:12px;display:flex;flex-direction:column;justify-content:space-between}
+.principle-label{font-size:16px;line-height:24px;font-weight:800;letter-spacing:.12em;color:#219F88}
+.principle-rule{width:48px;height:3px;margin-top:18px;background:#08916E;border-radius:12px}
+.principle-copy{font-size:27px;line-height:1.55;font-weight:800;color:#FFFFFF;letter-spacing:-.045em}
+.principle-copy strong{color:#08916E}
+.principle-note{padding-top:20px;border-top:1px solid #219F88;font-size:17px;line-height:28px;font-weight:600;color:#CCECFF}
+.page-number{position:absolute;left:0;right:0;bottom:14px;height:16px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="135" style="height:135px" class="header-band" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="source-block-32bbe90152caa564" data-semantic-role="decoration" data-source-block-id="source-slide:25:text:3">
+    <div data-header-part="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-24" class="eyebrow">4주차</div>
+    <div data-header-part="title" data-semantic-role="title" data-qid="q-title-24" class="title">PART 1 | 제안서 만들기</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:155px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div data-semantic-role="supporting" data-qid="source-block-ffa18080f20d7e50" class="project-line" data-source-block-id="source-slide:25:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div data-semantic-role="decoration" data-qid="q-pillar-area-24" class="pillar-area">
+      <div class="pillar-grid" data-qid="source-block-8e52ed39bea27afd" data-semantic-role="decoration" data-source-block-id="source-slide:25:text:6">
+        <div data-semantic-role="decoration" data-qid="q-pillar-01-24" class="pillar-card">
+          <div class="pillar-index" data-qid="q-div-114831fd0de3" data-semantic-role="supporting"></div>
+          <div class="pillar-text" data-qid="q-div-f272a5929cad" data-semantic-role="body">나는 누구인가</div>
+        </div>
+        <div data-semantic-role="decoration" data-qid="q-pillar-02-24" class="pillar-card">
+          <div class="pillar-index" data-qid="q-div-59943eec40c1" data-semantic-role="supporting"></div>
+          <div class="pillar-text" data-qid="q-div-0384fd63654d" data-semantic-role="body">어떤 업종을 돕는가</div>
+        </div>
+        <div data-semantic-role="decoration" data-qid="q-pillar-03-24" class="pillar-card">
+          <div class="pillar-index" data-qid="q-div-9f44cc6d7241" data-semantic-role="supporting"></div>
+          <div class="pillar-text" data-qid="q-div-ab426ede69c3" data-semantic-role="body">무엇을 제작하는가</div>
+        </div>
+        <div data-semantic-role="decoration" data-qid="q-pillar-04-24" class="pillar-card">
+          <div class="pillar-index" data-qid="q-div-7469fd5b1e39" data-semantic-role="supporting"></div>
+          <div class="pillar-text" data-qid="q-div-893bb0bd7247" data-semantic-role="body">작업 과정</div>
+        </div>
+        <div data-semantic-role="decoration" data-qid="q-pillar-05-24" class="pillar-card">
+          <div class="pillar-index" data-qid="q-div-c29ffe6fae58" data-semantic-role="supporting"></div>
+          <div class="pillar-text" data-qid="q-div-f83409601b93" data-semantic-role="body">포트폴리오</div>
+        </div>
+        <div data-semantic-role="decoration" data-qid="q-pillar-06-24" class="pillar-card">
+          <div class="pillar-index" data-qid="q-div-15499efc9df6" data-semantic-role="supporting"></div>
+          <div class="pillar-text" data-qid="q-div-f9c046c53379" data-semantic-role="body">가격과 포함 범위</div>
+        </div>
+        <div data-semantic-role="decoration" data-qid="q-pillar-07-24" class="pillar-card">
+          <div class="pillar-index" data-qid="q-div-7b313232cd90" data-semantic-role="supporting"></div>
+          <div class="pillar-text" data-qid="q-div-58a099cf877f" data-semantic-role="body">문의 방법</div>
+        </div>
+      </div>
+    </div>
+
+    <div data-semantic-role="decoration" data-qid="q-principle-panel-24" class="principle-panel">
+      <div data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+        <div data-semantic-role="supporting" data-qid="source-block-8103387515e48443" class="principle-label" data-source-block-id="source-slide:25:text:9">원칙</div>
+        <div class="principle-rule" data-qid="q-div-0ddd902ead48" data-semantic-role="decoration"></div>
+      </div>
+      <div data-semantic-role="body" data-qid="source-block-35c99556c1c30c48" class="principle-copy" data-source-block-id="source-slide:25:text:10">제안서는 예쁜 문서보다<br><strong data-qid="q-strong-663977331dde" data-semantic-role="body">‘사장님이 이해하기 쉬운 문서’</strong>가 우선</div>
+      <div data-semantic-role="supporting" data-qid="q-principle-note-24" class="principle-note">필요한 내용을 빠짐없이 담고<br>이해의 순서대로 배열합니다.</div>
+    </div>
+  </div>
+</div>
+
+<div data-semantic-role="supporting" data-qid="source-block-9b064af20b7dc33a" class="page-number" data-source-block-id="source-slide:25:text:4">25</div>
+</body>
+</html>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#08916E}
+.header-left{position:absolute;left:64px;top:20px;width:820px}
+.eyebrow{height:20px;font-size:14px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#E0F3FF}
+.title{margin-top:6px;font-size:32px;line-height:39px;font-weight:800;color:#FFFFFF}
+.header-right{position:absolute;left:956px;top:20px;width:260px;height:76px;background:#00140E;color:#FFFFFF;padding:18px 20px;text-align:right;font-size:15px;line-height:22px;font-weight:700}
+.body-wrap{position:absolute;left:0;right:0;top:120px;height:528px}
+.claim-row{display:flex;align-items:flex-end;justify-content:space-between;width:1152px;height:62px;margin-left:64px}
+.claim{font-size:25px;line-height:34px;font-weight:800;color:#1D1D1B}
+.claim strong{color:#08916E}
+.client-line{font-size:18px;line-height:28px;color:#4B5563;font-weight:700}
+.content-grid{display:grid;grid-template-columns:398px 730px;gap:24px;width:1152px;height:420px;margin:18px 0 0 64px}
+.panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.left-panel{height:420px;padding:28px;display:flex;flex-direction:column;justify-content:space-between}
+.panel-kicker{font-size:15px;line-height:22px;letter-spacing:.02em;font-weight:700;color:#08916E}
+.big-number{margin-top:18px;font-family:"IBM Plex Mono","Consolas",monospace;font-size:64px;line-height:70px;font-weight:700;color:#08916E}
+.big-label{margin-top:8px;font-size:22px;line-height:32px;font-weight:800;color:#002060}
+.rule{width:100%;height:1px;background:#E2E8F0}
+.small-copy{font-size:18px;line-height:29px;font-weight:600;color:#1D1D1B}
+.right-panel{height:420px;padding:24px 28px}
+.right-head{display:flex;align-items:center;justify-content:space-between;height:38px}
+.right-title{font-size:24px;line-height:32px;font-weight:800;color:#002060}
+.formula{display:grid;grid-template-columns:1fr 52px 1fr 52px 1fr;align-items:center;height:132px;margin-top:18px;background:#E0F3FF;border-radius:12px;padding:20px 18px}
+.stage{height:82px;background:#FFFFFF;border:1px solid #CCECFF;border-radius:12px;padding:16px 14px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:20px;line-height:29px;font-weight:800;color:#002060}
+.arrow{position:relative;height:2px;background:#219F88;margin:0 12px}
+.arrow:after{;position:absolute;right:-1px;top:-5px;width:10px;height:10px;border-top:2px solid #219F88;border-right:2px solid #219F88;transform:rotate(45deg)}
+.bullet-area{margin-top:20px}
+.bullet-head{font-size:18px;line-height:27px;font-weight:800;color:#08916E}
+.bullet-list{display:grid;grid-template-columns:1fr 1fr;gap:11px 24px;margin-top:12px}
+.bullet{font-size:18px;line-height:28px;color:#1D1D1B;font-weight:600;padding-left:14px;border-left:4px solid #219F88}
+.takeaway{margin-top:17px;padding:12px 16px;background:#00140E;border-radius:12px;color:#FFFFFF;font-size:18px;line-height:27px;font-weight:700}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="96" style="height:96px" data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-12">릴스 기획</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-48ed582637691060" data-source-block-id="source-slide:13:text:3">2주차 PART 1 | 릴스 기획</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-a1581def94dc75ee" data-source-block-id="source-slide:13:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:120px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim-row" data-qid="q-div-75b3498fbbe1" data-semantic-role="decoration">
+    <div class="claim" data-semantic-role="body" data-qid="q-claim-12"><strong data-qid="source-block-fe8f22469e5a4536" data-semantic-role="body" data-source-block-id="source-slide:13:text:6">3초</strong> 안에 사람을 멈추게 하는 첫 장면이 핵심입니다.</div>
+    <div class="client-line" data-semantic-role="supporting" data-qid="q-client-line-12">숏폼 콘텐츠 설계 원칙</div>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="panel left-panel" data-semantic-role="decoration" data-qid="q-left-card-12">
+      <div data-qid="q-div-621f91553489" data-semantic-role="decoration">
+        <div class="panel-kicker" data-semantic-role="supporting" data-qid="q-kicker-12">첫 장면의 역할</div>
+        <div class="big-number" data-semantic-role="supporting" data-qid="q-number-12">3초</div>
+        <div class="big-label" data-semantic-role="supporting" data-qid="source-block-9992ecb1bc1f6711" data-source-block-id="source-slide:13:text:7">사람을 멈추게 하는 첫 장면</div>
+      </div>
+      <div class="rule" data-qid="q-div-cbd8ff350888" data-semantic-role="decoration"></div>
+      <div class="small-copy" data-semantic-role="body" data-qid="q-small-copy-12">첫 순간에 궁금증을 만들고, 한 가지 메시지로 집중시킨 뒤, 다음 행동까지 자연스럽게 연결합니다.</div>
+    </div>
+
+    <div class="panel right-panel" data-semantic-role="decoration" data-qid="q-right-card-12">
+      <div class="right-head" data-qid="q-div-f2bca9bf446d" data-semantic-role="decoration">
+        <div class="right-title" data-semantic-role="supporting" data-qid="source-block-68a66258f75a76f1" data-source-block-id="source-slide:13:text:11">기획 공식</div>
+      </div>
+
+      <div class="formula" data-qid="source-block-eece315772d8e253" data-semantic-role="decoration" data-source-block-id="source-slide:13:text:12">
+        <div class="stage" data-semantic-role="body" data-qid="q-stage-problem-12">문제 제시</div>
+        <div class="arrow" data-qid="q-div-f2e763bf438c" data-semantic-role="decoration"></div>
+        <div class="stage" data-semantic-role="body" data-qid="q-stage-solution-12">해결/정보</div>
+        <div class="arrow" data-qid="q-div-d3cb923b1c37" data-semantic-role="decoration"></div>
+        <div class="stage" data-semantic-role="body" data-qid="q-stage-action-12">행동 유도</div>
+      </div>
+
+      <div class="bullet-area" data-qid="q-div-a5158244fc18" data-semantic-role="decoration">
+        <div class="bullet-head" data-semantic-role="supporting" data-qid="q-bullet-head-12">구성 체크포인트</div>
+        <div class="bullet-list" data-qid="source-block-424c834f87ab1716" data-semantic-role="decoration" data-source-block-id="source-slide:13:text:8">
+          <div class="bullet" data-semantic-role="body" data-qid="q-bullet-1-12">• 후킹: 궁금증 · 문제 · 반전</div>
+          <div class="bullet" data-semantic-role="body" data-qid="q-bullet-2-12">• 본문: 한 가지 메시지만</div>
+          <div class="bullet" data-semantic-role="body" data-qid="q-bullet-3-12">• 마무리: 댓글 · 문의 · 방문 등 유도</div>
+          <div class="bullet" data-semantic-role="body" data-qid="q-bullet-4-12">• 정보형 / 홍보형 / 공감형 / 코믹형</div>
+        </div>
+      </div>
+
+      <div class="takeaway" data-semantic-role="body" data-qid="q-takeaway-12">후킹으로 멈추게 하고, 정보로 설득하며, 행동으로 완성합니다.</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-927a431dd72ca024" data-source-block-id="source-slide:13:text:4">13</div>
+</body>
+</html>

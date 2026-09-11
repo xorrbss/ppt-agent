@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;height:117px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:28px;width:960px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.body-wrap{position:absolute;left:0;right:0;top:141px;width:1152px;margin-left:64px}
+.claim{height:53px;display:flex;align-items:flex-start}
+.claim-text{font-size:25px;line-height:36px;font-weight:700;color:#1D1D1B}
+.claim-text strong{color:#08916E}
+.architecture-grid{display:grid;grid-template-columns:692px 436px;gap:24px;height:414px}
+.roadmap-panel{height:414px;padding:22px 24px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.roadmap-head{height:34px;display:flex;align-items:center;gap:12px}
+.head-mark{width:8px;height:24px;background:#08916E;border-radius:12px}
+.head-label{font-size:20px;line-height:28px;font-weight:700;color:#002060}
+.roadmap-line{position:relative;margin-top:15px}
+.roadmap-line:after{;position:absolute;left:27px;top:27px;width:2px;height:300px;background:#CCECFF}
+.week-card{position:relative;z-index:1;height:75px;margin-bottom:10px;display:grid;grid-template-columns:68px 1fr;align-items:center;border:1px solid #D8E5EE;border-radius:12px;background:#F9F9F9}
+.week-number{margin-left:16px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:#002060;color:#FFFFFF;font-family:"IBM Plex Mono","Consolas",monospace;font-size:16px;line-height:20px;font-weight:700}
+.week-copy{padding:0 18px 0 4px}
+.week-label{font-size:16px;line-height:22px;font-weight:700;color:#08916E}
+.week-text{margin-top:3px;font-size:18px;line-height:27px;font-weight:700;color:#1D1D1B}
+.image-panel{height:286px;padding:10px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.image-panel img{display:block;width:414px;height:264px;border-radius:12px;background:linear-gradient(135deg,#E0F3FF,#CCECFF);object-fit:cover}
+.image-caption{margin-top:16px;padding:18px 20px;background:#EAF7F4;border-radius:12px;border-left:6px solid #08916E}
+.caption-line{font-size:19px;line-height:29px;font-weight:700;color:#164F43}
+.caption-line strong{color:#08916E}
+.page-marker{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="117" class="header-band" style="height:117px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-qid="q-eyebrow-4week" data-semantic-role="supporting">전체 로드맵</div>
+    <div data-header-part="title" class="title" data-qid="source-block-f8737eca1e180d55" data-semantic-role="title" data-source-block-id="source-slide:3:text:3">4주 전체 로드맵</div>
+  </div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:141px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+    <div class="claim-text" data-semantic-role="body" data-qid="source-block-a3820e020b92952b" data-source-block-id="source-slide:3:text:4">매주 ‘배운 것’보다 <strong data-semantic-role="body" data-qid="q-claim-keyword">‘완성한 것’</strong>을 남깁니다.</div>
+  </div>
+
+  <div class="architecture-grid" data-qid="q-div-7381995bf616" data-semantic-role="decoration">
+    <div class="roadmap-panel" data-semantic-role="decoration" data-qid="q-card-roadmap">
+      <div class="roadmap-head" data-qid="q-div-6ce2e5d31511" data-semantic-role="decoration">
+        <div class="head-mark" data-qid="q-div-4ccd9f02e221" data-semantic-role="decoration"></div>
+        <div class="head-label" data-semantic-role="supporting" data-qid="q-label-roadmap">4주 전체 로드맵</div>
+      </div>
+      <div class="roadmap-line" data-qid="q-div-d32b01661647" data-semantic-role="decoration">
+        <div class="week-card" data-semantic-role="decoration" data-qid="q-card-week1">
+          <div class="week-number" data-semantic-role="supporting" data-qid="source-block-08ed6e21ae1287a5" data-source-block-id="source-slide:3:text:9">1주차</div>
+          <div class="week-copy" data-qid="q-div-b629fc5524cf" data-semantic-role="decoration">
+            <div class="week-label" data-semantic-role="supporting" data-qid="q-label-week1">1주차</div>
+            <div class="week-text" data-semantic-role="body" data-qid="source-block-a97c1c2951725590" data-source-block-id="source-slide:3:text:10">사업 구조 + 상품 + 인스타/블로그 세팅</div>
+          </div>
+        </div>
+        <div class="week-card" data-semantic-role="decoration" data-qid="q-card-week2">
+          <div class="week-number" data-semantic-role="supporting" data-qid="source-block-c53d1f4747aeff31" data-source-block-id="source-slide:3:text:13">2주차</div>
+          <div class="week-copy" data-qid="q-div-1f6ce5f40aad" data-semantic-role="decoration">
+            <div class="week-label" data-semantic-role="supporting" data-qid="q-label-week2">2주차</div>
+            <div class="week-text" data-semantic-role="body" data-qid="source-block-e9087b315009aadc" data-source-block-id="source-slide:3:text:14">기획 + 촬영 + AI + 캡컷 + 영상 완성</div>
+          </div>
+        </div>
+        <div class="week-card" data-semantic-role="decoration" data-qid="q-card-week3">
+          <div class="week-number" data-semantic-role="supporting" data-qid="source-block-c8164ca49e878134" data-source-block-id="source-slide:3:text:17">3주차</div>
+          <div class="week-copy" data-qid="q-div-2002012d01eb" data-semantic-role="decoration">
+            <div class="week-label" data-semantic-role="supporting" data-qid="q-label-week3">3주차</div>
+            <div class="week-text" data-semantic-role="body" data-qid="source-block-24660404e0f8b06a" data-source-block-id="source-slide:3:text:18">첫 고객 + 무료 샘플 + 영업 실전</div>
+          </div>
+        </div>
+        <div class="week-card" data-semantic-role="decoration" data-qid="q-card-week4">
+          <div class="week-number" data-semantic-role="supporting" data-qid="source-block-b952d4eaa184d728" data-source-block-id="source-slide:3:text:21">4주차</div>
+          <div class="week-copy" data-qid="q-div-eba832b3367d" data-semantic-role="decoration">
+            <div class="week-label" data-semantic-role="supporting" data-qid="q-label-week4">4주차</div>
+            <div class="week-text" data-semantic-role="body" data-qid="source-block-bd0d6a7bf06ae078" data-source-block-id="source-slide:3:text:22">제안서 + 상담 + 계약 + 장기고객</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+      <div class="image-panel" data-qid="q-div-5e0d969fd99d" data-semantic-role="decoration">
+        <img data-semantic-role="image" data-qid="q-image-4week" data-illust-prompt="A premium editorial-style visual map of a four-week solo short-form video agency launch roadmap, arranged as four connected stages from left to right on a clean studio desk, with a notebook, smartphone showing social media setup, camera and editing interface, sample video portfolio, sales proposal document and signed contract. Viewpoint: slightly elevated three-quarter angle, calm organized workspace, no people, no logos, no extra narrative text, labels: &quot;1주차&quot;, &quot;2주차&quot;, &quot;3주차&quot;, &quot;4주차&quot;" alt="4주 전체 로드맵">
+      </div>
+      <div class="image-caption" data-qid="q-div-7db014dad3ff" data-semantic-role="supporting">
+        <div class="caption-line" data-semantic-role="supporting" data-qid="source-block-d4f607d686375d21" data-source-block-id="source-slide:3:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-marker" data-semantic-role="supporting" data-qid="source-block-295cda5fd63eda2c" data-source-block-id="source-slide:3:text:5">03</div>
+</body>
+</html>
