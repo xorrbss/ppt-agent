@@ -10,6 +10,7 @@ from fastapi import Request
 from starlette.responses import Response
 
 from api.v1.auth.secret_store import (
+    clear_auth_secret,
     get_or_create_auth_secret,
     peek_auth_secret,
     rotate_auth_secret,
@@ -152,12 +153,13 @@ def clear_stored_credentials() -> None:
     """Remove stored credentials; next boot will request setup again."""
     config = _load_user_config()
     removed = False
-    for key in ("AUTH_USERNAME", "AUTH_PASSWORD_HASH", "AUTH_SECRET_KEY"):
+    for key in AUTH_CONFIG_FIELDS:
         if key in config:
             config.pop(key, None)
             removed = True
     if removed:
         _save_user_config(config, removed_keys=AUTH_CONFIG_FIELDS)
+    clear_auth_secret()
 
 
 def verify_credentials(username: str, password: str) -> bool:

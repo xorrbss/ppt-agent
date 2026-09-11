@@ -18,6 +18,7 @@ import uuid
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 import httpx
+import pytest
 
 
 def _free_tcp_port() -> int:
@@ -348,6 +349,12 @@ def test_production_api_external_worker_restart_and_sse_backfill(
 ) -> None:
     """Exercise migrations, API lifespan, process recovery and public wire contracts."""
 
+    if os.name != "nt":
+        pytest.skip(
+            "The session signing secret lives in the credential vault and the "
+            "only non-server backend is Windows DPAPI"
+        )
+
     server_root = Path(__file__).resolve().parents[2]
     database_path = tmp_path / "workspace-production-lifecycle.db"
     env = os.environ.copy()
@@ -366,6 +373,10 @@ def test_production_api_external_worker_restart_and_sse_backfill(
             # run instead of racing another Windows process in /tmp/presenton.
             "TEMP_DIRECTORY": str((tmp_path / "temp").resolve()),
             "USER_CONFIG_PATH": str(tmp_path / "userConfig.json"),
+            # AUTH_OVERRIDE_FROM_ENV rotates the session signing secret, which
+            # is stored in the credential vault rather than the config file.
+            "PROVIDER_CREDENTIAL_BACKEND": "desktop_vault",
+            "PROVIDER_DESKTOP_VAULT_DIRECTORY": str(tmp_path / "credential-vault"),
             "AUTH_USERNAME": "gate7_admin",
             "AUTH_PASSWORD": "gate7-password",
             "AUTH_OVERRIDE_FROM_ENV": "true",
