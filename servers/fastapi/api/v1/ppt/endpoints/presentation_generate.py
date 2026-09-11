@@ -133,9 +133,8 @@ from services.presentation_generation_job_service import (
     release_generation_job,
     request_sha256,
 )
-from services.presentation_export_router import (
-    PresentationExportExecution,
-    execute_presentation_export,
+from services.presentation_generation_export_chain import (
+    finalize_generation_export_chain,
 )
 from services.references import (
     ReferenceProviderError,
@@ -235,12 +234,6 @@ async def _publish_staged_presentation(*args: Any, **kwargs: Any) -> str:
         publish_artifact=publish_workspace_generation_artifact,
         compensate_artifact=compensate_workspace_artifact,
         stage_image_artifacts=stage_workspace_chat_artifacts_for_publication,
-    )
-
-
-async def _execute_generation_export(*args: Any, **kwargs: Any) -> PresentationExportExecution:
-    return await generation_staging._execute_generation_export(
-        *args, **kwargs, execute_export=execute_presentation_export
     )
 
 
@@ -1108,6 +1101,15 @@ async def generate_presentation_handler(
                 language_to_use,
                 sql_session,
                 generation_job,
+            )
+            # The single point where "generation finished and an export was
+            # requested" is decided, for the synchronous and the durable path
+            # alike: this is the one successful completion of the handler.
+            response = await finalize_generation_export_chain(
+                sql_session,
+                response=response,
+                export_as=request.export_as,
+                async_status=async_status,
             )
             if request.trigger_webhook:
                 CONCURRENT_SERVICE.run_task(
