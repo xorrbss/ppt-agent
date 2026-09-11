@@ -26,7 +26,6 @@ from typing import Any
 from services.authored_vnext.capability_registry import capability_metadata
 from services.source_content.source_runs import (
     SourceRunProjection,
-    parse_source_binding_id,
     project_source_runs,
     source_run_binding_id,
 )

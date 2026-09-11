@@ -26,7 +26,6 @@ from typing import Any, List, Optional, Tuple
 
 import dirtyjson
 from fastapi import (
-    APIRouter,
     BackgroundTasks,
     Depends,
     Header,
@@ -34,7 +33,6 @@ from fastapi import (
     Path,
     Request,
 )
-from pydantic import BaseModel
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,6 +44,14 @@ from api.v1.ppt.endpoints.presentation_generation_staging import (
     _uses_isolated_render_staging,
     _discard_render_staging,
     _request_from_durable_payload,
+)
+from api.v1.ppt.endpoints.presentation_generate_admission import (
+    AsyncPresentationGenerationAdmissionResponse,
+    AsyncPresentationGenerationTaskResponse,
+    PRESENTATION_GENERATE_ROUTER,
+    _chat_first_generation_enabled,
+    _require_local_legacy_async_generation,
+    _require_local_sync_generation,
 )
 from constants.presentation import (
     DEFAULT_ATTACHMENT_GENERATION_PROMPT,
@@ -163,12 +169,6 @@ from services.workspace_service import (
     WorkspaceServiceError,
     bootstrap_workspace,
 )
-from services.workspace_runtime_profile import (
-    UnsupportedWorkspaceRuntimeError,
-    WorkspaceRuntimeKind,
-    require_supported_workspace_runtime,
-    resolve_workspace_runtime_profile,
-)
 from services.public_operation_admission import (
     PublicAdmissionRejected,
     admit_public_operation_compatible_v2,
@@ -242,16 +242,6 @@ async def _execute_generation_export(*args: Any, **kwargs: Any) -> PresentationE
     return await generation_staging._execute_generation_export(
         *args, **kwargs, execute_export=execute_presentation_export
     )
-
-
-from api.v1.ppt.endpoints.presentation_generate_admission import (
-    AsyncPresentationGenerationAdmissionResponse,
-    AsyncPresentationGenerationTaskResponse,
-    PRESENTATION_GENERATE_ROUTER,
-    _chat_first_generation_enabled,
-    _require_local_legacy_async_generation,
-    _require_local_sync_generation,
-)
 
 
 def _authored_exact_admission_exception(

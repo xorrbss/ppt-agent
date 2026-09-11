@@ -65,7 +65,7 @@ def _union_area(boxes) -> float:
     """Exact union of axis-aligned browser line rectangles (avoid double count)."""
     edges = sorted({edge for box in boxes for edge in (box[0], box[2])})
     area = 0.0
-    for left, right in zip(edges, edges[1:]):
+    for left, right in zip(edges, edges[1:], strict=False):
         intervals = sorted((box[1], box[3]) for box in boxes if box[0] < right and box[2] > left)
         bottom = -math.inf
         height = 0.0
@@ -251,7 +251,10 @@ def _style_report(baseline: Mapping[str, Any], candidate: Mapping[str, Any], con
         if qid in context.get("protected_qids", ()):
             old_box = _measured_geometry(before.get("bbox"))
             new_box = _measured_geometry(after.get("bbox"))
-            if old_box is None or new_box is None or any(abs(old - new) > GEOMETRY_TOLERANCE_PX for old, new in zip(old_box, new_box)):
+            if old_box is None or new_box is None or any(
+                abs(old - new) > GEOMETRY_TOLERANCE_PX
+                for old, new in zip(old_box, new_box, strict=True)
+            ):
                 failures.append(f"repair_protected_geometry_changed:{qid}")
     if title_fonts and body_fonts:
         if min(item[0] for item in title_fonts) >= max(item[0] for item in body_fonts) and min(item[1] for item in title_fonts) < max(item[1] for item in body_fonts):

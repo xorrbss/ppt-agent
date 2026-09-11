@@ -860,7 +860,8 @@ def _validate_css_value(
             )
             for part in parts
         )
-        if valid: value = " ".join(parts)
+        if valid:
+            value = " ".join(parts)
     elif prop in {"grid-column", "grid-row"}:
         valid = bool(re.fullmatch(r"\d+\s*/\s*span\s+\d+", value))
     if not valid:

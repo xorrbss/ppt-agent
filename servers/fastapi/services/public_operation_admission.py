@@ -7,11 +7,9 @@ provider-response fields.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from inspect import isawaitable
-import re
 import uuid
 
 from sqlalchemy import and_, case, exists, func, or_, text, update
@@ -32,11 +30,6 @@ from migration_revision_contract import (
     REVISION_PUBLIC_CONTROL_PLANE,
 )
 from utils.datetime_utils import get_current_utc_datetime
-from utils.owner_context import (
-    get_current_owner_id,
-    get_current_tenant_id,
-    get_current_trace_id,
-)
 
 
 from models.sql.workspace import WorkspaceOperation
@@ -55,7 +48,6 @@ from services.public_workstation_runtime_profile import (
 
 
 from services.public_operation_admission_models import (
-    CONTENT_BRIEF_RETRY_REQUESTS,
     PUBLIC_PHASE2_DEFAULT_POLICY_VERSION,
     PUBLIC_PROVIDER_STAGES,
     PrincipalContext,

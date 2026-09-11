@@ -29,13 +29,10 @@ from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
     inspect_browser_source_readback,
 )
-from services.source_content.source_runs import parse_source_binding_id
 from utils.authored_dom_quality import (
     has_dom_quality_regression,
     inspect_authored_dom,
-    normalize_browser_metrics,
 )
-from utils.authored_dom_text_escape import find_text_escapes
 
 
 REPAIR_GATE_VERSION = "source-structural-repair-v3"
