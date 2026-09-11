@@ -193,6 +193,32 @@ fixture contents are unchanged by the correction — only the recorded basis is.
 `verdict.json` now carries `workspace_operation_id` alongside `job_id` and states the join it
 came from, so the mapping is checkable rather than asserted.
 
+### The 43-page contract manifest, exported (T5)
+
+`fixtures/manifest-43p/` carries the contract fixture itself, by
+`export_43p_manifest.py`: `manifest.json` (all 43 units and their blocks, 2.0 MiB),
+`projection.json` (`project_source_runs` for each of the 965 text blocks, keyed by
+`sourceBlockId` and carrying the unit it belongs to, 0.5 MiB) and `README.json` with the
+provenance. The export refuses to write if the counts are not 43/96 or if either payload
+matches a secret-shaped pattern.
+
+Projection over the 965 text blocks: **1,317 runs, 225 blocks with more than one run** — a
+quarter of the blocks are multi-run, against 57 of 289 in the 35-slide deck.
+
+**The choice of row had to be made deliberately.** That `source_digest` has **35 manifest rows,
+each with its own `manifest_digest`**, so there is no single stored manifest to point at. Grouped
+by text payload (block ids and their text) they fall into two:
+
+| group | rows | window | meaning |
+|---|---|---|---|
+| `d3839b142c32` | **31** | 2026-08-27 18:42 → 09-02 07:31 | current id assignment, identical across all 31 rows |
+| `1ae301686e36` | 4 | 2026-08-27 15:43 → 17:16 | superseded assignment: 450 ids exist on only one side, and 425 shared ids carry *different text* |
+
+The export takes the latest row of the 31 (`manifest_digest sha256:6f25a000…`, snapshot
+`0c6d0a0e…`, analysed 2026-09-02 07:31) and records the superseded group in `README.json`. All 35
+rows agree on 43 units, 965 text blocks and 96 image blocks, so the contract match is robust; only
+the block identity differs, and it stopped changing after 2026-08-27 17:16.
+
 ## Limits of this pass
 
 - 3.2's job ids are resolved for all eleven runs through the recorded `operation_id`, and the

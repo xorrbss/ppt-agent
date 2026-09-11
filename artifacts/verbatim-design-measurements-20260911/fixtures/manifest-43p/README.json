@@ -1,0 +1,40 @@
+{
+ "contract": "source-content.template-restyle-contract@7",
+ "referenceSnapshotId": "0c6d0a0e-4921-4adc-a274-50182cfa8411",
+ "sourceDigest": "sha256:32b098831a84774dfc35820fed6e21e715259e2fc4e72e586a63c3fc650f1188",
+ "manifestDigest": "sha256:6f25a0005dd243f65748cce3917d2192af4a88ac686579fb29fad1fad41184f3",
+ "contractVersion": "source-content-manifest/v1",
+ "sourceType": "pptx",
+ "units": 43,
+ "imageBlocks": 96,
+ "counts": {
+  "sourceUnits": 43,
+  "textBlocks": 965,
+  "tableCells": 66,
+  "chartValues": 29,
+  "uniqueImages": 77,
+  "imageOccurrences": 96,
+  "rasterFallbackBlocks": 0
+ },
+ "projection": {
+  "text_blocks": 965,
+  "projected": 965,
+  "failed": 0,
+  "runs": 1317,
+  "multi_run": 225
+ },
+ "chosenCreatedAt": "2026-09-02 07:31:42.021391+09:00",
+ "textPayloadFingerprint": "d3839b142c32",
+ "equivalentRows": 31,
+ "supersededGroups": [
+  {
+   "fingerprint": "1ae301686e36",
+   "rows": 4,
+   "created": [
+    "2026-08-27 15:43:26.944043+09:00"
+   ]
+  }
+ ],
+ "selection": "The same source_digest has 35 manifest rows, each with its own manifest_digest. Rows were grouped by text payload (block ids and their text); the largest group is the current id assignment and is identical across its rows, so the latest row of that group was taken. The smaller group is an older id assignment, superseded on 2026-08-27: 450 ids exist in only one side and 425 shared ids carry different text.",
+ "note": "Exported read-only from source_content_manifests for T5. projection.json is project_source_runs() per text block, keyed by sourceBlockId, with the unit it belongs to."
+}
