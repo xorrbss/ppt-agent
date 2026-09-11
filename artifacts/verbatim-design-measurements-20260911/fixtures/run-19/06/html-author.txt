@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:106px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:24px;width:960px}
+.eyebrow{font-size:14px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:38px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{width:1280px;margin-top:28px}
+.body-inner{width:1152px;margin-left:64px}
+.identity{height:48px;display:flex;align-items:center;gap:24px;border-bottom:1px solid #E2E8F0}
+.chapter-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:25px;line-height:32px;font-weight:700;color:#08916E;letter-spacing:.02em}
+.project-name{font-size:22px;line-height:32px;font-weight:700;color:#00140E}
+.architecture-grid{display:grid;grid-template-columns:660px 468px;gap:24px;margin-top:20px;height:398px}
+.module-map{position:relative;display:grid;grid-template-columns:318px 318px;grid-template-rows:118px 118px 118px;gap:12px 24px}
+.module-map-line{position:absolute;background:#219F88;opacity:.7}
+.line-h1{left:318px;top:58px;width:24px;height:2px}
+.line-h2{left:318px;top:188px;width:24px;height:2px}
+.line-v{left:329px;top:58px;width:2px;height:132px}
+.module-card{position:relative;padding:25px 22px 18px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.module-card:after{;position:absolute;left:0;top:0;width:6px;height:100%;background:#08916E;border-radius:12px 0 0 12px}
+.module-card p{margin:0;font-size:18px;line-height:1.55;font-weight:700;color:#002060}
+.module-card.primary{background:#E0F3FF;border-color:#CCECFF}
+.module-card.primary p{color:#00140E}
+.evidence-side{display:flex;flex-direction:column;gap:18px}
+.illustration-panel{width:468px;height:248px;padding:10px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.illustration-panel img{display:block;width:446px;height:226px;border-radius:12px;background:#E0F3FF;object-fit:cover}
+.insight-card{height:132px;padding:20px 24px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.insight-label{font-size:15px;line-height:23px;font-weight:700;letter-spacing:.08em;color:#219F88}
+.insight-text{margin-top:8px;font-size:22px;line-height:1.45;font-weight:700;color:#00140E}
+.insight-text strong{color:#08916E}
+.question-card{height:132px;padding:20px 24px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px}
+.question-label{font-size:15px;line-height:23px;font-weight:700;letter-spacing:.08em;color:#219F88}
+.question-text{margin-top:8px;font-size:20px;line-height:1.5;font-weight:700;color:#002060}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="106" class="header-band" style="height:106px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-6a1f">숏폼 대행사업 구조</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-9366bacde0801bd1" data-source-block-id="source-slide:7:text:3">1주차 PART 1 | 숏폼 대행사업의 구조</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:28px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="body-inner" data-qid="q-div-b79d9d1fba65" data-semantic-role="decoration">
+    <div class="identity" data-qid="q-div-ca97991e836c" data-semantic-role="decoration">
+      <div class="chapter-number" data-semantic-role="supporting" data-qid="source-block-655b2c17b138ffa8" data-source-block-id="source-slide:7:text:4">07</div>
+      <div class="project-name" data-semantic-role="body" data-qid="source-block-66cc49b73bfdaf11" data-source-block-id="source-slide:7:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    </div>
+
+    <div class="architecture-grid" data-qid="q-div-7381995bf616" data-semantic-role="decoration">
+      <div class="module-map" data-qid="source-block-d54d15f845104229" data-semantic-role="decoration" data-source-block-id="source-slide:7:text:6">
+        <div class="module-map-line line-h1" data-qid="q-div-9075c266a56d" data-semantic-role="decoration"></div>
+        <div class="module-map-line line-h2" data-qid="q-div-b7069d048f28" data-semantic-role="decoration"></div>
+        <div class="module-map-line line-v" data-qid="q-div-318ca1f8401d" data-semantic-role="decoration"></div>
+
+        <div class="module-card primary" data-qid="q-card-6e51" data-semantic-role="decoration">
+          <p data-semantic-role="body" data-qid="q-p-a03aca7ac95b">숏폼 대행사는 무엇을 돈 받고 해주는가</p>
+        </div>
+        <div class="module-card" data-qid="q-card-6f62" data-semantic-role="decoration">
+          <p data-semantic-role="body" data-qid="q-p-65a6a4ad3681">영상 편집자와 대행사의 차이</p>
+        </div>
+        <div class="module-card" data-qid="q-card-6073" data-semantic-role="decoration">
+          <p data-semantic-role="body" data-qid="q-p-042c7cf72ab8">1인이 맡을 수 있는 업무 범위</p>
+        </div>
+        <div class="module-card" data-qid="q-card-6184" data-semantic-role="decoration">
+          <p data-semantic-role="body" data-qid="q-p-e8bd4a6af1c2">고객이 실제로 원하는 결과</p>
+        </div>
+        <div class="module-card primary" data-qid="q-card-6295" data-semantic-role="decoration">
+          <p data-semantic-role="body" data-qid="q-p-d3965901eabe">월 관리형 대행의 기본 구조</p>
+        </div>
+      </div>
+
+      <div class="evidence-side" data-qid="q-div-3684a1a04c8f" data-semantic-role="decoration">
+        <div class="illustration-panel" data-qid="q-div-fb0802c39681" data-semantic-role="decoration">
+          <img data-semantic-role="image" data-qid="q-image-63a6" data-illust-prompt="A premium vector-like operating model for a one-person short-form agency: a central content operations hub connects client business needs, short-form video editing, recurring monthly management, and measurable customer outcomes. Landscape composition, clear modular nodes, restrained editorial diagram, no people, no decorative background text. labels: &quot;숏폼 대행사는 무엇을 돈 받고 해주는가&quot;, &quot;영상 편집자와 대행사의 차이&quot;, &quot;고객이 실제로 원하는 결과&quot;, &quot;월 관리형 대행의 기본 구조&quot;" style="width:446px;height:226px">
+        </div>
+        <div class="insight-card" data-qid="q-insight-64b7" data-semantic-role="decoration">
+          <div class="insight-label" data-semantic-role="supporting" data-qid="source-block-89815c94430fc4bb" data-source-block-id="source-slide:7:text:9">핵심</div>
+          <div class="insight-text" data-semantic-role="body" data-qid="source-block-63e840416b8365ef" data-source-block-id="source-slide:7:text:10">‘영상’이 아니라 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">‘콘텐츠 운영’</strong>을 판다</div>
+        </div>
+        <div class="question-card" data-qid="q-question-65c8" data-semantic-role="decoration">
+          <div class="question-label" data-semantic-role="supporting" data-qid="source-block-f87f57377a8365d6" data-source-block-id="source-slide:7:text:13">생각할 질문</div>
+          <div class="question-text" data-semantic-role="body" data-qid="source-block-50ea3177f0052651" data-source-block-id="source-slide:7:text:14">나는 어떤 사장님에게 강한가?</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="q-page-6609">07</div>
+</body>
+</html>

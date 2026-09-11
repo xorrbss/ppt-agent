@@ -1,0 +1,56 @@
+{
+ "run": "run-19",
+ "slide_index": 8,
+ "fixture_role": "authoring_passed",
+ "is_failing_slide": false,
+ "authoring_passed": true,
+ "job_id": "0e66d677-30cc-4eec-b25d-7b0379ef681b",
+ "job_id_basis": "05-admission.json operation_id -> presentation_generation_jobs.workspace_operation_id (authoritative join; agrees with the created_at ordering it replaces for all 11 runs)",
+ "job_id_basis_note": "run-19/08-rescue-readback.json",
+ "workspace_operation_id": "ce3d44bf-4e36-4f89-8698-c312db29ca3a",
+ "job_state": "failed",
+ "presentation_id": "4fe7204e-5f74-4ae7-a74e-2458e4ab4b67",
+ "completed_slides": 32,
+ "created_at": "2026-09-11 15:28:48.554992+09:00",
+ "checkpoint": {
+  "render_sha256": "01c434b02dc57d79998182c75d4cbd53837cf159c872e69405722161242bdaf7",
+  "failed_stage": null,
+  "error": {
+   "provider_attempt_count": 1,
+   "provider_attempt_epoch": 1,
+   "provider_attempt_total": 0
+  },
+  "author_status": "completed",
+  "render_status": "completed"
+ },
+ "run_artifacts": {
+  "files": [
+   "01-upload.json",
+   "02-snapshot.json",
+   "03-analysis.json",
+   "04-generate-request.json",
+   "05-admission.json",
+   "06-final-status.json",
+   "08-rescue-readback.json",
+   "w25-checkpoint-scan",
+   "w25-report.md"
+  ],
+  "06-final-status.json": {
+   "code": "source_content_browser_readback_failed",
+   "detail": "Presentation generation failed",
+   "block_ids": [
+    "source-slide:34:text:6"
+   ]
+  },
+  "08-rescue-readback.json": {
+   "code": "source_content_browser_readback_failed",
+   "blockIds": [
+    "source-slide:34:text:6"
+   ]
+  }
+ },
+ "absent": [
+  "html-render.txt: deck did not publish, no slides row",
+  "metrics.json: browser metrics are not persisted anywhere (authored_slide_checkpoints has no metrics column, artifact_refs is null, authored_evidence_*_v3 are empty)"
+ ]
+}

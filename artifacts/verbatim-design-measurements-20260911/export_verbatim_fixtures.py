@@ -34,6 +34,28 @@ BASE = Path("C:/project/PPT-agent/ppt-agent/artifacts/authored-full-product-vali
 #: ``repeatability-20260911.md``; 18 and 19 come from their own failure artefacts;
 #: 17 and 23 sit between confirmed neighbours in ``created_at`` order for the same
 #: 35-slide input, which is why the basis is recorded per run rather than assumed.
+#: run -> workspace operation id, read from each run's ``05-admission.json``. This
+#: joins to ``presentation_generation_jobs.workspace_operation_id``, which is what
+#: makes the run-to-job mapping checkable rather than inferred from timestamps.
+OPERATIONS: dict[str, str] = {
+    "run-11": "97267adb-db55-436a-afaf-02a31192a7fa",
+    "run-13": "19a08008-3cbd-4cab-80dd-e76ec25a1144",
+    "run-14": "8b55257f-9b08-4b68-9319-acdf405275c1",
+    "run-15": "efebf8d1-f189-458b-8966-022a843eec44",
+    "run-16": "38cc3aa5",
+    "run-17": "72e0a06e-bb7f-4c84-90a8-87fe4d537c5f",
+    "run-18": "2123782f-8b01-486f-b540-8a1815ee2976",
+    "run-19": "ce3d44bf-4e36-4f89-8698-c312db29ca3a",
+    "run-20": "5ce102a8",
+    "run-21": "2298a9c5",
+    "run-23": "9c046b62-7266-4ff7-8622-3f55365943c0",
+}
+JOB_ID_BASIS = (
+    "05-admission.json operation_id -> "
+    "presentation_generation_jobs.workspace_operation_id (authoritative join; "
+    "agrees with the created_at ordering it replaces for all 11 runs)"
+)
+
 JOBS: dict[str, tuple[str, str]] = {
     "run-11": ("d185a6d0", "repeatability-20260911.md"),
     "run-13": ("88c1e3e6", "repeatability-20260911.md"),
@@ -49,6 +71,11 @@ JOBS: dict[str, tuple[str, str]] = {
 }
 PUBLISHED = ("run-11", "run-15", "run-16", "run-20", "run-21")
 FAILED = ("run-13", "run-14", "run-17", "run-18", "run-19", "run-23")
+#: Runs exported in full rather than only at their failing slides: every slide that
+#: kept authoring output. These are the only stored model output for the
+#: "model output -> static checks" path, because a published deck's author_html is
+#: cleared once it publishes.
+FULL_AUTHOR_EXPORT = ("run-18", "run-19")
 
 
 def walk(obj: Any, key: str, acc: list | None = None) -> list:
@@ -205,8 +232,36 @@ def main(out_dir: str) -> int:
                 ).fetchall()
             }
 
+            failing: set[int] = set()
             if run in PUBLISHED:
                 targets = sorted(slides)
+            elif run in FULL_AUTHOR_EXPORT:
+                with_output = {
+                    index for index, data in checkpoints.items()
+                    if data["author_html"] or data["illustrated_html"]
+                }
+                failing = {
+                    index for index, data in checkpoints.items() if data["failed_stage"]
+                } | slide_index_of_blocks(
+                    manifest,
+                    {
+                        str(value)
+                        for payload in artefacts.values()
+                        if isinstance(payload, dict)
+                        for group in walk(payload, "blockIds") + walk(payload, "block_ids")
+                        + walk(payload, "visibilityFailures") + walk(payload, "integrityFailures")
+                        for value in (group if isinstance(group, list) else [])
+                        if isinstance(value, str)
+                    },
+                )
+                unauthored = {
+                    index for index, data in checkpoints.items()
+                    if not data["author_html"] and not data["illustrated_html"]
+                }
+                # The slide that never authored is the negative fixture: it has no
+                # HTML by definition, so selecting only slides with output drops it.
+                failing |= unauthored
+                targets = sorted(with_output | failing)
             else:
                 # Every way the record names a failing slide, unioned: an explicit
                 # slide index, the slide owning a failing source block, a checkpoint
@@ -235,7 +290,8 @@ def main(out_dir: str) -> int:
                     index for index, data in checkpoints.items()
                     if data["author_html"] is None
                 } if any(data["author_html"] for data in checkpoints.values()) else set()
-                targets = sorted(named | by_block | failing | unauthored)
+                failing = named | by_block | failing | unauthored
+                targets = sorted(failing)
             print(f"{run}: job={str(job_id)[:8]} {state} slides={len(targets)}", flush=True)
 
             for index in targets:
@@ -272,11 +328,29 @@ def main(out_dir: str) -> int:
                     " (authored_slide_checkpoints has no metrics column, artifact_refs is null,"
                     " authored_evidence_*_v3 are empty)"
                 )
+                data_for_flags = checkpoints.get(index, {})
                 verdict = {
                     "run": run,
                     "slide_index": index,
+                    # Why this slide is in the fixture set, so a consumer need not
+                    # re-derive it: a slide the record names as failing, or one whose
+                    # authoring output survived and is therefore static-check input.
+                    "fixture_role": (
+                        "failing_slide" if index in failing
+                        else "authoring_passed" if (
+                            data_for_flags.get("author_html")
+                            or data_for_flags.get("illustrated_html")
+                        ) else "published_slide"
+                    ),
+                    "is_failing_slide": index in failing,
+                    "authoring_passed": bool(
+                        data_for_flags.get("author_html")
+                        or data_for_flags.get("illustrated_html")
+                    ) and index not in failing,
                     "job_id": str(job_id),
-                    "job_id_basis": basis,
+                    "job_id_basis": JOB_ID_BASIS,
+                    "job_id_basis_note": basis,
+                    "workspace_operation_id": OPERATIONS.get(run),
                     "job_state": state,
                     "presentation_id": str(presentation_id) if presentation_id else None,
                     "completed_slides": completed,
@@ -301,6 +375,7 @@ def main(out_dir: str) -> int:
                         "has_author_html": bool(data.get("author_html")),
                         "has_illustrated_html": bool(data.get("illustrated_html")),
                         "failed_stage": data.get("failed_stage"),
+                        "fixture_role": verdict["fixture_role"],
                     }
                 )
 

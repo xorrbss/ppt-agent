@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:111px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:820px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:956px;top:24px;width:260px;text-align:right;font-size:15px;line-height:21px;color:#5B6570}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:1px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px;margin-top:24px}
+.claim{height:64px;display:flex;align-items:center;border-left:6px solid #08916E;padding-left:22px;margin-bottom:24px;background:#FFFFFF;border:1px solid #E2E8F0;border-left-width:6px;border-radius:12px}
+.claim-text{font-size:25px;line-height:36px;font-weight:700;letter-spacing:-.02em}
+.claim-text strong{color:#08916E}
+.content-grid{display:grid;grid-template-columns:628px 500px;gap:24px;height:300px}
+.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;height:300px}
+.card{position:relative;height:138px;padding:30px 28px 20px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-tab{position:absolute;left:28px;top:-14px;height:30px;padding:4px 13px;background:#002060;color:#FFFFFF;border-radius:12px;font-size:15px;line-height:22px;font-weight:700}
+.card-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:28px;line-height:34px;font-weight:700;color:#08916E;margin-bottom:5px}
+.card-title{font-size:18px;line-height:27px;font-weight:700;color:#002060;margin-bottom:7px}
+.card-copy{font-size:18px;line-height:27px;font-weight:500;color:#1D1D1B}
+.card-copy .last{font-weight:700;color:#08916E}
+.card-rule{position:absolute;left:28px;right:28px;bottom:16px;height:4px;background:#E2E8F0;border-radius:12px}
+.card-rule-fill{height:4px;background:#219F88;border-radius:12px}
+.image-panel{width:500px;height:280px;padding:8px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.image-panel img{display:block;width:482px;height:262px;border-radius:12px;object-fit:cover;background:#EAF7F4}
+.takeaway{margin-top:24px;height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 24px 0 28px;background:#EAF7F4;border-radius:12px;color:#002060}
+.takeaway-label{font-size:17px;line-height:26px;font-weight:700}
+.takeaway-mark{font-size:22px;line-height:30px;font-weight:700;color:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+  <div data-header-part="band" data-header-band="111" class="header-band" style="height:111px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+    <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+      <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-22">실행 과제</div>
+      <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-5c533cf0c695d050" data-source-block-id="source-slide:23:text:3">3주차 과제</div>
+    </div>
+    <div data-header-part="right" class="header-right" data-qid="q-div-73774be43d12" data-semantic-role="decoration"></div>
+    <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+  </div>
+
+  <div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+    <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+      <div class="claim-text" data-semantic-role="body" data-qid="source-block-de2cb24234f4325a" data-source-block-id="source-slide:23:text:4">강의가 끝난 뒤 실제 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">영업</strong>이 시작됩니다.</div>
+    </div>
+
+    <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+      <div class="cards" data-qid="q-div-beb8611456c7" data-semantic-role="decoration">
+        <div class="card" data-qid="q-card-22-1" data-semantic-role="decoration">
+          <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-22-1">실행 01</div>
+          <div class="card-number" data-semantic-role="supporting" data-qid="q-number-22-1">01</div>
+          <div class="card-copy" data-semantic-role="body" data-qid="source-block-22038928f4c8b519" data-source-block-id="source-slide:23:text:7:run:0">타깃 업체 30곳 리스트업</div>
+          <div class="card-rule" data-qid="q-div-e24a51b44c9c" data-semantic-role="decoration"><div class="card-rule-fill" style="width:25%" data-qid="q-div-820999e5dc47" data-semantic-role="decoration"></div></div>
+        </div>
+
+        <div class="card" data-qid="q-card-22-2" data-semantic-role="decoration">
+          <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-22-2">실행 02</div>
+          <div class="card-number" data-semantic-role="supporting" data-qid="q-number-22-2">02</div>
+          <div class="card-copy" data-semantic-role="body" data-qid="source-block-c3749e1faffaecb6" data-source-block-id="source-slide:23:text:7:run:1">전화/DM 중 하나를 선택해 최소 10곳 시도</div>
+          <div class="card-rule" data-qid="q-div-0b8bad9e5967" data-semantic-role="decoration"><div class="card-rule-fill" style="width:50%" data-qid="q-div-cb1499f569a1" data-semantic-role="decoration"></div></div>
+        </div>
+
+        <div class="card" data-qid="q-card-22-3" data-semantic-role="decoration">
+          <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-22-3">실행 03</div>
+          <div class="card-number" data-semantic-role="supporting" data-qid="q-number-22-3">03</div>
+          <div class="card-copy" data-semantic-role="body" data-qid="source-block-c2164d272b855c34" data-source-block-id="source-slide:23:text:7:run:2">무료 샘플 1곳 기획</div>
+          <div class="card-rule" data-qid="q-div-7a9c3ff3b470" data-semantic-role="decoration"><div class="card-rule-fill" style="width:75%" data-qid="q-div-7656da0bf479" data-semantic-role="decoration"></div></div>
+        </div>
+
+        <div class="card" data-qid="q-card-22-4" data-semantic-role="decoration">
+          <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-22-4">실행 04</div>
+          <div class="card-number" data-semantic-role="supporting" data-qid="q-number-22-4">04</div>
+          <div class="card-copy" data-semantic-role="body" data-qid="source-block-c9a0b248517b82b9" data-source-block-id="source-slide:23:text:7:run:3">거절 이유를 기록하고 멘트를 수정</div>
+          <div class="card-rule" data-qid="q-div-7f25fb171299" data-semantic-role="decoration"><div class="card-rule-fill" style="width:100%" data-qid="q-div-d7238ed88388" data-semantic-role="decoration"></div></div>
+        </div>
+      </div>
+
+      <div class="image-panel" data-qid="q-div-5e0d969fd99d" data-semantic-role="decoration">
+        <img data-semantic-role="image" data-qid="q-image-22" data-illust-prompt="A premium editorial illustration of a solo short-form video agency operator preparing real sales outreach at a clean desk, with a laptop showing a prospect list, a phone for calls and direct messages, a small storyboard for a free sample, and handwritten notes about rejection reasons. Three-quarter overhead viewpoint, organized workspace, no people visible, no brand marks, no extra text." alt="" style="width:482px;height:262px">
+      </div>
+    </div>
+
+    <div class="takeaway" data-qid="q-div-45499f8e6b25" data-semantic-role="decoration">
+      <div class="takeaway-label" data-semantic-role="supporting" data-qid="source-block-fd1b4b21d626adf5" data-source-block-id="source-slide:23:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      <div class="takeaway-mark" data-semantic-role="supporting" data-qid="q-mark-22">실행</div>
+    </div>
+  </div>
+
+  <div class="page-number" data-semantic-role="supporting" data-qid="source-block-780036fd9a2ca8f2" data-source-block-id="source-slide:23:text:5">23</div>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:111px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:820px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:956px;top:24px;width:260px;text-align:right;font-size:15px;line-height:21px;color:#5B6570}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:1px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px;margin-top:24px}
+.claim{height:64px;display:flex;align-items:center;border-left:6px solid #08916E;padding-left:22px;margin-bottom:24px;background:#FFFFFF;border:1px solid #E2E8F0;border-left-width:6px;border-radius:12px}
+.claim-label{width:92px;flex:none;font-size:17px;line-height:26px;font-weight:700;color:#08916E}
+.claim-text{font-size:25px;line-height:36px;font-weight:700;letter-spacing:-.02em}
+.claim-text strong{color:#08916E}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:163px 163px;gap:24px;height:350px}
+.card{position:relative;height:163px;padding:30px 28px 26px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-title{font-size:24px;line-height:34px;font-weight:700;color:#002060;margin-bottom:20px}
+.card-rule{position:absolute;left:28px;right:28px;bottom:26px;height:4px;background:#E2E8F0;border-radius:12px}
+.card-rule-fill{height:4px;background:#219F88;border-radius:12px}
+.card:nth-child(1) .card-rule-fill{width:86%}
+.card:nth-child(2) .card-rule-fill{width:72%}
+.card:nth-child(3) .card-rule-fill{width:78%}
+.card:nth-child(4) .card-rule-fill{width:64%}
+.card:nth-child(5) .card-rule-fill{width:82%}
+.card:nth-child(6) .card-rule-fill{width:68%}
+.card:nth-child(7) .card-rule-fill{width:58%}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="111" class="header-band" style="height:111px" data-qid="q-band-24" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-header-left-24" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-cd5e9fc5918caad0" data-source-block-id="source-slide:25:text:3:run:0">4주차 PART 1</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-ffa18080f20d7e50" data-source-block-id="source-slide:25:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-34b38a0035166b7f" data-source-block-id="source-slide:25:text:3:run:1">제안서 만들기</div>
+  <div data-header-part="divider" class="divider" data-semantic-role="decoration" data-qid="q-divider-24"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-body-24" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-claim-24" data-semantic-role="decoration">
+    <div class="claim-label" data-semantic-role="supporting" data-qid="source-block-8103387515e48443" data-source-block-id="source-slide:25:text:9">원칙</div>
+    <div class="claim-text" data-semantic-role="body" data-qid="source-block-35c99556c1c30c48" data-source-block-id="source-slide:25:text:10">제안서는 예쁜 문서보다 <strong data-qid="q-claim-emphasis-24" data-semantic-role="supporting">‘사장님이 이해하기 쉬운 문서’</strong>가 우선</div>
+  </div>
+
+  <div class="cards" data-qid="source-block-8e52ed39bea27afd" data-semantic-role="decoration" data-source-block-id="source-slide:25:text:6">
+    <div class="card" data-qid="q-card-24-01" data-semantic-role="decoration">
+      <div class="card-title" data-semantic-role="body" data-qid="q-card-title-24-01">나는 누구인가</div>
+      <div class="card-rule" data-semantic-role="decoration" data-qid="q-card-rule-24-01"><div class="card-rule-fill" data-semantic-role="decoration" data-qid="q-card-fill-24-01"></div></div>
+    </div>
+    <div class="card" data-qid="q-card-24-02" data-semantic-role="decoration">
+      <div class="card-title" data-semantic-role="body" data-qid="q-card-title-24-02">어떤 업종을 돕는가</div>
+      <div class="card-rule" data-semantic-role="decoration" data-qid="q-card-rule-24-02"><div class="card-rule-fill" data-semantic-role="decoration" data-qid="q-card-fill-24-02"></div></div>
+    </div>
+    <div class="card" data-qid="q-card-24-03" data-semantic-role="decoration">
+      <div class="card-title" data-semantic-role="body" data-qid="q-card-title-24-03">무엇을 제작하는가</div>
+      <div class="card-rule" data-semantic-role="decoration" data-qid="q-card-rule-24-03"><div class="card-rule-fill" data-semantic-role="decoration" data-qid="q-card-fill-24-03"></div></div>
+    </div>
+    <div class="card" data-qid="q-card-24-04" data-semantic-role="decoration">
+      <div class="card-title" data-semantic-role="body" data-qid="q-card-title-24-04">작업 과정</div>
+      <div class="card-rule" data-semantic-role="decoration" data-qid="q-card-rule-24-04"><div class="card-rule-fill" data-semantic-role="decoration" data-qid="q-card-fill-24-04"></div></div>
+    </div>
+    <div class="card" data-qid="q-card-24-05" data-semantic-role="decoration">
+      <div class="card-title" data-semantic-role="body" data-qid="q-card-title-24-05">포트폴리오</div>
+      <div class="card-rule" data-semantic-role="decoration" data-qid="q-card-rule-24-05"><div class="card-rule-fill" data-semantic-role="decoration" data-qid="q-card-fill-24-05"></div></div>
+    </div>
+    <div class="card" data-qid="q-card-24-06" data-semantic-role="decoration">
+      <div class="card-title" data-semantic-role="body" data-qid="q-card-title-24-06">가격과 포함 범위</div>
+      <div class="card-rule" data-semantic-role="decoration" data-qid="q-card-rule-24-06"><div class="card-rule-fill" data-semantic-role="decoration" data-qid="q-card-fill-24-06"></div></div>
+    </div>
+    <div class="card" data-qid="q-card-24-07" data-semantic-role="decoration">
+      <div class="card-title" data-semantic-role="body" data-qid="q-card-title-24-07">문의 방법</div>
+      <div class="card-rule" data-semantic-role="decoration" data-qid="q-card-rule-24-07"><div class="card-rule-fill" data-semantic-role="decoration" data-qid="q-card-fill-24-07"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-9b064af20b7dc33a" data-source-block-id="source-slide:25:text:4">25</div>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:111px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:24px;width:820px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:956px;top:24px;width:260px;text-align:right;font-size:15px;line-height:21px;color:#5B6570}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:1px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px;margin-top:24px}
+.identity{height:28px;display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.identity-name{font-size:18px;line-height:28px;font-weight:700;color:#002060}
+.identity-mark{font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:22px;color:#08916E;font-weight:700}
+.arch-grid{display:grid;grid-template-columns:744px 384px;gap:24px;height:410px}
+.flow-panel{height:410px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;height:32px;margin-bottom:24px}
+.panel-title{font-size:24px;line-height:32px;font-weight:700;color:#002060}
+.panel-kicker{font-size:15px;line-height:22px;color:#5B6570}
+.flow-row{display:flex;align-items:center;gap:8px;height:82px;padding:16px 18px;background:#EAF7F4;border:1px solid #B8DED4;border-radius:12px}
+.flow-node{height:50px;min-width:76px;padding:12px 10px;background:#FFFFFF;border:1px solid #08916E;border-radius:12px;text-align:center;font-size:18px;line-height:26px;font-weight:700;color:#002060}
+.flow-node.wide{min-width:90px}
+.flow-arrow{width:16px;flex:none;text-align:center;font-size:22px;line-height:30px;font-weight:700;color:#00828E}
+.flow-caption{margin-top:28px;padding:18px 20px;background:#E0F3FF;border-radius:12px;border-left:6px solid #219F88}
+.caption-label{font-size:15px;line-height:22px;font-weight:700;color:#219F88;margin-bottom:7px}
+.caption-copy{font-size:20px;line-height:32px;font-weight:700;color:#002060}
+.side-stack{display:grid;grid-template-rows:122px 122px 122px;gap:22px}
+.card{position:relative;height:122px;padding:24px 24px 20px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-tab{position:absolute;left:24px;top:-14px;height:30px;padding:4px 13px;background:#002060;color:#FFFFFF;border-radius:12px;font-size:15px;line-height:22px;font-weight:700}
+.card-title{font-size:22px;line-height:30px;font-weight:700;color:#002060;margin-bottom:7px}
+.card-copy{font-size:18px;line-height:28px;font-weight:500;color:#1D1D1B}
+.card-rule{position:absolute;left:24px;right:24px;bottom:18px;height:4px;background:#E2E8F0;border-radius:12px}
+.card-rule-fill{height:4px;background:#219F88;border-radius:12px}
+.takeaway{margin-top:24px;height:58px;display:flex;align-items:center;padding:0 24px 0 28px;background:#EAF7F4;border-radius:12px;color:#002060}
+.takeaway-label{font-size:17px;line-height:26px;font-weight:700}
+.takeaway-mark{margin-left:auto;font-size:22px;line-height:30px;font-weight:700;color:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="111" class="header-band" style="height:111px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-23">4주차</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-70aacf52342bc3b7" data-source-block-id="source-slide:24:text:3">4주차 | 계약하고 장기고객 만들기</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-3be1401d7ba1344b" data-source-block-id="source-slide:24:text:4">목표: 상담 → 계약 → 납품 → 재계약 구조 완성</div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="identity" data-qid="q-div-ca97991e836c" data-semantic-role="decoration">
+    <div class="identity-name" data-semantic-role="supporting" data-qid="source-block-a202e9b93653f89a" data-source-block-id="source-slide:24:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    <div class="identity-mark" data-semantic-role="supporting" data-qid="source-block-8abfab6af5120722" data-source-block-id="source-slide:24:text:7">고객 흐름</div>
+  </div>
+
+  <div class="arch-grid" data-qid="q-div-58500264fd31" data-semantic-role="decoration">
+    <div class="flow-panel" data-qid="q-flow-panel-23" data-semantic-role="decoration">
+      <div class="panel-head" data-qid="q-div-e25ca81e908c" data-semantic-role="decoration">
+        <div class="panel-title" data-semantic-role="body" data-qid="q-flow-title-23">고객 흐름</div>
+        <div class="panel-kicker" data-semantic-role="supporting" data-qid="q-flow-kicker-23">계약 이후까지 이어지는 구조</div>
+      </div>
+      <div class="flow-row" data-qid="source-block-229050cd663c00b9" data-semantic-role="decoration" data-source-block-id="source-slide:24:text:8">
+        <div class="flow-node" data-semantic-role="body" data-qid="q-node-1-23">영업</div>
+        <div class="flow-arrow" data-semantic-role="supporting" data-qid="q-arrow-1-23">→</div>
+        <div class="flow-node" data-semantic-role="body" data-qid="q-node-2-23">상담</div>
+        <div class="flow-arrow" data-semantic-role="supporting" data-qid="q-arrow-2-23">→</div>
+        <div class="flow-node" data-semantic-role="body" data-qid="source-block-45eddfdd1d562dc5" data-source-block-id="source-slide:24:text:11">제안</div>
+        <div class="flow-arrow" data-semantic-role="supporting" data-qid="q-arrow-3-23">→</div>
+        <div class="flow-node" data-semantic-role="body" data-qid="q-node-4-23">계약</div>
+        <div class="flow-arrow" data-semantic-role="supporting" data-qid="q-arrow-4-23">→</div>
+        <div class="flow-node" data-semantic-role="body" data-qid="q-node-5-23">제작</div>
+        <div class="flow-arrow" data-semantic-role="supporting" data-qid="q-arrow-5-23">→</div>
+        <div class="flow-node" data-semantic-role="body" data-qid="q-node-6-23">납품</div>
+        <div class="flow-arrow" data-semantic-role="supporting" data-qid="q-arrow-6-23">→</div>
+        <div class="flow-node wide" data-semantic-role="body" data-qid="source-block-2e719209a97a37a6" data-source-block-id="source-slide:24:text:19">재계약</div>
+      </div>
+      <div class="flow-caption" data-qid="q-caption-23" data-semantic-role="supporting">
+        <div class="caption-label" data-semantic-role="supporting" data-qid="q-caption-label-23">핵심 구조</div>
+        <div class="caption-copy" data-semantic-role="supporting" data-qid="q-caption-copy-23">상담부터 재계약까지 고객 흐름을 하나의 운영 체계로 연결</div>
+      </div>
+    </div>
+
+    <div class="side-stack" data-qid="q-div-4761e1d4e3f8" data-semantic-role="decoration">
+      <div class="card" data-qid="q-card-proposal-23" data-semantic-role="decoration">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-proposal-23">제안</div>
+        <div class="card-title" data-semantic-role="body" data-qid="q-card-title-proposal-23">제안</div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-99450260569beed3" data-source-block-id="source-slide:24:text:12">고객 문제에 맞춘다</div>
+        <div class="card-rule" data-qid="q-div-e24a51b44c9c" data-semantic-role="decoration"><div class="card-rule-fill" style="width:76%" data-qid="q-div-820999e5dc47" data-semantic-role="decoration"></div></div>
+      </div>
+      <div class="card" data-qid="q-card-operation-23" data-semantic-role="decoration">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="source-block-f31c040e8451c814" data-source-block-id="source-slide:24:text:15">운영</div>
+        <div class="card-title" data-semantic-role="body" data-qid="q-card-title-operation-23">운영</div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-498c78cc6017801c" data-source-block-id="source-slide:24:text:16">범위와 수정 기준을 정한다</div>
+        <div class="card-rule" data-qid="q-div-0b8bad9e5967" data-semantic-role="decoration"><div class="card-rule-fill" style="width:88%" data-qid="q-div-cb1499f569a1" data-semantic-role="decoration"></div></div>
+      </div>
+      <div class="card" data-qid="q-card-renewal-23" data-semantic-role="decoration">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-renewal-23">재계약</div>
+        <div class="card-title" data-semantic-role="body" data-qid="q-card-title-renewal-23">재계약</div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-93753a78a03f0463" data-source-block-id="source-slide:24:text:20">다음 콘텐츠를 먼저 제안</div>
+        <div class="card-rule" data-qid="q-div-7a9c3ff3b470" data-semantic-role="decoration"><div class="card-rule-fill" style="width:100%" data-qid="q-div-7656da0bf479" data-semantic-role="decoration"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway" data-qid="q-takeaway-23" data-semantic-role="decoration">
+    <div class="takeaway-label" data-semantic-role="supporting" data-qid="q-takeaway-label-23">상담 → 계약 → 납품 → 재계약 구조 완성</div>
+    <div class="takeaway-mark" data-semantic-role="supporting" data-qid="q-takeaway-mark-23">장기고객</div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-f8a10a06259be68e" data-source-block-id="source-slide:24:text:5">24</div>
+</body>
+</html>

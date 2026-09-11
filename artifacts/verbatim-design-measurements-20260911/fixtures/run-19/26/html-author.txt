@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+[data-semantic-role]{word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;height:106px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:960px}
+.eyebrow{font-size:14px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:38px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:134px;height:514px}
+.identity{position:absolute;left:64px;top:0;width:280px;height:86px;padding:22px 24px;background:#00140E;border-radius:12px;color:#FFFFFF}
+.identity-label{font-size:15px;line-height:22px;color:#8AD7C2;font-weight:700}
+.identity-name{margin-top:7px;font-size:20px;line-height:28px;font-weight:700}
+.system-area{position:absolute;left:64px;top:106px;width:816px;height:392px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:24px}
+.system-head{height:30px;font-size:18px;line-height:26px;font-weight:700;color:#00140E}
+.flow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:18px;height:276px;position:relative}
+.module{position:relative;padding:18px 18px 16px;background:#F9F9F9;border:1px solid #B9E5D9;border-radius:12px}
+.module.contract{border-top:6px solid #08916E}
+.module.production{border-top:6px solid #219F88}
+.module.delivery{border-top:6px solid #00828E}
+.module-title{font-size:22px;line-height:30px;font-weight:700;color:#00140E;margin-bottom:15px}
+.item{display:flex;align-items:center;min-height:34px;padding:4px 0;border-top:1px solid #E2E8F0;font-size:16px;line-height:24px;color:#1D1D1B}
+.item:first-of-type{border-top:0}
+.node{width:7px;height:7px;margin-right:10px;background:#08916E;flex:none}
+.production .node{background:#219F88}
+.delivery .node{background:#00828E}
+.connector{position:absolute;top:128px;width:24px;height:2px;background:#00828E}
+.connector.one{left:264px}
+.connector.two{left:528px}
+.connector:after{;position:absolute;right:-1px;top:-4px;width:8px;height:8px;border-top:2px solid #00828E;border-right:2px solid #00828E;transform:rotate(45deg)}
+.image-panel{position:absolute;left:904px;top:0;width:312px;height:176px;padding:8px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.image-panel img{display:block;width:294px;height:158px;border-radius:12px;object-fit:cover;background:linear-gradient(135deg,#E0F3FF,#EAEDF2)}
+.callout{position:absolute;left:904px;top:200px;width:312px;height:154px;padding:22px 24px;background:#E0F3FF;border-radius:12px;border:1px solid #CCECFF}
+.callout-label{font-size:15px;line-height:22px;font-weight:700;color:#00828E}
+.callout-text{margin-top:11px;font-size:18px;line-height:29px;font-weight:700;color:#00140E}
+.callout-text strong{color:#08916E}
+.takeaway{position:absolute;left:904px;top:378px;width:312px;font-size:18px;line-height:28px;font-weight:700;color:#1D1D1B}
+.takeaway strong{color:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="106" class="header-band" style="height:106px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-26">계약·납품 시스템</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-c3a5d91c0d1da123" data-source-block-id="source-slide:27:text:3">4주차 PART 3 | 계약·납품 시스템</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:134px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="identity" data-qid="q-card-identity-26" data-semantic-role="decoration">
+    <div class="identity-label" data-semantic-role="supporting" data-qid="q-identity-label-26">사업 운영 구조</div>
+    <div class="identity-name" data-semantic-role="body" data-qid="source-block-12aec5551ea300d2" data-source-block-id="source-slide:27:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  </div>
+
+  <div class="system-area" data-qid="q-card-system-26" data-semantic-role="decoration">
+    <div class="system-head" data-semantic-role="supporting" data-qid="q-system-head-26">업무 흐름에 따른 핵심 관리 영역</div>
+    <div class="flow" data-qid="q-div-7fd902b74613" data-semantic-role="decoration">
+      <div class="module contract" data-qid="q-card-contract-26" data-semantic-role="decoration">
+        <div class="module-title" data-semantic-role="body" data-qid="source-block-2b87e1e065191a4e" data-source-block-id="source-slide:27:text:8">계약</div>
+        <div class="item" data-semantic-role="body" data-qid="source-block-adf997ad3cd8ac2f" data-source-block-id="source-slide:27:text:9:run:0"><span class="node" data-qid="q-span-fe7e6bfeb16a" data-semantic-role="decoration"></span>제작 개수</div>
+        <div class="item" data-semantic-role="body" data-qid="source-block-27be1cc0599eeb81" data-source-block-id="source-slide:27:text:9:run:1"><span class="node" data-qid="q-span-d3833b9d86e5" data-semantic-role="decoration"></span>수정 횟수</div>
+        <div class="item" data-semantic-role="body" data-qid="source-block-64cac3ea563d7311" data-source-block-id="source-slide:27:text:9:run:2"><span class="node" data-qid="q-span-f0bd9a27e2e1" data-semantic-role="decoration"></span>납품일</div>
+        <div class="item" data-semantic-role="body" data-qid="source-block-f6e6077543defeb9" data-source-block-id="source-slide:27:text:9:run:3"><span class="node" data-qid="q-span-51ad756a24b4" data-semantic-role="decoration"></span>촬영 범위</div>
+        <div class="item" data-semantic-role="body" data-qid="source-block-b7718ad04b0bebc4" data-source-block-id="source-slide:27:text:9:run:4"><span class="node" data-qid="q-span-07f2cf240daf" data-semantic-role="decoration"></span>선금/잔금</div>
+      </div>
+      <div class="module production" data-qid="q-card-production-26" data-semantic-role="decoration">
+        <div class="module-title" data-semantic-role="body" data-qid="source-block-d7a5b08f6e8eb6de" data-source-block-id="source-slide:27:text:12">제작</div>
+        <div class="item" data-semantic-role="body" data-qid="source-block-2b1f9ce0c2bcc245" data-source-block-id="source-slide:27:text:13:run:0"><span class="node" data-qid="q-span-d0f4e435b051" data-semantic-role="decoration"></span>촬영 가이드</div>
+        <div class="item" data-semantic-role="body" data-qid="source-block-b59698fc72e551ad" data-source-block-id="source-slide:27:text:13:run:1"><span class="node" data-qid="q-span-de5aae1ba05b" data-semantic-role="decoration"></span>콘텐츠 기획</div>
+        <div class="item" data-semantic-role="body" data-qid="source-block-f0d4b10a9452656d" data-source-block-id="source-slide:27:text:13:run:2"><span class="node" data-qid="q-span-a03d7036a2a5" data-semantic-role="decoration"></span>편집</div>
+        <div class="item" data-semantic-role="body" data-qid="source-block-4cefe6cdbab4fa7e" data-source-block-id="source-slide:27:text:13:run:3"><span class="node" data-qid="q-span-61d33a028734" data-semantic-role="decoration"></span>검수</div>
+        <div class="item" data-semantic-role="body" data-qid="source-block-8a4efa1348aa5099" data-source-block-id="source-slide:27:text:13:run:4"><span class="node" data-qid="q-span-342fabe7f5a2" data-semantic-role="decoration"></span>수정</div>
+      </div>
+      <div class="module delivery" data-qid="q-card-delivery-26" data-semantic-role="decoration">
+        <div class="module-title" data-semantic-role="body" data-qid="source-block-62f8c8ebaa593861" data-source-block-id="source-slide:27:text:16">납품</div>
+        <div class="item" data-semantic-role="body" data-qid="source-block-51b3c612ca0ac3bb" data-source-block-id="source-slide:27:text:17:run:0"><span class="node" data-qid="q-span-0631487c1021" data-semantic-role="decoration"></span>파일 전달</div>
+        <div class="item" data-semantic-role="body" data-qid="source-block-3ab60d1a348ea75b" data-source-block-id="source-slide:27:text:17:run:1"><span class="node" data-qid="q-span-d4b97c9eb603" data-semantic-role="decoration"></span>최종 확인</div>
+        <div class="item" data-semantic-role="body" data-qid="source-block-f1b10c2924ef96d5" data-source-block-id="source-slide:27:text:17:run:2"><span class="node" data-qid="q-span-8105245a808e" data-semantic-role="decoration"></span>성과 기록</div>
+        <div class="item" data-semantic-role="body" data-qid="source-block-215ec9fa110acff5" data-source-block-id="source-slide:27:text:17:run:3"><span class="node" data-qid="q-span-fb2399d1f543" data-semantic-role="decoration"></span>다음 콘텐츠 제안</div>
+      </div>
+      <div class="connector one" data-qid="q-div-4ef5a01146fb" data-semantic-role="decoration"></div>
+      <div class="connector two" data-qid="q-div-d63f3e8c8f23" data-semantic-role="decoration"></div>
+    </div>
+  </div>
+
+  <div class="image-panel" data-qid="q-image-panel-26" data-semantic-role="decoration">
+    <img data-semantic-role="image" data-qid="q-image-26" data-illust-prompt="A premium vector-like architecture map for a solo short-form content production business, showing three connected operational modules arranged left to right: contract management, production workflow, and delivery follow-up. Use abstract documents, a camera, editing interface, file transfer, confirmation, performance record, and next content proposal as visual artefacts. Clean isometric viewpoint, no people, no brand marks, labels: &quot;계약&quot;, &quot;제작&quot;, &quot;납품&quot;" alt="" style="width:294px;height:158px">
+  </div>
+
+  <div class="callout" data-qid="q-card-callout-26" data-semantic-role="decoration">
+    <div class="callout-label" data-semantic-role="supporting" data-qid="q-callout-label-26">운영 핵심</div>
+    <div class="callout-text" data-semantic-role="body" data-qid="q-callout-text-26">계약 조건이 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">제작</strong>과 <strong data-qid="q-strong-f213b54d7db8" data-semantic-role="body">납품</strong>의 기준이 됩니다.</div>
+  </div>
+
+  <div class="takeaway" data-semantic-role="body" data-qid="q-takeaway-26">기록이 쌓일수록 다음 콘텐츠 제안이 쉬워집니다.</div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-995e8a59ce32dab2" data-source-block-id="source-slide:27:text:4">27</div>
+</body>
+</html>

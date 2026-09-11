@@ -1,8 +1,13 @@
 {
  "run": "run-19",
  "slide_index": 33,
+ "fixture_role": "failing_slide",
+ "is_failing_slide": true,
+ "authoring_passed": false,
  "job_id": "0e66d677-30cc-4eec-b25d-7b0379ef681b",
  "job_id_basis": "05-admission.json operation_id -> presentation_generation_jobs.workspace_operation_id (authoritative join; agrees with the created_at ordering it replaces for all 11 runs)",
+ "job_id_basis_note": "run-19/08-rescue-readback.json",
+ "workspace_operation_id": "ce3d44bf-4e36-4f89-8698-c312db29ca3a",
  "job_state": "failed",
  "presentation_id": "4fe7204e-5f74-4ae7-a74e-2458e4ab4b67",
  "completed_slides": 32,
@@ -63,6 +68,5 @@
   "html-author.txt: checkpoint author_html is null (cleared after publication on published decks)",
   "html-illustrated.txt: checkpoint illustrated_html is null",
   "metrics.json: browser metrics are not persisted anywhere (authored_slide_checkpoints has no metrics column, artifact_refs is null, authored_evidence_*_v3 are empty)"
- ],
- "workspace_operation_id": "ce3d44bf-4e36-4f89-8698-c312db29ca3a"
+ ]
 }

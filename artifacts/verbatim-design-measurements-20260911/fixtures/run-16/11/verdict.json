@@ -1,8 +1,13 @@
 {
  "run": "run-16",
  "slide_index": 11,
+ "fixture_role": "published_slide",
+ "is_failing_slide": false,
+ "authoring_passed": false,
  "job_id": "9bc815e1-9d2d-4e71-bc06-1a7b2cf96f23",
  "job_id_basis": "05-admission.json operation_id -> presentation_generation_jobs.workspace_operation_id (authoritative join; agrees with the created_at ordering it replaces for all 11 runs)",
+ "job_id_basis_note": "created_at order, between run-15 and run-17",
+ "workspace_operation_id": "38cc3aa5",
  "job_state": "published",
  "presentation_id": "896c7bca-a12b-42ee-bb20-8a00b42bf287",
  "completed_slides": 35,
@@ -336,6 +341,5 @@
   "html-author.txt: checkpoint author_html is null (cleared after publication on published decks)",
   "html-illustrated.txt: checkpoint illustrated_html is null",
   "metrics.json: browser metrics are not persisted anywhere (authored_slide_checkpoints has no metrics column, artifact_refs is null, authored_evidence_*_v3 are empty)"
- ],
- "workspace_operation_id": "38cc3aa5"
+ ]
 }

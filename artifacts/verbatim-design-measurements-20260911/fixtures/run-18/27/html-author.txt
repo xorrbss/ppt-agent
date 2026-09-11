@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:111px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:820px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:956px;top:24px;width:260px;text-align:right;font-size:15px;line-height:21px;color:#5B6570}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:1px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px;margin-top:24px}
+.claim{height:64px;display:flex;align-items:center;border-left:6px solid #08916E;padding-left:22px;margin-bottom:24px;background:#FFFFFF;border:1px solid #E2E8F0;border-left-width:6px;border-radius:12px}
+.claim-text{font-size:25px;line-height:36px;font-weight:700;letter-spacing:-.02em}
+.claim-text strong{color:#08916E}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;height:328px}
+.card{position:relative;height:152px;padding:30px 28px 26px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-tab{position:absolute;left:28px;top:-14px;height:30px;padding:4px 13px;background:#002060;color:#FFFFFF;border-radius:12px;font-size:15px;line-height:22px;font-weight:700}
+.card-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:42px;line-height:50px;font-weight:700;color:#08916E;margin-bottom:12px}
+.card-title{font-size:24px;line-height:34px;font-weight:700;color:#002060;margin-bottom:0}
+.card-copy{font-size:20px;line-height:32px;font-weight:500;color:#1D1D1B}
+.card-copy .last{font-weight:700;color:#08916E}
+.card-rule{position:absolute;left:28px;right:28px;bottom:26px;height:4px;background:#E2E8F0;border-radius:12px}
+.card-rule-fill{height:4px;background:#219F88;border-radius:12px}
+.takeaway{margin-top:24px;height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 24px 0 28px;background:#EAF7F4;border-radius:12px;color:#002060}
+.takeaway-label{font-size:17px;line-height:26px;font-weight:700}
+.takeaway-mark{font-size:22px;line-height:30px;font-weight:700;color:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="111" class="header-band" style="height:111px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-27">고객 관계 설계</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-b15a5509cf3e870e" data-source-block-id="source-slide:28:text:3">4주차 PART 4 | 장기고객 만들기</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-f46666d065b161ca" data-source-block-id="source-slide:28:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+    <div class="claim-text" data-semantic-role="body" data-qid="source-block-4944da184a3e0b54" data-source-block-id="source-slide:28:text:6">한 번의 계약을 <strong data-qid="q-claim-key-27" data-semantic-role="body">‘월 관리’로</strong></div>
+  </div>
+
+  <div class="cards" data-qid="q-div-beb8611456c7" data-semantic-role="decoration">
+    <div class="card" data-qid="q-card-01-27" data-semantic-role="decoration">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-01-27">01</div>
+      <div class="card-number" data-semantic-role="supporting" data-qid="q-number-01-27">01</div>
+      <div class="card-title" data-semantic-role="body" data-qid="source-block-b230a1affe531fde" data-source-block-id="source-slide:28:text:7:run:0">다음 달 콘텐츠를 먼저 제안</div>
+      <div class="card-rule" data-qid="q-div-e24a51b44c9c" data-semantic-role="decoration"><div class="card-rule-fill" style="width:100%" data-qid="q-div-820999e5dc47" data-semantic-role="decoration"></div></div>
+    </div>
+
+    <div class="card" data-qid="q-card-02-27" data-semantic-role="decoration">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-02-27">02</div>
+      <div class="card-number" data-semantic-role="supporting" data-qid="q-number-02-27">02</div>
+      <div class="card-title" data-semantic-role="body" data-qid="source-block-2e05b9acbfb922ef" data-source-block-id="source-slide:28:text:7:run:1">월간 콘텐츠 캘린더 제공</div>
+      <div class="card-rule" data-qid="q-div-0b8bad9e5967" data-semantic-role="decoration"><div class="card-rule-fill" style="width:100%" data-qid="q-div-cb1499f569a1" data-semantic-role="decoration"></div></div>
+    </div>
+
+    <div class="card" data-qid="q-card-03-27" data-semantic-role="decoration">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-03-27">03</div>
+      <div class="card-number" data-semantic-role="supporting" data-qid="q-number-03-27">03</div>
+      <div class="card-title" data-semantic-role="body" data-qid="source-block-3e811b0daf92b564" data-source-block-id="source-slide:28:text:7:run:2">고객 업종에 맞는 소재를 지속 발굴</div>
+      <div class="card-rule" data-qid="q-div-7a9c3ff3b470" data-semantic-role="decoration"><div class="card-rule-fill" style="width:100%" data-qid="q-div-7656da0bf479" data-semantic-role="decoration"></div></div>
+    </div>
+
+    <div class="card" data-qid="q-card-04-27" data-semantic-role="decoration">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-04-27">04</div>
+      <div class="card-number" data-semantic-role="supporting" data-qid="q-number-04-27">04</div>
+      <div class="card-title" data-semantic-role="body" data-qid="source-block-974bf21d2869dc37" data-source-block-id="source-slide:28:text:7:run:3">성과와 개선점을 간단히 공유</div>
+      <div class="card-rule" data-qid="q-div-7f25fb171299" data-semantic-role="decoration"><div class="card-rule-fill" style="width:100%" data-qid="q-div-d7238ed88388" data-semantic-role="decoration"></div></div>
+    </div>
+
+    <div class="card" data-qid="q-card-05-27" data-semantic-role="decoration">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-05-27">05</div>
+      <div class="card-number" data-semantic-role="supporting" data-qid="q-number-05-27">05</div>
+      <div class="card-title" data-semantic-role="body" data-qid="source-block-a750c5538dc06bbb" data-source-block-id="source-slide:28:text:7:run:4">소개받을 수 있는 만족 경험 만들기</div>
+      <div class="card-rule" data-qid="q-div-38e0525d10f2" data-semantic-role="decoration"><div class="card-rule-fill" style="width:100%" data-qid="q-div-e7e033202431" data-semantic-role="decoration"></div></div>
+    </div>
+  </div>
+
+  <div class="takeaway" data-qid="q-div-45499f8e6b25" data-semantic-role="decoration">
+    <div class="takeaway-label" data-semantic-role="supporting" data-qid="source-block-03913a405febe2a7" data-source-block-id="source-slide:28:text:10">핵심</div>
+    <div class="takeaway-mark" data-semantic-role="body" data-qid="source-block-33096d52fdad8a75" data-source-block-id="source-slide:28:text:11">고객이 ‘내가 계속 아이디어를 내야 하나?’라고 느끼지 않게 한다.</div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-ac0696b54813061d" data-source-block-id="source-slide:28:text:4">28</div>
+</body>
+</html>

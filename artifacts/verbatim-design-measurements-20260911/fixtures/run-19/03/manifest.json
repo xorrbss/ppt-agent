@@ -1,0 +1,220 @@
+{
+ "sourceUnitId": "source-slide:4",
+ "sourceIndex": 3,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:4:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:4:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "8시간의 원칙",
+    "paragraphs": [
+     {
+      "runs": [
+       "8시간의 원칙"
+      ],
+      "text": "8시간의 원칙"
+     }
+    ],
+    "runs": [
+     "8시간의 원칙"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:e0243da58cd69e453a731346d4ed7d5f64a03f2f02471ffe3a21cb3f7916e335",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:4:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "본 수업은 ‘필수’만. 나머지는 템플릿과 보너스 자료로 제공합니다.",
+    "paragraphs": [
+     {
+      "runs": [
+       "본 수업은 ‘필수’만. 나머지는 템플릿과 보너스 자료로 제공합니다."
+      ],
+      "text": "본 수업은 ‘필수’만. 나머지는 템플릿과 보너스 자료로 제공합니다."
+     }
+    ],
+    "runs": [
+     "본 수업은 ‘필수’만. 나머지는 템플릿과 보너스 자료로 제공합니다."
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 658368,
+     "y": 987552,
+     "cx": 10424160,
+     "cy": 365760
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:b0df9c27c30afd227d20b3677254d681b8c26fdab249f82b6b6a2f598182ea5d",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:4:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "04",
+    "paragraphs": [
+     {
+      "runs": [
+       "04"
+      ],
+      "text": "04"
+     }
+    ],
+    "runs": [
+     "04"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:469f005520d516ae3198f4d572bd3165bf9c82b92f034f08d5cb915e4832880c",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:4:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:36fd55bab03eb0480d24a03055e21590393daa37f1e868df1a69112f2d6294dd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:4:text:7",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 5,
+   "payload": {
+    "text": "• 기능을 많이 배우는 것보다 실제 영상 1개를 완성한다.\n• 영업 방법을 전부 외우기보다 핵심 3개를 실제로 해본다.\n• 강의가 끝날 때 ‘무엇을 누구에게 팔지’가 명확해야 한다.\n• 수강생이 집에 가서 바로 실행할 수 있는 자료를 남긴다.",
+    "paragraphs": [
+     {
+      "runs": [
+       "• 기능을 많이 배우는 것보다 실제 영상 1개를 완성한다."
+      ],
+      "text": "• 기능을 많이 배우는 것보다 실제 영상 1개를 완성한다."
+     },
+     {
+      "runs": [
+       "• 영업 방법을 전부 외우기보다 핵심 3개를 실제로 해본다."
+      ],
+      "text": "• 영업 방법을 전부 외우기보다 핵심 3개를 실제로 해본다."
+     },
+     {
+      "runs": [
+       "• 강의가 끝날 때 ‘무엇을 누구에게 팔지’가 명확해야 한다."
+      ],
+      "text": "• 강의가 끝날 때 ‘무엇을 누구에게 팔지’가 명확해야 한다."
+     },
+     {
+      "runs": [
+       "• 수강생이 집에 가서 바로 실행할 수 있는 자료를 남긴다."
+      ],
+      "text": "• 수강생이 집에 가서 바로 실행할 수 있는 자료를 남긴다."
+     }
+    ],
+    "runs": [
+     "• 기능을 많이 배우는 것보다 실제 영상 1개를 완성한다.",
+     "\n",
+     "• 영업 방법을 전부 외우기보다 핵심 3개를 실제로 해본다.",
+     "\n",
+     "• 강의가 끝날 때 ‘무엇을 누구에게 팔지’가 명확해야 한다.",
+     "\n",
+     "• 수강생이 집에 가서 바로 실행할 수 있는 자료를 남긴다."
+    ],
+    "shapeName": "TextBox 6",
+    "geometry": {
+     "x": 914400,
+     "y": 1645920,
+     "cx": 10058400,
+     "cy": 4114800
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:517289e71616778a480e7b4b3e546fcb6b8cd1aab3af9221133e1719a59a2737",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

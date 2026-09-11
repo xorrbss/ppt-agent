@@ -1,8 +1,13 @@
 {
  "run": "run-17",
  "slide_index": 9,
+ "fixture_role": "failing_slide",
+ "is_failing_slide": true,
+ "authoring_passed": false,
  "job_id": "ce953f11-df1b-4216-bfe4-a0744ce8f8ec",
  "job_id_basis": "05-admission.json operation_id -> presentation_generation_jobs.workspace_operation_id (authoritative join; agrees with the created_at ordering it replaces for all 11 runs)",
+ "job_id_basis_note": "created_at order, between run-16 and run-18",
+ "workspace_operation_id": "72e0a06e-bb7f-4c84-90a8-87fe4d537c5f",
  "job_state": "failed",
  "presentation_id": "311c2959-9906-4d36-a082-6d7532b3aef6",
  "completed_slides": 35,
@@ -51,6 +56,5 @@
  "absent": [
   "html-render.txt: deck did not publish, no slides row",
   "metrics.json: browser metrics are not persisted anywhere (authored_slide_checkpoints has no metrics column, artifact_refs is null, authored_evidence_*_v3 are empty)"
- ],
- "workspace_operation_id": "72e0a06e-bb7f-4c84-90a8-87fe4d537c5f"
+ ]
 }

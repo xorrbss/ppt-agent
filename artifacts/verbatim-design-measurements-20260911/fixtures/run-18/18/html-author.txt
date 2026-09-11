@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:111px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:24px;width:820px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:956px;top:24px;width:260px;text-align:right;font-size:15px;line-height:21px;color:#5B6570}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:1px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px;margin-top:24px}
+.claim{height:64px;display:flex;align-items:center;border-left:6px solid #08916E;padding-left:22px;margin-bottom:24px;background:#FFFFFF;border:1px solid #E2E8F0;border-left-width:6px;border-radius:12px}
+.claim-text{font-size:25px;line-height:36px;font-weight:700;letter-spacing:-.02em}
+.claim-text strong{color:#08916E}
+.architecture-grid{display:grid;grid-template-columns:430px 698px;gap:24px;height:425px}
+.card{position:relative;height:425px;padding:30px 28px 26px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-tab{position:absolute;left:28px;top:-14px;height:30px;padding:4px 13px;background:#002060;color:#FFFFFF;border-radius:12px;font-size:15px;line-height:22px;font-weight:700}
+.card-title{font-size:24px;line-height:34px;font-weight:700;color:#002060;margin-bottom:20px}
+.card-copy{font-size:20px;line-height:32px;font-weight:500;color:#1D1D1B}
+.bullet-list{display:flex;flex-direction:column;gap:12px}
+.bullet-item{display:flex;align-items:flex-start;gap:12px}
+.bullet-mark{flex:none;width:8px;height:8px;margin-top:12px;background:#219F88;border-radius:12px}
+.bullet-text{font-size:20px;line-height:32px;font-weight:500;color:#1D1D1B}
+.bullet-text strong{font-weight:700;color:#08916E}
+.card-rule{position:absolute;left:28px;right:28px;bottom:26px;height:4px;background:#E2E8F0;border-radius:12px}
+.card-rule-fill{height:4px;width:82%;background:#219F88;border-radius:12px}
+.right-column{display:flex;flex-direction:column;gap:24px}
+.flow-panel{height:176px;padding:24px 24px 20px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.flow-label{font-size:17px;line-height:26px;font-weight:700;color:#08916E;margin-bottom:18px}
+.flow{display:flex;align-items:center;justify-content:space-between}
+.flow-node{height:58px;min-width:104px;padding:14px 12px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px;text-align:center;font-size:18px;line-height:28px;font-weight:700;color:#002060}
+.flow-node.wide{min-width:118px}
+.flow-arrow{flex:none;width:22px;text-align:center;font-size:22px;line-height:28px;font-weight:700;color:#00828E}
+.image-panel{width:430px;height:225px;padding:8px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;align-self:flex-end}
+.image-panel img{display:block;width:412px;height:207px;border-radius:12px;object-fit:cover;background:#E0F3FF}
+.takeaway{margin-top:24px;height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 24px 0 28px;background:#EAF7F4;border-radius:12px;color:#002060}
+.takeaway-label{font-size:17px;line-height:26px;font-weight:700}
+.takeaway-mark{font-size:22px;line-height:30px;font-weight:700;color:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="111" class="header-band" style="height:111px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-18">무료 샘플 전략</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-0af096b13b18e735" data-source-block-id="source-slide:19:text:3">3주차 PART 1 | 무료 샘플 전략</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-a219155582a20462" data-source-block-id="source-slide:19:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-claim-18" data-semantic-role="decoration">
+    <div class="claim-text" data-semantic-role="body" data-qid="source-block-e02d960ceebeda77" data-source-block-id="source-slide:19:text:6:run:0">첫 고객에게 무작정 가격부터 말하지 않는다</div>
+  </div>
+
+  <div class="architecture-grid" data-qid="q-div-7381995bf616" data-semantic-role="decoration">
+    <div class="card" data-qid="q-card-18" data-semantic-role="decoration">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="q-card-tab-18">무료 샘플 전략</div>
+      <div class="card-title" data-semantic-role="body" data-qid="q-card-title-18">샘플 운영 원칙</div>
+      <div class="bullet-list" data-qid="source-block-0d69a5c1e45c4328" data-semantic-role="decoration" data-source-block-id="source-slide:19:text:6:run:1-4">
+        <div class="bullet-item" data-qid="q-bullet-1-18" data-semantic-role="decoration">
+          <span class="bullet-mark" data-qid="q-span-42f15cbbf745" data-semantic-role="decoration"></span>
+          <div class="bullet-text" data-semantic-role="body" data-qid="q-bullet-text-1-18">가능하면 가게 특성에 맞는 샘플을 준비</div>
+        </div>
+        <div class="bullet-item" data-qid="q-bullet-2-18" data-semantic-role="decoration">
+          <span class="bullet-mark" data-qid="q-span-b5961728f975" data-semantic-role="decoration"></span>
+          <div class="bullet-text" data-semantic-role="body" data-qid="q-bullet-text-2-18">한 가게에 4개 소재를 기획해보기</div>
+        </div>
+        <div class="bullet-item" data-qid="q-bullet-3-18" data-semantic-role="decoration">
+          <span class="bullet-mark" data-qid="q-span-e331268f35e2" data-semantic-role="decoration"></span>
+          <div class="bullet-text" data-semantic-role="body" data-qid="q-bullet-text-3-18">무료 제공 범위와 기간을 명확히</div>
+        </div>
+        <div class="bullet-item" data-qid="q-bullet-4-18" data-semantic-role="decoration">
+          <span class="bullet-mark" data-qid="q-span-9f77a5cecf39" data-semantic-role="decoration"></span>
+          <div class="bullet-text" data-semantic-role="body" data-qid="q-bullet-text-4-18">목표는 ‘공짜 노동’이 아니라 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">유료 전환</strong></div>
+        </div>
+      </div>
+      <div class="card-rule" data-qid="q-div-e24a51b44c9c" data-semantic-role="decoration"><div class="card-rule-fill" data-qid="q-div-820999e5dc47" data-semantic-role="decoration"></div></div>
+    </div>
+
+    <div class="right-column" data-qid="q-div-b5b858d45503" data-semantic-role="decoration">
+      <div class="flow-panel" data-qid="q-flow-panel-18" data-semantic-role="decoration">
+        <div class="flow-label" data-semantic-role="supporting" data-qid="source-block-07640de12403b83a" data-source-block-id="source-slide:19:text:9">샘플 구조</div>
+        <div class="flow" data-qid="source-block-2528122476d8e673" data-semantic-role="decoration" data-source-block-id="source-slide:19:text:10">
+          <div class="flow-node wide" data-semantic-role="body" data-qid="q-flow-1-18">가게 분석</div>
+          <div class="flow-arrow" data-semantic-role="supporting" data-qid="q-arrow-1-18">→</div>
+          <div class="flow-node" data-semantic-role="body" data-qid="q-flow-2-18">4개 기획</div>
+          <div class="flow-arrow" data-semantic-role="supporting" data-qid="q-arrow-2-18">→</div>
+          <div class="flow-node wide" data-semantic-role="body" data-qid="q-flow-3-18">1~4개 제작</div>
+          <div class="flow-arrow" data-semantic-role="supporting" data-qid="q-arrow-3-18">→</div>
+          <div class="flow-node" data-semantic-role="body" data-qid="q-flow-4-18">반응 확인</div>
+          <div class="flow-arrow" data-semantic-role="supporting" data-qid="q-arrow-4-18">→</div>
+          <div class="flow-node" data-semantic-role="body" data-qid="q-flow-5-18">유료 제안</div>
+        </div>
+      </div>
+
+      <div class="image-panel" data-qid="q-image-panel-18" data-semantic-role="decoration">
+        <img data-semantic-role="image" data-qid="q-image-18" data-illust-prompt="A clean editorial architecture diagram showing a small local shop analysis leading through four short-form content concepts, production of one to four pieces, response review, and a paid proposal. Arrange five connected stages from left to right in a bright workspace-like schematic, with compact cards, directional connectors, and a restrained professional viewpoint. labels: &quot;가게 분석&quot;, &quot;4개 기획&quot;, &quot;1~4개 제작&quot;, &quot;반응 확인&quot;, &quot;유료 제안.&quot;" style="width:412px;height:207px">
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway" data-qid="q-takeaway-18" data-semantic-role="decoration">
+    <div class="takeaway-label" data-semantic-role="supporting" data-qid="q-takeaway-label-18">목표는 ‘공짜 노동’이 아니라 유료 전환</div>
+    <div class="takeaway-mark" data-semantic-role="supporting" data-qid="q-takeaway-mark-18">유료 전환</div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-0835442ac46726d4" data-source-block-id="source-slide:19:text:4">19</div>
+</body>
+</html>

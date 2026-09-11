@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+[data-header-part="band"]{position:absolute;left:0;top:0;width:1280px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:960px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:38px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:134px}
+.main{width:1152px;margin-left:64px}
+.goal-card{height:92px;padding:20px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;display:flex;align-items:center;gap:28px}
+.goal-label{width:86px;padding:9px 12px;border-radius:12px;background:#219F88;color:#FFFFFF;font-size:18px;line-height:28px;font-weight:700;text-align:center}
+.goal-copy{font-size:23px;line-height:34px;font-weight:700;color:#002060}
+.goal-copy strong{color:#08916E}
+.flow{height:210px;margin-top:24px;display:flex;align-items:stretch;gap:24px}
+.module{position:relative;width:211px;height:210px;padding:38px 20px 20px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px}
+.module-tab{position:absolute;left:0;top:0;width:100%;height:28px;background:#002060;border-radius:12px 12px 0 0}
+.module-mark{position:absolute;left:20px;top:38px;width:8px;height:8px;background:#08916E}
+.module-text{margin-top:24px;font-size:18px;line-height:1.6;font-weight:700;color:#002060}
+.connector{width:0;height:210px;position:relative;flex:none}
+.connector-line{position:absolute;left:-12px;top:104px;width:24px;height:2px;background:#00828E}
+.connector-node{position:absolute;left:8px;top:100px;width:8px;height:8px;border-top:2px solid #00828E;border-right:2px solid #00828E;transform:rotate(45deg)}
+.criteria{height:136px;margin-top:24px;padding:20px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;display:flex;align-items:center}
+.criteria-head{width:210px;font-size:22px;line-height:32px;font-weight:700;color:#002060}
+.criteria-divider{width:2px;height:76px;background:#08916E;margin-right:28px}
+.criteria-items{display:flex;gap:24px;align-items:center}
+.criteria-item{height:76px;padding:18px 24px;border-radius:12px;background:#EAEDF2;font-size:22px;line-height:36px;font-weight:700;color:#1D1D1B}
+.criteria-item:last-child{background:#EAF7F4;color:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="106" style="height:106px" data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-c6a4d602bf6b9e9d" data-source-block-id="source-slide:12:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-4fa73e5d453f6213" data-source-block-id="source-slide:12:text:3">2주차 | 숏폼 제작의 핵심</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" style="position:absolute;left:0;right:0;top:134px" data-qid="q-div-621f91553489" data-semantic-role="decoration">
+  <div class="main" data-qid="q-div-e469d0ff63c9" data-semantic-role="decoration">
+    <div class="goal-card" data-qid="q-card-goal-11" data-semantic-role="decoration">
+      <div class="goal-label" data-semantic-role="supporting" data-qid="q-goal-label-11">목표</div>
+      <div class="goal-copy" data-semantic-role="body" data-qid="source-block-9b5a4183fd82a0c1" data-source-block-id="source-slide:12:text:4">목표: 포트폴리오로 보여줄 영상 1~2개 완성</div>
+    </div>
+
+    <div class="flow" data-qid="source-block-cd7f78d64a5219fd" data-semantic-role="decoration" data-source-block-id="source-slide:12:text:7">
+      <div class="module" data-qid="q-card-hook-11" data-semantic-role="decoration">
+        <div class="module-tab" data-qid="q-div-46be16a77b21" data-semantic-role="decoration"></div>
+        <div class="module-mark" data-qid="q-div-42df03190493" data-semantic-role="decoration"></div>
+        <div class="module-text" data-semantic-role="body" data-qid="q-text-hook-11">후킹 → 본문 → 유도 구조</div>
+      </div>
+      <div class="connector" data-qid="q-div-1bfec761b021" data-semantic-role="decoration"><div class="connector-line" data-qid="q-line-1-11" data-semantic-role="decoration"></div><div class="connector-node" data-qid="q-node-1-11" data-semantic-role="decoration"></div></div>
+      <div class="module" data-qid="q-card-benchmark-11" data-semantic-role="decoration">
+        <div class="module-tab" data-qid="q-div-f6e405bc1a0f" data-semantic-role="decoration"></div>
+        <div class="module-mark" data-qid="q-div-1b44da357f70" data-semantic-role="decoration"></div>
+        <div class="module-text" data-semantic-role="body" data-qid="q-text-benchmark-11">조회수 높은 콘텐츠 벤치마킹</div>
+      </div>
+      <div class="connector" data-qid="q-div-f954d062b2c8" data-semantic-role="decoration"><div class="connector-line" data-qid="q-line-2-11" data-semantic-role="decoration"></div><div class="connector-node" data-qid="q-node-2-11" data-semantic-role="decoration"></div></div>
+      <div class="module" data-qid="q-card-smartphone-11" data-semantic-role="decoration">
+        <div class="module-tab" data-qid="q-div-296890358ac3" data-semantic-role="decoration"></div>
+        <div class="module-mark" data-qid="q-div-4aaab91192e3" data-semantic-role="decoration"></div>
+        <div class="module-text" data-semantic-role="body" data-qid="q-text-smartphone-11">스마트폰 촬영 기본</div>
+      </div>
+      <div class="connector" data-qid="q-div-d70e41e2467e" data-semantic-role="decoration"><div class="connector-line" data-qid="q-line-3-11" data-semantic-role="decoration"></div><div class="connector-node" data-qid="q-node-3-11" data-semantic-role="decoration"></div></div>
+      <div class="module" data-qid="q-card-ai-11" data-semantic-role="decoration">
+        <div class="module-tab" data-qid="q-div-352d7fe637ef" data-semantic-role="decoration"></div>
+        <div class="module-mark" data-qid="q-div-c7e3e210d77d" data-semantic-role="decoration"></div>
+        <div class="module-text" data-semantic-role="body" data-qid="q-text-ai-11">AI 활용</div>
+      </div>
+      <div class="connector" data-qid="q-div-44f8a0ccb367" data-semantic-role="decoration"><div class="connector-line" data-qid="q-line-4-11" data-semantic-role="decoration"></div><div class="connector-node" data-qid="q-node-4-11" data-semantic-role="decoration"></div></div>
+      <div class="module" data-qid="q-card-capcut-11" data-semantic-role="decoration">
+        <div class="module-tab" data-qid="q-div-ce1f831a32b8" data-semantic-role="decoration"></div>
+        <div class="module-mark" data-qid="q-div-987bd7f6a61c" data-semantic-role="decoration"></div>
+        <div class="module-text" data-semantic-role="body" data-qid="q-text-capcut-11">캡컷 핵심 기능</div>
+      </div>
+    </div>
+
+    <div class="criteria" data-qid="q-card-criteria-11" data-semantic-role="decoration">
+      <div class="criteria-head" data-semantic-role="supporting" data-qid="source-block-8cceaa7d9e37d877" data-source-block-id="source-slide:12:text:10">오늘의 기준</div>
+      <div class="criteria-divider" data-qid="q-div-232866ca87d6" data-semantic-role="decoration"></div>
+      <div class="criteria-items" data-qid="source-block-423bc1ef63d38cd3" data-semantic-role="decoration" data-source-block-id="source-slide:12:text:11">
+        <div class="criteria-item" data-semantic-role="body" data-qid="q-criteria-perfect-11">완벽한 영상 X</div>
+        <div class="criteria-item" data-semantic-role="body" data-qid="q-criteria-sell-11">팔 수 있는 영상 O</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-e016b77742690b0b" data-source-block-id="source-slide:12:text:5">12</div>
+</body>
+</html>

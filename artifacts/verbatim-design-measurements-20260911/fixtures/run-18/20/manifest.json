@@ -1,0 +1,372 @@
+{
+ "sourceUnitId": "source-slide:21",
+ "sourceIndex": 20,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:21:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:21:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "3주차 PART 3 | 전화영업 기본 구조",
+    "paragraphs": [
+     {
+      "runs": [
+       "3주차 PART 3 | 전화영업 기본 구조"
+      ],
+      "text": "3주차 PART 3 | 전화영업 기본 구조"
+     }
+    ],
+    "runs": [
+     "3주차 PART 3 | 전화영업 기본 구조"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:40ed02c0cd5bb2fb33765cc0332a072441fe4dda7f72f48908056bac41ba9280",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:21:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "21",
+    "paragraphs": [
+     {
+      "runs": [
+       "21"
+      ],
+      "text": "21"
+     }
+    ],
+    "runs": [
+     "21"
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:983e9ab15fe1f8f1a2cac1bfe13fbf428ebc89693763a8e3d0e4ee54ef29aa7c",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:21:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:74f52ea3fedff52018a6c922ae9f9a5650ace6385c0dd96cc4f477c74504ce90",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:21:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "① 인사",
+    "paragraphs": [
+     {
+      "runs": [
+       "① 인사"
+      ],
+      "text": "① 인사"
+     }
+    ],
+    "runs": [
+     "① 인사"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 822960,
+     "y": 1463040,
+     "cx": 1828800,
+     "cy": 411480
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:9adeba522e950831c6fd95dff7dd541f3f80571785d5460ed2c0a857ac8ea268",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:21:text:7",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 5,
+   "payload": {
+    "text": "② 왜 연락했는지",
+    "paragraphs": [
+     {
+      "runs": [
+       "② 왜 연락했는지"
+      ],
+      "text": "② 왜 연락했는지"
+     }
+    ],
+    "runs": [
+     "② 왜 연락했는지"
+    ],
+    "shapeName": "TextBox 6",
+    "geometry": {
+     "x": 2834640,
+     "y": 1463040,
+     "cx": 2560320,
+     "cy": 411480
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:84cf591342f3e00190fcd7afc5330442a2335a0cd8384ef4cff612c21768ba1a",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:21:text:8",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 6,
+   "payload": {
+    "text": "③ 어떤 도움을 줄 수 있는지",
+    "paragraphs": [
+     {
+      "runs": [
+       "③ 어떤 도움을 줄 수 있는지"
+      ],
+      "text": "③ 어떤 도움을 줄 수 있는지"
+     }
+    ],
+    "runs": [
+     "③ 어떤 도움을 줄 수 있는지"
+    ],
+    "shapeName": "TextBox 7",
+    "geometry": {
+     "x": 5577840,
+     "y": 1463040,
+     "cx": 3200400,
+     "cy": 411480
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:7cb4653de04c63a954af462ea0c30cdf31ea8ef73bedb9e0e0f219139042dcd4",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:21:text:9",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 7,
+   "payload": {
+    "text": "④ 다음 행동 제안",
+    "paragraphs": [
+     {
+      "runs": [
+       "④ 다음 행동 제안"
+      ],
+      "text": "④ 다음 행동 제안"
+     }
+    ],
+    "runs": [
+     "④ 다음 행동 제안"
+    ],
+    "shapeName": "TextBox 8",
+    "geometry": {
+     "x": 8961120,
+     "y": 1463040,
+     "cx": 2103120,
+     "cy": 411480
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:733f947453707c814b55ac0ba5648ce815f9ebf79501594010f8d60c49b1f74a",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:21:shape:10",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 8,
+   "payload": {
+    "shapeName": "Rounded Rectangle 9",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 914400,
+     "y": 2286000,
+     "cx": 9966960,
+     "cy": 2011680
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:7352c33513c65edd728a025e76ac61de431a9fa8826cb3391a68dc519e152de1",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:21:shape:11",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 9,
+   "payload": {
+    "shapeName": "Rectangle 10",
+    "preset": "rect",
+    "geometry": {
+     "x": 914400,
+     "y": 2286000,
+     "cx": 73152,
+     "cy": 2011680
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:4bbd0837a3711354641a3c7be9366d4bce01ca0040dbfa440980e35ef9cfc557",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:21:text:12",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 10,
+   "payload": {
+    "text": "연습 포인트",
+    "paragraphs": [
+     {
+      "runs": [
+       "연습 포인트"
+      ],
+      "text": "연습 포인트"
+     }
+    ],
+    "runs": [
+     "연습 포인트"
+    ],
+    "shapeName": "TextBox 11",
+    "geometry": {
+     "x": 1115568,
+     "y": 2423160,
+     "cx": 9601200,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:76af562027849c79850d8402d053961ba6e1a9ded8e2d772675182627d50bba2",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:21:text:13",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 11,
+   "payload": {
+    "text": "길게 설명하지 않는다. ‘관심 있으면 자료/샘플을 보내드리겠다’는 다음 단계까지 연결하는 것이 목표.",
+    "paragraphs": [
+     {
+      "runs": [
+       "길게 설명하지 않는다. ‘관심 있으면 자료/샘플을 보내드리겠다’는 다음 단계까지 연결하는 것이 목표."
+      ],
+      "text": "길게 설명하지 않는다. ‘관심 있으면 자료/샘플을 보내드리겠다’는 다음 단계까지 연결하는 것이 목표."
+     }
+    ],
+    "runs": [
+     "길게 설명하지 않는다. ‘관심 있으면 자료/샘플을 보내드리겠다’는 다음 단계까지 연결하는 것이 목표."
+    ],
+    "shapeName": "TextBox 12",
+    "geometry": {
+     "x": 1115568,
+     "y": 2852928,
+     "cx": 9601200,
+     "cy": 1325880
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:81009a04363eba92ac4fe71cb1de6aa566988ee212be810444ac04d04d405b08",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

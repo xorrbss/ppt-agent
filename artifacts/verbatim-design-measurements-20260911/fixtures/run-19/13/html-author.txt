@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;height:106px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:960px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:38px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:134px;height:514px}
+.architecture-field{position:absolute;left:64px;top:0;width:1152px;height:384px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:28px}
+.flow{position:relative;width:1094px;height:218px;display:flex;align-items:stretch;gap:24px}
+.module{position:relative;width:198px;height:218px;border:1px solid #1B469C;border-radius:12px;background:#E0F3FF;padding:26px 20px 20px}
+.module:nth-child(2){background:#CCECFF}
+.module:nth-child(3){background:#E0F3FF}
+.module:nth-child(4){background:#CCECFF}
+.module:nth-child(5){background:#E0F3FF}
+.module-tab{position:absolute;left:20px;top:-14px;height:29px;padding:4px 12px;border-radius:12px;background:#002060;color:#FFFFFF;font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:21px;font-weight:700}
+.module-text{position:absolute;left:20px;right:18px;top:59px;font-size:18px;line-height:1.55;font-weight:700;color:#002060}
+.connector{position:relative;flex:1;height:2px;margin-top:108px;background:#00828E}
+.connector:after{;position:absolute;right:-1px;top:-5px;width:10px;height:10px;border-top:2px solid #00828E;border-right:2px solid #00828E;transform:rotate(45deg)}
+.node{position:absolute;left:50%;top:-5px;width:12px;height:12px;background:#08916E;border:2px solid #FFFFFF}
+.caution{position:absolute;left:64px;top:408px;width:1152px;height:106px;border-radius:12px;background:#00140E;padding:22px 28px;display:flex;align-items:center;gap:24px}
+.caution-label{width:92px;color:#E5A93D;font-size:21px;line-height:30px;font-weight:700}
+.caution-rule{width:2px;height:56px;background:#08916E}
+.caution-copy{color:#FFFFFF;font-size:20px;line-height:1.65;font-weight:700}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="106" class="header-band" style="height:106px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div data-header-part="eyebrow" class="eyebrow" data-qid="source-block-f6b34324bf5ef794" data-semantic-role="supporting" data-source-block-id="source-slide:14:text:3">2주차 PART 2 | 벤치마킹</div>
+  <div data-header-part="title" class="title" data-qid="source-block-f66130067a843124" data-semantic-role="title" data-source-block-id="source-slide:14:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:134px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="architecture-field" data-qid="q-card-architecture-13" data-semantic-role="decoration">
+    <div class="flow" data-qid="q-div-7fd902b74613" data-semantic-role="decoration">
+      <div class="module" data-qid="q-card-step-01-13" data-semantic-role="decoration">
+        <div class="module-tab" data-semantic-role="supporting" data-qid="q-tab-01-13">01</div>
+        <div class="module-text" data-semantic-role="body" data-qid="source-block-964d67cc43173bf8" data-source-block-id="source-slide:14:text:6:run:0">조회수 높은 영상 찾기</div>
+      </div>
+      <div class="connector" data-qid="q-div-1bfec761b021" data-semantic-role="decoration"><div class="node" data-qid="q-div-956b9abdf526" data-semantic-role="decoration"></div></div>
+      <div class="module" data-qid="q-card-step-02-13" data-semantic-role="decoration">
+        <div class="module-tab" data-semantic-role="supporting" data-qid="q-tab-02-13">02</div>
+        <div class="module-text" data-semantic-role="body" data-qid="source-block-0017aab9d05b387d" data-source-block-id="source-slide:14:text:6:run:1">첫 3초를 분리해서 보기</div>
+      </div>
+      <div class="connector" data-qid="q-div-f954d062b2c8" data-semantic-role="decoration"><div class="node" data-qid="q-div-761ee8778d46" data-semantic-role="decoration"></div></div>
+      <div class="module" data-qid="q-card-step-03-13" data-semantic-role="decoration">
+        <div class="module-tab" data-semantic-role="supporting" data-qid="q-tab-03-13">03</div>
+        <div class="module-text" data-semantic-role="body" data-qid="source-block-af3e429dbb31da3a" data-source-block-id="source-slide:14:text:6:run:2">카메라 움직임과 구도 보기</div>
+      </div>
+      <div class="connector" data-qid="q-div-d70e41e2467e" data-semantic-role="decoration"><div class="node" data-qid="q-div-d05a86cb5969" data-semantic-role="decoration"></div></div>
+      <div class="module" data-qid="q-card-step-04-13" data-semantic-role="decoration">
+        <div class="module-tab" data-semantic-role="supporting" data-qid="q-tab-04-13">04</div>
+        <div class="module-text" data-semantic-role="body" data-qid="source-block-114e782a431f0581" data-source-block-id="source-slide:14:text:6:run:3">자막과 편집 리듬 보기</div>
+      </div>
+      <div class="connector" data-qid="q-div-44f8a0ccb367" data-semantic-role="decoration"><div class="node" data-qid="q-div-6edaa20ac2ad" data-semantic-role="decoration"></div></div>
+      <div class="module" data-qid="q-card-step-05-13" data-semantic-role="decoration">
+        <div class="module-tab" data-semantic-role="supporting" data-qid="q-tab-05-13">05</div>
+        <div class="module-text" data-semantic-role="body" data-qid="source-block-1aec2c3d2f529047" data-source-block-id="source-slide:14:text:6:run:4">같은 구조를 내 업종에 맞게 재구성</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="caution" data-qid="q-card-caution-13" data-semantic-role="decoration">
+    <div class="caution-label" data-semantic-role="supporting" data-qid="source-block-497ffd6a2015763a" data-source-block-id="source-slide:14:text:9">주의</div>
+    <div class="caution-rule" data-qid="q-div-e76cc2f8cf74" data-semantic-role="decoration"></div>
+    <div class="caution-copy" data-semantic-role="body" data-qid="source-block-5c91764e406daced" data-source-block-id="source-slide:14:text:10">영상 자체를 복제하는 것이 아니라<br>‘구조와 아이디어’를 분석합니다.</div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-c239ae4678509f14" data-source-block-id="source-slide:14:text:4">14</div>
+</body>
+</html>
