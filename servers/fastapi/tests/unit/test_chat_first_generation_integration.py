@@ -34,6 +34,7 @@ from models.sql.public_admission import (
     PublicQuotaCounter,
     PublicResourceLease,
 )
+from models.sql.public_artifact import PublicArtifact
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceArtifact,
@@ -50,6 +51,9 @@ from services import (
     workspace_asset_service,
     workspace_legacy_write_gate,
     workspace_operation_runner,
+)
+from services.compatibility_migration.admission import (
+    stamp_new_authored_presentation,
 )
 from services.public_policy_versions import PUBLIC_DEFAULT_POLICY_VERSION
 from services.source_content.errors import SourceContentError
@@ -363,6 +367,7 @@ OWNER_A = uuid.UUID("11111111-1111-4111-8111-111111111111")
 OWNER_B = uuid.UUID("22222222-2222-4222-8222-222222222222")
 TABLES = [
     User.__table__,
+    PublicArtifact.__table__,
     PublicPolicyProfile.__table__,
     PublicQuotaCounter.__table__,
     PublicOperationAdmission.__table__,
@@ -1682,6 +1687,10 @@ async def _seed_running_operation(
             lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
             revision=0,
         )
+        # Every persisted presentation must carry a resolvable profile
+        # identity; the server stamps it on creation, so the fixture uses
+        # the same helper instead of hand-writing the columns.
+        stamp_new_authored_presentation(presentation)
         session.add(presentation)
         await session.flush()
         conversation = WorkspaceConversation(presentation_id=presentation.id)
