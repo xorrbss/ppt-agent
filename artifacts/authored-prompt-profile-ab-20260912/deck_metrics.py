@@ -6,7 +6,7 @@ from ``render_live_deck.py``, and the attempt-timing receipt under
 ``app_data/authored-quality-receipts``. Nothing is generated or written to the
 database.
 
-    python deck_metrics.py <deck-dir> [--receipts <app_data/authored-quality-receipts>]
+    python deck_metrics.py <deck-dir> [--receipts <app_data/authored-quality-receipts>] [--job <id>]
 
 Body-slide medians exclude the TOC and chapter-cover indexes the 2026-09-05
 series page excluded (1, 2, 5, 9, 13, 16, 19).
@@ -66,32 +66,104 @@ def slide_metrics(html: str, metrics: dict[str, Any]) -> dict[str, Any]:
 
 
 def receipt_for(receipts_dir: Path, job_id: str | None) -> dict[str, Any]:
+    """Per-call provider usage for one generation job.
+
+    The durable per-call source for the ordinary async path is the
+    ``provider_usage_receipts`` table (``job_id`` = ``presentation_generation_jobs.id``,
+    one row per logical call with stage, retry class, outcome, latency and
+    tokens). The ``job-*-attempt-timing.json`` files under
+    ``authored-quality-receipts`` belong to the workspace lane and do not cover
+    this path (0 of 171 matched a generation job on 2026-09-12); one is read
+    only as an optional extra when it happens to exist.
+    """
     if not job_id:
         return {}
-    candidates = sorted(receipts_dir.glob(f"job-{job_id}*-attempt-timing.json"))
-    if not candidates:
-        return {}
-    document = json.loads(candidates[-1].read_text(encoding="utf-8"))
-    entries = document.get("receipts") or {}
-    values = list(entries.values()) if isinstance(entries, dict) else list(entries)
-    if not values:
-        return {}
-    last = values[-1]
-    usage = (last.get("providerUsage") or {}).get("totals") or {}
-    stages = last.get("stages") or {}
-    return {
-        "attempt": last.get("attemptNumber"),
-        "outcome": last.get("outcome"),
-        "wall_ms": last.get("wallMillis"),
-        "stages_ms": {k: (v.get("ms") if isinstance(v, dict) else v) for k, v in stages.items()},
-        "logical_calls": usage.get("logicalCalls"),
-        "physical_calls": usage.get("physicalCalls"),
-        "retry_calls": usage.get("retryCalls"),
-        "input_tokens": usage.get("inputTokens"),
-        "output_tokens": usage.get("outputTokens"),
-        "latency_ms": usage.get("latencyMs"),
-        "receipt_file": candidates[-1].name,
-    }
+    summary: dict[str, Any] = {}
+    by_stage: dict[str, dict[str, Any]] = {}
+    for stage, retry_class, outcome, latency, tokens_in, tokens_out, cached, requests in _usage_rows(job_id):
+        bucket = by_stage.setdefault(stage or "?", {
+            "calls": 0, "requests": 0, "retries": 0, "failed": 0,
+            "input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "latencies_ms": [],
+        })
+        bucket["calls"] += 1
+        bucket["requests"] += int(requests or 0)
+        bucket["retries"] += 1 if (retry_class or "initial") != "initial" else 0
+        bucket["failed"] += 1 if outcome != "succeeded" else 0
+        bucket["input_tokens"] += int(tokens_in or 0)
+        bucket["output_tokens"] += int(tokens_out or 0)
+        bucket["cached_tokens"] += int(cached or 0)
+        if isinstance(latency, (int, float)):
+            bucket["latencies_ms"].append(float(latency))
+    for bucket in by_stage.values():
+        latencies = sorted(bucket.pop("latencies_ms"))
+        bucket["latency_p50_ms"] = latencies[len(latencies) // 2] if latencies else None
+        bucket["latency_p90_ms"] = (
+            latencies[min(len(latencies) - 1, int(len(latencies) * 0.9))] if latencies else None
+        )
+    if by_stage:
+        summary["provider_usage"] = by_stage
+        summary["author_calls"] = by_stage.get("author", {}).get("calls", 0)
+    candidates = sorted(receipts_dir.glob(f"job-{job_id}*-attempt-timing.json")) if receipts_dir.exists() else []
+    if candidates:
+        document = json.loads(candidates[-1].read_text(encoding="utf-8"))
+        entries = document.get("receipts") or {}
+        values = list(entries.values()) if isinstance(entries, dict) else list(entries)
+        if values:
+            last = values[-1]
+            stages = last.get("stages") or {}
+            summary["attempt_timing"] = {
+                "wall_ms": last.get("wallMillis"),
+                "stages_ms": {k: (v.get("ms") if isinstance(v, dict) else v) for k, v in stages.items()},
+                "receipt_file": candidates[-1].name,
+            }
+    return summary
+
+
+def _usage_rows(job_id: str) -> list[tuple[Any, ...]]:
+    """Rows of ``provider_usage_receipts`` for a job id given with or without hyphens."""
+    import os
+
+    import psycopg
+
+    url_file = os.environ.get("LOCAL_FIT_DB_URL_FILE")
+    if not url_file:
+        return []
+    raw = job_id.replace("-", "")
+    uuid = f"{raw[:8]}-{raw[8:12]}-{raw[12:16]}-{raw[16:20]}-{raw[20:]}" if len(raw) == 32 else job_id
+    url = re.sub(r"^postgresql\+\w+://", "postgresql://", Path(url_file).read_text().strip())
+    with psycopg.connect(url, connect_timeout=15, options="-c default_transaction_read_only=on") as c:
+        return c.execute(
+            "select stage, retry_class, outcome, latency_ms, input_tokens, output_tokens,"
+            " cached_tokens, request_count from provider_usage_receipts"
+            " where job_id = %s order by created_at",
+            (uuid,),
+        ).fetchall()
+
+
+def job_id_for(task_id: str | None, presentation_id: str | None) -> str | None:
+    """The generation job id (UUID) for a deck, read-only through the jobs table.
+
+    The terminal status carries the task id, not the job id; ``LOCAL_FIT_DB_URL_FILE``
+    must point at the database URL file.
+    """
+    import os
+
+    import psycopg
+
+    url_file = os.environ.get("LOCAL_FIT_DB_URL_FILE")
+    if not url_file or not (task_id or presentation_id):
+        return None
+    url = re.sub(r"^postgresql\+\w+://", "postgresql://", Path(url_file).read_text().strip())
+    with psycopg.connect(url, connect_timeout=15, options="-c default_transaction_read_only=on") as c:
+        row = None
+        if task_id:
+            row = c.execute("select id from presentation_generation_jobs where task_id = %s"
+                            " order by created_at desc limit 1", (task_id,)).fetchone()
+        if row is None and presentation_id:
+            row = c.execute("select id from presentation_generation_jobs where presentation_id = %s"
+                            " order by created_at desc limit 1", (presentation_id,)).fetchone()
+    return str(row[0]) if row else None
+
 
 
 def _walk(obj: Any, key: str, acc: list[Any] | None = None) -> list[Any]:
@@ -133,15 +205,13 @@ def main(argv: list[str]) -> int:
         values = [m[key] for m in body if isinstance(m.get(key), (int, float))]
         return statistics.median(values) if values else None
 
-    # The attempt-timing receipt is named by the generation job id, which the
-    # terminal status carries as its own top-level "id"; the acceptance body
-    # (02-accepted.json) carries the same id when the series saved it.
     accepted_path = deck / "02-accepted.json"
     accepted = json.loads(accepted_path.read_text(encoding="utf-8-sig")) if accepted_path.exists() else {}
-    job_id = next((value for value in (
-        *(_walk(status, "job_id") + _walk(status, "jobId")), status.get("id"),
-        accepted.get("id"), accepted.get("job_id"), accepted.get("task_id"),
-    ) if value), None)
+    task_id = next((value for value in (status.get("id"), accepted.get("id"), accepted.get("task_id"))
+                    if isinstance(value, str) and value.startswith("task-")), None)
+    presentation_id = (_walk(status, "presentation_id") or _walk(status, "presentationId") or [None])[0]
+    job_id = (argv[argv.index("--job") + 1] if "--job" in argv
+              else job_id_for(task_id, str(presentation_id) if presentation_id else None))
     summary = {
         "deck": deck.name,
         "slides": len(per_slide),

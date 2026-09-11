@@ -132,9 +132,9 @@ Computed by `deck_metrics.py` from the final status, the rendered metrics and th
 | text leaves per body slide (median) | elements whose `owned_text` is non-empty in the DOM metrics | `slides/sNN.metrics.json` |
 | minimum and median declared type size (px) | `computed_style.fontSize` over text-owning elements | same |
 | blocking defects on the published bytes | `blocking_safety_issues(inspect_authored_dom(html, metrics))` categories | the gate the replay used |
-| author calls, physical calls, retries, input/output tokens, latency | `providerUsage.totals` and `stages.authoring` | `app_data/authored-quality-receipts/job-<id>-attempt-timing.json` |
-| deck wall, stage millis | `wallMillis`, `stages{outline, authoring, provider, chromiumReview, repair, publication}` | same |
-| Chromium captures | `chromiumReview` stage count / the render runtime counters if present | same |
+| author calls, retries, failed calls, input/output/cached tokens, latency p50/p90, per stage | one row per logical call in `provider_usage_receipts` (`job_id` = `presentation_generation_jobs.id`, resolved from the status task id) | read-only DB query in `deck_metrics.py` |
+| deck wall | terminal status `updated_at − created_at`, plus the `[authored] done … total=Xs` log line when the log is at hand | `03-final-status.json`, `app_data/logs/backend.log*` |
+| attempt-timing stages | **not available on this path**: the `job-*-attempt-timing.json` files belong to the workspace lane (0 of 171 matched a generation job on 2026-09-12); read only if one happens to exist | `app_data/authored-quality-receipts/` |
 
 Medians over body slides exclude the TOC and chapter-cover indexes listed in §1.
 
