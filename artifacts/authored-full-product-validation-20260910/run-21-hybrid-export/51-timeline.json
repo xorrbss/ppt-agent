@@ -1,0 +1,3234 @@
+{
+  "schema_version": 1,
+  "conversation_id": "5a1dbe34-c910-4095-89e5-0f7dcc73c758",
+  "items": [
+    {
+      "schema_version": 1,
+      "anchor_type": "message",
+      "id": "0a041c08-ffbf-4ff1-a678-1ecbf5e38ee1",
+      "position": 1,
+      "role": "user",
+      "content": "Generate a presentation from the attached files.",
+      "created_at": "2026-09-11T08:30:51.658261Z",
+      "attachments": [
+        {
+          "schema_version": 1,
+          "id": "09a4603d-3dfd-4908-b533-0bc2732959d6",
+          "name": "7746aaeddbf1222fd73c9870ac7297af98446b8e5df22d52c809b4d69b5340ae.pptx",
+          "status": "ready",
+          "current_state": "ready",
+          "mime_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "size_bytes": 98344,
+          "sha256": "7746aaeddbf1222fd73c9870ac7297af98446b8e5df22d52c809b4d69b5340ae",
+          "error": null,
+          "safe_failure": null,
+          "download_url": "/api/v1/ppt/workspace/assets/09a4603d-3dfd-4908-b533-0bc2732959d6/download",
+          "download_action": "download",
+          "preview_url": null,
+          "preview_action": null,
+          "unavailable_reason": null
+        }
+      ],
+      "generation_settings": {
+        "n_slides": null,
+        "language": "ko",
+        "tone": "default",
+        "verbosity": "standard",
+        "instructions": null,
+        "include_table_of_contents": false,
+        "include_title_slide": false,
+        "web_search": false,
+        "reference_snapshot_ids": [
+          "5bcc6589-1438-42d0-b55a-66b5d0058865"
+        ]
+      }
+    },
+    {
+      "schema_version": 1,
+      "anchor_type": "operation",
+      "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+      "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+      "position": 2,
+      "operation_type": "presentation.generate",
+      "title": "프레젠테이션 생성",
+      "status": "succeeded",
+      "progress": 79.0,
+      "error": null,
+      "error_message": null,
+      "retryable": null,
+      "providerAttemptCount": null,
+      "retryCount": 0,
+      "recoveryReason": null,
+      "recoveryStatus": "not_required",
+      "capacity_waiting": false,
+      "queue_position": null,
+      "result": {
+        "artifact_id": "518557be-0177-4097-845b-bbba5f60e87f",
+        "artifact_kind": "presentation.export",
+        "artifact_sha256": "d6518d923f2efa3ade980be6c8ef0d8ca4ed2c33a0e8656033ad07e2a5398bdd",
+        "artifact_size_bytes": 2318194,
+        "path": "/app_data/workspace-artifacts/users/d74ac154-738d-4c58-bade-daf2f8d703d3/2298a9c5-3d5d-4eaa-b11d-345f71d462cb/518557be-0177-4097-845b-bbba5f60e87f.pptx",
+        "generationQualityReceipt": {
+          "schemaVersion": "quality-receipt/v2",
+          "p0Count": null,
+          "p1Count": null,
+          "p2Count": null,
+          "passed": false,
+          "receiptDigest": null,
+          "documentStatus": "completed",
+          "pageSummary": {
+            "total": 35,
+            "normal": 21,
+            "autoRepaired": 1,
+            "reviewRequired": 13
+          },
+          "reviewPages": [
+            {
+              "index": 1,
+              "reasons": [
+                "composition_safety:gate_repair_not_admitted"
+              ]
+            },
+            {
+              "index": 2,
+              "reasons": [
+                "composition_safety:gate_repair_not_admitted"
+              ]
+            },
+            {
+              "index": 14,
+              "reasons": [
+                "composition_safety:gate_repair_not_admitted"
+              ]
+            },
+            {
+              "index": 16,
+              "reasons": [
+                "composition_safety:gate_repair_not_admitted"
+              ]
+            },
+            {
+              "index": 18,
+              "reasons": [
+                "composition_safety:gate_repair_not_admitted"
+              ]
+            },
+            {
+              "index": 22,
+              "reasons": [
+                "composition_safety:gate_repair_not_admitted"
+              ]
+            },
+            {
+              "index": 24,
+              "reasons": [
+                "composition_safety:gate_repair_not_admitted"
+              ]
+            },
+            {
+              "index": 25,
+              "reasons": [
+                "composition_safety:gate_repair_not_admitted"
+              ]
+            },
+            {
+              "index": 26,
+              "reasons": [
+                "composition_safety:gate_repair_not_admitted"
+              ]
+            },
+            {
+              "index": 28,
+              "reasons": [
+                "composition_safety:gate_repair_not_admitted"
+              ]
+            },
+            {
+              "index": 29,
+              "reasons": [
+                "composition_safety:gate_repair_not_admitted"
+              ]
+            },
+            {
+              "index": 31,
+              "reasons": [
+                "composition_safety:gate_repair_not_admitted"
+              ]
+            },
+            {
+              "index": 32,
+              "reasons": [
+                "composition_safety:gate_repair_not_admitted"
+              ]
+            }
+          ]
+        }
+      },
+      "version": 47,
+      "operation_version": 47,
+      "expected_revision": 0,
+      "result_revision": 1,
+      "approval_expires_at": null,
+      "retry_of_operation_id": null,
+      "created_at": "2026-09-11T08:30:51.658261Z",
+      "updated_at": "2026-09-11T08:43:47.036110Z",
+      "actor": {
+        "type": "user",
+        "label": "You"
+      },
+      "target": {
+        "presentation_id": "75cf9f7b-0a1c-45f5-842c-9c019565434c",
+        "summary": "Entire presentation",
+        "context": {}
+      },
+      "activity_summary": "Presentation generation completed.",
+      "allowed_actions": [
+        {
+          "id": "undo",
+          "label": "Undo",
+          "variant": "secondary",
+          "enabled": false,
+          "reason": "workspace_undo_not_supported"
+        }
+      ],
+      "events": [
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:1",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 0,
+          "sequence": 1,
+          "cursor": "28718",
+          "operation_anchor_position": 2,
+          "type": "message.created",
+          "status": "awaiting_approval",
+          "message": null,
+          "progress": null,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:30:51.675079Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:2",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 0,
+          "sequence": 2,
+          "cursor": "28719",
+          "operation_anchor_position": 2,
+          "type": "awaiting_approval",
+          "status": "awaiting_approval",
+          "message": "Awaiting approval.",
+          "progress": null,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:30:51.682086Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:3",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 1,
+          "sequence": 3,
+          "cursor": "28720",
+          "operation_anchor_position": 2,
+          "type": "queued",
+          "status": "queued",
+          "message": "Queued.",
+          "progress": null,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:30:52.118123Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:4",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 2,
+          "sequence": 4,
+          "cursor": "28721",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": null,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:30:52.754949Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:5",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 3,
+          "sequence": 5,
+          "cursor": "28722",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": null,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:30:52.882620Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:6",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 4,
+          "sequence": 6,
+          "cursor": "28723",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 8.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:30:52.910715Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:7",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 5,
+          "sequence": 7,
+          "cursor": "28724",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 8.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:30:56.167558Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:8",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 6,
+          "sequence": 8,
+          "cursor": "28725",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 9.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:30:59.222757Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:9",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 7,
+          "sequence": 9,
+          "cursor": "28726",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 10.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:31:02.266469Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:10",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 8,
+          "sequence": 10,
+          "cursor": "28727",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 11.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:31:05.305916Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:11",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 9,
+          "sequence": 11,
+          "cursor": "28728",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 12.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:31:08.340967Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:12",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 10,
+          "sequence": 12,
+          "cursor": "28729",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 13.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:31:11.378450Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:13",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 11,
+          "sequence": 13,
+          "cursor": "28730",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 14.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:31:14.429348Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:14",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 12,
+          "sequence": 14,
+          "cursor": "28731",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 15.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:31:17.481470Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:15",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 13,
+          "sequence": 15,
+          "cursor": "28732",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 16.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:31:20.517379Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:16",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 14,
+          "sequence": 16,
+          "cursor": "28733",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 17.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:31:23.574245Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:17",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 15,
+          "sequence": 17,
+          "cursor": "28734",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 18.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:31:26.610985Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:18",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 16,
+          "sequence": 18,
+          "cursor": "28735",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 19.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:31:29.636332Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:19",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 17,
+          "sequence": 19,
+          "cursor": "28736",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 20.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:31:48.732038Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:20",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 18,
+          "sequence": 20,
+          "cursor": "28737",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 21.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:31:51.801032Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:21",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 19,
+          "sequence": 21,
+          "cursor": "28738",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 22.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:31:54.859863Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:22",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 20,
+          "sequence": 22,
+          "cursor": "28739",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 23.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:31:57.903880Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:23",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 21,
+          "sequence": 23,
+          "cursor": "28740",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 24.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:00.952360Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:24",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 22,
+          "sequence": 24,
+          "cursor": "28741",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 25.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:03.995179Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:25",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 23,
+          "sequence": 25,
+          "cursor": "28742",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 26.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:07.032951Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:26",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 24,
+          "sequence": 26,
+          "cursor": "28743",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 27.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:10.093021Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:27",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 25,
+          "sequence": 27,
+          "cursor": "28744",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 28.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:13.139802Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:28",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 26,
+          "sequence": 28,
+          "cursor": "28745",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 29.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:16.179759Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:29",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 27,
+          "sequence": 29,
+          "cursor": "28746",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 30.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:19.212620Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:30",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 28,
+          "sequence": 30,
+          "cursor": "28747",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 31.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:22.251789Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:31",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 29,
+          "sequence": 31,
+          "cursor": "28748",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 32.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:25.287390Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:32",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 30,
+          "sequence": 32,
+          "cursor": "28749",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 33.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:28.307903Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:33",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 31,
+          "sequence": 33,
+          "cursor": "28750",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 34.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:31.307971Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:34",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 32,
+          "sequence": 34,
+          "cursor": "28751",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 35.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:34.350487Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:35",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 33,
+          "sequence": 35,
+          "cursor": "28752",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 36.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:37.378629Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:36",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 34,
+          "sequence": 36,
+          "cursor": "28753",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 37.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:40.408150Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:37",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 35,
+          "sequence": 37,
+          "cursor": "28754",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 38.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:43.435770Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:38",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 36,
+          "sequence": 38,
+          "cursor": "28755",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 39.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:46.471091Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:39",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 37,
+          "sequence": 39,
+          "cursor": "28756",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 40.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:49.498794Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:40",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 38,
+          "sequence": 40,
+          "cursor": "28757",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 41.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:52.529778Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:41",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 39,
+          "sequence": 41,
+          "cursor": "28758",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 42.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:55.566643Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:42",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 40,
+          "sequence": 42,
+          "cursor": "28759",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 60.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:32:58.717306Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:43",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 41,
+          "sequence": 43,
+          "cursor": "28760",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 75.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:33:01.759746Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:44",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 42,
+          "sequence": 44,
+          "cursor": "28761",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 76.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:33:04.787885Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:45",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 43,
+          "sequence": 45,
+          "cursor": "28762",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 77.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:33:07.819276Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:46",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 44,
+          "sequence": 46,
+          "cursor": "28763",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 78.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:33:10.847307Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:47",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 45,
+          "sequence": 47,
+          "cursor": "28764",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 79.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:33:13.874011Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:48",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 46,
+          "sequence": 48,
+          "cursor": "28765",
+          "operation_anchor_position": 2,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 79.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:33:52.955099Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:49",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 46,
+          "sequence": 49,
+          "cursor": "28766",
+          "operation_anchor_position": 2,
+          "type": "quality.receipt.v3",
+          "status": null,
+          "message": null,
+          "progress": null,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:43:41.142323Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb:50",
+          "operation_id": "2298a9c5-3d5d-4eaa-b11d-345f71d462cb",
+          "operation_version": 47,
+          "sequence": 50,
+          "cursor": "28767",
+          "operation_anchor_position": 2,
+          "type": "operation.result",
+          "status": "succeeded",
+          "message": null,
+          "progress": null,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T08:43:46.991670Z"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "anchor_type": "message",
+      "id": "66da981e-9f22-4637-b788-4ac64074f24b",
+      "position": 3,
+      "role": "user",
+      "content": "export.pptx",
+      "created_at": "2026-09-11T18:26:24.219575Z",
+      "attachments": [],
+      "generation_settings": null
+    },
+    {
+      "schema_version": 1,
+      "anchor_type": "operation",
+      "id": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+      "operation_id": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+      "position": 4,
+      "operation_type": "export.pptx",
+      "title": "PowerPoint 내보내기",
+      "status": "succeeded",
+      "progress": 100.0,
+      "error": null,
+      "error_message": null,
+      "retryable": null,
+      "providerAttemptCount": null,
+      "retryCount": 0,
+      "recoveryReason": null,
+      "recoveryStatus": "not_required",
+      "capacity_waiting": false,
+      "queue_position": null,
+      "result": {
+        "artifact_id": "8ec17ef5-99ff-4fe0-853f-e59540eed0f5",
+        "artifact_kind": "export.pptx",
+        "artifact_sha256": "32ef63e8b632b206e66b19eef85c09933c69810a0e32eedaeada98968e258b46",
+        "artifact_size_bytes": 8175789,
+        "format": "pptx",
+        "source_revision": 1,
+        "expires_at": "2026-09-12T18:41:49.646692+00:00",
+        "worker_peak_memory_bytes": 1892405248,
+        "worker_peak_handle_count": 0,
+        "worker_peak_process_count": 94,
+        "worker_peak_cpu_millis": 284562,
+        "worker_recycle_failure_count": 0,
+        "resource_limits_enforced": true,
+        "worker_enforcement_layer": "windows-job-object",
+        "worker_execution_count": 6,
+        "worker_resource_samples": [
+          {
+            "role": "render",
+            "enforcementLayer": "windows-job-object",
+            "resourceLimitsEnforced": true,
+            "controlEnforcementMethods": {},
+            "residualRisks": {},
+            "supervisorPollIntervalMillis": 0,
+            "resourceLimits": {
+              "memory": 2147483648,
+              "cpu": 0,
+              "pids": 32,
+              "openFiles": 0,
+              "outputBytes": 0,
+              "wallClock": 120
+            },
+            "peakRssBytes": 0,
+            "peakPrivateBytes": 252051456,
+            "peakHandleCount": 0,
+            "peakProcessCount": 11,
+            "peakCpuMillis": 1890,
+            "recycledWithinBaseline": true,
+            "finalProcessCount": 0,
+            "isolationAttestation": {
+              "schemaVersion": "presenton.worker-isolation-attestation/v1",
+              "platform": "nt",
+              "backend": "windows-job-object-only",
+              "resourceLimits": {
+                "status": "supported",
+                "reason": "Windows Job Object supports CPU, memory, process-count, and descendant ownership limits"
+              },
+              "controls": {
+                "low-privilege-identity": {
+                  "status": "unsupported",
+                  "reason": "launcher does not create a restricted token or AppContainer identity"
+                },
+                "network-none": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer network isolation or outbound-deny policy was applied"
+                },
+                "root-filesystem-read-only": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer or ACL read-only root policy was applied"
+                },
+                "staged-inputs-read-only": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer or ACL read-only staged-input policy was applied"
+                },
+                "temporary-bytes-bounded": {
+                  "status": "unsupported",
+                  "reason": "Job Object memory limits do not enforce a temporary-storage byte quota"
+                },
+                "temporary-files-bounded": {
+                  "status": "unsupported",
+                  "reason": "Job Object limits do not enforce a temporary-file count quota"
+                }
+              },
+              "productionEligible": false
+            }
+          },
+          {
+            "role": "render",
+            "enforcementLayer": "windows-job-object",
+            "resourceLimitsEnforced": true,
+            "controlEnforcementMethods": {},
+            "residualRisks": {},
+            "supervisorPollIntervalMillis": 0,
+            "resourceLimits": {
+              "memory": 2147483648,
+              "cpu": 0,
+              "pids": 32,
+              "openFiles": 0,
+              "outputBytes": 0,
+              "wallClock": 120
+            },
+            "peakRssBytes": 0,
+            "peakPrivateBytes": 240144384,
+            "peakHandleCount": 0,
+            "peakProcessCount": 11,
+            "peakCpuMillis": 171,
+            "recycledWithinBaseline": true,
+            "finalProcessCount": 0,
+            "isolationAttestation": {
+              "schemaVersion": "presenton.worker-isolation-attestation/v1",
+              "platform": "nt",
+              "backend": "windows-job-object-only",
+              "resourceLimits": {
+                "status": "supported",
+                "reason": "Windows Job Object supports CPU, memory, process-count, and descendant ownership limits"
+              },
+              "controls": {
+                "low-privilege-identity": {
+                  "status": "unsupported",
+                  "reason": "launcher does not create a restricted token or AppContainer identity"
+                },
+                "network-none": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer network isolation or outbound-deny policy was applied"
+                },
+                "root-filesystem-read-only": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer or ACL read-only root policy was applied"
+                },
+                "staged-inputs-read-only": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer or ACL read-only staged-input policy was applied"
+                },
+                "temporary-bytes-bounded": {
+                  "status": "unsupported",
+                  "reason": "Job Object memory limits do not enforce a temporary-storage byte quota"
+                },
+                "temporary-files-bounded": {
+                  "status": "unsupported",
+                  "reason": "Job Object limits do not enforce a temporary-file count quota"
+                }
+              },
+              "productionEligible": false
+            }
+          },
+          {
+            "role": "render",
+            "enforcementLayer": "windows-job-object",
+            "resourceLimitsEnforced": true,
+            "controlEnforcementMethods": {},
+            "residualRisks": {},
+            "supervisorPollIntervalMillis": 0,
+            "resourceLimits": {
+              "memory": 2147483648,
+              "cpu": 0,
+              "pids": 32,
+              "openFiles": 0,
+              "outputBytes": 0,
+              "wallClock": 120
+            },
+            "peakRssBytes": 0,
+            "peakPrivateBytes": 245977088,
+            "peakHandleCount": 0,
+            "peakProcessCount": 11,
+            "peakCpuMillis": 921,
+            "recycledWithinBaseline": true,
+            "finalProcessCount": 0,
+            "isolationAttestation": {
+              "schemaVersion": "presenton.worker-isolation-attestation/v1",
+              "platform": "nt",
+              "backend": "windows-job-object-only",
+              "resourceLimits": {
+                "status": "supported",
+                "reason": "Windows Job Object supports CPU, memory, process-count, and descendant ownership limits"
+              },
+              "controls": {
+                "low-privilege-identity": {
+                  "status": "unsupported",
+                  "reason": "launcher does not create a restricted token or AppContainer identity"
+                },
+                "network-none": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer network isolation or outbound-deny policy was applied"
+                },
+                "root-filesystem-read-only": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer or ACL read-only root policy was applied"
+                },
+                "staged-inputs-read-only": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer or ACL read-only staged-input policy was applied"
+                },
+                "temporary-bytes-bounded": {
+                  "status": "unsupported",
+                  "reason": "Job Object memory limits do not enforce a temporary-storage byte quota"
+                },
+                "temporary-files-bounded": {
+                  "status": "unsupported",
+                  "reason": "Job Object limits do not enforce a temporary-file count quota"
+                }
+              },
+              "productionEligible": false
+            }
+          },
+          {
+            "role": "render",
+            "enforcementLayer": "windows-job-object",
+            "resourceLimitsEnforced": true,
+            "controlEnforcementMethods": {},
+            "residualRisks": {},
+            "supervisorPollIntervalMillis": 0,
+            "resourceLimits": {
+              "memory": 2147483648,
+              "cpu": 0,
+              "pids": 32,
+              "openFiles": 0,
+              "outputBytes": 0,
+              "wallClock": 120
+            },
+            "peakRssBytes": 0,
+            "peakPrivateBytes": 233295872,
+            "peakHandleCount": 0,
+            "peakProcessCount": 11,
+            "peakCpuMillis": 328,
+            "recycledWithinBaseline": true,
+            "finalProcessCount": 0,
+            "isolationAttestation": {
+              "schemaVersion": "presenton.worker-isolation-attestation/v1",
+              "platform": "nt",
+              "backend": "windows-job-object-only",
+              "resourceLimits": {
+                "status": "supported",
+                "reason": "Windows Job Object supports CPU, memory, process-count, and descendant ownership limits"
+              },
+              "controls": {
+                "low-privilege-identity": {
+                  "status": "unsupported",
+                  "reason": "launcher does not create a restricted token or AppContainer identity"
+                },
+                "network-none": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer network isolation or outbound-deny policy was applied"
+                },
+                "root-filesystem-read-only": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer or ACL read-only root policy was applied"
+                },
+                "staged-inputs-read-only": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer or ACL read-only staged-input policy was applied"
+                },
+                "temporary-bytes-bounded": {
+                  "status": "unsupported",
+                  "reason": "Job Object memory limits do not enforce a temporary-storage byte quota"
+                },
+                "temporary-files-bounded": {
+                  "status": "unsupported",
+                  "reason": "Job Object limits do not enforce a temporary-file count quota"
+                }
+              },
+              "productionEligible": false
+            }
+          },
+          {
+            "role": "render",
+            "enforcementLayer": "windows-job-object",
+            "resourceLimitsEnforced": true,
+            "controlEnforcementMethods": {},
+            "residualRisks": {},
+            "supervisorPollIntervalMillis": 0,
+            "resourceLimits": {
+              "memory": 2147483648,
+              "cpu": 0,
+              "pids": 32,
+              "openFiles": 0,
+              "outputBytes": 0,
+              "wallClock": 120
+            },
+            "peakRssBytes": 0,
+            "peakPrivateBytes": 258162688,
+            "peakHandleCount": 0,
+            "peakProcessCount": 11,
+            "peakCpuMillis": 2250,
+            "recycledWithinBaseline": true,
+            "finalProcessCount": 0,
+            "isolationAttestation": {
+              "schemaVersion": "presenton.worker-isolation-attestation/v1",
+              "platform": "nt",
+              "backend": "windows-job-object-only",
+              "resourceLimits": {
+                "status": "supported",
+                "reason": "Windows Job Object supports CPU, memory, process-count, and descendant ownership limits"
+              },
+              "controls": {
+                "low-privilege-identity": {
+                  "status": "unsupported",
+                  "reason": "launcher does not create a restricted token or AppContainer identity"
+                },
+                "network-none": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer network isolation or outbound-deny policy was applied"
+                },
+                "root-filesystem-read-only": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer or ACL read-only root policy was applied"
+                },
+                "staged-inputs-read-only": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer or ACL read-only staged-input policy was applied"
+                },
+                "temporary-bytes-bounded": {
+                  "status": "unsupported",
+                  "reason": "Job Object memory limits do not enforce a temporary-storage byte quota"
+                },
+                "temporary-files-bounded": {
+                  "status": "unsupported",
+                  "reason": "Job Object limits do not enforce a temporary-file count quota"
+                }
+              },
+              "productionEligible": false
+            }
+          },
+          {
+            "role": "export",
+            "enforcementLayer": "windows-job-object",
+            "resourceLimitsEnforced": true,
+            "controlEnforcementMethods": {},
+            "residualRisks": {},
+            "supervisorPollIntervalMillis": 0,
+            "resourceLimits": {
+              "memory": 8589934592,
+              "cpu": 0,
+              "pids": 96,
+              "openFiles": 0,
+              "outputBytes": 0,
+              "wallClock": 1740
+            },
+            "peakRssBytes": 0,
+            "peakPrivateBytes": 1892405248,
+            "peakHandleCount": 0,
+            "peakProcessCount": 94,
+            "peakCpuMillis": 284562,
+            "recycledWithinBaseline": true,
+            "finalProcessCount": 0,
+            "isolationAttestation": {
+              "schemaVersion": "presenton.worker-isolation-attestation/v1",
+              "platform": "nt",
+              "backend": "windows-job-object-only",
+              "resourceLimits": {
+                "status": "supported",
+                "reason": "Windows Job Object supports CPU, memory, process-count, and descendant ownership limits"
+              },
+              "controls": {
+                "low-privilege-identity": {
+                  "status": "unsupported",
+                  "reason": "launcher does not create a restricted token or AppContainer identity"
+                },
+                "network-none": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer network isolation or outbound-deny policy was applied"
+                },
+                "root-filesystem-read-only": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer or ACL read-only root policy was applied"
+                },
+                "staged-inputs-read-only": {
+                  "status": "unsupported",
+                  "reason": "no AppContainer or ACL read-only staged-input policy was applied"
+                },
+                "temporary-bytes-bounded": {
+                  "status": "unsupported",
+                  "reason": "Job Object memory limits do not enforce a temporary-storage byte quota"
+                },
+                "temporary-files-bounded": {
+                  "status": "unsupported",
+                  "reason": "Job Object limits do not enforce a temporary-file count quota"
+                }
+              },
+              "productionEligible": false
+            }
+          }
+        ],
+        "worker_isolation_attestations": [
+          {
+            "schemaVersion": "presenton.worker-isolation-attestation/v1",
+            "platform": "nt",
+            "backend": "windows-job-object-only",
+            "resourceLimits": {
+              "status": "supported",
+              "reason": "Windows Job Object supports CPU, memory, process-count, and descendant ownership limits"
+            },
+            "controls": {
+              "low-privilege-identity": {
+                "status": "unsupported",
+                "reason": "launcher does not create a restricted token or AppContainer identity"
+              },
+              "network-none": {
+                "status": "unsupported",
+                "reason": "no AppContainer network isolation or outbound-deny policy was applied"
+              },
+              "root-filesystem-read-only": {
+                "status": "unsupported",
+                "reason": "no AppContainer or ACL read-only root policy was applied"
+              },
+              "staged-inputs-read-only": {
+                "status": "unsupported",
+                "reason": "no AppContainer or ACL read-only staged-input policy was applied"
+              },
+              "temporary-bytes-bounded": {
+                "status": "unsupported",
+                "reason": "Job Object memory limits do not enforce a temporary-storage byte quota"
+              },
+              "temporary-files-bounded": {
+                "status": "unsupported",
+                "reason": "Job Object limits do not enforce a temporary-file count quota"
+              }
+            },
+            "productionEligible": false
+          },
+          {
+            "schemaVersion": "presenton.worker-isolation-attestation/v1",
+            "platform": "nt",
+            "backend": "windows-job-object-only",
+            "resourceLimits": {
+              "status": "supported",
+              "reason": "Windows Job Object supports CPU, memory, process-count, and descendant ownership limits"
+            },
+            "controls": {
+              "low-privilege-identity": {
+                "status": "unsupported",
+                "reason": "launcher does not create a restricted token or AppContainer identity"
+              },
+              "network-none": {
+                "status": "unsupported",
+                "reason": "no AppContainer network isolation or outbound-deny policy was applied"
+              },
+              "root-filesystem-read-only": {
+                "status": "unsupported",
+                "reason": "no AppContainer or ACL read-only root policy was applied"
+              },
+              "staged-inputs-read-only": {
+                "status": "unsupported",
+                "reason": "no AppContainer or ACL read-only staged-input policy was applied"
+              },
+              "temporary-bytes-bounded": {
+                "status": "unsupported",
+                "reason": "Job Object memory limits do not enforce a temporary-storage byte quota"
+              },
+              "temporary-files-bounded": {
+                "status": "unsupported",
+                "reason": "Job Object limits do not enforce a temporary-file count quota"
+              }
+            },
+            "productionEligible": false
+          },
+          {
+            "schemaVersion": "presenton.worker-isolation-attestation/v1",
+            "platform": "nt",
+            "backend": "windows-job-object-only",
+            "resourceLimits": {
+              "status": "supported",
+              "reason": "Windows Job Object supports CPU, memory, process-count, and descendant ownership limits"
+            },
+            "controls": {
+              "low-privilege-identity": {
+                "status": "unsupported",
+                "reason": "launcher does not create a restricted token or AppContainer identity"
+              },
+              "network-none": {
+                "status": "unsupported",
+                "reason": "no AppContainer network isolation or outbound-deny policy was applied"
+              },
+              "root-filesystem-read-only": {
+                "status": "unsupported",
+                "reason": "no AppContainer or ACL read-only root policy was applied"
+              },
+              "staged-inputs-read-only": {
+                "status": "unsupported",
+                "reason": "no AppContainer or ACL read-only staged-input policy was applied"
+              },
+              "temporary-bytes-bounded": {
+                "status": "unsupported",
+                "reason": "Job Object memory limits do not enforce a temporary-storage byte quota"
+              },
+              "temporary-files-bounded": {
+                "status": "unsupported",
+                "reason": "Job Object limits do not enforce a temporary-file count quota"
+              }
+            },
+            "productionEligible": false
+          },
+          {
+            "schemaVersion": "presenton.worker-isolation-attestation/v1",
+            "platform": "nt",
+            "backend": "windows-job-object-only",
+            "resourceLimits": {
+              "status": "supported",
+              "reason": "Windows Job Object supports CPU, memory, process-count, and descendant ownership limits"
+            },
+            "controls": {
+              "low-privilege-identity": {
+                "status": "unsupported",
+                "reason": "launcher does not create a restricted token or AppContainer identity"
+              },
+              "network-none": {
+                "status": "unsupported",
+                "reason": "no AppContainer network isolation or outbound-deny policy was applied"
+              },
+              "root-filesystem-read-only": {
+                "status": "unsupported",
+                "reason": "no AppContainer or ACL read-only root policy was applied"
+              },
+              "staged-inputs-read-only": {
+                "status": "unsupported",
+                "reason": "no AppContainer or ACL read-only staged-input policy was applied"
+              },
+              "temporary-bytes-bounded": {
+                "status": "unsupported",
+                "reason": "Job Object memory limits do not enforce a temporary-storage byte quota"
+              },
+              "temporary-files-bounded": {
+                "status": "unsupported",
+                "reason": "Job Object limits do not enforce a temporary-file count quota"
+              }
+            },
+            "productionEligible": false
+          },
+          {
+            "schemaVersion": "presenton.worker-isolation-attestation/v1",
+            "platform": "nt",
+            "backend": "windows-job-object-only",
+            "resourceLimits": {
+              "status": "supported",
+              "reason": "Windows Job Object supports CPU, memory, process-count, and descendant ownership limits"
+            },
+            "controls": {
+              "low-privilege-identity": {
+                "status": "unsupported",
+                "reason": "launcher does not create a restricted token or AppContainer identity"
+              },
+              "network-none": {
+                "status": "unsupported",
+                "reason": "no AppContainer network isolation or outbound-deny policy was applied"
+              },
+              "root-filesystem-read-only": {
+                "status": "unsupported",
+                "reason": "no AppContainer or ACL read-only root policy was applied"
+              },
+              "staged-inputs-read-only": {
+                "status": "unsupported",
+                "reason": "no AppContainer or ACL read-only staged-input policy was applied"
+              },
+              "temporary-bytes-bounded": {
+                "status": "unsupported",
+                "reason": "Job Object memory limits do not enforce a temporary-storage byte quota"
+              },
+              "temporary-files-bounded": {
+                "status": "unsupported",
+                "reason": "Job Object limits do not enforce a temporary-file count quota"
+              }
+            },
+            "productionEligible": false
+          },
+          {
+            "schemaVersion": "presenton.worker-isolation-attestation/v1",
+            "platform": "nt",
+            "backend": "windows-job-object-only",
+            "resourceLimits": {
+              "status": "supported",
+              "reason": "Windows Job Object supports CPU, memory, process-count, and descendant ownership limits"
+            },
+            "controls": {
+              "low-privilege-identity": {
+                "status": "unsupported",
+                "reason": "launcher does not create a restricted token or AppContainer identity"
+              },
+              "network-none": {
+                "status": "unsupported",
+                "reason": "no AppContainer network isolation or outbound-deny policy was applied"
+              },
+              "root-filesystem-read-only": {
+                "status": "unsupported",
+                "reason": "no AppContainer or ACL read-only root policy was applied"
+              },
+              "staged-inputs-read-only": {
+                "status": "unsupported",
+                "reason": "no AppContainer or ACL read-only staged-input policy was applied"
+              },
+              "temporary-bytes-bounded": {
+                "status": "unsupported",
+                "reason": "Job Object memory limits do not enforce a temporary-storage byte quota"
+              },
+              "temporary-files-bounded": {
+                "status": "unsupported",
+                "reason": "Job Object limits do not enforce a temporary-file count quota"
+              }
+            },
+            "productionEligible": false
+          }
+        ],
+        "network_none_worker": false,
+        "_worker_dispatch_evidence": [
+          {
+            "attemptTokenSha256": "b862bc9d176d2da133609661a92e6b44144fb6bab93c38420c8177959ed0ddca",
+            "dispatchId": "27af27e9-996c-435c-be6b-e218983ac14e",
+            "durationMillis": 14767.4216,
+            "evidenceDigest": "c185aff682b5674a4f97abe0e86a35d46ec0e8b215e2c60b892adf474b266e4c",
+            "evidenceScope": "local-supervisor-invocation-to-tree-zero",
+            "externalAttestationStatus": "not-collected",
+            "inputBytes": 8182,
+            "inputDigest": "983e033374af3606f2f24370757bf5f7aaa5c082d2c7dfc5b18dc5572c4a9c70",
+            "invocationStartedAtUtc": "2026-09-11T18:26:38.121694+00:00",
+            "operationId": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+            "outcome": "succeeded",
+            "outputBytes": 8278,
+            "outputDigest": "d8d35cc064d4cc82c0e012282db7a5b0247f86e3b1173e885d99624036980a17",
+            "productionEligible": false,
+            "resourceMetricGaps": [
+              "peakHandleCount",
+              "peakRssBytes"
+            ],
+            "resourceMetrics": {
+              "deadlineExceeded": false,
+              "finalProcessCount": 0,
+              "limits": {
+                "cpuRatePercent": 100,
+                "memoryBytes": 2147483648,
+                "pidCount": 32,
+                "temporaryBytes": 536870912,
+                "wallClockSeconds": 120
+              },
+              "memoryLimitExceeded": false,
+              "peakCpuMillis": 1890,
+              "peakPrivateBytes": 252051456,
+              "peakProcessCount": 11,
+              "recycledWithinBaseline": true,
+              "resourceLimitsEnforced": true,
+              "terminatedProcessCount": 0,
+              "totalProcessCount": 24
+            },
+            "role": "render",
+            "schemaVersion": "presenton.local-supervised-dispatch-evidence/v1",
+            "treeZeroConfirmedAtUtc": "2026-09-11T18:26:52.889049+00:00",
+            "utcClockRegressed": false,
+            "utcElapsedMillis": 14767.355,
+            "workerRuntimeIdentity": {
+              "argvSha256": "8469e44b0313b5dbd740bd529f07dc926c978090b608009b8bdd0bd8efb4086d",
+              "executableSha256": "a1addb0ce1f14f000c826b5a442c4acc0dc8e7b41fcb6337ec1a92c5194302a4",
+              "identityDigest": "3f2fbe9c9a1ac3d0e64b0e1291158bd49102abd7de9ca43a722647d45dd00acc",
+              "identityScope": "observed-executable-and-argv",
+              "schemaVersion": "presenton.observed-launch-identity/v1",
+              "unavailable": []
+            }
+          },
+          {
+            "attemptTokenSha256": "b862bc9d176d2da133609661a92e6b44144fb6bab93c38420c8177959ed0ddca",
+            "dispatchId": "23223309-ef4b-42b6-8e61-2018367d003e",
+            "durationMillis": 2947.9705,
+            "evidenceDigest": "3294ffe30c98cb67cded82a1a3e5ed5cf2231df675ba16c424b0969bfa27e646",
+            "evidenceScope": "local-supervisor-invocation-to-tree-zero",
+            "externalAttestationStatus": "not-collected",
+            "inputBytes": 679,
+            "inputDigest": "ed9279b8ed6ee75c4fd7a2338e16862118370c820eee6c0823ccec99c906800a",
+            "invocationStartedAtUtc": "2026-09-11T18:26:54.909559+00:00",
+            "operationId": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+            "outcome": "succeeded",
+            "outputBytes": 772,
+            "outputDigest": "d0d940dcac95c1f3c2e4b8e86a5180390db34a1a2d3e8ca11cfa4d0a666b36fd",
+            "productionEligible": false,
+            "resourceMetricGaps": [
+              "peakHandleCount",
+              "peakRssBytes"
+            ],
+            "resourceMetrics": {
+              "deadlineExceeded": false,
+              "finalProcessCount": 0,
+              "limits": {
+                "cpuRatePercent": 100,
+                "memoryBytes": 2147483648,
+                "pidCount": 32,
+                "temporaryBytes": 536870912,
+                "wallClockSeconds": 120
+              },
+              "memoryLimitExceeded": false,
+              "peakCpuMillis": 171,
+              "peakPrivateBytes": 240144384,
+              "peakProcessCount": 11,
+              "recycledWithinBaseline": true,
+              "resourceLimitsEnforced": true,
+              "terminatedProcessCount": 0,
+              "totalProcessCount": 12
+            },
+            "role": "render",
+            "schemaVersion": "presenton.local-supervised-dispatch-evidence/v1",
+            "treeZeroConfirmedAtUtc": "2026-09-11T18:26:57.857454+00:00",
+            "utcClockRegressed": false,
+            "utcElapsedMillis": 2947.895,
+            "workerRuntimeIdentity": {
+              "argvSha256": "8469e44b0313b5dbd740bd529f07dc926c978090b608009b8bdd0bd8efb4086d",
+              "executableSha256": "a1addb0ce1f14f000c826b5a442c4acc0dc8e7b41fcb6337ec1a92c5194302a4",
+              "identityDigest": "3f2fbe9c9a1ac3d0e64b0e1291158bd49102abd7de9ca43a722647d45dd00acc",
+              "identityScope": "observed-executable-and-argv",
+              "schemaVersion": "presenton.observed-launch-identity/v1",
+              "unavailable": []
+            }
+          },
+          {
+            "attemptTokenSha256": "b862bc9d176d2da133609661a92e6b44144fb6bab93c38420c8177959ed0ddca",
+            "dispatchId": "f4418bae-55b1-4391-843a-d8391d437ed7",
+            "durationMillis": 12325.5808,
+            "evidenceDigest": "148576bc446e02b71eeb433d936482d9d901ca3ec7832186a0da5d443d6b04b0",
+            "evidenceScope": "local-supervisor-invocation-to-tree-zero",
+            "externalAttestationStatus": "not-collected",
+            "inputBytes": 7556,
+            "inputDigest": "cee28937310d3a946ff9ce49b9e40bb24a6905551df8bd369ba98ef11f92df19",
+            "invocationStartedAtUtc": "2026-09-11T18:27:03.111474+00:00",
+            "operationId": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+            "outcome": "succeeded",
+            "outputBytes": 7651,
+            "outputDigest": "fd5aecae4eb18eb38b14ec4758fc6e7652d4db93d6e8f84807ad5b8b69cc6732",
+            "productionEligible": false,
+            "resourceMetricGaps": [
+              "peakHandleCount",
+              "peakRssBytes"
+            ],
+            "resourceMetrics": {
+              "deadlineExceeded": false,
+              "finalProcessCount": 0,
+              "limits": {
+                "cpuRatePercent": 100,
+                "memoryBytes": 2147483648,
+                "pidCount": 32,
+                "temporaryBytes": 536870912,
+                "wallClockSeconds": 120
+              },
+              "memoryLimitExceeded": false,
+              "peakCpuMillis": 921,
+              "peakPrivateBytes": 245977088,
+              "peakProcessCount": 11,
+              "recycledWithinBaseline": true,
+              "resourceLimitsEnforced": true,
+              "terminatedProcessCount": 0,
+              "totalProcessCount": 23
+            },
+            "role": "render",
+            "schemaVersion": "presenton.local-supervised-dispatch-evidence/v1",
+            "treeZeroConfirmedAtUtc": "2026-09-11T18:27:15.437393+00:00",
+            "utcClockRegressed": false,
+            "utcElapsedMillis": 12325.919,
+            "workerRuntimeIdentity": {
+              "argvSha256": "8469e44b0313b5dbd740bd529f07dc926c978090b608009b8bdd0bd8efb4086d",
+              "executableSha256": "a1addb0ce1f14f000c826b5a442c4acc0dc8e7b41fcb6337ec1a92c5194302a4",
+              "identityDigest": "3f2fbe9c9a1ac3d0e64b0e1291158bd49102abd7de9ca43a722647d45dd00acc",
+              "identityScope": "observed-executable-and-argv",
+              "schemaVersion": "presenton.observed-launch-identity/v1",
+              "unavailable": []
+            }
+          },
+          {
+            "attemptTokenSha256": "b862bc9d176d2da133609661a92e6b44144fb6bab93c38420c8177959ed0ddca",
+            "dispatchId": "96cab30a-d2f4-4180-8c3a-c83ac4c14d4f",
+            "durationMillis": 3631.9355,
+            "evidenceDigest": "ae8da7e122ab4154c8c74286fc850af48483397c895bea39e01083a8a31c4c3f",
+            "evidenceScope": "local-supervisor-invocation-to-tree-zero",
+            "externalAttestationStatus": "not-collected",
+            "inputBytes": 679,
+            "inputDigest": "e73c7b3a6f7ab3a9669706fbc9f5110bb6007a67d6b837079726412f2dd61655",
+            "invocationStartedAtUtc": "2026-09-11T18:27:17.824186+00:00",
+            "operationId": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+            "outcome": "succeeded",
+            "outputBytes": 772,
+            "outputDigest": "e0d7da10001fd1aa86792c5a2fc4965b59effff6c75fcd38565d4ae8dcfc2179",
+            "productionEligible": false,
+            "resourceMetricGaps": [
+              "peakHandleCount",
+              "peakRssBytes"
+            ],
+            "resourceMetrics": {
+              "deadlineExceeded": false,
+              "finalProcessCount": 0,
+              "limits": {
+                "cpuRatePercent": 100,
+                "memoryBytes": 2147483648,
+                "pidCount": 32,
+                "temporaryBytes": 536870912,
+                "wallClockSeconds": 120
+              },
+              "memoryLimitExceeded": false,
+              "peakCpuMillis": 328,
+              "peakPrivateBytes": 233295872,
+              "peakProcessCount": 11,
+              "recycledWithinBaseline": true,
+              "resourceLimitsEnforced": true,
+              "terminatedProcessCount": 0,
+              "totalProcessCount": 12
+            },
+            "role": "render",
+            "schemaVersion": "presenton.local-supervised-dispatch-evidence/v1",
+            "treeZeroConfirmedAtUtc": "2026-09-11T18:27:21.456071+00:00",
+            "utcClockRegressed": false,
+            "utcElapsedMillis": 3631.885,
+            "workerRuntimeIdentity": {
+              "argvSha256": "8469e44b0313b5dbd740bd529f07dc926c978090b608009b8bdd0bd8efb4086d",
+              "executableSha256": "a1addb0ce1f14f000c826b5a442c4acc0dc8e7b41fcb6337ec1a92c5194302a4",
+              "identityDigest": "3f2fbe9c9a1ac3d0e64b0e1291158bd49102abd7de9ca43a722647d45dd00acc",
+              "identityScope": "observed-executable-and-argv",
+              "schemaVersion": "presenton.observed-launch-identity/v1",
+              "unavailable": []
+            }
+          },
+          {
+            "attemptTokenSha256": "b862bc9d176d2da133609661a92e6b44144fb6bab93c38420c8177959ed0ddca",
+            "dispatchId": "33af0aef-652a-48c7-b0a7-f8666e8a19b2",
+            "durationMillis": 11441.7521,
+            "evidenceDigest": "d22188bb88b1c4723f45391c6b103f1bb630504512a888a4711a7b5be52b902d",
+            "evidenceScope": "local-supervisor-invocation-to-tree-zero",
+            "externalAttestationStatus": "not-collected",
+            "inputBytes": 5056,
+            "inputDigest": "1a9a7e2f5e7a681e9542c0578e8c1e5c91fe3bab74849d8c399c0c53d2914b19",
+            "invocationStartedAtUtc": "2026-09-11T18:27:26.201749+00:00",
+            "operationId": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+            "outcome": "succeeded",
+            "outputBytes": 5148,
+            "outputDigest": "65a239356b6bdd4f638af9841150418b8cb0e7a1a47086b1baafc13212bcb36b",
+            "productionEligible": false,
+            "resourceMetricGaps": [
+              "peakHandleCount",
+              "peakRssBytes"
+            ],
+            "resourceMetrics": {
+              "deadlineExceeded": false,
+              "finalProcessCount": 0,
+              "limits": {
+                "cpuRatePercent": 100,
+                "memoryBytes": 2147483648,
+                "pidCount": 32,
+                "temporaryBytes": 536870912,
+                "wallClockSeconds": 120
+              },
+              "memoryLimitExceeded": false,
+              "peakCpuMillis": 2250,
+              "peakPrivateBytes": 258162688,
+              "peakProcessCount": 11,
+              "recycledWithinBaseline": true,
+              "resourceLimitsEnforced": true,
+              "terminatedProcessCount": 0,
+              "totalProcessCount": 19
+            },
+            "role": "render",
+            "schemaVersion": "presenton.local-supervised-dispatch-evidence/v1",
+            "treeZeroConfirmedAtUtc": "2026-09-11T18:27:37.644122+00:00",
+            "utcClockRegressed": false,
+            "utcElapsedMillis": 11442.373,
+            "workerRuntimeIdentity": {
+              "argvSha256": "8469e44b0313b5dbd740bd529f07dc926c978090b608009b8bdd0bd8efb4086d",
+              "executableSha256": "a1addb0ce1f14f000c826b5a442c4acc0dc8e7b41fcb6337ec1a92c5194302a4",
+              "identityDigest": "3f2fbe9c9a1ac3d0e64b0e1291158bd49102abd7de9ca43a722647d45dd00acc",
+              "identityScope": "observed-executable-and-argv",
+              "schemaVersion": "presenton.observed-launch-identity/v1",
+              "unavailable": []
+            }
+          },
+          {
+            "attemptTokenSha256": "b862bc9d176d2da133609661a92e6b44144fb6bab93c38420c8177959ed0ddca",
+            "dispatchId": "54911489-9585-43e1-9d35-3544e664d719",
+            "durationMillis": 831638.0873,
+            "evidenceDigest": "9b043de9f4ec66b733c7352b25bd85c39f4d3a0fbb067833e9730049bb015239",
+            "evidenceScope": "local-supervisor-invocation-to-tree-zero",
+            "externalAttestationStatus": "not-collected",
+            "inputBytes": 365858,
+            "inputDigest": "34f9142459aefee60fdcdcb4d4dfc915832e8cf574188f890015d922be799dc5",
+            "invocationStartedAtUtc": "2026-09-11T18:27:54.544825+00:00",
+            "operationId": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+            "outcome": "succeeded",
+            "outputBytes": 8175789,
+            "outputDigest": "32ef63e8b632b206e66b19eef85c09933c69810a0e32eedaeada98968e258b46",
+            "productionEligible": false,
+            "resourceMetricGaps": [
+              "peakHandleCount",
+              "peakRssBytes"
+            ],
+            "resourceMetrics": {
+              "deadlineExceeded": false,
+              "finalProcessCount": 0,
+              "limits": {
+                "cpuRatePercent": 100,
+                "memoryBytes": 8589934592,
+                "pidCount": 96,
+                "temporaryBytes": 536870912,
+                "wallClockSeconds": 1740
+              },
+              "memoryLimitExceeded": false,
+              "peakCpuMillis": 284562,
+              "peakPrivateBytes": 1892405248,
+              "peakProcessCount": 94,
+              "recycledWithinBaseline": true,
+              "resourceLimitsEnforced": true,
+              "terminatedProcessCount": 0,
+              "totalProcessCount": 1121
+            },
+            "role": "export",
+            "schemaVersion": "presenton.local-supervised-dispatch-evidence/v1",
+            "treeZeroConfirmedAtUtc": "2026-09-11T18:41:46.182945+00:00",
+            "utcClockRegressed": false,
+            "utcElapsedMillis": 831638.12,
+            "workerRuntimeIdentity": {
+              "argvSha256": "c3ff96d051178d7dc9903d2c3b9a92bbbda0a5799fa307435346a11f441765cd",
+              "executableSha256": "a1addb0ce1f14f000c826b5a442c4acc0dc8e7b41fcb6337ec1a92c5194302a4",
+              "identityDigest": "f0ab65afbc79ca960fca329ae286a78e3719c92c207a3bb144fd072e3c6ea21e",
+              "identityScope": "observed-executable-and-argv",
+              "schemaVersion": "presenton.observed-launch-identity/v1",
+              "unavailable": []
+            }
+          }
+        ],
+        "_worker_dispatch_evidence_gaps": [],
+        "artifact_store_put_count": 41,
+        "artifact_store_put_latency_micros_total": 667123,
+        "artifact_store_read_count": 5,
+        "artifact_store_read_latency_micros_total": 26401,
+        "artifact_store_head_count": 124,
+        "artifact_store_head_latency_micros_total": 714617,
+        "artifact_cache_hit_count": 0,
+        "artifact_cache_miss_count": 75,
+        "artifact_cache_eviction_count": 49,
+        "artifact_cache_evicted_bytes": 2305425,
+        "artifact_store_put_latency_micros_process_max": 32978,
+        "artifact_store_read_latency_micros_process_max": 10573,
+        "artifact_store_head_latency_micros_process_max": 47210,
+        "artifact_cache_current_bytes": 2612837,
+        "artifact_cache_current_entries": 61,
+        "render_execution_count": 35,
+        "render_checkpoint_reuse_count": 0,
+        "render_singleflight_join_count": 0,
+        "render_authority_modes": [
+          "postgresql-advisory-xact"
+        ],
+        "requested_export_mode": "editable-hybrid",
+        "public_export_worker_evidence": {
+          "declaredGraphSlides": 35,
+          "deliveredExportMode": "editable-hybrid",
+          "fallbackReason": null,
+          "font_embedding": {
+            "applied": true,
+            "embeddedTypefaces": 1,
+            "reason": "embedded",
+            "requested": true
+          },
+          "quality": {
+            "schemaVersion": "public-hybrid-quality-summary/v1",
+            "status": "partially-editable",
+            "editableSlides": 7,
+            "imageFallbackSlides": 28,
+            "rasterFallbackElements": 68,
+            "deckBudgetMillis": 1495562,
+            "slidesNotAttempted": 0,
+            "fallbackReasonTally": {
+              "chrome-teardown-timeout": 28,
+              "invalid-bounds": 2,
+              "native-preparation-or-layer-safety-rejected": 2,
+              "typography-embedding-face-missing": 4,
+              "typography-font-substitution": 4,
+              "unsupported-shape": 5
+            },
+            "slideFallbacks": [
+              {
+                "n": 1,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 2,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 3,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 4,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 5,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 6,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 7,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 8,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 9,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 11,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 12,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 13,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 14,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 15,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 16,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 18,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 24,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 25,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 26,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 27,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 28,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 29,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 30,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 31,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 32,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 33,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 34,
+                "code": "chrome-teardown-timeout"
+              },
+              {
+                "n": 35,
+                "code": "chrome-teardown-timeout"
+              }
+            ]
+          },
+          "requestedExportMode": "editable-hybrid",
+          "structural": {
+            "fullSlideRasterSlides": 34,
+            "nativeChartElements": 0,
+            "nativeGroupElements": 31,
+            "nativeImageElements": 0,
+            "nativeLayerSlides": 7,
+            "nativeShapeElements": 148,
+            "nativeTableElements": 0,
+            "nativeTextElements": 123,
+            "readbackFailedSlides": 0,
+            "slideCount": 35,
+            "slides": [
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 1,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 2,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 3,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 4,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 5,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 6,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 7,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 8,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 9,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 1,
+                "chart": 0,
+                "fullSlideRaster": false,
+                "group": 4,
+                "image": 0,
+                "n": 10,
+                "readback": "passed",
+                "shape": 13,
+                "table": 0,
+                "text": 15
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 11,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 12,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 13,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 14,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 15,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 16,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 1,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 2,
+                "image": 0,
+                "n": 17,
+                "readback": "passed",
+                "shape": 17,
+                "table": 0,
+                "text": 19
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 18,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 1,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 9,
+                "image": 0,
+                "n": 19,
+                "readback": "passed",
+                "shape": 31,
+                "table": 0,
+                "text": 23
+              },
+              {
+                "backplates": 1,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 6,
+                "image": 0,
+                "n": 20,
+                "readback": "passed",
+                "shape": 33,
+                "table": 0,
+                "text": 22
+              },
+              {
+                "backplates": 1,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 1,
+                "image": 0,
+                "n": 21,
+                "readback": "passed",
+                "shape": 19,
+                "table": 0,
+                "text": 17
+              },
+              {
+                "backplates": 1,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 5,
+                "image": 0,
+                "n": 22,
+                "readback": "passed",
+                "shape": 19,
+                "table": 0,
+                "text": 14
+              },
+              {
+                "backplates": 1,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 4,
+                "image": 0,
+                "n": 23,
+                "readback": "passed",
+                "shape": 16,
+                "table": 0,
+                "text": 13
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 24,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 25,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 26,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 27,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 28,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 29,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 30,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 31,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 32,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 33,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 34,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              },
+              {
+                "backplates": 0,
+                "chart": 0,
+                "fullSlideRaster": true,
+                "group": 0,
+                "image": 0,
+                "n": 35,
+                "readback": "passed",
+                "shape": 0,
+                "table": 0,
+                "text": 0
+              }
+            ]
+          }
+        },
+        "public_export_execution_receipt": {
+          "schemaVersion": "public-export-execution-receipt/v1",
+          "slideCount": 35,
+          "renderConcurrencyLimit": 2,
+          "renderConcurrencyPeak": 1,
+          "renderGateWaitMillis": 0,
+          "renderSchedulerQueueWaitMillis": 47671,
+          "renderWorkerCumulativeMillis": 47681,
+          "renderWallMillis": 68392,
+          "artifactStageMillis": 31219,
+          "htmlPersistMillis": 1672,
+          "exportWorkerMillis": 834126,
+          "exportSchedulerQueueWaitMillis": 833235,
+          "operationWallMillis": 924090,
+          "renderExecutionCount": 35,
+          "renderBatchExecutionCount": 5,
+          "chromiumProcessLaunchCount": 5,
+          "browserReuseCount": 30,
+          "renderCheckpointReuseCount": 0,
+          "renderSingleflightJoinCount": 0,
+          "renderRuntimeIdentity": {
+            "schemaVersion": "public-render-runtime-binding/v2",
+            "mode": "owned-local-controller-observed",
+            "checkpointReuseEligible": true,
+            "releaseEligible": false,
+            "releaseEligibilityReason": "runtime-binding-is-not-release-authorization",
+            "workerImageDigest": null,
+            "chromeRuntimeDigest": "sha256:a3da7929fb64395390db81c3ed3bffd12c30e1f9d489b0f436bf1efaab97dfc2",
+            "fontInventoryDigest": "sha256:9aeabb592d3ee316a47673c990488fa6b096412a689649f5222cd2261193816b",
+            "limitations": [
+              "controller-worker-colocation-required"
+            ],
+            "bindingDigest": "sha256:ae3b5fbf6954581c151b317b83f1cfd1c893c4f0238071b4fbfef80fc0f0ad3b"
+          },
+          "deckRenderIdentityDigest": "sha256:431b6b64a792d5053101b3f0e9db62e503ee33e36fdbd86b27de5a931ec0074d",
+          "exporterWorkerBundle": {
+            "schemaVersion": "public-export-worker-bundle/v1",
+            "digest": "a00a8cb2b64d641c41e2a6a6cbc7d03adf7cc6d4fbfdacdad56d1d792121a35c",
+            "source": "worker-bundle-files",
+            "fileCount": 83
+          }
+        },
+        "public_artifact_id": "cd789c53-fd05-49ec-81ef-304d7e3ef40a",
+        "quality_receipt": {
+          "schemaVersion": "quality-receipt/v3",
+          "qualityReceiptId": "quality:1a00e102-49b1-45d3-8873-a2be8554f23d:cd789c53-fd05-49ec-81ef-304d7e3ef40a",
+          "operationId": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+          "presentationId": "75cf9f7b-0a1c-45f5-842c-9c019565434c",
+          "artifactDigest": "sha256:32ef63e8b632b206e66b19eef85c09933c69810a0e32eedaeada98968e258b46",
+          "sourceRevision": 1,
+          "sceneDigest": "sha256:d3fc26961043ed21b76afad6765ba763609cfbe4f303a6683fe6612d4c6c2d43",
+          "capabilityRegistryDigest": "sha256:3ca9579f0b88f17ecbbb957ad11a203fc5aaf6347f76bf8236c782eb6c30981b",
+          "exporterVersion": "public-worker-protocol/v2",
+          "evaluatedAt": "2026-09-11T18:41:49.509235Z",
+          "contentBrief": {
+            "required": false,
+            "status": "not_required",
+            "evidence": null,
+            "reasonCode": null
+          },
+          "authoring": {
+            "required": true,
+            "status": "passed",
+            "evidence": {
+              "checkerVersion": "authored-generation-checkers/v1",
+              "inputDigest": "sha256:bd90e8e8d811440ba7087e4b979ddba3a25f98e11ee961d54debc18434d61162",
+              "outputDigest": "sha256:d9cd260f2a04076a1224c025dca73628251a19cef0513ff75879f38ee6eebcb0",
+              "measurements": {
+                "blockingIssueCount": 0,
+                "checkerCount": 1
+              },
+              "thresholds": {
+                "maximumBlockingIssueCount": 0,
+                "allChecksObserved": true
+              }
+            },
+            "reasonCode": null
+          },
+          "geometryFont": {
+            "required": true,
+            "status": "passed",
+            "evidence": {
+              "checkerVersion": "authored-generation-checkers/v1",
+              "inputDigest": "sha256:bd90e8e8d811440ba7087e4b979ddba3a25f98e11ee961d54debc18434d61162",
+              "outputDigest": "sha256:d9cd260f2a04076a1224c025dca73628251a19cef0513ff75879f38ee6eebcb0",
+              "measurements": {
+                "blockingIssueCount": 0,
+                "checkerCount": 2
+              },
+              "thresholds": {
+                "maximumBlockingIssueCount": 0,
+                "allChecksObserved": true
+              }
+            },
+            "reasonCode": null
+          },
+          "imageContentIntegrity": {
+            "required": false,
+            "status": "not_required",
+            "evidence": null,
+            "reasonCode": null
+          },
+          "visualReview": {
+            "required": true,
+            "status": "failed",
+            "evidence": null,
+            "reasonCode": "visual_checker_evidence_not_persisted"
+          },
+          "performance": {
+            "required": false,
+            "status": "not_assessed",
+            "evidence": null,
+            "reasonCode": "performance_checker_evidence_not_persisted"
+          },
+          "nativeCoverageOoxml": {
+            "required": false,
+            "status": "pending",
+            "evidence": null,
+            "reasonCode": "ooxml_checker_evidence_not_persisted"
+          },
+          "releaseReadiness": "blocked"
+        }
+      },
+      "version": 4,
+      "operation_version": 4,
+      "expected_revision": 1,
+      "result_revision": 1,
+      "approval_expires_at": null,
+      "retry_of_operation_id": null,
+      "created_at": "2026-09-11T18:26:24.219575Z",
+      "updated_at": "2026-09-11T18:41:49.824943Z",
+      "actor": {
+        "type": "user",
+        "label": "You"
+      },
+      "target": {
+        "presentation_id": "75cf9f7b-0a1c-45f5-842c-9c019565434c",
+        "summary": "PowerPoint export",
+        "context": {}
+      },
+      "activity_summary": "PowerPoint export completed.",
+      "allowed_actions": [
+        {
+          "id": "download",
+          "label": "Download",
+          "variant": "primary",
+          "enabled": true,
+          "reason": null
+        }
+      ],
+      "events": [
+        {
+          "schema_version": 1,
+          "id": "1a00e102-49b1-45d3-8873-a2be8554f23d:1",
+          "operation_id": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+          "operation_version": 0,
+          "sequence": 1,
+          "cursor": "28955",
+          "operation_anchor_position": 4,
+          "type": "message.created",
+          "status": "queued",
+          "message": null,
+          "progress": null,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T18:26:24.265864Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "1a00e102-49b1-45d3-8873-a2be8554f23d:2",
+          "operation_id": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+          "operation_version": 0,
+          "sequence": 2,
+          "cursor": "28956",
+          "operation_anchor_position": 4,
+          "type": "queued",
+          "status": "queued",
+          "message": "Queued.",
+          "progress": null,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T18:26:24.274468Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "1a00e102-49b1-45d3-8873-a2be8554f23d:3",
+          "operation_id": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+          "operation_version": 1,
+          "sequence": 3,
+          "cursor": "28957",
+          "operation_anchor_position": 4,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": null,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T18:26:25.161300Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "1a00e102-49b1-45d3-8873-a2be8554f23d:4",
+          "operation_id": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+          "operation_version": 2,
+          "sequence": 4,
+          "cursor": "28958",
+          "operation_anchor_position": 4,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 10.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T18:26:25.278227Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "1a00e102-49b1-45d3-8873-a2be8554f23d:5",
+          "operation_id": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+          "operation_version": 3,
+          "sequence": 5,
+          "cursor": "29013",
+          "operation_anchor_position": 4,
+          "type": "operation.progress",
+          "status": "running",
+          "message": null,
+          "progress": 80.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T18:41:49.547109Z"
+        },
+        {
+          "schema_version": 1,
+          "id": "1a00e102-49b1-45d3-8873-a2be8554f23d:6",
+          "operation_id": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+          "operation_version": 4,
+          "sequence": 6,
+          "cursor": "29014",
+          "operation_anchor_position": 4,
+          "type": "operation.result",
+          "status": "succeeded",
+          "message": null,
+          "progress": 100.0,
+          "error": null,
+          "safe_message": null,
+          "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": 0,
+          "recoveryReason": null,
+          "recoveryStatus": "not_required",
+          "capacity_waiting": null,
+          "queue_position": null,
+          "result": null,
+          "created_at": "2026-09-11T18:41:49.840692Z"
+        }
+      ]
+    }
+  ],
+  "next_before_position": null,
+  "event_high_watermark": "29014",
+  "has_more": false,
+  "revision": 1
+}
