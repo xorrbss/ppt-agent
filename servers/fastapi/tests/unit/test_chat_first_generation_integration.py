@@ -188,7 +188,10 @@ def test_v1_async_generation_uses_strict_v2_admission_before_claim(
                 assert observed["operation_id"] == operation.id
                 assert operation.contract_version == "public-operation/v2"
                 assert operation.execution_profile_version == "public-generation-export/v2"
-                assert operation.phase == "active"
+                # Admission is the only phase the route may reach: the
+                # runner is what claims the operation and moves it to
+                # "active" (services/public_operation_admission.py).
+                assert operation.phase == "admitted"
                 assert operation.deadline_at is not None
                 assert operation.fencing_token == 1
                 assert observed["operation_kind"] == "generation"
