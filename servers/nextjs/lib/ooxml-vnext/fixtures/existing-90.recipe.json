@@ -43,6 +43,6 @@
       "expectedDisposition": "WARN_PRESERVE"
     }
   ],
-  "expectedArchiveSha256": "76236ccfaed176966dabcfb8d91b4541b17e8f6907606240d1e09a82bb78afa3",
-  "expectedPackageDigest": "28c836438e267a11f172f93be421b3942fd8f07e75a55c6057268102bb05e9e1"
+  "expectedArchiveSha256": "a3d184117f04a56d67e077894c80cc228b660371c3b2bfbc600199861aff7087",
+  "expectedPackageDigest": "1d202544bb13b3c3e26f37f79431b88c6b79ff4b562ff6805ee5efa3bbbd284a"
 }
