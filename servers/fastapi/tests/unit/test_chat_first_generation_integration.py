@@ -327,6 +327,9 @@ def test_recovery_expires_phase1_partial_before_lease_and_releases_quota(
                         active_resource_units=1,
                     )
                     for scope, key in (
+                        # Every admission reserves one slot in all three
+                        # scopes, so recovery must release all three.
+                        ("global", "global"),
                         ("tenant", "default"),
                         ("owner", str(OWNER_A)),
                     )
@@ -2170,7 +2173,12 @@ async def _seed_v2_operation_with_phase1_admission(
                 operation_kind="generation",
                 **counter_kwargs,
             )
-            for scope, key in (("tenant", "default"), ("owner", str(OWNER_A)))
+            # An admission reserves one slot in every scope, global included.
+            for scope, key in (
+                ("global", "global"),
+                ("tenant", "default"),
+                ("owner", str(OWNER_A)),
+            )
         ]
         session.add(_public_policy_profile(policy_version))
         await session.flush()
