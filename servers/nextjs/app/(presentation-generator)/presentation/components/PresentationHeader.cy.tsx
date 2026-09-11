@@ -31,6 +31,7 @@ const mountHeader = (
   },
   editableHybridProjection?: Record<string, unknown>,
   authoredQualityGate?: Record<string, unknown>,
+  activeExportOperation?: "export.pptx" | "export.pdf" | null,
 ) => {
   store.dispatch(
     setPresentationData({
@@ -82,6 +83,7 @@ const mountHeader = (
               onWorkspaceCommand={workspace?.command}
               onWorkspaceQualityReviewRequest={workspace?.qualityReview}
               onWorkspacePageRemakeRequest={workspace?.pageRemake}
+              activeExportOperation={activeExportOperation}
             />
           </Provider>
         </PathnameContext.Provider>
@@ -534,6 +536,41 @@ describe("PresentationHeader workspace controls", () => {
 
     cy.get('[data-testid="export-trigger"]').should("be.disabled");
     cy.get("@updatePresentationContent").should("not.have.been.called");
+  });
+
+  it("disables the export trigger with a Korean reason while an export operation is in flight", () => {
+    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
+    mountHeader(
+      false,
+      true,
+      { enabled: true, command: workspaceCommand },
+      undefined,
+      undefined,
+      "export.pptx",
+    );
+
+    cy.get('[data-testid="export-trigger"]')
+      .should("be.disabled")
+      .and("have.attr", "aria-label", enMessages.exportMenu.triggerDisabledExportInFlightAria)
+      .and("have.attr", "title", enMessages.exportMenu.triggerDisabledExportInFlightAria);
+    cy.get("@workspaceCommand").should("not.have.been.called");
+  });
+
+  it("re-enables the export trigger once no export operation is in flight", () => {
+    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
+    mountHeader(
+      false,
+      true,
+      { enabled: true, command: workspaceCommand },
+      undefined,
+      undefined,
+      null,
+    );
+
+    cy.get('[data-testid="export-trigger"]')
+      .should("not.be.disabled")
+      .and("have.attr", "aria-label", enMessages.exportMenu.triggerAria)
+      .and("not.have.attr", "title");
   });
 
 });

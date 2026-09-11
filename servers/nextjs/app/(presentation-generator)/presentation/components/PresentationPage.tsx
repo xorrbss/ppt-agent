@@ -45,6 +45,7 @@ import { usePresentationPageController } from "../hooks/usePresentationPageContr
 import {
   WorkspaceChatPanel,
   useWorkspaceCapability,
+  type ExportOperationType,
   type WorkspaceAgentSlideFocus,
   type WorkspaceCommandDispatcher,
   type WorkspacePageRemakeRequester,
@@ -180,6 +181,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     useState<WorkspaceQualityReviewRequester | null>(null);
   const [workspacePageRemakeRequester, setWorkspacePageRemakeRequester] =
     useState<WorkspacePageRemakeRequester | null>(null);
+  const [activeExportOperation, setActiveExportOperation] = useState<ExportOperationType | null>(null);
   const handleWorkspaceCommandDispatcherReady = useCallback(
     (dispatcher: WorkspaceCommandDispatcher | null) => {
       setWorkspaceCommandDispatcher(() => dispatcher);
@@ -689,6 +691,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               ? handleWorkspacePageRemakeRequest
               : undefined
           }
+          activeExportOperation={activeExportOperation}
           onCanonicalSaved={handlePresentationChanged}
           headerFeatures={{
             showAuthoredActions: presentationFeatureView.authored,
@@ -1023,6 +1026,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                 onPageRemakeRequesterReady={(requester) =>
                   setWorkspacePageRemakeRequester(() => requester)
                 }
+                onExportOperationStateChange={setActiveExportOperation}
               />
             ) : workspaceCapabilityState === "unavailable" ? (
               <div

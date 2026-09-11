@@ -46,6 +46,8 @@ import {
   CONNECTION_LABELS,
   parseQualityReviewSlideRange,
   resolveHistoricalExportOperations,
+  useActiveExportOperationNotifier,
+  type ExportOperationType,
   type QualityReviewScope,
   type SlideRangeParseResult,
 } from "./workspaceChatPanelUtils";
@@ -75,6 +77,7 @@ interface WorkspaceChatPanelProps {
   onPageRemakeRequesterReady?: (
     requester: WorkspacePageRemakeRequester | null,
   ) => void;
+  onExportOperationStateChange?: (operationType: ExportOperationType | null) => void;
 }
 
 export default function WorkspaceChatPanel({
@@ -88,6 +91,7 @@ export default function WorkspaceChatPanel({
   onCommandDispatcherReady,
   onQualityReviewRequesterReady,
   onPageRemakeRequesterReady,
+  onExportOperationStateChange,
 }: WorkspaceChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -197,6 +201,7 @@ export default function WorkspaceChatPanel({
     [generationInfo, presentationId, projection.items],
   );
 
+  useActiveExportOperationNotifier(timelineItems, onExportOperationStateChange);
   const agentFocus = useWorkspaceAgentFocus({
     presentationId,
     submitting,

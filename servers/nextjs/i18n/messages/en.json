@@ -3061,7 +3061,8 @@
     "embeddedPptxDescription": "This is an explicit opt-in. Licensed fonts only; native/raster coverage and unsupported elements are shown after export.",
     "trigger": "Export",
     "triggerAria": "Choose an export format in the chat workspace",
-    "triggerDisabledAria": "Waiting for the chat workspace connection"
+    "triggerDisabledAria": "Waiting for the chat workspace connection",
+    "triggerDisabledExportInFlightAria": "An export is already in progress. Please wait for it to finish before starting another."
   },
   "qualityReview": {
     "issueSummary": "Issue slides {issueSlides} · detailed issues {detailedIssues} · fixed slides {fixedSlides} · resolved issues {resolvedIssues} · remaining issues {remainingIssues}",

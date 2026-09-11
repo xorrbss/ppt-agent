@@ -3061,7 +3061,8 @@
     "embeddedPptxDescription": "명시적 선택이 필요합니다. 허가된 글꼴만 포함하며 native/raster 범위와 지원 불가 요소를 export 후 표시합니다.",
     "trigger": "내보내기",
     "triggerAria": "채팅 작업 영역에서 내보내기 형식을 선택하세요",
-    "triggerDisabledAria": "채팅 작업 영역 연결을 기다리는 중"
+    "triggerDisabledAria": "채팅 작업 영역 연결을 기다리는 중",
+    "triggerDisabledExportInFlightAria": "이미 내보내기가 진행 중입니다. 완료된 후 다시 시도하세요."
   },
   "qualityReview": {
     "issueSummary": "문제 슬라이드 {issueSlides}장 · 상세 이슈 {detailedIssues}개 · 수정 슬라이드 {fixedSlides}장 · 해결 이슈 {resolvedIssues}개 · 잔여 이슈 {remainingIssues}개",

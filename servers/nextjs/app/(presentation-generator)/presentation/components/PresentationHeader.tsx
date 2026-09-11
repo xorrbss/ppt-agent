@@ -40,6 +40,7 @@ import {
   presentationMasterPin,
 } from "../utils/masterPresentation";
 import type {
+  ExportOperationType,
   WorkspaceCommandDispatcher,
   WorkspacePageRemakeRequester,
   WorkspaceQualityReviewRequester,
@@ -69,6 +70,7 @@ const PresentationHeader = ({
   onWorkspaceCommand,
   onWorkspaceQualityReviewRequest,
   onWorkspacePageRemakeRequest,
+  activeExportOperation = null,
   onCanonicalSaved,
   headerFeatures,
 }: {
@@ -82,6 +84,7 @@ const PresentationHeader = ({
   onWorkspaceCommand?: WorkspaceCommandDispatcher;
   onWorkspaceQualityReviewRequest?: WorkspaceQualityReviewRequester;
   onWorkspacePageRemakeRequest?: WorkspacePageRemakeRequester;
+  activeExportOperation?: ExportOperationType | null;
   onCanonicalSaved?: () => void | Promise<void>;
   headerFeatures?: PresentationHeaderFeatureSlots;
 }) => {
@@ -325,11 +328,13 @@ const PresentationHeader = ({
     router.push(to);
   };
 
+  const exportOperationInFlight = activeExportOperation !== null;
   const exportDisabled =
     !resolvedHeaderFeatures.exportActions ||
     isStreaming === true ||
     !workspaceCommandsEnabled ||
-    !onWorkspaceCommand;
+    !onWorkspaceCommand ||
+    exportOperationInFlight;
 
   const titleBlock = (
     <div
@@ -443,6 +448,7 @@ const PresentationHeader = ({
               onOpenHybridExportHistory={openHybridExportHistory}
               historyDisabled={isStreaming === true}
               hybridDisabledReason={hybridDisabledReason}
+              exportOperationInFlight={exportOperationInFlight}
               presentation={presentationData}
               manifestBindingLabel={
                 authoredCapabilityStatus.state === "ready" && authoredCapabilityStatus.readiness.version === "v1-fallback"

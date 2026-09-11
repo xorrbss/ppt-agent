@@ -23,6 +23,8 @@ interface ExportMenuProps {
   /** The deck itself; its quality receipt can refuse every format. */
   presentation?: unknown;
   manifestBindingLabel?: string;
+  /** An export operation for this presentation is already running or queued. */
+  exportOperationInFlight?: boolean;
 }
 
 const ExportMenu = ({
@@ -37,6 +39,7 @@ const ExportMenu = ({
   hybridDisabledReason,
   presentation,
   manifestBindingLabel,
+  exportOperationInFlight = false,
 }: ExportMenuProps) => {
   const t = useTranslations("exportMenu");
   const [open, setOpen] = useState(false);
@@ -50,6 +53,11 @@ const ExportMenu = ({
     ? presentationExportBlockReason(presentation)
     : undefined;
   const blocked = exportDisabled || exportBlockReason !== undefined;
+  const triggerReason = exportOperationInFlight
+    ? t("triggerDisabledExportInFlightAria")
+    : workspaceCommandsEnabled
+      ? t("triggerAria")
+      : t("triggerDisabledAria");
   const ExportOptions = ({ mobile }: { mobile: boolean }) => (
     <div className={`rounded-[18px] max-md:mt-4 ${mobile ? "" : "bg-white"} p-5`} aria-label={t("formatGroup")} role="group">
       <p className="text-sm font-medium text-[#19001F]">{t("chooseFormat")}</p>
@@ -86,7 +94,7 @@ const ExportMenu = ({
   );
 
   return <Popover open={open} onOpenChange={setOpen}>
-    <PopoverTrigger asChild><Button ref={exportTriggerRef} type="button" variant="toolbar" size="toolbar" disabled={exportDisabled} data-testid="export-trigger" aria-label={workspaceCommandsEnabled ? t("triggerAria") : t("triggerDisabledAria")}>
+    <PopoverTrigger asChild><Button ref={exportTriggerRef} type="button" variant="toolbar" size="toolbar" disabled={exportDisabled} data-testid="export-trigger" aria-label={triggerReason} title={exportOperationInFlight ? triggerReason : undefined}>
       <Download className="h-4 w-4" aria-hidden="true" /> {t("trigger")}
     </Button></PopoverTrigger>
     <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[18px] space-y-2 p-0"><ExportOptions mobile={false} /></PopoverContent>
