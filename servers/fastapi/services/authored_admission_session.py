@@ -220,13 +220,14 @@ def check_producer(
         context = context.for_state(representation)
     elif metrics is None and producer in {"author", "author_batch", "author_rescue"}:
         context = context.for_state("token")
+    gate_error: Exception | None = None
     try:
         result = session.admit(context, html, metrics=metrics, png=png)
     except Exception as error:
         # A shadow instrumentation bug must not change existing producer behavior.
         if session.mode == "enforce":
             raise
-        result = None
+        result, gate_error = None, error
         gate_code = bounded_code(getattr(error, "code", INTERNAL_ERROR))
     else:
         gate_code = result.code
@@ -236,6 +237,11 @@ def check_producer(
         elif context.state == "captured":
             result = replace(result, receipt=replace(result.receipt, persistence_class="evidence"))
         return result.html, result
+    evidence_fields = {
+        "predicate": result.predicate if result else "",
+        "block_count": len(result.block_ids) if result else 0,
+        "error": gate_error,
+    }
     try:
         existing = legacy(html)
     except Exception as error:
@@ -245,6 +251,7 @@ def check_producer(
             existing_code=bounded_code(getattr(error, "code", RENDERER_POLICY_FAILED)),
             gate_verdict=result.verdict if result else "error",
             gate_code=gate_code,
+            **evidence_fields,
         )
         raise
     legacy_flagged = isinstance(existing, dict) and existing.get("outcome") == VERBATIM_FLAG_ONLY
@@ -254,6 +261,7 @@ def check_producer(
         existing_code="",
         gate_verdict=result.verdict if result else "error",
         gate_code=gate_code,
+        **evidence_fields,
     )
     return existing, result
 

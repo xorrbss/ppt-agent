@@ -10,6 +10,7 @@ from services.authored_admission_policy import (
     SOURCE_READBACK_FAILED,
 )
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, replace
 import hashlib
 import json
@@ -24,11 +25,39 @@ def digest_html(value: str) -> str:
     return digest_bytes(value.encode("utf-8"))
 
 
+def json_value(value: Any) -> Any:
+    """Render mappings and sequences as the JSON types ``json.dumps`` accepts.
+
+    Producers hand the gate telemetry in whatever shape their own stage holds
+    it.  The per-slide render checkpoint passes Chromium's plain ``dict``, while
+    publication passes the deck evidence ledger's *retained* metrics, which that
+    ledger freezes into nested ``MappingProxyType``
+    (``services/authored_evidence_ledger.py``).  ``json.dumps`` serializes the
+    first and raises ``TypeError`` on the second, so the digest that keys every
+    admission used to depend on which stage produced the metrics: the
+    publication gate raised an uncoded ``TypeError`` on a deck whose slides had
+    each been admitted at their render checkpoint moments earlier.
+
+    Normalizing first makes the two the same bytes.  For a document that already
+    serialized this rewrite is the identity -- mappings keep their keys and
+    sequences stay arrays -- so digests minted before it remain valid, and
+    ``allow_nan=False`` below still fails closed on non-finite telemetry.
+    """
+
+    if isinstance(value, Mapping):
+        return {str(key): json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_value(item) for item in value]
+    return value
+
+
 def canonical_json(value: Any) -> str:
     dump = getattr(value, "model_dump", None)
     if callable(dump):
         value = dump(mode="json", by_alias=True)
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return json.dumps(
+        json_value(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
 
 
 @dataclass(frozen=True, slots=True)

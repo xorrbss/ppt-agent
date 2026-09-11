@@ -157,6 +157,7 @@ async def _persist_publishable_checkpoints(*, generation_job, admissions, htmls,
 
     import asyncio
 
+    from services.authored_admission_context import json_value
     from services.authored_checkpoint_html import checkpoint_stage_html
     from services.authored_checkpoint_state import get_checkpoint
     from services.authored_presentation_artifacts import _complete_stage_after_external_success
@@ -186,7 +187,11 @@ async def _persist_publishable_checkpoints(*, generation_job, admissions, htmls,
             fencing_token=fencing_token,
             html=htmls[index],
             png=pngs[index],
-            browser_metrics=metrics[index],
+            # The deck's final metrics come from the evidence ledger, which
+            # freezes them into nested ``MappingProxyType``.  The gate digests
+            # them either way, but the checkpoint bundle this writer produces is
+            # serialized with ``json.dumps``, which does not.
+            browser_metrics=json_value(metrics[index]),
             admission_receipt=admission.receipt,
         )
         if checkpoint_stage_html(saved, publishable=True) != htmls[index]:
@@ -212,16 +217,19 @@ async def final_readback(*, pngs, generation_job, **kwargs):
             )
             for index, html in enumerate(htmls)
         ]
-    except Exception:
+    except Exception as error:
         if session.mode == "enforce":
             raise
         # Instrumentation cannot become a new failure in the shadow rollout.
+        # The class and a digest of the message travel with the row: without
+        # them this branch discards the only evidence of what escaped.
         session.shadow.record(
             producer="publication",
             existing_verdict="unobserved",
             existing_code="",
             gate_verdict="error",
             gate_code=INTERNAL_ERROR,
+            error=error,
         )
         return _legacy_final_readback(**kwargs)
     if session.mode == "shadow":
@@ -236,6 +244,8 @@ async def final_readback(*, pngs, generation_job, **kwargs):
                     existing_code=error.code if i == index else "",
                     gate_verdict=admission.verdict,
                     gate_code=admission.code,
+                    predicate=admission.predicate,
+                    block_count=len(admission.block_ids),
                 )
             raise
         for i, admission in enumerate(admissions):
@@ -245,6 +255,8 @@ async def final_readback(*, pngs, generation_job, **kwargs):
                 existing_code="",
                 gate_verdict=admission.verdict,
                 gate_code=admission.code,
+                predicate=admission.predicate,
+                block_count=len(admission.block_ids),
             )
         return result
     for admission in admissions:

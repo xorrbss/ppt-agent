@@ -283,11 +283,16 @@ async def test_scope_pins_mode_and_configures_source(monkeypatch):
     assert await run() == context().manifest_digest
 
 
-def test_shadow_report_aggregates_content_free_lines():
+def shadow_report():
     root = Path(__file__).resolve().parents[4]
     spec = importlib.util.spec_from_file_location("shadow_report", root / "scripts/authored_admission_shadow_report.py")
     report = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(report)
+    return report
+
+
+def test_shadow_report_aggregates_content_free_lines():
+    report = shadow_report()
     rows = report.aggregate(
         [
             'prefix authored_admission_shadow {"producer":"author",'
@@ -295,7 +300,37 @@ def test_shadow_report_aggregates_content_free_lines():
         ]
         * 2
     )
+    # ``series_metrics.py`` unpacks this key as a three-tuple; it must not grow.
+    assert list(rows) == [("author", "admitted", "rejected")]
     assert "| author | admitted | rejected | 2 |" in report.markdown(rows)
+
+
+def test_shadow_report_scopes_to_one_operation_and_names_the_predicate():
+    """One worker log holds several decks; a parity table is per operation.
+
+    The shadow line carries no operation id of its own -- it is content-free --
+    so a row belongs to the most recent operation id the worker logged above it.
+    """
+
+    report = shadow_report()
+    lines = [
+        'workspace_operation {"operation_id":"11111111-1111-4111-8111-111111111111"}\n',
+        'x authored_admission_shadow {"producer":"render","existingVerdict":"admitted",'
+        '"existingCode":"","gateVerdict":"rejected","gateCode":"source_content_browser_readback_failed",'
+        '"predicate":"visibility","blockCount":2,"gateError":"","gateErrorDigest":""}\n',
+        'workspace_operation {"operation_id":"22222222-2222-4222-8222-222222222222"}\n',
+        'x authored_admission_shadow {"producer":"publication","existingVerdict":"unobserved",'
+        '"existingCode":"","gateVerdict":"error","gateCode":"authored_admission_internal_error",'
+        '"predicate":"","blockCount":0,"gateError":"TypeError","gateErrorDigest":"0123456789abcdef"}\n',
+    ]
+    whole_log = report.aggregate(lines, columns=report.COLUMNS)
+    assert sum(whole_log.values()) == 2
+    scoped = report.aggregate(lines, operation="22222222", columns=report.COLUMNS)
+    table = report.markdown(scoped, columns=report.COLUMNS)
+    assert sum(scoped.values()) == 1
+    assert "| publication | unobserved |  | error | authored_admission_internal_error |" in table
+    assert table.rstrip().endswith("|  | 0 | TypeError | 1 |")
+    assert "| producer | existing verdict |" in table and "| blocks | gate error | count |" in table
 
 
 @sync_async
@@ -361,3 +396,77 @@ def test_batch_provider_raw_diagnostics_precede_legacy_rewrites(session, monkeyp
     with pytest.raises(gate.BrowserSourceReadbackError):
         batch._postprocess_slide(prepared, HTML.replace("<h1>", '<h1 id="a" id="b">'), brand=None)
     rewrite.assert_not_called()
+
+
+@sync_async
+@pytest.mark.parametrize("mode", ["shadow", "enforce"])
+async def test_publication_admits_the_evidence_ledger_s_frozen_metrics(session, mode):
+    """G4, live series 2026-09-12: the publication gate's only observed regression.
+
+    ``final_readback`` is the one gate call site fed the deck evidence ledger's
+    *retained* metrics, and that ledger freezes them into nested
+    ``MappingProxyType``.  Every other producer hands the gate Chromium's plain
+    ``dict``, so the deck whose 35 slides had each been admitted at their render
+    checkpoint raised an uncoded ``TypeError`` at publication: recorded in
+    shadow as ``unobserved -> error``/``authored_admission_internal_error`` and,
+    under enforce, a deck-level failure of a deck that published.
+    """
+
+    from services.authored_evidence_ledger import _freeze
+
+    session.mode = mode
+    session.contexts = (replace(context(), terminal_fallback_eligible=True),)
+    html = author_html(HTML, index=0)
+    kwargs = dict(
+        pngs=[b"png"],
+        generation_job=None,
+        request=SimpleNamespace(_source_document_outline=OUTLINE, _source_content_manifest=MANIFEST),
+        htmls=[html],
+        source_reflow=True,
+        composition_profile=SimpleNamespace(text_mode="verbatim"),
+        terminal_fallback_enabled=True,
+        evidence_ledger=object(),
+        final_browser_metrics=[_freeze(metrics(html))],
+        flagged_slides=[],
+        _merge_flagged_slide_entries=lambda entries: list(entries),
+    )
+    _, payload, _ = await final_readback(**kwargs)
+    assert payload["verified"] is True
+    assert not [row for row in session.shadow.as_dict()["rows"] if row["gateVerdict"] == "error"]
+
+
+@sync_async
+async def test_a_gate_error_at_publication_still_names_its_exception(session, monkeypatch):
+    """The fail-closed re-raise stays; shadow records what escaped, bounded."""
+
+    from services.authored_admission_session import AdmissionSession
+
+    session.mode = "shadow"
+    html = author_html(HTML, index=0)
+    kwargs = dict(
+        pngs=[b"png"],
+        generation_job=None,
+        request=SimpleNamespace(_source_document_outline=OUTLINE, _source_content_manifest=MANIFEST),
+        htmls=[html],
+        source_reflow=True,
+        composition_profile=SimpleNamespace(text_mode="verbatim"),
+        terminal_fallback_enabled=False,
+        evidence_ledger=object(),
+        final_browser_metrics=[metrics(html)],
+        flagged_slides=[],
+        _merge_flagged_slide_entries=lambda entries: list(entries),
+    )
+
+    def explode(self, context, value, *, metrics=None, png=None):
+        raise RuntimeError("instrumentation defect")
+
+    monkeypatch.setattr(AdmissionSession, "admit", explode)
+    _, payload, _ = await final_readback(**kwargs)
+    assert payload["verified"] is True
+    row = next(row for row in session.shadow.as_dict()["rows"] if row["gateVerdict"] == "error")
+    assert row["gateCode"] == "authored_admission_internal_error"
+    assert row["gateError"] == "RuntimeError" and len(row["gateErrorDigest"]) == 16
+
+    session.mode = "enforce"
+    with pytest.raises(RuntimeError, match="instrumentation defect"):
+        await final_readback(**kwargs)

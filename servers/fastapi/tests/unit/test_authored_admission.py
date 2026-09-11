@@ -834,3 +834,179 @@ def test_evidence_from_another_policy_revision_is_refused(monkeypatch):
     assert checkpoint_stage_html(_Checkpoint(payload), publishable=True) == html
     stale_payload = dict(payload, policyRevision="authored-admission/v1")
     assert checkpoint_stage_html(_Checkpoint(stale_payload), publishable=True) is None
+
+
+def test_canonical_json_normalizes_frozen_ledger_metrics():
+    """The digest is the same bytes whichever stage produced the telemetry.
+
+    Publication gates the deck evidence ledger's *retained* metrics, which that
+    ledger freezes into nested ``MappingProxyType``; every other producer hands
+    the gate Chromium's plain ``dict``.  ``json.dumps`` raised ``TypeError`` on
+    the first, which is the uncoded ``authored_admission_internal_error`` the
+    2026-09-12 live series recorded at publication on a deck that published.
+    """
+
+    from services.authored_admission_context import canonical_json
+    from services.authored_evidence_ledger import _freeze
+
+    plain = metrics(HTML)
+    frozen = _freeze(plain)
+    assert not isinstance(frozen, dict)
+    assert canonical_json(frozen) == canonical_json(plain)
+
+    session = AdmissionSession(mode="shadow", contexts=(context(),))
+    html = gate.admit_slide_html(context(), HTML).html
+    admitted = session.admit(session.context(0, captured=True), html, metrics=_freeze(metrics(html)), png=b"png")
+    assert admitted.verdict == "admitted"
+    assert admitted.receipt.metrics_digest == digest_html(canonical_json(metrics(html)))
+
+
+def test_canonical_json_still_fails_closed_on_non_finite_telemetry():
+    from services.authored_admission_context import canonical_json
+
+    with pytest.raises(ValueError):
+        canonical_json({"width": float("nan")})
+
+
+def test_shadow_row_names_the_predicate_block_count_and_gate_exception():
+    shadow = AdmissionShadow()
+    shadow.record(
+        producer="publication",
+        existing_verdict="unobserved",
+        existing_code="",
+        gate_verdict="error",
+        gate_code="authored_admission_internal_error",
+        error=TypeError("Object of type mappingproxy is not JSON serializable"),
+    )
+    shadow.record(
+        producer="render",
+        existing_verdict="admitted",
+        existing_code="",
+        gate_verdict="rejected",
+        gate_code="source_content_browser_readback_failed",
+        predicate="visibility",
+        block_count=2,
+    )
+    error_row, rejected_row = sorted(shadow.as_dict()["rows"], key=lambda row: row["producer"])
+    assert error_row["gateError"] == "TypeError"
+    assert re.fullmatch(r"[0-9a-f]{16}", error_row["gateErrorDigest"])
+    assert rejected_row["predicate"] == "visibility" and rejected_row["blockCount"] == 2
+    assert rejected_row["gateError"] == "" and rejected_row["gateErrorDigest"] == ""
+    # The row must stay content-free: no source text, no attempt token.
+    assert "원문" not in json.dumps(shadow.as_dict(), ensure_ascii=False)
+
+
+def test_shadow_row_bounds_an_unnameable_exception_class():
+    from services.authored_admission_shadow import bounded_error
+
+    class _Bad(Exception):
+        pass
+
+    _Bad.__qualname__ = "not a class name"
+    name, digest = bounded_error(_Bad("boom"))
+    assert name == "authored_admission_uncoded_error" and len(digest) == 16
+    assert bounded_error(None) == ("", "")
+
+
+AUTHOR_FIXTURES = (
+    Path(__file__).resolve().parents[4]
+    / "artifacts"
+    / "verbatim-design-measurements-20260911"
+    / "fixtures"
+)
+
+
+def _author_fixtures():
+    """Stored author-stage documents with their one-unit manifest and bindings."""
+
+    if not AUTHOR_FIXTURES.is_dir():
+        return []
+    cases = []
+    for run in sorted(AUTHOR_FIXTURES.iterdir()):
+        for slide in sorted(run.iterdir()) if run.is_dir() else ():
+            document = slide / "html-author.txt"
+            if not document.is_file():
+                continue
+            manifest = json.loads((slide / "manifest.json").read_text(encoding="utf-8"))
+            projection = json.loads((slide / "projection.json").read_text(encoding="utf-8"))
+            blocks = {str(block.get("sourceBlockId")): block for block in manifest.get("blocks", ())}
+            bindings = tuple(
+                (block_id, (blocks[block_id].get("payload") or {})["text"])
+                for block_id in projection
+                if isinstance((blocks.get(block_id, {}).get("payload") or {}).get("text"), str)
+                and (blocks[block_id]["payload"]["text"]).strip()
+            )
+            if bindings:
+                cases.append((f"{run.name}/{slide.name}", document.read_text(encoding="utf-8"), manifest, bindings))
+    return cases
+
+
+def _entry_point_context(manifest, bindings):
+    slide = {
+        "sourceUnitId": manifest["sourceUnitId"],
+        "sourceIndex": 0,
+        "readingOrder": [block_id for block_id, _ in bindings],
+    }
+    return context_from_source(
+        manifest={"units": [manifest]},
+        projection={"slides": [slide]},
+        presentation_id="p1",
+        operation_id="op1",
+        slide_index=0,
+        source_unit_id=str(manifest["sourceUnitId"]),
+        policy_revision=current_rollout_profile().policy_revision,
+        fenced_revision=0,
+        attempt_token="attempt-1",
+        reference_mode="source_content_restyle",
+        source_reflow=True,
+        terminal_fallback_eligible=False,
+        allow_illustration_slots=True,
+        bindings=bindings,
+    )
+
+
+def _raw_and_expanded_entries_agree(html, manifest, bindings):
+    """Admit one document at both author entry points, and re-admit the first.
+
+    ``provider_raw_html`` enters at the top of ``_postprocess_slide`` in the
+    ``token`` state and ``provider_expanded_html`` at the bottom in the
+    ``expanded`` state.  Under enforce the raw entry also *returns* the gate's
+    stamped document into the middle of that function, so the expanded entry
+    re-admits bytes the gate has already bound -- the re-entrancy shadow never
+    exercises.  Both are asserted here.
+    """
+
+    pinned = _entry_point_context(manifest, bindings)
+    raw = gate.admit_slide_html(pinned.for_state("token"), html)
+    expanded = gate.admit_slide_html(pinned.for_state("expanded"), html)
+    rebound = gate.admit_slide_html(pinned.for_state("expanded"), raw.html)
+    return (
+        (raw.verdict, raw.code, raw.block_ids, raw.html)
+        == (expanded.verdict, expanded.code, expanded.block_ids, expanded.html)
+        and (rebound.verdict, rebound.code, rebound.html) == (raw.verdict, raw.code, raw.html)
+    ), raw
+
+
+@pytest.mark.parametrize("normalization", ["legacy", "tree"])
+def test_raw_entry_point_binds_exactly_as_the_expanded_entry_point(normalization):
+    """Design section 3.2 replay: the ``token`` entry adds no strictness.
+
+    With placeholder authoring off -- the rollout default -- ``admit_slide_html``
+    runs the identical steps in both states, so the raw entry cannot reject a
+    document the expanded entry admits, and its stamped output is the expanded
+    entry's own.  The stored run-13/14/17/18/19/23 author documents are the
+    corpus; the inline document keeps the assertion running where they are not
+    checked out.
+    """
+
+    with rollout_profile_scope(RolloutProfile(html_normalization=normalization)):
+        agreed, raw = _raw_and_expanded_entries_agree(
+            HTML, MANIFEST["units"][0], (("b1", "원문 제목"),)
+        )
+        assert agreed and raw.verdict == "admitted" and SOURCE_BLOCK_ATTRIBUTE in raw.html
+        disagreed = [
+            name
+            for name, html, manifest, bindings in _author_fixtures()
+            if not _raw_and_expanded_entries_agree(html, manifest, bindings)[0]
+        ]
+        assert disagreed == []
