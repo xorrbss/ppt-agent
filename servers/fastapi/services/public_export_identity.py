@@ -1,9 +1,10 @@
-"""Digest-bound, feature-gated export identity and publication contracts.
+"""Digest-bound export identity and publication contracts.
 
-This module is a shadow boundary for the Phase 3/5 export design.  It composes
-the existing database-backed ``PublicExportIdentity`` single-flight authority
-with immutable slide ``ArtifactRef`` checkpoints.  Callers must explicitly opt
-in; importing this module does not change the legacy export path.
+This module is the authority for the Phase 3/5 export design.  It composes the
+database-backed ``PublicExportIdentity`` single-flight row with immutable slide
+``ArtifactRef`` checkpoints.  Every public export submission passes through it:
+the unique identity key decides whether a submission executes, joins an
+in-flight execution, or reuses a completed result.
 """
 
 from __future__ import annotations
@@ -45,7 +46,6 @@ EXPORT_IDENTITY_SCHEMA_VERSION = "public-export-identity/v2"
 EXPORT_CHECKPOINT_SCHEMA_VERSION = "public-export-checkpoint/v1"
 SLIDE_RENDER_IDENTITY_SCHEMA_VERSION = "public-slide-render-identity/v1"
 SLIDE_RENDER_STAGE_VERSION = "public-fidelity-render/v2"
-PUBLIC_EXPORT_IDENTITY_V2_ENV = "PUBLIC_EXPORT_IDENTITY_V2_ENABLED"
 MAX_EXPORT_CHECKPOINT_BYTES = 4 * 1024 * 1024
 
 ExportFormat = Literal["pptx", "pdf"]
@@ -53,10 +53,6 @@ ExportMode = Literal["fidelity-raster", "editable-hybrid"]
 
 
 class PublicExportIdentityError(RuntimeError):
-    pass
-
-
-class PublicExportIdentityV2Disabled(PublicExportIdentityError):
     pass
 
 
@@ -70,22 +66,6 @@ class PublicExportFenceRejected(PublicExportIdentityError):
 
 class PublicSlideRenderSingleflightError(PublicExportIdentityError):
     pass
-
-
-def public_export_identity_v2_enabled() -> bool:
-    """Return an explicit opt-in; production authority is unchanged by default."""
-
-    return (os.getenv(PUBLIC_EXPORT_IDENTITY_V2_ENV) or "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-
-
-def require_public_export_identity_v2_enabled() -> None:
-    if not public_export_identity_v2_enabled():
-        raise PublicExportIdentityV2Disabled("public_export_identity_v2_disabled")
 
 
 def _normalized_text(value: str, *, field: str, maximum: int = 160) -> str:
@@ -351,7 +331,6 @@ async def find_reusable_slide_render_checkpoint(
 ) -> ArtifactRef | None:
     """Resolve a committed owner-scoped PNG checkpoint from any prior export."""
 
-    require_public_export_identity_v2_enabled()
     artifact = await session.scalar(
         select(PublicArtifact)
         .join(
@@ -418,7 +397,6 @@ async def bind_slide_render_checkpoint(
 ) -> None:
     """CAS a fresh or reused PNG checkpoint under the current operation fence."""
 
-    require_public_export_identity_v2_enabled()
     _validate_slide_render_claim(operation_claim, identity)
     if (
         artifact.owner_id != identity.owner_id
@@ -947,7 +925,6 @@ async def checkpoint_canonical_export_slides(
 ) -> None:
     """Bind every committed slide checkpoint to the live operation fence."""
 
-    require_public_export_identity_v2_enabled()
     _validate_operation_claim(operation_claim, identity)
     if operation_claim.owner_id is None:
         raise PublicExportIdentityBindingError("public_export_owner_required")
@@ -980,9 +957,8 @@ async def claim_canonical_export_identity(
     lease_seconds: int,
     now: datetime | None = None,
 ) -> CanonicalExportExecution:
-    """Join the cluster-wide single-flight without changing legacy call sites."""
+    """Join the cluster-wide single-flight for this export identity."""
 
-    require_public_export_identity_v2_enabled()
     _validate_operation_claim(operation_claim, identity)
     worker_id = _normalized_text(worker_id, field="export worker")
     claim = await claim_export_identity(
@@ -1072,7 +1048,6 @@ async def complete_canonical_export_identity(
 ) -> FencedExportPublicationCandidate:
     """Fence the result before it becomes eligible for publication-pointer CAS."""
 
-    require_public_export_identity_v2_enabled()
     _validate_execution_claim(execution, operation_claim)
     if (
         execution.singleflight.disposition != "claimed"
@@ -1104,7 +1079,6 @@ def reuse_completed_export_identity(
 ) -> FencedExportPublicationCandidate:
     """Bind an existing immutable result to the current operation's live fence."""
 
-    require_public_export_identity_v2_enabled()
     _validate_execution_claim(execution, operation_claim)
     artifact = execution.singleflight.artifact
     if execution.singleflight.disposition != "completed" or artifact is None:
@@ -1129,7 +1103,6 @@ async def promote_canonical_export_publication(
 ) -> PublicArtifactPublication:
     """Publish a committed result only while its operation fence is current."""
 
-    require_public_export_identity_v2_enabled()
     candidate.validate_for_claim(operation_claim)
     if operation_claim.owner_id is None:
         raise PublicExportIdentityBindingError("public_export_owner_required")
@@ -1171,13 +1144,11 @@ __all__ = [
     "ExportEvidenceDigests",
     "FencedExportPublicationCandidate",
     "MAX_EXPORT_CHECKPOINT_BYTES",
-    "PUBLIC_EXPORT_IDENTITY_V2_ENV",
     "SLIDE_RENDER_IDENTITY_SCHEMA_VERSION",
     "SLIDE_RENDER_STAGE_VERSION",
     "PublicExportFenceRejected",
     "PublicExportIdentityBindingError",
     "PublicExportIdentityError",
-    "PublicExportIdentityV2Disabled",
     "PublicSlideRenderSingleflightError",
     "SlideCheckpointArtifact",
     "acquire_slide_render_authority",
@@ -1186,9 +1157,7 @@ __all__ = [
     "checkpoint_canonical_export_slides",
     "complete_canonical_export_identity",
     "find_reusable_slide_render_checkpoint",
-    "public_export_identity_v2_enabled",
     "promote_canonical_export_publication",
-    "require_public_export_identity_v2_enabled",
     "restore_canonical_export_identity",
     "reuse_completed_export_identity",
     "run_slide_render_singleflight",

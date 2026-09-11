@@ -39,7 +39,6 @@ from services.public_export_identity import (
     ExportEvidenceDigests,
     PublicExportFenceRejected,
     PublicExportIdentityBindingError,
-    PublicExportIdentityV2Disabled,
     SlideCheckpointArtifact,
     acquire_slide_render_authority,
     claim_canonical_export_identity,
@@ -94,7 +93,7 @@ def _operation_claim(
     )
 
 
-def test_canonical_export_identity_is_feature_gated_digest_bound_and_fenced(
+def test_canonical_export_identity_is_digest_bound_and_fenced(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -247,20 +246,6 @@ def test_canonical_export_identity_is_feature_gated_digest_bound_and_fenced(
                 attempt_token="operation-attempt-1",
                 fencing_token=11,
             )
-            with pytest.raises(
-                PublicExportIdentityV2Disabled,
-                match="public_export_identity_v2_disabled",
-            ):
-                await claim_canonical_export_identity(
-                    session,
-                    identity=identity,
-                    source_checkpoint=source_checkpoint,
-                    operation_claim=initial_operation,
-                    worker_id="node-a",
-                    lease_seconds=30,
-                )
-
-            monkeypatch.setenv("PUBLIC_EXPORT_IDENTITY_V2_ENABLED", "true")
             render_identity = CanonicalSlideRenderIdentity(
                 owner_id=owner_id,
                 tenant_id="tenant-a",
