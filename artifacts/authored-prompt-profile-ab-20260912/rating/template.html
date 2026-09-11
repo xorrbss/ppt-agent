@@ -1,0 +1,351 @@
+<title>슬라이드 블라인드 평가</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#15181A; --panel:#1F2326; --panel-2:#282D31; --line:#31373B; --line-2:#3E4549;
+  --ink:#EAECEC; --ink-2:#A9AFB2; --ink-3:#767D81;
+  --accent:#4FB3A3; --accent-dim:#2B5F58;
+  --a:#7BA7D9; --same:#9AA1A6; --b:#D9A05B;
+  --ok:#5FAE7A; --warn:#D08A5B;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans KR","Malgun Gothic",system-ui,sans-serif;
+  font-size:15px; line-height:1.6; word-break:keep-all; overflow-wrap:break-word;
+  -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:"IBM Plex Mono",Consolas,monospace;font-variant-numeric:tabular-nums}
+
+/* ---- top bar ---- */
+header{
+  position:sticky; top:0; z-index:20; background:rgba(21,24,26,.94);
+  backdrop-filter:blur(8px); border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  padding:10px 18px;
+}
+h1{font-size:15px;font-weight:600;margin:0;letter-spacing:-0.01em;white-space:nowrap}
+.sub{font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+.spacer{flex:1 1 auto}
+.count{font-size:13px;color:var(--ink-2)}
+.count b{color:var(--ink);font-weight:600}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+.btn{
+  border:1px solid var(--line-2); background:var(--panel); color:var(--ink);
+  border-radius:6px; padding:6px 12px; font-size:13px; font-weight:500;
+  transition:background .12s,border-color .12s;
+}
+.btn:hover{background:var(--panel-2);border-color:var(--ink-3)}
+.btn:focus-visible,.choice:focus-visible,.cell:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn[disabled]{opacity:.4;cursor:default}
+
+/* ---- stage ---- */
+main{padding:18px 18px 0;max-width:2200px;margin:0 auto}
+.stage{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:900px){.stage{grid-template-columns:1fr}}
+.side{min-width:0}
+.side-head{
+  display:flex;align-items:center;gap:8px;margin-bottom:6px;height:22px;
+}
+.tag{
+  font-size:12px;font-weight:600;letter-spacing:.06em;
+  width:22px;height:22px;display:grid;place-items:center;border-radius:4px;
+  background:var(--panel-2);color:var(--ink-2);
+}
+.side.pick-a .tag{background:var(--a);color:#12181F}
+.side.pick-b .tag{background:var(--b);color:#1E1408}
+.reveal-name{font-size:12.5px;color:var(--ink-3)}
+.side.is-new .reveal-name{color:var(--accent)}
+.shot{
+  width:100%;display:block;border-radius:5px;border:1px solid var(--line);
+  background:#fff;aspect-ratio:16/9;object-fit:contain;
+}
+.side.pick-a .shot{border-color:var(--a)}
+.side.pick-b .shot{border-color:var(--b)}
+
+/* ---- controls ---- */
+.controls{
+  position:sticky;bottom:0;z-index:15;margin-top:14px;
+  background:linear-gradient(180deg,rgba(21,24,26,0) 0%,var(--ground) 22%);
+  padding:14px 0 10px;
+}
+.choices{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:760px;margin:0 auto}
+.choice{
+  border:1px solid var(--line-2);background:var(--panel);border-radius:8px;
+  padding:11px 8px;font-size:14px;font-weight:600;color:var(--ink-2);
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  transition:background .12s,border-color .12s,color .12s;
+}
+.choice small{font-weight:400;font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+.choice:hover{background:var(--panel-2)}
+.choice[aria-pressed="true"]{color:var(--ink)}
+.choice.c-a[aria-pressed="true"]{background:var(--a);border-color:var(--a);color:#12181F}
+.choice.c-a[aria-pressed="true"] small{color:#12181F;opacity:.7}
+.choice.c-same[aria-pressed="true"]{background:var(--same);border-color:var(--same);color:#16191B}
+.choice.c-same[aria-pressed="true"] small{color:#16191B;opacity:.7}
+.choice.c-b[aria-pressed="true"]{background:var(--b);border-color:var(--b);color:#1E1408}
+.choice.c-b[aria-pressed="true"] small{color:#1E1408;opacity:.7}
+
+.noterow{display:flex;gap:10px;max-width:760px;margin:10px auto 0;align-items:center}
+input[type=text]{
+  flex:1 1 auto;min-width:0;background:var(--panel);border:1px solid var(--line-2);
+  color:var(--ink);border-radius:6px;padding:8px 11px;font:inherit;font-size:13.5px;
+}
+input[type=text]::placeholder{color:var(--ink-3)}
+input[type=text]:focus{outline:none;border-color:var(--accent)}
+
+/* ---- filmstrip ---- */
+.strip{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin:12px auto 0;max-width:900px}
+.cell{
+  width:30px;height:26px;border-radius:4px;border:1px solid var(--line-2);
+  background:var(--panel);font-size:11.5px;color:var(--ink-3);
+  display:grid;place-items:center;
+}
+.cell.done{color:var(--ink);border-color:var(--ink-3)}
+.cell.r-a{background:var(--a);color:#12181F;border-color:var(--a)}
+.cell.r-same{background:var(--same);color:#16191B;border-color:var(--same)}
+.cell.r-b{background:var(--b);color:#1E1408;border-color:var(--b)}
+.cell.cur{box-shadow:0 0 0 2px var(--accent)}
+
+/* ---- summary ---- */
+.summary{max-width:900px;margin:26px auto 60px;border-top:1px solid var(--line);padding-top:20px}
+.summary h2{font-size:16px;font-weight:600;margin:0 0 12px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.tile .k{font-size:11.5px;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px}
+.tile .v{font-size:25px;font-weight:600;line-height:1.15}
+.tile.new .v{color:var(--accent)} .tile.old .v{color:var(--ink-2)} .tile.tie .v{color:var(--same)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:520px}
+th,td{padding:7px 11px;text-align:left;border-bottom:1px solid var(--line)}
+th{font-size:11.5px;letter-spacing:.05em;color:var(--ink-3);text-transform:uppercase;font-weight:500;background:var(--panel-2)}
+tr:last-child td{border-bottom:none}
+td.res-new{color:var(--accent);font-weight:600}
+td.res-old{color:var(--warn);font-weight:600}
+td.res-tie{color:var(--ink-3)}
+.note{color:var(--ink-2);font-size:12.5px}
+.hint{max-width:900px;margin:0 auto;color:var(--ink-3);font-size:12.5px;text-align:center;padding:8px 0 0}
+.status{font-size:12px;color:var(--ink-3);white-space:nowrap}
+.status.bad{color:var(--warn)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header>
+  <h1>슬라이드 블라인드 평가</h1>
+  <span class="sub">24장 · 좌우 무작위 · 평가 후 공개</span>
+  <span class="spacer"></span>
+  <span class="count"><b id="doneCount">0</b> / 24</span>
+  <span class="status" id="status">저장 준비 중</span>
+  <button class="btn" id="revealBtn">결과 보기</button>
+</header>
+
+<main>
+  <div class="stage">
+    <div class="side" id="sideA">
+      <div class="side-head"><span class="tag">A</span><span class="reveal-name" id="nameA"></span></div>
+      <img class="shot" id="imgA" alt="A안 슬라이드">
+    </div>
+    <div class="side" id="sideB">
+      <div class="side-head"><span class="tag">B</span><span class="reveal-name" id="nameB"></span></div>
+      <img class="shot" id="imgB" alt="B안 슬라이드">
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="choices">
+      <button class="choice c-a" id="chA" aria-pressed="false">A가 낫다<small>1</small></button>
+      <button class="choice c-same" id="chS" aria-pressed="false">비슷하다<small>2</small></button>
+      <button class="choice c-b" id="chB" aria-pressed="false">B가 낫다<small>3</small></button>
+    </div>
+    <div class="noterow">
+      <button class="btn" id="prevBtn">← 이전</button>
+      <input type="text" id="noteIn" placeholder="이유를 한 줄로 (선택)">
+      <button class="btn" id="nextBtn">다음 →</button>
+    </div>
+    <div class="strip" id="strip"></div>
+    <p class="hint">키보드: 1 · 2 · 3 으로 평가, ← → 로 이동. 평가한 장은 어느 쪽이 새 코드인지 바로 공개됩니다.</p>
+  </div>
+
+  <section class="summary" id="summary" hidden>
+    <h2>결과</h2>
+    <div class="tiles">
+      <div class="tile new"><div class="k">새 코드 우세</div><div class="v" id="tNew">0</div></div>
+      <div class="tile tie"><div class="k">비슷</div><div class="v" id="tTie">0</div></div>
+      <div class="tile old"><div class="k">기존 우세</div><div class="v" id="tOld">0</div></div>
+      <div class="tile"><div class="k">평가한 장</div><div class="v mono" id="tDone">0</div></div>
+    </div>
+    <div class="tw"><table>
+      <thead><tr><th>장</th><th>선택</th><th>결과</th><th>메모</th></tr></thead>
+      <tbody id="sumBody"></tbody>
+    </table></div>
+    <p class="note" id="sumNote"></p>
+  </section>
+</main>
+
+<script>
+/*DATA*/
+
+const NEW_RUN = "run27", OLD_RUN = "run22";
+const RUN_LABEL = {run27:"새 코드", run22:"기존 코드"};
+const N = PAIRS.length;
+let idx = 0;
+const ratings = new Map();   // slide index -> {choice, note}
+let db = null, store = "local";
+
+const $ = (id) => document.getElementById(id);
+const stat = $("status");
+
+/* ---------- persistence ---------- */
+const LS = "blind-rating-p1-v1";
+function loadLocal(){
+  try{ const raw = localStorage.getItem(LS); if(raw) for(const [k,v] of Object.entries(JSON.parse(raw))) ratings.set(Number(k), v); }catch(e){}
+}
+function saveLocal(){
+  try{ localStorage.setItem(LS, JSON.stringify(Object.fromEntries(ratings))); }catch(e){}
+}
+async function persist(i){
+  const r = ratings.get(i); if(!r) return;
+  saveLocal();
+  if(!db) return;
+  const p = PAIRS[i];
+  try{
+    await db.doc("ratings/p1-s" + String(i).padStart(2,"0")).set({
+      pass:"P1", slide:i, choice:r.choice, note:r.note || "",
+      left:p.left, right:p.right,
+      winner: r.choice==="same" ? "same" : (r.choice==="A" ? p.left : p.right),
+      ts: Date.now()
+    });
+    stat.textContent = "저장됨"; stat.classList.remove("bad");
+  }catch(e){
+    stat.textContent = "저장 실패 · 기기에만 보관"; stat.classList.add("bad");
+  }
+}
+
+/* ---------- rendering ---------- */
+function render(){
+  const p = PAIRS[idx];
+  $("imgA").src = "data:image/jpeg;base64," + IMG[p.left][p.slide];
+  $("imgB").src = "data:image/jpeg;base64," + IMG[p.right][p.slide];
+  $("imgA").alt = "A안 " + (idx+1) + "번째 슬라이드";
+  $("imgB").alt = "B안 " + (idx+1) + "번째 슬라이드";
+
+  const r = ratings.get(idx);
+  $("chA").setAttribute("aria-pressed", String(r?.choice === "A"));
+  $("chS").setAttribute("aria-pressed", String(r?.choice === "same"));
+  $("chB").setAttribute("aria-pressed", String(r?.choice === "B"));
+  $("noteIn").value = r?.note || "";
+
+  const sa = $("sideA"), sb = $("sideB");
+  sa.className = "side" + (r?.choice === "A" ? " pick-a" : "");
+  sb.className = "side" + (r?.choice === "B" ? " pick-b" : "");
+  if(r){
+    $("nameA").textContent = RUN_LABEL[p.left];
+    $("nameB").textContent = RUN_LABEL[p.right];
+    if(p.left === NEW_RUN) sa.classList.add("is-new"); else sb.classList.add("is-new");
+  }else{
+    $("nameA").textContent = ""; $("nameB").textContent = "";
+  }
+  $("prevBtn").disabled = idx === 0;
+  $("nextBtn").disabled = idx === N-1;
+  renderStrip();
+  $("doneCount").textContent = String(ratings.size);
+  if(!$("summary").hidden) renderSummary();
+}
+function renderStrip(){
+  const strip = $("strip");
+  strip.textContent = "";
+  for(let i=0;i<N;i++){
+    const b = document.createElement("button");
+    b.className = "cell" + (i===idx ? " cur" : "");
+    const r = ratings.get(i);
+    if(r){ b.classList.add("done","r-" + (r.choice==="same" ? "same" : r.choice.toLowerCase())); }
+    b.textContent = String(i+1);
+    b.setAttribute("aria-label", (i+1) + "번째 슬라이드로 이동");
+    b.addEventListener("click", () => { idx = i; render(); window.scrollTo({top:0,behavior:"instant"}); });
+    strip.appendChild(b);
+  }
+}
+function renderSummary(){
+  const body = $("sumBody"); body.textContent = "";
+  let nNew=0, nOld=0, nTie=0;
+  for(let i=0;i<N;i++){
+    const r = ratings.get(i); if(!r) continue;
+    const p = PAIRS[i];
+    let winner = "same";
+    if(r.choice === "A") winner = p.left; else if(r.choice === "B") winner = p.right;
+    if(winner === NEW_RUN) nNew++; else if(winner === OLD_RUN) nOld++; else nTie++;
+    const tr = document.createElement("tr");
+    const td = (t, cls) => { const d = document.createElement("td"); d.textContent = t; if(cls) d.className = cls; return d; };
+    tr.appendChild(td(String(i+1), "mono"));
+    tr.appendChild(td(r.choice === "same" ? "비슷" : r.choice + "안"));
+    tr.appendChild(td(
+      winner === NEW_RUN ? "새 코드" : winner === OLD_RUN ? "기존" : "무승부",
+      winner === NEW_RUN ? "res-new" : winner === OLD_RUN ? "res-old" : "res-tie"));
+    tr.appendChild(td(r.note || "", "note"));
+    body.appendChild(tr);
+  }
+  $("tNew").textContent = String(nNew);
+  $("tOld").textContent = String(nOld);
+  $("tTie").textContent = String(nTie);
+  $("tDone").textContent = String(ratings.size);
+  $("sumNote").textContent = ratings.size < N
+    ? (N - ratings.size) + "장이 아직 남았습니다."
+    : "24장 모두 평가했습니다.";
+}
+
+/* ---------- interaction ---------- */
+function choose(choice){
+  const prev = ratings.get(idx) || {};
+  ratings.set(idx, {choice, note: $("noteIn").value.trim() || prev.note || ""});
+  persist(idx);
+  render();
+}
+$("chA").addEventListener("click", () => choose("A"));
+$("chS").addEventListener("click", () => choose("same"));
+$("chB").addEventListener("click", () => choose("B"));
+$("prevBtn").addEventListener("click", () => { if(idx>0){ idx--; render(); } });
+$("nextBtn").addEventListener("click", () => { if(idx<N-1){ idx++; render(); } });
+$("noteIn").addEventListener("change", () => {
+  const r = ratings.get(idx); if(!r) return;
+  r.note = $("noteIn").value.trim(); persist(idx);
+});
+$("revealBtn").addEventListener("click", () => {
+  const s = $("summary");
+  s.hidden = !s.hidden;
+  if(!s.hidden){ renderSummary(); s.scrollIntoView({behavior:"smooth", block:"start"}); }
+});
+document.addEventListener("keydown", (e) => {
+  if(e.target && e.target.tagName === "INPUT") return;
+  if(e.key === "1") choose("A");
+  else if(e.key === "2") choose("same");
+  else if(e.key === "3") choose("B");
+  else if(e.key === "ArrowLeft" && idx > 0){ idx--; render(); }
+  else if(e.key === "ArrowRight" && idx < N-1){ idx++; render(); }
+  else return;
+  e.preventDefault();
+});
+
+/* ---------- boot ---------- */
+loadLocal();
+render();
+stat.textContent = "이 기기에 임시 저장";
+claude.use("db").then(async (h) => {
+  if(!h){ stat.textContent = "이 기기에만 저장됨"; stat.classList.add("bad"); return; }
+  db = h;
+  try{
+    const snap = await db.collection("ratings").get();
+    for(const d of (snap.docs || [])){
+      const v = d.data();
+      if(v && v.pass === "P1" && typeof v.slide === "number" && v.choice){
+        if(!ratings.has(v.slide)) ratings.set(v.slide, {choice: v.choice, note: v.note || ""});
+      }
+    }
+    saveLocal();
+    stat.textContent = "저장 켜짐";
+    render();
+  }catch(e){
+    stat.textContent = "읽기 실패 · 기기에만 보관"; stat.classList.add("bad");
+  }
+});
+</script>
