@@ -711,3 +711,92 @@ def test_structural_repair_style_guard_retains_9_5pt_floor_and_protected_geometr
     assert not any(
         reason.startswith("repair_protected_geometry_changed:") for reason in reasons
     )
+
+
+def test_structural_repair_evaluator_rejects_a_candidate_that_drops_source_text() -> None:
+    """Validation run-14: a strict verbatim check killed the deck, not the candidate.
+
+    The repair's composition validator runs the same fail-closed
+    ``_require_source_verbatim_bindings`` the deck uses. Raised from inside the
+    evaluator it escaped the repair round and ended a 35-slide deck at 34/35.
+    The candidate must be REJECTED instead, leaving the original slide selected
+    and the slide unresolved for the terminal fallback to flag.
+    """
+
+    from services.authored_presentation_generation import (
+        _require_source_verbatim_bindings,
+    )
+    from services.authored_structural_repair import (
+        SOURCE_VERBATIM_REJECTION,
+        _digest,
+        make_source_repair_evaluator,
+        source_verbatim_rejection,
+    )
+
+    bindings = (("b1", "원문 제목"), ("b2", "중요한 본문"))
+    baseline = stamp_source_block_ids(
+        '<h1 data-qid="t" style="width:200px">원문 제목</h1>'
+        '<p data-qid="b">중요한 본문</p>',
+        bindings,
+    )
+    # The candidate summarised one bound block away -- exactly run-14's shape.
+    candidate = stamp_source_block_ids(
+        '<h1 data-qid="t" style="width:220px">원문 제목</h1><p data-qid="b">요약</p>',
+        (("b1", "원문 제목"),),
+    )
+
+    def capture(html, occluded):
+        metrics = _metrics(occluded=occluded)
+        metrics.update(
+            source_digest=_digest(html), render_digest=_digest("render:" + html)
+        )
+        return metrics
+
+    seen: list[dict] = []
+
+    async def validate_candidate(_index, html, _metrics):
+        _require_source_verbatim_bindings([html], (bindings,))
+
+    async def composition(html, metrics):
+        try:
+            await validate_candidate(2, html, metrics)
+        except BrowserSourceReadbackError as error:
+            rejected = source_verbatim_rejection(error)
+            seen.append(rejected)
+            return rejected
+        return {"passed": True, "violations": []}
+
+    # The check really does refuse this candidate on its own terms.
+    with pytest.raises(BrowserSourceReadbackError):
+        _require_source_verbatim_bindings([candidate], (bindings,))
+
+    async def check():
+        evaluator = make_source_repair_evaluator(
+            manifest=_manifest(), outline=_outline("b1", "b2"),
+            baseline_html=baseline, baseline_metrics=capture(baseline, 0.75),
+            composition_validator=composition,
+        )
+        assessment = await evaluator(2, candidate, capture(candidate, 0.0))
+        assert assessment.decision == "reject"
+        assert "repair_composition_contract_failed" in assessment.reasons
+        assert evaluator.selected_digest == _digest(baseline)
+
+    asyncio.run(check())
+
+    assert seen and seen[0]["contract_violations"] == [SOURCE_VERBATIM_REJECTION]
+    assert seen[0]["passed"] is False
+
+
+def test_generation_repair_validator_routes_the_strict_check_through_the_rejection() -> None:
+    """The generation-side validator must not call the strict check bare again."""
+
+    import inspect as inspect_module
+
+    from services import authored_presentation_generation
+
+    source = inspect_module.getsource(authored_presentation_generation)
+    start = source.index("def composition_validator(")
+    body = source[start : source.index("measured_dom =", start)]
+    assert "await validate_source_repair_candidate(" in body
+    assert "except BrowserSourceReadbackError as error:" in body
+    assert "return source_verbatim_rejection(error)" in body

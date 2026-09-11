@@ -238,6 +238,7 @@ from services.authored_evidence_ledger import digest_html, digest_png
 from services.authored_structural_repair import (
     SlideRepairResult,
     make_source_repair_evaluator,
+    source_verbatim_rejection,
     structural_checkpoint_metrics,
     validate_repair_result,
 )
@@ -2044,10 +2045,16 @@ async def _generate_authored_presentation(
                         slide_indices=(index,),
                     )
 
-                def composition_validator(candidate_html, metrics, *, absolute_index=index):
-                    _require_source_verbatim_bindings(
-                        [candidate_html], (source_text_bindings[absolute_index],)
-                    )
+                async def composition_validator(candidate_html, metrics, *, absolute_index=index):
+                    # A candidate that drops bound source text is rejected here,
+                    # never raised: propagating ended the whole deck over one
+                    # unusable repair candidate (validation run-14).
+                    try:
+                        await validate_source_repair_candidate(
+                            absolute_index, candidate_html, metrics,
+                        )
+                    except BrowserSourceReadbackError as error:
+                        return source_verbatim_rejection(error)
                     capacity_errors = capacity_violations(
                         candidate_html, metrics, capacity_plan.at(absolute_index)
                     )

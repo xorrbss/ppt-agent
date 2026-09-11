@@ -25,7 +25,10 @@ from services.authored_structural_repair_compare import (
     _visibility_comparison,
     protected_scope_violations,
 )
-from services.source_content.browser_readback import inspect_browser_source_readback
+from services.source_content.browser_readback import (
+    BrowserSourceReadbackError,
+    inspect_browser_source_readback,
+)
 from services.source_content.source_runs import parse_source_binding_id
 from utils.authored_dom_quality import (
     has_dom_quality_regression,
@@ -137,6 +140,37 @@ def source_repair_html_violations(baseline_html: str, candidate_html: str) -> tu
     if Counter(baseline.qids) != Counter(candidate.qids) or any(count != 1 for count in Counter(candidate.qids).values()):
         return ("repair_qid_identity_invalid",)
     return ()
+
+
+#: Contract violation recorded for a repair candidate that dropped source
+#: text the deck must reproduce verbatim.
+SOURCE_VERBATIM_REJECTION = "repair_source_verbatim_binding_failed"
+
+
+def source_verbatim_rejection(error: BrowserSourceReadbackError) -> dict[str, Any]:
+    """A rejecting composition report for a failed strict source check.
+
+    The strict verbatim-binding check is fail-closed by design, and it must
+    stay that way for a deck. Inside a repair, though, it has to fail this
+    CANDIDATE: raised from a composition validator it escapes the evaluator,
+    the repair round and the whole generation, so one unusable candidate ends
+    a deck that is otherwise complete. Returning a failing report instead
+    leaves the evaluator's original slide selected and the slide unresolved,
+    which is exactly what the terminal fallback already flags.
+
+    The caller owns the strict check and catches only
+    :class:`BrowserSourceReadbackError`; unrelated failures still propagate.
+    """
+
+    return {
+        "passed": False,
+        "violations": [
+            {"category": SOURCE_VERBATIM_REJECTION, "severity": "high"}
+        ],
+        "telemetryStatus": "unavailable",
+        "contract_violations": [SOURCE_VERBATIM_REJECTION],
+        "detail": str(getattr(error, "detail", "") or "")[:200],
+    }
 
 
 def make_source_repair_evaluator(
