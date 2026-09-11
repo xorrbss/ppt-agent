@@ -9,6 +9,7 @@ outlived its own admission and was failed at completion.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 import importlib.util
 from pathlib import Path
 import uuid
@@ -29,11 +30,18 @@ from models.sql.public_admission import (
 from models.sql.user import User
 from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
 import migration_revision_contract as revision_contract
+from services.public_export_deadline import (
+    PUBLIC_RENDER_BATCH_DEADLINE_SECONDS,
+    PublicExportDeadlineGrant,
+    load_public_export_deadline_grant,
+    worker_deadline_bounds,
+)
 from services.public_export_deadline_policy import (
     PUBLIC_EXPORT_DEADLINE_MAX_SECONDS,
     PUBLIC_EXPORT_DEADLINE_MIN_SECONDS,
     public_export_deadline_seconds,
 )
+from services.public_export_errors import PublicExportOperationError
 from services.public_operation_admission import (
     PUBLIC_DEFAULT_POLICY_VERSION,
     PrincipalContext,
@@ -297,6 +305,70 @@ def test_admission_pins_the_scaled_budget_under_the_row_ceiling(tmp_path: Path) 
             )
             assert legacy.slide_count == 35
             assert granted_seconds(legacy) == 600
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+# --- Worker grants derived from the pinned admission ----------------------
+
+
+def test_worker_grants_are_what_is_left_of_the_admission() -> None:
+    now = datetime(2026, 9, 12, 12, 0, tzinfo=timezone.utc)
+    grant = PublicExportDeadlineGrant(deadline_at=now + timedelta(seconds=1030))
+    assert grant.export_worker_seconds(now=now) == 1030
+    assert grant.render_batch_seconds(now=now) == PUBLIC_RENDER_BATCH_DEADLINE_SECONDS
+    # Time spent rendering comes out of the export worker's grant.
+    later = now + timedelta(seconds=400)
+    assert grant.export_worker_seconds(now=later) == 630
+    # A naive (SQLite) deadline compares like an aware one.
+    naive = PublicExportDeadlineGrant(
+        deadline_at=(now + timedelta(seconds=90)).replace(tzinfo=None)
+    )
+    assert naive.export_worker_seconds(now=now) == 90
+    assert naive.render_batch_seconds(now=now) == 90
+    # Never above the executor's role budget, never below one second.
+    generous = PublicExportDeadlineGrant(deadline_at=now + timedelta(seconds=9999))
+    assert generous.export_worker_seconds(now=now) == PUBLIC_EXPORT_DEADLINE_MAX_SECONDS
+    exhausted = PublicExportDeadlineGrant(deadline_at=now)
+    with pytest.raises(
+        PublicExportOperationError, match="public_export_admission_deadline_exhausted"
+    ):
+        exhausted.export_worker_seconds(now=now)
+    assert worker_deadline_bounds("export") == (600, PUBLIC_EXPORT_DEADLINE_MAX_SECONDS)
+    assert worker_deadline_bounds("render") == (120, 120)
+
+
+def test_hybrid_grant_comes_from_the_admitted_thirty_five_slide_row(
+    tmp_path: Path,
+) -> None:
+    """The 1740 s constant is gone: the worker is granted the admission budget."""
+
+    async def scenario() -> None:
+        engine, maker = await database(tmp_path / "export-grant.db")
+        try:
+            thirty_five, five = await admit_export(
+                maker, export_deadline_seconds=1800, slide_counts=(35, 5)
+            )
+            large = await load_public_export_deadline_grant(
+                maker, operation_id=thirty_five.operation_id
+            )
+            small = await load_public_export_deadline_grant(
+                maker, operation_id=five.operation_id
+            )
+            large_grant = large.export_worker_seconds(now=thirty_five.queued_at)
+            small_grant = small.export_worker_seconds(now=five.queued_at)
+            assert large_grant == 1030
+            assert large_grant > MEASURED_35_SLIDE_HYBRID_SECONDS
+            assert small_grant == 600
+            assert small_grant < large_grant
+            with pytest.raises(
+                PublicExportOperationError, match="public_export_admission_required"
+            ):
+                await load_public_export_deadline_grant(
+                    maker, operation_id=uuid.uuid4()
+                )
         finally:
             await engine.dispose()
 

@@ -785,7 +785,8 @@ def test_hybrid_assembler_budget_reserves_time_to_assemble_and_store(
             [sys.executable, str(echo)]
         ),
     }
-    budget_seconds = 1740.0
+    # What a 35-slide admission grants the worker (26 s/slide + 120 s).
+    budget_seconds = 1030.0
 
     outcome = asyncio.run(
         public_export_hybrid.assemble_hybrid_pptx(
@@ -996,7 +997,7 @@ def test_hybrid_assembler_puts_the_declared_graph_on_the_child_job(
             html_paths=[html],
             scratch=tmp_path / "run",
             font_embedding=False,
-            budget_seconds=1740.0,
+            budget_seconds=1030.0,
             semantic_slides=declared,
             export_attempt_id=attempt_id,
             renderer_source_digest=renderer_digest,
@@ -1018,7 +1019,7 @@ def test_hybrid_assembler_puts_the_declared_graph_on_the_child_job(
             html_paths=[html],
             scratch=tmp_path / "mismatch",
             font_embedding=False,
-            budget_seconds=1740.0,
+            budget_seconds=1030.0,
             semantic_slides=[*declared, {"slideIndex": 1}],
             export_attempt_id=attempt_id,
             renderer_source_digest=renderer_digest,

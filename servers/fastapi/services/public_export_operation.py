@@ -42,6 +42,8 @@ from services.presentation_export_route_inputs import (
 )
 from services.public_export_hybrid_evidence import bounded_hybrid_worker_evidence
 from services.public_export_worker_bundle import public_export_worker_bundle
+from services.public_export_deadline import load_public_export_deadline_grant, worker_deadline_bounds
+from services.public_export_deadline_policy import PUBLIC_EXPORT_DEADLINE_MAX_SECONDS
 from services.public_export_errors import PublicExportOperationError
 from services.public_render_runtime_identity import (
     MAX_PUBLIC_RENDER_OPERATION_SLIDES,
@@ -216,12 +218,8 @@ PUBLIC_EXPORT_HYBRID_SEMANTIC_ENV = "PUBLIC_EXPORT_HYBRID_SEMANTIC_ENABLED"
 #: The export bundle is capped at 8 MiB by the trusted transport; the declared
 #: graph may take a quarter of that before the lane stays observed-only.
 MAX_INLINE_DECLARED_GRAPH_BYTES = 2 * 1024 * 1024
-MAX_PUBLIC_EXPORT_DEADLINE_SECONDS = 1800
-# The worker spends most of this measuring slides in its own browser. Inside
-# the worker the assembler child is given a strictly smaller budget, so there
-# is always time left to assemble, verify and store the package before the
-# worker's own deadline fires.
-HYBRID_EXPORT_DEADLINE_SECONDS = 1740
+# One number with the admission formula's ceiling and the executor's export cap.
+MAX_PUBLIC_EXPORT_DEADLINE_SECONDS = PUBLIC_EXPORT_DEADLINE_MAX_SECONDS
 
 
 class PublicExportHybridFallback(PublicExportOperationError):
@@ -270,15 +268,10 @@ def build_isolated_operation_job(
         raise PublicExportOperationError("public_worker_artifact_owner_mismatch")
     if not claim.attempt_token or claim.fencing_token < 0:
         raise PublicExportOperationError("public_worker_operation_fence_invalid")
-    effective_deadline = (
-        (600 if role == "export" else 120)
-        if deadline_seconds is None
-        else deadline_seconds
-    )
-    # An editable-hybrid export measures every slide in the isolated worker's
-    # own browser before assembling OOXML, so the export role's ceiling is the
-    # browser budget rather than the raster-converter budget.
-    maximum_deadline = MAX_PUBLIC_EXPORT_DEADLINE_SECONDS if role == "export" else 120
+    fallback_deadline, maximum_deadline = worker_deadline_bounds(role)
+    # Product callers pass what is left of the pinned admission deadline; the
+    # fallback serves only callers without an admission row (no session here).
+    effective_deadline = fallback_deadline if deadline_seconds is None else deadline_seconds
     if not 1 <= effective_deadline <= maximum_deadline:
         raise PublicExportOperationError("public_worker_deadline_invalid")
     issued_at = int(time.time()) if now is None else now
@@ -326,12 +319,14 @@ async def execute_isolated_render_operation(
     claim: WorkspaceOperationClaim,
     *,
     input_artifact: ArtifactRef,
+    deadline_seconds: int | None = None,
 ) -> IsolatedWorkerResult:
     job = build_isolated_operation_job(
         claim,
         role="render",
         input_artifact=input_artifact,
         signing_key=load_worker_capability_signing_key(),
+        deadline_seconds=deadline_seconds,
     )
     return await execute_isolated_worker_job(job, presentation_id=claim.presentation_id)
 
@@ -998,6 +993,11 @@ async def render_and_export_authored_htmls(
 
     if pptx_mode not in {"fidelity", "hybrid"}:
         raise PublicExportOperationError("public_export_pptx_mode_invalid")
+    # One deadline: every worker below (render batches, hybrid or raster
+    # export) is granted what is left of the admission the lease fences on.
+    grant = await load_public_export_deadline_grant(
+        session_factory, operation_id=claim.operation_id
+    )
     hybrid_requested = pptx_mode == "hybrid" and export_format == "pptx"
     if font_embedding and not hybrid_requested:
         raise PublicExportOperationError("public_export_font_embedding_invalid")
@@ -1227,6 +1227,7 @@ async def render_and_export_authored_htmls(
                 result = await execute_isolated_render_operation(
                     claim,
                     input_artifact=_worker_ref(bundle_ref),
+                    deadline_seconds=grant.render_batch_seconds(),
                 )
             finally:
                 render_worker_millis += int(
@@ -1656,9 +1657,7 @@ async def render_and_export_authored_htmls(
                 ),
                 font_embedding=font_embedding if hybrid else False,
                 local_fit_receipts=local_fit_receipts,
-                deadline_seconds=(
-                    HYBRID_EXPORT_DEADLINE_SECONDS if hybrid else None
-                ),
+                deadline_seconds=grant.export_worker_seconds(),
                 session_factory=session_factory,
             )
 
@@ -1764,6 +1763,7 @@ async def render_and_export_authored_htmls(
     exported = await execute_isolated_export_operation(
         claim,
         input_artifact=_worker_ref(bundle_ref),
+        deadline_seconds=grant.export_worker_seconds(),
     )
     export_millis = int((time.perf_counter() - export_started) * 1000)
     if not exported.ok:
@@ -1822,7 +1822,6 @@ __all__ = [
     "MAX_PUBLIC_RENDER_BATCH_SLIDES",
     "MAX_PUBLIC_EXPORT_DEADLINE_SECONDS",
     "MAX_PUBLIC_RENDER_OPERATION_SLIDES",
-    "HYBRID_EXPORT_DEADLINE_SECONDS",
     "PUBLIC_RENDER_WORKER_PROTOCOL_VERSION",
     "PUBLIC_RENDER_WORKER_FONT_DIGEST_ENV",
     "PUBLIC_RENDER_WORKER_IMAGE_DIGEST_ENV",
