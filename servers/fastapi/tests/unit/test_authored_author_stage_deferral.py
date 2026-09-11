@@ -38,6 +38,7 @@ from services import authored_checkpoint_service as checkpoints
 from services import authored_presentation_pipeline as pipeline
 from services.authored_author_stage_deferral import (
     author_failure_is_rescuable,
+    author_rejection_code,
     defer_rescuable_author_failures,
     resumed_author_budget_is_rescuable,
 )
@@ -97,6 +98,9 @@ def test_a_rejected_candidate_is_the_dead_end_the_rescue_answers():
         )
         is True
     )
+    assert author_rejection_code(_header_contract_rejection().error) == (
+        "authored_header_contract_rejected"
+    )
 
 
 def test_a_renderer_policy_refusal_and_a_transport_failure_are_not_rescuable():
@@ -151,6 +155,11 @@ def test_an_inactive_predicate_defers_nothing():
     )
     assert set(deferred) == {_FAILING_SLIDE}
     assert deferred[_FAILING_SLIDE].provider_attempt_count == 2
+    assert deferred[_FAILING_SLIDE].prior_failure == {
+        "code": "authored_header_contract_rejected",
+        "exception_type": "ValueError",
+        "cause": "header contract violated: header_band_missing",
+    }
 
     strict_deferred = defer_rescuable_author_failures(
         _SLIDE_COUNT,

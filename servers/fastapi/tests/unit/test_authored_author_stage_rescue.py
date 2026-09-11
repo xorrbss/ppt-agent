@@ -30,9 +30,15 @@ from services import authored_presentation_pipeline as pipeline_mod
 from services import authored_presentation_service as authored_service
 from services import authored_terminal_slide_fallback as terminal_mod
 from services.authored_composition_policy import CompositionProfile
+from services.authored_generation_observability import (
+    log_authored_slide_failure_observation,
+)
 from services.authored_generation_timing_receipt_e4 import flagged_slide_entries
 from services.authored_presentation_contracts import (
     AuthoredGenerationPipelineResult,
+)
+from services.source_content.browser_readback import (
+    BrowserSourceReadbackResult,
 )
 from utils.authored_header_validation import validate_header_contract
 from utils.llm_calls.author_deck import (
@@ -386,6 +392,131 @@ def test_a_source_reflow_deck_gets_one_strict_third_call_without_placeholder(
     hint = seen["prior_failure_hint"]
     assert "source-locked correction" in hint
     assert "do not summarize, shorten, merge" in hint
+
+
+def _readback_result(**overrides):
+    values = {
+        "checked_slide_count": 1,
+        "checked_block_count": 1,
+        "failed_slide_indices": (0,),
+    }
+    values.update(overrides)
+    return BrowserSourceReadbackResult(**values)
+
+
+def test_source_reflow_rescue_visibility_is_predeclared_verbatim_flag_only(
+    monkeypatch,
+):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
+    monkeypatch.setattr(
+        rescue_mod,
+        "inspect_browser_source_readback",
+        lambda **_kwargs: _readback_result(visibility_failures=("b1",)),
+    )
+
+    entry = rescue_mod.source_reflow_rescue_readback(
+        index=0,
+        html=_RESCUED_HTML,
+        metrics={},
+        bindings=(("b1", "RESCUED"),),
+        profile=_ORDINARY,
+        reference_mode="style_reference",
+        prior_failure={"code": "authored_header_contract_rejected"},
+    )
+
+    assert entry == {
+        "index": 0,
+        "reason": "source_readback:visibility",
+        "remakeAttempted": False,
+        "remakeOutcome": "verbatim_flag_only",
+        "reasons": [
+            "source_readback:visibility",
+            "author_prior:authored_header_contract_rejected",
+        ],
+    }
+    assert flagged_slide_entries([entry]) == (entry,)
+
+
+def test_recovered_source_slide_routes_visibility_to_the_pipeline_flag(monkeypatch):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
+
+    async def strict_rescue(_plan, _index, **_kwargs):
+        return _RESCUED_HTML
+
+    monkeypatch.setattr(
+        rescue_mod,
+        "inspect_browser_source_readback",
+        lambda **_kwargs: _readback_result(visibility_failures=("b1",)),
+    )
+    result = _run_pipeline(
+        monkeypatch,
+        plan=_stub_plan(contract=default_header_contract()),
+        first_pass=_first_pass_that_spends_its_budget([]),
+        rescue=strict_rescue,
+        source_block_bindings=((('b1', "RESCUED"),),),
+    )
+
+    assert result.author_flagged_slides[0]["remakeOutcome"] == "verbatim_flag_only"
+
+
+@pytest.mark.parametrize(
+    "result",
+    (
+        _readback_result(missing_block_ids=("b1",)),
+        _readback_result(integrity_failures=("b1",)),
+    ),
+)
+def test_source_reflow_rescue_hard_readback_uses_a_coded_terminal_failure(
+    monkeypatch, result,
+):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
+    monkeypatch.setattr(
+        rescue_mod, "inspect_browser_source_readback", lambda **_kwargs: result
+    )
+
+    with pytest.raises(pipeline_mod.AuthoredStageError) as caught:
+        rescue_mod.source_reflow_rescue_readback(
+            index=0,
+            html=_RESCUED_HTML,
+            metrics={},
+            bindings=(("b1", "RESCUED"),),
+            profile=_ORDINARY,
+            reference_mode="style_reference",
+        )
+
+    assert caught.value.code == "source_content_browser_readback_failed"
+    assert caught.value.cause.block_ids == ("b1",)
+    event = log_authored_slide_failure_observation(
+        stage="author",
+        code=caught.value.code,
+        slide_number=1,
+        retryable=False,
+        provider_attempt_count=3,
+    )
+    assert event["code"] == "source_content_browser_readback_failed"
+
+
+def test_recovered_source_slide_hard_readback_is_never_unexpected(monkeypatch):
+    async def strict_rescue(_plan, _index, **_kwargs):
+        return _RESCUED_HTML
+
+    monkeypatch.setattr(
+        rescue_mod,
+        "inspect_browser_source_readback",
+        lambda **_kwargs: _readback_result(integrity_failures=("b1",)),
+    )
+    with pytest.raises(pipeline_mod.AuthoredStageError) as caught:
+        _run_pipeline(
+            monkeypatch,
+            plan=_stub_plan(contract=default_header_contract()),
+            first_pass=_first_pass_that_spends_its_budget([]),
+            rescue=strict_rescue,
+            source_block_bindings=((('b1', "RESCUED"),),),
+        )
+
+    assert caught.value.code == "source_content_browser_readback_failed"
+    assert "integrity=[b1]" in caught.value.safe_message
+    assert caught.value.provider_attempt_count == 3
 
 
 def test_a_retryable_transport_failure_is_not_rescued(monkeypatch):

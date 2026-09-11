@@ -24,7 +24,10 @@ from services.authored_author_stage_deferral import (
     defer_rescuable_author_failures,
     deferred_author_budget_error,
 )
-from services.authored_author_stage_rescue import rescue_author_stage
+from services.authored_author_stage_rescue import (
+    rescue_author_stage,
+    source_reflow_rescue_readback,
+)
 from services.authored_checkpoint_service import (
     AuthoredStageError,
     fail_stage,

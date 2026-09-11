@@ -39,10 +39,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from collections.abc import Sequence
 from typing import Any, Mapping
 
 from services.authored_author_stage_placeholder import author_placeholder_html
+from services.authored_checkpoint_service import AuthoredStageError
+from services.authored_terminal_slide_flag_only import flagged_entry
 from services.authored_terminal_slide_policy import terminal_fallback_active
+from services.source_content.browser_readback import (
+    BrowserSourceReadbackError,
+    inspect_browser_source_readback,
+    log_browser_source_readback_failure,
+)
 from utils.llm_calls.author_deck import (
     AuthoredProviderBudgetExhausted,
     author_planned_slide,
@@ -88,6 +96,70 @@ class AuthorStageRescue:
     provider_attempt_count: int
     #: ``None`` when the third call succeeded; the deck publishes it unflagged.
     flagged_entry: dict[str, object] | None = None
+    prior_failure: Mapping[str, object] | None = None
+
+
+def source_reflow_rescue_readback(
+    *, index: int, html: str, metrics: Mapping[str, Any],
+    bindings: Sequence[tuple[str, str]], profile: Any, reference_mode: str,
+    prior_failure: Mapping[str, object] | None = None,
+    provider_attempt_count: int = RESCUE_ATTEMPT_ORDINAL,
+) -> dict[str, object] | None:
+    """Route a rescued source slide through the canonical browser predicate."""
+
+    unit_id = f"author-rescue:{int(index)}"
+    block_ids = [str(block_id) for block_id, _text in bindings]
+    result = inspect_browser_source_readback(
+        manifest={"units": [{
+            "sourceUnitId": unit_id, "sourceIndex": 0,
+            "blocks": [
+                {"sourceBlockId": block_id, "kind": "text", "order": order,
+                 "payload": {"text": text}}
+                for order, (block_id, text) in enumerate(bindings)
+            ],
+        }]},
+        outline={"slides": [{
+            "sourceUnitId": unit_id, "sourceIndex": 0, "readingOrder": block_ids,
+        }]},
+        browser_metrics=[metrics], htmls=[html],
+    )
+    hard_failure = bool(
+        result.missing_block_ids or result.order_violations
+        or result.integrity_failures or result.telemetry_failures
+        or result.diagnostic_error
+    )
+    fallback = terminal_fallback_active(
+        profile=profile, reference_mode=reference_mode, source_reflow=True
+    )
+    if hard_failure or (result.visibility_failures and not fallback):
+        summary = log_browser_source_readback_failure(result)
+        error = BrowserSourceReadbackError(
+            "source_content_browser_readback_failed",
+            detail=f"author rescue source readback failed; {summary}",
+            block_ids=tuple(dict.fromkeys((
+                *result.missing_block_ids, *result.integrity_failures,
+                *result.telemetry_failures, *result.visibility_failures,
+            ))),
+            slide_indices=(int(index),), order_violations=result.order_violations,
+        )
+        raise AuthoredStageError(
+            slide_index=index, stage="author", code=error.code, cause=error,
+            retryable=False, message=error.detail,
+            provider_attempt_count=provider_attempt_count,
+            prior_failure=prior_failure,
+        ) from error
+    if not result.visibility_failures:
+        return None
+    entry = flagged_entry(
+        index=index, reason="source_readback:visibility", attempted=False,
+        outcome="verbatim_flag_only",
+    )
+    prior_code = str((prior_failure or {}).get("code") or "").strip()
+    entry["reasons"] = [
+        "source_readback:visibility",
+        *([f"author_prior:{prior_code}"[:160]] if prior_code else []),
+    ]
+    return entry
 
 
 class _SimplifiedPlan:
@@ -306,7 +378,9 @@ async def rescue_author_stage(
     else:
         LOGGER.info("[authored] slide %d recovered on the simplified attempt", index + 1)
         return AuthorStageRescue(
-            html=html, provider_attempt_count=RESCUE_ATTEMPT_ORDINAL
+            html=html,
+            provider_attempt_count=RESCUE_ATTEMPT_ORDINAL,
+            prior_failure=getattr(error, "prior_failure", None),
         )
     try:
         placeholder = _placeholder(plan, index)
@@ -340,6 +414,7 @@ __all__ = [
     "SAFE_BOTTOM_Y_PX",
     "AuthorStageRescue",
     "rescue_author_stage",
+    "source_reflow_rescue_readback",
     "simplified_author_brief",
     "strict_source_reflow_author_brief",
 ]

@@ -485,6 +485,7 @@ async def _author_illustrate_render_pipeline(
         local_fit_policy_value: Mapping[str, Any] | None = None
         local_fit_checkpoint_reused = False
         accepted_fit = None
+        rescue = None
         author_provider_attempt_count = preauthored_attempt_counts.get(index, 0)
         # The authoring call and the substitution step must see the identical
         # set: substitution resolves a placed id against this mapping, so an id
@@ -559,9 +560,6 @@ async def _author_illustrate_render_pipeline(
                     )
                 )
             )
-            # A spent author budget the rescue may still answer; the ordinary
-            # authoring call below is skipped and its third, simplified attempt
-            # runs in its place.
             spent_budget: DeferredAuthorBudgetExhausted | None = None
             if not author_completed:
                 if author_provider_attempt_count >= 2:
@@ -687,21 +685,13 @@ async def _author_illustrate_render_pipeline(
                                 )
                             try:
                                 if spent_budget is not None:
-                                    # Both ordinary calls are already spent, so
-                                    # asking for a third here would only hit the
-                                    # budget guard. Go straight to the rescue.
                                     raise spent_budget
                                 html = await author_planned_slide(
                                     plan, index, **author_kwargs
                                 )
                             except Exception as author_error:
-                                # D7 at the author stage: one simplified attempt,
-                                # then a flagged placeholder. ``None`` keeps
-                                # today's fail-closed raise for this deck.
                                 rescue = await rescue_author_stage(
-                                    plan,
-                                    index,
-                                    author_error,
+                                    plan, index, author_error,
                                     author_kwargs=author_kwargs,
                                     profile=composition_profile,
                                     reference_mode=plan_reference_mode,
@@ -711,8 +701,7 @@ async def _author_illustrate_render_pipeline(
                                     raise
                                 html = rescue.html
                                 author_provider_attempt_count = max(
-                                    author_provider_attempt_count,
-                                    rescue.provider_attempt_count,
+                                    author_provider_attempt_count, rescue.provider_attempt_count,
                                 )
                                 if rescue.flagged_entry is not None:
                                     author_flagged_slides[index] = rescue.flagged_entry
@@ -772,7 +761,9 @@ async def _author_illustrate_render_pipeline(
                         code=exc.code,
                         cause=exc,
                         retryable=author_provider_attempt_count < 3,
+                        message=exc.detail,
                         provider_attempt_count=author_provider_attempt_count,
+                        prior_failure=getattr(rescue, "prior_failure", None),
                     ) from exc
                 if generation_job is not None:
                     checkpoint = await _complete_stage_after_external_success(
@@ -1297,6 +1288,15 @@ async def _author_illustrate_render_pipeline(
                 finally:
                     render_work = time.monotonic() - render_started
                     await record_local_stage(latency_ms=render_work * 1000)
+            if source_reflow and rescue is not None and source_block_bindings is not None:
+                flag = source_reflow_rescue_readback(
+                    index=index, html=illustrated_html, metrics=browser_metrics,
+                    bindings=source_block_bindings[index], profile=composition_profile,
+                    reference_mode=plan_reference_mode, prior_failure=rescue.prior_failure,
+                    provider_attempt_count=author_provider_attempt_count,
+                )
+                if flag is not None:
+                    author_flagged_slides[index] = flag
             if require_all_source_images:
                 try:
                     if browser_metrics is None:

@@ -62,6 +62,25 @@ _MAX_CAUSE_DEPTH = 6
 _RENDERER_POLICY_EXCEPTION = RendererPolicyError.__name__
 
 
+def author_rejection_code(error: BaseException) -> str:
+    """Return a bounded reason for a rejected provider candidate."""
+
+    code = getattr(error, "code", None)
+    if isinstance(code, str) and code:
+        return code[:160]
+    message = str(error)
+    for prefix, reason in (
+        ("header contract violated:", "authored_header_contract_rejected"),
+        ("authored_source_image_slots_missing:", "authored_source_image_slots_missing"),
+        ("authored_semantic_qid_", "authored_semantic_qid_invalid"),
+        ("authored_batch_duplicate_slide", "authored_batch_duplicate_slide"),
+        ("authored_batch_slide_missing", "authored_batch_slide_missing"),
+    ):
+        if message.startswith(prefix):
+            return reason
+    return "authored_candidate_validation_failed"
+
+
 def terminal_provider_code(error: BaseException) -> str | None:
     """Recover a non-retryable public admission cause through safe wrappers."""
 
@@ -155,6 +174,15 @@ class DeferredAuthorBudgetExhausted(AuthoredProviderBudgetExhausted):
         # and the deck falls back to today's non-retryable author failure.
         self.cause = cause
         self.retryable = False
+        self.prior_failure = (
+            {
+                "code": author_rejection_code(cause),
+                "exception_type": type(cause).__name__,
+                "cause": str(cause),
+            }
+            if isinstance(cause, BaseException)
+            else None
+        )
 
 
 def _wraps_renderer_policy_refusal(error: BaseException) -> bool:
@@ -249,10 +277,11 @@ def defer_rescuable_author_failures(
             cause=error,
         )
         LOGGER.warning(
-            "[authored] slide %d unresolved after its author budget (%s); "
+            "[authored] slide %d unresolved after its author budget (%s:%s); "
             "deferred to the tail's rescue instead of failing the deck",
             index + 1,
             type(error).__name__,
+            author_rejection_code(error),
         )
     return deferred
 
@@ -324,6 +353,7 @@ def deferred_author_budget_error(
 __all__ = [
     "AUTHOR_BUDGET_EXHAUSTED_CODE",
     "DeferredAuthorBudgetExhausted",
+    "author_rejection_code",
     "author_failure_is_rescuable",
     "author_failure_retryable",
     "author_stage_failure",
