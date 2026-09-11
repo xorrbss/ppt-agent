@@ -50,6 +50,10 @@ from services.public_workstation_runtime_profile import (
     PublicWorkstationProfileError,
     resolve_enabled_workstation_runtime_profile,
 )
+from utils.get_env_concurrency import (
+    get_authored_cluster_job_concurrency_env,
+    get_public_export_scheduler_global_cap_env,
+)
 
 
 from services.public_operation_admission_models import (
@@ -347,6 +351,16 @@ def _effective_runtime_quota_limits(
     except PublicWorkstationProfileError as error:
         raise PublicAdmissionRejected(str(error), retry_after_seconds=15) from error
     if profile is None:
+        # No profile: the row is still bounded by the knobs that run the work
+        # (cluster authored job cap, executor scheduler cap).  Admitting more
+        # than they can run only grows the queue behind them.
+        if scope_type == "global":
+            knob = (
+                get_authored_cluster_job_concurrency_env()
+                if operation_kind == "generation"
+                else get_public_export_scheduler_global_cap_env()
+            )
+            active = min(active, knob)
         return active, queued
     capacity = profile.admission_capacity(operation_kind)
     if scope_type == "owner":
