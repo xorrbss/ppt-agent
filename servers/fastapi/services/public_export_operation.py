@@ -64,7 +64,6 @@ from services.public_export_identity import (
     CanonicalExportIdentity,
     CanonicalSlideRenderIdentity,
     ExportEvidenceDigests,
-    FencedExportPublicationCandidate,
     SlideCheckpointArtifact,
     acquire_slide_render_authority,
     bind_slide_render_checkpoint,
@@ -72,7 +71,6 @@ from services.public_export_identity import (
     claim_canonical_export_identity,
     complete_canonical_export_identity,
     find_reusable_slide_render_checkpoint,
-    promote_canonical_export_publication,
     restore_canonical_export_identity,
     reuse_completed_export_identity,
     run_slide_render_singleflight,
@@ -699,89 +697,6 @@ async def resume_canonical_export_execution(
         lease_seconds=lease_seconds,
         now=now,
     )
-
-
-async def execute_and_publish_canonical_export_execution(
-    claim: WorkspaceOperationClaim,
-    *,
-    execution: CanonicalExportExecution,
-    publication_name: str,
-    session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
-) -> FencedExportPublicationCandidate:
-    """Run or reuse one DB-authoritative export and fence its publication.
-
-    Child execution happens outside a database transaction.  The returned
-    worker bytes must already be durable in object storage; result metadata,
-    single-flight completion, and publication pointer are then committed in
-    one transaction.  An in-flight duplicate never performs local fallback.
-    """
-
-    if execution.singleflight.disposition == "in_flight":
-        raise PublicExportOperationError("public_export_singleflight_in_flight")
-    if execution.singleflight.disposition == "completed":
-        candidate = reuse_completed_export_identity(
-            execution=execution,
-            operation_claim=claim,
-        )
-        async with session_factory() as session:
-            await promote_canonical_export_publication(
-                session,
-                candidate=candidate,
-                operation_claim=claim,
-                publication_name=publication_name,
-                revision=execution.identity.source_revision,
-                quality_digest=execution.identity.evidence.quality_digest,
-            )
-            await session.commit()
-        return candidate
-    if not execution.should_execute:
-        raise PublicExportOperationError("public_export_execution_disposition_invalid")
-
-    artifact_service = configured_public_artifact_service()
-    bundle = build_validated_checkpoint_export_bundle(execution.identity)
-    async with session_factory() as session:
-        bundle_ref = await artifact_service.persist_bytes(
-            session,
-            owner_id=execution.identity.owner_id,
-            tenant_id=execution.identity.tenant_id,
-            kind="export-bundle",
-            payload=bundle,
-            media_type="application/vnd.presenton.export-bundle+json",
-            created_by_operation_id=claim.operation_id,
-            retention_class="ephemeral",
-        )
-        await session.commit()
-
-    exported = await execute_isolated_export_operation(
-        claim,
-        input_artifact=_worker_ref(bundle_ref),
-    )
-    if not exported.ok:
-        raise PublicExportOperationError(
-            exported.error_code or "public_export_worker_failed"
-        )
-    result_ref = _public_worker_output(
-        dict(exported.output_artifact or {}),
-        retention_class="published",
-    )
-    async with session_factory() as session:
-        registered = await artifact_service.register_ref(session, result_ref)
-        candidate = await complete_canonical_export_identity(
-            session,
-            execution=execution,
-            operation_claim=claim,
-            result_artifact=registered,
-        )
-        await promote_canonical_export_publication(
-            session,
-            candidate=candidate,
-            operation_claim=claim,
-            publication_name=publication_name,
-            revision=execution.identity.source_revision,
-            quality_digest=execution.identity.evidence.quality_digest,
-        )
-        await session.commit()
-    return candidate
 
 
 async def execute_canonical_export_execution(
@@ -1718,7 +1633,6 @@ __all__ = [
     "build_isolated_operation_job",
     "execute_isolated_export_operation",
     "execute_isolated_render_operation",
-    "execute_and_publish_canonical_export_execution",
     "execute_canonical_export_execution",
     "load_worker_capability_signing_key",
     "partition_public_render_references",
