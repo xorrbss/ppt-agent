@@ -438,6 +438,11 @@ def test_default_chrome_path_contains_pipe_data_document_and_no_unsafe_flags(mon
             captured["profile"] = profile
 
         def command(self, command_id, method, params=None, session_id=None):
+            # Every slide gets its own disposable BrowserContext before the
+            # target/session pair (utils/slide_capture_pipe_render.py); the
+            # command must return a real id or render_one raises.
+            if method == "Target.createBrowserContext":
+                return {"browserContextId": "context"}
             if method == "Target.createTarget":
                 return {"targetId": "page"}
             if method == "Target.attachToTarget":

@@ -1380,7 +1380,12 @@ def test_author_slide_style_reference_failure_is_one_receipted_provider_outcome(
         )
 
     assert captured.value.code == "public_provider_bridge_exception"
-    assert captured.value.recovery_allowed is True
+    # T4 (commit 5590702f7, "Centralize authored provider overload handling")
+    # narrowed overload/recovery to the accepted status/timeout/quota set and
+    # made every other bridge exception non-recoverable outright: "Generic
+    # bridge exceptions are not overloads" (artifacts/verbatim-design-impl-
+    # 20260911/T4-report.md).
+    assert captured.value.recovery_allowed is False
     assert str(captured.value.__cause__) == "vision unavailable"
     assert len(calls) == 1
     assert isinstance(_author_user_content(calls[0]), list)
@@ -1697,7 +1702,12 @@ def test_vision_qa_reuses_selected_design_system(monkeypatch):
 
     # The full re-author is the slide's one receipted recovery call; it must
     # never downgrade to an unreceipted text-only provider fallback.
-    assert captured == [("SELECTED DESIGN SYSTEM", "high", "recovery", 2, False)]
+    # Commit bd72851e4b ("wip: checkpoint multi-session authored generation
+    # work") stopped forcing reasoning_effort="high" here: the durable
+    # generation preset is request-scoped and remains authoritative during
+    # this optional re-author pass too (see the call site's comment in
+    # utils/llm_calls/author_vision_qa.py).
+    assert captured == [("SELECTED DESIGN SYSTEM", None, "recovery", 2, False)]
     assert htmls == [_VALID]
     assert pngs == [b"revised-png"]
     assert fixed == [0]
@@ -2756,6 +2766,14 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(
     monkeypatch.setattr(
         authored_service, "_author_illustrate_render_pipeline", fake_pipeline
     )
+    # This double's ``AuthoredGenerationPipelineResult`` predates the
+    # requirement (services/authored_local_fit_policy.py) that a deck where
+    # local_fit_applies() carry one local_fit_receipts entry per published
+    # slide; this fixture is about style resolution, not local fit, so local
+    # fit is turned off here rather than faked.
+    monkeypatch.setattr(
+        authored_generation_mod, "local_fit_applies", lambda **_kwargs: False
+    )
 
     async def fake_header_contract(
         outline, brand, style=None, instructions=None, chapter_breadcrumb=False
@@ -2774,7 +2792,7 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(
     monkeypatch.setattr(
         authored_service,
         "_build_authored_export",
-        lambda request, presentation_id, pngs, title: "deck.pptx",
+        lambda request, presentation_id, pngs, title, **_kwargs: "deck.pptx",
     )
 
     from utils import llm_provider
@@ -2851,6 +2869,11 @@ def test_a_design_replay_is_authored_rather_than_dumped_verbatim(
     monkeypatch.setattr(
         authored_service, "_author_illustrate_render_pipeline", fake_pipeline
     )
+    # See the same note in
+    # test_authored_service_resolves_passes_and_persists_canonical_style.
+    monkeypatch.setattr(
+        authored_generation_mod, "local_fit_applies", lambda **_kwargs: False
+    )
 
     async def fake_header_contract(
         outline, brand, style=None, instructions=None, chapter_breadcrumb=False
@@ -2867,7 +2890,7 @@ def test_a_design_replay_is_authored_rather_than_dumped_verbatim(
     monkeypatch.setattr(
         authored_service,
         "_build_authored_export",
-        lambda request, presentation_id, pngs, title: "deck.pptx",
+        lambda request, presentation_id, pngs, title, **_kwargs: "deck.pptx",
     )
 
     from utils import llm_provider
@@ -2983,6 +3006,11 @@ def test_slide_pipeline_renders_fast_slide_before_slowest_author_finishes(monkey
         )
         monkeypatch.setattr(authored_service, "author_planned_slide", fake_author)
         monkeypatch.setattr(authored_service, "render_html_to_png", fake_render)
+        # This test exercises the mocked-Chrome pipelining contract stated in
+        # the module docstring; local fit's render path bypasses the mocked
+        # ``render_html_to_png`` seam entirely (it renders through
+        # ``render_html_to_png_with_metrics`` instead), so it is turned off here.
+        monkeypatch.setattr(authored_pipeline_mod, "local_fit_applies", lambda **_kwargs: False)
 
         return await asyncio.wait_for(
             authored_service._author_illustrate_render_pipeline(
@@ -3116,6 +3144,11 @@ def test_ninety_slide_pipeline_keeps_worker_concurrency_bounded(monkeypatch):
         )
         monkeypatch.setattr(authored_service, "author_planned_slide", fake_author)
         monkeypatch.setattr(authored_service, "render_html_to_png", fake_render)
+        # This test exercises the mocked-Chrome worker-pool contract stated in
+        # the module docstring; local fit's render path bypasses the mocked
+        # ``render_html_to_png`` seam entirely (it renders through
+        # ``render_html_to_png_with_metrics`` instead), so it is turned off here.
+        monkeypatch.setattr(authored_pipeline_mod, "local_fit_applies", lambda **_kwargs: False)
 
         result = await authored_service._author_illustrate_render_pipeline(
             _outline(90),
@@ -3276,7 +3309,10 @@ def test_build_image_pptx_one_fullbleed_picture_per_slide(tmp_path):
     build_image_pptx(pngs, out)
     prs = Presentation(out)
     assert len(prs.slides._sldIdLst) == 3
-    assert prs.slide_width == 12191695 and prs.slide_height == 6858000  # 13.333x7.5"
+    # 960x540pt at 12700 EMU/pt (see build_image_pptx, commit bd72851e4b): an
+    # exact CSS-pixel-to-point page, not the former 13.333x7.5" decimal-inch
+    # approximation that this assertion used to encode.
+    assert prs.slide_width == 12_192_000 and prs.slide_height == 6_858_000
     for s in prs.slides:
         pics = [sh for sh in s.shapes if sh.shape_type == 13]
         assert len(pics) == 1

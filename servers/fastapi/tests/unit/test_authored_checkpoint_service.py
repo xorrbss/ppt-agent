@@ -114,6 +114,11 @@ def _install_one_slide_pipeline_fakes(monkeypatch, *, rendered_html):
     monkeypatch.setattr(pipeline, "author_planned_slide", unexpected_author)
     monkeypatch.setattr(pipeline, "render_html_to_png", fake_render)
     monkeypatch.setattr(pipeline, "record_local_stage", no_recording)
+    # local_fit_applies() defaults on for an ordinary deck and routes render
+    # through render_html_to_png_with_metrics instead of the mocked
+    # render_html_to_png seam (real Chrome, unmocked here); see the identical
+    # note in tests/unit/test_authored_pipeline.py.
+    monkeypatch.setattr(pipeline, "local_fit_applies", lambda **_kwargs: False)
 
 
 def test_semantic_gate_recaptures_stale_role_metrics_once(monkeypatch):
@@ -642,6 +647,16 @@ def test_filesystem_evidence_recovers_db_pointer_and_clears_render_failure(
                 / "support"
                 / "authored_checkpoint_crash_writer.py"
             )
+            fastapi_root = Path(__file__).parents[2]
+            subprocess_env = os.environ.copy()
+            # The crash writer imports ``services`` (resolved via the editable
+            # install regardless of cwd) which now transitively imports the
+            # top-level ``migration_revision_contract`` module -- a loose
+            # script at the fastapi root, not part of that editable package,
+            # so it is only importable when the root itself is on sys.path.
+            subprocess_env["PYTHONPATH"] = os.pathsep.join(
+                filter(None, [str(fastapi_root), subprocess_env.get("PYTHONPATH")])
+            )
             crashed = subprocess.run(
                 [
                     sys.executable,
@@ -655,8 +670,8 @@ def test_filesystem_evidence_recovers_db_pointer_and_clears_render_failure(
                     "--revision",
                     "0",
                 ],
-                cwd=Path(__file__).parents[2],
-                env=os.environ.copy(),
+                cwd=fastapi_root,
+                env=subprocess_env,
                 capture_output=True,
                 text=True,
                 check=False,

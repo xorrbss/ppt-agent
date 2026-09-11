@@ -37,7 +37,12 @@ from utils.llm_calls.author_slide import Brand, authored_provider_semantic_slot
 
 def test_pre_author_planner_freezes_known_closing_text_and_call_budget(monkeypatch) -> None:
     monkeypatch.setenv("AUTHORED_COMPOSITION_ENVELOPE_ENABLED", "true")
-    content = "최종 실행 원칙\n" + ("검증 가능한 운영 근거를 유지합니다. " * 20)
+    # Commit c7b6383c1 ("author ordinary decks by free composition again")
+    # raised the envelope's visible-text target from 350 to 460 chars but did
+    # not raise this fixture's repeat count to match, so the content stopped
+    # exceeding the (correctly updated) target it exists to overflow. 24
+    # repeats clears the new 460-char target with headroom.
+    content = "최종 실행 원칙\n" + ("검증 가능한 운영 근거를 유지합니다. " * 24)
     profile = CompositionProfile("ordinary", "authored", True, True, 1)
     capacity_plan = build_authored_capacity_plan((content,), ("CLOSING",), profile)
 
@@ -46,7 +51,10 @@ def test_pre_author_planner_freezes_known_closing_text_and_call_budget(monkeypat
     assert planned.input_title_chars == len("최종 실행 원칙")
     assert planned.input_body_chars > planned.body_target_chars == 380
     assert planned.input_visible_chars > planned.visible_target_chars == 460
-    assert planned.semantic_target_limit == 20
+    # The same commit raised CLOSING's qid ceiling 20 -> 36
+    # (_ROLE_BUDGETS["CLOSING"] in services/authored_composition_policy.py)
+    # without updating this assertion to match.
+    assert planned.semantic_target_limit == 36
     assert planned.condensation_required is True
     assert planned.condensation_allowed is True
     assert planned.provider_initial_call_limit == 1
@@ -102,7 +110,15 @@ def test_attempt_receipt_keeps_non_null_stages_and_operational_causes(
     monkeypatch.setenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path))
     recorder = GenerationTimingRecorder()
     recorder.record_stage_ms("author", 9)
-    stages = recorder.snapshot_stage_timings_ms()
+    # ``snapshot_stage_timings_ms`` only ever reports stages actually recorded
+    # (it has never zero-filled; see services/authored_generation_timing_receipt.py
+    # GenerationTimingRecorder, unchanged since its introduction in 4e7221520).
+    # The one production caller (services/authored_presentation_generation.py,
+    # ``stage_timings_ms = {stage: 0 for stage in _PERFORMANCE_STAGE_NAMES}``)
+    # owns zero-filling itself before merging in recorded values; this test
+    # does the same to build a receipt-ready, fully-keyed stage map.
+    stages = {stage: 0 for stage in GENERATION_TIMING_STAGES}
+    stages.update(recorder.snapshot_stage_timings_ms())
 
     assert all(stage in stages for stage in GENERATION_TIMING_STAGES)
     assert stages["outline"] == 0
