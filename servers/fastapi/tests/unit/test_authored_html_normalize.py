@@ -71,6 +71,47 @@ def test_author_intake_records_void_end_tag_normalization(monkeypatch):
     ]
 
 
+def test_author_intake_stays_byte_identical_in_legacy_mode_when_nothing_fires(monkeypatch):
+    """Regression: adoption must not depend on the receipt count. `legacy` only
+    ever rewrites bytes when a whitelisted rule fires, so a document with no
+    findings comes back unchanged either way -- this pins that invariant."""
+    from utils.llm_calls.author_slide import validate_authored_slide_html
+
+    monkeypatch.delenv("AUTHORED_HTML_NORMALIZE_ENABLED", raising=False)
+    monkeypatch.setenv("AUTHORED_HTML_NORMALIZATION", "legacy")
+    html = "<html><head></head><body><p data-qid='x'>hello</p></body></html>"
+    receipt = []
+
+    admitted = validate_authored_slide_html(html, normalization_receipt=receipt)
+
+    assert admitted == html
+    assert receipt == []
+
+
+def test_author_intake_adopts_tree_canonicalization_even_when_no_rule_fires(monkeypatch):
+    """Regression for the defect where `validate_authored_slide_html` gated
+    adoption of the normalized HTML on `normalized.normalizations` being
+    non-empty. In `tree` mode the whole point is a canonical HTML5
+    reserialization, which the html5lib round trip changes on virtually every
+    real document (here: single-quoted attributes canonicalize to double
+    quotes) even when zero rewrite rules fire. Gating on receipt count meant
+    the reserialized tree never reached the renderer in tree mode."""
+    from utils.llm_calls.author_slide import validate_authored_slide_html
+
+    monkeypatch.delenv("AUTHORED_HTML_NORMALIZE_ENABLED", raising=False)
+    monkeypatch.setenv("AUTHORED_HTML_NORMALIZATION", "tree")
+    html = "<html><head></head><body><div class='a'><p data-qid=\"x\">hello</p></div></body></html>"
+    receipt = []
+
+    admitted = validate_authored_slide_html(html, normalization_receipt=receipt)
+
+    # No whitelisted rewrite rule fired -- the receipt stays empty --
+    # but the canonical (double-quoted) reserialization must still be adopted.
+    assert receipt == []
+    assert "class=\"a\"" in admitted
+    assert "class='a'" not in admitted
+
+
 def test_normalize_authored_html_strips_forbidden_style_attribute_declarations():
     html = (
         "<!doctype html><html><head><meta charset='utf-8'></head><body>"

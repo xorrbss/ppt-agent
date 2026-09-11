@@ -128,6 +128,32 @@ def test_run_identity_and_dom_deviation():
     assert check_coverage(parse_text_tokens("{{q:b}}{{q:a}}"), build_block_table({"a": "a", "b": "b"}))
 
 
+def test_canonical_text_keeps_content_markers_drops_item_glyphs():
+    # Regression for a defect where every run marker -- including a corporate
+    # mark ("㈜") and enumerators ("①"/"②") -- was peeled off the canonical
+    # token text, so token expansion silently dropped content even though
+    # `accepts()` would have admitted the full (unpeeled) form. Only pure
+    # item-glyph markers (bullets/checkboxes) are template furniture.
+    table = build_block_table({"a": "㈜아이비즈소프트웨어"})
+    block = table[0]
+    assert block.text == "㈜아이비즈소프트웨어"
+    assert block.projection.accepts(*block.projection.whole, block.text)
+
+    table = build_block_table({"a": "① 질문\n② 답변"})
+    block = table[0]
+    assert "①" in block.text and "②" in block.text
+    assert block.projection.accepts(*block.projection.whole, block.text)
+
+    table = build_block_table({"a": "• 첫째 항목\n• 둘째 항목"})
+    block = table[0]
+    assert "•" not in block.text
+    assert block.projection.accepts(*block.projection.whole, block.text)
+
+    result = expand("<p>{{q:a}}</p>", {"a": "㈜아이비즈소프트웨어"})
+    root = parse_authored_html(result.html, profile="fragment").root
+    assert root[0].text == "㈜아이비즈소프트웨어"
+
+
 def test_bounded_error_receipt():
     table = build_block_table({f"a{i}": "text" for i in range(100)})
     with pytest.raises(BrowserSourceReadbackError) as caught:

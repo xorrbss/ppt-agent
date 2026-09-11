@@ -721,17 +721,27 @@ def validate_authored_slide_html(
     canonical = canonicalize_authored_slide_html(html, finalized=finalized)
     if is_authored_html_normalize_enabled():
         normalized = normalize_authored_html(canonical)
-        if normalized.normalizations:
+        # Adopt whenever the normalizer actually changed the bytes, not
+        # whenever a rule fired: `legacy` only ever changes bytes when a rule
+        # fires (byte-identical otherwise), so this is equivalent for it, but
+        # `tree` mode's whole point is a canonical HTML5 reserialization that
+        # can differ from the input even when no rewrite rule fired (empty
+        # receipt list). Gating adoption on `normalizations` truthiness left
+        # the reserialized tree discarded on every slide that fired no rule.
+        if normalized.html != canonical:
             canonical = normalized.html
             if normalization_receipt is not None:
                 normalization_receipt.extend(normalized.normalizations)
-            logger.info(
-                "authored_html_normalize fired %d rule(s): %s",
-                len(normalized.normalizations),
-                ", ".join(
-                    f"{entry['rule']}x{entry['count']}" for entry in normalized.normalizations
-                ),
-            )
+            if normalized.normalizations:
+                logger.info(
+                    "authored_html_normalize fired %d rule(s): %s",
+                    len(normalized.normalizations),
+                    ", ".join(
+                        f"{entry['rule']}x{entry['count']}" for entry in normalized.normalizations
+                    ),
+                )
+            else:
+                logger.info("authored_html_normalize adopted canonical reserialization (no rule fired)")
     validation_source = (
         _without_authoring_only_image_attributes(canonical)
         if allow_illustration_slots

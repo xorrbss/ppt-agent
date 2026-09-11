@@ -9,7 +9,11 @@ import re
 
 import regex
 
-from services.source_content.source_runs import SourceRunProjection, project_source_runs
+from services.source_content.source_runs import (
+    _ITEM_GLYPHS,
+    SourceRunProjection,
+    project_source_runs,
+)
 from services.source_content.placeholder.tokens import ID_PATTERN, reject
 
 
@@ -32,11 +36,32 @@ class SourceBlock:
             "id": self.id, "text": self.text, "fullText": self.full_text,
             "chars": len(self.text),
             "hardBreaks": [self.run_spans[start][0] for start, _ in self.projection.lines[1:]],
-            "markers": [[self.run_spans[run.index][0], run.marker] for run in runs if run.marker],
+            # Only markers actually dropped from canonical text (pure item
+            # glyphs) are reported here; a kept marker (enumerator, "n.",
+            # "㈜"-class mark) is already part of text/chars and needs no
+            # separate furniture from the model.
+            "markers": [
+                [self.run_spans[run.index][0], run.marker]
+                for run in runs if run.marker and _is_pure_item_glyph_marker(run.marker)
+            ],
             "pipes": [self.run_spans[run.index][0] for run in runs if run.order_free_before],
             # Inclusive boundary intervals compact the common all-single-codepoint case.
             "allowedBoundaries": _boundary_intervals(self.boundaries),
         }
+
+
+def _is_pure_item_glyph_marker(marker: str) -> bool:
+    """Whether a run's peeled marker is only template furniture.
+
+    ``_ITEM_GLYPHS`` (bullets, checkboxes, arrow heads) are drawn by the
+    template and carry no source characters, so a marker made entirely of
+    them (plus whitespace) is dropped from canonical text. Anything else --
+    an enumerator (``①``), digit numbering (``1.``/``2)``), a corporate mark
+    (``㈜``) -- is content and is kept, even inside a mixed marker.
+    """
+
+    stripped = re.sub(r"\s+", "", marker)
+    return bool(stripped) and all(char in _ITEM_GLYPHS for char in stripped)
 
 
 def _boundary_intervals(boundaries: tuple[int, ...]) -> list[list[int]]:
@@ -62,14 +87,21 @@ def build_block_table(bindings: Mapping[str, str] | Sequence[tuple[str, str]]) -
         seen.add(block_id)
         projection = project_source_runs(raw)
         # The existing accepts() predicate is the authority. A projection can
-        # begin after a discarded marker-only piece, and optional run markers
-        # are furniture. Inter-run separators remain exactly as projected.
+        # begin after a discarded marker-only piece, and a pure-item-glyph
+        # run marker (bullet/checkbox furniture) is dropped. Any other marker
+        # -- an enumerator, digit numbering, a corporate mark like "㈜" -- is
+        # source content and is kept immediately before its run's body, which
+        # is exactly the position accepts()'s per-run pattern expects an
+        # (optional) marker to occupy. Inter-run separators remain exactly as
+        # projected.
         text = ""
         spans = []
         previous = projection.runs[0].begin
         for run in projection.runs:
             text += projection.text[previous:run.begin]
             begin = len(text)
+            if run.marker and not _is_pure_item_glyph_marker(run.marker):
+                text += run.marker
             text += run.body
             spans.append((begin, len(text)))
             previous = run.end
