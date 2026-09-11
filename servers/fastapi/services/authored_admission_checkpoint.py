@@ -14,11 +14,9 @@ from services.authored_admission_context import (
     digest_html,
 )
 from services.authored_admission_policy import (
-    POLICY_REVISION,
     RENDERER_POLICY_FAILED,
     SOURCE_BLOCK_ATTRIBUTE,
     SOURCE_READBACK_FAILED,
-    admission_gate_mode,
 )
 from services.authored_admission_receipt import (
     INCOMPLETE_IDENTITY,
@@ -28,13 +26,14 @@ from services.authored_admission_receipt import (
     require_admission_receipt,
 )
 from services.authored_admission_session import check_producer, current_session
+from services.authored_rollout_profile import current_rollout_profile
 from utils.renderer_isolation import RendererPolicyError
 from utils.renderer_profile import AUTHORED_PROFILE, select_render_profile
 
 
 def enforce_receipts() -> bool:
     session = current_session()
-    return (session.mode if session else admission_gate_mode()) == "enforce"
+    return (session.mode if session else current_rollout_profile().gate_mode) == "enforce"
 
 
 def _admit_on_renderer_profile(
@@ -65,7 +64,7 @@ def _admit_on_renderer_profile(
         raw_diagnostics_step(html)
     except RendererPolicyError as error:
         verdict, code = "rejected", getattr(error, "code", RENDERER_POLICY_FAILED)
-    if verdict == "admitted" and context.state == "captured" and metrics is None:
+    if verdict == "admitted" and context.html_repr == "captured" and metrics is None:
         verdict, code, predicate = "rejected", SOURCE_READBACK_FAILED, "capture_binding"
     elif verdict == "admitted":
         predicate = "complete"
@@ -79,7 +78,7 @@ def _admit_on_renderer_profile(
         predicate=predicate,
         metrics_digest=digest_html(canonical_json(metrics)) if metrics is not None else None,
         png_digest=digest_bytes(png) if png is not None else None,
-        capture_count=int(context.state == "captured" and metrics is not None),
+        capture_count=int(context.html_repr == "captured" and metrics is not None),
     )
 
 
@@ -111,13 +110,13 @@ def _admission_without_session(kwargs: dict[str, Any]) -> dict[str, Any]:
         operation_id="",
         slide_index=int(kwargs["slide_index"]),
         source_unit_id="",
-        policy_revision=POLICY_REVISION,
+        policy_revision=current_rollout_profile().policy_revision,
         fenced_revision=int(kwargs.get("fencing_token") or 0),
         attempt_token=str(kwargs.get("attempt_token") or ""),
         reference_mode="",
         source_reflow=False,
         terminal_fallback_eligible=False,
-        state="captured" if stage == "render" else "expanded",
+        html_repr="captured" if stage == "render" else "expanded",
         allow_illustration_slots=stage == "author",
     )
     admitted, receipt = _admit_on_renderer_profile(
@@ -228,7 +227,7 @@ def _validate_checkpoint_write(
         pinned = admission_receipt.context
         expected = replace(
             session.contexts[slide_index],
-            state=pinned.state,
+            html_repr=pinned.html_repr,
             already_admitted_flags=pinned.already_admitted_flags,
             capture_profile=pinned.capture_profile,
             allow_illustration_slots=pinned.allow_illustration_slots,

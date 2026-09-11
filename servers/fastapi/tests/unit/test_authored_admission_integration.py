@@ -17,6 +17,7 @@ from services.authored_admission_checkpoint import prepare_checkpoint_write
 from services.authored_admission_producers import author_html, illustrate_html, source_candidate
 from services.authored_admission_publication import final_readback
 from services.authored_admission_session import AdmissionSession, _SESSION, admission_scope, configure_admission
+from services.authored_rollout_profile import RolloutProfile, rollout_profile_scope
 from tests.unit.test_authored_admission import HTML, MANIFEST, OUTLINE, context, metrics
 
 
@@ -30,14 +31,18 @@ def sync_async(function):
 
 @pytest.fixture
 def session(monkeypatch):
+    profile = RolloutProfile(gate_mode="enforce")
     monkeypatch.setattr(gate, "text_step", gate.bind_current_source)
     monkeypatch.setattr(gate, "placeholder_authoring_enabled", lambda: False)
-    value = AdmissionSession(mode="enforce", contexts=(context(),))
-    token = _SESSION.set(value)
-    try:
-        yield value
-    finally:
-        _SESSION.reset(token)
+    with rollout_profile_scope(profile):
+        value = AdmissionSession(
+            mode="enforce", profile=profile, pinned_profile=profile, contexts=(context(),)
+        )
+        token = _SESSION.set(value)
+        try:
+            yield value
+        finally:
+            _SESSION.reset(token)
 
 
 def test_author_and_illustration_producers_use_gate(session):
@@ -102,7 +107,7 @@ def test_publication_reader_ignores_evidence_and_stale_receipts(session):
     from services.authored_checkpoint_html import checkpoint_stage_html
 
     html = author_html(HTML, index=0)
-    receipt = gate.admit_slide_html(context(state="captured"), html, metrics=metrics(html), png=b"png").receipt
+    receipt = gate.admit_slide_html(context(html_repr="captured"), html, metrics=metrics(html), png=b"png").receipt
     checkpoint = SimpleNamespace(
         illustrated_html=html,
         attempt_token="attempt-1",
@@ -189,7 +194,7 @@ async def test_a_session_less_producer_is_admitted_at_the_writer(monkeypatch):
 
     monkeypatch.setattr(gate, "text_step", gate.bind_current_source)
     monkeypatch.setattr(gate, "placeholder_authoring_enabled", lambda: False)
-    monkeypatch.setattr(checkpoint, "admission_gate_mode", lambda: "enforce")
+    monkeypatch.setattr(checkpoint, "enforce_receipts", lambda: True)
     assert checkpoint.current_session() is None
     row = SimpleNamespace(error=None)
     database = SimpleNamespace(add_all=lambda _: None, commit=AsyncMock())
@@ -255,7 +260,7 @@ async def test_vqa_producer_uses_same_rejection_and_label(session):
 async def test_scope_pins_mode_and_configures_source(monkeypatch):
     from services import authored_admission_session as sessions
 
-    monkeypatch.setattr(sessions, "admission_gate_mode", lambda: "shadow")
+    monkeypatch.setattr(sessions, "resolve_rollout_profile", lambda: RolloutProfile(gate_mode="shadow"))
 
     @admission_scope
     async def run():
@@ -323,7 +328,7 @@ def test_enforce_removes_the_legacy_deck_seal_check(session):
     require_bound_source_html([HTML], (context().bindings,), stamp=legacy)
     legacy.assert_not_called()
     # The captured gate still rejects unsealed bytes before they can publish.
-    assert gate.admit_slide_html(context(state="captured"), HTML, metrics=metrics(HTML)).verdict == "rejected"
+    assert gate.admit_slide_html(context(html_repr="captured"), HTML, metrics=metrics(HTML)).verdict == "rejected"
 
 
 def test_provider_output_marker_never_reinterprets_inserted_tokens(session, monkeypatch):

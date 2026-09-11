@@ -7,6 +7,7 @@ from dataclasses import FrozenInstanceError, replace
 import json
 from pathlib import Path
 import re
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -22,6 +23,7 @@ from services.authored_admission_receipt import (
 )
 from services.authored_admission_session import AdmissionSession, _SESSION, check_producer
 from services.authored_admission_shadow import AdmissionShadow
+from services.authored_rollout_profile import RolloutProfile, current_rollout_profile, rollout_profile_scope
 from services.source_content.browser_readback import BrowserSourceReadbackResult, deterministic_source_qid
 from utils.renderer_markup_policy import GLOBAL_ATTRIBUTES, SERVER_STAMPED_ATTRIBUTES
 from utils.slide_capture_result import RenderCapture
@@ -56,7 +58,7 @@ def context(**kwargs):
         operation_id="op1",
         slide_index=0,
         source_unit_id="u1",
-        policy_revision="test/v1",
+        policy_revision=current_rollout_profile().policy_revision,
         fenced_revision=4,
         attempt_token="attempt-1",
         reference_mode="source_content_restyle",
@@ -100,8 +102,10 @@ def metrics(html, **changes):
 
 @pytest.fixture(autouse=True)
 def legacy_representation(monkeypatch):
-    monkeypatch.setattr(gate, "get_authored_html_normalization", lambda: "legacy")
-    monkeypatch.setattr(gate, "text_step", gate.bind_current_source)
+    """Pin the attempt's rollout profile the way a real attempt start does."""
+    with rollout_profile_scope(RolloutProfile()):
+        monkeypatch.setattr(gate, "text_step", gate.bind_current_source)
+        yield
 
 
 def test_context_is_immutable_and_pins_source_digest():
@@ -119,7 +123,7 @@ def test_context_is_immutable_and_pins_source_digest():
 @pytest.mark.parametrize("flagged", [False, True])
 def test_three_mode_table(monkeypatch, mode, predicate, flagged):
     ctx = context(
-        state="captured",
+        html_repr="captured",
         source_reflow=mode != "ordinary",
         terminal_fallback_eligible=mode == "terminal",
         already_admitted_flags=("source_readback:visibility",) if flagged else (),
@@ -164,10 +168,11 @@ def test_fixed_gate_order_and_post_expansion_policy(monkeypatch):
         "inspect_browser_source_readback",
         lambda **_: calls.append("readback") or BrowserSourceReadbackResult(1, 1),
     )
-    assert gate.admit_slide_html(context(state="token"), HTML).verdict == "admitted"
+    assert gate.admit_slide_html(context(html_repr="token"), HTML).verdict == "admitted"
     assert calls == ["raw", "policy", "text", "policy"]
     calls.clear()
-    assert gate.admit_slide_html(context(state="captured", source_reflow=False), HTML, metrics={}).verdict == "admitted"
+    ordinary = context(html_repr="captured", source_reflow=False)
+    assert gate.admit_slide_html(ordinary, HTML, metrics={}).verdict == "admitted"
     assert calls == ["raw", "policy", "policy"]
 
 
@@ -182,7 +187,7 @@ def test_duplicate_attributes_fail_before_rewrite(monkeypatch):
 def test_text_step_normalizations_are_carried_in_receipt(monkeypatch):
     entry = {"rule": "source_placeholder_expanded", "blocks": 1, "deviations": 0}
     monkeypatch.setattr(gate, "text_step", lambda ctx, html: gate.TextStepResult(html, normalizations=(entry,)))
-    admission = gate.admit_slide_html(context(source_reflow=False, state="token"), HTML)
+    admission = gate.admit_slide_html(context(source_reflow=False, html_repr="token"), HTML)
     assert entry in admission.normalizations
     assert entry in admission.receipt.as_dict()["normalizations"]
 
@@ -199,7 +204,7 @@ def test_text_step_normalizations_are_carried_in_receipt(monkeypatch):
 )
 def test_synthetic_historical_failure_classes_remain_rejected(run, change):
     html = gate.admit_slide_html(context(), HTML).html
-    result = gate.admit_slide_html(context(state="captured"), html, metrics=metrics(html, **change))
+    result = gate.admit_slide_html(context(html_repr="captured"), html, metrics=metrics(html, **change))
     assert result.verdict == "rejected", run
 
 
@@ -211,7 +216,7 @@ def test_run18_void_end_tag_keeps_existing_normalization_semantics():
 def test_real_captured_integrity_and_html_binding():
     expanded = gate.admit_slide_html(context(), HTML)
     assert expanded.verdict == "admitted"
-    captured = context(state="captured")
+    captured = context(html_repr="captured")
     assert gate.admit_slide_html(captured, expanded.html, metrics=metrics(expanded.html)).verdict == "admitted"
     damaged = metrics(expanded.html, renderedText="손상된 원문")
     assert gate.admit_slide_html(captured, expanded.html, metrics=damaged).predicate == "rendered_integrity"
@@ -232,7 +237,7 @@ def test_real_captured_integrity_and_html_binding():
 )
 def test_writer_receipt_mismatch(change, code):
     html = gate.admit_slide_html(context(), HTML).html
-    captured = gate.admit_slide_html(context(state="captured"), html, metrics=metrics(html), png=b"png")
+    captured = gate.admit_slide_html(context(html_repr="captured"), html, metrics=metrics(html), png=b"png")
     kwargs = dict(
         html=html,
         stage="render",
@@ -251,7 +256,7 @@ def test_writer_receipt_mismatch(change, code):
 def test_rejected_capture_can_only_be_nonpublishable_evidence():
     html = gate.admit_slide_html(context(), HTML).html
     sample = metrics(html, cssVisible=False)
-    admission = gate.admit_slide_html(context(state="captured"), html, metrics=sample, png=b"png")
+    admission = gate.admit_slide_html(context(html_repr="captured"), html, metrics=sample, png=b"png")
     kwargs = dict(
         html=html,
         stage="render",
@@ -297,7 +302,7 @@ async def test_checkpoint_writer_refuses_unadmitted_html_before_io(monkeypatch):
 
 def test_same_profile_capture_reuse_is_attempt_bound():
     html = gate.admit_slide_html(context(), HTML).html
-    ctx = context(state="captured")
+    ctx = context(html_repr="captured")
     sample = metrics(html)
     captured = gate.admit_slide_html(ctx, html, metrics=sample, png=b"png")
     store = AdmissionCaptureStore()
@@ -598,3 +603,198 @@ def test_verbatim_html_is_never_admitted_without_a_session(monkeypatch):
     checkpoint = enforcing_gate(monkeypatch)
     with pytest.raises(AdmissionReceiptError, match="session_identity_required"):
         author_checkpoint_write(checkpoint, bound)
+
+
+# --- R7/B4: one frozen rollout profile per attempt -------------------------
+
+
+def test_the_five_switches_are_read_once_and_frozen(monkeypatch):
+    """Every consumer reads the attempt's profile, not the live accessors."""
+
+    from services import authored_repair_loop as loop
+    from services.source_content.placeholder import prompt, text_step
+    from services import authored_rollout_profile as rollout
+    from utils import get_env_programme
+
+    reads: list[str] = []
+    for name in (
+        "get_authored_admission_gate_mode",
+        "get_authored_html_normalization",
+        "is_authored_verbatim_placeholder_authoring_enabled",
+        "is_authored_verbatim_single_repair_loop_enabled",
+        "get_authored_verbatim_repair_loop_model_calls",
+    ):
+        original = getattr(get_env_programme, name)
+        monkeypatch.setattr(
+            rollout, name, lambda *a, _n=name, _f=original, **k: reads.append(_n) or _f(*a, **k)
+        )
+
+    profile = RolloutProfile(
+        gate_mode="enforce",
+        html_normalization="tree",
+        placeholder_authoring=True,
+        single_repair_loop=True,
+        repair_loop_model_calls=2,
+    )
+    with rollout_profile_scope(profile):
+        assert gate.placeholder_authoring_enabled() is True
+        assert loop.single_repair_loop_enabled(source_reflow=True) is True
+        assert loop.repair_loop_model_calls() == 2
+        assert prompt.current_rollout_profile() is profile
+        assert text_step.current_rollout_profile() is profile
+    assert reads == []
+    assert rollout.resolve_rollout_profile() == RolloutProfile()
+    assert sorted(set(reads)) == sorted(
+        {
+            "get_authored_admission_gate_mode",
+            "get_authored_html_normalization",
+            "is_authored_verbatim_placeholder_authoring_enabled",
+            "is_authored_verbatim_single_repair_loop_enabled",
+            "get_authored_verbatim_repair_loop_model_calls",
+        }
+    )
+
+
+@sync_async
+async def test_an_attempt_resolves_its_profile_once_at_the_scope(monkeypatch):
+    from services import authored_admission_session as sessions
+    from services import authored_rollout_profile as rollout
+
+    calls = []
+    monkeypatch.setattr(
+        sessions,
+        "resolve_rollout_profile",
+        lambda: calls.append(1) or RolloutProfile(gate_mode="enforce"),
+    )
+
+    @sessions.admission_scope
+    async def run():
+        assert sessions.current_session().mode == "enforce"
+        return rollout.current_rollout_profile()
+
+    outer = rollout.pinned_rollout_profile()
+    assert (await run()).gate_mode == "enforce"
+    assert calls == [1]
+    # The pin is attempt-local: nothing leaks out of the attempt that made it.
+    assert rollout.pinned_rollout_profile() == outer != RolloutProfile(gate_mode="enforce")
+
+
+@sync_async
+async def test_a_resumed_attempt_reuses_the_profile_its_job_pinned():
+    """A knob flipped between attempts cannot re-represent a half-built deck."""
+
+    from services import authored_admission_session as sessions
+    from services.authored_rollout_profile import (
+        ROLLOUT_PROFILE_PAYLOAD_KEY,
+        RolloutProfileError,
+        current_rollout_profile,
+    )
+
+    pinned = RolloutProfile(html_normalization="tree", placeholder_authoring=True)
+    job = SimpleNamespace(
+        request_payload={ROLLOUT_PROFILE_PAYLOAD_KEY: pinned.as_dict()},
+        workspace_operation_id=None,
+        attempt_token="attempt-1",
+        _workspace_fencing_token=4,
+    )
+
+    @sessions.admission_scope
+    async def run(generation_job):
+        sessions.configure_admission(
+            request=SimpleNamespace(
+                _source_content_authored_reflow=True,
+                _source_content_manifest=MANIFEST,
+                _source_document_outline=OUTLINE,
+            ),
+            presentation_id="p1",
+            generation_job=generation_job,
+            profile=SimpleNamespace(strict_dom_gate=True),
+            reference_mode="source_content_restyle",
+            slide_count=1,
+            bindings=None,
+            image_bindings=None,
+        )
+        session = sessions.current_session()
+        return current_rollout_profile(), session.contexts[0].policy_revision
+
+    active, revision = await run(job)
+    assert active == pinned and revision == pinned.policy_revision
+    assert revision != RolloutProfile().policy_revision
+
+    broken = SimpleNamespace(
+        request_payload={ROLLOUT_PROFILE_PAYLOAD_KEY: {"gate_mode": "audit"}},
+        workspace_operation_id=None,
+        attempt_token="attempt-1",
+        _workspace_fencing_token=4,
+    )
+    with pytest.raises(RolloutProfileError, match="rollout_profile_invalid"):
+        await run(broken)
+
+
+def test_a_second_disagreeing_pin_is_a_coded_rejection():
+    from services.authored_rollout_profile import RolloutProfileError, pin_rollout_profile
+
+    first = RolloutProfile()
+    second = RolloutProfile(gate_mode="enforce")
+    with rollout_profile_scope(first):
+        pin_rollout_profile(first, replacing=first)
+        with pytest.raises(RolloutProfileError, match="rollout_profile_mismatch"):
+            pin_rollout_profile(second, replacing=first)
+
+
+def test_the_receipt_states_its_representation_and_a_real_policy_revision():
+    from services.authored_admission_policy import POLICY_REVISION_BASE
+
+    expanded = gate.admit_slide_html(context(), HTML)
+    captured = gate.admit_slide_html(
+        context(html_repr="captured"), expanded.html, metrics=metrics(expanded.html)
+    )
+    assert expanded.receipt.as_dict()["htmlRepr"] == "expanded"
+    assert captured.receipt.as_dict()["htmlRepr"] == "captured"
+    revision = expanded.receipt.as_dict()["policyRevision"]
+    assert revision.startswith(POLICY_REVISION_BASE + "+")
+    assert revision != "authored-admission/v1"
+    # The rollout profile is part of the revision, so two runs under different
+    # switches never mint receipts that read as one another's.
+    assert RolloutProfile(html_normalization="tree").policy_revision != revision
+
+
+def test_evidence_from_another_policy_revision_is_refused(monkeypatch):
+    from services.authored_checkpoint_html import checkpoint_stage_html
+
+    html = gate.admit_slide_html(context(), HTML).html
+    captured = gate.admit_slide_html(
+        context(html_repr="captured"), html, metrics=metrics(html), png=b"png"
+    )
+    kwargs = dict(
+        html=html,
+        stage="render",
+        slide_index=0,
+        attempt_token="attempt-1",
+        fenced_revision=4,
+        metrics=metrics(html),
+        png=b"png",
+    )
+    require_admission_receipt(captured.receipt, **kwargs)
+    stale = replace(
+        captured.receipt, context=replace(captured.receipt.context, policy_revision="authored-admission/v1")
+    )
+    with pytest.raises(AdmissionReceiptError, match="policy_revision_mismatch"):
+        require_admission_receipt(stale, **kwargs)
+
+    checkpoint = enforcing_gate(monkeypatch)
+    assert checkpoint is not None
+
+    class _Checkpoint:
+        attempt_token = "attempt-1"
+        illustrated_html = html
+        author_html = html
+        render_status = "completed"
+
+        def __init__(self, admission):
+            self.error = {"admission": admission}
+
+    payload = dict(captured.receipt.as_dict(), persistenceClass="publishable", publishable=True)
+    assert checkpoint_stage_html(_Checkpoint(payload), publishable=True) == html
+    stale_payload = dict(payload, policyRevision="authored-admission/v1")
+    assert checkpoint_stage_html(_Checkpoint(stale_payload), publishable=True) is None

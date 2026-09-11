@@ -19,14 +19,27 @@ from services.authored_admission_context import (
     digest_bytes,
     digest_html,
 )
-from services.authored_admission_policy import POLICY_REVISION, admission_gate_mode
 from services.authored_admission_shadow import AdmissionShadow, bounded_code
+from services.authored_rollout_profile import (
+    ROLLOUT_PROFILE_PAYLOAD_KEY,
+    RolloutProfile,
+    pin_rollout_profile,
+    require_rollout_profile,
+    resolve_rollout_profile,
+    rollout_profile_scope,
+)
 from services.authored_terminal_slide_policy import terminal_fallback_active
 
 
 @dataclass
 class AdmissionSession:
     mode: str
+    #: The five rollout switches, resolved once when this attempt started.  The
+    #: session never re-reads them; ``mode`` above is this profile's gate mode.
+    profile: RolloutProfile = field(default_factory=RolloutProfile)
+    #: The profile restored from the job record, once ``configure_admission``
+    #: has seen one.  A second, disagreeing pin is a coded rejection.
+    pinned_profile: RolloutProfile | None = None
     contexts: tuple[AdmissionContext, ...] = ()
     shadow: AdmissionShadow = field(default_factory=AdmissionShadow)
     admissions: dict[tuple[str, str, str], Admission] = field(default_factory=dict)
@@ -40,7 +53,7 @@ class AdmissionSession:
     ) -> AdmissionContext:
         return replace(
             self.contexts[index],
-            state="captured" if captured else "expanded",
+            html_repr="captured" if captured else "expanded",
             already_admitted_flags=flags,
             allow_illustration_slots=slots,
         )
@@ -81,27 +94,57 @@ def producer_scope(producer: str):
 
 
 def admission_scope(function):
+    """An operation attempt: the rollout switches are resolved here, once."""
+
     @wraps(function)
     async def run(*args, **kwargs):
-        token = _SESSION.set(AdmissionSession(mode=admission_gate_mode()))
-        try:
-            return await function(*args, **kwargs)
-        finally:
-            session = current_session()
-            pending = [task for task in session.captures.values() if not task.done()]
-            if pending:
-                import asyncio
+        profile = resolve_rollout_profile()
+        with rollout_profile_scope(profile):
+            token = _SESSION.set(AdmissionSession(mode=profile.gate_mode, profile=profile))
+            try:
+                return await function(*args, **kwargs)
+            finally:
+                session = current_session()
+                pending = [task for task in session.captures.values() if not task.done()]
+                if pending:
+                    import asyncio
 
-                for task in pending:
-                    task.cancel()
-                await asyncio.gather(*pending, return_exceptions=True)
-            _SESSION.reset(token)
+                    for task in pending:
+                        task.cancel()
+                    await asyncio.gather(*pending, return_exceptions=True)
+                _SESSION.reset(token)
 
     return run
 
 
 def current_session() -> AdmissionSession | None:
     return _SESSION.get()
+
+
+def persisted_rollout_profile(request: Any, generation_job: Any) -> Any:
+    """The rollout profile this job was staged with, if the record carries one."""
+    persisted = getattr(request, "_authored_rollout_profile", None)
+    if persisted is None:
+        payload = getattr(generation_job, "request_payload", None)
+        if isinstance(payload, Mapping):
+            persisted = payload.get(ROLLOUT_PROFILE_PAYLOAD_KEY)
+    return persisted
+
+
+def _pin_attempt_profile(session: AdmissionSession, *, request: Any, generation_job: Any) -> RolloutProfile:
+    """Pin the attempt to its job record's profile, resolving live only once.
+
+    A resumed attempt runs the switches its earlier attempts ran: the record is
+    authority over the live environment, because the deck's already-published
+    slides were produced under it.
+    """
+
+    profile = require_rollout_profile(persisted_rollout_profile(request, generation_job))
+    pin_rollout_profile(profile, replacing=session.pinned_profile)
+    session.pinned_profile = profile
+    session.profile = profile
+    session.mode = profile.gate_mode
+    return profile
 
 
 def configure_admission(
@@ -118,6 +161,7 @@ def configure_admission(
     session = current_session()
     if session is None:
         return
+    profile = _pin_attempt_profile(session, request=request, generation_job=generation_job)
     source_reflow = bool(getattr(request, "_source_content_authored_reflow", False))
     manifest = getattr(request, "_source_content_manifest", None)
     projection = getattr(request, "_source_document_outline", None)
@@ -134,7 +178,7 @@ def configure_admission(
                 operation_id=str(getattr(generation_job, "workspace_operation_id", None) or ""),
                 slide_index=index,
                 source_unit_id=str(slide.get("sourceUnitId") or slide.get("source_unit_id") or ""),
-                policy_revision=POLICY_REVISION,
+                policy_revision=profile.policy_revision,
                 fenced_revision=int(getattr(generation_job, "_workspace_fencing_token", None) or 0),
                 attempt_token=str(getattr(generation_job, "attempt_token", None) or ""),
                 reference_mode=reference_mode,
@@ -215,5 +259,12 @@ def check_producer(
 
 
 def admission_shadow_receipt() -> dict | None:
+    """The deck-level receipt, stating which switches produced it."""
     session = current_session()
-    return session.shadow.as_dict() if session is not None else None
+    if session is None:
+        return None
+    return dict(
+        session.shadow.as_dict(),
+        rolloutProfile=session.profile.as_dict(),
+        policyRevision=session.profile.policy_revision,
+    )

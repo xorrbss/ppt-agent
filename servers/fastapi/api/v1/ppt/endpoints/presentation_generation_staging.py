@@ -37,6 +37,11 @@ from services.workspace_artifact_publication_service import (
     publish_workspace_generation_artifact,
     stage_workspace_chat_artifacts_for_publication,
 )
+from services.authored_rollout_profile import (
+    ROLLOUT_PROFILE_PAYLOAD_KEY,
+    resolve_rollout_profile,
+    rollout_profile_from_payload,
+)
 from services.workspace_runtime_profile import UnsupportedWorkspaceRuntimeError, require_supported_workspace_runtime
 
 INTERNAL_EXACT_SNAPSHOT_KEY = "_internal_authored_exact_snapshot_id"
@@ -48,6 +53,7 @@ INTERNAL_STYLE_SNAPSHOT_KEY = "_internal_authored_style_snapshot"
 INTERNAL_DECK_METADATA_KEY = "_internal_authored_deck_metadata"
 INTERNAL_SOURCE_SEMANTIC_SNAPSHOT_KEY = "_internal_authored_source_semantic_snapshot"
 INTERNAL_LOCAL_FIT_POLICY_REVISION_KEY = "_internal_authored_local_fit_policy_revision"
+INTERNAL_ROLLOUT_PROFILE_KEY = ROLLOUT_PROFILE_PAYLOAD_KEY
 
 
 def _durable_style_snapshot(style: AuthoredStyle) -> dict[str, Any]:
@@ -88,6 +94,14 @@ def _durable_request_payload(request: GeneratePresentationRequest) -> dict:
         font_policy(policy_revision)
         request._authored_local_fit_policy_revision = policy_revision
         payload[INTERNAL_LOCAL_FIT_POLICY_REVISION_KEY] = policy_revision
+        # Freeze the rollout switches with the job, so every attempt of it --
+        # including one resumed after an operator flipped a knob -- authors,
+        # normalizes, substitutes and repairs the same way.
+        rollout_profile = (
+            request._authored_rollout_profile or resolve_rollout_profile().as_dict()
+        )
+        request._authored_rollout_profile = rollout_profile
+        payload[INTERNAL_ROLLOUT_PROFILE_KEY] = rollout_profile
     if request._authored_exact_snapshot_id is not None:
         payload[INTERNAL_EXACT_SNAPSHOT_KEY] = request._authored_exact_snapshot_id
     if request._authored_composition_pin is not None:
@@ -309,6 +323,7 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     local_fit_policy_revision = values.pop(
         INTERNAL_LOCAL_FIT_POLICY_REVISION_KEY, None
     )
+    rollout_profile_payload = values.pop(INTERNAL_ROLLOUT_PROFILE_KEY, None)
     # Internal runner metadata is deliberately outside the public request
     # schema. It remains on the durable job across operation rebinds, but must
     # never be passed to Pydantic as caller input.
@@ -338,5 +353,12 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
         local_fit_policy_revision = str(local_fit_policy_revision)
         font_policy(local_fit_policy_revision)
         request._authored_local_fit_policy_revision = local_fit_policy_revision
+    if rollout_profile_payload is not None:
+        # Validate here, at restore, so a job whose pinned profile this build can
+        # no longer honour fails with its own code instead of silently running
+        # the live switches over slides produced under different ones.
+        request._authored_rollout_profile = rollout_profile_from_payload(
+            rollout_profile_payload
+        ).as_dict()
     return request
 

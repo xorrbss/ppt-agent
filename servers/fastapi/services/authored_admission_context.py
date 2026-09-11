@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from services.authored_admission_policy import (
+    HTML_REPRESENTATIONS,
     MANIFEST_DIGEST_MISMATCH,
     PROJECTION_DIGEST_MISMATCH,
     REPRESENTATION_INVALID,
@@ -45,7 +46,14 @@ class AdmissionContext:
     source_reflow: bool
     terminal_fallback_eligible: bool
     already_admitted_flags: tuple[str, ...] = ()
-    state: str = "expanded"
+    #: Which representation of the slide these bytes are: the model's own output
+    #: with placeholders unexpanded (``token``), the substituted and statically
+    #: checked document (``expanded``), or that document plus the Chromium
+    #: metrics and PNG taken from it (``captured``).  Design section 2.3 names
+    #: this ``html_repr`` and versions a checkpoint by it; the receipt publishes
+    #: it as ``htmlRepr`` so two receipts over the same slide are not confused
+    #: for two judgements of the same bytes.
+    html_repr: str = "expanded"
     capture_profile: str = "authored/default"
     allow_illustration_slots: bool = False
     finalized: bool = False
@@ -56,7 +64,7 @@ class AdmissionContext:
     image_bindings: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        if self.state not in {"token", "expanded", "captured"}:
+        if self.html_repr not in HTML_REPRESENTATIONS:
             raise ValueError(REPRESENTATION_INVALID)
         object.__setattr__(self, "already_admitted_flags", tuple(self.already_admitted_flags))
         object.__setattr__(self, "bindings", tuple(tuple(pair) for pair in self.bindings))
@@ -67,11 +75,16 @@ class AdmissionContext:
             raise ValueError(PROJECTION_DIGEST_MISMATCH)
 
     @property
+    def state(self) -> str:
+        """Read-only alias; ``html_repr`` is the field consumers may set."""
+        return self.html_repr
+
+    @property
     def identity_digest(self) -> str:
         return digest_html(canonical_json(asdict(self)))
 
     def for_state(self, state: str, **changes: Any) -> AdmissionContext:
-        return replace(self, state=state, **changes)
+        return replace(self, html_repr=state, **changes)
 
     def readback_documents(self) -> tuple[dict, dict]:
         """Select one source unit without manufacturing a replacement manifest."""

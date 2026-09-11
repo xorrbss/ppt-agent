@@ -22,10 +22,7 @@ from services.source_content.browser_readback import (
 from services.source_content.text_stamping import stamp_source_blocks
 from utils.llm_calls.author_slide import validate_authored_slide_html
 from utils.renderer_isolation import MAX_HTML_BYTES, RendererPolicyError, duplicate_attribute_counts
-from utils.get_env_programme import (
-    get_authored_html_normalization,
-    is_authored_verbatim_placeholder_authoring_enabled,
-)
+from services.authored_rollout_profile import current_rollout_profile
 
 
 class _RawAttributes(HTMLParser):
@@ -48,7 +45,7 @@ def raw_diagnostics_step(html: str) -> None:
         raise RendererPolicyError("authored HTML contains NUL")
     if "__METADATA_ENDPOINT_DO_NOT_RESOLVE__" in html:
         raise RendererPolicyError("reserved metadata endpoint marker is not renderable")
-    if get_authored_html_normalization() == "tree":
+    if current_rollout_profile().html_normalization == "tree":
         from utils.authored_html_tree.raw_diagnostics import diagnose_raw_authored_html
 
         diagnostics = diagnose_raw_authored_html(html)
@@ -123,7 +120,7 @@ text_step: Callable[[AdmissionContext, str], TextStepResult] = _selected_text_st
 
 
 def placeholder_authoring_enabled() -> bool:
-    return is_authored_verbatim_placeholder_authoring_enabled()
+    return current_rollout_profile().placeholder_authoring
 
 
 def rendered_verdict(

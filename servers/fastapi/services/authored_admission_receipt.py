@@ -10,6 +10,7 @@ from services.authored_admission_policy import (
     METRICS_DIGEST_MISMATCH,
     PERSISTENCE_CLASS_INVALID,
     PNG_DIGEST_MISMATCH,
+    POLICY_REVISION_MISMATCH,
     RECEIPT_MISSING,
     RECEIPT_REJECTED,
     REPRESENTATION_INVALID,
@@ -19,6 +20,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Mapping
 
 from services.authored_admission_context import AdmissionContext, canonical_json, digest_bytes, digest_html
+from services.authored_rollout_profile import matches_policy_revision
 
 
 #: A receipt minted from a live admission session carries the deck's real
@@ -57,8 +59,8 @@ class AdmissionReceipt:
     def as_dict(self) -> dict[str, Any]:
         context = self.context
         return {
-            "schemaVersion": 1,
-            "htmlRepr": context.state,
+            "schemaVersion": 2,
+            "htmlRepr": context.html_repr,
             "presentationId": context.presentation_id,
             "operationId": context.operation_id,
             "slideIndex": context.slide_index,
@@ -78,7 +80,7 @@ class AdmissionReceipt:
             "blockCount": len(self.block_ids),
             "metricsDigest": self.metrics_digest,
             "pngDigest": self.png_digest,
-            "metricsStorage": "checkpoint_bundle" if context.state == "captured" else None,
+            "metricsStorage": "checkpoint_bundle" if context.html_repr == "captured" else None,
             "captureProfile": context.capture_profile,
             "captureReused": self.capture_reused,
             "captureCount": self.capture_count,
@@ -118,6 +120,11 @@ def require_admission_receipt(
     if not isinstance(receipt, AdmissionReceipt):
         raise AdmissionReceiptError(RECEIPT_MISSING)
     pinned = receipt.context
+    # The bytes were judged by one policy under one set of rollout switches.  A
+    # writer running a different revision is looking at evidence from another
+    # run, not at this one's, so it is refused rather than trusted.
+    if not matches_policy_revision(pinned.policy_revision):
+        raise AdmissionReceiptError(POLICY_REVISION_MISMATCH)
     if receipt.verdict == "flag_only" and not (
         pinned.source_reflow and pinned.terminal_fallback_eligible and pinned.already_admitted_flags
     ):
@@ -125,7 +132,7 @@ def require_admission_receipt(
     if receipt.persistence_class not in {"evidence", "publishable"}:
         raise AdmissionReceiptError(PERSISTENCE_CLASS_INVALID)
     if receipt.verdict not in {"admitted", "flag_only"} and not (
-        receipt.persistence_class == "evidence" and receipt.context.state == "captured"
+        receipt.persistence_class == "evidence" and receipt.context.html_repr == "captured"
     ):
         raise AdmissionReceiptError(RECEIPT_REJECTED)
     if receipt.html_digest != digest_html(html):
@@ -138,7 +145,7 @@ def require_admission_receipt(
         or (context is not None and pinned.identity_digest != context.identity_digest)
     ):
         raise AdmissionReceiptError(CONTEXT_MISMATCH)
-    if (stage != "author" and pinned.state == "token") or (stage == "render" and pinned.state != "captured"):
+    if (stage != "author" and pinned.html_repr == "token") or (stage == "render" and pinned.html_repr != "captured"):
         raise AdmissionReceiptError(REPRESENTATION_INVALID)
     if stage == "render" and (metrics is None or png is None):
         raise AdmissionReceiptError(CAPTURE_MISSING)
@@ -163,7 +170,7 @@ class AdmissionCaptureStore:
         self._captures: dict[tuple[str, str], CapturedEvidence] = {}
 
     def remember(self, receipt: AdmissionReceipt, metrics: Mapping[str, object], png: bytes | None) -> None:
-        if receipt.context.state != "captured" or receipt.verdict == "rejected":
+        if receipt.context.html_repr != "captured" or receipt.verdict == "rejected":
             return
         key = (receipt.html_digest, receipt.context.capture_profile)
         self._captures[key] = CapturedEvidence(receipt, canonical_json(metrics), png)

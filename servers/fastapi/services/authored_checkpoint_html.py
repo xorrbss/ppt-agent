@@ -45,6 +45,7 @@ def checkpoint_stage_html(checkpoint: Any, *, stage: str = "render", publishable
         from services.authored_admission_checkpoint import enforce_receipts
         from services.authored_admission_context import digest_html
         from services.authored_admission_receipt import COMPLETE_IDENTITY
+        from services.authored_rollout_profile import matches_policy_revision
 
         if enforce_receipts():
             receipt = (getattr(checkpoint, "error", None) or {}).get("admission", {})
@@ -55,8 +56,13 @@ def checkpoint_stage_html(checkpoint: Any, *, stage: str = "render", publishable
             # to admit that write and never enough to publish it.  Receipts
             # written before the field existed carry the identity they were
             # minted under, which was always a session's.
+            # The revision names the admission policy *and* the rollout switches
+            # the bytes were produced under.  A checkpoint written under another
+            # one is another run's evidence: it is not published here, it is
+            # re-produced under this attempt's pinned profile.
             if (not receipt.get("publishable")
                     or receipt.get("identity", COMPLETE_IDENTITY) != COMPLETE_IDENTITY
+                    or not matches_policy_revision(receipt.get("policyRevision"))
                     or html is None or receipt.get("htmlDigest") != digest_html(html)
                     or receipt.get("attemptToken") != getattr(checkpoint, "attempt_token", None)):
                 return None

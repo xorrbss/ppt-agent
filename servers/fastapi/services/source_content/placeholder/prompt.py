@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from services.source_content.placeholder.block_table import build_block_table, placeholder_prompt_contract
 from services.source_content.source_stamp_dom import BrowserSourceReadbackError
-from utils.get_env_programme import is_authored_verbatim_placeholder_authoring_enabled
+from services.authored_rollout_profile import current_rollout_profile
 
 
 class AuthoredPlaceholderPromptRejected(RuntimeError):
@@ -33,7 +33,7 @@ class AuthoredPlaceholderPromptRejected(RuntimeError):
 
 
 def placeholder_prompt_for_slide(index: int) -> str:
-    if not is_authored_verbatim_placeholder_authoring_enabled():
+    if not current_rollout_profile().placeholder_authoring:
         return ""
     # Lazy import avoids prompt -> admission -> author_slide -> prompt cycles.
     from services.authored_admission_session import current_session

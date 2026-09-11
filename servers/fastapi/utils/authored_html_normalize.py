@@ -86,7 +86,6 @@ from utils.authored_css_strip import (
 )
 from utils.authored_html_tree import NormalizationProfile, normalize_authored_html_tree
 from utils.authored_void_end_tag_normalize import drop_void_element_end_tags
-from utils.get_env_programme import get_authored_html_normalization
 from utils.renderer_markup_policy import VOID_TAGS
 
 #: A real ``style="..."``/``style='...'`` attribute -- required leading
@@ -427,7 +426,11 @@ def normalize_authored_html(
 ) -> NormalizedHtml:
     """Normalize through the selected ``legacy`` or HTML5 ``tree`` path."""
 
-    selected = (mode or get_authored_html_normalization()).strip().lower()
+    # Lazy: ``services`` sits above ``utils``, and the attempt's frozen rollout
+    # profile is the only reader of the normalization switch there is.
+    from services.authored_rollout_profile import current_rollout_profile
+
+    selected = (mode or current_rollout_profile().html_normalization).strip().lower()
     if selected == "legacy":
         return normalize_authored_html_legacy(html)
     if selected == "tree":
