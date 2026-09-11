@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -14,6 +13,13 @@ import {
 } from "@/lib/run-bundled-presentation-export";
 import { fetchPersistedPresentationProjectionForExport } from "@/lib/export-presentation-route";
 
+import {
+  createHybridCacheKey,
+  inFlightHybridExports,
+  readCompletedHybridExport,
+  rememberCompletedHybridExport,
+  resolveSafeFidelityPptx,
+} from "./export-result-cache.ts";
 import { resolveAuthoredHybridChromeExecutable } from "./index.ts";
 import {
   assembleAuthoredHybridPptxAsync,
@@ -79,7 +85,6 @@ import { materializeCanonicalSceneAssetsForSlide } from "./scene-html-assets.ts"
 
 const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 const MAX_HYBRID_SLIDES = 100;
-const MAX_FIDELITY_PPTX_BYTES = 512 * 1024 * 1024;
 const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // Total wall-clock budget for the bounded-concurrency per-slide hybrid pass. Each slide can
 // take ~90s worst case (extract + font-layout + backplate relaunches); without a ceiling a
@@ -87,9 +92,6 @@ const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // spent the remaining slides receive a separately isolated fidelity capture below. Never
 // retain the bundled export's shared-DOM raster: authored slide styles can collide there.
 const HYBRID_DECK_BUDGET_MS = 15 * 60_000;
-const HYBRID_CACHE_VERSION =
-  "authored-hybrid-v23-local-fit-capture-evidence";
-const HYBRID_RESULT_CACHE_LIMIT = 24;
 // Standard explicit Hybrid uses the element-level semantic/QID admission
 // gates. A persisted authored-vNext Scene projection, when present, is a
 // stronger authority and remains raster-only unless its bounded profile is
@@ -104,18 +106,6 @@ const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   1,
   12,
 );
-
-interface CompletedHybridExport {
-  result: BundledPresentationExportResult;
-  artifactSha256: string;
-  artifactSizeBytes: number;
-}
-
-const completedHybridExports = new Map<string, CompletedHybridExport>();
-const inFlightHybridExports = new Map<
-  string,
-  Promise<BundledPresentationExportResult>
->();
 
 interface StoredSlide {
   id?: unknown;
@@ -225,31 +215,6 @@ async function resolveActiveEmissionBinding(
     canonicalSourceDigest: params.canonicalSourceDigest,
     slideIds,
   });
-}
-
-async function resolveSafeFidelityPptx(outPath: string): Promise<string> {
-  if (path.extname(outPath).toLowerCase() !== ".pptx") {
-    throw new Error("Fidelity export did not produce a PPTX file.");
-  }
-  const exportsDirectory = await fs.realpath(
-    path.join(resolveAppDataDirectory(), "exports"),
-  );
-  const resolved = await fs.realpath(outPath);
-  if (
-    resolved === exportsDirectory ||
-    !resolved.startsWith(exportsDirectory + path.sep)
-  ) {
-    throw new Error("Fidelity export finished outside the exports directory.");
-  }
-  const stats = await fs.stat(resolved);
-  if (
-    !stats.isFile() ||
-    stats.size < 22 ||
-    stats.size > MAX_FIDELITY_PPTX_BYTES
-  ) {
-    throw new Error("Fidelity PPTX is not a safe readable file.");
-  }
-  return resolved;
 }
 
 async function writeHybridPptx(
@@ -959,88 +924,6 @@ export async function runAuthoredHybridPresentationExport(
     });
   inFlightHybridExports.set(cacheKey, job);
   return job;
-}
-
-function createHybridCacheKey(
-  presentationId: string,
-  sourceSha256: string,
-  sourceRevision: number | undefined,
-  fontEmbeddingDiscriminator: string,
-  exportAttemptId: string | undefined,
-  canonicalSourceDigest: string | undefined,
-  editableHybridProfileId: string | undefined,
-): string {
-  return createHash("sha256")
-    .update(HYBRID_CACHE_VERSION)
-    .update("\0")
-    .update(presentationId)
-    .update("\0")
-    .update(sourceSha256)
-    .update("\0")
-    .update(sourceRevision === undefined ? "unknown" : String(sourceRevision))
-    .update("\0")
-    .update(fontEmbeddingDiscriminator)
-    .update("\0")
-    .update(exportAttemptId ?? "unbound")
-    .update("\0")
-    .update(canonicalSourceDigest ?? "unbound")
-    .update("\0")
-    .update(editableHybridProfileId ?? "raster-only")
-    .digest("hex");
-}
-
-async function readHybridArtifactIdentity(
-  artifactPath: string,
-): Promise<{ sha256: string; sizeBytes: number }> {
-  const safePath = await resolveSafeFidelityPptx(artifactPath);
-  const stats = await fs.stat(safePath);
-  const digest = createHash("sha256");
-  for await (const chunk of createReadStream(safePath)) {
-    digest.update(chunk);
-  }
-  return { sha256: digest.digest("hex"), sizeBytes: stats.size };
-}
-
-async function rememberCompletedHybridExport(
-  cacheKey: string,
-  result: BundledPresentationExportResult,
-): Promise<void> {
-  const identity = await readHybridArtifactIdentity(result.path);
-  completedHybridExports.delete(cacheKey);
-  completedHybridExports.set(cacheKey, {
-    result,
-    artifactSha256: identity.sha256,
-    artifactSizeBytes: identity.sizeBytes,
-  });
-  while (completedHybridExports.size > HYBRID_RESULT_CACHE_LIMIT) {
-    const oldestKey = completedHybridExports.keys().next().value;
-    if (typeof oldestKey !== "string") break;
-    completedHybridExports.delete(oldestKey);
-  }
-}
-
-async function readCompletedHybridExport(
-  cacheKey: string,
-): Promise<BundledPresentationExportResult | null> {
-  const cached = completedHybridExports.get(cacheKey);
-  if (!cached) return null;
-  try {
-    const safePath = await resolveSafeFidelityPptx(cached.result.path);
-    const identity = await readHybridArtifactIdentity(safePath);
-    if (
-      identity.sha256 !== cached.artifactSha256 ||
-      identity.sizeBytes !== cached.artifactSizeBytes
-    ) {
-      throw new Error("cached_hybrid_artifact_digest_mismatch");
-    }
-    completedHybridExports.delete(cacheKey);
-    const safeResult = { ...cached.result, path: safePath };
-    completedHybridExports.set(cacheKey, { ...cached, result: safeResult });
-    return safeResult;
-  } catch {
-    completedHybridExports.delete(cacheKey);
-    return null;
-  }
 }
 
 function elapsedMs(startedAt: number): number {

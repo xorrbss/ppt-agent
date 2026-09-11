@@ -816,8 +816,7 @@ def _validate_css_value(
         # a measured, transform-free static element; matrices, functions,
         # percentages and chained transforms remain fail closed.
         match = re.fullmatch(
-            r"translate\(\s*([^,()]+)\s*,\s*([^,()]+)\s*\)", value,
-            re.IGNORECASE,
+            r"translate\(\s*([^,()]+)\s*,\s*([^,()]+)\s*\)", value, re.IGNORECASE
         )
         valid = bool(
             match
