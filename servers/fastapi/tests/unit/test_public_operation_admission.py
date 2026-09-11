@@ -97,7 +97,14 @@ async def _database(path: Path):
 
 def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
+    # The global scope is now consulted on this path too, and its active limit
+    # is min(policy row, cluster job knob).  Widen the knob so this test keeps
+    # exercising the owner/tenant axes rather than the global ceiling, which
+    # ``test_public_runtime_quota_clamp`` owns.
+    monkeypatch.setenv("AUTHORED_CLUSTER_JOB_CONCURRENCY", "4")
+
     async def scenario() -> None:
         engine, maker = await _database(tmp_path / "public-admission.db")
         owner_a = uuid.uuid4()
