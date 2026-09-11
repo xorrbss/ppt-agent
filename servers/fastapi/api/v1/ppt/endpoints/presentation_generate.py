@@ -1794,8 +1794,21 @@ async def queue_presentation_generation(
 
     admitted_presentation: PresentationModel | None = None
     workspace_operation: WorkspaceOperation | None = None
+    document_preflight_done = False
     if chat_first_enabled:
         if request.presentation_id is None:
+            # Nothing durable exists yet for a bare API/CLI generate: no deck,
+            # no workspace operation, no timeline card to project a rejection
+            # onto. So the admission that can fail on the request alone runs
+            # here, before the bootstrap mints a deck, copies the caller's
+            # uploads into immutable workspace storage, and before any job row
+            # or background task exists. A request that already carries a
+            # ``presentation_id`` keeps the opposite ordering on purpose: its
+            # rejection is deferred so it lands on the operation's timeline.
+            _validate_authored_exact_admission(request)
+            if request.files:
+                await _load_document_context(request.files, request.language)
+                document_preflight_done = True
             # A bare API/CLI generate carries no deck. Mint one plus its
             # bootstrap anchor so the lookup below resolves exactly as it does
             # for a web client that created the deck in an earlier request.
@@ -1895,14 +1908,19 @@ async def queue_presentation_generation(
             if key_error is not None:
                 raise key_error
             _validate_authored_exact_admission(admitted_request)
-            await check_if_api_request_is_valid(admitted_request, sql_session)
-            if admitted_request.files:
+            if admitted_request.files and not document_preflight_done:
                 # Bootstrap copied uploads to immutable workspace storage.
                 # Admission and all later retries consume only those paths.
+                # This runs *before* validation because validation consumes the
+                # paths -- it canonicalizes them into reference snapshots and
+                # clears ``files`` -- so a preflight placed after it could never
+                # see a document again. Skipped when the fail-first admission
+                # above already measured the same bytes for this request.
                 await _load_document_context(
                     admitted_request.files,
                     admitted_request.language,
                 )
+            await check_if_api_request_is_valid(admitted_request, sql_session)
         except Exception as error:
             workspace_projected = (
                 await _record_chat_first_generation_admission_failure(
@@ -1931,12 +1949,13 @@ async def queue_presentation_generation(
             raise
         request = admitted_request
     else:
+        if request.files:
+            # Reject oversized extracted input before persisting a durable job,
+            # and before validation canonicalizes the paths away.
+            await _load_document_context(request.files, request.language)
         (presentation_id,) = await check_if_api_request_is_valid(
             request, sql_session
         )
-        if request.files:
-            # Reject oversized extracted input before persisting a durable job.
-            await _load_document_context(request.files, request.language)
 
     # Persist the exact admitted request that the worker will execute. The fingerprint remains
     # tied to the caller's canonical submitted payload for stable replay.

@@ -26,6 +26,7 @@ from models.presentation_outline_model import (
 )
 from services import authored_checkpoint_service as checkpoints
 from services import authored_presentation_pipeline as pipeline
+from services.authored_checkpoint_html import checkpoint_stage_html
 from utils.llm_calls.author_slide import Brand
 from utils.runtime_settings import replace_process_runtime_settings
 from utils.renderer_isolation import RendererPolicyError
@@ -121,64 +122,102 @@ def _install_one_slide_pipeline_fakes(monkeypatch, *, rendered_html):
     monkeypatch.setattr(pipeline, "local_fit_applies", lambda **_kwargs: False)
 
 
-def test_semantic_gate_recaptures_stale_role_metrics_once(monkeypatch):
-    old_html = (
-        '<main data-qid="slide" data-semantic-role="body">'
-        '<div data-qid="decorative"></div></main>'
-    )
-    gate_html = (
-        '<main data-qid="slide" data-semantic-role="decoration">'
-        '<div data-qid="decorative" data-semantic-role="decoration"></div></main>'
-    )
-    old_metrics = {"elements": [{"qid": "slide", "semanticRole": "body"}]}
-    gate_metrics = {
-        "elements": [{"qid": "slide", "semanticRole": "decoration"}]
-    }
-    ledger = pipeline.DeckEvidenceLedger(attempt_id="semantic-attempt")
-    ledger.record_slide(
-        attempt_id="semantic-attempt",
-        slide_index=0,
-        html=old_html,
-        png=b"old-png",
-        browser_metrics=old_metrics,
-        checkpoint_revision=7,
-    )
-    captures = []
+def test_sealed_scene_envelope_recaptures_stale_role_evidence_once(
+    tmp_path, monkeypatch
+):
+    """Evidence that predates role stamping is recaptured once, then reused.
 
-    async def fake_capture(html):
-        captures.append(html)
-        return SimpleNamespace(png=b"gate-png", browser_metrics=gate_metrics)
+    This replaces ``test_semantic_gate_recaptures_stale_role_metrics_once``,
+    which drove ``pipeline._refresh_semantic_gate_evidence`` -- a whole-deck,
+    gate-time recapture that commit ``5218198f3`` removed when it sealed the
+    scene envelope before Chromium instead. The intent it protected survives
+    unchanged and is what this test asserts against the new model:
 
-    monkeypatch.setattr(pipeline, "render_html_to_png_with_metrics", fake_capture)
+    * A durable render checkpoint written under an older semantic-role policy
+      is not authoritative merely because its pixels survived. The sealed
+      envelope's HTML projection is the render input, and a checkpoint whose
+      stage HTML differs from it has its PNG discarded and recaptured.
+    * The recapture is bounded: it happens exactly once. Completing the render
+      stage rebinds the durable evidence to the sealed projection, so a later
+      resume of the same job finds them equal and renders nothing.
+    """
+
+    stale_role_html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        '<main data-semantic-role="body">'
+        '<div data-semantic-role="body"></div>'
+        "<h1>stale roles</h1></main></body></html>"
+    )
+
+    async def resume_once(job):
+        return await pipeline._author_illustrate_render_pipeline(
+            _one_slide_outline(),
+            _pipeline_brand(),
+            SimpleNamespace(
+                reference_mode="style_reference",
+                illustration_prompt=None,
+            ),
+            generation_job=job,
+        )
 
     async def scenario():
-        pngs = [b"old-png"]
-        first = await pipeline._refresh_semantic_gate_evidence(
-            htmls=(gate_html,),
-            pngs=pngs,
-            evidence_ledger=ledger,
-            evidence_attempt_id="semantic-attempt",
-        )
-        second = await pipeline._refresh_semantic_gate_evidence(
-            htmls=(gate_html,),
-            pngs=pngs,
-            evidence_ledger=ledger,
-            evidence_attempt_id="semantic-attempt",
-        )
-        return pngs, first, second
+        engine, maker = await _checkpoint_database(tmp_path, monkeypatch)
+        rendered_html = []
+        _install_one_slide_pipeline_fakes(monkeypatch, rendered_html=rendered_html)
+        try:
+            _, job = await _running_authored_job(maker, total_slides=1)
+            await checkpoints.initialize_checkpoints(
+                job_id=job.id,
+                attempt_token="attempt-a",
+                roles=["title"],
+            )
+            for stage, kwargs in (
+                ("author", {"html": stale_role_html}),
+                ("illustrate", {"skipped": True}),
+                ("render", {"png": b"stale-role-png"}),
+                ("persist", {}),
+            ):
+                await checkpoints.start_stage(
+                    job_id=job.id,
+                    slide_index=0,
+                    stage=stage,
+                    attempt_token="attempt-a",
+                )
+                await checkpoints.complete_stage(
+                    job_id=job.id,
+                    slide_index=0,
+                    stage=stage,
+                    attempt_token="attempt-a",
+                    **kwargs,
+                )
 
-    pngs, first, second = asyncio.run(scenario())
+            first = await resume_once(job)
 
-    assert captures == [gate_html]
-    assert pngs == [b"gate-png"]
-    assert first == (gate_metrics,)
-    assert second[0]["elements"][0]["semanticRole"] == "decoration"
-    latest = ledger.latest("semantic-attempt", 0)
-    assert latest is not None
-    assert latest.html == gate_html
-    assert latest.png == b"gate-png"
-    assert latest.browser_metrics["elements"][0]["semanticRole"] == "decoration"
-    assert latest.checkpoint_revision == 7
+            # The stale-role pixels are refused: the sealed projection restamps
+            # the obsolete ``body`` roles, so the checkpoint's HTML no longer
+            # describes the scene its PNG was taken from.
+            assert len(rendered_html) == 1
+            assert 'data-semantic-role="body"' not in rendered_html[0]
+            assert 'data-semantic-role="decoration"' in rendered_html[0]
+            assert first.deck.htmls == rendered_html
+            assert first.pngs == [b"rendered-png"]
+
+            # The durable evidence is rebound to the sealed scene: the
+            # stale-role PNG is gone and the stage HTML is the projection.
+            recaptured = await checkpoints.get_checkpoint(job.id, 0)
+            assert checkpoints.read_valid_render(recaptured) == b"rendered-png"
+            assert checkpoint_stage_html(recaptured) == rendered_html[0]
+
+            # Once. A second resume finds the durable evidence already bound to
+            # the sealed projection and captures nothing further.
+            second = await resume_once(job)
+            assert len(rendered_html) == 1
+            assert second.deck.htmls == first.deck.htmls
+            assert second.pngs == first.pngs
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
 
 
 def test_exception_metadata_is_bounded_and_redacts_secrets_paths_and_html():

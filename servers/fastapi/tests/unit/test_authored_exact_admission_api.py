@@ -67,6 +67,17 @@ def test_exact_admission_returns_stable_non_private_4xx(monkeypatch, reason, sta
 
 
 def test_exact_admission_happens_before_async_job_or_background_task(monkeypatch):
+    """An unadmissible bare generate must not mint a deck, job or task.
+
+    The seam this protects used to be the removed ``force_legacy_dispatch``
+    parameter. It is now the ordering inside ``queue_presentation_generation``
+    itself: a request that carries no ``presentation_id`` has no workspace
+    operation to project a rejection onto, so exact-preset admission runs
+    before the workspace bootstrap rather than after it. A request that does
+    carry one keeps the deferred ordering, so its rejection lands on the
+    operation's timeline card.
+    """
+
     monkeypatch.setattr(
         endpoint,
         "resolve_authored_style",
@@ -82,14 +93,11 @@ def test_exact_admission_happens_before_async_job_or_background_task(monkeypatch
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
             endpoint.queue_presentation_generation(
+                # No ``presentation_id``: nothing durable exists for this
+                # request yet, which is exactly the case that must fail first.
                 _authored_request(),
                 tasks,
                 session,
-                # A workspace-bootstrapped request defers this rejection until
-                # after the operation is located, so that it lands on the
-                # timeline card. The nested dispatch keeps the fail-first
-                # ordering this test is about.
-                force_legacy_dispatch=True,
             )
         )
 

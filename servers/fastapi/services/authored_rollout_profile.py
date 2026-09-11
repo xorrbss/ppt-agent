@@ -107,6 +107,29 @@ class RolloutProfile:
         return policy_revision_for(self.digest)
 
 
+def _require_coherent_switches(profile: RolloutProfile) -> RolloutProfile:
+    """Refuse a switch combination that does not describe one coherent rollout.
+
+    ``AUTHORED_VERBATIM_SINGLE_REPAIR_LOOP`` replaces the several post-author
+    repair paths with exactly one bounded loop, and that loop decides what to
+    repair from the admission gate's verdict.  Under ``shadow`` the gate records
+    a verdict nothing acts on, so a single-loop profile there spends its one
+    repair budget on advice that was never enforced and then publishes anyway --
+    strictly worse than either switch alone.  The two are only meaningful
+    together, so the combination is refused where a profile is *resolved*: read
+    from the environment, or restored from a job's durable pin.  A profile built
+    directly stays a plain value; resolution is the boundary an attempt crosses.
+    """
+
+    if profile.single_repair_loop and profile.gate_mode != "enforce":
+        raise RolloutProfileError(
+            ROLLOUT_PROFILE_INVALID,
+            "single_repair_loop requires gate_mode=enforce, "
+            f"got gate_mode={profile.gate_mode!r}",
+        )
+    return profile
+
+
 def rollout_profile_from_payload(payload: Any) -> RolloutProfile:
     """Restore a pinned profile, refusing anything that is not one.
 
@@ -122,17 +145,21 @@ def rollout_profile_from_payload(payload: Any) -> RolloutProfile:
     unknown = sorted(set(payload) - fields)
     if unknown:
         raise RolloutProfileError(ROLLOUT_PROFILE_INVALID, f"unknown={unknown[0]}")
-    return RolloutProfile(**{key: payload[key] for key in payload})
+    return _require_coherent_switches(
+        RolloutProfile(**{key: payload[key] for key in payload})
+    )
 
 
 def resolve_rollout_profile() -> RolloutProfile:
     """Read the five accessors once. The only live environment read there is."""
-    return RolloutProfile(
-        gate_mode=get_authored_admission_gate_mode(),
-        html_normalization=get_authored_html_normalization(),
-        placeholder_authoring=is_authored_verbatim_placeholder_authoring_enabled(),
-        single_repair_loop=is_authored_verbatim_single_repair_loop_enabled(),
-        repair_loop_model_calls=get_authored_verbatim_repair_loop_model_calls(),
+    return _require_coherent_switches(
+        RolloutProfile(
+            gate_mode=get_authored_admission_gate_mode(),
+            html_normalization=get_authored_html_normalization(),
+            placeholder_authoring=is_authored_verbatim_placeholder_authoring_enabled(),
+            single_repair_loop=is_authored_verbatim_single_repair_loop_enabled(),
+            repair_loop_model_calls=get_authored_verbatim_repair_loop_model_calls(),
+        )
     )
 
 

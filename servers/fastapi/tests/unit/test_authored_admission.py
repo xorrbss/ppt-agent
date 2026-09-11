@@ -731,6 +731,42 @@ async def test_a_resumed_attempt_reuses_the_profile_its_job_pinned():
         await run(broken)
 
 
+def test_the_single_repair_loop_is_refused_outside_an_enforcing_gate(monkeypatch):
+    """One bounded repair is only meaningful when the gate's verdict is acted on.
+
+    Under ``shadow`` the admission gate records a verdict nothing enforces, so a
+    single-loop profile spends its one repair budget on advice that was never
+    enforced and publishes anyway. The combination is refused where a profile is
+    resolved -- from the environment and from a job's durable pin alike.
+    """
+
+    from services import authored_rollout_profile as rollout
+    from services.authored_rollout_profile import (
+        RolloutProfileError,
+        rollout_profile_from_payload,
+    )
+
+    monkeypatch.setattr(
+        rollout, "is_authored_verbatim_single_repair_loop_enabled", lambda: True
+    )
+    monkeypatch.setattr(rollout, "get_authored_admission_gate_mode", lambda: "shadow")
+    with pytest.raises(RolloutProfileError, match="rollout_profile_invalid") as refused:
+        rollout.resolve_rollout_profile()
+    assert refused.value.code == "authored_rollout_profile_invalid"
+    assert refused.value.retryable is False
+    assert "gate_mode" in refused.value.detail
+
+    with pytest.raises(RolloutProfileError, match="rollout_profile_invalid"):
+        rollout_profile_from_payload(
+            RolloutProfile(single_repair_loop=True).as_dict()
+        )
+
+    monkeypatch.setattr(rollout, "get_authored_admission_gate_mode", lambda: "enforce")
+    enforced = rollout.resolve_rollout_profile()
+    assert (enforced.gate_mode, enforced.single_repair_loop) == ("enforce", True)
+    assert rollout_profile_from_payload(enforced.as_dict()) == enforced
+
+
 def test_a_second_disagreeing_pin_is_a_coded_rejection():
     from services.authored_rollout_profile import RolloutProfileError, pin_rollout_profile
 

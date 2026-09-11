@@ -8,7 +8,7 @@ import time
 from typing import Any, Callable
 import uuid
 
-from sqlalchemy import Engine, create_engine, select
+from sqlalchemy import Engine, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -22,7 +22,6 @@ from models.sql.authored_vnext_repository import (
 )
 from models.sql.user import User
 from services.authored_vnext.master.digests import canonical_digest
-from utils.db_utils import get_database_url_and_connect_args, to_sync_sqlalchemy_url
 
 from .sql_repository_composition import AuthoredVNextCompositionRepositoryMixin
 from .sql_repository_jobs import AuthoredVNextExportJobRepositoryMixin
@@ -86,6 +85,7 @@ class AuthoredVNextSqlRepository(
         owner_scope: str,
         tenant_id: str,
         owner_id: uuid.UUID | None = None,
+        sessions: sessionmaker | None = None,
     ) -> None:
         if not owner_scope.strip() or not tenant_id.strip():
             raise ValueError("owner_scope and tenant_id are required")
@@ -97,7 +97,7 @@ class AuthoredVNextSqlRepository(
         self.owner_scope = owner_scope
         self.tenant_id = tenant_id
         self.owner_id = owner_id
-        self._sessions = sessionmaker(engine, expire_on_commit=False)
+        self._sessions = sessions or sessionmaker(engine, expire_on_commit=False)
 
     @classmethod
     def from_application_database(
@@ -107,17 +107,28 @@ class AuthoredVNextSqlRepository(
         tenant_id: str,
         owner_id: uuid.UUID | None = None,
     ) -> "AuthoredVNextSqlRepository":
-        url, connect_args = get_database_url_and_connect_args()
-        sync_url = to_sync_sqlalchemy_url(url)
-        if "sqlite" in sync_url:
-            connect_args = {"check_same_thread": False, "timeout": 30.0}
-        else:
-            connect_args = {}
+        """Bind to the process's one configured database.
+
+        This used to resolve its own URL from the environment and build a
+        private engine.  That made it a third connection: whenever the
+        application engine was bound to something other than the environment's
+        default -- an embedded harness, an integration test, any caller that
+        rebinds ``services.database.sql_engine`` -- this repository silently
+        wrote to a different database, and the publication step at the end of a
+        fully generated deck failed against an empty schema.  The synchronous
+        view of ``services.database.sql_engine`` is the only correct target, and
+        it carries the same owner/tenant ORM hooks because those are registered
+        on ``sqlalchemy.orm.Session`` itself.
+        """
+
+        from services.database import get_sync_engine, sync_session_maker
+
         return cls(
-            create_engine(sync_url, connect_args=connect_args),
+            get_sync_engine(),
             owner_scope=owner_scope,
             tenant_id=tenant_id,
             owner_id=owner_id,
+            sessions=sync_session_maker(),
         )
 
     @staticmethod
