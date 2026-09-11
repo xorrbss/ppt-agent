@@ -1462,6 +1462,24 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
       "description": "Author source-reflow verbatim slides with whole-block or grapheme-safe exact-cover character-range tokens; substitute trusted source text in the admission gate. Off preserves legacy text binding."
+    },
+    {
+      "key": "AUTHORED_VERBATIM_SINGLE_REPAIR_LOOP",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Replace the four post-author repair paths on the source-reflow verbatim path (gate repair, vision-review repair, structural/patch repair and the separate rescue readback) with one bounded loop: deterministic repairs, then at most AUTHORED_VERBATIM_REPAIR_LOOP_MODEL_CALLS model calls bound by the placeholder token contract, then the unchanged terminal policy. Off keeps today's paths."
+    },
+    {
+      "key": "AUTHORED_VERBATIM_REPAIR_LOOP_MODEL_CALLS",
+      "type": "integer",
+      "default": 1,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Model repair calls the single repair loop may spend on one slide, clamped to 0..3. Only read when AUTHORED_VERBATIM_SINGLE_REPAIR_LOOP is on."
     }
   ]
 }

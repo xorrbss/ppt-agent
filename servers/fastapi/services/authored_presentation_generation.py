@@ -171,6 +171,12 @@ from services.authored_quality_gate_diagnostics import (
     log_quality_receipt_gate_failure,
     quality_receipt_gate_failure,
 )
+from services.authored_repair_loop import single_repair_loop_enabled
+from services.authored_repair_loop_evidence import (
+    vision_evidence_for_flagged,
+    visual_review_evidence_only,
+)
+from services.authored_repair_loop_stage import run_verbatim_repair_loop
 from services.authored_repair_round_order import remake_first_flagged_slides
 from services.authored_terminal_slide_fallback import (
     MAX_REMAKES_PER_SLIDE,
@@ -1828,6 +1834,11 @@ async def _generate_authored_presentation(
     )
     predeclared_terminal: list[dict[str, object]] = []
     remake_counts: dict[int, int] = {}
+    # Rev-3 2.5: with the knob on, the four post-author repair paths collapse
+    # into one bounded loop on the verbatim path. Off, every path below runs as
+    # it does today, through the same admission gate.
+    single_loop = single_repair_loop_enabled(source_reflow=source_reflow)
+    vqa_evidence: dict[int, object] = {}
     await mark_stage("repair")
     repair_started = time.monotonic()
     repair_claims: dict[int, object] = {}
@@ -2167,6 +2178,14 @@ async def _generate_authored_presentation(
                 # A deterministic local candidate needs only the one bound
                 # Chromium recapture below, not a provider recovery.
                 provider_recovery_allowed[local_index] = False
+        if single_loop and getattr(request, "vision_qa", False):
+            # Vision review feeds the loop's one prompt; it writes no HTML.
+            vqa_evidence = await vision_evidence_for_flagged(
+                flagged=flagged, pngs=pngs, contents=contents,
+                reference_mode=reference_mode,
+                job_id=(generation_job.id if generation_job is not None else None),
+                attempt_number=(generation_job.attempt_number if generation_job else 0),
+            )
         try:
             with provider_usage_scope(
                 job_id=(generation_job.id if generation_job is not None else None),
@@ -2174,18 +2193,42 @@ async def _generate_authored_presentation(
                 stage="repair",
                 attempt_number=(generation_job.attempt_number if generation_job else 0),
             ):
-                revised_htmls, fixed = await _revise_gate_repair_candidates(
-                    flagged=flagged,
-                    htmls=htmls,
-                    pngs=pngs,
-                    contents=contents,
-                    roles=roles,
-                    deterministic_candidates=deterministic_gate_candidates,
-                    brand=brand,
-                    design_system=authored_deck.design_system,
-                    repair_kwargs=repair_kwargs,
-                    terminal_fallback_enabled=terminal_fallback_enabled,
-                )
+                if single_loop:
+                    revised_htmls, fixed = [], []
+                    structural_results.extend(
+                        await run_verbatim_repair_loop(
+                            flagged=flagged, htmls=htmls, pngs=pngs, roles=roles,
+                            contents=contents, brand=brand,
+                            design_system=authored_deck.design_system,
+                            capacity_briefs=capacity_briefs,
+                            frozen_gate_inputs=frozen_gate_inputs,
+                            deterministic_by_index=deterministic_gate_candidates,
+                            provider_allowed=provider_recovery_allowed,
+                            evaluators=evaluators,
+                            capture=capture_source_repair_candidate,
+                            reference_mode=reference_mode,
+                            source_issues_by_index=source_visibility_by_slide,
+                            vqa_evidence=vqa_evidence,
+                            plans=(chapter_plan, illustration_plan, infographic_plan),
+                            page_number_mode=pipeline_kwargs["page_number_mode"],
+                            instructions=request.instructions,
+                            source_images_by_slide=offered_for_review,
+                            generation_job=generation_job,
+                        )
+                    )
+                else:
+                    revised_htmls, fixed = await _revise_gate_repair_candidates(
+                        flagged=flagged,
+                        htmls=htmls,
+                        pngs=pngs,
+                        contents=contents,
+                        roles=roles,
+                        deterministic_candidates=deterministic_gate_candidates,
+                        brand=brand,
+                        design_system=authored_deck.design_system,
+                        repair_kwargs=repair_kwargs,
+                        terminal_fallback_enabled=terminal_fallback_enabled,
+                    )
             # Bind the repaired HTML, pixels, and Chromium readback atomically.
             # All deterministic mutations above form one candidate and consume
             # exactly one recapture for each failed slide.
@@ -2368,7 +2411,17 @@ async def _generate_authored_presentation(
     visual_review_evidence = visual_review_not_assessed()
     # A replay now produces authored slides, so the caller's own vision-QA choice
     # governs it like any other authored deck.
-    if getattr(request, "vision_qa", False):
+    if single_loop and getattr(request, "vision_qa", False):
+        # Rev-3 2.5: the review already ran, as evidence for the loop's prompt.
+        visual_review_evidence = visual_review_evidence_only(
+            reviewed_indices=sorted(vqa_evidence),
+            unresolved_indices=[
+                int(entry["index"]) for entry in predeclared_terminal
+                if isinstance(entry.get("index"), int)
+            ],
+            model_reviewed=sum(1 for value in vqa_evidence.values() if value is not None),
+        )
+    if getattr(request, "vision_qa", False) and not single_loop:
         pre_vqa_htmls = tuple(htmls)
         pre_vqa_pngs = tuple(pngs)
         pre_vqa_metrics_by_slide = {

@@ -269,8 +269,24 @@ def is_authored_verbatim_placeholder_authoring_enabled(
     return _bool_setting("AUTHORED_VERBATIM_PLACEHOLDER_AUTHORING", False, settings)
 
 
+def is_authored_verbatim_single_repair_loop_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Replace the four post-author repair paths with one bounded loop."""
+    return _bool_setting("AUTHORED_VERBATIM_SINGLE_REPAIR_LOOP", False, settings)
+
+
+def get_authored_verbatim_repair_loop_model_calls(
+    settings: RuntimeSettings | None = None,
+) -> int:
+    """Model repair calls the single loop may spend per slide, clamped 0..3."""
+    return _clamped_int("AUTHORED_VERBATIM_REPAIR_LOOP_MODEL_CALLS", 1, 0, 3, settings)
+
+
 __all__ = [
+    "get_authored_verbatim_repair_loop_model_calls",
     "is_authored_verbatim_placeholder_authoring_enabled",
+    "is_authored_verbatim_single_repair_loop_enabled",
     "get_authored_admission_gate_mode",
     "get_authored_illustration_share",
     "get_authored_metrics_cache_entries",

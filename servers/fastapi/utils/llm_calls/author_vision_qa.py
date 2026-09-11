@@ -388,6 +388,37 @@ def deterministic_dom_critique(report: Any) -> SlideCritique | None:
     )
 
 
+async def review_slides_for_evidence(
+    pngs: Sequence[bytes],
+    *,
+    slide_indices: Sequence[int],
+    contexts: Optional[Sequence[Optional[str]]] = None,
+    reference_mode: str = STYLE_REFERENCE,
+    critique_round: str = "evidence",
+) -> dict[int, Optional[SlideCritique]]:
+    """Vision review as an EVIDENCE SOURCE only: it produces no HTML.
+
+    The single repair loop
+    (``docs/authored-verbatim-placeholder-authoring-design-20260911.md`` 2.5)
+    keeps the visual review and drops its ability to rewrite a slide: what the
+    reviewer sees becomes part of the loop's one prompt, and the loop's own
+    candidates face the same admission every other candidate does. This is the
+    existing ``critique_authored`` call with its result returned per slide and
+    nothing else done with it -- no re-author, no patch, no fallback.
+    """
+
+    if len(slide_indices) != len(pngs):
+        raise ValueError("evidence review needs one slide index per render")
+    critiques = await critique_authored(
+        list(pngs),
+        list(contexts) if contexts is not None else None,
+        reference_mode=reference_mode,
+        slide_indices=list(slide_indices),
+        critique_round=critique_round,
+    )
+    return {int(index): critiques[i] for i, index in enumerate(slide_indices)}
+
+
 async def _revise_structural_candidates(**kwargs: Any) -> Any:
     return await _revise_structural_candidates_impl(
         runtime=sys.modules[__name__],
