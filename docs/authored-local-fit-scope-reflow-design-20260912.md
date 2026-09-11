@@ -211,3 +211,69 @@ Read-only as before: stored HTML in, Chromium render, JSON out; no generation,
 no provider call, no database write, no stack contact. Output goes under
 `artifacts/local-fit-source-reflow-replay-20260911/` as a `mode-simulation`
 section and JSON, with per-slide records for both corpora.
+
+## Appendix A. Simulation result (2026-09-12) — the rule in §6 is not met
+
+Run as planned: `artifacts/local-fit-source-reflow-replay-20260911/simulate_scope_modes.py`,
+four arms patched in-process, read-only, Chromium only. Per-slide records in
+`mode-simulation.json` beside it. The horizontal predicate was implemented at
+its **widest** structural reading (a scope is offered the mode when its root or
+any ancestor of a defect leaf is a flex row or a grid), so these numbers are an
+upper bound on the design's narrower predicate.
+
+### A.1 Verdicts
+
+| corpus | arm | resolved | improved | no_change | worse | unchanged |
+|---|---|---|---|---|---|---|
+| verbatim, 9 slides | every arm | 0 | 0 | 0 | 0 | 9 |
+| non-verbatim, 175 slides (2 render errors excluded) | `vertical` (control) | 0 | 0 | 0 | 0 | 175 |
+| | `horizontal_within_root` | 4 | 0 | 3 | 0 | 168 |
+| | `root_growth` | 5 | 2 | 3 | 0 | 165 |
+| | `horizontal_and_growth` | **9** | **2** | 5 | 0 | 159 |
+
+The control reproduced the baseline exactly (same 5,651 judged candidates,
+same rule mix). No arm produced a `worse` slide. Every arm stayed within the
+measurement budget (maximum 160, which the control already reaches) and the
+9.0pt floor (minimum 9.0pt); the horizontal arms reach the 10% cumulative
+shrink cap on some slides, which is the expected effect of accepting type
+changes that were previously rejected for width.
+
+### A.2 What the width rule turned into
+
+On the verbatim document `fixed_horizontal` fell from 148 to **0** in the
+horizontal arms and every one of those candidates failed next on an escape
+rule: `reject.flow_box_escape` rose from 11% to 37% of rejections and
+`reject.text_escape` from 3% to 14%. That is the (c) prediction, now measured
+on all nine slides. On the non-verbatim corpus the same shift: 1,541 →  25
+`fixed_horizontal`, with `flow_box_escape` 14% → 28% and `text_escape` 11% →
+17%. The width rule was masking escape failures, not causing them.
+
+`root_growth` changes scope selection (auto-height containers become roots,
+so more scopes exist and slightly more candidates are judged) and resolves a
+different class: clipping and card escapes in one deck family (현대백화점
+renewals, 2026-08-19), where a card could grow into slack below it.
+
+### A.3 Decision
+
+The rule fixed in §6 requires at least 18 of the 177 non-verbatim slides
+resolved or improved **and** at least one of the nine verbatim slides. The best
+arm reaches **11 of 175 (6.3%) and 0 of 9**. It fails both halves. Nothing in
+this note is built.
+
+Of the 11, eight come from one deck family, so even the upside is not
+document-independent. The honest reading is that the horizontal contract is
+not the lever: relaxing it converts one rejection into another, and the
+remaining rejections (`parent_space_unavailable` 18-20%, `vertical_movement_cap`
+15-20%, the escape pair 45%) are about space that does not exist on the slide.
+The deterministic fitter has reached the limit of what it can do without
+changing content or layout, which is exactly the boundary the design of
+2026-09-09 drew for it.
+
+### A.4 What remains valid from this note
+
+- The mode table and the derivation of `allowed_axes` / `preserved_properties`
+  from one place (§2.2, §3 test 2) are a correctness cleanup independent of
+  yield; they may be done for their own sake, behind the default `vertical`.
+- `root_growth`'s scope-selection change ((a), auto-height roots) is the only
+  arm that resolved defects the others could not; if any part is revisited it
+  is this half, with a fresh rule, not the horizontal half.
