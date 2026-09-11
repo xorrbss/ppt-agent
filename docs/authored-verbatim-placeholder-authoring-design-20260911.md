@@ -5,7 +5,7 @@
   (2.5) and single capture per digest (2.3). Earlier revisions are in git history.)
 - Scope: the document-verbatim generation path (`source_content_restyle`, `source_reflow=True`) of the
   authored pipeline. Ordinary prompt-driven authoring and the Hybrid export lane are not changed.
-- Status: proposal awaiting the user's decision. Nothing here is implemented.
+- Status: **accepted by the user on 2026-09-11** (`.spec-memory/decisions/authored.verbatim-placeholder-authoring.1.json`). Section 6 records the answers. Implementation is tracked as tasks T1-T6 below.
 - Rule this design follows: **no per-path fixes.** An invariant is enforced in exactly one place, or it
   is made impossible by construction.
 - What rev 2 changed, in one line: substitution is a construction guarantee, **not** a proof of the
@@ -270,7 +270,11 @@ Flagged slides remain a layout metric, not a correctness one.
 - Hybrid export implementation. Its compatibility with changed text-run boundaries is verified in
   experiment (c), not assumed.
 
-## 6. Decisions requested
+## 6. Decisions (answered 2026-09-11)
+
+Answers: (1) approved; (2) whole-block tokens, character-range only if 3.1 demands; (3) ledger aligned to code: three ordinals, the third is the last author attempt that replaces rescue; (4) binder removed after one passing token-mode series and no unfinished legacy jobs; (5) N=1 default, N=2 compared in (c).
+
+Original questions:
 
 1. Approve 2.1-2.4 as the direction; implementation starts with section 3.
 2. Token granularity: whole-block tokens only (recommended; emphasis via wrapping the block) versus
@@ -280,3 +284,14 @@ Flagged slides remain a layout metric, not a correctness one.
    (recommended), or kept for one release.
 5. Repair-loop budget `N`: default 1 (recommended; the data in 2.5 shows extra model repair attempts
    mostly produce unadmitted candidates), measured against N=2 in experiment (c).
+
+## 7. Implementation tasks
+
+| id | task | depends on | owns |
+| --- | --- | --- | --- |
+| T1 | measurements 3.1-3.4 (read-only) | - | `artifacts/verbatim-design-measurements-20260911/` |
+| T2 | admission gate on the current representation, receipt enforcement at the checkpoint writer, shadow across every producer, then removal of per-path checks (rollout step 1) | - | `services/authored_admission*.py` (new), `authored_presentation_generation.py`, `authored_presentation_pipeline.py`, `authored_checkpoint_state.py` |
+| T3 | parser-based normalization with the enumerated DOM rewrite pass and receipts, behind a switch (rollout step 2) | - | `utils/authored_html_normalize*.py`, `utils/renderer_isolation.py`, new parser module |
+| T4 | provider-layer overload classification with bounded physical calls and quota pause (rollout step 4) | - | `utils/provider_idempotency.py`, `services/authored_batch_policy.py`, `services/authored_wave_scheduler.py` |
+| T5 | placeholder substitution module, static checks, block table prompt, knob (rollout step 3); integrates into the gate from T2 | T2 interface | `services/source_content/placeholder_*.py` (new), `utils/llm_calls/author_slide_prompt.py` |
+| T6 | single repair loop with knob and N; rescue folded into the author stage (rollout step 5) | T2 | `services/authored_repair_loop*.py` (new), rescue/VQA/gate-repair call sites |

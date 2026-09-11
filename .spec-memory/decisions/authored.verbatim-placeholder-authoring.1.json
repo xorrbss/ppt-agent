@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.verbatim-placeholder-authoring",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Adopt docs/authored-verbatim-placeholder-authoring-design-20260911.md rev 3: verbatim text by construction (placeholder tokens), one admission gate with a token/expanded/captured lifecycle, capture once per digest, one bounded repair loop, overload classified in the provider layer with bounded physical calls.",
+  "scope": [
+    "authored",
+    "source-content",
+    "source-reflow",
+    "publication",
+    "provider"
+  ],
+  "invariants": [
+    "Slide HTML reaches a checkpoint only through admit_slide_html; the checkpoint writer refuses HTML without a matching admission receipt.",
+    "Rendered integrity (text, QID identity and uniqueness, capture binding, deck order) is asserted on the captured admission; only search-based binding is removed.",
+    "Placeholder tokens are recognized in text nodes only, expanded once, non-recursively, from a server-controlled id table; expanded HTML is re-checked against resource limits and policy.",
+    "Visibility failures publish flag-only only on slides already accepted by the terminal flag-only policy (authored.verbatim-flagged-publish@2 stands).",
+    "Physical provider calls stay reserved against the attempt ledger and the operation deadline; overload retries are bounded and recorded.",
+    "After authoring, exactly one repair loop produces HTML; every candidate is admitted through the same gate.",
+    "No new judge or verify-repair loop is added; existing predicates are centralized."
+  ],
+  "decisions": [
+    "Token granularity: whole-block tokens; character-range tokens only if measurement 3.1 shows in-run emphasis is common.",
+    "Repair-loop model budget N defaults to 1; N=2 is compared in experiment (c).",
+    "Author attempt ordinals: the ledger is aligned to code (three ordinals per operation attempt, the third reserved for the last author attempt that replaces the separate rescue path); supersedes authored.provider-attempt-budget-per-operation-attempt@1 once recorded.",
+    "The text binder is removed after one passing token-mode series and no unfinished legacy job remains.",
+    "Rollout order: gate on current representation (shadow, then switch) -> parser normalization -> token mode (knob, default off) -> provider layer -> single repair loop (knob, default off)."
+  ],
+  "forbidden": [
+    "Per-path fixes: adding a check or retry to one producer instead of the gate.",
+    "Reviving Deck IR, source-native, SlideSpec, or Composer layout ownership.",
+    "Relaxing renderer policy content or verbatim integrity predicates."
+  ],
+  "evidence": [
+    "User decision 2026-09-11 (\"이대로 진행해 멀티에이전트로\")",
+    "docs/authored-verbatim-placeholder-authoring-design-20260911.md",
+    "artifacts/design-review-placeholder-authoring-20260911/review.md",
+    "artifacts/authored-full-product-validation-20260910/repeatability-20260911.md",
+    "artifacts/flagged-overreport-20260911/report.md"
+  ],
+  "recordedAt": "2026-09-11T19:30:00+09:00"
+}
