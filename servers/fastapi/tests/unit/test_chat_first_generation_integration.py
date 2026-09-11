@@ -51,6 +51,7 @@ from services import (
     workspace_legacy_write_gate,
     workspace_operation_runner,
 )
+from services.public_policy_versions import PUBLIC_DEFAULT_POLICY_VERSION
 from services.source_content.errors import SourceContentError
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
@@ -833,6 +834,10 @@ def test_create_copies_attachments_to_durable_workspace_storage(
 def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkeypatch):
     async def scenario():
         engine, maker = await _database(tmp_path / "activate-generation.db")
+        async with maker() as session, session.begin():
+            session.add(User(id=OWNER_A, username="owner-a", hashed_password="x"))
+            session.add(_public_policy_profile(PUBLIC_DEFAULT_POLICY_VERSION))
+        owner_token = set_current_owner_id(OWNER_A)
         monkeypatch.setattr(
             presentation_crud,
             "_chat_first_create_enabled",
@@ -943,6 +948,7 @@ def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkey
                 ) == 1
             assert validated_files == [["C:/workspace-assets/durable-source.txt"]]
         finally:
+            reset_current_owner_id(owner_token)
             await engine.dispose()
 
     asyncio.run(scenario())
@@ -954,6 +960,10 @@ def test_bare_generate_bootstrap_persists_and_claims_reference_snapshots(
 ):
     async def scenario():
         engine, maker = await _database(tmp_path / "bare-reference-generation.db")
+        async with maker() as session, session.begin():
+            session.add(User(id=OWNER_A, username="owner-a", hashed_password="x"))
+            session.add(_public_policy_profile(PUBLIC_DEFAULT_POLICY_VERSION))
+        owner_token = set_current_owner_id(OWNER_A)
         monkeypatch.setattr(
             presentation_generate,
             "_chat_first_generation_enabled",
@@ -1047,6 +1057,7 @@ def test_bare_generate_bootstrap_persists_and_claims_reference_snapshots(
                 ] == [str(snapshot_id)]
                 assert claimed == [([snapshot_id], conversation.id)]
         finally:
+            reset_current_owner_id(owner_token)
             await engine.dispose()
 
     asyncio.run(scenario())
@@ -1058,6 +1069,10 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
 ):
     async def scenario():
         engine, maker = await _database(tmp_path / "admission-rejected.db")
+        async with maker() as session, session.begin():
+            session.add(User(id=OWNER_A, username="owner-a", hashed_password="x"))
+            session.add(_public_policy_profile(PUBLIC_DEFAULT_POLICY_VERSION))
+        owner_token = set_current_owner_id(OWNER_A)
         monkeypatch.setattr(
             presentation_crud,
             "_chat_first_create_enabled",
@@ -1231,6 +1246,7 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
                 ) == 1
             assert validation_calls == 1
         finally:
+            reset_current_owner_id(owner_token)
             await engine.dispose()
 
     asyncio.run(scenario())
@@ -1242,6 +1258,10 @@ def test_raw_path_admission_failure_requires_reattach_without_persisting_locator
 ):
     async def scenario():
         engine, maker = await _database(tmp_path / "admission-retry.db")
+        async with maker() as session, session.begin():
+            session.add(User(id=OWNER_A, username="owner-a", hashed_password="x"))
+            session.add(_public_policy_profile(PUBLIC_DEFAULT_POLICY_VERSION))
+        owner_token = set_current_owner_id(OWNER_A)
         monkeypatch.setattr(
             presentation_crud,
             "_chat_first_create_enabled",
@@ -1366,6 +1386,7 @@ def test_raw_path_admission_failure_requires_reattach_without_persisting_locator
                 assert status.status == "error"
                 assert status.error == caught.value.detail
         finally:
+            reset_current_owner_id(owner_token)
             await engine.dispose()
 
     asyncio.run(scenario())
@@ -1377,6 +1398,10 @@ def test_admission_projection_race_does_not_mark_the_response(
 ):
     async def scenario():
         engine, maker = await _database(tmp_path / "admission-projection-race.db")
+        async with maker() as session, session.begin():
+            session.add(User(id=OWNER_A, username="owner-a", hashed_password="x"))
+            session.add(_public_policy_profile(PUBLIC_DEFAULT_POLICY_VERSION))
+        owner_token = set_current_owner_id(OWNER_A)
         monkeypatch.setattr(
             presentation_crud,
             "_chat_first_create_enabled",
@@ -1435,6 +1460,7 @@ def test_admission_projection_race_does_not_mark_the_response(
                 assert caught.value.detail == "template_v2_generation_invalid"
                 assert not caught.value.headers
         finally:
+            reset_current_owner_id(owner_token)
             await engine.dispose()
 
     asyncio.run(scenario())
@@ -2002,7 +2028,7 @@ def test_source_content_admission_defers_manifest_rejection_to_validation(
     asyncio.run(scenario())
 
 
-def _invalid_admission_policy(version: str) -> PublicPolicyProfile:
+def _public_policy_profile(version: str) -> PublicPolicyProfile:
     return PublicPolicyProfile(
         version=version,
         max_slides=100,
@@ -2116,7 +2142,7 @@ async def _seed_v2_operation_with_phase1_admission(
             )
             for scope, key in (("tenant", "default"), ("owner", str(OWNER_A)))
         ]
-        session.add(_invalid_admission_policy(policy_version))
+        session.add(_public_policy_profile(policy_version))
         await session.flush()
         session.add_all([task, job, admission, *counters])
         await session.commit()
