@@ -29,6 +29,9 @@ Whitelist (nothing more):
   allowed tag surface (the tags that would make it load-bearing -- ``form``,
   ``input``, ``iframe`` -- are already in ``DROP_TAGS``) (rule in
   ``utils/authored_html_normalize_rules_name.py``).
+* Closing tags for HTML void elements (for example ``</img>`` and ``</br>``)
+  are deleted. Browsers ignore these parse-error tokens, so this preserves the
+  rendered DOM while avoiding a needless provider retry.
 * Any other CSS property not in ``renderer_css_policy.ALLOWED_CSS_PROPERTIES``,
   and any ``@media``/``@supports``/other at-rule, is handled by
   ``utils.authored_css_strip`` (H1,
@@ -78,6 +81,7 @@ from utils.authored_html_normalize_edits import apply_edits
 from utils.authored_html_normalize_rules_name import apply_name_attribute_rule
 from utils.authored_html_normalize_rules_title import apply_title_line_break_rule
 from utils.authored_css_strip import strip_disallowed_css
+from utils.authored_void_end_tag_normalize import drop_void_element_end_tags
 from utils.renderer_markup_policy import VOID_TAGS
 
 #: Declarations normalised out of both inline ``style=""`` values and
@@ -154,6 +158,9 @@ def normalize_authored_html(html: str) -> NormalizedHtml:
 
     result = html
     normalizations: list[dict] = []
+
+    result, void_end_tag_records = drop_void_element_end_tags(result)
+    normalizations.extend(void_end_tag_records)
 
     result, css_count, css_properties = _strip_forbidden_css(result)
     if css_count:

@@ -951,6 +951,22 @@ def test_author_retry_correction_names_the_specific_local_repair(
     assert all(fragment in correction for fragment in required_guidance)
 
 
+def test_author_retry_prompt_includes_exact_bounded_renderer_rejection(monkeypatch):
+    calls = []
+
+    async def flaky(content, ds, brand, role, index, n, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise RendererPolicyError("HTML closing tag is unbalanced: section")
+        return _VALID
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", flaky)
+
+    assert _run(author_deck(_outline(1), _brand())).htmls == [_SEALED_VALID]
+    assert "HTML closing tag is unbalanced: section" in calls[1]["correction_hint"]
+    assert len(calls[1]["correction_hint"]) < 500
+
+
 def test_author_deck_retries_local_renderer_failure_with_rejected_html(monkeypatch):
     rejected_html = (
         "<!doctype html><html><head><style>"

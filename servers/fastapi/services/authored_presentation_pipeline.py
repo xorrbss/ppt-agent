@@ -241,8 +241,7 @@ async def _author_illustrate_render_pipeline(
     preauthored_htmls: dict[int, str] = {}
     preauthored_attempt_counts: dict[int, int] = {}
     preauthored_author_work: dict[int, float] = {}
-    # Slides the pre-authoring pass could not author and handed to the tail's
-    # author-stage rescue instead of failing the deck, keyed by slide index.
+    preauthored_normalization_receipts: dict[int, list[dict]] = {}
     author_rescue_deferrals: dict[int, DeferredAuthorBudgetExhausted] = {}
     # G0: the deck's style anchor, once one slide has been authored and gated.
     # ``None`` keeps every later prompt byte-identical to today's.
@@ -285,6 +284,7 @@ async def _author_illustrate_render_pipeline(
         "slide_source_images": slide_source_images, "plan": plan,
         "require_all_source_images": require_all_source_images,
         "preauthored_author_work": preauthored_author_work,
+        "preauthored_normalization_receipts": preauthored_normalization_receipts,
     }
     async def _persist_batch_success(index: int, html: str) -> str:
         return await author_batch_impl.persist_batch_success(
@@ -535,7 +535,7 @@ async def _author_illustrate_render_pipeline(
             # 8): fired A2 normalisation rules from this slide's own
             # ``validate_authored_slide_html`` call(s), carried into this
             # slide's quality receipt below.
-            normalization_receipt: list[dict] = []
+            normalization_receipt = list(preauthored_normalization_receipts.get(index, ()))
             html = (
                 checkpoint.author_html
                 if checkpoint is not None and checkpoint.author_html

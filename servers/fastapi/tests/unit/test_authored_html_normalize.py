@@ -25,6 +25,52 @@ def test_normalize_authored_html_is_a_no_op_when_nothing_matches():
     assert result.normalizations == []
 
 
+def test_normalize_authored_html_drops_only_void_element_end_tags():
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'></head><body>"
+        "<main><img data-qid='hero'></IMG><br></br><hr></hr></main>"
+        "</body></html>"
+    )
+
+    result = normalize_authored_html(html)
+
+    assert "</img>" not in result.html.lower()
+    assert "</br>" not in result.html.lower()
+    assert "</hr>" not in result.html.lower()
+    assert result.normalizations == [
+        {"rule": "html_void_end_tag_dropped", "detail": "br", "count": 1},
+        {"rule": "html_void_end_tag_dropped", "detail": "hr", "count": 1},
+        {"rule": "html_void_end_tag_dropped", "detail": "img", "count": 1},
+    ]
+
+
+def test_non_void_unbalanced_end_tag_still_fails_renderer_admission():
+    from utils.renderer_isolation import RendererPolicyError, admit_authored_html
+
+    html = "<html><head></head><body><main>kept</span></main></body></html>"
+    result = normalize_authored_html(html)
+
+    assert result.html == html
+    assert result.normalizations == []
+    with pytest.raises(RendererPolicyError, match="unbalanced: span"):
+        admit_authored_html(result.html)
+
+
+def test_author_intake_records_void_end_tag_normalization(monkeypatch):
+    from utils.llm_calls.author_slide import validate_authored_slide_html
+
+    monkeypatch.delenv("AUTHORED_HTML_NORMALIZE_ENABLED", raising=False)
+    html = "<html><head></head><body><img data-qid='hero'></img></body></html>"
+    receipt = []
+
+    admitted = validate_authored_slide_html(html, normalization_receipt=receipt)
+
+    assert "</img>" not in admitted.lower()
+    assert receipt == [
+        {"rule": "html_void_end_tag_dropped", "detail": "img", "count": 1}
+    ]
+
+
 def test_normalize_authored_html_strips_forbidden_style_attribute_declarations():
     html = (
         "<!doctype html><html><head><meta charset='utf-8'></head><body>"

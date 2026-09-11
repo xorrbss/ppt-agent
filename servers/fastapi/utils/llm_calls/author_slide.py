@@ -927,13 +927,12 @@ async def author_slide_html(
     allow_provider_fallback: bool = True,
     receipt_retry_class: Optional[str] = None,
     receipt_attempt_ordinal: Optional[int] = None,
+    normalization_receipt: list[dict] | None = None,
 ) -> str:
     """Author one bespoke, self-contained 1280x720 HTML slide. Single text-generation
     call against the configured provider; returns the cleaned HTML document.
-
-    `reasoning_effort` overrides the codex reasoning effort for this call (see
-    _authoring_extra_body); the vision-QA re-author pass passes 'off' so corrections
-    run at the provider's full default effort rather than the fast authoring 'low'.
+    `reasoning_effort` overrides the codex reasoning effort; the vision-QA
+    re-author pass uses 'off' so corrections run at the provider default.
 
     `source_images` are pictures the user already owns that this slide may place.
     An empty sequence attaches nothing and leaves the request as it was."""
@@ -1233,6 +1232,7 @@ async def author_slide_html(
     authored_html = validate_authored_slide_html(
         authored_html,
         allow_illustration_slots=True,
+        normalization_receipt=normalization_receipt,
     )
     if authored_semantic_dual_output_mode() == "declared":
         try:

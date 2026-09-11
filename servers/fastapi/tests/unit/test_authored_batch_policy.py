@@ -377,6 +377,30 @@ def test_batch_author_returns_three_slides_from_one_provider_call(monkeypatch) -
     ) == 3
 
 
+def test_batch_author_records_void_end_tag_normalization(monkeypatch) -> None:
+    candidate = _html(0).replace("</body>", "<img data-qid='hero'></img></body>")
+    _capture_batch_provider(
+        monkeypatch,
+        f'<authored-slide index="0">{candidate}</authored-slide>',
+    )
+    receipts = {0: []}
+
+    result = _run(
+        author_slides_html(
+            [AuthoredBatchSlideRequest(index=0, content="cover", role="COVER")],
+            design_system="DESIGN",
+            brand=_brand(),
+            slide_count=1,
+            normalization_receipts_by_index=receipts,
+        )
+    )
+
+    assert "</img>" not in result.htmls[0].lower()
+    assert receipts[0] == [
+        {"rule": "html_void_end_tag_dropped", "detail": "img", "count": 1}
+    ]
+
+
 def test_batch_author_preserves_successes_when_one_slide_is_missing(monkeypatch) -> None:
     _capture_batch_provider(
         monkeypatch,

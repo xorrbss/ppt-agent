@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+import inspect
 import time
 from typing import Any
 
@@ -125,6 +126,13 @@ async def run_author_batch(
                 runtime.author_planned_batch
             ):
                 batch_kwargs["style_anchor"] = style_anchor
+            if "normalization_receipts_by_index" in inspect.signature(
+                runtime.author_planned_batch
+            ).parameters:
+                batch_kwargs["normalization_receipts_by_index"] = {
+                    index: context["preauthored_normalization_receipts"].setdefault(index, [])
+                    for index in selected
+                }
             result = await runtime.author_planned_batch(
                 context["plan"],
                 selected,

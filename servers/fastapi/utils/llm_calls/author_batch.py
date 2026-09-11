@@ -232,6 +232,7 @@ def _postprocess_slide(
     raw_html: str,
     *,
     brand: Brand,
+    normalization_receipt: list[dict] | None = None,
 ) -> str:
     request = prepared.request
     mode = normalize_reference_mode(request.reference_mode)
@@ -287,6 +288,7 @@ def _postprocess_slide(
     authored_html = validate_authored_slide_html(
         authored_html,
         allow_illustration_slots=True,
+        normalization_receipt=normalization_receipt,
     )
     if authored_semantic_dual_output_mode() == "declared":
         try:
@@ -305,6 +307,7 @@ async def author_slides_html(
     brand: Brand,
     slide_count: int,
     recovery: bool = False,
+    normalization_receipts_by_index: Mapping[int, list[dict]] | None = None,
 ) -> AuthoredBatchCallResult:
     """Return up to three slide documents from exactly one provider call."""
 
@@ -436,7 +439,8 @@ async def author_slides_html(
     for index, candidate in raw.items():
         try:
             htmls[index] = _postprocess_slide(
-                prepared_by_index[index], candidate, brand=brand
+                prepared_by_index[index], candidate, brand=brand,
+                normalization_receipt=(normalization_receipts_by_index or {}).get(index),
             )
         except BaseException as error:  # per-slide validation boundary
             errors[index] = error
