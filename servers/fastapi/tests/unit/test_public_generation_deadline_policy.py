@@ -130,8 +130,8 @@ def _three_slide_calls(monkeypatch):
 
 
 def test_public_default_policy_version_is_v4() -> None:
-    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v4"
-    assert PUBLIC_PHASE2_DEFAULT_POLICY_VERSION == "public-default/v4"
+    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v5"
+    assert PUBLIC_PHASE2_DEFAULT_POLICY_VERSION == "public-default/v5"
 
 
 def test_wave_budget_scales_with_the_slides_one_call_returns(monkeypatch) -> None:
@@ -620,7 +620,7 @@ def test_v4_admission_pins_scaled_deadline_and_retry_never_regrants_it(
                 assert granted == 7410
                 assert granted == public_generation_deadline_seconds(35)
                 assert granted < PUBLIC_GENERATION_DEADLINE_MAX_SECONDS
-                assert admitted.policy_version == "public-default/v4"
+                assert admitted.policy_version == PUBLIC_PHASE2_DEFAULT_POLICY_VERSION
                 operation = await session.get(WorkspaceOperation, operation_id)
                 assert _naive_utc(operation.deadline_at) == _naive_utc(admitted.deadline_at)
                 pinned_deadline = admitted.deadline_at
@@ -722,6 +722,7 @@ def test_policy_migrations_add_rows_without_touching_older_ones(tmp_path: Path) 
             "public-default/v2",
             "public-default/v3",
             "public-default/v4",
+            "public-default/v5",
         }
         for legacy in ("public-default/v1", "public-default/v2"):
             assert rows[legacy]["generation_deadline_seconds"] == (
@@ -745,5 +746,10 @@ def test_policy_migrations_add_rows_without_touching_older_ones(tmp_path: Path) 
         assert v4["export_deadline_seconds"] == v3["export_deadline_seconds"]
         assert v4["max_slides"] == v3["max_slides"]
         assert v4["retry_request_limit"] == v3["retry_request_limit"]
+        # v5 only raises the export ceiling; its generation column is v4's.
+        v5 = rows["public-default/v5"]
+        assert v5["generation_deadline_seconds"] == V4_POLICY_ROW_CEILING_SECONDS
+        assert v5["export_deadline_seconds"] == 1800
+        assert v5["max_slides"] == v4["max_slides"]
     finally:
         engine.dispose()

@@ -56,6 +56,7 @@ VERSIONS_DIRECTORY = ALEMBIC_DIRECTORY / "versions"
 
 V3_REVISION = "e1a7c9d4b2f8"
 V4_REVISION = "a2c4e6f8b1d3"
+V5_REVISION = "b4e6f8a0c2d5"
 REVISION_BEFORE_V4 = "e8b3d1f6a4c2"
 
 # Frozen: the v3 row is applied in production and can never move again.
@@ -189,6 +190,7 @@ def test_v4_row_clones_v3_and_only_raises_the_generation_ceiling(tmp_path) -> No
             "public-default/v2",
             "public-default/v3",
             "public-default/v4",
+            "public-default/v5",
         }
         v3 = rows["public-default/v3"]
         v4 = rows["public-default/v4"]
@@ -208,6 +210,13 @@ def test_v4_row_clones_v3_and_only_raises_the_generation_ceiling(tmp_path) -> No
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one() == revision_contract.HEAD_REVISION
 
+        command.downgrade(config, V4_REVISION)
+        assert set(_policy_rows(engine)) == {
+            "public-default/v1",
+            "public-default/v2",
+            "public-default/v3",
+            "public-default/v4",
+        }
         command.downgrade(config, REVISION_BEFORE_V4)
         remaining = _policy_rows(engine)
         assert set(remaining) == {
@@ -333,7 +342,7 @@ def test_large_decks_receive_the_formula_not_a_clamp(
                     request_plan=_plan(slide_count),
                     resource_plan=_RESOURCE_PLAN,
                 )
-                assert admitted.policy_version == "public-default/v4"
+                assert admitted.policy_version == "public-default/v5"
                 assert _granted_seconds(admitted) == expected_seconds
                 assert (
                     public_generation_deadline_seconds(slide_count)
@@ -361,7 +370,7 @@ def test_default_version_falls_back_to_the_previous_row_before_migration(
     database_path = tmp_path / "public-policy-fallback.db"
     command.upgrade(
         _alembic_config(f"sqlite:///{database_path.as_posix()}"),
-        REVISION_BEFORE_V4,
+        V4_REVISION,
     )
 
     async def scenario() -> None:
@@ -379,7 +388,7 @@ def test_default_version_falls_back_to_the_previous_row_before_migration(
                 )
                 assert resolved is not None
                 assert resolved.version == PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION
-                assert resolved.generation_deadline_seconds == V3_ROW_CEILING_SECONDS
+                assert resolved.export_deadline_seconds == 600
 
                 policy = await load_public_policy(session)
                 assert policy.version == PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION
@@ -415,10 +424,10 @@ def test_admission_records_the_version_of_the_row_it_actually_applied(
         "services.public_operation_admission._require_phase2_authority",
         lambda _session: PublicResourceLease,
     )
-    database_path = tmp_path / "public-admission-before-v4.db"
+    database_path = tmp_path / "public-admission-before-v5.db"
     command.upgrade(
         _alembic_config(f"sqlite:///{database_path.as_posix()}"),
-        REVISION_BEFORE_V4,
+        V4_REVISION,
     )
 
     async def scenario() -> None:
@@ -458,6 +467,6 @@ def test_admission_records_the_version_of_the_row_it_actually_applied(
 
 
 def test_both_default_version_constants_move_together() -> None:
-    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v4"
+    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v5"
     assert PUBLIC_PHASE2_DEFAULT_POLICY_VERSION == PUBLIC_DEFAULT_POLICY_VERSION
-    assert PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION == "public-default/v3"
+    assert PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION == "public-default/v4"

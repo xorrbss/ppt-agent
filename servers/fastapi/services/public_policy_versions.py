@@ -14,7 +14,7 @@ default* version.  An operation pinned to an explicitly older version keeps
 that version's limits; nothing here redirects it.
 
 Falling back is a degraded mode, not a resting state: the previous default
-carries the previous generation-deadline ceiling, so large decks are capped
+carries the previous export-deadline ceiling, so large exports are capped
 again until the migration runs.  Every fallback logs a warning naming both
 versions.
 """
@@ -31,15 +31,16 @@ from models.sql.public_admission import PublicPolicyProfile
 logger = logging.getLogger(__name__)
 
 
-# The policy row admission pins by default.  ``public-default/v4`` is a clone
-# of v3 that only raises ``generation_deadline_seconds`` to the code ceiling in
-# ``services/public_generation_deadline_policy.py``; see Alembic revision
-# ``a2c4e6f8b1d3``.
-PUBLIC_DEFAULT_POLICY_VERSION = "public-default/v4"
+# The policy row admission pins by default.  ``public-default/v5`` is a clone
+# of v4 that only raises ``export_deadline_seconds`` to the export ceiling in
+# ``services/public_export_deadline_policy.py``; see Alembic revision
+# ``b4e6f8a0c2d5``.  (v4 itself raised ``generation_deadline_seconds`` to the
+# generation ceiling; revision ``a2c4e6f8b1d3``.)
+PUBLIC_DEFAULT_POLICY_VERSION = "public-default/v5"
 
 # The one version the default may fall back to while a deployment still has
 # code in front of the migration.
-PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION = "public-default/v3"
+PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION = "public-default/v4"
 
 
 async def resolve_public_policy_row(
@@ -64,7 +65,7 @@ async def resolve_public_policy_row(
     logger.warning(
         "public_policy_version_fallback requested=%s applied=%s: the database "
         "is behind the code. Run the Alembic migrations; until then the "
-        "previous generation deadline ceiling caps large decks.",
+        "previous export deadline ceiling caps large exports.",
         version,
         PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION,
     )
