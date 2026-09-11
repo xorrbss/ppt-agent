@@ -262,6 +262,7 @@ from services.authored_visual_review_evidence import visual_review_not_assessed,
 from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
     inspect_browser_source_readback,
+    log_browser_source_readback_failure,
     stamp_source_block_ids,
     verify_browser_source_readback,
 )
@@ -2898,9 +2899,12 @@ async def _generate_authored_presentation(
                         or browser_source_receipt.diagnostic_error
                     )
                     if hard_failure or unflagged_visibility:
+                        failure_summary = log_browser_source_readback_failure(
+                            browser_source_receipt
+                        )
                         raise BrowserSourceReadbackError(
                             "source_content_browser_readback_failed",
-                            detail="browser source text/geometry/visibility contract failed",
+                            detail=f"browser source text/geometry/visibility contract failed; {failure_summary}",
                             block_ids=tuple(dict.fromkeys((*browser_source_receipt.missing_block_ids, *browser_source_receipt.visibility_failures))),
                             slide_indices=browser_source_receipt.failed_slide_indices,
                             order_violations=browser_source_receipt.order_violations,

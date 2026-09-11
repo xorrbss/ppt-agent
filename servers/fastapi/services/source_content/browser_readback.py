@@ -18,6 +18,7 @@ from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 import hashlib
+import logging
 import math
 import re
 from typing import Any
@@ -38,6 +39,36 @@ from services.source_content.source_stamp_dom import (
     source_block_data_attribute,
 )
 from services.source_content.text_stamping import stamp_source_block_ids
+
+
+LOGGER = logging.getLogger(__name__)
+_FAILURE_ID_LIMIT = 8
+_FAILURE_ID_LENGTH = 96
+
+
+def _bounded_failure_ids(values: Sequence[object]) -> str:
+    identifiers = [
+        re.sub(r"[\x00-\x1f\x7f]+", "?", str(value))[:_FAILURE_ID_LENGTH]
+        for value in values[:_FAILURE_ID_LIMIT]
+    ]
+    suffix = f"+{len(values) - len(identifiers)}" if len(values) > len(identifiers) else ""
+    return "[" + ",".join(identifiers) + "]" + suffix
+
+
+def log_browser_source_readback_failure(result: "BrowserSourceReadbackResult") -> str:
+    """Warn with bounded identifiers and return the same operation-safe summary."""
+
+    summary = " ".join((
+        f"slides={_bounded_failure_ids(result.failed_slide_indices)}",
+        f"missing={_bounded_failure_ids(result.missing_block_ids)}",
+        f"order={int(result.order_violations)}",
+        f"integrity={_bounded_failure_ids(result.integrity_failures)}",
+        f"telemetry={_bounded_failure_ids(result.telemetry_failures)}",
+        f"visibility={_bounded_failure_ids(result.visibility_failures)}",
+        f"diagnostic={bool(result.diagnostic_error)}",
+    ))
+    LOGGER.warning("browser source readback rejected: %s", summary)
+    return summary
 
 
 @dataclass(frozen=True, slots=True)
@@ -786,7 +817,8 @@ def verify_browser_source_readback(*, manifest: Any, outline: Any, browser_metri
         manifest=manifest, outline=outline, browser_metrics=browser_metrics, htmls=htmls
     )
     if not result.passed:
-        raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="browser source text/geometry/visibility contract failed", block_ids=tuple(dict.fromkeys((*result.missing_block_ids, *result.visibility_failures))), slide_indices=result.failed_slide_indices, order_violations=result.order_violations)
+        summary = log_browser_source_readback_failure(result)
+        raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail=f"browser source text/geometry/visibility contract failed; {summary}", block_ids=tuple(dict.fromkeys((*result.missing_block_ids, *result.visibility_failures))), slide_indices=result.failed_slide_indices, order_violations=result.order_violations)
     return result
 
 
@@ -806,5 +838,6 @@ __all__ = [
     "stamp_source_image_block_ids",
     "verify_browser_source_readback",
     "inspect_browser_source_readback",
+    "log_browser_source_readback_failure",
     "verify_source_verbatim_browser_readback",
 ]

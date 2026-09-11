@@ -45,6 +45,7 @@ from services.source_content.browser_readback import (
     BrowserSourceBlockEvidence,
     BrowserSourceReadbackError,
     BrowserSourceReadbackResult,
+    log_browser_source_readback_failure,
 )
 from utils.llm_calls import author_vision_qa as author_vision_qa_mod
 from utils.llm_calls.author_deck import AuthoredDeckResult
@@ -1239,7 +1240,7 @@ def test_flagged_visibility_only_readback_publishes_and_records_reason(
     assert source_readback["flaggedVisibilityFailures"] == [block_id]
 
 
-def test_flagged_fallback_still_rejects_a_missing_source_block(monkeypatch, tmp_path):
+def test_flagged_fallback_still_rejects_a_missing_source_block(monkeypatch, tmp_path, caplog):
     monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
     deck = [_REMADE_HTML, _TERMINAL_HTML]
     block_id = "source-slide:2:text:1"
@@ -1257,13 +1258,43 @@ def test_flagged_fallback_still_rejects_a_missing_source_block(monkeypatch, tmp_
 
     owner_token = set_current_owner_id(uuid.uuid4())
     try:
-        with pytest.raises(Exception) as caught:
-            _run(_generate_on_sqlite(tmp_path, request, _outline(len(deck))))
+        with caplog.at_level("WARNING", logger="services.source_content.browser_readback"):
+            with pytest.raises(Exception) as caught:
+                _run(_generate_on_sqlite(tmp_path, request, _outline(len(deck))))
     finally:
         reset_current_owner_id(owner_token)
 
     assert getattr(caught.value, "code", None) == "source_content_browser_readback_failed"
     assert caught.value.retryable is False
+    assert f"missing=[{block_id}]" in str(caught.value)
+    assert "visibility=[]" in str(caught.value)
+    assert any(f"missing=[{block_id}]" in record.message for record in caplog.records)
+
+
+def test_readback_failure_summary_splits_and_bounds_identifiers(caplog):
+    result = BrowserSourceReadbackResult(
+        2,
+        15,
+        missing_block_ids=tuple(f"missing-{index}" for index in range(10)),
+        order_violations=3,
+        integrity_failures=("integrity-1",),
+        telemetry_failures=("telemetry-1",),
+        visibility_failures=("visibility-1",),
+        failed_slide_indices=(0, 1),
+        diagnostic_error="must not be emitted",
+    )
+
+    with caplog.at_level("WARNING", logger="services.source_content.browser_readback"):
+        summary = log_browser_source_readback_failure(result)
+
+    assert "slides=[0,1]" in summary
+    assert "missing=[missing-0,missing-1,missing-2,missing-3,missing-4,missing-5,missing-6,missing-7]+2" in summary
+    assert "order=3" in summary
+    assert "integrity=[integrity-1]" in summary
+    assert "telemetry=[telemetry-1]" in summary
+    assert "visibility=[visibility-1]" in summary
+    assert "diagnostic=True" in summary
+    assert "must not be emitted" not in caplog.text
 
 
 def test_flagged_fallback_rejects_visibility_failure_on_unflagged_slide(
