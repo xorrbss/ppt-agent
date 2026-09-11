@@ -31,6 +31,16 @@ PARENT_MEMBERS = BOUNDARY_MEMBERS + r"""
     }
     return result;
   },
+  _slackRoot(roots) {
+    // The nearest fixed-height ancestor is the natural scope, except when it is
+    // a grid: the space a grown row needs comes from the grid's following
+    // siblings, which live in the grid's parent, and materializeGrowth only
+    // reclaims them when the grid is not the root (sharedGrid). Step up once.
+    const nearest = roots[0];
+    if (roots.length > 1 && getComputedStyle(nearest).display === 'grid' &&
+        roots[1] === nearest.parentElement) return roots[1];
+    return nearest;
+  },
   _parentSnapshot(root, qids) {
     const elements = [root].concat(Array.from(root.querySelectorAll('[data-qid]'))), leaves = this._allLeaves(root);
     const siblings = [];

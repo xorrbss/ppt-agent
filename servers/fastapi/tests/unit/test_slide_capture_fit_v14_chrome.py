@@ -189,15 +189,9 @@ def test_grid_cards_grow_by_reclaiming_slack_from_the_following_sibling() -> Non
     assert boxes["summary"]["height"] == pytest.approx(111, abs=0.5)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="DEFECT: _fitScopes() takes the nearest root-eligible ancestor (the grid) "
-    "as the scope root, so the 73px of slack in the root's following sibling is "
-    "never visible to materializeGrowth (sharedGrid requires grid !== root); the "
-    "fitter falls back to shrinking body text by 5% although design §5.2 asks for "
-    "the wider fixed area inside the protected boundary.",
-)
 def test_grid_slack_is_reclaimed_when_the_grid_itself_is_root_eligible() -> None:
+    # _slackRoot steps the scope up from a root-eligible grid to the grid's parent,
+    # so the 73px of slack in the following sibling is visible to materializeGrowth.
     _, _, capture = support.fit("grid_slack_borderbox")
     report = support.report_of(capture)
 

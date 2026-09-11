@@ -195,12 +195,12 @@ GEOMETRY_MEMBERS = r"""
       intersection_px: this._round(seed.depth, 2), intentional_overlap: seed.intentional}));
     for (const region of regions) {
       const roots = this._parentRoots(region.card);
-      scopes.push(this._scopeRegion(roots.length ? roots[0] : region.card, [region], []));
+      scopes.push(this._scopeRegion(roots.length ? this._slackRoot(roots) : region.card, [region], []));
     }
     for (const seed of collisionSeeds) {
       let common = seed.first.parentElement;
       while (common && !common.contains(seed.second)) common = common.parentElement;
-      let root = null, current = common;
+      const roots = []; let current = common;
       for (let depth = 0; current && current !== document.body && depth < 4; depth += 1, current = current.parentElement) {
         if (this._protected(current)) {
           this._last.parent_exclusions.push({qid: current.getAttribute('data-qid'),
@@ -208,8 +208,9 @@ GEOMETRY_MEMBERS = r"""
             ancestor_distance: depth, reason: 'protected_boundary'});
           break;
         }
-        if (this._parentRootEligible(current, seed.first)) { root = current; break; }
+        if (this._parentRootEligible(current, seed.first)) roots.push(current);
       }
+      let root = roots.length ? this._slackRoot(roots) : null;
       root = this._morphScopeRoot(common, root, seed);
       if (!root) {
         this._last.parent_exclusions.push({qid: seed.first.getAttribute('data-qid'), reason: 'collision_root_unavailable'});
