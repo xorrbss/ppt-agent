@@ -34,6 +34,7 @@ from services.authored_generation_observability import (
     log_authored_slide_failure_observation,
 )
 from services.authored_generation_timing_receipt_e4 import flagged_slide_entries
+from services.authored_local_fit_policy import POLICY_REVISION, html_digest
 from services.authored_presentation_contracts import (
     AuthoredGenerationPipelineResult,
 )
@@ -41,6 +42,7 @@ from services.source_content.browser_readback import (
     BrowserSourceReadbackResult,
 )
 from utils.authored_header_validation import validate_header_contract
+from utils.authored_semantic_role_repair import canonicalize_authored_roles
 from utils.llm_calls.author_deck import (
     AuthoredDeckResult,
     AuthoredProviderBudgetExhausted,
@@ -60,6 +62,28 @@ _RESCUED_HTML = (
     "<body><h1>RESCUED</h1></body></html>"
 )
 _OUTLINE_TEXT = "분기 실적 요약\n매출 120억 원\n영업이익 18억 원"
+
+
+def _fit_receipts(htmls):
+    """One local-fit receipt per slide, as the real pipeline always returns.
+
+    A pipeline that renders a deck also fits it, so generation requires one
+    receipt per slide (``local_fit_applies`` in
+    ``services/authored_presentation_generation.py``); a stub that returns none
+    fails the deck with ``authored_local_fit_evidence_incomplete`` before the
+    behaviour under test is reached.
+    """
+
+    return tuple(
+        {
+            "policy_revision": POLICY_REVISION,
+            "finalHtmlDigest": html_digest(canonicalize_authored_roles(html)),
+            "qualityStatus": "passed",
+            "unresolvedReasons": [],
+            "changed": False,
+        }
+        for html in htmls
+    )
 
 
 def _run(coro):
@@ -585,6 +609,7 @@ def test_the_author_flag_reaches_the_published_quality_gate(monkeypatch, tmp_pat
             illustration_work=0.0,
             render_work=0.1,
             author_flagged_slides=(flag,),
+            local_fit_receipts=_fit_receipts([_RESCUED_HTML]),
         )
 
     async def fake_header_contract(
@@ -620,7 +645,7 @@ def test_the_author_flag_reaches_the_published_quality_gate(monkeypatch, tmp_pat
     monkeypatch.setattr(
         authored_service,
         "_build_authored_export",
-        lambda request, presentation_id, pngs, title: "deck.pptx",
+        lambda request, presentation_id, pngs, title, **kwargs: "deck.pptx",
     )
     monkeypatch.setattr(
         llm_provider, "get_llm_provider", lambda: SimpleNamespace(value="stub")
