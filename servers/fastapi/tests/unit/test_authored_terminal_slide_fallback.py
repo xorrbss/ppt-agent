@@ -25,6 +25,7 @@ from models.presentation_outline_model import (
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.slide import SlideModel
+from services import authored_admission_publication as admission_publication_mod
 from services import authored_presentation_generation as authored_generation_mod
 from services import authored_presentation_service as authored_service
 from services import authored_repair_round_order as order_mod
@@ -808,8 +809,14 @@ def _install_source_reflow_contract_stubs(monkeypatch, count, browser_receipt=No
     receipt = BrowserSourceReadbackResult(
         checked_slide_count=count, checked_block_count=0
     )
+    # b5a98b9f2 moved the final deck-level readback out of
+    # ``authored_presentation_generation`` into ``authored_admission_publication``
+    # (function ``_legacy_final_readback``, called by ``final_readback``), which
+    # imports these three names into its own module namespace rather than
+    # calling back into the generation module. Patch them where they are now
+    # actually looked up.
     monkeypatch.setattr(
-        authored_generation_mod,
+        admission_publication_mod,
         "verify_source_verbatim_readback",
         lambda **_kwargs: receipt,
     )
@@ -832,10 +839,10 @@ def _install_source_reflow_contract_stubs(monkeypatch, count, browser_receipt=No
         return result
 
     monkeypatch.setattr(
-        authored_generation_mod, "verify_browser_source_readback", verify_browser
+        admission_publication_mod, "verify_browser_source_readback", verify_browser
     )
     monkeypatch.setattr(
-        authored_generation_mod, "inspect_browser_source_readback", inspect_browser
+        admission_publication_mod, "inspect_browser_source_readback", inspect_browser
     )
     final_gate_flags = []
 
