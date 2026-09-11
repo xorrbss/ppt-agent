@@ -21,6 +21,17 @@ stack, run this once per relevant component to confirm every worker process
 actually resolves the knob values the stage table claims, instead of trusting
 that the DPAPI store write alone was enough.
 
+.PARAMETER AsJson
+Emit one machine-readable JSON object on stdout instead of the per-component
+human-readable blocks, so an automated precheck can gate on it. The object
+carries, per component, the resolved knob values plus the evidence that the
+component's *running* process actually predates nothing: its pid from
+app_data\public-v2-local\local-stack.json, that process's start time, and the
+DPAPI store's last-write time. A component whose process started before the
+store was last written is reported with restartRequired = true -- writing a
+knob without restarting is the failure this exists to catch, and the resolved
+values alone cannot show it.
+
 .PARAMETER Components
 Which stack components to check. Each is checked independently because each
 runs as its own OS process with its own environment; a knob written to the
@@ -35,7 +46,8 @@ pwsh scripts\verify-local-stack-knobs.ps1 -Components @("worker-generation")
 
 [CmdletBinding()]
 param(
-    [string[]]$Components = @("api", "worker-generation", "worker-export")
+    [string[]]$Components = @("api", "worker-generation", "worker-export"),
+    [switch]$AsJson
 )
 
 Set-StrictMode -Version Latest
@@ -44,9 +56,56 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $fastApiRoot = Join-Path $repoRoot 'servers\fastapi'
 . (Join-Path $repoRoot 'scripts\local-stack-lib.ps1')
 
-$store = Read-StackEnvironment (
-    Join-Path $repoRoot 'app_data\public-v2-local\local-stack-env.dpapi.xml'
-)
+$storePath = Join-Path $repoRoot 'app_data\public-v2-local\local-stack-env.dpapi.xml'
+$store = Read-StackEnvironment $storePath
+$storeWrittenAt = [DateTimeOffset]((Get-Item -LiteralPath $storePath).LastWriteTimeUtc)
+
+# The resolved values below come from the store, which is what a component
+# *would* see at its next start. Whether the component running right now sees
+# them is a different question, and the one that actually invalidates a series
+# stage: start-local-stack.ps1 records one pid per component here, and a
+# process that started before the store's last write is running the old
+# environment no matter what the store says.
+$statePath = Join-Path $repoRoot 'app_data\public-v2-local\local-stack.json'
+$componentProcessIds = @{}
+if (Test-Path -LiteralPath $statePath) {
+    $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+    foreach ($property in $state.PSObject.Properties) {
+        $componentProcessIds[$property.Name] = [int]$property.Value
+    }
+}
+
+function Get-ComponentRuntimeEvidence {
+    param([string]$Component)
+
+    $evidence = [ordered]@{
+        processId       = $null
+        startedAt       = $null
+        running         = $false
+        restartRequired = $true
+        reason          = 'no pid recorded in local-stack.json; cannot prove the running process sees the store'
+    }
+    if (-not $componentProcessIds.ContainsKey($Component)) { return $evidence }
+
+    $componentProcessId = $componentProcessIds[$Component]
+    $evidence.processId = $componentProcessId
+    $process = Get-Process -Id $componentProcessId -ErrorAction SilentlyContinue
+    if ($null -eq $process) {
+        $evidence.reason = "recorded pid $componentProcessId is not running; the component is down"
+        return $evidence
+    }
+
+    $startedAt = [DateTimeOffset]$process.StartTime.ToUniversalTime()
+    $evidence.running = $true
+    $evidence.startedAt = $startedAt.ToString('o')
+    if ($startedAt -lt $storeWrittenAt) {
+        $evidence.reason = "process started $($startedAt.ToString('o')) but the store was written $($storeWrittenAt.ToString('o')); restart the stack"
+        return $evidence
+    }
+    $evidence.restartRequired = $false
+    $evidence.reason = $null
+    return $evidence
+}
 
 # Printed via utils/get_env_programme.py accessors -- keep this in sync with
 # that module's public knob accessors rather than reading os.environ directly,
@@ -119,7 +178,10 @@ try {
             $locationPushed = $true
             $raw = & uv run python $probeScriptPath
             if ($LASTEXITCODE -ne 0) { throw "knob probe failed for component '$component' (exit $LASTEXITCODE)" }
-            $results[$component] = ($raw | ConvertFrom-Json)
+            $results[$component] = [pscustomobject]@{
+                resolved = ($raw | ConvertFrom-Json)
+                runtime  = [pscustomobject](Get-ComponentRuntimeEvidence -Component $component)
+            }
         }
         finally {
             if ($locationPushed) { Pop-Location }
@@ -133,7 +195,27 @@ finally {
     Remove-Item -LiteralPath $probeScriptPath -ErrorAction SilentlyContinue
 }
 
-foreach ($component in $Components) {
-    Write-Host "== $component =="
-    $results[$component] | ConvertTo-Json -Depth 4 | Write-Host
+if ($AsJson) {
+    # Not $components: PowerShell variable names are case-insensitive, so that
+    # name would silently overwrite the $Components parameter being iterated.
+    $componentReports = [ordered]@{}
+    foreach ($component in $Components) { $componentReports[$component] = $results[$component] }
+    [pscustomobject]@{
+        storePath      = $storePath
+        storeWrittenAt = $storeWrittenAt.ToString('o')
+        components     = [pscustomobject]$componentReports
+    } | ConvertTo-Json -Depth 6 | Write-Output
+}
+else {
+    foreach ($component in $Components) {
+        Write-Host "== $component =="
+        $results[$component].resolved | ConvertTo-Json -Depth 4 | Write-Host
+        $runtime = $results[$component].runtime
+        if ($runtime.restartRequired) {
+            Write-Host ("   !! restart required: {0}" -f $runtime.reason)
+        }
+        else {
+            Write-Host ("   ok: pid {0} started {1}, after the store was written" -f $runtime.processId, $runtime.startedAt)
+        }
+    }
 }

@@ -13,13 +13,27 @@ param(
 
     # The knob values this stage is supposed to be running under, per
     # RUNBOOK.md section 1's table. This script never writes them (that is a
-    # coordinator action against /api/v1/admin/provider-settings followed by
-    # a stack restart, RUNBOOK.md section 2) -- it only verifies the running
-    # stack already reports them before spending any provider quota.
+    # coordinator action against the DPAPI environment store via
+    # scripts\set-local-stack-knob.ps1 followed by a stack restart,
+    # RUNBOOK.md section 2) -- it only verifies the running stack already
+    # resolves them before spending any provider quota.
     [Parameter(Mandatory)]
     [hashtable]$StageKnobs,
 
     [string]$BaseUrl = 'http://localhost:5000',
+
+    # The precheck resolves the stage knobs the way the running code does, per
+    # component, through this script. It deliberately does NOT gate on
+    # GET /api/v1/admin/provider-settings: every knob in the stage table is
+    # registered targets: ["fastapi.runtime"], which that endpoint neither
+    # stores nor returns, so gating on it could only ever produce a false
+    # mismatch -- or, for a knob it silently drops on write, a false pass.
+    [string]$KnobVerifyScript = (Join-Path $PSScriptRoot '..\..\scripts\verify-local-stack-knobs.ps1'),
+
+    # Every component that participates in a run must resolve the stage knobs,
+    # not just the API: generation runs in worker-generation and export in
+    # worker-export, each its own OS process with its own environment.
+    [string[]]$KnobComponents = @('api', 'worker-generation', 'worker-export'),
 
     # Reuse the existing single-generation harness and audit script as-is.
     [string]$RunScript = (Join-Path $PSScriptRoot '..\authored-full-product-validation-20260910\run.ps1'),
@@ -62,45 +76,99 @@ function ConvertTo-ComparableString($Value) {
 
 if (-not (Test-Path -LiteralPath $RunScript -PathType Leaf)) { throw "RunScript not found: $RunScript" }
 if (-not (Test-Path -LiteralPath $AuditScript -PathType Leaf)) { throw "AuditScript not found: $AuditScript" }
+if (-not (Test-Path -LiteralPath $KnobVerifyScript -PathType Leaf)) { throw "KnobVerifyScript not found: $KnobVerifyScript" }
 
 $stageDir = Join-Path (Resolve-Path -LiteralPath $SeriesRoot).Path $Stage
 New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
 
-Write-Output "PRECHECK verifying live provider-settings match -StageKnobs before spending any quota"
-$observed = Invoke-RestMethod -Method Get -Uri "$BaseUrl/api/v1/admin/provider-settings"
+Write-Output "PRECHECK resolving the stage knobs per component, the way the running code resolves them"
+$knobReportJson = & $KnobVerifyScript -AsJson -Components $KnobComponents
+if ($LASTEXITCODE -ne 0) { throw "knob verification failed (exit $LASTEXITCODE): $KnobVerifyScript" }
+$knobReport = (($knobReportJson | Out-String) | ConvertFrom-Json)
+
 $mismatches = [System.Collections.Generic.List[object]]::new()
-foreach ($key in $StageKnobs.Keys) {
-    $expected = ConvertTo-ComparableString $StageKnobs[$key]
-    $actual = ConvertTo-ComparableString (Get-JsonProperty $observed $key)
-    if ($actual -ne $expected) {
-        $mismatches.Add([pscustomobject]@{ key = $key; expected = $expected; actual = $actual })
+foreach ($component in $KnobComponents) {
+    $entry = Get-JsonProperty $knobReport.components $component
+    if ($null -eq $entry) {
+        $mismatches.Add([pscustomobject]@{
+            component = $component
+            key = '(component)'
+            expected = 'probed'
+            actual = 'missing from the knob report'
+        })
+        continue
+    }
+
+    # A knob written to the store but not picked up by a process that started
+    # before that write is exactly the failure the old GET-based precheck
+    # could not see. Treat it as a mismatch, not a warning.
+    if ($entry.runtime.restartRequired) {
+        $mismatches.Add([pscustomobject]@{
+            component = $component
+            key = '(process)'
+            expected = 'started after the store was written'
+            actual = $entry.runtime.reason
+        })
+    }
+
+    foreach ($key in $StageKnobs.Keys) {
+        $expected = ConvertTo-ComparableString $StageKnobs[$key]
+        $property = $entry.resolved.PSObject.Properties[$key]
+        if ($null -eq $property) {
+            # An unknown knob must fail loudly: silently "matching" a key the
+            # probe does not resolve is how a stage runs under the wrong
+            # configuration and still records a clean manifest.
+            $mismatches.Add([pscustomobject]@{
+                component = $component
+                key = $key
+                expected = $expected
+                actual = 'not resolved by verify-local-stack-knobs.ps1; add an accessor for it there'
+            })
+            continue
+        }
+        $actual = ConvertTo-ComparableString $property.Value
+        if ($actual -ne $expected) {
+            $mismatches.Add([pscustomobject]@{
+                component = $component
+                key = $key
+                expected = $expected
+                actual = $actual
+            })
+        }
     }
 }
+
+# Provider and model identity is still worth recording for the stage, but it
+# is provenance, never the gate: none of the stage knobs live there.
+$observed = $null
+try { $observed = Invoke-RestMethod -Method Get -Uri "$BaseUrl/api/v1/admin/provider-settings" }
+catch { $observed = [pscustomobject]@{ error = $_.Exception.Message } }
+
 $manifestPath = Join-Path $stageDir '00-stage-manifest.json'
 $startedAt = [DateTimeOffset]::UtcNow
-if ($mismatches.Count -gt 0) {
-    [pscustomobject]@{
-        stage = $Stage
-        runCount = $RunCount
-        stageKnobsRequested = $StageKnobs
-        observedProviderSettings = $observed
-        startedAt = $startedAt
-        stoppedBeforeFirstRun = $true
-        stopReason = 'provider-settings mismatch: the coordinator has not written and restarted for this stage yet'
-        mismatches = $mismatches
-    } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding utf8
-    Write-Error "STOP: live provider-settings do not match -StageKnobs for stage '$Stage'. See $manifestPath. No run was started."
-    exit 1
-}
-
-[pscustomobject]@{
+$manifest = [pscustomobject]@{
     stage = $Stage
     runCount = $RunCount
     stageKnobsRequested = $StageKnobs
+    knobComponents = $KnobComponents
+    resolvedStageKnobs = $knobReport
     observedProviderSettings = $observed
     startedAt = $startedAt
-    stoppedBeforeFirstRun = $false
-} | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+    stoppedBeforeFirstRun = ($mismatches.Count -gt 0)
+}
+if ($mismatches.Count -gt 0) {
+    $manifest | Add-Member -NotePropertyName stopReason -NotePropertyValue 'resolved stage knobs do not match -StageKnobs: the coordinator has not written and restarted for this stage yet' -Force
+    $manifest | Add-Member -NotePropertyName mismatches -NotePropertyValue $mismatches -Force
+    $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+    foreach ($mismatch in $mismatches) {
+        Write-Warning ("  {0} / {1}: expected '{2}', resolved '{3}'" -f $mismatch.component, $mismatch.key, $mismatch.expected, $mismatch.actual)
+    }
+    Write-Error "STOP: resolved stage knobs do not match -StageKnobs for stage '$Stage'. See $manifestPath. No run was started."
+    exit 1
+}
+
+$manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+Write-Output ("PRECHECK ok: {0} knob(s) match on {1} component(s)" -f $StageKnobs.Count, $KnobComponents.Count)
 
 $summaries = [System.Collections.Generic.List[object]]::new()
 $stopReason = $null

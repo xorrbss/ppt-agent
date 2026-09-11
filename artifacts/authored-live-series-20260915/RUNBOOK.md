@@ -146,22 +146,31 @@ pwsh artifacts/authored-live-series-20260915/series.ps1 `
 ```
 
 `-StageKnobs` is recorded into the stage manifest for provenance; `series.ps1` never sets the knobs
-itself (see section 2 — that is now a coordinator action against the DPAPI environment store via
+itself (see section 2 — that is a coordinator action against the DPAPI environment store via
 `scripts/set-local-stack-knob.ps1`, done *before* invoking `series.ps1`, followed by a stack restart).
-`series.ps1` only asserts that what it can observe (`GET /api/v1/admin/provider-settings`, redacted)
-matches `-StageKnobs` before starting run 1, and stops immediately (no provider call) if it does not —
-this catches "forgot to restart the stack" or "forgot to write the knob" before spending quota.
+Before starting run 1, `series.ps1` resolves every `-StageKnobs` key **through the same accessors the
+running code uses**, once per component (`api`, `worker-generation`, `worker-export`), by calling
+`scripts/verify-local-stack-knobs.ps1 -AsJson`. It stops immediately, with no provider call, on any of:
 
-> **Known gap, not fixed by this pass:** section 2 no longer writes these five keys through
-> `PUT /api/v1/admin/provider-settings` (that endpoint silently drops `fastapi.runtime`-only keys — see
-> section 2), so `series.ps1`'s own `GET`-based precheck above will not observe them either: it can only
-> corroborate whatever subset of `-StageKnobs` *is* DB-backed (none, for this series' four knobs), not
-> the actual env-sourced values. Until `series.ps1` is updated to call
-> `scripts/verify-local-stack-knobs.ps1` (or equivalent) for its precheck, the coordinator must treat
-> step 3 of section 2 — running `verify-local-stack-knobs.ps1` after the restart — as the real
-> precondition check, done by hand before invoking `series.ps1`, not something `series.ps1` itself still
-> guarantees. This is a script change outside this runbook's own scope; flag it to whoever owns
-> `series.ps1` rather than silently relying on its current (now partly meaningless) precheck.
+- a resolved value that differs from `-StageKnobs` on any component;
+- a `-StageKnobs` key that `verify-local-stack-knobs.ps1` does not resolve at all (an unknown knob must
+  fail loudly — silently "matching" a key nothing resolves is how a stage runs misconfigured and still
+  records a clean manifest). The fix is to add an accessor for it to that script's probe;
+- a component whose recorded process in `app_data/public-v2-local/local-stack.json` started **before**
+  the environment store's last write, or is not running at all. This is the "wrote the knob, forgot to
+  restart" case, and resolved values alone cannot show it, because they are read from the store rather
+  than from the already-running process.
+
+The whole report, including each component's pid and start time, is written into the stage manifest as
+`resolvedStageKnobs`, so a stage's configuration provenance is a recorded fact rather than a claim.
+
+> **Why not `GET /api/v1/admin/provider-settings`:** the precheck used to gate on that endpoint, and it
+> could never have worked. Every knob in the stage table is registered `targets: ["fastapi.runtime"]`,
+> which that endpoint neither stores nor returns (see section 2), so the gate could only ever produce a
+> false mismatch — or, for a knob silently dropped on write, a false pass. The endpoint is still called,
+> but only to record provider and model identity (`LLM`, `CODEX_MODEL`, `IMAGE_PROVIDER`) into the
+> manifest as provenance, and a failure to reach it is recorded rather than fatal. Treat
+> `observedProviderSettings` in the manifest as provider identity, never as knob state.
 
 ## 4. What to check between stages
 
