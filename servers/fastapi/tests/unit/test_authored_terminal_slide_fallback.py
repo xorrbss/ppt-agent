@@ -30,6 +30,10 @@ from services import authored_presentation_service as authored_service
 from services import authored_repair_round_order as order_mod
 from services import authored_terminal_slide_fallback as terminal_mod
 from services import authored_terminal_slide_policy as policy_mod
+from services.authored_flag_classification import (
+    REPAIR_NOT_ADMITTED,
+    REVIEW_REQUIRED,
+)
 from services.authored_vnext.generation.scene_checkpoint import (
     SceneRepairBudgetExhausted,
 )
@@ -64,18 +68,26 @@ _REMADE_HTML = (
 )
 
 
+
 def _run(coro):
     return asyncio.run(coro)
 
 
 def _pop_slide_ids(entries):
-    """Strip each entry's ``slideId`` after checking it looks right.
+    """Strip the two fields these tests do not fix, after checking both.
 
-    Publication now backfills every flagged-slide entry with the id of the
-    slide it was generated for (see ``authored_presentation_publication``).
-    Its value is a fresh ``uuid4`` the test cannot predict, so assert only
-    that it is present and well-formed, then compare the rest of the entry
-    against the fixed expectations the tests already had.
+    Publication backfills every flagged-slide entry with the id of the slide it
+    was generated for (see ``authored_presentation_publication``). Its value is
+    a fresh ``uuid4`` the test cannot predict, so assert only that it is present
+    and well-formed, then compare the rest of the entry against the fixed
+    expectations the tests already had.
+
+    ``classification`` is likewise orthogonal to what these cases verify -- they
+    pin which slides are flagged and why, not whether a flag asks for a reviewer.
+    Assert it is one of the two values and strip it;
+    ``tests/unit/test_authored_flag_classification.py`` fixes the rule itself, and
+    ``test_the_published_receipt_classifies_every_flag`` below pins that the
+    published receipt carries it at all.
     """
 
     result = []
@@ -84,6 +96,8 @@ def _pop_slide_ids(entries):
         slide_id = entry.pop("slideId", None)
         assert isinstance(slide_id, str) and slide_id, entry
         uuid.UUID(slide_id)
+        classification = entry.pop("classification", None)
+        assert classification in {REVIEW_REQUIRED, REPAIR_NOT_ADMITTED}, entry
         result.append(entry)
     return result
 
@@ -1108,6 +1122,17 @@ def test_source_reflow_unresolved_repair_is_predeclared_and_published_flagged(
             "remakeOutcome": "verbatim_flag_only",
         }
     ]
+    # The flag also says which of the two things it is. The final gate measured
+    # this slide (``final_gate_flags == [[1]]``), so it is a review requirement
+    # and the reviewer-facing list carries it.
+    # ``tests/unit/test_authored_flag_classification.py`` fixes the rule, including
+    # the other direction where a flag with nothing measured is kept out of that
+    # list; this pins that the pipeline applies the rule to what it publishes.
+    gate = presentation.theme["authoredQualityGate"]
+    assert [entry["classification"] for entry in gate["flaggedSlides"]] == [
+        REVIEW_REQUIRED
+    ]
+    assert [page["index"] for page in gate["reviewPages"]] == [1]
 
 
 def test_source_reflow_unresolved_repair_still_fails_with_fallback_disabled(

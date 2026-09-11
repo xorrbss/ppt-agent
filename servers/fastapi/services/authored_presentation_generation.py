@@ -89,6 +89,9 @@ from services.authored_local_fit_policy import (
     local_fit_policy,
     slide_budget,
 )
+from services.authored_flag_classification import (
+    classify_flagged_slides, flag_pages, review_pages_for,
+)
 from services.authored_local_fit_deadline import (
     remaining_authored_local_fit_seconds,
 )
@@ -2724,23 +2727,7 @@ async def _generate_authored_presentation(
                     retryable=False,
                 )
 
-    review_pages = [
-        {
-            "index": int(entry["index"]),
-            "reasons": list(
-                dict.fromkeys(
-                    str(reason)
-                    for reason in (
-                        entry.get("reasons")
-                        or ([entry.get("reason")] if entry.get("reason") else [])
-                    )
-                    if reason
-                )
-            )[:8],
-        }
-        for entry in flagged_slides
-        if isinstance(entry.get("index"), int)
-    ]
+    review_pages = flag_pages(flagged_slides)
     review_indices = {int(item["index"]) for item in review_pages}
     auto_repaired_indices = {
         *map(int, repaired_gate_indices),
@@ -2933,6 +2920,14 @@ async def _generate_authored_presentation(
                 message=error.detail,
             ) from error
 
+    # Final here: the readback merged its visibility sub-reasons and the gate's
+    # residuals are partitioned, so a flag can be told from a review requirement.
+    flagged_slides = classify_flagged_slides(
+        flagged_slides, residual_failures=flagged_residual_failures
+    )
+    object.__setattr__(request, "_authored_flagged_slides", flagged_slides)
+    reviewable_pages = review_pages_for(flagged_slides)
+
     quality_gate_receipt = build_authored_quality_gate_receipt(
         htmls=htmls,
         profile_id=composition_profile.profile_id,
@@ -2954,7 +2949,7 @@ async def _generate_authored_presentation(
         documentCompleted=False,
         qualityPass=not review_pages and not residual_gate_failures,
         pageSummary=page_summary,
-        reviewPages=review_pages,
+        reviewPages=reviewable_pages,
     )
     if source_readback_receipt is not None:
         quality_gate_receipt["sourceReadback"] = source_readback_payload
@@ -3118,7 +3113,7 @@ async def _generate_authored_presentation(
             "documentStatus": "pending",
             "documentCompleted": False,
             "pageSummary": page_summary,
-            "reviewPages": review_pages,
+            "reviewPages": reviewable_pages,
             "residualIssues": quality_residuals,
             "residualIssueCount": len(quality_residuals),
             "requestedQualityProfile": quality_profile_id,
