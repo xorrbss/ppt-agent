@@ -1094,6 +1094,33 @@
       "description": "Stuck-job ceiling on the whole public generation deadline; unset takes the default (14400), set above the formula for the largest admitted deck."
     },
     {
+      "key": "PUBLIC_EXPORT_DEADLINE_PER_SLIDE_SECONDS",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.export_deadline",
+      "description": "Per-slide seconds of public export deadline for the isolated export worker; unset takes the measured default (26)."
+    },
+    {
+      "key": "PUBLIC_EXPORT_DEADLINE_BASE_SECONDS",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.export_deadline",
+      "description": "Fixed seconds of public export deadline for bundle build, worker launch, verification and publication; unset takes the default (120)."
+    },
+    {
+      "key": "PUBLIC_EXPORT_DEADLINE_MIN_SECONDS",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.export_deadline",
+      "description": "Floor of the public export deadline for small or unknown-size decks; unset takes the historical flat budget (600). The 1800 ceiling mirrors the executor export budget and is not a knob."
+    },
+    {
       "key": "CONTENT_BRIEF_OPERATION_DEADLINE_SHARE",
       "type": "number",
       "default": null,

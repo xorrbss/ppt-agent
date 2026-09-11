@@ -9,9 +9,11 @@ outlived its own admission and was failed at completion.
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 from pathlib import Path
 import uuid
 
+import pytest
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
@@ -26,11 +28,31 @@ from models.sql.public_admission import (
 )
 from models.sql.user import User
 from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
+import migration_revision_contract as revision_contract
+from services.public_export_deadline_policy import (
+    PUBLIC_EXPORT_DEADLINE_MAX_SECONDS,
+    PUBLIC_EXPORT_DEADLINE_MIN_SECONDS,
+    public_export_deadline_seconds,
+)
 from services.public_operation_admission import (
     PUBLIC_DEFAULT_POLICY_VERSION,
     PrincipalContext,
     admit_public_operation,
 )
+from services.trusted_executor.worker_dispatcher import _ROLE_RESOURCE_BUDGETS
+
+
+VERSIONS_DIRECTORY = Path(__file__).resolve().parents[2] / "alembic" / "versions"
+V4_REVISION = "a2c4e6f8b1d3"
+V5_REVISION = "b4e6f8a0c2d5"
+
+
+def _revision_module(revision: str):
+    path = next(VERSIONS_DIRECTORY.glob(f"{revision}_*.py"))
+    spec = importlib.util.spec_from_file_location(f"_revision_{revision}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 TABLES = [
@@ -181,6 +203,100 @@ def test_export_admission_persists_the_planned_slide_count(tmp_path: Path) -> No
             assert admitted.planned_request_limit == 0
             # An unknown deck size is stored as zero, never rejected.
             assert defaulted.slide_count == 0
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+# --- Slide-count scaled export budget -----------------------------------
+
+_EXPORT_KNOBS = (
+    "PUBLIC_EXPORT_DEADLINE_PER_SLIDE_SECONDS",
+    "PUBLIC_EXPORT_DEADLINE_BASE_SECONDS",
+    "PUBLIC_EXPORT_DEADLINE_MIN_SECONDS",
+)
+
+# The measured wall of the 35-slide editable-hybrid export (W22 report).
+MEASURED_35_SLIDE_HYBRID_SECONDS = 894
+
+
+@pytest.fixture(autouse=True)
+def _shipped_export_terms(monkeypatch):
+    for knob in _EXPORT_KNOBS:
+        monkeypatch.delenv(knob, raising=False)
+
+
+def test_thirty_five_slide_export_budget_covers_the_measured_wall() -> None:
+    """THE defect: 894 s of hybrid export against a 600 s flat budget."""
+
+    granted = public_export_deadline_seconds(35)
+    assert granted > MEASURED_35_SLIDE_HYBRID_SECONDS
+    assert granted == 120 + 26 * 35 == 1030
+    assert public_export_deadline_seconds(5) < granted
+    assert public_export_deadline_seconds(10) < granted
+
+
+def test_small_and_unknown_decks_keep_the_historical_floor() -> None:
+    assert public_export_deadline_seconds(0) == PUBLIC_EXPORT_DEADLINE_MIN_SECONDS
+    assert public_export_deadline_seconds(5) == PUBLIC_EXPORT_DEADLINE_MIN_SECONDS
+    assert public_export_deadline_seconds(10) == PUBLIC_EXPORT_DEADLINE_MIN_SECONDS
+    assert PUBLIC_EXPORT_DEADLINE_MIN_SECONDS == 600
+
+
+@pytest.mark.parametrize("slide_count", [0, 1, 35, 64, 65, 100, 250])
+def test_no_export_budget_exceeds_the_ceiling(slide_count: int) -> None:
+    granted = public_export_deadline_seconds(slide_count)
+    assert 1 <= granted <= PUBLIC_EXPORT_DEADLINE_MAX_SECONDS
+    assert granted == min(PUBLIC_EXPORT_DEADLINE_MAX_SECONDS, max(600, 120 + 26 * slide_count))
+
+
+def test_the_ceiling_mirrors_the_executor_cap_and_the_v5_row() -> None:
+    """The migration literal and the executor budget are hand-copied mirrors."""
+
+    v5 = _revision_module(V5_REVISION)
+    assert v5._EXPORT_DEADLINE_CEILING_SECONDS == PUBLIC_EXPORT_DEADLINE_MAX_SECONDS
+    assert v5.down_revision == V4_REVISION
+    assert revision_contract.HEAD_REVISION == V5_REVISION
+    assert revision_contract.REVISION_PUBLIC_EXPORT_DEADLINE_CEILING_V5 == V5_REVISION
+    assert PUBLIC_EXPORT_DEADLINE_MAX_SECONDS <= _ROLE_RESOURCE_BUDGETS["export"][2]
+
+
+def test_runtime_terms_are_overridable_but_never_lift_the_ceiling(monkeypatch) -> None:
+    monkeypatch.setenv("PUBLIC_EXPORT_DEADLINE_PER_SLIDE_SECONDS", "40")
+    monkeypatch.setenv("PUBLIC_EXPORT_DEADLINE_BASE_SECONDS", "200")
+    assert public_export_deadline_seconds(35) == 200 + 40 * 35
+    assert public_export_deadline_seconds(100) == PUBLIC_EXPORT_DEADLINE_MAX_SECONDS
+    monkeypatch.setenv("PUBLIC_EXPORT_DEADLINE_MIN_SECONDS", "900")
+    assert public_export_deadline_seconds(0) == 900
+    monkeypatch.delenv("PUBLIC_EXPORT_DEADLINE_MIN_SECONDS")
+    assert public_export_deadline_seconds(0) == PUBLIC_EXPORT_DEADLINE_MIN_SECONDS
+    with pytest.raises(ValueError):
+        public_export_deadline_seconds(-1)
+
+
+def test_admission_pins_the_scaled_budget_under_the_row_ceiling(tmp_path: Path) -> None:
+    """v5 (ceiling 1800) lets the formula decide; a legacy 600 row still caps."""
+
+    async def scenario() -> None:
+        engine, maker = await database(tmp_path / "export-scaled.db")
+        try:
+            thirty_five, five, hundred = await admit_export(
+                maker, export_deadline_seconds=1800, slide_counts=(35, 5, 100)
+            )
+            assert granted_seconds(thirty_five) == 1030
+            assert granted_seconds(five) == 600
+            assert granted_seconds(hundred) == PUBLIC_EXPORT_DEADLINE_MAX_SECONDS
+        finally:
+            await engine.dispose()
+
+        engine, maker = await database(tmp_path / "export-legacy.db")
+        try:
+            (legacy,) = await admit_export(
+                maker, export_deadline_seconds=600, slide_counts=(35,)
+            )
+            assert legacy.slide_count == 35
+            assert granted_seconds(legacy) == 600
         finally:
             await engine.dispose()
 
