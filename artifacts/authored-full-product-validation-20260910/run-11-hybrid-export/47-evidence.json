@@ -1,0 +1,270 @@
+{
+  "schema": "run-11-authored-hybrid-export-w22-evidence/v1",
+  "request": {
+    "presentationId": "bc843f70-a28e-45f6-a87f-8a4b6c017928",
+    "operationId": "0bd9ff3a-6fcf-41d5-b314-33dc1736a12b",
+    "idempotencyKey": "run11-hybrid-export-w22-20260911145745",
+    "fontEmbedding": true,
+    "pptxMode": "hybrid"
+  },
+  "operation": {
+    "status": "succeeded",
+    "requestedExportMode": "editable-hybrid",
+    "deliveredExportMode": "editable-hybrid",
+    "hybridDegradedReason": null,
+    "operationWallMillis": 925391,
+    "exportWorkerMillis": 896192,
+    "configuredDeckBudgetMillis": 1496707,
+    "workerDispatchMillisUsed": 893786.557,
+    "firstDispatchMillis": 893786.557,
+    "workerExecutionCount": 1,
+    "qualityStatus": "partially-editable",
+    "slideFallbacks": []
+  },
+  "artifact": {
+    "artifactId": "ff31b9a2-c33d-4b92-a6d5-dafb421053e9",
+    "bytes": 7807484,
+    "sha256": "f11eb80e3b1a436669bee356289b6c159c9f7fc38577d0d665dae63bea7beeab",
+    "receiptSha256": "f11eb80e3b1a436669bee356289b6c159c9f7fc38577d0d665dae63bea7beeab",
+    "digestMatches": true,
+    "path": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\authored-full-product-validation-20260910\\run-11-hybrid-export\\48-hybrid-export.pptx"
+  },
+  "inspection": {
+    "slideCount": 35,
+    "nativeLayerSlides": 35,
+    "totalPSp": 1384,
+    "totalPPic": 233,
+    "totalATRuns": 872,
+    "sourceTextStringCount": 289,
+    "sourceTextStringsMatchedVerbatimInATRuns": 137,
+    "matchMethod": "Each sourceReadback renderedText value counted when it exactly equaled at least one complete a:t node; duplicate source occurrences counted independently.",
+    "targetTextBreak": {
+      "elementId": "q-phone-step-1",
+      "shapeName": "DevAX hybrid raster q-phone-step-1",
+      "aTValues": [
+        "짧게 소개",
+        "→"
+      ],
+      "aBrCount": 0,
+      "aPCount": 1
+    },
+    "slides": [
+      {
+        "slideNumber": 1,
+        "pSp": 18,
+        "pPic": 5,
+        "aTRuns": 18
+      },
+      {
+        "slideNumber": 2,
+        "pSp": 36,
+        "pPic": 3,
+        "aTRuns": 28
+      },
+      {
+        "slideNumber": 3,
+        "pSp": 35,
+        "pPic": 12,
+        "aTRuns": 18
+      },
+      {
+        "slideNumber": 4,
+        "pSp": 38,
+        "pPic": 9,
+        "aTRuns": 29
+      },
+      {
+        "slideNumber": 5,
+        "pSp": 40,
+        "pPic": 8,
+        "aTRuns": 22
+      },
+      {
+        "slideNumber": 6,
+        "pSp": 40,
+        "pPic": 8,
+        "aTRuns": 24
+      },
+      {
+        "slideNumber": 7,
+        "pSp": 32,
+        "pPic": 3,
+        "aTRuns": 20
+      },
+      {
+        "slideNumber": 8,
+        "pSp": 41,
+        "pPic": 6,
+        "aTRuns": 25
+      },
+      {
+        "slideNumber": 9,
+        "pSp": 42,
+        "pPic": 4,
+        "aTRuns": 29
+      },
+      {
+        "slideNumber": 10,
+        "pSp": 32,
+        "pPic": 7,
+        "aTRuns": 19
+      },
+      {
+        "slideNumber": 11,
+        "pSp": 26,
+        "pPic": 7,
+        "aTRuns": 20
+      },
+      {
+        "slideNumber": 12,
+        "pSp": 43,
+        "pPic": 3,
+        "aTRuns": 29
+      },
+      {
+        "slideNumber": 13,
+        "pSp": 38,
+        "pPic": 4,
+        "aTRuns": 24
+      },
+      {
+        "slideNumber": 14,
+        "pSp": 40,
+        "pPic": 11,
+        "aTRuns": 22
+      },
+      {
+        "slideNumber": 15,
+        "pSp": 39,
+        "pPic": 3,
+        "aTRuns": 20
+      },
+      {
+        "slideNumber": 16,
+        "pSp": 37,
+        "pPic": 3,
+        "aTRuns": 24
+      },
+      {
+        "slideNumber": 17,
+        "pSp": 39,
+        "pPic": 9,
+        "aTRuns": 24
+      },
+      {
+        "slideNumber": 18,
+        "pSp": 36,
+        "pPic": 6,
+        "aTRuns": 20
+      },
+      {
+        "slideNumber": 19,
+        "pSp": 51,
+        "pPic": 12,
+        "aTRuns": 32
+      },
+      {
+        "slideNumber": 20,
+        "pSp": 63,
+        "pPic": 3,
+        "aTRuns": 54
+      },
+      {
+        "slideNumber": 21,
+        "pSp": 35,
+        "pPic": 7,
+        "aTRuns": 21
+      },
+      {
+        "slideNumber": 22,
+        "pSp": 35,
+        "pPic": 11,
+        "aTRuns": 13
+      },
+      {
+        "slideNumber": 23,
+        "pSp": 24,
+        "pPic": 7,
+        "aTRuns": 22
+      },
+      {
+        "slideNumber": 24,
+        "pSp": 53,
+        "pPic": 7,
+        "aTRuns": 26
+      },
+      {
+        "slideNumber": 25,
+        "pSp": 38,
+        "pPic": 4,
+        "aTRuns": 23
+      },
+      {
+        "slideNumber": 26,
+        "pSp": 52,
+        "pPic": 8,
+        "aTRuns": 30
+      },
+      {
+        "slideNumber": 27,
+        "pSp": 62,
+        "pPic": 3,
+        "aTRuns": 46
+      },
+      {
+        "slideNumber": 28,
+        "pSp": 36,
+        "pPic": 3,
+        "aTRuns": 27
+      },
+      {
+        "slideNumber": 29,
+        "pSp": 34,
+        "pPic": 8,
+        "aTRuns": 22
+      },
+      {
+        "slideNumber": 30,
+        "pSp": 59,
+        "pPic": 16,
+        "aTRuns": 30
+      },
+      {
+        "slideNumber": 31,
+        "pSp": 46,
+        "pPic": 11,
+        "aTRuns": 26
+      },
+      {
+        "slideNumber": 32,
+        "pSp": 30,
+        "pPic": 5,
+        "aTRuns": 16
+      },
+      {
+        "slideNumber": 33,
+        "pSp": 37,
+        "pPic": 1,
+        "aTRuns": 17
+      },
+      {
+        "slideNumber": 34,
+        "pSp": 48,
+        "pPic": 11,
+        "aTRuns": 31
+      },
+      {
+        "slideNumber": 35,
+        "pSp": 29,
+        "pPic": 5,
+        "aTRuns": 21
+      }
+    ]
+  },
+  "acceptance": {
+    "insideGrant": true,
+    "deliveredEditableHybrid": true,
+    "native35Of35": true,
+    "slideFallbacksEmpty": true
+  }
+}
