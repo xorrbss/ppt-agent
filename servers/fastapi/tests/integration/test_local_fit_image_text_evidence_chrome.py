@@ -136,3 +136,55 @@ def test_an_icon_the_pack_never_recorded_fails_closed(tmp_path: Path, monkeypatc
 
     assert "font_unverifiable" in report["unresolved_reasons"]
     assert "image_text_evidence" not in _element(capture, _ICON_QID)
+
+
+def _illustration_index(tmp_path: Path, src: str, *, labels_requested: bool, method: str) -> None:
+    """A durable illustration review as `review_illustration` would have written it."""
+    import json
+
+    from services.authored_local_fit_image_text import src_digest
+
+    root = tmp_path / "authored-illustration-reviews"
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "index.json").write_text(json.dumps({
+        "schema_version": 1, "updated_at": time.time(),
+        "reviews": {src_digest(src): {
+            "labels_requested": labels_requested,
+            "text": {"passed": True, "method": method, "detail": "test"},
+            "provider": "test", "prompt_digest": "sha256:test", "mime": "image/png",
+            "created_at": time.time(), "schema_version": 1,
+        }},
+    }), encoding="utf-8")
+
+
+def _point_reviews_at(monkeypatch, tmp_path: Path) -> None:
+    import services.authored_illustration_reviews as reviews_mod
+
+    monkeypatch.setattr(reviews_mod, "illustration_review_root",
+                        lambda app_data=None: tmp_path / "authored-illustration-reviews")
+    monkeypatch.setattr(producer_mod, "icon_pack_root",
+                        lambda app_data=None: tmp_path / "authored-icon-packs")
+
+
+def test_a_reviewed_no_label_illustration_lets_the_fit_run(tmp_path: Path, monkeypatch) -> None:
+    _point_reviews_at(monkeypatch, tmp_path)
+    src = "data:image/png;base64," + base64.b64encode(_icon_png((20, 160, 90, 255))).decode("ascii")
+    _illustration_index(tmp_path, src, labels_requested=False, method="ocr")
+
+    capture = _fit(_slide(src))
+    report = capture.fit_report
+
+    assert "font_unverifiable" not in report["unresolved_reasons"]
+    assert report["image_text"][0]["scope"] == "verified_no_text"
+    assert _element(capture, _ICON_QID)["image_text_evidence"]["status"] == "no_text"
+
+
+def test_an_illustration_that_asked_for_labels_fails_closed(tmp_path: Path, monkeypatch) -> None:
+    _point_reviews_at(monkeypatch, tmp_path)
+    src = "data:image/png;base64," + base64.b64encode(_icon_png((20, 160, 90, 255))).decode("ascii")
+    _illustration_index(tmp_path, src, labels_requested=True, method="ocr")
+
+    capture = _fit(_slide(src))
+
+    assert "font_unverifiable" in capture.fit_report["unresolved_reasons"]
+    assert "image_text_evidence" not in _element(capture, _ICON_QID)

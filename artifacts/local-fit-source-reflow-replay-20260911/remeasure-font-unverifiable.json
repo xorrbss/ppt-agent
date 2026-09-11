@@ -8803,5 +8803,14 @@
    "evidence_records": 0,
    "verdict": "no_edit"
   }
- ]
+ ],
+ "rerun_with_illustration_producer": {
+  "generated": "2026-09-12",
+  "still_font_unverifiable": 414,
+  "search_now_runs": 0,
+  "image_text_verdicts": {
+   "unverifiable": 721
+  },
+  "why": "no stored deck was generated under the illustration review store, so no illustration carries a review entry"
+ }
 }

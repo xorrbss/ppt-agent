@@ -10,6 +10,11 @@ elements whose ``src`` is that icon's inlined data URI. Scene cutouts,
 generated illustrations and uploaded source pictures are not in the index
 and therefore never receive a record; a heuristic-only text check is not a
 verification and receives none either, so the fail-closed rule stands.
+
+The illustration review index (``authored-illustration-reviews/index.json``)
+is the second such record: a generated illustration whose OCR text check
+passed *and* that was requested without labels. Records restated from it
+carry ``provenance == "illustration"``.
 """
 
 from __future__ import annotations
@@ -23,10 +28,13 @@ from typing import Any, Mapping, Optional
 
 from services.authored_icon_pack.inline import icon_data_uri
 from services.authored_icon_pack.store import IconEntry, icon_pack_root
+from utils.get_env import get_app_data_directory_env
 
 LOGGER = logging.getLogger(__name__)
 
 PROVENANCE = "icon_pack"
+ILLUSTRATION_PROVENANCE = "illustration"
+_ILLUSTRATION_ROOT_NAME = "authored-illustration-reviews"
 _VERIFIED_METHOD = "ocr"
 _DATA_PREFIX = "data:"
 _INDEX_NAME = "index.json"
@@ -109,6 +117,67 @@ def verified_icon_reviews(app_data: Optional[str] = None) -> dict[str, str]:
     return reviews
 
 
+# -- illustration review index ----------------------------------------------
+
+
+def _illustration_root(app_data: Optional[str]) -> Optional[Path]:
+    """Root of the illustration review store; ``None`` when unconfigured."""
+    try:
+        from services.authored_illustration_reviews import illustration_review_root
+    except ImportError:
+        base = app_data or get_app_data_directory_env()
+        return Path(base) / _ILLUSTRATION_ROOT_NAME if base else None
+    try:
+        return illustration_review_root(app_data)
+    except RuntimeError:
+        return None
+
+
+def _load_illustration_index(root: Path) -> dict[str, Any]:
+    """``reviews`` mapping of ``index.json``; anything unreadable is empty."""
+    try:
+        raw = json.loads((root / _INDEX_NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(raw, Mapping):
+        return {}
+    reviews = raw.get("reviews")
+    return dict(reviews) if isinstance(reviews, Mapping) else {}
+
+
+def _verified_illustration(entry: Any) -> Optional[str]:
+    """The entry's prompt digest when it is an OCR-verified, label-free picture."""
+    if not isinstance(entry, Mapping) or entry.get("labels_requested") is not False:
+        return None
+    text = entry.get("text")
+    if not isinstance(text, Mapping):
+        return None
+    if text.get("passed") is not True or text.get("method") != _VERIFIED_METHOD:
+        return None
+    prompt_digest = entry.get("prompt_digest")
+    return prompt_digest if isinstance(prompt_digest, str) and prompt_digest else None
+
+
+def verified_illustration_reviews(app_data: Optional[str] = None) -> dict[str, str]:
+    """Map ``src`` digest -> review digest for every OCR-verified illustration.
+
+    Only entries generated without labels and whose text check passed by OCR
+    qualify. A missing root, an unreadable index or a malformed entry
+    contributes nothing; nothing raises.
+    """
+    root = _illustration_root(app_data)
+    if root is None:
+        return {}
+    reviews: dict[str, str] = {}
+    for key, entry in _load_illustration_index(root).items():
+        prompt_digest = _verified_illustration(entry)
+        if prompt_digest is None:
+            continue
+        digest = str(key)
+        reviews[digest] = f"illustration:{digest}:{prompt_digest}"
+    return reviews
+
+
 # -- slide markup ------------------------------------------------------------
 
 
@@ -178,29 +247,36 @@ def image_text_evidence(html: str, *, app_data: Optional[str] = None) -> list[di
     candidates = [(qid, src) for qid, src in images if src.startswith(_DATA_PREFIX)]
     if not candidates:
         return []
-    reviews = verified_icon_reviews(app_data)
-    if not reviews:
+    sources: list[tuple[dict[str, str], str]] = [
+        (verified_icon_reviews(app_data), PROVENANCE),
+        (verified_illustration_reviews(app_data), ILLUSTRATION_PROVENANCE),
+    ]
+    if not any(reviews for reviews, _provenance in sources):
         return []
     records: list[dict[str, Any]] = []
     for qid, src in candidates:
         asset_digest = src_digest(src)
-        review = reviews.get(asset_digest)
-        if review is None:
-            continue
-        records.append({
-            "qid": qid,
-            "asset_digest": asset_digest,
-            "text_free": True,
-            "review_digest": review,
-            "provenance": PROVENANCE,
-        })
+        for reviews, provenance in sources:
+            review = reviews.get(asset_digest)
+            if review is None:
+                continue
+            records.append({
+                "qid": qid,
+                "asset_digest": asset_digest,
+                "text_free": True,
+                "review_digest": review,
+                "provenance": provenance,
+            })
+            break
     return records
 
 
 __all__ = [
+    "ILLUSTRATION_PROVENANCE",
     "PROVENANCE",
     "image_text_evidence",
     "images_with_qid",
     "src_digest",
     "verified_icon_reviews",
+    "verified_illustration_reviews",
 ]

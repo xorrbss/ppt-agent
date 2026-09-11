@@ -334,3 +334,15 @@ illustrations (the illustration stage knows whether it asked a text-capable
 provider for labels; recording that decision is the natural next producer), or
 running the icon-pack infographic path so slides carry pack icons instead of
 free illustrations. Neither is part of this change.
+
+### Second re-measurement, with the illustration review producer (2026-09-12)
+
+The same 414 slides, rendered again after `services/authored_illustration_reviews.py`
+and its write point in `_generate_slot_image` landed: **still 414 `font_unverifiable`,
+0 now run**, 721 image records all `unverifiable`. Expected: the review store only
+holds entries for illustrations generated under this code, and no stored deck was.
+The producer restates recorded reviews; it does not inspect pictures at fit time.
+The mechanism is covered by the real-Chrome cases in
+`tests/integration/test_local_fit_image_text_evidence_chrome.py`. Per-review OCR
+cost, measured on 20 stored illustrations: median 1.39 s, p90 2.25 s
+(design note §5.1).

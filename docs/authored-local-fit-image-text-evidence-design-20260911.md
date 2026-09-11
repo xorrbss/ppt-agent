@@ -3,7 +3,10 @@
 - Date: 2026-09-11
 - Status: **implemented 2026-09-12** — producer `services/authored_local_fit_image_text.py`,
   transport hunks in `utils/slide_capture_local_fit.py::capture_with_policy`, unit tests and a
-  real-Chrome integration test. §5 records the measured effect on the existing corpus.
+  real-Chrome integration test; a second durable record, the illustration review store
+  (`services/authored_illustration_reviews.py`), was added the same day so the producer can also
+  restate OCR-verified, label-free generated illustrations. §5 records the measured effect on the
+  existing corpus and why it stays unchanged until decks are generated under this code.
 - Problem evidence: [`artifacts/local-fit-source-reflow-replay-20260911/report.md`](../artifacts/local-fit-source-reflow-replay-20260911/report.md),
   section "Baseline on non-verbatim decks", commit `7b25d19dd`.
 
@@ -77,7 +80,7 @@ returned from the illustration stage; it has to be recoverable from the final
 HTML plus server-held durable state alone. That constraint is why the design
 below looks different from the one originally approved.
 
-### 2.1 One producer at rest: the icon pack index
+### 2.1 One producer at rest: two durable records, one status function
 
 The illustration stage itself is unchanged; it places pictures exactly as it
 did before this design existed. The durable record of provenance is not a
@@ -97,8 +100,37 @@ matching the data URI — via `icon_data_uri(pack.path_for(entry))`, not the
 icon file's raw bytes, because `authored_icon_pack/inline.py::icon_data_uri`
 may re-encode the PNG on the way to inlining — and issues a record only when
 the matched entry's `checks.text.passed` is true and `checks.text.method ==
-"ocr"`. A heuristic pass, a cutout, an illustration or an upload produces no
-record, and therefore stays unverifiable.
+"ocr"`. A heuristic pass, a cutout or an upload produces no record from this
+index, and therefore stays unverifiable from it; a generated illustration is
+covered by the second index below.
+
+A second durable record was added on 2026-09-12, for the origin that was
+wholly unverifiable when this paragraph was first written: generated
+illustrations. `services/authored_illustration_reviews.py`'s
+`IllustrationReviewStore` holds a JSON index at
+`<app_data>/authored-illustration-reviews/index.json`, entries keyed by
+`src_digest(data_uri)` — the sha256 of the literal data-URI string that ends
+up in the slide HTML, the same kind of identity the icon pack side already
+uses, so a checkpoint-resumed slide still matches its review.
+`review_illustration(data_uri, *, labels_requested, forbidden, provider,
+prompt, app_data=None)` decodes the data URI and runs the *existing*
+`services/authored_icon_pack/checks.py::check_no_text` against `forbidden` —
+the slide-content words, the only permitted label source (§2.2) — then
+appends `{labels_requested, text: TextCheck.to_dict(), provider,
+prompt_digest, mime, created_at, schema_version}` atomically: the index is
+re-read, merged and rewritten by rename on every append, and the first entry
+recorded for a picture wins. It never raises; a malformed data URI, an OCR
+failure or a disk error all yield `None` and the picture simply stays
+unreviewed rather than breaking generation. The single write point is
+`utils/authored_illustrations.py::_generate_slot_image`, which calls
+`record_generated_illustration(data_uri, prompt=..., content=..., image_service=...)`
+immediately after the generated data URI is obtained. That function reads the
+label decision off the prompt the provider actually received
+(`labels_requested = not prompt.endswith(NO_TEXT_SUFFIX)`, the constant being
+`utils/authored_illustration_prompt.py`'s own), passes the slide-content words
+as the `forbidden` terms, and swallows every failure with a warning. The
+`utils/authored_illustrations.py` hunk is net zero lines because that file sits
+exactly on its file-size-ratchet baseline (798).
 
 ### 2.2 Provenance decides the status, and nothing else looks at pixels
 
@@ -110,7 +142,7 @@ the DOM. Each origin maps to one status:
 |---|---|---|---|
 | Icon-pack icon | `<img>` whose `src` data URI matches a pack entry | `no_text`, only when the pack recorded an OCR-verified pass | `IconEntry.checks["text"]` with `passed: true`, `method: "ocr"` (written by `authored_icon_pack/service.py:131-150`). A `heuristic` pass — OCR unavailable, see `checks.py`'s module docstring — gets no record: fail-closed. |
 | Scene cutout | `services/authored_icon_pack/scene.py::generate_scene_cutout` | **no record** | The cutout runs `check_no_text` (line 118) but is never written to the pack index — there is no `IconEntry` created for it and no `pack.append` call anywhere in `scene.py` — so there is no durable record to restate. Giving it evidence would require adding it to a pack index; this design does not add one. |
-| Generated illustration | placed via `image_service` | **no record** | Not text-free by construction. `utils/authored_illustrations.py:682-683` states the slide's outline markdown is "the authoritative — and only — source of any label the image model is allowed to draw" and "it only reaches providers verified to render text" — i.e. a text-capable provider is allowed to render it. The parallel comment at `services/authored_illustration_stage.py:186-188` restates the same rule at the call site. Fail-closed here is correct, not a gap; this replaces the earlier design's claim of a no-lettering prompt. |
+| Generated illustration | placed via `image_service`; reviewed by `services/authored_illustration_reviews.py::review_illustration` | `no_text`, only when the illustration review index recorded `labels_requested: false` **and** an OCR-verified text pass; otherwise **no record** | `utils/authored_illustration_prompt.py::build_illustration_prompt` (lines 87-96) requests labels only when the slide has outline content *and* the selected provider is verified to render text (`image_provider_renders_text`, default-deny); that decision is recorded verbatim as `labels_requested` on the review entry. `services/authored_local_fit_image_text.py::verified_illustration_reviews` restates the entry only when `labels_requested is False` and `text.passed` and `text.method == "ocr"` — the same three-part test the icon-pack row above applies, reused rather than reinvented (§2.3). A heuristic-only pass (OCR unavailable) or a labelled illustration gets no record: fail-closed, as before. `utils/authored_illustrations.py:682-683` still states the slide's outline markdown is the only permitted label source. The write point is `_generate_slot_image` via `record_generated_illustration`; §5 explains why the existing corpus, generated before this code, still carries no reviews. |
 | User-uploaded source image | `source_images`, carried on `data-asset-id` | **no record** | No measurement of text in image pixels exists anywhere under `services/source_images/` (`extract.py`, `models.py`, `registry.py`, `selection.py`) or `services/authored_source_images.py`. The `source_text` fields present there are caption/matching text extracted from the source deck's own XML, not OCR of the picture. |
 | Anything else | no provenance | **no record** | Fail closed, exactly as today. |
 
@@ -124,7 +156,10 @@ state. The rule that actually holds is: a picture gets evidence only when a
 specific, already-durable record says it passed OCR text verification. Today
 that exists for exactly one origin, the icon pack. Everything else — including
 origins the system fully controls — keeps the current refusal until an
-equivalent durable record exists for it too.
+equivalent durable record exists for it too. A second origin joined it on
+2026-09-12: generated illustrations, via the illustration review index
+described in §2.1 and §2.4 — the same rule, restated for a second durable
+record, not a second judge (§2.3). The rest of this table is unchanged.
 
 ### 2.3 No new judge
 
@@ -141,10 +176,28 @@ asked for or accepted the asset. The two existing judges keep their jobs:
 Neither predicate is edited. The change is that a producer now exists to satisfy
 them.
 
+The illustration review store does not add a third judge. The OCR check it
+runs, `services/authored_icon_pack/checks.py::check_no_text`, is the exact
+function the icon pack already runs on every icon it writes, applied here to
+one more asset class — a generated illustration — at the moment the asset is
+generated rather than at fit time. The OCR cost that check carries is paid
+once, during generation, and cached in the review entry; a later fit never
+re-runs OCR, it only reads `labels_requested` and the cached `text.passed` /
+`text.method` (§2.1, §2.4).
+
 ### 2.4 How the record reaches both readers
 
 One producer, computed fresh at measurement time from the final HTML, two
 hops, no second source of truth.
+
+**Write side.** What step 1 restates at measurement time is written, for
+illustrations, upstream of capture entirely: `review_illustration` (§2.1) is
+meant to be called from `utils/authored_illustrations.py::_generate_slot_image`,
+the function that calls `image_service.generate_image(...)` for a slot,
+immediately after the generated data URI comes back — the single write
+point, wrapped so a review failure never breaks generation. For icons, the
+write side is unchanged from the original design: `authored_icon_pack/service.py`
+writing `checks["text"]` onto the `IconEntry` when the pack accepts an icon.
 
 1. `utils/slide_capture_local_fit.py::capture_with_policy` computes
    `image_text_evidence = policy.get("image_text_evidence") or
@@ -153,7 +206,12 @@ hops, no second source of truth.
    existing `installed_font_identity` augmentation, in the same dict-merge.
    This happens inside the existing capture path, so no production call site
    that constructs the policy needs to change, and the offline harness goes
-   through the same function.
+   through the same function. `image_text_evidence_for_html` is a thin
+   wrapper over `authored_local_fit_image_text.py::image_text_evidence`,
+   which performs two lookups per candidate `<img>` — `verified_icon_reviews(app_data)`
+   first, then `verified_illustration_reviews(app_data)` — and stamps the
+   matching record's `provenance` as `"icon_pack"` or `"illustration"`
+   accordingly (§2.1, §2.2); the first source to match wins.
 2. The browser fit runner reads `P.image_text_evidence` exactly as before
    (`utils/slide_capture_fit_runner.py::_imageTextCheck`) and writes its
    resolved per-element verdicts into the report's existing `image_text`
@@ -208,19 +266,26 @@ The implemented design answers them directly rather than assuming:
    (`services/authored_icon_pack/checks.py:106-121`), which always includes
    `passed` and `method` (`"ocr"` or `"heuristic"`,
    `checks.py:103`). No new manifest field was needed.
-2. **Moot for illustrations; answered for icons.** Illustration request
-   identity never had to be resolved, because generated illustrations stay
-   fail-closed regardless of retry or cache behavior (§2.2) — they are not
-   text-free by construction, so no `review_digest` is ever issued for one.
-   For icons, the identity used as `review_digest` is the pack file itself
-   (`_review_digest`, `services/authored_local_fit_image_text.py:74-79`: a
-   digest of the pack key, the entry's `file` name and the file's own bytes).
-   That identity is stable across a retry or a cache hit by construction:
-   `IconPack.write_icon` names a file deterministically from the concept key
-   (`store.py:151-156`, `icon_file_name(key)`), and `IconPack.append` keeps
-   the first writer's file when two callers race on the same concept,
-   discarding the later duplicate (`store.py:166-191`, specifically the
-   dedup check at 176-180).
+2. **Answered for both, as of 2026-09-12.** For icons, the identity used as
+   `review_digest` is unchanged: the pack file itself (`_review_digest`,
+   `services/authored_local_fit_image_text.py:82-87`: a digest of the pack
+   key, the entry's `file` name and the file's own bytes), stable across a
+   retry or a cache hit by construction — `IconPack.write_icon` names a file
+   deterministically from the concept key (`store.py:151-156`,
+   `icon_file_name(key)`), and `IconPack.append` keeps the first writer's
+   file when two callers race on the same concept, discarding the later
+   duplicate (`store.py:166-191`, the dedup check at 176-179). Generated
+   illustrations now have an identity too: `verified_illustration_reviews`
+   hands back `f"illustration:{src_digest}:{prompt_digest}"` — the digest of
+   the data URI the picture ends up as, plus a digest of the exact prompt
+   text the image model was given (`_prompt_digest`,
+   `services/authored_illustration_reviews.py`). That identity is not stable
+   across a retry the way the icon pack's deterministic file name is: a
+   regenerated illustration gets a new data URI, hence a new `src_digest`
+   and a fresh review. `review_illustration`'s own first-writer-wins dedup
+   (§2.1) only protects two concurrent writers reviewing the *same* data URI
+   from double-reviewing it; it does not make identity stable across a retry
+   that produces a different picture.
 3. **No.** There is no existing measurement of embedded text size or
    presence for an uploaded source image anywhere under
    `services/source_images/` or `services/authored_source_images.py`. Those
@@ -264,3 +329,35 @@ The mechanism is verified in real Chrome by
 fits; heuristic-only and unrecorded icons fail closed). The corpus number will
 move only when a producer exists for generated illustrations' text size, or when
 decks are produced with pack icons.
+
+**Illustration producer added, corpus still 0/414 (2026-09-12).** The second
+durable record described in §2.1, the illustration review store
+(`services/authored_illustration_reviews.py`), is live code with unit coverage,
+a write-point test in `tests/unit/test_authored_illustrations.py`, and two
+additional real-Chrome cases in `test_local_fit_image_text_evidence_chrome.py`:
+a reviewed, no-label illustration lets the fit run, and a label-requesting one
+still fails closed. Re-rendering the same 414 slides through the finished path
+again yields 0 changed, for the reason already stated: every deck in the corpus
+was generated before this code existed, so no illustration in it has a review
+entry, and the producer restates only what a review recorded. The number moves
+when decks are generated under this code; the mechanism is proven by the tests.
+
+### 5.1 Cost of the review at generation time
+
+Measured offline on 20 randomly chosen illustrations stored in the database
+(decoded from their data URIs, payload median 109 KiB JPEG, local tesseract
+`kor+eng`, the same `check_no_text` the write point calls):
+
+| `check_no_text`, one illustration | seconds |
+|---|---|
+| minimum | 0.06 |
+| median | 1.39 |
+| p90 | 2.25 |
+| maximum | 3.17 |
+
+All 20 ran with `method: "ocr"`. The cost is paid once per generated
+illustration, at generation time, after the provider call has returned and
+outside the illustration semaphore (no provider slot is held during OCR); the
+fit path pays nothing. It is added to the slide's serial illustrate stage, so
+it is visible in per-slide latency and should be read against the provider
+call it follows, which takes seconds to tens of seconds.
