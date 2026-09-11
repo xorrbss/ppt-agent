@@ -122,7 +122,7 @@ def test_runtime_factory_fails_closed_without_complete_platform_isolation(
     tmp_path: Path,
 ) -> None:
     authority = _FilesystemAuthority(tmp_path / "input", tmp_path / "published")
-    with pytest.raises(IsolationUnavailableError, match="SANDBOX_BACKEND=windows-local"):
+    with pytest.raises(IsolationUnavailableError, match="SANDBOX_BACKEND must be container or windows-local"):
         create_trusted_worker_executor_runtime(
             staging_root=tmp_path / "staging",
             node_id="node-test",

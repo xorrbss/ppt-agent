@@ -95,9 +95,24 @@ def create_trusted_worker_executor_runtime(
         raise ValueError("trusted worker runtime configuration is invalid")
     source = os.environ if environment is None else environment
     backend = source.get("PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND", "").strip().lower()
+    if backend == "container":
+        # The Linux production path: isolation is proven from the container
+        # runtime's own inspect output, never from configuration.
+        from services.trusted_executor.container_composition import (
+            create_container_trusted_worker_executor_runtime,
+        )
+
+        return create_container_trusted_worker_executor_runtime(
+            staging_root=root,
+            node_id=node_id,
+            artifact_authority=artifact_authority,
+            environment=source,
+            scheduler_policy=scheduler_policy,
+            zero_timeout_seconds=zero_timeout_seconds,
+        )
     if backend != "windows-local":
         raise IsolationUnavailableError(
-            "PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND=windows-local is required"
+            "PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND must be container or windows-local"
         )
     runtime_environment = source.get("ENVIRONMENT", "production").strip().lower()
     local_policy = source.get("PUBLIC_TRUSTED_WORKER_LOCAL_POLICY", "").strip().lower()
