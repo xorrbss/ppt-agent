@@ -10,6 +10,7 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services import presentation_generation_job_service as jobs
+from utils.get_env import get_authored_cluster_job_concurrency_env
 
 
 async def _job_database(tmp_path, monkeypatch):
@@ -134,14 +135,23 @@ def test_non_authored_claims_do_not_consume_or_wait_for_authored_quota(
 
 
 def test_invalid_cluster_limit_falls_back_to_existing_job_limit(monkeypatch):
+    # jobs.AUTHORED_CLUSTER_JOB_CONCURRENCY itself is a module constant fixed
+    # at import time (see _job_database above, which monkeypatches it
+    # directly); the fallback chain it was computed from now lives in
+    # get_authored_cluster_job_concurrency_env(), exercised here directly.
+    #
+    # Both knobs are registered in settings_registry.json as typed integers,
+    # so a non-numeric env value now fails fast inside RuntimeSettings itself
+    # (constants/settings_registry.json + utils/runtime_settings.py) rather
+    # than being caught here -- that hard-validation behaviour is shared by
+    # every other registered fastapi.runtime integer setting and is not
+    # specific to this accessor, so it is not exercised in this test.
     monkeypatch.setenv("AUTHORED_JOB_CONCURRENCY", "3")
-    monkeypatch.setenv("AUTHORED_CLUSTER_JOB_CONCURRENCY", "not-an-int")
-    assert jobs._positive_int_env(
-        "AUTHORED_CLUSTER_JOB_CONCURRENCY",
-        jobs._positive_int_env("AUTHORED_JOB_CONCURRENCY", 1),
-    ) == 3
     monkeypatch.setenv("AUTHORED_CLUSTER_JOB_CONCURRENCY", "0")
-    assert jobs._positive_int_env("AUTHORED_CLUSTER_JOB_CONCURRENCY", 3) == 1
+    assert get_authored_cluster_job_concurrency_env() == 3
+    monkeypatch.delenv("AUTHORED_CLUSTER_JOB_CONCURRENCY")
+    monkeypatch.delenv("AUTHORED_JOB_CONCURRENCY")
+    assert get_authored_cluster_job_concurrency_env() == 1
 
 
 def test_capacity_wait_is_cancellable_before_an_attempt_is_claimed(monkeypatch):
