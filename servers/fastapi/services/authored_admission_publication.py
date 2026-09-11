@@ -274,6 +274,10 @@ async def final_readback(*, pngs, generation_job, **kwargs):
             gate_code=admission.code,
             predicate=admission.predicate,
             block_count=len(admission.block_ids),
+            # The raise below names only the predicate, so without the ids
+            # here a publication rejection cannot be traced to a DOM node
+            # from the logs of the run that produced it.
+            block_ids=admission.block_ids,
         )
     for admission in admissions:
         if admission.verdict == "rejected":

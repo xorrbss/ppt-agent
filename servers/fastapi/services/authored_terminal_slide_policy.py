@@ -33,6 +33,25 @@ REPAIR_BUDGET_EXHAUSTED_REASON = "composition_safety:repair_budget_exhausted"
 GATE_REPAIR_NOT_ADMITTED_REASON = "composition_safety:gate_repair_not_admitted"
 
 
+def _composition_switch(profile: Any, name: str) -> bool:
+    """Read one composition-profile switch, refusing a profile that lacks it.
+
+    ``None`` is the absent profile every entry point already reads as "no
+    deck-level policy", and stays inactive. Any other object must be a
+    :class:`~services.authored_composition_policy.CompositionProfile`: reading
+    the switch through ``getattr(..., False)`` silently answered "off" when the
+    caller passed the wrong object entirely -- the rollout profile, which
+    carries none of these switches -- and that inversion disabled the terminal
+    fallback on every deck for a whole validation stage (regression 4afa7a141,
+    artifacts/authored-live-series-20260915). A missing switch is a wiring
+    defect, so it raises here instead of quietly changing the deck's policy.
+    """
+
+    if profile is None:
+        return False
+    return bool(getattr(profile, name))
+
+
 def terminal_fallback_active(
     *, profile: Any, reference_mode: str, source_reflow: bool
 ) -> bool:
@@ -52,13 +71,13 @@ def terminal_fallback_active(
         return (
             is_authored_publish_flagged_slides_source_reflow_enabled()
             and reference_mode != EXACT_RECONSTRUCTION
-            and bool(getattr(profile, "strict_dom_gate", False))
+            and _composition_switch(profile, "strict_dom_gate")
         )
     return (
         is_authored_publish_flagged_slides_enabled()
         and reference_mode != EXACT_RECONSTRUCTION
-        and bool(getattr(profile, "strict_dom_gate", False))
-        and bool(getattr(profile, "allow_summarization", False))
+        and _composition_switch(profile, "strict_dom_gate")
+        and _composition_switch(profile, "allow_summarization")
     )
 
 

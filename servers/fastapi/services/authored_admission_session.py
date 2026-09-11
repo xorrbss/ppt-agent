@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from functools import wraps
 import json
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Sequence
 
 from services.authored_admission import Admission, admit_slide_html, reused_admission
 from services.authored_admission_context import (
@@ -161,7 +161,15 @@ def configure_admission(
     session = current_session()
     if session is None:
         return
-    profile = _pin_attempt_profile(session, request=request, generation_job=generation_job)
+    # Two different profiles meet here and must keep two different names: the
+    # ``profile`` argument is the deck's COMPOSITION profile (it carries
+    # ``strict_dom_gate``, which decides terminal-fallback eligibility), while
+    # the pinned one is the attempt's ROLLOUT profile (the five switches, and
+    # the policy revision every receipt is minted under). Binding the pin over
+    # the argument made every context eligibility-false, because a rollout
+    # profile has no ``strict_dom_gate`` -- see 4afa7a141 and the stage-2
+    # enforce analysis in artifacts/authored-live-series-20260915.
+    rollout = _pin_attempt_profile(session, request=request, generation_job=generation_job)
     source_reflow = bool(getattr(request, "_source_content_authored_reflow", False))
     manifest = getattr(request, "_source_content_manifest", None)
     projection = getattr(request, "_source_document_outline", None)
@@ -178,7 +186,7 @@ def configure_admission(
                 operation_id=str(getattr(generation_job, "workspace_operation_id", None) or ""),
                 slide_index=index,
                 source_unit_id=str(slide.get("sourceUnitId") or slide.get("source_unit_id") or ""),
-                policy_revision=profile.policy_revision,
+                policy_revision=rollout.policy_revision,
                 fenced_revision=int(getattr(generation_job, "_workspace_fencing_token", None) or 0),
                 attempt_token=str(getattr(generation_job, "attempt_token", None) or ""),
                 reference_mode=reference_mode,
@@ -203,6 +211,7 @@ def record_enforced_admission(
     gate_code: str,
     predicate: str = "",
     block_count: int = 0,
+    block_ids: Sequence[str] | None = None,
     error: BaseException | None = None,
 ) -> None:
     """Record one enforce-mode admission as its own evidence row.
@@ -211,6 +220,10 @@ def record_enforced_admission(
     ``unobserved`` -- the same word the publication adapter already uses for a
     row it could not compare. Every other field is the shadow row's, so one
     parser and one report read both modes.
+
+    ``block_ids`` is the sample that makes an enforce rejection diagnosable:
+    this is the only per-call evidence enforce emits, and the raised
+    ``AuthoredStageError`` carries the predicate, not the nodes.
     """
 
     session.shadow.record(
@@ -221,6 +234,7 @@ def record_enforced_admission(
         gate_code=gate_code,
         predicate=predicate,
         block_count=block_count,
+        block_ids=block_ids,
         error=error,
     )
 
@@ -276,6 +290,7 @@ def check_producer(
             gate_code=gate_code,
             predicate=result.predicate,
             block_count=len(result.block_ids),
+            block_ids=result.block_ids,
         )
         if not evidence:
             result.require()

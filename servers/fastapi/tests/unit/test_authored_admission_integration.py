@@ -16,7 +16,13 @@ from services import authored_admission as gate
 from services.authored_admission_checkpoint import prepare_checkpoint_write
 from services.authored_admission_producers import author_html, illustrate_html, source_candidate
 from services.authored_admission_publication import final_readback
-from services.authored_admission_session import AdmissionSession, _SESSION, admission_scope, configure_admission
+from services.authored_admission_session import (
+    AdmissionSession,
+    _SESSION,
+    admission_scope,
+    check_producer,
+    configure_admission,
+)
 from services.authored_rollout_profile import RolloutProfile, rollout_profile_scope
 from tests.unit.test_authored_admission import HTML, MANIFEST, OUTLINE, context, metrics
 
@@ -256,31 +262,95 @@ async def test_vqa_producer_uses_same_rejection_and_label(session):
     assert not await source_vqa_candidate_integrity_passes(0, html, metrics(html, renderedText="changed"), validator)
 
 
+def _configure_source_reflow_deck(profile):
+    """Configure one verbatim source-reflow slide, as the generation owner does."""
+
+    configure_admission(
+        request=SimpleNamespace(
+            _source_content_authored_reflow=True,
+            _source_content_manifest=MANIFEST,
+            _source_document_outline=OUTLINE,
+        ),
+        presentation_id="p",
+        generation_job=None,
+        profile=profile,
+        reference_mode="source_content_restyle",
+        slide_count=1,
+        bindings=(context().bindings,),
+        image_bindings=((),),
+    )
+
+
 @sync_async
 async def test_scope_pins_mode_and_configures_source(monkeypatch):
     from services import authored_admission_session as sessions
 
     monkeypatch.setattr(sessions, "resolve_rollout_profile", lambda: RolloutProfile(gate_mode="shadow"))
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
 
     @admission_scope
     async def run():
-        configure_admission(
-            request=SimpleNamespace(
-                _source_content_authored_reflow=True,
-                _source_content_manifest=MANIFEST,
-                _source_document_outline=OUTLINE,
-            ),
-            presentation_id="p",
-            generation_job=None,
-            profile=SimpleNamespace(strict_dom_gate=True),
-            reference_mode="source_content_restyle",
-            slide_count=1,
-            bindings=(context().bindings,),
-            image_bindings=((),),
-        )
-        return sessions.current_session().contexts[0].manifest_digest
+        _configure_source_reflow_deck(SimpleNamespace(strict_dom_gate=True))
+        return sessions.current_session().contexts[0]
 
-    assert await run() == context().manifest_digest
+    pinned = await run()
+    assert pinned.manifest_digest == context().manifest_digest
+    # The attempt's ROLLOUT profile names the policy revision; the caller's
+    # COMPOSITION profile decides terminal-fallback eligibility. Pinning the
+    # first over the second minted every context ineligible, because a rollout
+    # profile carries no ``strict_dom_gate`` -- and this one assertion is what
+    # 4afa7a141 got past.
+    assert pinned.policy_revision == RolloutProfile(gate_mode="shadow").policy_revision
+    assert pinned.terminal_fallback_eligible is True
+
+
+@sync_async
+async def test_enforce_flags_a_visibility_failure_on_an_already_flagged_slide(monkeypatch):
+    """An already-flagged verbatim slide publishes flagged; an unflagged one dies.
+
+    Stage-2 enforce killed three 35-slide decks at publication on exactly this
+    row: ``terminal_flag_only | rejected | visibility``. The verdict rule was
+    right and its context was wrong, so the rule alone cannot be the test.
+    """
+
+    from services import authored_admission_session as sessions
+
+    monkeypatch.setattr(gate, "text_step", gate.bind_current_source)
+    monkeypatch.setattr(gate, "placeholder_authoring_enabled", lambda: False)
+    monkeypatch.setattr(sessions, "resolve_rollout_profile", lambda: RolloutProfile(gate_mode="enforce"))
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
+
+    @admission_scope
+    async def run():
+        _configure_source_reflow_deck(SimpleNamespace(strict_dom_gate=True))
+        session = sessions.current_session()
+        html = author_html(HTML, index=0)
+        hidden = metrics(html, cssVisible=False)
+        _published, flagged = check_producer(
+            html,
+            index=0,
+            producer="terminal_flag_only",
+            legacy=lambda value: value,
+            metrics=hidden,
+            flags=("composition_safety:gate_repair_not_admitted",),
+        )
+        with pytest.raises(gate.BrowserSourceReadbackError) as unflagged:
+            check_producer(
+                html, index=0, producer="publication", legacy=lambda value: value, metrics=hidden
+            )
+        return session, flagged, unflagged.value
+
+    session, flagged, rejection = await run()
+    assert (flagged.verdict, flagged.predicate) == ("flag_only", "visibility")
+    assert flagged.block_ids and rejection.block_ids == flagged.block_ids
+    # The enforce evidence rows name the nodes, not only how many there were.
+    rows = {row["producer"]: row for row in session.shadow.as_dict()["rows"]}
+    assert rows["terminal_flag_only"]["gateVerdict"] == "flag_only"
+    assert rows["publication"]["gateVerdict"] == "rejected"
+    assert all(
+        tuple(rows[producer]["blockIds"]) == flagged.block_ids
+        for producer in ("terminal_flag_only", "publication")
+    )
 
 
 def shadow_report():
