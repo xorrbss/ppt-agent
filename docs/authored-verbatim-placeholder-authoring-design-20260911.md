@@ -1,168 +1,220 @@
-# Verbatim decks: text by construction, one admission gate — design
+# Verbatim decks: text by construction, one admission gate — design (rev 2)
 
-- Date: 2026-09-11
+- Date: 2026-09-11 (rev 2 after the independent review in
+  `artifacts/design-review-placeholder-authoring-20260911/review.md`; rev 1 is in git history).
 - Scope: the document-verbatim generation path (`source_content_restyle`, `source_reflow=True`) of the
   authored pipeline. Ordinary prompt-driven authoring and the Hybrid export lane are not changed.
 - Status: proposal awaiting the user's decision. Nothing here is implemented.
 - Rule this design follows: **no per-path fixes.** An invariant is enforced in exactly one place, or it
-  is made impossible by construction. See the failure history below for why.
+  is made impossible by construction.
+- What rev 2 changed, in one line: substitution is a construction guarantee, **not** a proof of the
+  published artifact — rendered integrity stays; the gate gets an explicit three-state lifecycle, a
+  substitution security boundary, the existing terminal-fallback rule, bounded overload retries, and
+  a rollout that can actually be measured.
 
 ## 1. Why the current design keeps failing
 
 The verbatim contract is "every source text block is published exactly as written". Today the pipeline
-enforces it **after the fact**: the model retypes all 289 blocks inside free HTML, a 2,000-line binder
+enforces it **after the fact**: the model retypes all 289 blocks inside free HTML; a ~2,000-line binder
 (`services/source_content/text_stamping.py`, `source_stamp_dom.py`, `source_runs.py`,
 `browser_readback.py`) then searches the model's DOM for each block, guesses run boundaries, repairs
-terminal punctuation, stamps a QID, and finally a Chromium readback compares rendered text to the source.
+terminal punctuation, stamps a QID; finally a Chromium readback compares rendered text to the source.
 
-Slide HTML is produced or mutated at five points, and each point carries its own copy of the checks:
+Slide HTML is produced or mutated at these points, each with its own copy of the checks:
 
 | Producer | Where | Check present before 2026-09-11 |
 | --- | --- | --- |
 | author (single / batch) | `authored_presentation_pipeline.py:737-746`, `:779` | policy + stamp |
+| illustration + source-image validation | `authored_presentation_pipeline.py:821-844` | stamp |
 | author rescue (simplified retry) | `authored_author_stage_rescue.py` via pipeline `:692` | none until W25 |
 | gate repair candidate | `authored_presentation_generation.py:2057` | policy + stamp + readback |
-| VQA repair candidate | `authored_presentation_generation.py:2560` | none until W23 |
+| VQA repair candidate (incl. full reauthor, `author_vision_qa.py:610-649`) | `authored_presentation_generation.py:2520-2603` | none until W23 |
+| structural / patch repairs (`setText` in `author_slide_patch_contracts.py:131-145`) | repair loops | source-specific checks |
 | terminal flag-only | `authored_terminal_slide_flag_only.py` | n/a (no mutation) |
 
-Result over 2026-09-10/11 (runs 11-22, same 35-slide input, `repeatability-20260911.md`): publish rate
-40%, and every failure was a different seam — run-13 `content:"1"`, run-14 candidate readback,
-run-17 VQA mutated one block (integrity), run-18 `</img>` refused by the token-level policy, run-19 rescue
-output not validated, run-22 provider 429 on the rescue call. Each got its own fix (W21, W23, W24, W25,
-W26). That is the pattern this design ends.
+Result over 2026-09-10/11 (runs 11-23, same 35-slide input, `repeatability-20260911.md`): 5/13
+published; every failure was a different seam (run-13 `content:"1"`, run-14 candidate readback, run-17
+VQA mutated a block, run-18 `</img>`, run-19 rescue unvalidated, run-22 provider 429 on rescue, run-23
+binder could not bind a short title). Each got its own fix (W21, W23, W24, W25, W26). This design ends
+that pattern.
 
-Three root causes, not six:
+Three root causes:
 
-1. **Text is verified instead of guaranteed.** Any path that touches HTML can alter text; therefore
-   every path needs the binder and the readback, and one missing call kills a deck.
-2. **Markup policy is syntactic.** `utils/renderer_isolation.py` is a token-level `HTMLParser`; it
-   refuses syntax the browser tolerates (`</img>`) while the real policy questions are semantic
-   (which elements, attributes, CSS properties, image bytes).
-3. **Overload handling lives with callers.** Batch authoring has cooldown + recovery
-   (`authored_batch_policy.py`), rescue had none, other provider callers each decide for themselves.
+1. **Text is verified instead of guaranteed.** Any path that touches HTML can alter text; therefore every
+   path needs the binder, and one missing call kills a deck.
+2. **Markup policy is syntactic.** `utils/renderer_isolation.py` is a token-level `HTMLParser`; it refuses
+   syntax the browser tolerates (`</img>`) while the real policy questions are semantic.
+3. **Overload handling lives with callers.** Batch authoring has cooldown + recovery; rescue had none;
+   other callers decide for themselves.
 
 ## 2. Design
 
 ### 2.1 Placeholder authoring (text by construction)
 
-The model never writes source text. The prompt shows each block's text **for sizing and layout
-judgement only**, and the output contract is: emit one placeholder token per block (or per run when the
-block has projected runs), never the text.
+The model never emits source text. The prompt carries a compact **block table** — for each block: id,
+full text, character count, hard line breaks, marker/pipe semantics — so the model can size and group
+content; the output contract is one placeholder token per block, never the text.
 
-- Token form: `{{q:<sourceBlockId>}}` for a whole block, `{{q:<sourceBlockId>:<runStart>-<runEnd>}}`
-  for a run span. Ids and run boundaries come from the existing `project_source_runs` projection, so
-  today's binding-id vocabulary (`source_run_binding_id`) is reused unchanged.
-- Inline emphasis is expressed by wrapping a token (`<strong>{{q:12:0-0}}</strong>`), never by
-  splitting text. This removes the run-mapping guesswork entirely.
-- The server substitutes tokens **once, at the single admission gate (2.3)**, escaping the source
-  text for HTML and stamping `data-source-block-id` / `data-qid` exactly as the binder does today.
-- Deterministic pre-render checks replace the binder's search: every expected token present exactly
-  once; no unknown token; DOM order of tokens follows source order unless the run is marked
-  `order_free_before` (the existing pipe-join rule). A violation is a coded rejection
-  (`source_placeholder_missing|duplicate|unknown|order`) raised before any Chromium work, so the
-  retry is cheap and the feedback to the model is exact.
-- Chromium readback keeps only what cannot be decided statically: visibility (clipped, occluded,
-  off-canvas) and telemetry. Integrity, missing, and order failures cannot occur.
+- Token form: `{{q:<sourceBlockId>}}` for a whole block. Sub-block tokens (character-range emphasis)
+  are **not** part of the initial contract: the review showed that projected runs follow delimiters,
+  not style boundaries, so run tokens cannot express in-sentence emphasis anyway. Whether a bounded
+  character-range form (`{{q:<id>@<start>-<end>}}`, grapheme-safe, disjoint, covering the whole block)
+  is added is decided by measurement 3.1.
+- Inline styling is expressed by wrapping a whole-block token; the model cannot split text.
+- Tokens are recognized **only in text nodes** of the parsed tree. A token in an attribute, a `<style>`
+  block, a comment, or hidden content is a coded rejection. Substitution is a single non-recursive pass
+  over the original text nodes using a server-controlled id table; source text that happens to look like
+  a token is inserted as data, never re-expanded. Inserted text is HTML-escaped.
+- Static checks, before any Chromium work: every expected token present exactly once; no unknown
+  token; no residue in model-owned syntax. Each is a coded rejection
+  (`source_placeholder_missing|duplicate|unknown|context`) with exact feedback for the retry.
+- Source occurrences versus furniture: page markers, chapter breadcrumbs and repeated headers that
+  today's binder tolerates as bounded duplicates (`text_stamping.py:22-24`) keep the existing header
+  contract; source-owned page numbers use source tokens. Two distinct source blocks with equal text are
+  two occurrence ids. No occurrence id is minted for decoration.
+- Order: the deck-level source-unit/outline order check (`browser_readback_inspection.py:58-77`) is
+  kept as is. Within a slide, DOM order of tokens is **recorded** as a deviation, not rejected, matching
+  today's binder (`browser_readback.py:673-698`); the review is right that DOM order is not visual order.
+- After substitution the expanded HTML is re-checked against the resource limits and the renderer
+  policy (size, depth, text bytes, attributes) because expansion changes them.
+- **Rendered integrity stays.** The Chromium readback still asserts rendered text equals source text,
+  QID identity and uniqueness, capture-to-HTML binding and telemetry. Only the search-based *binding*
+  (finding where the model put the text) disappears; the assertion that the final artifact is right does
+  not. This costs no extra Chromium pass — it runs on the same capture the visibility check needs.
+- Every path that generates HTML — single and batch author, rescue, VQA full reauthor — receives the
+  same token contract. Geometry/style patches (`setText`-free) may operate on expanded HTML only when
+  source-owned text and ids are byte-unchanged and the final evidence is renewed; rendered screenshots
+  stay diagnostic input and are never a source of output text.
 
-What this changes for the model: output length drops by roughly the source text volume, which also
-lowers exposure to the output-token limit and to account rate limits. Layout authority stays with the
-model; the server owns text characters only. This is not Deck IR or source-native (the model still
-authors HTML/CSS; no IR, no server layout).
+### 2.2 Normalization on a parsed tree, semantic policy kept
 
-### 2.2 Parser-based normalization and semantic policy
+1. Parse model output with an HTML5-conformant parser (browser-equivalent tree construction) and pin
+   the fragment/namespace behavior.
+2. Run an **enumerated DOM rewrite pass** carrying today's semantic normalizers unchanged:
+   disallowed CSS declarations (including every `content:`), hidden-bound-text handling, title line
+   breaks, name-attribute stripping. Parsing replaces only the syntax-level fixes (void end tags and
+   the like); it does not replace these rules.
+3. Serialize canonically and apply the renderer policy to the tree (element/attribute/CSS/image
+   checks). Raw-input diagnostics that the tree loses (duplicate attributes, oversized input) are
+   captured before parsing and still reject.
+4. Every rewrite records a receipt entry (`rule`, `count`, bounded `detail`).
 
-Replace "strip one known bad pattern" normalizers (`authored_void_end_tag_normalize.py`, the
-`content:` stripper, and the ad-hoc rules in `authored_html_normalize.py`) with one step:
+A new serializer changes HTML digests and therefore capture reuse; the rollout (section 4) accounts
+for that by switching normalization separately from the gate.
 
-1. Parse the model output with an HTML5-conformant parser (browser-equivalent tree construction:
-   void end tags ignored, implied end tags, attribute normalization).
-2. Serialize the tree back to canonical HTML.
-3. Apply the renderer policy **to the tree**: element allowlist, attribute allowlist
-   (`renderer_markup_policy.GLOBAL_ATTRIBUTES`), CSS property/value allowlist per declaration, image
-   byte checks. The policy content is unchanged; only its input moves from tokens to a DOM.
+### 2.3 One admission gate with an explicit lifecycle
 
-Every normalization records a receipt entry (`rule`, `count`, `detail`) so evidence still shows what
-was rewritten. The policy stays fail-closed for anything that is semantically disallowed; it stops
-failing on syntax the browser would have repaired anyway.
+`admit_slide_html(context, html) -> Admission` is the only way HTML reaches a checkpoint. The gate
+distinguishes three representations and says which stage may hold which:
 
-### 2.3 One admission gate, enforced at the checkpoint
+| State | Content | May be checkpointed as |
+| --- | --- | --- |
+| `token` | model output, placeholders unexpanded | author-stage candidate only, versioned as `html_repr=token` |
+| `expanded` | after 2.2 + substitution + static checks | author checkpoint (pre-illustration), repair candidates |
+| `captured` | expanded HTML plus Chromium metrics/PNG | render/VQA checkpoints, publication |
 
-`admit_slide_html(slide_index, html, origin) -> Admission` is the only way HTML reaches a checkpoint.
-
-- Fixed order: normalize (2.2) → policy (2.2) → placeholder substitution and static source checks (2.1)
-  → visibility readback (Chromium, verbatim decks only) → verdict.
-- Verdict is one of `admitted`, `flag_only(reasons)`, `rejected(code, evidence)`. The mode table
-  below decides which check is fatal, flag, or skipped; path code contains no `if source_reflow`
-  branches.
+- `context` is immutable and pins: presentation/operation, slide index and source unit, manifest and
+  projection digests, policy revision, fenced revision and attempt token, terminal-fallback eligibility
+  (the existing strict-profile rule in `authored_terminal_slide_policy.py:36-60`), and the set of
+  already-admitted flags for the slide.
+- Fixed order inside the gate: raw-input diagnostics → parse + rewrite → policy → substitution +
+  static checks → post-expansion limits → (captured only) rendered integrity + visibility.
+- Verdict is `admitted`, `flag_only(reasons)` or `rejected(code, evidence)`. Mode table:
 
 | check | ordinary authored | verbatim, terminal fallback off | verbatim, terminal fallback on |
 | --- | --- | --- | --- |
-| normalization + policy | fatal | fatal | fatal |
+| raw diagnostics, parse/rewrite, policy | fatal | fatal | fatal |
 | placeholder static checks | skip | fatal | fatal |
-| visibility readback | skip | fatal | flag_only |
+| rendered integrity (text, QID, order, capture binding) | skip | fatal | fatal |
+| visibility | skip | fatal | fatal on unflagged slides; `flag_only` only on slides already flagged by the terminal policy (today's rule, `authored_presentation_generation.py:2875-2904`) |
 | telemetry / diagnostic | skip | fatal (retryable) | fatal (retryable) |
 
-- Enforcement: the checkpoint writer refuses HTML that does not carry an admission receipt whose
-  digest matches the HTML. A new repair path that forgets the gate cannot persist anything.
-- Evidence: the receipt carries `code`, the predicate that fired, block ids, and digests. No layer may
-  collapse a code into `authored_unexpected_failure`; unknown codes pass through unchanged.
-- Vocabulary: attribute names, flag reasons, and rejection codes are imported from one policy module;
-  a test asserts every attribute a consumer reads is admitted by the renderer policy (the
-  `data-intentional-overlap` vs `data-allow-overlap` class of defect).
+  Repair-candidate rejection and terminal publication remain separate decisions: a candidate that
+  fails visibility is rejected (the frozen pre-repair HTML stays), and the terminal policy decides
+  flag-only publication exactly as today.
+- Enforcement: the checkpoint writer refuses HTML without an admission receipt whose digest matches the
+  HTML **and** whose context matches the checkpoint's fenced revision. Metrics/PNG are reused only on
+  identical expanded-HTML and capture identity.
+- Evidence: the receipt carries `code`, the predicate, block ids, digests and the context above; it is
+  mapped into the existing quality/E4 timing/operation receipts (counts and bounded reasons preserved,
+  detailed evidence behind digests). No layer collapses a code into `authored_unexpected_failure`.
+- Vocabulary: attribute names, flag reasons and rejection codes are imported from one policy module; a
+  test asserts every attribute a consumer reads is admitted by the renderer policy.
+- Consumers that count characters (capacity gate, `authored_composition_policy.py:1516-1547`) and the
+  Hybrid text-run assembler always see expanded HTML; `token` state never leaves the author stage.
 
-### 2.4 Provider overload in one layer
+### 2.4 Provider overload: one classifier, bounded physical calls
 
-`utils/provider_idempotency.py` (the bounded provider call) becomes the only place that recognizes
-overload (429, 5xx, call timeout) and applies the shared cooldown state from `authored_batch_policy`.
-Callers (batch, single, rescue, VQA, gate repair) stop handling overload themselves. Overload retries
-never consume an author-budget attempt; content rejections do. A whole-account usage-limit response
-(`usage_limit_reached` with a reset time) is surfaced as a deck-level coded pause, not as a slide
-failure.
+- Overload classification (429 / 5xx / call timeout / `usage_limit_reached`) and the cooldown schedule
+  move into the bounded provider call (`utils/provider_idempotency.py`) with the shared
+  `authored_batch_policy` state. Callers stop classifying.
+- Physical-call bounds are **kept**: every request is reserved against the attempt ledger
+  (`authored_checkpoint_state.py:203-280`), the operation deadline applies, and overload retries are
+  bounded and visible in the receipt. Overload retries do not consume a *content* attempt; they do
+  consume reservation and time. The generic bridge code is not treated as transient wholesale — only
+  the classified statuses are.
+- The ledger says two author ordinals per operation attempt
+  (`authored.provider-attempt-budget-per-operation-attempt.1.json`) while code allows three (the third
+  reserved for rescue). This must be reconciled in the decision ledger before implementation; the
+  design does not pick a number.
+- A whole-account `usage_limit_reached` becomes a deck-level coded pause with the reset time persisted
+  and a resume path, not a slide failure.
 
-## 3. What is measured before implementation
+## 3. Measured before implementation (stored data only; no generation, no provider calls)
 
-These numbers are produced from stored data only (no generation, no provider calls) and go into the
-first implementation task's report:
+1. Emphasis inside blocks, measured as styled spans **within a projected run** (not merely blocks split
+   across elements), over published verbatim decks (runs 11, 15, 16, 20, 21). Decides whether the
+   character-range token form is needed.
+2. Replay of runs 13, 14, 17, 18, 19, 23 HTML through 2.2 and the static checks as **negative
+   fixtures**: each must yield a coded pre-render rejection or an admitted slide, and none may reach the
+   readback as an integrity failure. Historical binder failures are kept as negative fixtures, never
+   converted into successes.
+3. Token accounting: if raw provider-usage receipts exist outside the run directories, compute the net
+   output-token delta with the real tokenizer (old emitted source tokens minus ids/wrappers, plus retry
+   output); if they do not exist, record that honestly and instrument E4 receipts so the first token-mode
+   series produces the number. Current run directories carry no usage receipts.
+4. The bound 43-page / 96-image-occurrence contract
+   (`source-content.template-restyle-contract.7.json`) is added to the fixture set; the 35-slide deck
+   alone is not sufficient acceptance material.
 
-1. Across the published verbatim decks (runs 11, 15, 16, 20, 21): how many source blocks the model
-   rendered as more than one element, and how many of those carry inline emphasis. This fixes the
-   run-token granularity and shows how much styling placeholder authoring must preserve.
-2. Replay of runs 13, 14, 17, 18, 19 HTML through 2.1 + 2.2: each must turn into a coded pre-render
-   rejection or an admitted slide; none may reach the Chromium readback as an integrity failure.
-3. Output-token delta per slide with text removed from the model output (from stored provider usage
-   receipts), to size the speed and rate-limit effect.
+## 4. Rollout — four independent switches, in this order
 
-## 4. Rollout
+1. **Centralize on the current representation.** Implement the gate and the receipt enforcement with
+   the existing binder as the text step. Shadow: run the gate beside every per-path check on the same
+   expanded HTML and metrics; target zero unexplained verdict differences over one repeatability
+   series. Then delete the per-path copies. This step alone ends the "missing check on one path" class.
+2. **Parser-based normalization** behind its own switch; compare receipts and digests against the old
+   normalizers on stored HTML before enabling.
+3. **Token mode** behind `AUTHORED_VERBATIM_PLACEHOLDER_AUTHORING` (default off), pinned per operation
+   and recorded in the checkpoint (`html_repr`). Legacy operations resume under the old representation;
+   the binder is removed only after no unfinished legacy job remains and one token-mode series passes.
+4. **Provider layer** change, separately switched and separately measured.
 
-1. **Shadow.** Implement `admit_slide_html` and run it beside the existing per-path checks on every
-   mutation, logging verdict differences. Target: zero unexplained differences over one repeatability
-   series before any path switches.
-2. **Switch the producers.** Replace the five per-path check blocks with the gate; delete the
-   per-path copies. Enable checkpoint enforcement.
-3. **Placeholder prompt behind a registry knob** (`AUTHORED_VERBATIM_PLACEHOLDER_AUTHORING`, default
-   off) so the binder path remains until a series shows the placeholder path publishes without
-   integrity/missing/order failures. Then the binder's search-and-repair code is deleted.
-4. Parser-based normalization and the provider layer change ship with step 2; they do not depend on
-   the knob.
+Three separate experiments, because a changed prompt cannot be compared by shadowing:
+(a) gate-verdict parity on stored expanded HTML + metrics; (b) synthetic token fixtures and final
+expanded bytes for substitution correctness (including run-23's short-title class and adversarial
+token-looking source text); (c) fresh identically configured runs for product quality, wall time,
+token usage and flags — the only experiment that measures the prompt change.
 
-Success criterion for the whole design: one repeatability series of five identical runs with zero
-deck-level failures caused by text integrity, markup syntax, path-specific validation gaps, or rescue
-overload. Flagged (review-required) slides remain allowed; their count is a layout metric, not a
-correctness one.
+Success criterion: one repeatability series of five identical runs with zero deck-level failures
+caused by text integrity, markup syntax, path-specific validation gaps or rescue overload, with complete
+E4 receipts, real Fidelity publication, and flagged-slide rate not worse than the series before.
+Flagged slides remain a layout metric, not a correctness one.
 
 ## 5. Not in scope
 
 - Layout repair quality (`local-fit`), the pending decisions (a)/(b)/(c) in
   `authored-local-fit-overlap-space-design-20260909.md` §10, and the open-source adoption list in
   `layout-repair-open-source-review-20260911.md`. Those act on flagged-slide counts, not on deck death.
-- Any change to what the model is allowed to design. The renderer policy content is unchanged.
-- Hybrid export.
+- Any change to what the model is allowed to design. Renderer policy content is unchanged.
+- Hybrid export implementation. Its compatibility with changed text-run boundaries is verified in
+  experiment (c), not assumed.
 
 ## 6. Decisions requested
 
-1. Approve 2.1-2.4 as the direction; implementation starts with the measurements in section 3.
-2. Run-token granularity for emphasis: whole-block tokens only (simplest, loses intra-block emphasis)
-   versus run tokens (keeps emphasis, model must place several tokens). Recommendation: run tokens,
-   decided finally by measurement 3.1.
-3. Whether the binder path is kept behind the knob for one release or removed as soon as the
-   placeholder series passes. Recommendation: remove after one passing series.
+1. Approve 2.1-2.4 as the direction; implementation starts with section 3.
+2. Token granularity: whole-block tokens only (recommended; emphasis via wrapping the block) versus
+   adding bounded character-range tokens. Final answer from measurement 3.1.
+3. Attempt ordinals: reconcile the ledger (two) with code (three) before section 4 step 4.
+4. Binder removal: after one passing token-mode series **and** no unfinished legacy jobs
+   (recommended), or kept for one release.
