@@ -213,3 +213,24 @@ def slide_budget(renderer_timeout: float, remaining_job_seconds: float) -> dict[
     return {"total_seconds": total, "verify_seconds": verify,
             "first_seconds": total - verify,
             "fit_seconds": min(renderer_timeout * .1, 6, total - verify)}
+
+
+def image_text_evidence_for_html(
+    html: str, *, app_data: str | None = None
+) -> list[dict[str, Any]]:
+    """``image_text_evidence`` records for the pack icons a slide inlines.
+
+    One record per ``<img>`` whose ``src`` is the data URI of an icon-pack
+    entry that passed the OCR text check, keyed by the qid the browser
+    resolves (``closest('[data-qid]')``). No new judgment is made here: the
+    record restates the pack index, and every other picture -- cutouts,
+    illustrations, uploads, heuristic-only or failed checks -- stays
+    unverifiable so the fit still fails closed. Never raises; malformed
+    markup or an unconfigured pack root yields ``[]``.
+    """
+    from services.authored_local_fit_image_text import image_text_evidence
+
+    try:
+        return image_text_evidence(html, app_data=app_data)
+    except Exception:  # noqa: BLE001 - evidence is advisory, never a fit blocker
+        return []

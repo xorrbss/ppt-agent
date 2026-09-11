@@ -296,3 +296,41 @@ Consequences for the proposed scope-level reflow contract:
 Reproduce: `python baseline_non_verbatim.py <decks.json> <out.json>` from
 `servers/fastapi`, with `LOCAL_FIT_DB_URL_FILE` pointing at a file holding the
 database URL. Per-deck and per-slide records in `baseline-non-verbatim.json`.
+
+## After the evidence producer — re-measurement of the 414 zero-candidate slides
+
+The producer/transport bridge (`image_text_evidence_for_html` +
+`capture_with_policy`) was implemented on 2026-09-12 and the 414 slides that
+produced zero candidates were rendered again through the same path
+(`remeasure_font_unverifiable.py`, records in `remeasure-font-unverifiable.json`).
+
+| result | slides |
+|---|---|
+| still `font_unverifiable`, zero candidates | **414** |
+| search now runs | **0** |
+| image-text records issued by the runner | 721, all `unverifiable` |
+
+**This is the expected and correct outcome for this corpus**, not a failure of
+the bridge:
+
+- The only provenance the producer restates is the icon-pack index, and this
+  `app_data` has **no icon pack at all** (`app_data/authored-icon-packs` does not
+  exist). No slide in the database carries an icon-pack placement either
+  (`class="ig-ic"` with a data-URI `<img>`: 0 rows).
+- Every one of the 401 image-bearing slides holds **generated illustrations**
+  (data-URI `<img>` written by the illustration stage from a style prompt).
+  Those may carry labels by design (`utils/authored_illustrations.py:682-683`),
+  so they have no text-free record and must stay fail-closed until a text-size
+  measurement exists for them.
+
+The bridge itself is proven end to end in real Chrome by
+`tests/integration/test_local_fit_image_text_evidence_chrome.py`: a slide whose
+raster is an OCR-verified pack icon fits (`image_text_evidence.status == "no_text"`
+lands on the element metrics), a heuristic-only icon and an unrecorded icon both
+still fail closed.
+
+What would move the 401: a durable, unforgeable text-size record for generated
+illustrations (the illustration stage knows whether it asked a text-capable
+provider for labels; recording that decision is the natural next producer), or
+running the icon-pack infographic path so slides carry pack icons instead of
+free illustrations. Neither is part of this change.

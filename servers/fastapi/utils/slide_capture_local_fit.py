@@ -1,4 +1,11 @@
-"""Request-only policy transport through existing isolated renderer paths."""
+"""Request-only policy transport through existing isolated renderer paths.
+
+The browser fit runner is the only judge of whether a raster element's
+embedded text has been verified. This module never makes that call: it only
+carries `image_text_evidence` producer records into the browser policy and,
+after the runner reports its verdicts, copies them back onto the matching
+elements in `metrics`.
+"""
 from __future__ import annotations
 
 import base64
@@ -67,14 +74,63 @@ def local_fit_render_identity(html: str, policy: Mapping[str, Any], *, fit: bool
                    "export_scale_manifest": policy["export_scale_manifest"]})
 
 
+def merge_image_text_verdicts(metrics: Mapping[str, Any], report: Mapping[str, Any]) -> dict[str, Any]:
+    """Copy the runner's image/text verdicts onto their matching elements.
+
+    The browser fit runner (see `utils/slide_capture_fit_runner.py`) is the
+    only judge of whether a raster element's text has been verified; this
+    function makes no such decision itself. It copies each verified record
+    from `report["image_text"]` onto the element with the matching qid, and
+    leaves everything else untouched: unverified records write nothing, an
+    element that already carries `image_text_evidence` is left as-is, a
+    record whose qid matches no element is ignored, and no other element
+    field is modified. Input mappings are not mutated; a new metrics dict
+    (with a new elements list) is returned, preserving element order.
+    """
+    verdicts = {
+        str(item.get("qid") or ""): item
+        for item in (report.get("image_text") or [])
+        if isinstance(item, Mapping) and item.get("verified") is True
+    }
+    elements = metrics.get("elements")
+    if not verdicts or not isinstance(elements, list):
+        return dict(metrics)
+
+    merged_elements = []
+    for element in elements:
+        verdict = (
+            verdicts.get(str(element.get("qid") or ""))
+            if isinstance(element, Mapping)
+            else None
+        )
+        if verdict is None or "image_text_evidence" in element:
+            merged_elements.append(element)
+            continue
+        scope = verdict.get("scope")
+        status = "no_text" if scope == "verified_no_text" else "font_floor_verified"
+        merged_elements.append({
+            **element,
+            "image_text_evidence": {
+                "status": status,
+                "scope": scope,
+                "asset_identity": verdict.get("asset_identity"),
+            },
+        })
+    return {**metrics, "elements": merged_elements}
+
+
 async def capture_with_policy(html: str, timeout: int, *, deck_scope: str | None,
                               fit: bool, policy: Mapping[str, Any], fresh: bool):
-    from services.authored_local_fit_policy import html_digest
+    from services.authored_local_fit_policy import html_digest, image_text_evidence_for_html
     from utils import slide_capture as capture
     from utils.authored_fit_edits import apply_fit_edits
     from utils.authored_font_identity import installed_font_identity
 
-    policy = {**policy, "installed_font_identity": installed_font_identity()}
+    # The producer supplies image/text evidence for the exact HTML being
+    # rendered; a caller-supplied non-empty list is trusted as-is instead.
+    image_text_evidence = policy.get("image_text_evidence") or image_text_evidence_for_html(html)
+    policy = {**policy, "installed_font_identity": installed_font_identity(),
+              "image_text_evidence": image_text_evidence}
     canonical_request = policy_request_html(html, policy, fit=fit)
     request_html = (policy_request_html(html, {**policy, "_document_nonce": uuid.uuid4().hex}, fit=fit)
                     if fresh else canonical_request)
@@ -84,6 +140,7 @@ async def capture_with_policy(html: str, timeout: int, *, deck_scope: str | None
     report = metrics.get("fit")
     if not isinstance(report, Mapping) or report.get("fit_state") != "final":
         raise ValueError("local fit final observation unavailable")
+    metrics = merge_image_text_verdicts(metrics, report)
     edits = report.get("edits") or []
     if not fit and edits:
         raise ValueError("fit-disabled renderer returned edits")
