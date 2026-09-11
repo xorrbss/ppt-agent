@@ -12,6 +12,10 @@ from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services import authored_checkpoint_service as checkpoints
 from services.authored_checkpoint_state import provider_attempt_count_in_epoch
+from services.authored_provider_attempt_ledger import (
+    reserve_provider_overload_retry,
+    take_provider_attempt_reservations,
+)
 from utils.llm_calls.author_deck import author_correction_from_stored_failure
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.authored_composition_policy import (
@@ -287,8 +291,13 @@ def test_a_later_operation_attempt_gives_a_failed_slide_its_calls_back(
                 ordinal=ordinal,
                 fencing_token=1,
             )
+        await reserve_provider_overload_retry(
+            take_provider_attempt_reservations(),
+            physical_ordinal=2,
+        )
         exhausted = await checkpoints.get_checkpoint(job.id, 0)
         spent_in_first = provider_attempt_count_in_epoch(exhausted.error, 1)
+        physical_in_first = exhausted.error["provider_physical_attempts"]
 
         # The operation is retried: a new lease, a new fencing token, the same
         # durable checkpoint carrying the slides that already succeeded.
@@ -315,16 +324,20 @@ def test_a_later_operation_attempt_gives_a_failed_slide_its_calls_back(
         await engine.dispose()
         return {
             "spent_in_first": spent_in_first,
+            "physical_in_first": physical_in_first,
             "remaining": remaining,
             "in_second": provider_attempt_count_in_epoch(retried.error, 2),
             "total": int(retried.error["provider_attempt_total"]),
+            "physical_total": int(retried.error["provider_physical_attempt_total"]),
         }
 
     assert asyncio.run(scenario()) == {
         "spent_in_first": 2,
+        "physical_in_first": {"1": 1, "2": 2},
         "remaining": 0,
         "in_second": 1,
         "total": 2,
+        "physical_total": 3,
     }
 
 

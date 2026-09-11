@@ -154,13 +154,17 @@ class _RateLimited(RuntimeError):
     "error",
     [
         500,
+        502,
         503,
+        504,
         429,
         "HTTP 500",
+        "HTTP 502",
+        "HTTP 504",
         "HTTP 429",
         "request timed out",
         "provider_circuit_open",
-        "public_provider_bridge_exception",
+        "public_provider_overload",
         "public_provider_call_timeout",
         "rate_limit_exceeded",
         "Rate limit reached for gpt-5.2",
@@ -177,7 +181,17 @@ def test_overload_and_rate_limit_signals_are_recognized(error: object) -> None:
     assert is_authored_provider_overload(error) is True
 
 
-@pytest.mark.parametrize("error", [None, 400, "HTTP 404", "authored_batch_slide_missing", "schema mismatch"])
+@pytest.mark.parametrize(
+    "error",
+    [
+        None,
+        400,
+        "HTTP 404",
+        "public_provider_bridge_exception",
+        "authored_batch_slide_missing",
+        "schema mismatch",
+    ],
+)
 def test_ordinary_failures_are_not_overload(error: object) -> None:
     assert is_authored_provider_overload(error) is False
 

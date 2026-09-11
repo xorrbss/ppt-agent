@@ -45,7 +45,6 @@ from collections.abc import Sequence
 from typing import Any, Mapping
 
 from services.authored_author_stage_placeholder import author_placeholder_html
-from services.authored_batch_policy import is_authored_provider_overload
 from services.authored_checkpoint_service import AuthoredStageError
 from services.authored_terminal_slide_flag_only import flagged_entry
 from services.authored_terminal_slide_policy import terminal_fallback_active
@@ -316,15 +315,7 @@ def _placeholder(plan: Any, index: int) -> str:
     )
 
 
-def _overload_recovery_allowed(error: BaseException) -> bool:
-    """Reuse the batch predicate plus the provider outcome recovery contract."""
-
-    return is_authored_provider_overload(error) or (
-        getattr(error, "recovery_allowed", False) is True
-    )
-
-
-async def _author_with_overload_recovery(
+async def _author_with_provider_policy(
     plan: Any,
     index: int,
     *,
@@ -332,7 +323,7 @@ async def _author_with_overload_recovery(
     hint: str,
     schedule: AuthoredWaveSchedule,
 ) -> str:
-    """Run ordinal three, replaying it once only for a recoverable overload."""
+    """Run ordinal three once; the bounded provider layer owns overload replay."""
 
     kwargs = _rescue_attempt_kwargs(author_kwargs, hint)
     await schedule.wait_out_cooldown(f"author-rescue-{index + 1}")
@@ -340,21 +331,7 @@ async def _author_with_overload_recovery(
         html = await author_planned_slide(_SimplifiedPlan(plan), index, **kwargs)
     except Exception as error:
         schedule.advance(error, succeeded=False)
-        if not _overload_recovery_allowed(error):
-            raise
-        LOGGER.warning(
-            "[authored] slide %d simplified attempt overloaded (%s); "
-            "waiting for the shared cooldown and replaying ordinal %d once",
-            index + 1,
-            getattr(error, "code", None) or type(error).__name__,
-            RESCUE_ATTEMPT_ORDINAL,
-        )
-        await schedule.wait_out_cooldown(f"author-rescue-recovery-{index + 1}")
-        try:
-            html = await author_planned_slide(_SimplifiedPlan(plan), index, **kwargs)
-        except Exception as recovery_error:
-            schedule.advance(recovery_error, succeeded=False)
-            raise
+        raise
     schedule.advance(html, succeeded=True)
     return html
 
@@ -400,7 +377,7 @@ async def rescue_author_stage(
         f". {OUTPUT_TOKEN_LIMIT_GUIDANCE}" if token_limited else "",
     )
     try:
-        html = await _author_with_overload_recovery(
+        html = await _author_with_provider_policy(
             plan, index, author_kwargs=author_kwargs, hint=hint, schedule=schedule
         )
     except AuthoredProviderBudgetExhausted as exhausted:

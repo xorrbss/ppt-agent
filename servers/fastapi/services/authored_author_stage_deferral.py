@@ -47,6 +47,7 @@ from utils.llm_calls.author_slide_stream import (
     output_token_limit_in_cause_chain,
 )
 from utils.renderer_isolation import RendererPolicyError
+from utils.provider_idempotency import ProviderQuotaPause
 
 LOGGER = logging.getLogger(__name__)
 
@@ -123,8 +124,13 @@ def author_stage_failure(
     error: BaseException,
     *,
     provider_attempt_count: int | None = None,
-) -> AuthoredStageError:
+) -> AuthoredStageError | ProviderQuotaPause:
     """Build the exact author-stage envelope consumed by operation retry policy."""
+
+    if isinstance(error, ProviderQuotaPause):
+        # The durable runner owns this deck-level pause. Wrapping it as a slide
+        # error would consume an operation retry and lose the reset boundary.
+        return error
 
     # On the chatgpt transport the ceiling abort wraps the outcome guard's
     # ``public_provider_response_incomplete``; the more specific cause names

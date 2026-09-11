@@ -3,16 +3,40 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
+from pathlib import Path
 from types import SimpleNamespace
+import uuid
 
 import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlmodel import SQLModel
 
+from models.sql.presentation import PresentationModel
+from models.sql.user import User
+from models.sql.workspace import (
+    WorkspaceConversation,
+    WorkspaceOperation,
+    WorkspaceOperationEvent,
+    WorkspaceOutbox,
+)
 from utils.llm_calls import author_deck as author_deck_mod
 from utils.llm_calls.author_slide import Brand
+from services.authored_author_stage_deferral import author_stage_failure
 from services.authored_batch_policy import is_authored_provider_overload
+from services.workspace_operation_handler_registry import (
+    WorkspaceOperationClaim,
+    WorkspaceOperationDeferred,
+)
+from services.workspace_operation_runner import (
+    defer_workspace_operation_claim,
+    sanitize_workspace_event_payload,
+)
+from utils.datetime_utils import get_current_utc_datetime
 from utils.provider_idempotency import (
     PROVIDER_CALL_TIMEOUT_SECONDS,
     ProviderOutcomeError,
+    ProviderQuotaPause,
     provider_generate_call,
 )
 
@@ -92,7 +116,7 @@ def test_terminal_response_events_have_distinct_durable_outcomes(
     assert raised.value.recovery_allowed is recovery_allowed
 
 
-def test_empty_output_and_bridge_exception_are_not_terminal_event_aliases():
+def test_empty_output_and_classified_overload_are_not_terminal_event_aliases():
     empty = _ChatGPTClient([], result_content="  ")
     with pytest.raises(ProviderOutcomeError) as raised_empty:
         _call(empty)()
@@ -106,7 +130,7 @@ def test_empty_output_and_bridge_exception_are_not_terminal_event_aliases():
     broken = _ChatGPTClient([], error=ProviderUnavailable("private detail"))
     with pytest.raises(ProviderOutcomeError) as raised_bridge:
         _call(broken)()
-    assert raised_bridge.value.code == "public_provider_bridge_exception"
+    assert raised_bridge.value.code == "public_provider_overload"
     assert raised_bridge.value.retryable is False
     assert raised_bridge.value.recovery_allowed is True
     assert "private detail" not in str(raised_bridge.value)
@@ -195,11 +219,266 @@ def test_rate_limited_bridge_call_is_an_overload_signal():
     with pytest.raises(ProviderOutcomeError) as raised:
         _call(throttled)()
 
-    assert raised.value.code == "public_provider_bridge_exception"
+    assert raised.value.code == "public_provider_overload"
     assert raised.value.recovery_allowed is True
     assert "private quota detail" not in str(raised.value)
     assert is_authored_provider_overload(raised.value) is True
     assert is_authored_provider_overload(RateLimited("throttled")) is True
+
+
+def test_generic_bridge_error_is_not_transient_wholesale():
+    broken = _ChatGPTClient([], error=RuntimeError("private bridge detail"))
+
+    with pytest.raises(ProviderOutcomeError) as raised:
+        _call(broken)()
+
+    assert raised.value.code == "public_provider_bridge_exception"
+    assert raised.value.recovery_allowed is False
+    assert is_authored_provider_overload(raised.value) is False
+
+
+class _OpenAIClient:
+    def __init__(self, outcomes):
+        self._client = _RawClient([])
+        self.outcomes = list(outcomes)
+        self.call_count = [0]
+
+    def generate(self, **_kwargs):
+        self.call_count[0] += 1
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return SimpleNamespace(content=outcome)
+
+
+_OpenAIClient.__module__ = "llmai.openai.client"
+
+
+def test_idempotent_overload_retry_reserves_and_stays_inside_deadline():
+    class Unavailable(RuntimeError):
+        status_code = 503
+
+    client = _OpenAIClient([Unavailable("private"), "ok"])
+    now = [10.0]
+    reservations: list[int] = []
+
+    def sleep(seconds: float) -> None:
+        now[0] += seconds
+
+    call = provider_generate_call(
+        client,
+        provider_id="openai",
+        kwargs={},
+        idempotency_key="stable-key",
+        outcome_scope="authored",
+        timeout_seconds=60,
+        retry_reserver=reservations.append,
+        clock=lambda: now[0],
+        sleep=sleep,
+    )
+
+    assert call().content == "ok"
+    assert client.call_count[0] == 2
+    assert reservations == [2]
+    assert client._client.cloned_options["timeout"] == 30.0
+    assert client._client.cloned_options["max_retries"] == 0
+    assert call.receipt == {
+        "schemaVersion": 1,
+        "physicalCallCount": 2,
+        "overloadRetryCount": 1,
+        "cooldownWaitSeconds": 30.0,
+        "deadlineExhausted": False,
+        "quotaPauseResetAt": None,
+    }
+
+
+def test_overload_retry_does_not_start_past_the_deadline():
+    class Unavailable(RuntimeError):
+        status_code = 504
+
+    client = _OpenAIClient([Unavailable("private"), "must not run"])
+    reservations: list[int] = []
+    call = provider_generate_call(
+        client,
+        provider_id="openai",
+        kwargs={},
+        idempotency_key="stable-key",
+        outcome_scope="authored",
+        timeout_seconds=10,
+        retry_reserver=reservations.append,
+        clock=lambda: 100.0,
+        sleep=lambda _seconds: None,
+    )
+
+    with pytest.raises(ProviderOutcomeError, match="public_provider_overload"):
+        call()
+
+    assert client.call_count[0] == 1
+    assert reservations == []
+    assert call.receipt["deadlineExhausted"] is True
+
+
+def test_unsupported_transport_never_replays_inside_one_admission():
+    class Unavailable(RuntimeError):
+        status_code = 502
+
+    client = _PlainClient(error=Unavailable("private"))
+    call = provider_generate_call(
+        client,
+        provider_id="anthropic",
+        kwargs={},
+        idempotency_key=None,
+        outcome_scope="authored",
+        sleep=lambda _seconds: pytest.fail("unsupported transport retried"),
+    )
+
+    with pytest.raises(ProviderOutcomeError, match="public_provider_overload"):
+        call()
+
+    assert client._client.cloned_options["max_retries"] == 0
+    assert call.receipt["physicalCallCount"] == 1
+
+
+def test_run22_usage_limit_shape_is_a_durable_deck_pause():
+    fixture = (
+        Path(__file__).parents[1]
+        / "fixtures"
+        / "authored_provider_usage_limit_run22.txt"
+    ).read_text(encoding="utf-8")
+
+    class UsageLimit(RuntimeError):
+        status_code = 429
+
+    client = _ChatGPTClient([], error=UsageLimit(fixture))
+    call = _call(client)
+    with pytest.raises(ProviderQuotaPause) as raised:
+        call()
+
+    pause = raised.value
+    assert isinstance(pause, WorkspaceOperationDeferred)
+    assert pause.reset_at == 1789437217
+    assert pause.detail == {
+        "provider_quota_reset_at": 1789437217,
+        "provider_quota_resume_semantics": "coordinator_requeues_after_reset",
+    }
+    assert call.receipt["quotaPauseResetAt"] == 1789437217
+    assert author_stage_failure(21, pause, provider_attempt_count=3) is pause
+
+
+def test_quota_pause_reset_is_persisted_on_the_operation(tmp_path):
+    async def scenario() -> dict[str, object]:
+        engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'pause.db'}")
+        tables = [
+            User.__table__,
+            PresentationModel.__table__,
+            WorkspaceConversation.__table__,
+            WorkspaceOperation.__table__,
+            WorkspaceOperationEvent.__table__,
+            WorkspaceOutbox.__table__,
+        ]
+        async with engine.begin() as connection:
+            await connection.run_sync(
+                lambda sync: SQLModel.metadata.create_all(sync, tables=tables)
+            )
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        owner_id = uuid.uuid4()
+        presentation_id = uuid.uuid4()
+        conversation_id = uuid.uuid4()
+        operation_id = uuid.uuid4()
+        attempt_token = "quota-pause-attempt"
+        now = get_current_utc_datetime()
+        async with maker() as session, session.begin():
+            session.add(User(id=owner_id, username="quota-pause", hashed_password="test"))
+            session.add(
+                PresentationModel(
+                    id=presentation_id,
+                    owner_id=owner_id,
+                    content="quota pause",
+                    n_slides=1,
+                    language="en",
+                    mode="authored",
+                    theme={},
+                )
+            )
+            session.add(
+                WorkspaceConversation(
+                    id=conversation_id,
+                    owner_id=owner_id,
+                    owner_scope=str(owner_id),
+                    presentation_id=presentation_id,
+                )
+            )
+            session.add(
+                WorkspaceOperation(
+                    id=operation_id,
+                    owner_id=owner_id,
+                    owner_scope=str(owner_id),
+                    conversation_id=conversation_id,
+                    presentation_id=presentation_id,
+                    anchor_position=1,
+                    kind="design.apply",
+                    state="running",
+                    idempotency_key_hash="a" * 64,
+                    request_hash="b" * 64,
+                    request_payload={},
+                    attempt_number=1,
+                    attempt_token=attempt_token,
+                    fencing_token=4,
+                    lease_expires_at=now + timedelta(minutes=5),
+                )
+            )
+        reset_at = int(now.timestamp()) + 120
+        pause = ProviderQuotaPause(reset_at=reset_at, observed_at=int(now.timestamp()))
+        claim = WorkspaceOperationClaim(
+            operation_id=operation_id,
+            owner_id=owner_id,
+            owner_scope=str(owner_id),
+            conversation_id=conversation_id,
+            presentation_id=presentation_id,
+            kind="design.apply",
+            request_payload={},
+            expected_revision=None,
+            attempt_number=1,
+            attempt_token=attempt_token,
+            fencing_token=4,
+        )
+        assert await defer_workspace_operation_claim(claim, pause, session_factory=maker)
+        async with maker() as session:
+            persisted = await session.get(WorkspaceOperation, operation_id)
+            result = {
+                "state": persisted.state,
+                "attempt_number": persisted.attempt_number,
+                "reset_at": persisted.progress["provider_quota_reset_at"],
+                "resume_semantics": persisted.progress[
+                    "provider_quota_resume_semantics"
+                ],
+                "reason": persisted.progress["wait_reason"],
+                "next_attempt_at": persisted.next_attempt_at,
+                "expected_reset_at": reset_at,
+            }
+        await engine.dispose()
+        return result
+
+    persisted = asyncio.run(scenario())
+    assert persisted["state"] == "queued"
+    assert persisted["attempt_number"] == 0
+    assert persisted["reset_at"] == persisted["expected_reset_at"]
+    assert persisted["resume_semantics"] == "coordinator_requeues_after_reset"
+    assert persisted["reason"] == "public_provider_usage_limit_paused"
+    assert persisted["next_attempt_at"] is not None
+
+
+def test_quota_pause_sanitizer_keeps_only_the_coded_resume_receipt():
+    assert sanitize_workspace_event_payload(
+        {
+            "provider_quota_reset_at": 1_789_437_217,
+            "provider_quota_resume_semantics": "coordinator_requeues_after_reset",
+            "provider_error_body": "must-not-persist",
+        }
+    ) == {
+        "provider_quota_reset_at": 1_789_437_217,
+        "provider_quota_resume_semantics": "coordinator_requeues_after_reset",
+    }
 
 
 def test_unenforceable_timeout_is_reported_rather_than_assumed(caplog):

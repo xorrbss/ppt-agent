@@ -14,6 +14,7 @@ from services.authored_wave_scheduler import (
     AuthoredWaveSchedule,
     run_initial_authoring,
 )
+from utils.provider_idempotency import ProviderQuotaPause
 
 
 @dataclass
@@ -240,6 +241,29 @@ def test_a_raised_batch_is_recorded_and_never_reauthored():
 
     assert sorted(index for batch in seen for index in batch) == [0, 1]
     assert all(is_exception for _batch, is_exception in recorded)
+
+
+def test_quota_pause_escapes_as_a_deck_outcome_before_slide_recording():
+    recorded: list[tuple[int, ...]] = []
+    pause = ProviderQuotaPause(reset_at=2_000_000_000, observed_at=1_999_999_900)
+
+    async def run_batch(_indexes):
+        raise pause
+
+    schedule = AuthoredWaveSchedule(_state())
+    with pytest.raises(ProviderQuotaPause) as raised:
+        _run(
+            run_initial_authoring(
+                [0],
+                schedule,
+                run_batch=run_batch,
+                record=lambda indexes, _outcome: recorded.append(tuple(indexes)) or False,
+                barrier_disabled=True,
+            )
+        )
+
+    assert raised.value is pause
+    assert recorded == []
 
 
 def test_cancelling_admission_reaps_every_inflight_batch():

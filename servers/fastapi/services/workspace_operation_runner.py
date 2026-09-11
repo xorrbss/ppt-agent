@@ -257,6 +257,8 @@ _SAFE_PAYLOAD_KEYS = frozenset(
         "fencing_token",
         "queue_position",
         "wait_reason",
+        "provider_quota_reset_at",
+        "provider_quota_resume_semantics",
         "worker_peak_memory_bytes",
         "worker_peak_handle_count",
         "worker_peak_process_count",

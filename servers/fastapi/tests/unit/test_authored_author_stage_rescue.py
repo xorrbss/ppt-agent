@@ -29,7 +29,6 @@ from services import authored_author_stage_rescue as rescue_mod
 from services import authored_presentation_pipeline as pipeline_mod
 from services import authored_presentation_service as authored_service
 from services import authored_terminal_slide_fallback as terminal_mod
-from services.authored_batch_policy import OVERLOAD_COOLDOWN_BASE_SECONDS
 from services.authored_composition_policy import CompositionProfile
 from services.authored_generation_observability import (
     log_authored_slide_failure_observation,
@@ -315,7 +314,7 @@ def test_third_attempt_uses_the_simplified_brief_and_publishes_unflagged(monkeyp
     assert simplified.header_contract_at(0) is contract
 
 
-def test_rescue_overload_waits_for_shared_cooldown_then_succeeds_without_new_ordinal(
+def test_rescue_overload_replay_is_owned_by_the_bounded_provider_layer(
     monkeypatch,
 ):
     waits = _capture_cooldown_waits(monkeypatch)
@@ -335,28 +334,28 @@ def test_rescue_overload_waits_for_shared_cooldown_then_succeeds_without_new_ord
         if attempt_observer is not None:
             attempt_observer(provider_attempt_offset + 1)
             observed.append(provider_attempt_offset + 1)
-        if len(calls) == 1:
-            raise ProviderOutcomeError(
-                "public_provider_bridge_exception", recovery_allowed=True
-            )
-        return _RESCUED_HTML
+        raise ProviderOutcomeError(
+            "public_provider_overload", recovery_allowed=True, overload=True
+        )
 
-    result = _run_pipeline(
-        monkeypatch,
-        plan=_stub_plan(contract=default_header_contract()),
-        first_pass=_first_pass_that_spends_its_budget([]),
-        rescue=overloaded_once,
-        source_images_locked_to_source_slide=True,
-    )
+    with pytest.raises(pipeline_mod.AuthoredStageError) as caught:
+        _run_pipeline(
+            monkeypatch,
+            plan=_stub_plan(contract=default_header_contract()),
+            first_pass=_first_pass_that_spends_its_budget([]),
+            rescue=overloaded_once,
+            source_images_locked_to_source_slide=True,
+        )
 
-    assert calls == [(2, 3), (2, 3)]
-    assert observed == [3, 3]
-    assert waits == [OVERLOAD_COOLDOWN_BASE_SECONDS]
-    assert result.author_provider_attempt_counts == (3,)
+    assert calls == [(2, 3)]
+    assert observed == [3]
+    assert waits == []
+    assert caught.value.code == "public_provider_overload"
+    assert caught.value.provider_attempt_count == 3
 
 
 @pytest.mark.parametrize(
-    "code", ("public_provider_bridge_exception", "public_provider_call_timeout")
+    "code", ("public_provider_overload", "public_provider_call_timeout")
 )
 def test_rescue_overload_past_bound_keeps_coded_terminal_failure(monkeypatch, code):
     waits = _capture_cooldown_waits(monkeypatch)
@@ -369,7 +368,7 @@ def test_rescue_overload_past_bound_keeps_coded_terminal_failure(monkeypatch, co
         calls += 1
         if attempt_observer is not None:
             attempt_observer(provider_attempt_offset + 1)
-        raise ProviderOutcomeError(code, recovery_allowed=True)
+        raise ProviderOutcomeError(code, recovery_allowed=True, overload=True)
 
     with pytest.raises(pipeline_mod.AuthoredStageError) as caught:
         _run_pipeline(
@@ -380,8 +379,8 @@ def test_rescue_overload_past_bound_keeps_coded_terminal_failure(monkeypatch, co
             source_images_locked_to_source_slide=True,
         )
 
-    assert calls == 2
-    assert waits == [OVERLOAD_COOLDOWN_BASE_SECONDS]
+    assert calls == 1
+    assert waits == []
     assert caught.value.code == code
     assert caught.value.provider_attempt_count == 3
     event = log_authored_slide_failure_observation(

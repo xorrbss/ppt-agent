@@ -26,6 +26,7 @@ from services.authored_batch_policy import (
     plan_authored_batch_wave,
 )
 from utils.get_env_programme import is_authored_wave_barrier_disabled
+from utils.provider_idempotency import ProviderQuotaPause
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +149,8 @@ async def _run_waves(
         )
         consumed: set[int] = set()
         for batch, outcome in zip(wave.batches, outcomes, strict=True):
+            if isinstance(outcome, ProviderQuotaPause):
+                raise outcome
             consumed.update(batch.slide_indices)
             schedule.advance(
                 outcome, succeeded=record(batch.slide_indices, outcome)
@@ -190,6 +193,8 @@ async def _run_admission(
             for task in done:
                 batch = inflight.pop(task)
                 error = task.exception()
+                if isinstance(error, ProviderQuotaPause):
+                    raise error
                 outcome = error if error is not None else task.result()
                 schedule.advance(outcome, succeeded=record(batch, outcome))
     finally:

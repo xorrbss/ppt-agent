@@ -74,13 +74,17 @@ def register_rate_limit(
     default_cooldown_seconds: float,
     max_cooldown_seconds: float,
 ) -> None:
-    status_code = getattr(error, "status_code", None)
-    response = getattr(error, "response", None)
-    if status_code is None and response is not None:
-        status_code = getattr(response, "status_code", None)
-    if status_code != 429 and "429" not in str(error):
+    # Classification belongs to provider_idempotency. Callers hand this helper
+    # only a content-free provider outcome and never inspect HTTP/error text.
+    if getattr(error, "overload", False) is not True:
         return
-    retry_after = retry_after_seconds(error)
+    classified_cooldown = getattr(error, "cooldown_seconds", None)
+    retry_after = (
+        max(0.0, float(classified_cooldown))
+        if isinstance(classified_cooldown, (int, float))
+        and not isinstance(classified_cooldown, bool)
+        else None
+    )
     cooldown = (
         retry_after if retry_after is not None else default_cooldown_seconds
     )
