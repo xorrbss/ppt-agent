@@ -42,7 +42,15 @@ from services.presentation_export_route_inputs import (
 )
 from services.public_export_hybrid_evidence import bounded_hybrid_worker_evidence
 from services.public_export_worker_bundle import public_export_worker_bundle
-from services.public_export_deadline import load_public_export_deadline_grant, worker_deadline_bounds
+from services.public_export_deadline import (
+    PublicExportDeadlineGrant,
+    load_public_export_deadline_grant,
+    worker_deadline_bounds,
+)
+from services.public_export_join import (
+    export_identity_lease_keeper,
+    resolve_export_join,
+)
 from services.public_export_deadline_policy import PUBLIC_EXPORT_DEADLINE_MAX_SECONDS
 from services.public_export_errors import PublicExportOperationError
 from services.public_render_runtime_identity import (
@@ -64,7 +72,6 @@ from services.public_export_identity import (
     CanonicalExportIdentity,
     CanonicalSlideRenderIdentity,
     ExportEvidenceDigests,
-    FencedExportPublicationCandidate,
     SlideCheckpointArtifact,
     acquire_slide_render_authority,
     bind_slide_render_checkpoint,
@@ -72,11 +79,7 @@ from services.public_export_identity import (
     claim_canonical_export_identity,
     complete_canonical_export_identity,
     find_reusable_slide_render_checkpoint,
-    promote_canonical_export_publication,
-    public_export_identity_v2_enabled,
-    require_public_export_identity_v2_enabled,
     restore_canonical_export_identity,
-    reuse_completed_export_identity,
     run_slide_render_singleflight,
 )
 from services.isolated_worker_contracts import (
@@ -641,13 +644,13 @@ async def prepare_canonical_export_execution(
     worker_id: str,
     lease_seconds: int = 120,
 ) -> CanonicalExportExecution:
-    """Persist the cross-node identity checkpoint and join shadow single-flight.
+    """Persist the cross-node identity checkpoint and join the single-flight.
 
-    The caller owns the surrounding database transaction.  This boundary is
-    inert unless ``PUBLIC_EXPORT_IDENTITY_V2_ENABLED`` is explicitly enabled.
+    The caller owns the surrounding database transaction.  The returned
+    disposition is the cluster-wide authority: ``claimed`` executes,
+    ``in_flight`` joins a live attempt, ``completed`` reuses the result.
     """
 
-    require_public_export_identity_v2_enabled()
     if claim.owner_id is None:
         raise PublicExportOperationError("public_export_owner_required")
     artifact_service = configured_public_artifact_service()
@@ -687,7 +690,6 @@ async def resume_canonical_export_execution(
 ) -> CanonicalExportExecution:
     """Resume from object-store checkpoint bytes after strict digest rebinding."""
 
-    require_public_export_identity_v2_enabled()
     if claim.owner_id is None:
         raise PublicExportOperationError("public_export_owner_required")
     artifact_service = configured_public_artifact_service()
@@ -704,90 +706,6 @@ async def resume_canonical_export_execution(
     )
 
 
-async def execute_and_publish_canonical_export_execution(
-    claim: WorkspaceOperationClaim,
-    *,
-    execution: CanonicalExportExecution,
-    publication_name: str,
-    session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
-) -> FencedExportPublicationCandidate:
-    """Run or reuse one DB-authoritative export and fence its publication.
-
-    Child execution happens outside a database transaction.  The returned
-    worker bytes must already be durable in object storage; result metadata,
-    single-flight completion, and publication pointer are then committed in
-    one transaction.  An in-flight duplicate never performs local fallback.
-    """
-
-    require_public_export_identity_v2_enabled()
-    if execution.singleflight.disposition == "in_flight":
-        raise PublicExportOperationError("public_export_singleflight_in_flight")
-    if execution.singleflight.disposition == "completed":
-        candidate = reuse_completed_export_identity(
-            execution=execution,
-            operation_claim=claim,
-        )
-        async with session_factory() as session:
-            await promote_canonical_export_publication(
-                session,
-                candidate=candidate,
-                operation_claim=claim,
-                publication_name=publication_name,
-                revision=execution.identity.source_revision,
-                quality_digest=execution.identity.evidence.quality_digest,
-            )
-            await session.commit()
-        return candidate
-    if not execution.should_execute:
-        raise PublicExportOperationError("public_export_execution_disposition_invalid")
-
-    artifact_service = configured_public_artifact_service()
-    bundle = build_validated_checkpoint_export_bundle(execution.identity)
-    async with session_factory() as session:
-        bundle_ref = await artifact_service.persist_bytes(
-            session,
-            owner_id=execution.identity.owner_id,
-            tenant_id=execution.identity.tenant_id,
-            kind="export-bundle",
-            payload=bundle,
-            media_type="application/vnd.presenton.export-bundle+json",
-            created_by_operation_id=claim.operation_id,
-            retention_class="ephemeral",
-        )
-        await session.commit()
-
-    exported = await execute_isolated_export_operation(
-        claim,
-        input_artifact=_worker_ref(bundle_ref),
-    )
-    if not exported.ok:
-        raise PublicExportOperationError(
-            exported.error_code or "public_export_worker_failed"
-        )
-    result_ref = _public_worker_output(
-        dict(exported.output_artifact or {}),
-        retention_class="published",
-    )
-    async with session_factory() as session:
-        registered = await artifact_service.register_ref(session, result_ref)
-        candidate = await complete_canonical_export_identity(
-            session,
-            execution=execution,
-            operation_claim=claim,
-            result_artifact=registered,
-        )
-        await promote_canonical_export_publication(
-            session,
-            candidate=candidate,
-            operation_claim=claim,
-            publication_name=publication_name,
-            revision=execution.identity.source_revision,
-            quality_digest=execution.identity.evidence.quality_digest,
-        )
-        await session.commit()
-    return candidate
-
-
 async def execute_canonical_export_execution(
     claim: WorkspaceOperationClaim,
     *,
@@ -799,43 +717,25 @@ async def execute_canonical_export_execution(
     font_embedding: bool = False,
     local_fit_receipts: Sequence[Mapping[str, object]] = (),
     deadline_seconds: int | None = None,
+    deadline_grant: PublicExportDeadlineGrant | None = None,
     session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
 ) -> PublicWorkerArtifactResult:
     """Execute/join without publishing; the workspace handler owns publication.
     This boundary only durably completes the reusable export identity."""
 
-    require_public_export_identity_v2_enabled()
-    if execution.singleflight.disposition == "in_flight":
-        raise PublicExportOperationError("public_export_singleflight_in_flight")
-    if execution.singleflight.disposition == "completed":
-        candidate = reuse_completed_export_identity(
-            execution=execution,
-            operation_claim=claim,
-        )
-        artifact_service = configured_public_artifact_service()
-        async with session_factory() as session:
-            # Keep the completed identity's producer immutable. The public
-            # publisher requires a separately registered consumer operation
-            # ref even when both refs share the same verified CAS bytes.
-            registered = await artifact_service.register_consumer_ref(
-                session,
-                candidate.artifact,
-                created_by_operation_id=claim.operation_id,
-            )
-            await session.commit()
+    # One point owns every non-leading disposition: a duplicate joins the live
+    # flight (or is promoted when its leader's lease died) instead of failing.
+    join = await resolve_export_join(
+        claim,
+        execution=execution,
+        session_factory=session_factory,
+        artifact_service_factory=configured_public_artifact_service,
+        grant=deadline_grant,
+    )
+    execution = join.execution
+    if join.result is not None:
         return PublicWorkerArtifactResult(
-            artifact=registered,
-            # No worker ran, but the identity being complete is itself the
-            # statement of what these bytes are: an identity only completes
-            # when the worker delivered the mode it names.
-            resource_metrics={
-                "public_export_worker_evidence": {
-                    "requestedExportMode": execution.identity.export_mode,
-                    "deliveredExportMode": execution.identity.export_mode,
-                    "fallbackReason": None,
-                    "reusedCompletedIdentity": True,
-                }
-            },
+            artifact=join.result[0], resource_metrics=join.result[1]
         )
     if not execution.should_execute:
         raise PublicExportOperationError("public_export_execution_disposition_invalid")
@@ -862,11 +762,17 @@ async def execute_canonical_export_execution(
             retention_class="ephemeral",
         )
         await session.commit()
-    exported = await execute_isolated_export_operation(
-        claim,
-        input_artifact=_worker_ref(bundle_ref),
-        deadline_seconds=deadline_seconds,
-    )
+    # The leading attempt renews its identity lease while the worker runs, so
+    # lease expiry keeps meaning "the leader is gone" and no waiter is promoted
+    # into a second worker for the same identity.
+    async with export_identity_lease_keeper(
+        execution=execution, session_factory=session_factory
+    ):
+        exported = await execute_isolated_export_operation(
+            claim,
+            input_artifact=_worker_ref(bundle_ref),
+            deadline_seconds=deadline_seconds,
+        )
     if not exported.ok:
         raise PublicExportOperationError(
             exported.error_code or "public_export_worker_failed"
@@ -915,9 +821,10 @@ async def execute_canonical_export_execution(
         resource_metrics={
             "role": exported.role,
             **exported.resource_metrics,
-            "public_export_worker_evidence": bounded_hybrid_worker_evidence(
-                exported.execution_evidence
-            ),
+            "public_export_worker_evidence": {
+                **bounded_hybrid_worker_evidence(exported.execution_evidence),
+                **join.evidence(),
+            },
         },
     )
 
@@ -1106,8 +1013,9 @@ async def render_and_export_authored_htmls(
     render_worker_millis = 0
     artifact_stage_millis = 0
 
-    canonical_enabled = public_export_identity_v2_enabled()
-    if canonical_enabled and claim.expected_revision is None:
+    # The export identity is keyed on the source revision, so an operation that
+    # cannot name one has no identity and must not execute.
+    if claim.expected_revision is None:
         raise PublicExportOperationError("public_export_revision_required")
     render_execution_count = 0
     render_batch_execution_count = 0
@@ -1165,9 +1073,7 @@ async def render_and_export_authored_htmls(
                         payload=png,
                         media_type="image/png",
                         created_by_operation_id=claim.operation_id,
-                        retention_class=(
-                            "checkpoint" if canonical_enabled else "ephemeral"
-                        ),
+                        retention_class="checkpoint",
                     )
                 )
             await session.commit()
@@ -1286,7 +1192,7 @@ async def render_and_export_authored_htmls(
             claim=claim,
             tenant_id=tenant_id,
             expected_count=len(references),
-            retention_class=("checkpoint" if canonical_enabled else "ephemeral"),
+            retention_class="checkpoint",
         )
         return tuple(
             await asyncio.gather(
@@ -1295,9 +1201,7 @@ async def render_and_export_authored_htmls(
                         reference,
                         expected_kind="slide-png",
                         expected_media_type="image/png",
-                        retention_class=(
-                            "checkpoint" if canonical_enabled else "ephemeral"
-                        ),
+                        retention_class="checkpoint",
                     )
                     for reference in rendered
                 )
@@ -1351,26 +1255,22 @@ async def render_and_export_authored_htmls(
     checkpoint_reuse_eligible = bool(
         render_runtime_binding.get("checkpointReuseEligible") is True
     )
-    slide_identities = (
-        tuple(
-            CanonicalSlideRenderIdentity(
-                owner_id=claim.owner_id,
-                tenant_id=tenant_id,
-                presentation_id=claim.presentation_id,
-                source_revision=claim.expected_revision,
-                slide_index=index,
-                html_digest=reference.sha256,
-                scene_digest=normalized_scene_digest,
-                quality_digest=normalized_quality_digest,
-                render_adapter="public-isolated-fidelity",
-                renderer_version=public_slide_renderer_version(
-                    htmls[index], runtime_binding=render_runtime_binding
-                ),
-            )
-            for index, reference in enumerate(html_refs)
+    slide_identities = tuple(
+        CanonicalSlideRenderIdentity(
+            owner_id=claim.owner_id,
+            tenant_id=tenant_id,
+            presentation_id=claim.presentation_id,
+            source_revision=claim.expected_revision,
+            slide_index=index,
+            html_digest=reference.sha256,
+            scene_digest=normalized_scene_digest,
+            quality_digest=normalized_quality_digest,
+            render_adapter="public-isolated-fidelity",
+            renderer_version=public_slide_renderer_version(
+                htmls[index], runtime_binding=render_runtime_binding
+            ),
         )
-        if canonical_enabled and claim.expected_revision is not None
-        else ()
+        for index, reference in enumerate(html_refs)
     )
 
     async def render_canonical_slide(
@@ -1481,16 +1381,10 @@ async def render_and_export_authored_htmls(
         render_authority_modes.add("accepted-local-fit-artifact")
     else:
         try:
-            if canonical_enabled:
-                png_refs = await gather_render_members(
-                    [render_canonical_slide(index, reference, slide_identities[index])
-                     for index, reference in enumerate(html_refs)]
-                )
-            else:
-                png_refs = await gather_render_members(
-                    [render_fresh(index, reference)
-                     for index, reference in enumerate(html_refs)]
-                )
+            png_refs = await gather_render_members(
+                [render_canonical_slide(index, reference, slide_identities[index])
+                 for index, reference in enumerate(html_refs)]
+            )
         finally:
             # Do not let an operation cancellation/fence failure leave the
             # operation-scoped drain task or an isolated Chromium child behind.
@@ -1564,250 +1458,155 @@ async def render_and_export_authored_htmls(
             "exporterWorkerBundle": worker_bundle.evidence(),
         }
 
-    if hybrid_requested and not canonical_enabled:
-        # The hybrid input is addressed by the canonical export identity. Never
-        # fail the request over a controller configuration gap: deliver the
-        # fidelity raster and say why it is not editable.
-        hybrid_requested = False
-        hybrid_degraded_reason = "hybrid_requires_export_identity_v2"
-    if canonical_enabled:
-        def canonical_identity(*, hybrid: bool) -> CanonicalExportIdentity:
-            return CanonicalExportIdentity.build(
-                owner_id=claim.owner_id,
-                tenant_id=tenant_id,
-                presentation_id=claim.presentation_id,
-                source_revision=claim.expected_revision,
-                export_format=export_format,  # type: ignore[arg-type]
-                export_mode=(
-                    "editable-hybrid" if hybrid else "fidelity-raster"
-                ),
-                render_adapter=(
-                    "public-isolated-hybrid"
-                    if hybrid
-                    else "public-isolated-fidelity"
-                ),
-                exporter_version=PUBLIC_RENDER_WORKER_PROTOCOL_VERSION,
-                evidence=ExportEvidenceDigests(
-                    scene_digest=normalized_scene_digest,
-                    semantic_digest=semantic_digest,
-                    quality_digest=normalized_quality_digest,
-                    exporter_digest=worker_bundle.digest,
-                    font_manifest_digest=sha256(
-                        (
-                            f"editable-hybrid:font-embedding={'on' if font_embedding else 'off'}"
-                            if hybrid
-                            else "fidelity-raster:no-font-manifest"
-                        ).encode("utf-8")
-                    ).hexdigest(),
-                ),
-                slides=tuple(
-                    SlideCheckpointArtifact(
-                        slide_index=index,
-                        artifact=reference,
-                        input_digest=slide_identities[index].canonical_digest,
-                        stage_version=slide_identities[index].stage_version,
-                        validation_digest=sha256(
-                            json.dumps(
-                                {
-                                    "slideIndex": index,
-                                    "htmlDigest": html_refs[index].sha256,
-                                    "pngDigest": reference.sha256,
-                                    "sceneDigest": normalized_scene_digest,
-                                    "qualityDigest": normalized_quality_digest,
-                                    "localFitAcceptanceKey": (
-                                        local_fit_receipts[index].get(
-                                            "acceptanceKey"
-                                        )
-                                        if local_fit_receipts
-                                        else None
-                                    ),
-                                },
-                                sort_keys=True,
-                                separators=(",", ":"),
-                            ).encode("utf-8")
-                        ).hexdigest(),
-                    )
-                    for index, reference in enumerate(png_refs)
-                ),
-            )
-
-        async def run_canonical(*, hybrid: bool) -> PublicWorkerArtifactResult:
-            async with session_factory() as session:
-                execution = await prepare_canonical_export_execution(
-                    session,
-                    claim,
-                    identity=canonical_identity(hybrid=hybrid),
-                    worker_id=(
-                        os.getenv("PUBLIC_WORKER_NODE_ID") or "export-controller"
-                    ),
-                )
-                await session.commit()
-            return await execute_canonical_export_execution(
-                claim,
-                execution=execution,
-                source_slides=html_refs if hybrid else (),
-                semantic_slides=semantic_slides if hybrid else (),
-                export_attempt_id=(
-                    str(export_attempt_id)
-                    if hybrid and export_attempt_id is not None
-                    else None
-                ),
-                renderer_source_digest=(
-                    render_runtime_binding_digest if hybrid else None
-                ),
-                font_embedding=font_embedding if hybrid else False,
-                local_fit_receipts=local_fit_receipts,
-                deadline_seconds=grant.export_worker_seconds(),
-                session_factory=session_factory,
-            )
-
-        export_started = time.perf_counter()
-        try:
-            canonical_result = await run_canonical(hybrid=hybrid_requested)
-        except PublicExportHybridFallback as fallback:
-            # The worker already produced a good raster deck; publish it under
-            # the identity that honestly describes it, and keep the abandoned
-            # attempt's account of itself so the receipt can explain the
-            # downgrade instead of only naming it.
-            hybrid_degraded_reason = fallback.reason
-            hybrid_attempt_evidence = fallback.evidence
-            if fallback.resource_metrics:
-                resource_samples.append(fallback.resource_metrics)
-            hybrid_requested = False
-            canonical_result = await run_canonical(hybrid=False)
-        # A completed identity only verifies/registers the consumer ref, and
-        # reports only what the bytes are. Its elapsed work belongs to
-        # operationWallMillis, not to a worker that never ran.
-        worker_ran = "role" in canonical_result.resource_metrics
-        export_millis = (
-            int((time.perf_counter() - export_started) * 1000) if worker_ran else 0
-        )
-        if worker_ran:
-            resource_samples.append(canonical_result.resource_metrics)
-        cache_only_reuse = not resource_samples
-        await worker_cache.maintain()
-        return PublicWorkerArtifactResult(
-            artifact=canonical_result.artifact,
-            resource_metrics={
-                **_resource_summary(
-                    resource_samples,
-                    cache_only=cache_only_reuse,
-                ),
-                **public_artifact_store_metrics_delta(artifact_metrics_before),
-                "render_execution_count": render_execution_count,
-                "render_checkpoint_reuse_count": render_checkpoint_reuse_count,
-                "render_singleflight_join_count": render_singleflight_join_count,
-                "render_authority_modes": sorted(render_authority_modes),
-                "requested_export_mode": requested_export_mode,
-                "public_export_worker_evidence": dict(
-                    canonical_result.resource_metrics.get(
-                        "public_export_worker_evidence", {}
-                    )
-                    or {}
-                ),
-                **(
-                    {"hybrid_degraded_reason": hybrid_degraded_reason}
-                    if hybrid_degraded_reason
-                    else {}
-                ),
-                **(
-                    {"hybrid_attempt_evidence": hybrid_attempt_evidence}
-                    if hybrid_attempt_evidence
-                    else {}
-                ),
-                "public_export_execution_receipt": execution_receipt(
-                    export_millis=export_millis,
-                    export_scheduler_queue_wait_millis=metric_millis(
-                        canonical_result.resource_metrics,
-                        "trustedSchedulerQueueWaitMs",
-                    ),
-                ),
-            },
-        )
-    bundle = json.dumps(
-        {
-            "schemaVersion": "public-export-bundle/v1",
-            "exportFormat": export_format,
-            "slides": [
-                _worker_ref(reference).to_wire() for reference in png_refs
-            ],
-            **(
-                {
-                    "localFitReceipts": [
-                        dict(receipt) for receipt in local_fit_receipts
-                    ]
-                }
-                if local_fit_receipts
-                else {}
-            ),
-        },
-        ensure_ascii=True,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    async with session_factory() as session:
-        bundle_ref = await artifact_service.persist_bytes(
-            session,
+    def canonical_identity(*, hybrid: bool) -> CanonicalExportIdentity:
+        return CanonicalExportIdentity.build(
             owner_id=claim.owner_id,
             tenant_id=tenant_id,
-            kind="export-bundle",
-            payload=bundle,
-            media_type="application/vnd.presenton.export-bundle+json",
-            created_by_operation_id=claim.operation_id,
-            retention_class="ephemeral",
+            presentation_id=claim.presentation_id,
+            source_revision=claim.expected_revision,
+            export_format=export_format,  # type: ignore[arg-type]
+            export_mode=(
+                "editable-hybrid" if hybrid else "fidelity-raster"
+            ),
+            render_adapter=(
+                "public-isolated-hybrid"
+                if hybrid
+                else "public-isolated-fidelity"
+            ),
+            exporter_version=PUBLIC_RENDER_WORKER_PROTOCOL_VERSION,
+            evidence=ExportEvidenceDigests(
+                scene_digest=normalized_scene_digest,
+                semantic_digest=semantic_digest,
+                quality_digest=normalized_quality_digest,
+                exporter_digest=worker_bundle.digest,
+                font_manifest_digest=sha256(
+                    (
+                        f"editable-hybrid:font-embedding={'on' if font_embedding else 'off'}"
+                        if hybrid
+                        else "fidelity-raster:no-font-manifest"
+                    ).encode("utf-8")
+                ).hexdigest(),
+            ),
+            slides=tuple(
+                SlideCheckpointArtifact(
+                    slide_index=index,
+                    artifact=reference,
+                    input_digest=slide_identities[index].canonical_digest,
+                    stage_version=slide_identities[index].stage_version,
+                    validation_digest=sha256(
+                        json.dumps(
+                            {
+                                "slideIndex": index,
+                                "htmlDigest": html_refs[index].sha256,
+                                "pngDigest": reference.sha256,
+                                "sceneDigest": normalized_scene_digest,
+                                "qualityDigest": normalized_quality_digest,
+                                "localFitAcceptanceKey": (
+                                    local_fit_receipts[index].get(
+                                        "acceptanceKey"
+                                    )
+                                    if local_fit_receipts
+                                    else None
+                                ),
+                            },
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        ).encode("utf-8")
+                    ).hexdigest(),
+                )
+                for index, reference in enumerate(png_refs)
+            ),
         )
-        await session.commit()
-    await stage_worker_input(bundle_ref)
+
+    async def run_canonical(*, hybrid: bool) -> PublicWorkerArtifactResult:
+        async with session_factory() as session:
+            execution = await prepare_canonical_export_execution(
+                session,
+                claim,
+                identity=canonical_identity(hybrid=hybrid),
+                worker_id=(
+                    os.getenv("PUBLIC_WORKER_NODE_ID") or "export-controller"
+                ),
+            )
+            await session.commit()
+        return await execute_canonical_export_execution(
+            claim,
+            execution=execution,
+            source_slides=html_refs if hybrid else (),
+            semantic_slides=semantic_slides if hybrid else (),
+            export_attempt_id=(
+                str(export_attempt_id)
+                if hybrid and export_attempt_id is not None
+                else None
+            ),
+            renderer_source_digest=(
+                render_runtime_binding_digest if hybrid else None
+            ),
+            font_embedding=font_embedding if hybrid else False,
+            local_fit_receipts=local_fit_receipts,
+            deadline_seconds=grant.export_worker_seconds(),
+            deadline_grant=grant,
+            session_factory=session_factory,
+        )
 
     export_started = time.perf_counter()
-    exported = await execute_isolated_export_operation(
-        claim,
-        input_artifact=_worker_ref(bundle_ref),
-        deadline_seconds=grant.export_worker_seconds(),
+    try:
+        canonical_result = await run_canonical(hybrid=hybrid_requested)
+    except PublicExportHybridFallback as fallback:
+        # The worker already produced a good raster deck; publish it under
+        # the identity that honestly describes it, and keep the abandoned
+        # attempt's account of itself so the receipt can explain the
+        # downgrade instead of only naming it.
+        hybrid_degraded_reason = fallback.reason
+        hybrid_attempt_evidence = fallback.evidence
+        if fallback.resource_metrics:
+            resource_samples.append(fallback.resource_metrics)
+        hybrid_requested = False
+        canonical_result = await run_canonical(hybrid=False)
+    # A completed identity only verifies/registers the consumer ref, and
+    # reports only what the bytes are. Its elapsed work belongs to
+    # operationWallMillis, not to a worker that never ran.
+    worker_ran = "role" in canonical_result.resource_metrics
+    export_millis = (
+        int((time.perf_counter() - export_started) * 1000) if worker_ran else 0
     )
-    export_millis = int((time.perf_counter() - export_started) * 1000)
-    if not exported.ok:
-        raise PublicExportOperationError(
-            exported.error_code or "public_export_worker_failed"
-        )
-    if exported.resource_metrics is None:
-        raise PublicExportOperationError("public_worker_resource_metrics_missing")
-    resource_samples.append({"role": exported.role, **exported.resource_metrics})
-    published = _public_worker_output(
-        dict(exported.output_artifact or {}),
-        retention_class="published",
-    )
-    registered = await adopt_worker_output(
-        published,
-        expected_kind=f"presentation-{export_format}",
-        expected_media_type=(
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            if export_format == "pptx"
-            else "application/pdf"
-        ),
-        retention_class="published",
-    )
+    if worker_ran:
+        resource_samples.append(canonical_result.resource_metrics)
+    cache_only_reuse = not resource_samples
     await worker_cache.maintain()
     return PublicWorkerArtifactResult(
-        artifact=registered,
+        artifact=canonical_result.artifact,
         resource_metrics={
-            **_resource_summary(resource_samples),
+            **_resource_summary(
+                resource_samples,
+                cache_only=cache_only_reuse,
+            ),
             **public_artifact_store_metrics_delta(artifact_metrics_before),
             "render_execution_count": render_execution_count,
             "render_checkpoint_reuse_count": render_checkpoint_reuse_count,
             "render_singleflight_join_count": render_singleflight_join_count,
             "render_authority_modes": sorted(render_authority_modes),
             "requested_export_mode": requested_export_mode,
-            "public_export_worker_evidence": dict(exported.execution_evidence),
+            "public_export_worker_evidence": dict(
+                canonical_result.resource_metrics.get(
+                    "public_export_worker_evidence", {}
+                )
+                or {}
+            ),
             **(
                 {"hybrid_degraded_reason": hybrid_degraded_reason}
                 if hybrid_degraded_reason
                 else {}
             ),
+            **(
+                {"hybrid_attempt_evidence": hybrid_attempt_evidence}
+                if hybrid_attempt_evidence
+                else {}
+            ),
             "public_export_execution_receipt": execution_receipt(
                 export_millis=export_millis,
                 export_scheduler_queue_wait_millis=metric_millis(
-                    exported.resource_metrics,
+                    canonical_result.resource_metrics,
                     "trustedSchedulerQueueWaitMs",
                 ),
             ),
@@ -1832,7 +1631,6 @@ __all__ = [
     "build_isolated_operation_job",
     "execute_isolated_export_operation",
     "execute_isolated_render_operation",
-    "execute_and_publish_canonical_export_execution",
     "execute_canonical_export_execution",
     "load_worker_capability_signing_key",
     "partition_public_render_references",

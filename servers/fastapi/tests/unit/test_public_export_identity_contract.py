@@ -39,7 +39,6 @@ from services.public_export_identity import (
     ExportEvidenceDigests,
     PublicExportFenceRejected,
     PublicExportIdentityBindingError,
-    PublicExportIdentityV2Disabled,
     SlideCheckpointArtifact,
     acquire_slide_render_authority,
     claim_canonical_export_identity,
@@ -94,7 +93,7 @@ def _operation_claim(
     )
 
 
-def test_canonical_export_identity_is_feature_gated_digest_bound_and_fenced(
+def test_canonical_export_identity_is_digest_bound_and_fenced(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -247,20 +246,6 @@ def test_canonical_export_identity_is_feature_gated_digest_bound_and_fenced(
                 attempt_token="operation-attempt-1",
                 fencing_token=11,
             )
-            with pytest.raises(
-                PublicExportIdentityV2Disabled,
-                match="public_export_identity_v2_disabled",
-            ):
-                await claim_canonical_export_identity(
-                    session,
-                    identity=identity,
-                    source_checkpoint=source_checkpoint,
-                    operation_claim=initial_operation,
-                    worker_id="node-a",
-                    lease_seconds=30,
-                )
-
-            monkeypatch.setenv("PUBLIC_EXPORT_IDENTITY_V2_ENABLED", "true")
             render_identity = CanonicalSlideRenderIdentity(
                 owner_id=owner_id,
                 tenant_id="tenant-a",
@@ -582,12 +567,18 @@ def test_canonical_export_identity_is_feature_gated_digest_bound_and_fenced(
             # but it must still say what the reused bytes are, or a receipt
             # would describe an editable deck as a raster one.
             assert "role" not in consumer_result.resource_metrics
+            # ... and, since these bytes came from another operation's flight,
+            # that the export was joined and which operation led it.
             assert consumer_result.resource_metrics == {
                 "public_export_worker_evidence": {
                     "requestedExportMode": "fidelity-raster",
                     "deliveredExportMode": "fidelity-raster",
                     "fallbackReason": None,
                     "reusedCompletedIdentity": True,
+                    "joined": True,
+                    "joinedOperationId": str(recovered_operation.operation_id),
+                    "joinWaitSeconds": 0.0,
+                    "joinPollCount": 0,
                 }
             }
             repeated = await public_export_operation.execute_canonical_export_execution(
