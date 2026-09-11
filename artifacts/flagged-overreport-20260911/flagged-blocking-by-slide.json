@@ -1,0 +1,314 @@
+[
+ {
+  "run": "run-11",
+  "slide": 10,
+  "blocking": {}
+ },
+ {
+  "run": "run-11",
+  "slide": 14,
+  "blocking": {
+   "empty_media_panel": 1
+  }
+ },
+ {
+  "run": "run-11",
+  "slide": 16,
+  "blocking": {}
+ },
+ {
+  "run": "run-11",
+  "slide": 26,
+  "blocking": {
+   "overlap": 1
+  }
+ },
+ {
+  "run": "run-11",
+  "slide": 28,
+  "blocking": {}
+ },
+ {
+  "run": "run-11",
+  "slide": 29,
+  "blocking": {
+   "overlap": 3,
+   "text_escapes_card": 3
+  }
+ },
+ {
+  "run": "run-11",
+  "slide": 30,
+  "blocking": {
+   "empty_media_panel": 1
+  }
+ },
+ {
+  "run": "run-15",
+  "slide": 6,
+  "blocking": {}
+ },
+ {
+  "run": "run-15",
+  "slide": 8,
+  "blocking": {}
+ },
+ {
+  "run": "run-15",
+  "slide": 10,
+  "blocking": {}
+ },
+ {
+  "run": "run-15",
+  "slide": 11,
+  "blocking": {}
+ },
+ {
+  "run": "run-15",
+  "slide": 12,
+  "blocking": {}
+ },
+ {
+  "run": "run-15",
+  "slide": 14,
+  "blocking": {}
+ },
+ {
+  "run": "run-15",
+  "slide": 16,
+  "blocking": {}
+ },
+ {
+  "run": "run-15",
+  "slide": 18,
+  "blocking": {
+   "empty_media_panel": 1
+  }
+ },
+ {
+  "run": "run-15",
+  "slide": 20,
+  "blocking": {}
+ },
+ {
+  "run": "run-15",
+  "slide": 21,
+  "blocking": {
+   "text_escapes_card": 2
+  }
+ },
+ {
+  "run": "run-15",
+  "slide": 22,
+  "blocking": {
+   "text_escapes_card": 1
+  }
+ },
+ {
+  "run": "run-15",
+  "slide": 24,
+  "blocking": {
+   "clipping": 2,
+   "off_canvas": 1
+  }
+ },
+ {
+  "run": "run-15",
+  "slide": 25,
+  "blocking": {}
+ },
+ {
+  "run": "run-15",
+  "slide": 26,
+  "blocking": {}
+ },
+ {
+  "run": "run-15",
+  "slide": 29,
+  "blocking": {}
+ },
+ {
+  "run": "run-15",
+  "slide": 30,
+  "blocking": {}
+ },
+ {
+  "run": "run-15",
+  "slide": 34,
+  "blocking": {}
+ },
+ {
+  "run": "run-16",
+  "slide": 4,
+  "blocking": {}
+ },
+ {
+  "run": "run-16",
+  "slide": 6,
+  "blocking": {
+   "empty_media_panel": 1,
+   "text_escapes_card": 1
+  }
+ },
+ {
+  "run": "run-16",
+  "slide": 8,
+  "blocking": {}
+ },
+ {
+  "run": "run-16",
+  "slide": 9,
+  "blocking": {
+   "overlap": 1
+  }
+ },
+ {
+  "run": "run-16",
+  "slide": 10,
+  "blocking": {}
+ },
+ {
+  "run": "run-16",
+  "slide": 14,
+  "blocking": {}
+ },
+ {
+  "run": "run-16",
+  "slide": 18,
+  "blocking": {
+   "empty_media_panel": 1
+  }
+ },
+ {
+  "run": "run-16",
+  "slide": 19,
+  "blocking": {}
+ },
+ {
+  "run": "run-16",
+  "slide": 25,
+  "blocking": {
+   "overlap": 1
+  }
+ },
+ {
+  "run": "run-16",
+  "slide": 26,
+  "blocking": {
+   "empty_media_panel": 1,
+   "overlap": 3
+  }
+ },
+ {
+  "run": "run-16",
+  "slide": 30,
+  "blocking": {}
+ },
+ {
+  "run": "run-20",
+  "slide": 2,
+  "blocking": {
+   "empty_media_panel": 1
+  }
+ },
+ {
+  "run": "run-20",
+  "slide": 6,
+  "blocking": {
+   "empty_media_panel": 1
+  }
+ },
+ {
+  "run": "run-20",
+  "slide": 9,
+  "blocking": {}
+ },
+ {
+  "run": "run-20",
+  "slide": 10,
+  "blocking": {
+   "empty_media_panel": 1
+  }
+ },
+ {
+  "run": "run-20",
+  "slide": 14,
+  "blocking": {}
+ },
+ {
+  "run": "run-20",
+  "slide": 15,
+  "blocking": {}
+ },
+ {
+  "run": "run-20",
+  "slide": 16,
+  "blocking": {}
+ },
+ {
+  "run": "run-20",
+  "slide": 18,
+  "blocking": {
+   "empty_media_panel": 1
+  }
+ },
+ {
+  "run": "run-20",
+  "slide": 19,
+  "blocking": {
+   "overlap": 2
+  }
+ },
+ {
+  "run": "run-20",
+  "slide": 20,
+  "blocking": {}
+ },
+ {
+  "run": "run-20",
+  "slide": 22,
+  "blocking": {}
+ },
+ {
+  "run": "run-20",
+  "slide": 26,
+  "blocking": {}
+ },
+ {
+  "run": "run-20",
+  "slide": 27,
+  "blocking": {}
+ },
+ {
+  "run": "run-20",
+  "slide": 28,
+  "blocking": {}
+ },
+ {
+  "run": "run-20",
+  "slide": 30,
+  "blocking": {
+   "clipping": 1
+  }
+ },
+ {
+  "run": "run-20",
+  "slide": 31,
+  "blocking": {}
+ },
+ {
+  "run": "run-20",
+  "slide": 32,
+  "blocking": {
+   "overlap": 2
+  }
+ },
+ {
+  "run": "run-20",
+  "slide": 33,
+  "blocking": {
+   "overlap": 2,
+   "text_escapes_card": 1
+  }
+ }
+]
