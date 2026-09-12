@@ -139,12 +139,24 @@ _OBJECT_OWNER_SQL = text(
 )
 
 
-def _probe_database(database_url: str, schema: str, object_name: Optional[str]) -> dict[str, Any]:
-    """Collect the facts that make the failure actionable, on a fresh connection.
+def probe_schema_privileges(
+    database_url: str, schema: str, object_name: Optional[str] = None
+) -> dict[str, Any]:
+    """Collect role/schema privilege facts on a fresh connection.
 
-    The migration connection is inside a failed transaction by the time we get here, so
-    it cannot answer any further query; we open our own and never let a probe failure
-    replace the migration failure.
+    This is the one implementation of "can this role change the schema" --
+    ``MigrationPrivilegeWatch`` calls it after a migration already failed, and
+    ``services/database_revision_authority.py`` calls it *before* a migration
+    runs, to decide which remedy a "behind" refusal should print. When called
+    before a migration, ``object_name`` is not yet known and the migration
+    connection is not in a failed transaction, but the query and its meaning
+    are identical either way, so both call sites share this one function
+    instead of two privilege probes drifting apart.
+
+    The migration connection (when there is one) may be inside a failed
+    transaction by the time this runs, so it cannot answer any further query;
+    this always opens its own connection and never lets a probe failure
+    replace the caller's own failure.
     """
 
     facts: dict[str, Any] = {}
@@ -269,11 +281,13 @@ class MigrationPrivilegeWatch:
     def _diagnose(
         self, exc: Exception, error: BaseException
     ) -> MigrationInsufficientPrivilegeError:
-        schema = _target_schema(error) or _default_schema(self._database_url)
+        schema = _target_schema(error) or default_schema_for_database_url(self._database_url)
         facts: dict[str, Any] = {}
         if schema:
             try:
-                facts = _probe_database(self._database_url, schema, _diag(error, "table_name"))
+                facts = probe_schema_privileges(
+                    self._database_url, schema, _diag(error, "table_name")
+                )
             except Exception as probe_error:  # pragma: no cover - probe is best effort
                 facts = {"probe_error": str(probe_error)}
         return MigrationInsufficientPrivilegeError(
@@ -287,7 +301,7 @@ class MigrationPrivilegeWatch:
         )
 
 
-def _default_schema(database_url: str) -> Optional[str]:
+def default_schema_for_database_url(database_url: str) -> Optional[str]:
     """Fall back to the schema the DSN targets when the server did not name one."""
 
     try:

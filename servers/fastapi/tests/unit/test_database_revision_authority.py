@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 import migration_revision_contract as revision_contract
 import services.database as database
+import services.database_revision_authority as revision_authority
 from services.database_revision_authority import (
     REVISION_AHEAD_OF_CODE,
     REVISION_BEHIND_CODE,
@@ -104,6 +105,99 @@ def test_a_database_behind_the_code_is_refused_by_name(tmp_path) -> None:
     assert revision_contract.HEAD_REVISION in message
     assert "uv run alembic upgrade head" in message
     assert "MIGRATE_DATABASE_ON_STARTUP=true" in message
+
+
+def test_the_privilege_probe_returns_unknown_for_sqlite(tmp_path) -> None:
+    """SQLite has no privilege catalogs; the probe must say "unknown", not fail.
+
+    This is what makes the previous test's fallback message correct: the
+    probe never runs on SQLite (``default_schema_for_database_url`` returns
+    ``None`` for a non-PostgreSQL backend), so ``_behind_message`` always
+    keeps the original two-remedy text there.
+    """
+
+    database_path = tmp_path / "probe-sqlite.db"
+    _upgrade(database_path, "head")
+
+    async def scenario() -> object:
+        engine = create_async_engine(
+            f"sqlite+aiosqlite:///{database_path.as_posix()}"
+        )
+        try:
+            return await revision_authority._behind_privilege_facts(engine)
+        finally:
+            await engine.dispose()
+
+    assert asyncio.run(scenario()) is None
+
+
+def test_a_behind_database_whose_role_lacks_the_privilege_gets_the_owner_dsn_remedy(
+    monkeypatch, tmp_path
+) -> None:
+    """The refusal must not send the operator back into the same failure.
+
+    When the connected role cannot apply schema changes, neither remedy in
+    the original text works: both reconnect with that same role. The message
+    has to name the role, say it lacks the privilege, and point at the
+    bootstrap owner DSN instead -- and it must not suggest
+    ``MIGRATE_DATABASE_ON_STARTUP=true``, since startup uses the same runtime
+    credential and would fail identically.
+    """
+
+    database_path = tmp_path / "behind-no-privilege.db"
+    _upgrade(database_path, BEHIND_REVISION)
+
+    async def fake_facts(engine):
+        return {
+            "role_name": "presenton_public_api",
+            "schema_name": "public",
+            "can_create": False,
+        }
+
+    monkeypatch.setattr(revision_authority, "_behind_privilege_facts", fake_facts)
+
+    with pytest.raises(DatabaseRevisionMismatch) as refusal:
+        asyncio.run(_check(database_path))
+
+    message = str(refusal.value)
+    assert refusal.value.code == REVISION_BEHIND_CODE
+    assert 'Role "presenton_public_api"' in message
+    assert 'schema "public"' in message
+    assert "does not have the CREATE privilege" in message
+    assert "bootstrap owner DATABASE_URL" in message
+    assert "provision_public_v2_local_db_roles.py" in message
+    # It may explain *why* MIGRATE_DATABASE_ON_STARTUP=true will not help, but
+    # must never suggest running it as a fix the way the original text does.
+    assert "MIGRATE_DATABASE_ON_STARTUP=true will NOT help" in message
+    assert "restart this process with MIGRATE_DATABASE_ON_STARTUP=true" not in message
+
+
+def test_a_behind_database_whose_role_has_the_privilege_keeps_the_original_remedy(
+    monkeypatch, tmp_path
+) -> None:
+    """A role that genuinely can migrate itself still gets the original text."""
+
+    database_path = tmp_path / "behind-with-privilege.db"
+    _upgrade(database_path, BEHIND_REVISION)
+
+    async def fake_facts(engine):
+        return {
+            "role_name": "presenton_owner",
+            "schema_name": "public",
+            "can_create": True,
+        }
+
+    monkeypatch.setattr(revision_authority, "_behind_privilege_facts", fake_facts)
+
+    with pytest.raises(DatabaseRevisionMismatch) as refusal:
+        asyncio.run(_check(database_path))
+
+    message = str(refusal.value)
+    assert refusal.value.code == REVISION_BEHIND_CODE
+    assert "uv run alembic upgrade head" in message
+    assert "MIGRATE_DATABASE_ON_STARTUP=true" in message
+    assert "does not have the CREATE privilege" not in message
+    assert "bootstrap owner DATABASE_URL" not in message
 
 
 def test_a_database_ahead_of_the_code_is_refused_with_the_other_remedy(
