@@ -261,8 +261,16 @@ def validate_public_database_authority(
 async def require_public_controller_database_authority(
     engine: AsyncEngine = sql_engine,
 ) -> None:
-    """Require the dedicated cross-tenant queue role for a controller process."""
+    """Require the dedicated cross-tenant queue role for a controller process.
 
+    An externalised controller starts through ``workspace_operation_worker``
+    rather than ``api/lifespan.py``, so it never reaches the API-side authority
+    check.  The schema-revision contract is enforced here too, from the same
+    function, so that every process boundary refuses a mismatched schema
+    instead of only the ones that boot through the API.
+    """
+
+    await require_database_schema_revision_authority(engine)
     local_development = _local_development_environment()
     if not local_development and (
         os.getenv("PUBLIC_DATABASE_PROCESS_ROLE") or ""
