@@ -113,6 +113,10 @@ function Get-ComponentRuntimeEvidence {
 $probeScript = @'
 import json
 
+from utils.get_env import (
+    get_authored_author_concurrency_env,
+    get_authored_batch_wave_concurrency_env,
+)
 from utils.get_env_programme import (
     get_authored_admission_gate_mode,
     get_authored_author_prompt_model,
@@ -133,6 +137,11 @@ print(json.dumps({
     "AUTHORED_AUTHOR_PROMPT_PROFILE": get_authored_author_prompt_profile(),
     "AUTHORED_AUTHOR_PROMPT_MODEL": get_authored_author_prompt_model(),
     "AUTHORED_COMPOSITION_ENVELOPE_PROFILE": get_authored_composition_envelope_profile(),
+    # Throughput knobs: not part of the rollout table, but the audit asserts
+    # the stack agreed with the run's configuration, so it has to read the
+    # resolved value from the same place the precheck does.
+    "AUTHORED_BATCH_WAVE_CONCURRENCY": get_authored_batch_wave_concurrency_env(),
+    "AUTHORED_AUTHOR_CONCURRENCY": get_authored_author_concurrency_env(),
 }))
 '@
 $probeScriptPath = Join-Path ([System.IO.Path]::GetTempPath()) ("verify-local-stack-knobs-{0}.py" -f ([Guid]::NewGuid()))

@@ -167,6 +167,18 @@ if ($mismatches.Count -gt 0) {
     exit 1
 }
 
+# The wave concurrency the running workers resolved. The audit asserts the
+# stack agreed with it; a frozen constant there would report a deliberate knob
+# change as a failed deck.
+$resolvedBatchWaveConcurrency = 5
+$workerEntry = Get-JsonProperty $knobReport.components 'worker-generation'
+if ($null -ne $workerEntry) {
+    $waveProperty = $workerEntry.resolved.PSObject.Properties['AUTHORED_BATCH_WAVE_CONCURRENCY']
+    if ($null -ne $waveProperty -and $null -ne $waveProperty.Value) {
+        $resolvedBatchWaveConcurrency = [int]$waveProperty.Value
+    }
+}
+
 $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPath -Encoding utf8
 Write-Output ("PRECHECK ok: {0} knob(s) match on {1} component(s)" -f $StageKnobs.Count, $KnobComponents.Count)
 
@@ -205,6 +217,10 @@ for ($i = 1; $i -le $RunCount; $i++) {
                 ExpectedSlides = $ExpectedSlides
                 ExpectedSourceBlocks = $ExpectedSourceBlocks
                 ExpectedInputSha256 = $ExpectedInputSha256
+                # Read from the same resolved report the precheck gated on, so
+                # the audit checks the stack against this run's configuration
+                # rather than against a value frozen when the script was written.
+                ExpectedBatchWaveConcurrency = $resolvedBatchWaveConcurrency
             }
             $auditJson = & $AuditScript @auditArgs
             $auditExitCode = $LASTEXITCODE

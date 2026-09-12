@@ -15,6 +15,16 @@ param(
     [ValidatePattern('^[a-fA-F0-9]{64}$')]
     [string]$ExpectedInputSha256 = '7746aaeddbf1222fd73c9870ac7297af98446b8e5df22d52c809b4d69b5340ae',
 
+    # The authoring wave concurrency this run is supposed to have used. It is a
+    # knob, not a constant, so the audit cannot assert one frozen value: doing
+    # that reports a deliberate configuration change as a failed deck, which is
+    # the same conflation the quality receipts make between "configured
+    # differently" and "produced badly". Pass the value the run was configured
+    # with; the check then verifies the stack agreed with the caller, which is
+    # what makes the run's numbers attributable.
+    [ValidateRange(1, 64)]
+    [int]$ExpectedBatchWaveConcurrency = 5,
+
     # This permits archived failed-run rejection while the local database is
     # intentionally offline. It can never accept a release.
     [switch]$Offline
@@ -174,7 +184,7 @@ WHERE o.id = '$OperationId';
 
     $checks = [System.Collections.Generic.List[object]]::new()
     Add-AuditCheck $checks 'runtime.postgresql' ($databaseProvider -eq 'postgresql+asyncpg') $databaseProvider 'postgresql+asyncpg'
-    Add-AuditCheck $checks 'runtime.batchWaveConcurrency' ($effectiveBatchWaveConcurrency -eq 5) $effectiveBatchWaveConcurrency 5
+    Add-AuditCheck $checks 'runtime.batchWaveConcurrency' ($effectiveBatchWaveConcurrency -eq $ExpectedBatchWaveConcurrency) $effectiveBatchWaveConcurrency $ExpectedBatchWaveConcurrency
     Add-AuditCheck $checks 'runtime.clusterJobConcurrency' ($effectiveClusterJobConcurrency -eq 2) $effectiveClusterJobConcurrency 2
     Add-AuditCheck $checks 'runtime.renderConcurrency' ($effectiveRenderConcurrency -eq 2) $effectiveRenderConcurrency 2
     Add-AuditCheck $checks 'runtime.slideRenderConcurrency' ($effectiveSlideRenderConcurrency -eq 2) $effectiveSlideRenderConcurrency 2
