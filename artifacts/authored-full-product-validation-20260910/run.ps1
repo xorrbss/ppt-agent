@@ -47,7 +47,12 @@ if ($analysis.status -ne "ready" -or $analysis.summary.sourceUnits -ne 35 -or $a
 
 $request = @{
     content = "Generate a presentation from the attached files."
-    codex_generation_preset = "luna-medium"
+    # The preset pins the model and effort for this request, overriding the
+    # stored CODEX_MODEL. It was "luna-medium", so every run of this harness
+    # authored on gpt-5.6-luna while the admin surface reported gpt-5.6-sol --
+    # the split that made the September results incomparable to the August
+    # sol baseline. gpt-5.6-sol is the model the user confirmed for operation.
+    codex_generation_preset = "sol-medium"
     tone = "default"
     verbosity = "standard"
     web_search = $false
