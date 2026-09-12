@@ -304,6 +304,78 @@ async def test_checkpoint_writer_refuses_unadmitted_html_before_io(monkeypatch):
         )
 
 
+@sync_async
+@pytest.mark.parametrize("batched", [False, True])
+async def test_render_writers_refuse_at_admission_before_io(monkeypatch, batched):
+    """N6: the batched render writer gates on the same call as the unbatched one.
+
+    ``complete_render_stage_batched`` is a second writer, not a delegation, so
+    it needs its own proof that it refuses at ``admit_checkpoint_write`` rather
+    than at the database. ``job_id`` is not a real job here: anything that got
+    past admission would fail against the session instead, with a database
+    error rather than an ``AdmissionReceiptError``.
+    """
+
+    from services import authored_checkpoint_stage_batch as batch
+    from services import authored_checkpoint_state as state
+    from services import authored_admission_checkpoint as checkpoint
+
+    monkeypatch.setattr(checkpoint, "enforce_receipts", lambda: True)
+    monkeypatch.setattr(batch, "enforce_receipts", lambda: True)
+    writer = batch.complete_render_stage_batched if batched else state.complete_stage
+    kwargs = dict(
+        job_id="job",
+        slide_index=0,
+        attempt_token="attempt-1",
+        png=b"png",
+        checkpoint_revision=0,
+        skipped=False,
+        fencing_token=4,
+        session=None,
+    )
+    if not batched:
+        kwargs["stage"] = "render"
+
+    # A verbatim deck's guarantee is its manifest, and a session-less writer has
+    # none: both writers refuse the source bindings instead of defaulting to the
+    # ordinary-authored column that skips the readback.
+    bound = gate.admit_slide_html(context(), HTML).html
+    assert SOURCE_BLOCK_ATTRIBUTE in bound
+    with pytest.raises(AdmissionReceiptError, match="session_identity_required"):
+        await writer(html=bound, browser_metrics=metrics(bound), **kwargs)
+
+    # A render checkpoint without its capture is refused on both writers too.
+    with pytest.raises(AdmissionReceiptError, match="capture_missing"):
+        await writer(html=RENDERER_PROFILE_HTML, browser_metrics=None, **kwargs)
+
+
+def test_a_rejected_session_less_capture_is_evidence_and_never_publishable(monkeypatch):
+    """N6's other half: the render stage stores a refusal, it does not publish it.
+
+    A rejected capture is legitimate evidence -- it is why the slide failed --
+    so the render stage admits it into the evidence column rather than raising.
+    What it must never be is publishable, and with no session the identity is
+    incomplete as well, so two independent facts keep it out of publication.
+    """
+
+    checkpoint = enforcing_gate(monkeypatch)
+    unadmittable = HTML.replace("<h1>", '<h1 id="a" id="b">')
+    _, receipt = checkpoint.admit_checkpoint_write(
+        admission_receipt=None,
+        html=unadmittable,
+        stage="render",
+        slide_index=0,
+        attempt_token="attempt-1",
+        fencing_token=4,
+        browser_metrics=metrics(unadmittable),
+        png=b"png",
+    )
+    assert receipt.verdict == "rejected"
+    assert receipt.persistence_class == "evidence"
+    assert receipt.identity == "incomplete"
+    assert receipt.as_dict()["publishable"] is False
+
+
 def test_same_profile_capture_reuse_is_attempt_bound():
     html = gate.admit_slide_html(context(), HTML).html
     ctx = context(html_repr="captured")
@@ -669,6 +741,92 @@ def test_session_less_receipt_is_admissible_but_never_publishable(monkeypatch):
     # A receipt written before the field existed was minted under a session.
     legacy_identity = {key: value for key, value in session_identity.items() if key != "identity"}
     assert checkpoint_stage_html(_Checkpoint(legacy_identity), publishable=True) == admitted
+
+
+#: Shaped like ``_native_scene_element_html``'s image branch: the absolutely
+#: positioned, rotated ``<img>`` a retained PPTX scene emits per source shape.
+def native_scene_image(index):
+    return (
+        '<img class="native-scene-element native-scene-image" '
+        f'title="native slide 2:{index}" src="data:image/png;base64,{ONE_PIXEL_PNG}" '
+        'alt="" style="position:absolute;left:0px;top:0px;width:160px;height:90px;'
+        'transform:rotate(0deg);transform-origin:center center;overflow:hidden;'
+        'object-fit:fill">'
+    )
+
+
+def native_scene_document(images=200):
+    return (
+        '<!doctype html><html><head><meta charset="utf-8"><style>'
+        "body{margin:0;width:1280px;height:720px;position:relative}</style></head>"
+        "<body>" + "".join(native_scene_image(index) for index in range(images)) + "</body></html>"
+    )
+
+
+def test_the_gate_never_refuses_a_document_the_renderer_admits(monkeypatch):
+    """N1, as a property rather than a sample.
+
+    The reported risk was a document that renders and is then refused at its
+    first checkpoint -- specifically the image-heavy retained native scene a
+    PPTX-imported deck produces, whose base64 assets were thought to meet a
+    ceiling only the gate applies.  They do not: ``admit_static_output_html``
+    admits through ``admit_authored_html``, so both profiles carry the same
+    ``MAX_HTML_BYTES`` and asset ceilings, and the selection that decides
+    between them is one function shared with the renderer.  Whatever
+    ``select_render_profile`` admits, the session-less writer admits.
+    """
+
+    from utils.renderer_isolation import MAX_HTML_BYTES
+    from utils.renderer_profile import select_render_profile
+
+    checkpoint = enforcing_gate(monkeypatch)
+    scene = native_scene_document()
+    assert scene.count("data:image/") == 200
+    assert len(scene.encode("utf-8")) < MAX_HTML_BYTES
+    corpus = {
+        "native scene, 200 inline images": scene,
+        "renderer profile": RENDERER_PROFILE_HTML,
+        "authored": HTML,
+        "unrenderable": UNRENDERABLE_HTML,
+        "over the html ceiling": f"<!doctype html><html><body><p>{'가' * 800000}</p></body></html>",
+        "duplicate attribute": HTML.replace("<h1>", '<h1 id="a" id="b">'),
+    }
+    for name, html in corpus.items():
+        renderable = select_render_profile(html).renderable
+        try:
+            _, receipt = author_checkpoint_write(checkpoint, html)
+            admitted = receipt.verdict != "rejected"
+        except AdmissionReceiptError:
+            admitted = False
+        assert admitted == renderable, name
+
+
+def test_a_session_less_admission_never_substitutes_its_producer_s_bytes(monkeypatch):
+    """N5: the checkpoint holds the document the producer published, not a copy.
+
+    The bridge publishes its own ``html`` and pins ``canonical_digest`` over it
+    before the checkpoint write, so a writer that stored a canonicalised form
+    would leave two documents where the product has one, and the stored one
+    would carry a digest nothing pinned.  ``admit_slide_html`` does canonicalise
+    what it judges -- the uppercase ``<META>`` below is rewritten to ``<meta>``
+    -- so this has to be enforced at the admission, not hoped for.
+    """
+
+    checkpoint = enforcing_gate(monkeypatch)
+    corpus = {
+        "uppercase meta": (
+            '<!DOCTYPE html><HTML><HEAD><META charset="utf-8"></HEAD>'
+            "<BODY><H1>제목</H1></BODY></HTML>"
+        ),
+        "renderer profile": RENDERER_PROFILE_HTML,
+        "native scene": native_scene_document(8),
+        "authored": HTML,
+        "no charset": "<!doctype html><html><body><h1>제목</h1></body></html>",
+    }
+    for name, html in corpus.items():
+        admitted, receipt = author_checkpoint_write(checkpoint, html)
+        assert admitted == html, name
+        assert receipt.html_digest == digest_html(html), name
 
 
 def test_verbatim_html_is_never_admitted_without_a_session(monkeypatch):

@@ -53,12 +53,26 @@ def _admit_on_renderer_profile(
     bytes.  When the selection lands on the authored profile -- which includes
     every document no profile admits, so a refusal is still a refusal -- the
     ordinary admission runs unchanged.
+
+    Whichever profile is selected, this is a judgement and never a rewrite.
+    A producer with no session owns its bytes: it rendered them, it pinned
+    their digest and it -- not this writer -- publishes them.  Handing back a
+    canonicalised document would leave the checkpoint holding bytes the product
+    never published and no digest ever pinned, so the returned document is
+    always the one that came in.
     """
 
     profile = select_render_profile(html)
     if profile.name == AUTHORED_PROFILE:
         admission = admit_slide_html(context, html, metrics=metrics, png=png)
-        return admission.html, admission.receipt
+        if not profile.renderable or admission.html == html:
+            # Nothing was substituted: either the document is already canonical,
+            # or no profile admitted it and the rejection is what travels.
+            return admission.html, admission.receipt
+        # The canonicalisation is discarded, not the verdict.  ``select_render_profile``
+        # above already ran the renderer's authored policy over these exact raw
+        # bytes and admitted them, so the receipt re-binds to what the producer holds.
+        return html, replace(admission.receipt, html_digest=digest_html(html))
     verdict, code, predicate = "admitted", "", "renderer_profile"
     try:
         raw_diagnostics_step(html)
