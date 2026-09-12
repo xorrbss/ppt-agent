@@ -174,7 +174,14 @@ Key flags: `--content` / `--batch`, `--slides <n|auto>` (default 8), `--language
 (default `"Korean (한국어)"`), `--template`, `--style <id>` (authored-mode style preset), `--export pptx|pdf`, `--instructions`,
 `--tone`, `--verbosity`, `--web-search`, `--toc`, `--no-title`, `--base`,
 `--user`/`--password`, `--out <dir>`, `--timeout <sec>`. `--flag=value` also works.
-Verified end-to-end: a 3-slide Korean PPTX (valid OOXML) generated and downloaded.
+
+`--export` no longer produces a file inside the generate request. The server
+chains an `export.pptx` / `export.pdf` workspace command onto the finished deck
+and returns its `export_operation_id`; `--out` follows that operation on
+`GET /api/v1/ppt/workspace/presentations/{id}/timeline` and downloads the
+artifact it publishes from
+`GET /api/v1/ppt/workspace/artifacts/{artifact_id}/download`. A generation whose
+export was refused still succeeds and prints the refusal code.
 
 ## AI 저작(authored) 고품질 모드
 
