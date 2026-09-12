@@ -20,9 +20,9 @@ are collaboration and delivery copies, not upstream sources of truth.
   (`eng.traineddata`, `kor.traineddata`). `LiteParseService` auto-detects this
   directory, so scanned-PDF OCR works without a CDN. Override with
   `LITEPARSE_TESSDATA_PATH` to add languages.
-- **PPTX/PDF export fix** — `servers/fastapi/utils/export_utils.py` seeds the export
-  session cookie via the Next.js proxy so the headless render authenticates (modern
-  Chromium drops CDP-set `Cookie` headers).
+- **PPTX/PDF export** — runs as a durable `export.pptx` / `export.pdf` workspace
+  operation executed by the isolated export worker. The in-process exporter that
+  seeded a `/pdf-maker?exportSession=` cookie through the Next.js proxy is gone.
 - **Electron dev fixes** (`electron/app/`) — use system Node for LiteParse, disable
   uvicorn `--reload`, raise server-readiness timeout to 300s.
 - **Cross-platform npm scripts** — `electron/package.json` `dev`/`build:*`/`clean:build`
