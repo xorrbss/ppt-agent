@@ -10,6 +10,8 @@ from sqlmodel import SQLModel
 # Make sure all models can be imported when alembic runs standalone.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from migration_privilege_diagnostics import MigrationPrivilegeWatch  # noqa: E402
+
 # Import every SQL model so they register with SQLModel.metadata before
 # autogenerate or migration execution reads it.
 from models.sql.async_presentation_generation_status import (  # noqa: F401, E402
@@ -331,22 +333,30 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations against the live database."""
     configuration = dict(alembic_config.get_section(alembic_config.config_ini_section) or {})
-    configuration["sqlalchemy.url"] = _get_url()
+    database_url = _get_url()
+    configuration["sqlalchemy.url"] = database_url
 
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+    # Every entry point into the graph -- the alembic CLI, migrations.py on startup and
+    # command.stamp -- runs this function, so an insufficient-privilege failure is
+    # explained here once instead of being annotated on individual revisions.
+    privilege_watch = MigrationPrivilegeWatch(alembic_config, database_url)
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
             include_object=_include_object,
+            on_version_apply=privilege_watch.record_applied,
         )
+        privilege_watch.record_starting_heads(context.get_context())
         with context.begin_transaction():
-            context.run_migrations()
+            with privilege_watch.explain_privilege_failures():
+                context.run_migrations()
 
 
 if context.is_offline_mode():
