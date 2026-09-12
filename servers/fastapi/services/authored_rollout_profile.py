@@ -41,6 +41,7 @@ from services.authored_admission_policy import (
     POLICY_REVISION_MISMATCH,
     ROLLOUT_PROFILE_INVALID,
     ROLLOUT_PROFILE_MISMATCH,
+    AuthoredConfigurationError,
     policy_revision_for,
 )
 from utils.get_env_programme import (
@@ -58,8 +59,16 @@ MAX_REPAIR_LOOP_MODEL_CALLS = 3
 ROLLOUT_PROFILE_PAYLOAD_KEY = "_internal_authored_rollout_profile"
 
 
-class RolloutProfileError(ValueError):
-    """A coded, non-retryable rollout-profile failure."""
+class RolloutProfileError(AuthoredConfigurationError, ValueError):
+    """A coded, non-retryable rollout-profile failure.
+
+    This is a :class:`AuthoredConfigurationError`: the run has no coherent
+    switches to operate under, which is a different fact from any slide's HTML
+    being wrong. It stays a ``ValueError`` too, so every existing caller that
+    catches or reports it as one (API validation, resumed-attempt restore)
+    keeps working unchanged; only the admission boundary needs to know about
+    the added marker, and it is the marker it checks first.
+    """
 
     def __init__(self, code: str, detail: str = "") -> None:
         self.code = code

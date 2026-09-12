@@ -7,6 +7,29 @@ import json
 from typing import Any
 
 
+class AuthoredConfigurationError(Exception):
+    """Marks a coded failure that means the attempt should never have started.
+
+    ``admit_slide_html`` classifies every exception it does not name explicitly
+    by structural shape: a ``RendererPolicyError`` or ``BrowserSourceReadbackError``
+    is a content violation, and so, historically, was any other ``ValueError``
+    that happened to carry a ``.code`` -- the two were indistinguishable by that
+    test alone. A content violation says the slide's bytes are wrong; a
+    configuration failure (an incoherent rollout-switch combination, a job
+    payload that no longer restores into a usable profile) says the run itself
+    has no coherent policy to judge bytes against, and must never be reported
+    as a per-slide rejection.
+
+    This class is the single structural distinction between the two. Any
+    exception meaning "this operation attempt cannot run" -- present or future,
+    wherever it is raised in the admission call graph -- subclasses this
+    marker, and the admission boundary lets it propagate unmodified before it
+    ever tests for plain ``ValueError``. A new configuration failure that omits
+    this marker is a bug at its own raise site, not at the boundary: the
+    boundary only has to keep checking for the marker, once.
+    """
+
+
 SOURCE_READBACK_FAILED = "source_content_browser_readback_failed"
 RENDERER_POLICY_FAILED = "authored_slide_author_failed"
 SOURCE_VISIBILITY_REASON = "source_readback:visibility"

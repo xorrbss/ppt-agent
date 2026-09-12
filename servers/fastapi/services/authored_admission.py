@@ -11,7 +11,11 @@ from html.parser import HTMLParser
 from typing import Any, Callable, Mapping
 
 from services.authored_admission_context import AdmissionContext, canonical_json, digest_bytes, digest_html
-from services.authored_admission_policy import RENDERER_POLICY_FAILED, SOURCE_READBACK_FAILED
+from services.authored_admission_policy import (
+    RENDERER_POLICY_FAILED,
+    SOURCE_READBACK_FAILED,
+    AuthoredConfigurationError,
+)
 from services.authored_admission_receipt import AdmissionReceipt
 from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
@@ -239,6 +243,17 @@ def admit_slide_html(
                     code = SOURCE_READBACK_FAILED
         if verdict == "admitted":
             predicate = "complete"
+    except AuthoredConfigurationError:
+        # The run itself has no coherent policy to judge these bytes against --
+        # an operator's knob combination, a job pin this build no longer
+        # honours -- which is not a fact about the slide's content. Every
+        # exception meaning that carries this marker (see its definition in
+        # ``authored_admission_policy``), so this check stays correct as new
+        # configuration failures are added elsewhere, without listing them
+        # here. It must run before ``except ValueError`` below, which would
+        # otherwise treat any coded subclass -- this one included -- as a
+        # slide-content rejection.
+        raise
     except RendererPolicyError as error:
         verdict, code = "rejected", getattr(error, "code", RENDERER_POLICY_FAILED)
     except BrowserSourceReadbackError as error:
