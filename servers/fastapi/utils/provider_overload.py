@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import threading
 import time
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Protocol
 
 from services.authored_batch_policy import (
     OVERLOAD_COOLDOWN_BASE_SECONDS,
@@ -140,6 +140,24 @@ def is_provider_overload(error: BaseException | None) -> bool:
     return is_authored_provider_overload(error)
 
 
+class ProviderRetryReservation(Protocol):
+    """A bounded call's claim on the attempt reservations that let it replay.
+
+    ``claim`` is what actually spends them, and the bounded call makes it as
+    its first physical request begins -- so a wrapper that is built and then
+    dropped spends nothing, and the reservations stay available to the call
+    that does run.  ``pending`` says whether this claim can still authorize a
+    replay, which is the receipt's authority for ``replayUnavailable``.
+    """
+
+    @property
+    def pending(self) -> bool: ...
+
+    def claim(self) -> None: ...
+
+    def __call__(self, physical_ordinal: int) -> None: ...
+
+
 class BoundedProviderCall:
     """One provider call with a bounded, receipt-visible overload replay."""
 
@@ -148,6 +166,7 @@ class BoundedProviderCall:
         "_abort_event",
         "_terminal",
         "_idempotency_capable",
+        "_replay_unavailable",
         "_reserve_retry",
         "_clock",
         "_sleep",
@@ -163,7 +182,7 @@ class BoundedProviderCall:
         *,
         idempotency_capable: bool = False,
         replay_unavailable: str | None = None,
-        reserve_retry: Callable[[int], None] | None = None,
+        reserve_retry: ProviderRetryReservation | None = None,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         deadline_seconds: float | None = None,
@@ -172,6 +191,7 @@ class BoundedProviderCall:
         self._abort_event = abort_event
         self._terminal = terminal
         self._idempotency_capable = idempotency_capable
+        self._replay_unavailable = replay_unavailable
         self._reserve_retry = reserve_retry
         self._clock = clock
         self._sleep = sleep
@@ -194,13 +214,28 @@ class BoundedProviderCall:
     def _replay_declined_reason(self) -> str | None:
         """Why this overload cannot be replayed, or ``None`` when it can be."""
 
+        if self._replay_unavailable is not None:
+            # Declared at construction: a streamed response, or a call scope
+            # that owns no slide attempt.  Neither becomes replayable later.
+            return self._replay_unavailable
         if not self._idempotency_capable:
             return "transport_idempotency_unconfirmed"
-        if self._reserve_retry is None:
+        if self._reserve_retry is None or not self._reserve_retry.pending:
             return "attempt_reservation_unavailable"
         if int(self._receipt["physicalCallCount"]) >= _MAX_OVERLOAD_PHYSICAL_CALLS:
             return "physical_call_budget_exhausted"
         return None
+
+    def _claim_reservation(self) -> None:
+        """Spend this call's attempt reservations as its physical call starts.
+
+        Idempotent, and deliberately not done when the wrapper is built: a
+        wrapper that is never invoked must leave the reservations for the call
+        that is.
+        """
+
+        if self._reserve_retry is not None:
+            self._reserve_retry.claim()
 
     def __call__(self) -> Any:
         deadline = (
@@ -217,6 +252,7 @@ class BoundedProviderCall:
                     recovery_allowed=False,
                     overload=True,
                 )
+            self._claim_reservation()
             self._receipt["physicalCallCount"] = (
                 int(self._receipt["physicalCallCount"]) + 1
             )
@@ -320,6 +356,7 @@ __all__ = [
     "BoundedProviderCall",
     "ProviderOutcomeError",
     "ProviderQuotaPause",
+    "ProviderRetryReservation",
     "is_provider_overload",
     "provider_status_code",
     "usage_limit_reset_epoch",

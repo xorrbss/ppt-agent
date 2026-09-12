@@ -1114,9 +1114,10 @@ async def author_slide_html(
                 # SPEED-9: streaming keeps the socket busy and returns the same
                 # response shape, so it replaces the executor hand-off entirely.
                 # The bounded-call wrapper is built only on the path that uses
-                # it: building it unconditionally would consume this attempt's
-                # retry reservation for a wrapper the streaming branch then
-                # discards, leaving the call that actually runs without one.
+                # it. Building it on both would no longer lose this attempt's
+                # retry reservation -- the wrapper only claims it as its
+                # physical call starts -- but a wrapper nothing runs is still
+                # dead weight.
                 if is_authored_author_streaming_enabled():
                     response = await stream_author_call(client, generate_kwargs)
                     return response

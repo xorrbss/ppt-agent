@@ -23,12 +23,12 @@ from models.sql.workspace import (
 from utils.llm_calls import author_deck as author_deck_mod
 from utils.llm_calls import author_slide as author_slide_mod
 from utils.llm_calls.author_slide import Brand
-from services import authored_provider_attempt_ledger as attempt_ledger
 from services.authored_author_stage_deferral import author_stage_failure
 from services.authored_batch_policy import is_authored_provider_overload
 from services.authored_provider_attempt_ledger import (
     ProviderAttemptReservation,
     current_provider_attempt_reservations,
+    publish_provider_attempt_reservation,
 )
 from services.workspace_operation_handler_registry import (
     WorkspaceOperationClaim,
@@ -261,13 +261,36 @@ class _OpenAIClient:
 _OpenAIClient.__module__ = "llmai.openai.client"
 
 
+class _FakeRetryReservation:
+    """A retry reservation the tests can watch.
+
+    Mirrors the real lease: ``claim`` is made by the bounded call as its first
+    physical request starts and is idempotent; ``__call__`` is the replay
+    authority a confirmed overload spends.
+    """
+
+    def __init__(self) -> None:
+        self.claimed = False
+        self.ordinals: list[int] = []
+
+    @property
+    def pending(self) -> bool:
+        return True
+
+    def claim(self) -> None:
+        self.claimed = True
+
+    def __call__(self, physical_ordinal: int) -> None:
+        self.ordinals.append(physical_ordinal)
+
+
 def test_idempotent_overload_retry_reserves_and_stays_inside_deadline():
     class Unavailable(RuntimeError):
         status_code = 503
 
     client = _OpenAIClient([Unavailable("private"), "ok"])
     now = [10.0]
-    reservations: list[int] = []
+    reserver = _FakeRetryReservation()
 
     def sleep(seconds: float) -> None:
         now[0] += seconds
@@ -279,14 +302,17 @@ def test_idempotent_overload_retry_reserves_and_stays_inside_deadline():
         idempotency_key="stable-key",
         outcome_scope="authored",
         timeout_seconds=60,
-        retry_reserver=reservations.append,
+        retry_reserver=reserver,
         clock=lambda: now[0],
         sleep=sleep,
     )
 
+    # Nothing is claimed until the physical call starts.
+    assert reserver.claimed is False
     assert call().content == "ok"
     assert client.call_count[0] == 2
-    assert reservations == [2]
+    assert reserver.claimed is True
+    assert reserver.ordinals == [2]
     assert client._client.cloned_options["timeout"] == 30.0
     assert client._client.cloned_options["max_retries"] == 0
     assert call.receipt == {
@@ -306,7 +332,7 @@ def test_overload_retry_does_not_start_past_the_deadline():
         status_code = 504
 
     client = _OpenAIClient([Unavailable("private"), "must not run"])
-    reservations: list[int] = []
+    reserver = _FakeRetryReservation()
     call = provider_generate_call(
         client,
         provider_id="openai",
@@ -314,7 +340,7 @@ def test_overload_retry_does_not_start_past_the_deadline():
         idempotency_key="stable-key",
         outcome_scope="authored",
         timeout_seconds=10,
-        retry_reserver=reservations.append,
+        retry_reserver=reserver,
         clock=lambda: 100.0,
         sleep=lambda _seconds: None,
     )
@@ -323,7 +349,7 @@ def test_overload_retry_does_not_start_past_the_deadline():
         call()
 
     assert client.call_count[0] == 1
-    assert reservations == []
+    assert reserver.ordinals == []
     assert call.receipt["deadlineExhausted"] is True
 
 
@@ -372,6 +398,12 @@ def _reservation(slide_index: int = 0) -> ProviderAttemptReservation:
     )
 
 
+def _seed_reservation(slide_index: int = 0) -> None:
+    """Publish one reservation into the running task, as the ledger does."""
+
+    publish_provider_attempt_reservation(_reservation(slide_index))
+
+
 def test_a_pending_reservation_does_not_impose_the_authored_document_guard():
     """A stream has no ``.content``: the empty-output guard must not read it.
 
@@ -384,7 +416,7 @@ def test_a_pending_reservation_does_not_impose_the_authored_document_guard():
     client = _StreamingChatGPTClient(events)
 
     async def scenario():
-        attempt_ledger._PENDING.set((_reservation(),))
+        _seed_reservation()
         call = provider_generate_call(
             client,
             provider_id="codex",
@@ -405,7 +437,7 @@ def test_a_generic_call_is_untouched_by_a_pending_authored_reservation():
     client = _PlainClient(error=Unavailable("private"))
 
     async def scenario():
-        attempt_ledger._PENDING.set((_reservation(),))
+        _seed_reservation()
         call = provider_generate_call(
             client,
             provider_id="anthropic",
@@ -426,26 +458,31 @@ def test_a_generic_call_is_untouched_by_a_pending_authored_reservation():
     assert len(still_pending) == 1
 
 
+def _authored_openai_call(*, kwargs: dict | None = None, scope: str = "authored"):
+    return provider_generate_call(
+        _OpenAIClient(["ok"]),
+        provider_id="openai",
+        kwargs={} if kwargs is None else kwargs,
+        idempotency_key="stable-key",
+        outcome_scope=scope,
+    )
+
+
 def test_an_authored_call_consumes_its_reservation_exactly_once():
-    """The second call in the same task must not inherit the first's replay."""
+    """The second call in the same task must not inherit the first's replay.
+
+    The reservation is spent by the call that *runs*, so this drives the first
+    call rather than only constructing it: construction alone must leave the
+    reservation where it is (see the dropped-wrapper test below).
+    """
 
     async def scenario():
-        attempt_ledger._PENDING.set((_reservation(),))
-        first = provider_generate_call(
-            _OpenAIClient(["ok"]),
-            provider_id="openai",
-            kwargs={},
-            idempotency_key="stable-key",
-            outcome_scope="authored",
-        )
+        _seed_reservation()
+        first = _authored_openai_call()
+        first()
         after_first = current_provider_attempt_reservations()
-        second = provider_generate_call(
-            _OpenAIClient(["ok"]),
-            provider_id="openai",
-            kwargs={},
-            idempotency_key="stable-key",
-            outcome_scope="authored",
-        )
+        second = _authored_openai_call()
+        second()
         return after_first, dict(first.receipt), dict(second.receipt)
 
     after_first, first_receipt, second_receipt = asyncio.run(scenario())
@@ -454,6 +491,132 @@ def test_an_authored_call_consumes_its_reservation_exactly_once():
     assert first_receipt["replayUnavailable"] is None
     assert second_receipt["idempotencyCapable"] is True
     assert second_receipt["replayUnavailable"] == "attempt_reservation_unavailable"
+
+
+def test_a_dropped_authored_wrapper_leaves_its_reservation_behind():
+    """Item 1: a wrapper that is built and never run must spend nothing.
+
+    Construction, an executor hand-off that is cancelled before the queued work
+    starts, and a branch that discards the wrapper are all the same shape: the
+    physical call never happened, so the ledger must not believe a replayable
+    one did.
+    """
+
+    async def scenario():
+        _seed_reservation()
+        dropped = _authored_openai_call()
+        after_construction = current_provider_attempt_reservations()
+        ran = _authored_openai_call()
+        ran()
+        return (
+            after_construction,
+            current_provider_attempt_reservations(),
+            dict(dropped.receipt),
+            dict(ran.receipt),
+        )
+
+    after_construction, after_run, dropped_receipt, ran_receipt = asyncio.run(scenario())
+
+    # Nothing was spent until a call actually started...
+    assert len(after_construction) == 1
+    assert dropped_receipt["physicalCallCount"] == 0
+    # ...and the call that did start is the one that got the replay authority.
+    assert after_run == ()
+    assert ran_receipt["physicalCallCount"] == 1
+    assert ran_receipt["replayUnavailable"] is None
+
+
+def test_a_failing_authored_call_still_spends_its_reservation():
+    """A call that starts has spent it, whatever the provider then did."""
+
+    class Rejected(RuntimeError):
+        status_code = 400
+
+    async def scenario():
+        _seed_reservation()
+        call = provider_generate_call(
+            _OpenAIClient([Rejected("private")]),
+            provider_id="openai",
+            kwargs={},
+            idempotency_key="stable-key",
+            outcome_scope="authored",
+        )
+        with pytest.raises(ProviderOutcomeError):
+            call()
+        return current_provider_attempt_reservations(), dict(call.receipt)
+
+    remaining, receipt = asyncio.run(scenario())
+
+    assert remaining == ()
+    assert receipt["physicalCallCount"] == 1
+
+
+def test_a_deck_scope_authored_call_never_leases_a_slide_reservation():
+    """Item 1, third call site: a deck-level call owns no slide attempt.
+
+    ``run_vision_advisory`` runs from a deck-level stage, where a slide's
+    reservation may still be pending in the same task.  The scope it declares
+    is what keeps it from spending one, enforced at the single constructor
+    rather than by a guard the caller could omit.
+    """
+
+    async def scenario():
+        _seed_reservation()
+        call = _authored_openai_call(scope="authored_deck")
+        call()
+        return current_provider_attempt_reservations(), dict(call.receipt)
+
+    remaining, receipt = asyncio.run(scenario())
+
+    assert len(remaining) == 1
+    assert receipt["physicalCallCount"] == 1
+    assert receipt["replayUnavailable"] == "deck_scope_no_slide_attempt"
+
+
+def test_an_unsupported_outcome_scope_is_still_refused():
+    """The scope vocabulary is closed: a typo is a failure, not a silent scope."""
+
+    with pytest.raises(ValueError):
+        _authored_openai_call(scope="authored-deck")
+
+
+def test_a_streamed_call_states_that_its_response_cannot_be_replayed():
+    """Item 2: ``generate(stream=True)`` returns a generator, so the request is
+    made at iteration -- outside the bounded wrapper, where no overload can
+    reach the replay branch on any transport, openai API key included.  The
+    receipt has to say that rather than leave ``replayUnavailable`` at ``None``,
+    which reads as "this call never needed a replay"."""
+
+    async def scenario():
+        _seed_reservation()
+        call = _authored_openai_call(kwargs={"stream": True})
+        return dict(call.receipt), current_provider_attempt_reservations()
+
+    receipt, remaining = asyncio.run(scenario())
+
+    assert receipt["replayUnavailable"] == "stream_response_not_replayable"
+    # A wrapper that can never replay must not hold a reservation either.
+    assert len(remaining) == 1
+
+
+def test_a_child_task_never_publishes_into_its_parents_reservations():
+    """Per-task isolation: worker tasks author many slides under one parent."""
+
+    async def scenario():
+        _seed_reservation(slide_index=0)
+
+        async def child() -> tuple[int, int]:
+            _seed_reservation(slide_index=7)
+            return len(current_provider_attempt_reservations())
+
+        child_count = await asyncio.create_task(child())
+        parent = current_provider_attempt_reservations()
+        return child_count, tuple(item.slide_index for item in parent)
+
+    child_count, parent_slides = asyncio.run(scenario())
+
+    assert child_count == 1
+    assert parent_slides == (0,)
 
 
 # --- R2: the wrapper that spends the reservation must match the call that runs -----
@@ -500,7 +663,7 @@ def test_streaming_author_call_leaves_the_reservation_intact(monkeypatch):
     monkeypatch.setattr(author_slide_mod, "stream_author_call", fake_stream_author_call)
 
     async def scenario():
-        attempt_ledger._PENDING.set((_reservation(),))
+        _seed_reservation()
         html = await author_slide_mod.author_slide_html(
             "content", "DESIGN", Brand(topic="주제"), "COVER", 0, 1,
         )
@@ -523,7 +686,7 @@ def test_non_streaming_author_call_consumes_the_reservation_exactly_once(monkeyp
     _patch_author_call_environment(monkeypatch, streaming=False, client=_FakeClient())
 
     async def scenario():
-        attempt_ledger._PENDING.set((_reservation(),))
+        _seed_reservation()
         html = await author_slide_mod.author_slide_html(
             "content", "DESIGN", Brand(topic="주제"), "COVER", 0, 1,
         )
@@ -584,12 +747,14 @@ def test_a_reservation_author_slide_spends_is_spent_by_a_call_that_runs(
     """The invariant, stated once for every branch ``author_slide_html`` has.
 
     A reservation authorizes exactly one physical replay of the call that
-    consumed it, so consuming one for a wrapper the function then drops is an
+    spends it, so spending one for a wrapper the function then drops is an
     accounting leak: the ledger believes a replayable physical call was made
-    and nothing can replay it.  This asserts the property rather than the
-    branch -- ``streaming`` is only the control that exercises both legs -- so
-    a future early return between construction and invocation fails here even
-    though it is a branch this test does not know about.
+    and nothing can replay it.  Construction therefore spends nothing at all,
+    and the number of reservations gone from the ledger is exactly the number
+    of authored wrappers that were invoked.  This asserts the property rather
+    than the branch -- ``streaming`` is only the control that exercises both
+    legs -- so a future early return between construction and invocation stays
+    harmless even though it is a branch this test does not know about.
     """
 
     class _FakeClient:
@@ -608,7 +773,7 @@ def test_a_reservation_author_slide_spends_is_spent_by_a_call_that_runs(
     records = _record_reservation_accounting(monkeypatch)
 
     async def scenario():
-        attempt_ledger._PENDING.set((_reservation(),))
+        _seed_reservation()
         html = await author_slide_mod.author_slide_html(
             "content", "DESIGN", Brand(topic="주제"), "COVER", 0, 1,
         )
@@ -617,12 +782,16 @@ def test_a_reservation_author_slide_spends_is_spent_by_a_call_that_runs(
     html, remaining = asyncio.run(scenario())
 
     assert "제목" in html
-    # The invariant: nothing may consume a reservation and then not run.
-    assert [record for record in records if record["consumed"] and not record["invoked"]] == []
-    # And the ledger agrees: one seeded reservation, spent only by the wrappers
-    # above, so nothing consumed it outside the accounting this test can see.
-    spent = sum(record["consumed"] for record in records)
-    assert spent == 1 - len(remaining)
+    # The invariant: building a wrapper spends nothing at all...
+    assert [record for record in records if record["consumed"]] == []
+    # ...and exactly the wrappers that ran spent the seeded reservation.
+    spent = 1 - len(remaining)
+    invoked = [
+        record
+        for record in records
+        if record["outcome_scope"] == "authored" and record["invoked"]
+    ]
+    assert spent == len(invoked)
     # Control: the two legs must differ, or the parametrization proves nothing.
     if streaming:
         assert spent == 0 and len(remaining) == 1
@@ -630,13 +799,15 @@ def test_a_reservation_author_slide_spends_is_spent_by_a_call_that_runs(
         assert spent == 1 and remaining == ()
 
 
-def test_the_reservation_accounting_check_catches_a_dropped_wrapper(monkeypatch):
+def test_a_wrapper_author_slide_builds_and_drops_spends_nothing(monkeypatch):
     """Sensitivity control for the assertion above: it must not be vacuous.
 
     Constructing an authored wrapper and never invoking it is exactly the R2
     defect shape (an authored bounded call built on one branch and discarded on
-    another).  Reproduced here through the construction seam itself so the
-    proof needs no edit to the code under test.
+    another), and it is what a cancelled executor hand-off leaves behind.
+    Reproduced through the construction seam itself, so the proof needs no edit
+    to the code under test: under the previous construction-time consumption
+    this left the ledger empty.
     """
 
     class _UncalledClient:
@@ -646,7 +817,7 @@ def test_the_reservation_accounting_check_catches_a_dropped_wrapper(monkeypatch)
     records = _record_reservation_accounting(monkeypatch)
 
     async def scenario():
-        attempt_ledger._PENDING.set((_reservation(),))
+        _seed_reservation()
         author_slide_mod.provider_generate_call(
             _UncalledClient(),
             provider_id="openai",
@@ -658,10 +829,9 @@ def test_the_reservation_accounting_check_catches_a_dropped_wrapper(monkeypatch)
 
     remaining = asyncio.run(scenario())
 
-    assert remaining == ()
-    assert [
-        record for record in records if record["consumed"] and not record["invoked"]
-    ] != []
+    assert len(remaining) == 1
+    assert [record for record in records if record["invoked"]] == []
+    assert [record for record in records if record["consumed"]] == []
 
 
 def test_codex_transport_records_that_no_replay_was_available():

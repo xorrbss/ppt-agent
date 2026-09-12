@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from contextvars import ContextVar
-from dataclasses import dataclass
 from typing import Any, Mapping
 import uuid
 
@@ -14,68 +12,13 @@ from services.authored_checkpoint_fence import (
     owned_job as _owned_job,
 )
 from utils.datetime_utils import get_current_utc_datetime
-
-
-@dataclass(frozen=True, slots=True)
-class ProviderAttemptReservation:
-    """Authority needed to reserve one overload replay of a physical call."""
-
-    job_id: uuid.UUID
-    slide_index: int
-    attempt_token: str
-    ordinal: int
-    fencing_token: int | None
-
-
-_PENDING: ContextVar[tuple[ProviderAttemptReservation, ...]] = ContextVar(
-    "authored_pending_provider_attempt_reservations", default=()
+from utils.provider_attempt_reservations import (
+    ProviderAttemptReservation as ProviderAttemptReservation,
+    current_provider_attempt_reservations as current_provider_attempt_reservations,
+    lease_provider_attempt_reservations as lease_provider_attempt_reservations,
+    publish_provider_attempt_reservation as publish_provider_attempt_reservation,
+    take_provider_attempt_reservations as take_provider_attempt_reservations,
 )
-
-
-def _publish(reservation: ProviderAttemptReservation) -> None:
-    pending = _PENDING.get()
-    group = (
-        reservation.job_id,
-        reservation.attempt_token,
-        reservation.ordinal,
-        reservation.fencing_token,
-    )
-    if pending:
-        first = pending[0]
-        current_group = (
-            first.job_id,
-            first.attempt_token,
-            first.ordinal,
-            first.fencing_token,
-        )
-        if current_group != group:
-            pending = ()
-    if all(existing.slide_index != reservation.slide_index for existing in pending):
-        _PENDING.set((*pending, reservation))
-
-
-def take_provider_attempt_reservations() -> tuple[ProviderAttemptReservation, ...]:
-    """Hand the pending reservations to one caller and clear the context.
-
-    This is the only supported way to spend them.  A reservation authorizes a
-    single physical replay of the provider call that the reserving attempt is
-    about to make, so it must leave the context with that call: anything still
-    pending afterwards would let the next call in the same task -- another
-    slide, a fallback request, an unrelated structured call -- reserve a
-    physical ordinal against an attempt token that is not its own.  Callers run
-    this in the task that reserved, because the consuming context is the one
-    that published.
-    """
-
-    pending = _PENDING.get()
-    _PENDING.set(())
-    return pending
-
-
-def current_provider_attempt_reservations() -> tuple[ProviderAttemptReservation, ...]:
-    """Inspect the pending reservations without spending them (tests, logging)."""
-
-    return _PENDING.get()
 
 
 def provider_attempt_epoch(metadata: Mapping[str, Any] | None) -> int:
@@ -179,7 +122,7 @@ async def reserve_provider_attempt(
                 provider_attempt_count=current,
             )
         if ordinal == current:
-            _publish(reservation)
+            publish_provider_attempt_reservation(reservation)
             return checkpoint
         metadata["provider_attempt_count"] = ordinal
         metadata["provider_attempt_state"] = "reserved"
@@ -197,7 +140,7 @@ async def reserve_provider_attempt(
         mutation_session.add_all((checkpoint, job))
         if owns_session:
             await mutation_session.commit()
-        _publish(reservation)
+        publish_provider_attempt_reservation(reservation)
         return checkpoint
 
 
@@ -269,7 +212,9 @@ async def reserve_provider_overload_retry(
 __all__ = [
     "ProviderAttemptReservation",
     "current_provider_attempt_reservations",
+    "lease_provider_attempt_reservations",
     "provider_attempt_count_in_epoch",
+    "publish_provider_attempt_reservation",
     "provider_attempt_epoch",
     "reserve_provider_attempt",
     "reserve_provider_overload_retry",
