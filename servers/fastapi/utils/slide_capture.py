@@ -1102,9 +1102,19 @@ def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> None:
 _shared_render_waiters: dict[asyncio.Task[Any], int] = {}
 async def _await_shared_render_task(
     task: asyncio.Task[Any], inflight: dict, key: tuple[str, str, str],
-    *, timeout: float | None = None,
+    *, timeout: float,
 ) -> Any:
-    """Keep shared work alive only while a caller still needs its result."""
+    """Keep shared work alive only while a caller still needs its result.
+
+    ``timeout`` is required and has no ``None`` form on purpose.  Every joiner
+    of a shared render task waits on work it does not own, so an unbounded wait
+    here is not one slow caller -- a wedged browser semaphore or a detached
+    Windows Chrome child strands every joiner at once and blocks the event loop
+    that would have timed the renderer out.  The renderer bounds itself, so
+    pass its own timeout plus slack and let the inner bound fire first with a
+    real error.  A caller that cannot name a bound has not thought about what
+    happens when the shared task never finishes.
+    """
     if task not in _shared_render_waiters:
         def completed(done: asyncio.Task[Any]) -> None:
             if inflight.get(key) is done:
@@ -1114,8 +1124,6 @@ async def _await_shared_render_task(
         task.add_done_callback(completed)
     _shared_render_waiters[task] = _shared_render_waiters.get(task, 0) + 1
     try:
-        if timeout is None:
-            return await asyncio.shield(task)
         return await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
     finally:
         remaining = _shared_render_waiters[task] - 1
@@ -1901,7 +1909,12 @@ async def _render_html_to_png_cached(html: str, timeout: int) -> bytes:
     else:
         _count_runtime("render_inflight_joins")
     try:
-        rendered = await _await_shared_render_task(task, _render_inflight, key)
+        # Same bound and same reason as the metrics join below: the renderer
+        # owns its own timeout, so give the outer wait slack and let the inner
+        # one fail first.
+        rendered = await _await_shared_render_task(
+            task, _render_inflight, key, timeout=max(1, timeout) + 15
+        )
     finally:
         if _render_inflight.get(key) is task and task.done():
             _render_inflight.pop(key, None)
