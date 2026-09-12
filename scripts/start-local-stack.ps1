@@ -372,6 +372,16 @@ function Invoke-Start {
     $state = @{}
     $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
+    # Record what is running even when a later component fails to come up.
+    # The state file used to be written only after every component was ready,
+    # so a failure part-way through (an API that refuses to start on a schema
+    # mismatch, a port that never listens) left everything already started as
+    # an untracked orphan: -Stop could not see it, the next -Start refused the
+    # port it was holding, and two worker sets could end up claiming the same
+    # jobs. Observed twice on 2026-09-12. The finally below makes the file
+    # describe reality at every exit, including the failing ones.
+    try {
+
     Write-Host "starting local stack..."
     $postgres = Start-PersistentPostgres
     if ($postgres["Started"]) { $state["postgres"] = $postgres["ProcessId"] }
@@ -407,10 +417,18 @@ function Invoke-Start {
     [void](Wait-ForListener $ProxyPort 60)
     Write-Host "  proxy: ready on $ProxyPort"
 
-    Write-State $state
     Write-Host ""
     Write-Host "local stack is up: http://localhost:$ProxyPort"
     Write-Host "stop it with: .\scripts\start-local-stack.ps1 -Stop"
+
+    }
+    finally {
+        # Always, so a partial start is still stoppable by name.
+        Write-State $state
+        if ($state.Count -gt 0 -and -not (Get-PortOwner $ProxyPort)) {
+            Write-Warning ("start did not complete; {0} component(s) recorded in {1}. Run -Stop to clear them before starting again." -f $state.Count, $statePath)
+        }
+    }
 }
 
 if ($ImportEnvironment) { Import-EnvironmentDirectory $ImportEnvironment; return }
