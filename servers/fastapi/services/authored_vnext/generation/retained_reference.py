@@ -148,7 +148,7 @@ def _reference_path(retained_reference_id: str) -> Path | None:
             )
         )
     else:
-        repo_root = Path(__file__).resolve().parents[5]
+        repo_root = Path(__file__).resolve().parents[6]
         if retained_reference_id == OSB_RETAINED_REFERENCE_ID:
             candidates.append(repo_root / "osb-template-24-layouts.pptx")
         candidates.append(
