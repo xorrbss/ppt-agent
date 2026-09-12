@@ -290,6 +290,100 @@ async def _account_deletion_retires_public_artifacts(tmp_path: Path) -> None:
         await engine.dispose()
 
 
+def test_finalize_reclaims_expired_claim_with_naive_sqlite_lease(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    asyncio.run(
+        _finalize_reclaims_expired_claim_with_naive_sqlite_lease(tmp_path, monkeypatch)
+    )
+
+
+async def _finalize_reclaims_expired_claim_with_naive_sqlite_lease(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """SQLite hands ``DateTime(timezone=True)`` columns back naive.
+
+    ``claim_expires_at`` must therefore be normalised through ``as_utc``
+    before it is compared against the aware ``get_current_utc_datetime()``
+    result, or an expired claim raises ``TypeError`` instead of being
+    reclaimed via ``AccountDeletionFenceConflict``.
+    """
+
+    engine, maker = await _database(tmp_path / "account-deletion-naive-lease.db")
+    target = _user("naive-lease-target", auth_version=3)
+
+    async def noop(_session, *, owner_id):
+        assert owner_id == target.id
+        return 0
+
+    async def noop_credentials(_session, *, owner_id):
+        assert owner_id == target.id
+
+    monkeypatch.setattr(
+        deletion_controller, "snapshot_account_workspace_cleanup_targets", noop
+    )
+    monkeypatch.setattr(
+        deletion_controller,
+        "cancel_authored_vnext_generation_operations_for_account",
+        noop,
+    )
+    monkeypatch.setattr(
+        deletion_controller, "cancel_authored_vnext_exports_for_account", noop
+    )
+    monkeypatch.setattr(
+        deletion_controller, "retire_public_artifacts_for_account", noop
+    )
+    monkeypatch.setattr(
+        deletion_controller, "delete_account_restricted_dependents", noop
+    )
+    monkeypatch.setattr(
+        deletion_controller, "revoke_account_provider_credentials", noop_credentials
+    )
+
+    try:
+        async with maker() as session:
+            session.add(target)
+            await session.commit()
+            await mark_account_deleting(session, user_id=target.id)
+
+        async with maker() as session:
+            claim = await claim_account_deletion_request(
+                session, worker_id="naive-lease-worker"
+            )
+        assert claim is not None
+
+        async with maker() as session:
+            stored = await session.get(AccountDeletionRequest, target.id)
+            assert stored is not None and stored.claim_expires_at is not None
+            # This is the real shape produced by the SQLite round trip, not an
+            # artificially constructed naive value.
+            assert stored.claim_expires_at.tzinfo is None
+
+        real_now = datetime.now(timezone.utc)
+        # First call is the finalize-time SELECT's ``now`` (claim still has
+        # most of its 600s lease left); second is the post-cascade recheck,
+        # simulating external I/O consuming the rest of the lease.
+        observed_times = iter(
+            [real_now + timedelta(seconds=10), real_now + timedelta(seconds=700)]
+        )
+        monkeypatch.setattr(
+            deletion_controller,
+            "get_current_utc_datetime",
+            lambda: next(observed_times),
+        )
+
+        async with maker() as session:
+            with pytest.raises(
+                AccountDeletionFenceConflict,
+                match="expired before final cascade",
+            ):
+                await finalize_account_deletion_claim(session, claim=claim)
+    finally:
+        await engine.dispose()
+
+
 def test_duplicate_workers_share_one_durable_deletion_generation(tmp_path: Path):
     asyncio.run(_duplicate_workers_share_one_durable_deletion_generation(tmp_path))
 
