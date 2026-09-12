@@ -16,7 +16,7 @@ from services.source_content.placeholder.tree_slots import TextSlot, original_te
 from services.source_content.source_runs import source_run_binding_id
 from utils.authored_html_tree.parser_adapter import parse_authored_html
 from utils.authored_html_tree.serializer import serialize_authored_html
-from utils.get_env_programme import get_authored_html_normalization
+from services.authored_rollout_profile import current_rollout_profile
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,7 +156,11 @@ def expand_placeholders(html: str, block_table: Sequence[SourceBlock], *, contex
         ids = {match[1] for match in TOKEN.finditer(parent_text)}
         direct.append(len(slot.tokens) == 1 and len(ids) == 1 and not TOKEN.sub("", parent_text).strip())
 
-    if get_authored_html_normalization() == "legacy":
+    # The attempt's frozen profile, never a live read: an admission that is
+    # already pinned must splice the representation it was pinned to, and a
+    # resumed attempt must restore it from the job record rather than from
+    # whatever the environment says now.
+    if current_rollout_profile().html_normalization == "legacy":
         token_direct = tuple(
             is_direct for slot, is_direct in zip(slots, direct, strict=True) for _ in slot.tokens
         )

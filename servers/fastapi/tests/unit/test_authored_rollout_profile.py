@@ -103,13 +103,11 @@ def _modules_reading_the_normalization_knob() -> set[str]:
 
 
 #: ``authored_rollout_profile`` is the one module allowed to read the accessor:
-#: it is where the attempt's profile is resolved.  ``substitute.py`` is a known
-#: unrouted residual of R7 -- it picks its splice path from a live read inside
-#: ``expand_placeholders``, i.e. inside an admission that is already pinned --
-#: and is owned by the source-content surface, not by this one.  Removing it
-#: from the set below is the fix; adding anything is a new bypass.
+#: it is where the attempt's profile is resolved.  Every other consumer goes
+#: through ``current_rollout_profile()``.  Adding anything here is a new bypass:
+#: one live reader is enough to re-represent the rest of an in-flight deck.
 _ROLLOUT_PROFILE = "services/authored_rollout_profile.py"
-_KNOWN_UNROUTED = {_ROLLOUT_PROFILE, "services/source_content/placeholder/substitute.py"}
+_KNOWN_UNROUTED = {_ROLLOUT_PROFILE}
 
 
 def test_no_new_consumer_reads_the_normalization_knob_live():
