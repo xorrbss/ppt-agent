@@ -661,14 +661,18 @@ async def _fit_content_revision(
             fit=True,
             fit_policy=policy,
         )
+    prepared_original_html = fitted.prepared_html
+    if prepared_original_html is None:
+        raise AuthoredLocalFitRejected("reconstruction_mismatch")
+    policy = fitted.prepared_fit_policy or policy
     report = fitted.fit_report or {}
     changed = bool(report.get("changed")) or bool(
-        fitted.fitted_html and fitted.fitted_html != html
+        fitted.fitted_html and fitted.fitted_html != prepared_original_html
     )
     if not changed:
         return accept_unchanged_capture(
             fitted,
-            original_html=html,
+            original_html=prepared_original_html,
             policy=policy,
         )
     verify_queued_at = time.monotonic()
@@ -690,10 +694,14 @@ async def _fit_content_revision(
             fresh=True,
         )
     verify_finished_at = time.monotonic()
+    if verified.prepared_html is None:
+        raise AuthoredLocalFitRejected("reconstruction_mismatch")
+    policy = verified.prepared_fit_policy or policy
     return accept_verified_capture(
         fitted,
         verified,
-        original_html=html,
+        prepared_html=verified.prepared_html,
+        original_html=prepared_original_html,
         policy=policy,
         verify_queued_at=verify_queued_at,
         verify_started_at=verify_started_at,
@@ -708,6 +716,7 @@ async def _apply_bounded_header_eyebrow_fallback(
     capacity,
     header_contract: AuthoredHeaderContract | None,
     role: str,
+    slide_index: int | None = None,
     allow_immutable_checkpoint_geometry: bool = False,
 ) -> tuple[str, bytes, object] | None:
     """Apply and verify the single contract-scoped eyebrow clip fallback."""
@@ -726,7 +735,7 @@ async def _apply_bounded_header_eyebrow_fallback(
     if patched == html:
         return None
     bound_htmls, bound_pngs, bound_metrics = await _bind_bounded_repair_evidence(
-        [patched]
+        [patched], [slide_index]
     )
     if capacity_violations(bound_htmls[0], bound_metrics[0], capacity):
         return None
@@ -739,6 +748,7 @@ async def _apply_bounded_closing_capacity_reducer(
     browser_metrics: object,
     capacity,
     profile_id: str,
+    slide_index: int | None = None,
 ) -> tuple[str, bytes, object] | None:
     """Reduce and Chromium-verify one ordinary CLOSING capacity residual."""
 
@@ -751,7 +761,7 @@ async def _apply_bounded_closing_capacity_reducer(
     if reduced == html:
         return None
     bound_htmls, bound_pngs, bound_metrics = await _bind_bounded_repair_evidence(
-        [reduced]
+        [reduced], [slide_index]
     )
     if capacity_violations(bound_htmls[0], bound_metrics[0], capacity):
         return None
@@ -764,6 +774,7 @@ async def _apply_bounded_closing_title_reducer(
     browser_metrics: object,
     capacity,
     profile_id: str,
+    slide_index: int | None = None,
 ) -> tuple[str, bytes, object] | None:
     reduced = reduce_authored_closing_title_punctuation(
         html,
@@ -774,7 +785,7 @@ async def _apply_bounded_closing_title_reducer(
     if reduced == html:
         return None
     bound_htmls, bound_pngs, bound_metrics = await _bind_bounded_repair_evidence(
-        [reduced]
+        [reduced], [slide_index]
     )
     if capacity_violations(bound_htmls[0], bound_metrics[0], capacity):
         return None
@@ -859,6 +870,7 @@ async def _apply_final_checkpoint_header_eyebrow_fallback(
             capacity=capacity_plan.at(index),
             header_contract=header_contract,
             role=roles[index],
+            slide_index=index,
             allow_immutable_checkpoint_geometry=(
                 latest.capture_policy == "hydrated"
             ),
@@ -902,6 +914,7 @@ async def _apply_final_checkpoint_closing_capacity_reducer(
             browser_metrics=metrics,
             capacity=capacity,
             profile_id=profile_id,
+            slide_index=index,
         )
         if reduced is None:
             continue
@@ -1763,9 +1776,13 @@ async def _generate_authored_presentation(
             return fitted.html, fitted.png, fitted.metrics
         canonical = ensure_authored_semantic_roles(ensure_authored_qids(candidate_html))
         capture = await capture_once(canonical, index=slide_index, capture=render_html_to_png_with_metrics)
-        if capture.png == _placeholder_png() or capture.browser_metrics is None:
+        if (
+            capture.prepared_html is None
+            or capture.png == _placeholder_png()
+            or capture.browser_metrics is None
+        ):
             raise RuntimeError("source repair browser evidence unavailable")
-        return canonical, capture.png, capture.browser_metrics
+        return capture.prepared_html, capture.png, capture.browser_metrics
 
     author_provider_attempt_counts = [
         int(value)
@@ -1986,6 +2003,11 @@ async def _generate_authored_presentation(
                 # Older checkpoints predate exact clipping intersections.
                 # Refresh only this failed slide, retaining its exact HTML.
                 capture = await capture_once(htmls[absolute_index], index=absolute_index, capture=render_html_to_png_with_metrics)
+                if capture.prepared_html != htmls[absolute_index]:
+                    raise AuthoredStageError(
+                        slide_index=absolute_index, stage="render",
+                        code="authored_local_fit_post_acceptance_mutation", retryable=False,
+                    )
                 if capture.png == _placeholder_png() or capture.browser_metrics is None:
                     raise AuthoredStageError(
                         slide_index=absolute_index, stage="render",

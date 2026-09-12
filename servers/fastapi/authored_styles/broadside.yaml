@@ -23,34 +23,60 @@ preview:
     - "#F0ECE5"
     - "#888880"
   variant: dark
+  image: catalogue-previews/broadside.png
+reference_images:
+  content: [catalogue-previews/broadside.png]
 brief: |-
   MOOD:
   Create a protest-poster editorial system with considered newspaper precision: ink on fire, loud but controlled. Use two registers only—dark for documentation and orange for declaration. Treat one very short headline as a graphic object, then let negative space restore order.
 
+  Make the protest-poster voice evidence-literate: a forceful claim earns its scale through a legible comparison beneath it.
+
   PALETTE:
   Use ink black #111111 and alternate black #1A1A18 for content surfaces, warm cream #F0ECE5 for main text, muted cream #888880 and hint #505048 for secondary labels, border #282826 for hairlines, and fire orange #E85D26 as the single accent. Cover, chapter, statement, and closing slides may use full orange with black type. Never introduce a white or cream slide register or a second accent.
 
+  Keep ink, warm paper and burnt orange. Use light text on ink, dark text on paper, and orange as a bounded block or line with high-contrast labels.
+
   TYPOGRAPHY:
   Use a heavy grotesque sans serif at weight 800–900 for one enormous display moment and a regular sans serif for short support copy. Latin display text should be sentence case or lowercase, four to seven words, one or two lines, with tight tracking; Korean display text needs open line height and no collision. Reserve a mono face in uppercase for tiny kickers, page numbers, tags, and chart labels. Never use serif, script, italic, underline, or long display copy.
+  Allow Korean headings to wrap naturally rather than forcing uppercase-style width or compressed tracking, and keep source notes readable under the runtime typography policy.
+
+  Use an available heavy sans-serif with tight but non-colliding headlines; keep body text open, uncondensed and sentence-case. Distressed styling never affects reading copy. All Korean text must resolve through a local stack including "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif. At a 1280x720 canvas, target body 22-28px and labels at least 16px; 9.5pt (12.667px) is the hard floor for every text run, including SVG, captions and sources. If text cannot fit, shorten with evidence intact or split the slide; never shrink below the floor.
 
   LAYOUT SYSTEM:
-  Compose for a fixed 16:9 canvas with generous outer margins, one statement, one rule, and breathing room. On dark content slides, use thin top and bottom newspaper hairlines, a small mono kicker, and compact page metadata. Suppress chrome on orange declaration slides. Keep corners square, surfaces flat, and bullet lists marked with an orange slash and capped at three items. Body copy must never exceed two short lines in one text block.
+  Compose for a fixed 16:9 canvas with generous outer margins, one statement, one rule, and breathing room. On dark content slides, use thin top and bottom newspaper hairlines, a small mono kicker, and compact page metadata. Suppress chrome on orange declaration slides. Keep corners square, surfaces flat, and bullet lists marked with an orange slash and kept concise without dropping required items. Keep short statements concise, allowing required explanatory text a wider reading area.
+  Treat short text blocks as a compositional preference. When required Korean copy is longer, use a broad reading band or an open pair of columns, reduce display-title dominance and retain the full meaning before changing type size. Reserve catalogue numbers, dates and contact lines for supplied metadata; distinguish navigation indices from factual quantities.
+
+  Use an oversized condensed headline as one edge of the composition, then open a disciplined newspaper-style reading field. Alternate a loud poster page with a quieter tabular or quote page. Keep the claim to two lines and evidence to three rows; a dense brief becomes a second page rather than tighter tracking. These are flexible compositional directions for freely authored HTML/CSS, not fixed layouts, slots, Deck IR or a layout engine.
 
   SIGNATURE ELEMENTS:
   Repeat a short 36-by-2 orange rule, slash bullets, mono catalogue numbers, top-border-only statistic blocks, and one oversized orange numeral. Use a three-word fade stack at full, half, and faint opacity for sequence stories. Quotes may use one huge orange opening mark followed by a brief statement.
 
+  Use thick ink rules, issue numbers, one orange editorial stamp and abrupt scale changes. A stamp can flag a supplied finding or open question, but must not counterfeit authority or certification.
+
   DATA VISUALIZATION:
-  Use black canvases, hairline axes, direct labels, and flat bars in muted charcoal or cream hint, with exactly one bar or value in orange. Prefer one dominant KPI and a short label. Avoid multicolor dashboards, heavy legends, rounded chart cards, and dense annotations.
+  Use black canvases, fine rules and cream labels with one orange emphasis when a finding warrants it. Prefer a dominant supported number or a direct-label bar chart, retaining units, period, comparison baseline and a readable source note. Bar lengths must follow the data; a standalone number must retain its denominator or context. When numeric evidence is absent, use a concise qualitative comparison instead of decorative statistics.
+
+  Build blunt common-baseline bars, a stark before/after table or an annotated timeline. Direct-label each mark in readable type. Separate quotation from interpretation and keep the source visible; visual urgency must not exaggerate the numerical difference.
 
   IMAGE DIRECTION:
   Let typography lead. When imagery is essential, choose one high-contrast documentary black-and-white or restrained duotone image, crop it decisively, and use orange only as an accent or environment. Avoid lifestyle stock, rounded image frames, and multi-photo collage.
 
+  Use one original high-contrast cut-paper or halftone-like SVG motif, or a credited documentary crop. Avoid fake news clippings, fabricated citations or text embedded in distressed imagery.
+
   SLIDE ARCHETYPES:
-  - cover: Fill the canvas with orange, set one short massive black title, add a small catalogue number or date, and remove all chrome.
-  - content: Use black, an orange mono kicker, one large cream heading, and either a two-line lead or no more than three slash bullets between hairlines.
-  - data: Use black, top-rule statistics, and one dominant orange number or one-accent-bar chart.
-  - timeline: Use a three-stage fade stack or one hairline baseline with terse milestone names; highlight only the current stage in orange and omit event paragraphs.
-  - closing: Fill the canvas with orange, use one decisive black statement and a small action or contact line, and remove all chrome.
+  cover: Use the orange field and a massive black title with optional supplied catalogue metadata; suppress chrome.
+  agenda: Set the topic list as a broad cream column on black with orange slash markers and aligned navigation indices.
+  section: Use a chromeless orange declaration field with the actual section name rather than an unsupported slogan.
+  content: Pair a cream heading with a short statement, a few slash bullets, or a wider editorial reading band suited to the material.
+  data: Use top-rule statistics or a single-accent bar chart, with evidence labels clear of the oversized focal value.
+  timeline: Use a vertical hairline sequence sized to the supplied milestones. Highlight a current stage only when the source identifies it; use dates only when provided.
+  architecture: Use square, open labeled regions and restrained straight connectors for supported components or dependencies.
+  closing: Use an orange field with a concise supported conclusion and an action or contact line only when supplied.
+
+  Explore — typographic claim-and-proof poster; before/after evidence sheet; three-beat issue timeline; documentary crop with a rebuttal column; oversized quotation and context; ranked comparison; action page with explicit conditions.
 
   AVOID:
-  Avoid body blocks longer than two short lines, more than three bullets, two display moments on one slide, four-column layouts, uppercase Latin display, serif or script faces, any second accent, white backgrounds, gradients, shadows, rounded cards, decorative icon spam, clipped type, and unreplaced template text.
+  Prefer concise body copy and short bullet lists while preserving required wording and letting the content determine line and item counts. Avoid two display moments on one slide, four-column layouts, uppercase Latin display, serif or script faces, any second accent, white backgrounds, gradients, shadows, rounded cards, decorative icon spam, clipped type, and unreplaced template text.
+
+  Do not invent claims, measurements, quotations, citations or provenance. Keep illustrative data visibly labeled and supplied evidence traceable. Avoid repeating the same composition throughout a deck; alternate the narrative scenes above while retaining this style's visual identity. Keep all original reference images and their provenance intact.

@@ -1,0 +1,57 @@
+id: atelier-monograph
+name: 아틀리에 모노그래프
+description: 본화이트와 오버진, 명료한 활자와 작품 해설 같은 여백으로 브랜드·문화·공간의 이야기를 편집하는 스타일
+category: editorial
+tags:
+  - curation
+  - monograph
+  - premium-editorial
+use_cases:
+  - 브랜드 관점과 디자인 전략
+  - 문화·공간 프로젝트 소개
+  - 프리미엄 서비스 스토리텔링
+preview:
+  bg: '#F6F2EF'
+  accent: '#60364D'
+  palette: ['#F6F2EF', '#292529', '#60364D', '#CDBFC3', '#E4DCD5']
+  variant: monograph-editorial-plate
+design_tokens:
+  primary: '#60364D'
+  background: '#F6F2EF'
+  heading_font: '"Noto Serif KR", "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", serif'
+  body_font: '"Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif'
+brief: |-
+  MOOD:
+  Create a contemporary exhibition monograph: thoughtful, cultured, and quietly premium. Let a precise point of view, a beautifully paced page, and a small number of meaningful details provide the richness. The identity is a light printed surface with aubergine editorial marks, spacious Korean typography, and object-like framing. Build a coherent narrative while allowing both visual and evidence-heavy material to breathe.
+
+  PALETTE:
+  Use bone white #F6F2EF as the main surface, charcoal #292529 for all essential text, aubergine #60364D for chapter titles and measured emphasis, dusty mauve #CDBFC3 for secondary planes, and stone #E4DCD5 for quiet rules. Pale colors are backgrounds, not small text colors. A full aubergine interlude can carry bone-white type. Keep the page flat and tangible; premium character comes from proportion and restraint rather than shine.
+
+  TYPOGRAPHY:
+  For a few display lines, prefer "Noto Serif KR", "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", serif. Use "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif for prose, data, captions, and all dense Korean text. Do not require remote fonts or assume a Korean serif is installed. On a 1280 by 720 CSS canvas, target 46-62px display titles, 22-27px body text with 1.4-1.55 leading, and 16-19px captions. All visible text must stay at or above 9.5pt, equivalent to 12.667px at 96dpi. Keep Korean tracking natural and reserve small spaced capitals for brief optional Latin indexes. Edit or divide content before shrinking it.
+
+  LAYOUT SYSTEM:
+  Treat each slide as a composed editorial page, with a generous outer margin around 64px and a strong reading path. Choose an image-led opening, a typographic argument, a wide evidence spread, or an asymmetrical annotated object according to the material. Align edges carefully, leave the dominant idea ample space, and vary the silhouette across adjacent slides. A companion exemplar demonstrates rhythm and hierarchy only; it is not a required frame, slot system, or recurring layout. Long passages belong on a separate page rather than in fine print.
+
+  SIGNATURE ELEMENTS:
+  Use an unobtrusive folio, a short aubergine vertical rule, an inset specimen field, and an occasional large chapter numeral. Pair one carefully positioned caption with the object or claim it explains. Keep visual marks sparse and purposeful. Use original geometric studies when there is no supplied imagery; label conceptual studies as such and never imply an invented object is a real portfolio project.
+
+  DATA VISUALIZATION:
+  Edit quantitative material with the same care as prose: directly labeled horizontal bars, restrained small multiples, or a simple comparison table with generous row spacing. Charcoal carries the data, aubergine highlights one supported insight, and pale stone supplies dividers. Preserve supplied units, periods, sources, and uncertainty. For qualitative research, attribute quotations and distinguish observation from interpretation. Do not invent testimonials, awards, market proof, or brand results.
+
+  IMAGE DIRECTION:
+  Prefer one user-supplied object, material, space, or documentary detail in an intentional crop, with genuine provenance when available. Keep labels outside the image on a calm field. If no suitable asset exists, compose an original abstract CSS or SVG form or a typographic page; photography is optional. Do not fetch or imitate branded campaign imagery, use fake agency credits, or disguise synthetic studies as client work.
+
+  SLIDE ARCHETYPES:
+  - cover: A large, naturally wrapped Korean thesis, a small editorial index, and one simple object or line gesture in an open field.
+  - agenda: A roomy contents spread organized by narrative questions, with clear chapter titles and quiet numbering.
+  - section: An aubergine interlude with a concise bone-white chapter statement and abundant surrounding space.
+  - content: A considered proposition with two well-separated observations and a clearly distinguished interpretation.
+  - image: One generous supplied image or labeled original geometric study, paired with a short adjacent curatorial note.
+  - architecture: Compose a monograph figure plate on the bone-white field: align the supplied system or solution components as open groups with charcoal labels, a generous caption margin, and fine aubergine connectors. Let actual responsibilities or layers determine the grouping; use a single object-like focal group only when the relationships support it. Route straight or orthogonal connectors through clear gutters and label their meaning without crossing prose. Preserve required component names and relationships, widen or stack long Korean labels, and keep the established typography floor. Use only supplied dependencies and direction; do not invent modules, quantities, or relationships to fill the composition. Keep the diagram and side notes inside one shared content boundary below the title and above the footer. Determine side-panel height from the full note content before placing the diagram; do not let annotations run below a card or into the footer. Consolidate repeated relationship explanations with their diagram labels while preserving every required qualification. If the notes exceed the side panel, move the qualifications into a full-width note row inside the content boundary and reserve its height before sizing the diagram, without deleting required content or reducing the typography floor. Use distinct input and output ports on each node; never route an outgoing edge backward over that same node's incoming edge. When edges share a trunk, give every source node a visibly independent outbound segment before the merge so the origin and direction of each relationship remain unambiguous.
+  - data: A wide, directly labeled evidence comparison accompanied by one succinct implication and a readable source note.
+  - timeline: An editorial sequence of turning points with unequal visual emphasis reflecting their actual importance.
+  - closing: A spacious final point of view and a concrete next step, with a quiet folio and one echo of the opening gesture.
+
+  AVOID:
+  Avoid espresso-and-gold luxury styling, script overlays, fake paper textures, distressed collage, decorative drop caps inside Korean prose, repeated image-text halves, ornamental frames, pale body text, crowded footnotes, remote font dependencies, fabricated provenance, and treating the exemplar as fixed content or geometry. Preserve editorial variety without sacrificing reading order.

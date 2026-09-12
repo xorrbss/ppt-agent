@@ -11,6 +11,7 @@ import Wrapper from "@/components/Wrapper";
 import OutlineContent from "./OutlineContent";
 import EmptyStateView from "./EmptyStateView";
 import GenerateButton from "./GenerateButton";
+import TemplateSelection from "./TemplateSelection";
 
 import { useOutlineStreaming } from "../hooks/useOutlineStreaming";
 import { useOutlineManagement } from "../hooks/useOutlineManagement";
@@ -456,6 +457,7 @@ const OutlinePage: React.FC<{
       <Wrapper className="flex flex-col w-full relative px-5 sm:px-10 lg:px-20 ">
         <div className="w-full mx-auto">
           <div className="flex w-full flex-col pt-6">
+            {!auto && <TemplateSelection />}
             {!auto && masterEnabled && (
               <div className="mb-5 mt-2">
                 <MasterSelectionSummary

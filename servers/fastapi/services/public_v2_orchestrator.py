@@ -6,6 +6,11 @@ render, and export execution remains owned by the workspace worker boundary.
 
 from __future__ import annotations
 
+from services.public_generation_route import (
+    effective_generation_engine as _effective_generation_engine,
+    pin_source_restyle_authoring,
+)
+
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -307,18 +312,7 @@ async def _resolve_generation_route_receipt(
         raise _public_error(503, "generation_route_resolution_invalid") from error
 
 
-def _effective_generation_engine(
-    request: PresentationGenerationRequestV2,
-) -> str:
-    if request.generation_mode == "registered-template":
-        # The design-pack route receipt and source-native handler own this
-        # operation.  Sending it through bounded Deck IR preflight would reject
-        # valid packs with more than ten requested output pages before the
-        # provider-free capacity admission can run.
-        return "authored"
-    if "generation_mode" in request.model_fields_set:
-        return "deck-ir"
-    return request.generation_engine or "authored"
+
 
 
 def _release_review_receipt_reusable(
@@ -1000,6 +994,8 @@ class SqlPublicV2Orchestrator:
             internal_generation_mode = (
                 "registered-template"
                 if source_native_route
+                else "free-design"
+                if request.source_mode == "source_content_restyle"
                 else request.generation_mode
             )
             internal_design_pack_pin = (
@@ -1074,6 +1070,7 @@ class SqlPublicV2Orchestrator:
                     else ()
                 ),
             )
+            pin_source_restyle_authoring(internal_request)
             generation_payload = _durable_request_payload(internal_request)
             generation_payload["generation_route_receipt"] = route_payload
             presentation_id = uuid.uuid5(

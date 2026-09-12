@@ -267,11 +267,16 @@ async def revise_structural_candidates(
                         candidate_html, absolute_indices[i]
                     )
                 else:
-                    candidate_png, candidate_metrics = await capture_once(
+                    candidate_capture = await capture_once(
                         candidate_html,
                         index=absolute_indices[i],
                         capture=render_html_to_png_with_metrics,
                     )
+                    if candidate_capture.prepared_html is None:
+                        raise RuntimeError("structural repair capture preparation unavailable")
+                    candidate_html = candidate_capture.prepared_html
+                    candidate_png = candidate_capture.png
+                    candidate_metrics = candidate_capture.browser_metrics
                 final_digest = hashlib.sha256(candidate_html.encode("utf-8")).hexdigest()
                 if final_digest != digest and final_digest in seen_digests:
                     receipt["stop_reason"] = "duplicate_candidate_digest"

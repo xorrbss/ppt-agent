@@ -239,14 +239,13 @@ select = ["E", "F", "B", "ASYNC"]
 "services/chat/tools.py" = ["E501"]
 "services/decompose_job_service.py" = ["ASYNC230"]
 "services/documents_loader.py" = ["B007"]
-"services/export_task_service.py" = ["ASYNC109", "ASYNC230", "ASYNC240"]
 "services/image_generation_service.py" = ["ASYNC109", "ASYNC230", "ASYNC240", "B007", "B904"]
 "services/liteparse_service.py" = ["E501"]
 "services/mem0_oss_memory.py" = ["E501"]
 "services/presentation_generation_operation_handler.py" = ["F401"]
 # One-off PNG-identity read inside a per-slide export step; matches the
 # existing ASYNC240 tolerance for non-hot-path blocking calls in
-# services/export_task_service.py and services/workspace_asset_service.py.
+# services/workspace_asset_service.py.
 "services/public_export_operation.py" = ["ASYNC240"]
 "services/public_quality_receipt_v3_projection.py" = ["E501"]
 "services/slidespec_authored_executor.py" = ["B905", "E501", "F841"]

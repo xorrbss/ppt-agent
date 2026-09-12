@@ -40,7 +40,7 @@ const ModelSelectField = ({
   setOpenModelSelect,
 }: ModelSelectFieldProps) => {
   return (
-    <div className="w-[262px]">
+    <div className="w-full sm:w-[262px]">
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-3">
           {selectedProvider === "ollama"
@@ -57,7 +57,7 @@ const ModelSelectField = ({
                 variant="outline"
                 role="combobox"
                 aria-expanded={openModelSelect}
-                className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
+                className="w-full h-11 px-3 py-2 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors hover:border-gray-400 justify-between"
               >
                 <span className="text-sm truncate font-medium text-gray-900">
                   {(() => {

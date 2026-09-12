@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import subprocess
 
 from pydantic import BaseModel, model_validator
@@ -34,12 +33,6 @@ def export_task_timeout_seconds() -> int:
         )
         return DEFAULT_EXPORT_TASK_TIMEOUT_SECONDS
     return max(configured, MIN_EXPORT_TASK_TIMEOUT_SECONDS)
-
-
-def redact_export_url(url: str) -> str:
-    """Mask the admin session token in an export URL before logging."""
-
-    return re.sub(r"(exportSession=)[^&]*", r"\1***", url)
 
 
 def windows_hidden_subprocess_kwargs() -> dict[str, object]:
@@ -83,10 +76,6 @@ class PptxToJsonDocument(BaseModel):
 
     layouts: list[dict]
     output_dir: str = ""
-
-
-class PresentationExportTaskResult(BaseModel):
-    path: str
 
 
 class ExtractSchemaSlide(BaseModel):

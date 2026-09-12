@@ -51,7 +51,7 @@ const CurrentConfig = () => {
             ? IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER]?.label || llmConfig.IMAGE_PROVIDER
             : "이미지 제공자 없음";
     return (
-        <p className="rounded-full border border-[#EBEBEC] bg-[#F9FAFB] px-2.5 py-1 text-[10px] font-medium text-[#6B6B73]">
+        <p className="rounded-lg border border-slate-200/80 bg-slate-50 px-2.5 py-1.5 text-[11px] font-medium text-slate-500">
             {textSummary} · {imageSummary}
         </p>
 

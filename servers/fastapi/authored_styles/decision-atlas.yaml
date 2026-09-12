@@ -1,0 +1,57 @@
+id: decision-atlas
+name: 디시전 아틀라스
+description: 아이보리 지면과 포레스트 포인트, 선택지 비교와 근거 주석으로 경영진의 전략적 결정을 돕는 스타일
+category: business
+tags:
+  - strategy
+  - decision
+  - portfolio
+use_cases:
+  - 경영 전략과 자원 배분
+  - 사업 포트폴리오 검토
+  - 투자 대안 비교와 실행 합의
+preview:
+  bg: '#F5F2E9'
+  accent: '#205A49'
+  palette: ['#F5F2E9', '#172D29', '#205A49', '#A16B24', '#DCDDD1']
+  variant: atlas-executive-ledger
+design_tokens:
+  primary: '#205A49'
+  background: '#F5F2E9'
+  heading_font: '"Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif'
+  body_font: '"Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif'
+brief: |-
+  MOOD:
+  Create a calm decision atlas: an executive working paper with confident typography, open space, and visible reasoning. Focus on choices, trade-offs, and the evidence behind a recommendation. The visual identity is warm paper and forest ink, with an occasional dark chapter pause; it should feel analytical and composed without becoming a dense procurement proposal.
+
+  PALETTE:
+  Use ivory #F5F2E9 for the main field, deep ink #172D29 for text, forest #205A49 for the selected option, ochre #A16B24 for a constraint or unresolved question, and pale mineral #DCDDD1 for rules and secondary surfaces. Use ink or forest text on light fields and ivory on dark fields. Ochre is a small signal, not a paragraph color. Keep chart series distinguishable with direct labels and line or fill patterns as well as hue.
+
+  TYPOGRAPHY:
+  Use "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif for Korean headings and body, with tabular numerals for comparisons. At a 1280 by 720 CSS canvas, aim for 44-58px titles, 22-28px body, 18-20px chart labels, and 16-18px sources. Never reduce any text below 9.5pt, equivalent to 12.667px at 96dpi. Keep Korean letter spacing near normal, use 1.35-1.5 body leading, and break lines at natural phrases. Reduce copy or split the argument before shrinking type.
+
+  LAYOUT SYSTEM:
+  Compose freely around the actual decision: a broad argument, an annotated chart, a compact alternatives table, or an open two-part comparison. Use a 64px outer margin and consistent reading order as a starting point, not a fixed template. Give the claim and its evidence more area than navigation. Alternate asymmetrical evidence pages with sparse statements, wide comparison pages, and occasional forest section dividers. Do not impose identical cards, slots, coordinates, or a required object count across the deck.
+
+  SIGNATURE ELEMENTS:
+  Use a small atlas index, one forest selection rail, restrained hairline rules, and an open bracket marking the preferred path. Let the bracket accompany a real recommendation rather than framing every block. A small ochre decision marker can flag a dependency, with its meaning written beside it. Keep ornaments in the margin and preserve generous breathing room between facts and interpretation.
+
+  DATA VISUALIZATION:
+  Favor directly labeled comparison bars, a carefully scoped portfolio map, a contribution bridge, and scenario ranges. Show period, unit, baseline, source, and any assumptions that are actually supplied. Compare alternatives on consistent criteria; distinguish observed results from projections and expose missing evidence. Do not invent scores, weights, totals, benchmarks, or a favorable recommended option. Use a table or reasoned qualitative comparison when the source cannot support a chart.
+
+  IMAGE DIRECTION:
+  Work well without photos. Use original CSS or SVG brackets, simple decision paths, and evidence-led diagrams. When the user provides a relevant asset, place one deliberate crop with readable adjacent explanation and honest provenance. Do not manufacture brand affiliations or turn an unrelated stock photograph into evidence. Never substitute a decorative image for an unsupported numerical claim.
+
+  SLIDE ARCHETYPES:
+  - cover: An oversized Korean decision statement on ivory, a small atlas index, and one forest line ending at the key question.
+  - agenda: A short sequence of decisions to resolve, with generous spacing and one sentence on the meeting outcome.
+  - section: A sparse forest field with an ivory chapter thesis and a quiet index in the margin.
+  - content: A clear strategic claim paired with two or three well-separated pieces of evidence and their implications.
+  - comparison: A broad alternatives table or aligned rows, with one recommendation rail and an explicit trade-off note.
+  - architecture: Place the supplied solution or operating model in an open atlas diagram on ivory, with aligned responsibility or system layers, forest labels and connectors, and a narrow margin for the supported decision context. Use ochre only for an evidenced selected path or decision point. Let the actual components determine the number of groups; proximity must not imply unsupported priority or dependency. Keep straight or orthogonal connectors in reserved gutters, label boundaries and flow direction only when supplied, and preserve required names and relationships. Reflow long Korean labels into wider or stacked groups within the established typography floor rather than deleting evidence.
+  - data: One legible portfolio chart or comparison, direct labels, and a short decision implication in the open margin. Measure the title after its actual line wrapping, then determine the subtitle, horizontal rule, and table start positions from that measured height. Keep a clear gap below the final title line before drawing any rule; reserve the subtitle height and its spacing before beginning the evidence rows. A two-line title must expand the header rather than overlap a fixed-height divider or compress the explanation against it. Preserve every table value, unit, and required note while recomposing the remaining content area within the established typography floor. Use normal document flow and an auto-height or min-height title wrapper; never constrain a wrapping heading to a fixed single-line height.
+  - timeline: A phased commitment path with gates, evidence needed at each gate, and owners only when provided.
+  - closing: The requested decision, its rationale, and the next observable action arranged as a spacious final statement.
+
+  AVOID:
+  Avoid navy-and-cyan technology styling, emerald proposal header bars on every page, decorative dashboards, repeated three-card rows, microscopic footnotes, color-only judgments, heavy enclosing boxes, fabricated scoring systems, brand imitation, forced layouts, and illustrative exemplar numbers copied into real content. Treat the companion exemplar only as an original demonstration of spacing and visual language; compose each slide for its own material.

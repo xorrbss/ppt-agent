@@ -142,7 +142,10 @@ async def admit_source_content_request(
         if not code.startswith("source_content_"):
             code = "source_content_manifest_invalid"
         raise _source_error(code, status_code=409) from error
-    if get_composer_restyle_enabled():
+    if getattr(request, "_source_content_sealed_authored_route", False):
+        # A live worker switch cannot replace the admitted free Authored route.
+        request._composer_restyle = False
+    elif get_composer_restyle_enabled():
         # Server-owned composition: the request keeps ``source_mode`` and one
         # slide per admitted page; ``prepare_source_content_authored_reflow``
         # then leaves it untouched and generation routes to the Composer.

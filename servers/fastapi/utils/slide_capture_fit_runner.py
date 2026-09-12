@@ -131,6 +131,7 @@ RUNNER_MEMBERS = r"""
       this._restoreAll(); this._last.partial = true; this._last.operations = []; this._last.edits = []; this._last.cards = [];
       this._last.error = String(error && (error.message || error) || 'fit failed').slice(0, 240);
       if (this._last.error === 'unverifiable_font_size') this._last.unresolved_reasons.push('font_unverifiable');
+      if (this._last.error === 'source_qid_unavailable') this._last.unresolved_reasons.push('reconstruction_mismatch');
       this._last.runs = this._finalRuns();
     }
     this._last.groups = this._groups; this._last.changed = this._last.edits.length > 0;

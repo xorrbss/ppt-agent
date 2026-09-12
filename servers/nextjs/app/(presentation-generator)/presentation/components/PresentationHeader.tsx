@@ -25,11 +25,12 @@ import HybridCoverageDialog, {
 } from "./header/HybridCoverageDialog";
 import HybridExportHistoryDialog from "./header/HybridExportHistoryDialog";
 import HeaderToolbar from "./header/HeaderToolbar";
+import HeaderMoreMenu from "./header/HeaderMoreMenu";
 import DashboardNavigationButton from "./header/DashboardNavigationButton";
 import PresentationTitleEditor from "./header/PresentationTitleEditor";
 import RegenerateConfirmDialog from "./header/RegenerateConfirmDialog";
 import type { PptxExportMode } from "./header/types";
-import AuthoredEmissionCapabilityStatusView, {
+import {
   authoredHybridUnavailableReason,
   type AuthoredEmissionCapabilityStatus,
 } from "./header/AuthoredEmissionCapabilityStatus";
@@ -405,32 +406,23 @@ const PresentationHeader = ({
               presentation_id={presentation_id}
               theme={presentationData.theme}
               currentMasterPin={appliedMasterPin}
-              currentSlide={currentSlide}
               isStreaming={isStreaming}
               isPresentationSaving={isPresentationSaving}
               workspaceCommandsEnabled={workspaceCommandsEnabled}
               onWorkspaceCommand={onWorkspaceCommand}
-              onWorkspaceQualityReviewRequest={onWorkspaceQualityReviewRequest}
-              onWorkspacePageRemakeRequest={onWorkspacePageRemakeRequest}
               onCanonicalSaved={onCanonicalSaved}
-              handleQualityReview={handleQualityReview}
             />
           )}
 
           <HeaderToolbar
-            presentation_id={presentation_id}
             presentationData={presentationData}
             isStreaming={isStreaming}
-            mutationsEnabled={mutationsEnabled}
             historyEnabled={workspaceHistoryEnabled}
             canUndo={canUndo}
             canRedo={canRedo}
             onUndo={onUndo}
             onRedo={onRedo}
-            setIsRegenerateConfirmOpen={setIsRegenerateConfirmOpen}
             handleStartPresentation={handleStartPresentation}
-            workspaceCommandsEnabled={workspaceCommandsEnabled}
-            onWorkspaceCommand={onWorkspaceCommand}
           />
 
           {presentationData && (
@@ -459,23 +451,29 @@ const PresentationHeader = ({
               }
             />
           )}
+
+          {presentationData && (
+            <HeaderMoreMenu
+              presentationId={presentation_id}
+              isAuthoredDeck={isAuthoredDeck}
+              currentSlide={currentSlide}
+              isStreaming={isStreaming}
+              isPresentationSaving={isPresentationSaving}
+              mutationsEnabled={mutationsEnabled}
+              historyEnabled={workspaceHistoryEnabled}
+              workspaceCommandsEnabled={workspaceCommandsEnabled}
+              onWorkspaceCommand={onWorkspaceCommand}
+              onWorkspaceQualityReviewRequest={onWorkspaceQualityReviewRequest}
+              onWorkspacePageRemakeRequest={onWorkspacePageRemakeRequest}
+              onQualityReview={handleQualityReview}
+              onRegenerate={() => setIsRegenerateConfirmOpen(true)}
+              editableHybridWorkbench={editableHybridWorkbench}
+              authoredCapabilityStatus={authoredCapabilityStatus}
+              expectedRevision={expectedRevision}
+            />
+          )}
         </div>
       </div>
-      {isAuthoredDeck ? (
-        <div className="border-t border-slate-100 px-4 py-2 sm:px-6">
-          {editableHybridWorkbench && (
-            <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-950" data-testid="editable-hybrid-workbench-bridge">
-              <span className="font-semibold">편집 가능한 Hybrid MVP</span>
-              <span>{editableHybridWorkbench.status === "ready" ? "준비됨" : editableHybridWorkbench.status === "shadow" ? "Shadow" : "차단됨"}</span>
-              {editableHybridWorkbench.status === "blocked" ? <span>{editableHybridWorkbench.reasonCode ?? "editable_hybrid_mvp_blocked"}</span> : <a className="font-semibold underline underline-offset-2" data-testid="editable-hybrid-workbench-link" href={`/authored-vnext/workbench?authoredDeckId=${encodeURIComponent(editableHybridWorkbench.deckId)}`}>Workbench에서 편집</a>}
-            </div>
-          )}
-          <AuthoredEmissionCapabilityStatusView
-            status={authoredCapabilityStatus}
-            expectedRevision={expectedRevision}
-          />
-        </div>
-      ) : null}
       <ExportQualityDialog
         exportQuality={exportQuality}
         setExportQuality={setExportQuality}

@@ -20,6 +20,7 @@ preview:
     - "#1F2430"
     - "#FFFFFF"
   variant: iso-console
+  image: catalogue-previews/iso-blueprint.png
 illustration:
   style_prompt: >-
     clean isometric 3D technical illustration, industrial machinery, pipes,
@@ -27,11 +28,15 @@ illustration:
     plastic-and-metal surfaces with light gray platforms, soft ambient
     shadows, plain very light gray background, minimal, crisp vector-render
     quality, generous empty margin around the scene
+reference_images:
+  content: [catalogue-previews/iso-blueprint.png]
 brief: >-
   MOOD: Create a confident systems-engineering explainer with the warmth of a
   well-made product manual. Every slide should feel like a precision diagram
   a senior engineer drew to make a complex mechanism instantly understandable
   to a non-technical decision maker.
+
+  Explain one coherent engineered world with friendly precision. The isometric scene should make causal relationships easier to follow rather than add decorative machinery.
 
   PALETTE: Use very light gray (#EDEEF1) as the canvas, cobalt blue (#2E5FB7)
   for primary structures and emphasis, vivid orange (#E87722) as the single
@@ -39,10 +44,16 @@ brief: >-
   (#1F2430) for text, and white (#FFFFFF) for cards and surfaces. Orange is
   scarce and decisive — one concept per slide owns it.
 
+  Maintain light gray, blue and orange with dark ink labels. Orange identifies the active flow; use text or line pattern as a second cue so the explanation does not depend on hue alone.
+
   TYPOGRAPHY: A strong modern sans-serif throughout. Slide titles are large,
   dark and left-aligned with tight tracking; annotation labels are compact,
   bold and sit close to what they describe; supporting bullets are calm and
-  well-spaced. Korean text must remain crisp and never be drawn inside images.
+  well-spaced. Korean text uses an available Hangul-capable sans-serif and remains
+  editable outside images. Wrap long component names at phrase boundaries in a
+  wider label band; preserve the runtime typography floor and bold-text padding.
+
+  Use a confident modern sans-serif and keep component labels horizontally readable. Smaller labels belong in the annotation rail instead of being scaled into the scene. All Korean text must resolve through a local stack including "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif. At a 1280x720 canvas, target body 22-28px and labels at least 16px; 9.5pt (12.667px) is the hard floor for every text run, including SVG, captions and sources. If text cannot fit, shorten with evidence intact or split the slide; never shrink below the floor.
 
   LAYOUT SYSTEM: The signature composition places ONE large isometric
   illustration slot occupying roughly the left 55-65% of the slide, with
@@ -51,29 +62,51 @@ brief: >-
   column of 2-4 concise takeaway bullets. Vary the arrangement per role:
   cover slides may center the scene under the title; content slides may flip
   the illustration to the right. Reserve the slot area with explicit sizing
-  so the layout holds even without the image.
+  so the layout holds even without the image. Keep a visible gutter between scene
+  and takeaway column and reserve outer label lanes within the slide safe margins.
+  Connector ticks end at the relevant part without crossing another label; move
+  crowded callouts into a numbered key beside the scene.
+
+  Let one isometric system occupy the main field with a separate caption or findings rail. Keep a common projection, clear foreground/background separation and ample empty space around leader lines. Alternate the whole-system scene, a component cutaway and a flat evidence page. Show at most four labeled components per view; detail complex mechanisms on another page. These are flexible compositional directions for freely authored HTML/CSS, not fixed layouts, slots, Deck IR or a layout engine.
 
   SIGNATURE ELEMENTS: Isometric machinery scenes, floating bold labels with
   small connector ticks, one orange-highlighted critical element per slide,
   thin light-gray platform lines, generous whitespace around the scene.
 
+  Use blue outlined volumes with orange operational pathways and small numbered markers. Route arrows through empty space, never over a component label; maintain consistent line weights and projection angles.
+
   DATA VISUALIZATION: Prefer annotated flows and mechanisms over abstract
   charts. When a chart is needed, draw it as clean inline SVG in the same
-  blue/orange system with direct labels — never inside the generated image.
+  blue/orange system with direct labels — never inside the generated image. Use
+  flat bars or dots with shared scales, units, period, and source for magnitude;
+  isometric height, volume, perspective, and machinery size encode no quantities.
+  Use orange plus a text label to identify a signal without inventing a risk level.
+
+  Keep the isometric scene qualitative unless dimensions are supplied. Put quantitative comparison in a flat bar or small aligned table beside it, with units and a common baseline. State assumptions and label conceptual machinery as schematic.
 
   IMAGE DIRECTION: Describe one coherent isometric scene per slide that
   physically embodies the concept (pipelines, gates, control panels, locks,
   conveyor flows, server stacks). Composition only — all text, numbers and
   labels live in HTML around the image.
 
+  Draw original simple isometric solids as one coherent scene; retain any supplied image provenance. Place all labels outside the artwork with clear leaders. Do not mix photorealistic machinery with inconsistent flat clip art.
+
   SLIDE ARCHETYPES: cover: title over a wide hero scene with one orange
   focal point; content: scene left, labeled callouts on the scene, takeaway
   bullets right; data: one dominant annotated SVG flow or metric panel with
   a small supporting scene; timeline: horizontal milestone rail with small
-  isometric markers; closing: decision summary with one compact scene and
+  isometric markers for supplied stages and dates; section: a section title with
+  one cropped blue mechanism and an orange focal part; agenda: aligned supplied
+  topics with small isometric markers; architecture: separated system zones with
+  external editable labels and directional connectors through clear gutters,
+  using only documented components and relationships; closing: decision summary with one compact scene and
   clear next actions.
+
+  Explore — whole-system isometric overview; exploded component explanation; material or information flow; failure point with one orange route; flat current/proposed performance comparison; phased installation scene; boundary-and-assumption summary.
 
   AVOID: Avoid text baked into images, multiple competing scenes on one
   slide, photographic imagery, gradients on the canvas, dense paragraph
   blocks, more than one orange focal concept, and decorative icons that do
   not explain the mechanism.
+
+  Do not invent claims, measurements, quotations, citations or provenance. Keep illustrative data visibly labeled and supplied evidence traceable. Avoid repeating the same composition throughout a deck; alternate the narrative scenes above while retaining this style's visual identity. Keep all original reference images and their provenance intact.

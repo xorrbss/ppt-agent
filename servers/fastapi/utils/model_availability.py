@@ -271,10 +271,21 @@ async def check_llm_and_image_provider_api_or_model_availability():
             selected_image_provider == ImageProvider.DALLE3
             or selected_image_provider == ImageProvider.GPT_IMAGE_1_5
             or selected_image_provider == ImageProvider.GPT_IMAGE_2
+            or selected_image_provider == ImageProvider.GPT_IMAGE_2_5_FLARE
+            or selected_image_provider == ImageProvider.GPT_IMAGE_2_5_SUNBURST
         ):
             openai_api_key = get_openai_api_key_env()
             if not openai_api_key:
                 raise Exception("OPENAI_API_KEY must be provided")
+
+        elif selected_image_provider == ImageProvider.CODEX_IMAGE:
+            from utils.get_env import get_codex_account_id_env
+            from utils.codex_token_refresh import ensure_fresh_codex_access_token
+            from utils.runtime_settings import resolve_runtime_settings
+
+            snapshot = resolve_runtime_settings(None)
+            if not ensure_fresh_codex_access_token(snapshot) or not get_codex_account_id_env(snapshot):
+                raise Exception("Codex login is required for image generation")
 
         elif selected_image_provider == ImageProvider.COMFYUI:
             comfyui_url = get_comfyui_url_env()

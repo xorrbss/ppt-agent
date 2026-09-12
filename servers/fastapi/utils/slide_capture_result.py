@@ -26,6 +26,8 @@ class RenderCapture:
     runtime_counters: Mapping[str, int]
     fitted_html: str | None = None
     fit_report: Mapping[str, Any] | None = None
+    prepared_html: str | None = None
+    prepared_fit_policy: Mapping[str, Any] | None = None
 
     @classmethod
     def from_payload(
@@ -37,6 +39,8 @@ class RenderCapture:
         runtime_counters: Mapping[str, int],
         fitted_html: str | None = None,
         fit_report: Mapping[str, Any] | None = None,
+        prepared_html: str | None = None,
+        prepared_fit_policy: Mapping[str, Any] | None = None,
     ) -> "RenderCapture":
         canonical = json.dumps(
             browser_metrics, sort_keys=True, separators=(",", ":"),
@@ -51,6 +55,10 @@ class RenderCapture:
             runtime_counters=dict(runtime_counters),
             fitted_html=fitted_html,
             fit_report=fit_report,
+            prepared_html=prepared_html,
+            prepared_fit_policy=(
+                dict(prepared_fit_policy) if prepared_fit_policy is not None else None
+            ),
         )
 
     def __iter__(self):
@@ -71,6 +79,21 @@ class RenderCapture:
             "browserMetricsCaptured": self.browser_metrics is not None,
             "runtimeCounters": dict(self.runtime_counters),
         }
+        if self.prepared_html is not None:
+            result["preparedHtmlDigest"] = "sha256:" + hashlib.sha256(
+                self.prepared_html.encode("utf-8")
+            ).hexdigest()
+        if self.prepared_fit_policy is not None:
+            canonical_policy = json.dumps(
+                self.prepared_fit_policy,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                allow_nan=False,
+            ).encode("utf-8")
+            result["preparedFitPolicyDigest"] = "sha256:" + hashlib.sha256(
+                canonical_policy
+            ).hexdigest()
         if include_payload:
             result["pngBase64"] = base64.b64encode(self.png).decode("ascii")
             result["browserMetrics"] = self.browser_metrics

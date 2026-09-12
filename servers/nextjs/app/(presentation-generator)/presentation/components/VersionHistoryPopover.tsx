@@ -12,6 +12,7 @@ import { notify } from "@/components/ui/sonner";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import type { WorkspaceCommandDispatcher } from "../workspace";
 import { formatViewerTimestamp } from "@/i18n/viewer-time";
+import { cn } from "@/lib/utils";
 
 interface VersionSummary {
   id: string;
@@ -37,12 +38,14 @@ const VersionHistoryPopover = ({
   allowRestore = true,
   workspaceCommandsEnabled = false,
   onWorkspaceCommand,
+  triggerLabel,
 }: {
   presentationId: string;
   disabled?: boolean;
   allowRestore?: boolean;
   workspaceCommandsEnabled?: boolean;
   onWorkspaceCommand?: WorkspaceCommandDispatcher;
+  triggerLabel?: string;
 }) => {
   const locale = useLocale();
   const [open, setOpen] = useState(false);
@@ -100,9 +103,14 @@ const VersionHistoryPopover = ({
           data-testid="version-history-trigger"
           title="버전 기록"
           disabled={disabled}
-          className="group cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+          className={cn(
+            "group cursor-pointer disabled:cursor-not-allowed disabled:opacity-50",
+            triggerLabel &&
+              "flex h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-[#101323] hover:bg-[#F6F6F9]",
+          )}
         >
-          <History className="h-3.5 w-3.5 text-[#101323] duration-300 group-hover:text-[#5141e5]" />
+          <History className="h-3.5 w-3.5 shrink-0 text-[#101323] duration-300 group-hover:text-[#5141e5]" />
+          {triggerLabel ? <span>{triggerLabel}</span> : null}
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[280px] rounded-[18px] p-0">

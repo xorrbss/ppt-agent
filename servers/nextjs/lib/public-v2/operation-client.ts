@@ -181,6 +181,14 @@ export type PublicV2OperationSnapshot = {
   canCancel: boolean;
 };
 
+export function shouldPollPublicV2Operation(snapshot: PublicV2OperationSnapshot): boolean {
+  return Boolean(snapshot.operationId && (
+    snapshot.status === "queued"
+    || snapshot.status === "running"
+    || (snapshot.status === null && snapshot.lifecycle === "monitoring")
+  ));
+}
+
 export const PUBLIC_V2_FIDELITY_CAPABILITY = {
   mode: "fidelity-raster" as const,
   supportsPptx: true,
@@ -1072,6 +1080,10 @@ export class PublicV2OperationClient {
   }
 
   private setTransportFailure(error: unknown): void {
+    // A later event-list request cannot replace the authoritative terminal result.
+    if (this.snapshotValue.status === "succeeded"
+      || this.snapshotValue.status === "failed"
+      || this.snapshotValue.status === "cancelled") return;
     const known = error instanceof PublicV2ApiError
       ? error
       : new PublicV2ApiError(0, "public_v2_network_error", true);

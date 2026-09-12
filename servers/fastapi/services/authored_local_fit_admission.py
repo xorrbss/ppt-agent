@@ -64,21 +64,22 @@ async def admit_local_fit_capture(
     """Select verification or original restoration before accepting one tuple."""
 
     async def admit_candidate() -> AcceptedLocalFit:
+        prepared_original_html = capture.prepared_html or original_html
+        prepared_policy = capture.prepared_fit_policy or policy
         report = capture.fit_report or {}
-        changed = bool(report.get("changed")) or bool(
-            capture.fitted_html and capture.fitted_html != original_html
-        )
+        changed = bool(report.get("fit_proposal")) or bool((capture.browser_metrics or {}).get("local_fit_candidate_only")) or (bool(report.get("changed")) or bool(
+            capture.fitted_html and capture.fitted_html != prepared_original_html
+        ))
         if not changed:
             return accept_unchanged_capture(
-                capture, original_html=original_html, policy=policy
+                capture, original_html=prepared_original_html, policy=prepared_policy
             )
-        validate_changed_capture(capture, original_html=original_html, policy=policy)
-        _, failure = evaluate(
-            html=capture.fitted_html, browser_metrics=capture.browser_metrics
+        validate_changed_capture(
+            capture, original_html=prepared_original_html, policy=prepared_policy
         )
-        rejected = geometry_failures(failure)
-        if rejected:
-            raise AuthoredLocalFitRejected("whole_page_geometry_unresolved")
+        # Candidate metrics describe the proposal run; quality is decided on the final capture.
+        # Fit edits may append attributes out of canonical order. Keep the
+        # first tuple intact and independently render the final policy bytes.
         queued_at = time.monotonic()
         original_reserve = max(1.0, verify_seconds / 2)
         deadline = min(
@@ -112,15 +113,16 @@ async def admit_local_fit_capture(
         finally:
             render_gate.release()
         _, failure = evaluate(
-            html=capture.fitted_html, browser_metrics=second.browser_metrics
+            html=second.prepared_html, browser_metrics=second.browser_metrics
         )
         if geometry_failures(failure):
             raise AuthoredLocalFitRejected("reconstruction_mismatch")
         return accept_verified_capture(
             capture,
             second,
-            original_html=original_html,
-            policy=policy,
+            prepared_html=second.prepared_html,
+            original_html=prepared_original_html,
+            policy=prepared_policy,
             verify_queued_at=queued_at,
             verify_started_at=started_at,
             verify_finished_at=finished_at,
@@ -130,8 +132,8 @@ async def admit_local_fit_capture(
         return await admit_candidate()
     except Exception as error:
         return await preserve_original_capture(
-            original_html=original_html,
-            policy=policy,
+            original_html=capture.prepared_html or original_html,
+            policy=capture.prepared_fit_policy or policy,
             reason=local_fit_failure_reason(error),
             rejected_report=capture.fit_report,
             render=render,
@@ -180,8 +182,8 @@ async def preserve_original_capture(
             )
         return retain_publishable_unresolved_capture(
             original,
-            original_html=original_html,
-            policy=policy,
+            original_html=original.prepared_html or original_html,
+            policy=original.prepared_fit_policy or policy,
             unresolved_reasons=(reason,),
             rejected_report=rejected_report,
         )

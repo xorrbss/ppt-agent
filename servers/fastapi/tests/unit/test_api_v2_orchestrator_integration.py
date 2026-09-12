@@ -1007,6 +1007,7 @@ async def _submit_source_restyle(
     monkeypatch: pytest.MonkeyPatch,
     *,
     admit_manifest,
+    submission: dict[str, object] | None = None,
 ) -> tuple[object, object, dict[str, object], list[object], list[int]]:
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'restyle.db'}")
     tables = [
@@ -1027,14 +1028,10 @@ async def _submit_source_restyle(
     route_slide_counts: list[int] = []
 
     def fake_route_resolver(**kwargs):
-        # The internal design-pack lookup needs app-data storage; the route
-        # receipt only has to observe the admitted count here.
+        from services.authored_vnext.generation_route import resolve_generation_route
+
         route_slide_counts.append(kwargs["slide_count"])
-        return {
-            "selectedRoute": "authored-fallback",
-            "narrativeIrDigest": None,
-            "fallbackReason": "no-compatible-design-pack",
-        }
+        return resolve_generation_route(owner_id=owner, **kwargs)
 
     async def fake_admission(session, *, principal, operation_id, operation_kind, **kwargs):
         request_plans.append(kwargs["request_plan"])
@@ -1102,29 +1099,37 @@ async def _submit_source_restyle(
             response = client.post(
                 "/api/v2/presentations/generations",
                 headers={"Idempotency-Key": "restyle-key"},
-                json=_SOURCE_RESTYLE_SUBMISSION,
+                json=submission or _SOURCE_RESTYLE_SUBMISSION,
             )
         return response, maker, captured_generation_settings, request_plans, route_slide_counts
     finally:
         await engine.dispose()
 
 
+@pytest.mark.parametrize("verbatim", [False, True])
 def test_api_submit_source_restyle_charges_source_pages_and_pins_master(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, verbatim: bool,
 ) -> None:
     """A page-locked restyle is admitted for its source pages, not ``slideCount``."""
 
     async def scenario() -> None:
         async def admit_manifest(candidate):
-            candidate._source_document_outline = SimpleNamespace(source_slide_count=7)
+            candidate._source_document_outline = SimpleNamespace(source_slide_count=43)
 
+        submission = dict(_SOURCE_RESTYLE_SUBMISSION)
+        if verbatim:
+            submission.update(
+                generationMode="registered-template",
+                generationEngine="deck-ir",
+                contentPolicy={"text": "verbatim", "allowSummarization": False},
+            )
         response, maker, generation_settings, request_plans, route_counts = (
             await _submit_source_restyle(
-                tmp_path, monkeypatch, admit_manifest=admit_manifest,
+                tmp_path, monkeypatch, admit_manifest=admit_manifest, submission=submission,
             )
         )
         assert response.status_code == 202, response.json()
-        assert route_counts == [7]
+        assert route_counts == [43]
         operation_id = uuid.UUID(response.json()["operationId"])
         async with maker() as session:
             operation = await session.get(WorkspaceOperation, operation_id)
@@ -1134,10 +1139,10 @@ def test_api_submit_source_restyle_charges_source_pages_and_pins_master(
                     PresentationGenerationJob.workspace_operation_id == operation_id
                 )
             )
-        assert [plan.slide_count for plan in request_plans] == [7]
-        assert presentation.n_slides == 7
-        assert job.total_slides == 7
-        assert generation_settings["n_slides"] == 7
+        assert [plan.slide_count for plan in request_plans] == [43]
+        assert presentation.n_slides == 43
+        assert job.total_slides == 43
+        assert generation_settings["n_slides"] == 43
         expected_pin = {
             "masterId": "master:company",
             "revision": 3,
@@ -1147,7 +1152,7 @@ def test_api_submit_source_restyle_charges_source_pages_and_pins_master(
         assert generation_settings["source_mode"] == "source_content_restyle"
         # The durable job payload is the worker's request; it is persisted by
         # field name rather than wire alias.
-        assert job.request_payload["n_slides"] == 7
+        assert job.request_payload["n_slides"] == 43
         assert job.request_payload["master_pin"] == {
             "master_id": "master:company",
             "revision": 3,
@@ -1155,6 +1160,27 @@ def test_api_submit_source_restyle_charges_source_pages_and_pins_master(
         }
         assert job.request_payload["source_mode"] == "source_content_restyle"
         assert operation.request_payload["generation_request"] == job.request_payload
+        assert job.request_payload["generation_engine"] == "authored"
+        assert job.request_payload["generation_mode"] == "free-design"
+        route = operation.request_payload["generation_route_receipt"]
+        assert route["selectedRoute"] == "authored-fallback"
+        assert route["designPackPin"] is None
+        assert route["outputCapability"] == "fidelity"
+        assert operation.request_payload["generation_strategy"]["selectedStrategy"] == "legacy-authored"
+        if verbatim:
+            from api.v1.ppt.endpoints.presentation_generation_staging import _request_from_durable_payload
+            from services.authored_rollout_profile import ROLLOUT_PROFILE_PAYLOAD_KEY
+
+            expected_profile = {
+                "gate_mode": "enforce", "html_normalization": "tree",
+                "placeholder_authoring": True, "single_repair_loop": True,
+                "repair_loop_model_calls": 1,
+            }
+            assert job.request_payload[ROLLOUT_PROFILE_PAYLOAD_KEY] == expected_profile
+            monkeypatch.setenv("AUTHORED_VERBATIM_PLACEHOLDER_AUTHORING", "false")
+            restored = _request_from_durable_payload(job.request_payload)
+            assert restored._authored_rollout_profile == expected_profile
+            assert restored.source_content_manifest_pin.digest == "sha256:" + "b" * 64
 
     asyncio.run(scenario())
 

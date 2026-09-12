@@ -145,15 +145,18 @@ async def capture_with_policy(html: str, timeout: int, *, deck_scope: str | None
     if not fit and edits:
         raise ValueError("fit-disabled renderer returned edits")
     final_html = apply_fit_edits(html, edits) if edits else html
-    # Rebind the request-only marker identity to the exact saved bytes. This
-    # does not approve them: changed HTML still requires a fresh independent run.
-    source, rendered = capture._source_render_digests(final_html)
+    metrics["local_fit_candidate_only"] = bool(edits)
+    if edits:
+        report = {**report, "fit_proposal": True, "candidate_html_digest": html_digest(final_html)}
+    # Browser edits describe a proposal; only a fresh fit-disabled capture can
+    # establish evidence for the reconstructed candidate HTML.
+    source, rendered = capture._source_render_digests(html)
     metrics.update(source_digest=source, render_digest=rendered,
-                   metrics_cache_key=capture._metric_evidence_cache_key(final_html))
-    metrics["local_fit_render_identity"] = local_fit_render_identity(final_html, policy, fit=fit)
+                   metrics_cache_key=capture._metric_evidence_cache_key(html))
+    metrics["local_fit_render_identity"] = local_fit_render_identity(html, policy, fit=fit)
     metrics["local_fit_mode"] = bool(fit)
     return capture.RenderCapture.from_payload(
-        html_digest=html_digest(final_html), png=measured.png, browser_metrics=metrics,
+        html_digest=html_digest(html), png=measured.png, browser_metrics=metrics,
         runtime_counters=capture.get_render_runtime_counters(),
         fitted_html=final_html if final_html != html else None, fit_report=dict(report))
 

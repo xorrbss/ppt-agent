@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.empty-media-composition-flag",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Zero-image source pages forbid placeholders; measured empty media panels enter bounded repair or verbatim flags without HTML deletion.",
+  "scope": [
+    "authored",
+    "source-content"
+  ],
+  "invariants": [
+    "Zero-image page instructions use the admitted outline image occurrences.",
+    "Only large visible painted empty media leaf containers without text, children or source binding are flagged.",
+    "Ordinary decks use bounded remake; terminal source reflow uses composition_safety:empty_media_panel and verbatim_flag_only."
+  ],
+  "forbidden": [
+    "Do not delete panels without accounting for reserved CSS grid space.",
+    "Do not introduce a fatal admission exception for empty media panels."
+  ],
+  "evidence": [
+    "servers/fastapi/tests/unit/test_authored_empty_media.py",
+    "servers/fastapi/tests/unit/test_authored_dom_category_contract.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-10T18:39:40.6793495+00:00"
+}

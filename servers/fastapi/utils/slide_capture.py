@@ -34,6 +34,7 @@ from services.authored_vnext.capability_registry import (
     capability_metadata,
 )
 from utils.authored_dom_quality import ensure_authored_qids
+from utils.authored_qid_namespace import declared_authored_qids
 from utils.process_kill_on_parent_death import bind_to_parent_lifetime
 from utils.slide_capture_hit_test import THIN_VIEWPORT_HIT_TEST_JS
 from utils.slide_capture_polygon_paint import POLYGON_PAINT_DOMAIN_JS
@@ -295,6 +296,11 @@ def _instrument_authored_html(
     from utils.slide_capture_local_fit import policy_from_request, observation_script
     from utils.slide_capture_fit import fit_probe_prelude
     policy = policy_from_request(html)
+    if policy:
+        # The compatibility renderer adds QIDs only to its disposable measurement
+        # document.  Restrict proposals to identifiers already present in source,
+        # so every accepted edit remains byte-replayable without minting identities.
+        policy = {**policy, "_replayable_qids": list(declared_authored_qids(html))}
     fit_prelude = fit_probe_prelude(policy=policy) if policy else "const __codexFitPass = () => null;"
     script = rf"""<script data-codex-dom-probe{nonce_attribute}>
 (() => {{

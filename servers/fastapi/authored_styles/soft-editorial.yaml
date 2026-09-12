@@ -20,7 +20,7 @@ preview:
     - "#CBA9AD"
     - "#D9D1E8"
   variant: soft-margin
-brief: >-
+brief: |-
   MOOD: Create a warm, contemplative editorial atmosphere with tactile softness and
   confident restraint. This is a quiet long-form story, distinct from bright coral
   magazine energy or high-contrast tritone compositions.
@@ -32,26 +32,32 @@ brief: >-
   TYPOGRAPHY: Use a soft editorial serif for headlines and a clean humanist sans-serif
   for body copy. Maintain comfortable measure, relaxed leading, and clear contrast;
   use italic emphasis sparingly for short reflective phrases.
+  Keep Korean paragraphs and evidence labels in the installed Korean-capable body fallback with natural wrapping. Preserve required wording and runtime typography requirements.
 
   LAYOUT SYSTEM: Favor asymmetric but balanced compositions, broad margins, one large
   image or quotation per slide, and small supporting text blocks aligned to a simple
   invisible grid. Let the narrative pause between ideas.
+  Give Korean prose a broad reading area and keep caption tabs secondary to the content. Use the large image or quotation only where it earns its space, alternating open text, image and evidence pages rather than repeating the same split.
 
   SIGNATURE ELEMENTS: Use softly rounded image crops, understated caption tabs, thin
   lavender rules, low-contrast photo washes, and quiet numbered chapter markers.
 
-  DATA VISUALIZATION: Use soft but accessible bars, proportional dots, annotated
-  comparisons, and compact editorial tables. Preserve sufficient contrast, label
-  values directly, and use slate-blue only to identify the focal series.
+  DATA VISUALIZATION:
+  Use clear bars, proportional dots, annotated comparisons or compact editorial tables on lilac paper. Use plum for essential labels and slate blue for a focal series, keeping pale lavender rules and photo washes outside the evidence. Scale marks to source quantities, label units and preserve periods, baselines and provenance. Use a qualitative comparison when measurements are absent and avoid inferring a human impact the source does not support.
 
   IMAGE DIRECTION: Choose tactile still lifes, thoughtful portraits, interiors,
   materials, and documentary details with natural light. Favor calm crops and gentle
   grain; captions should add context rather than decoration.
 
-  SLIDE ARCHETYPES: cover: spacious title with one quiet image detail; content: a
-  reflective statement beside a captioned image or quote; data: a minimal chart with
-  a human interpretation; timeline: softly spaced chapters with a single thread;
-  closing: a calm final line, optional next action, and visual echo of the opening.
+  SLIDE ARCHETYPES:
+  cover: Use a spacious title with one quiet image detail.
+  agenda: List topics as broad plum text rows with restrained slate-blue indices and lavender dividers.
+  section: Pair the section name with one softly cropped image detail and generous paper space.
+  content: Place a grounded statement beside a captioned image or supplied quotation, with a wider text region when the explanation needs it.
+  data: Present one clear chart or table with a supported interpretation and a readable source note.
+  timeline: Use softly spaced milestones along one thread, showing source dates only when available and expanding long captions into open rows.
+  architecture: Use a calm labeled relationship diagram with plum connectors and one slate-blue emphasis based on the supplied relationships.
+  closing: End with a supported final implication and optional requested action, with a restrained visual echo of the opening.
 
   AVOID: Avoid coral-and-black tritone, newspaper mastheads, aggressive contrast,
   neon accents, busy collage layouts, low-contrast pastel text, and overused paper

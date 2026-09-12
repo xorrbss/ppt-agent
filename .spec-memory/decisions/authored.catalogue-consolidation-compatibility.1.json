@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.catalogue-consolidation-compatibility",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Authored 스타일 선택 목록은 대표 스타일만 노출하고 기존 스타일 ID는 대표값으로 해석하여 이전 선택과 호환한다.",
+  "scope": [
+    "servers/fastapi/utils/authored_style_catalogue.py",
+    "servers/fastapi/utils/authored_styles.py",
+    "servers/fastapi/api/v1/ppt/endpoints/authored.py",
+    "servers/nextjs/app/(presentation-generator)"
+  ],
+  "invariants": [
+    "공개 Authored 카탈로그는 대표 스타일을 노출하고 aliases 메타데이터로 이전 선택 ID를 연결한다.",
+    "스타일 해석기와 미리보기 경로 및 선택 UI는 이전 ID를 사용할 수 있는 대표 스타일로 정규화하며, 대표 파일이 없으면 원래 ID를 유지한다.",
+    "스타일 통합은 기존 정의 파일과 저장된 슬라이드 HTML을 삭제하거나 일괄 변경하지 않는다.",
+    "디자인 YAML과 exemplar 및 참조 이미지는 자유 Authored HTML/CSS 저작을 안내한다."
+  ],
+  "forbidden": [
+    "유사 스타일 통합을 이유로 기존 선택 ID의 해석을 끊는다.",
+    "카탈로그 개선 범위에서 고정 레이아웃 엔진을 도입한다."
+  ],
+  "evidence": [
+    "user: 기존의 템플릿은 비슷한거는 합치고 기존에 존재하던 템플릿은 좀더 고품질로 업그레이드 진행해 멀티 에이전트로",
+    "servers/fastapi/utils/authored_style_catalogue.py",
+    "servers/fastapi/utils/authored_styles.py",
+    "artifacts/authored-catalogue-upgrade-20260912/report.md",
+    "artifacts/authored-catalogue-upgrade-20260912/validation.json: 5 passed"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T08:06:53.9760596+00:00"
+}

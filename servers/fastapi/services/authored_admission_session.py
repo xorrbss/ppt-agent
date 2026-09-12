@@ -73,7 +73,13 @@ class AdmissionSession:
         if previous is not None and context.state == "captured":
             if png is None or previous.receipt.png_digest == digest_bytes(png):
                 return reused_admission(previous)
-        result = admit_slide_html(context, html, metrics=metrics, png=png)
+        result = admit_slide_html(
+            context,
+            html,
+            metrics=metrics,
+            png=png,
+            normalization_mode=self.profile.html_normalization,
+        )
         if same_capture:
             result = reused_admission(result)
         self.admissions[key] = result
@@ -106,12 +112,14 @@ def admission_scope(function):
             finally:
                 session = current_session()
                 pending = [task for task in session.captures.values() if not task.done()]
-                if pending:
+                ledger = getattr(session, "authored_capture_ledger", None)
+                draining = list(ledger.draining) if ledger is not None else []
+                if pending or draining:
                     import asyncio
 
                     for task in pending:
                         task.cancel()
-                    await asyncio.gather(*pending, return_exceptions=True)
+                    await asyncio.gather(*pending, *draining, return_exceptions=True)
                 _SESSION.reset(token)
 
     return run

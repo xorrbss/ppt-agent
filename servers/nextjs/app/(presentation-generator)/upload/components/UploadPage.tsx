@@ -7,7 +7,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, LayoutList, LayoutTemplate } from "lucide-react";
+import { ArrowUp, LayoutTemplate } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useDispatch, useSelector } from "react-redux";
 
@@ -34,7 +34,6 @@ import TemplateSelection from "../../outline/components/TemplateSelection";
 import MasterCatalogDialog from "../../authored-vnext/master-setup/MasterCatalogDialog";
 import type { MasterCatalogEntryMode } from "../../authored-vnext/master-setup/MasterCatalogDialog";
 import { ConfigurationSelects } from "./ConfigurationSelects";
-import CurrentConfig from "./CurrentConfig";
 import { PromptInput } from "./PromptInput";
 import SupportingDoc, { MAX_SUPPORTED_FILES } from "./SupportingDoc";
 import { abortDocumentProcessing } from "./upload-page/abortDocumentProcessing";
@@ -55,7 +54,6 @@ const UploadPage = ({
   masterFeatureEnabled = isAuthoredVnextMasterEnabled(),
 }: UploadPageProps = {}) => {
   const t = useTranslations("upload");
-  const workspaceT = useTranslations("slideWorkspace");
   const uploadLimits = useUploadLimits();
   const dispatch = useDispatch();
   const selectedThemeId = useSelector(
@@ -70,6 +68,7 @@ const UploadPage = ({
   const sourceContentMode = useSelector(
     (state: RootState) => state.pptGenUpload.sourceContentMode,
   );
+  const [reviewBeforeGeneration, setReviewBeforeGeneration] = useState(false);
   const [masterCatalogOpen, setMasterCatalogOpen] = useState(false);
   const [masterCatalogEntryMode, setMasterCatalogEntryMode] =
     useState<MasterCatalogEntryMode>("catalog");
@@ -103,6 +102,11 @@ const UploadPage = ({
     handleCardDragLeave,
     handleCardDrop,
   } = useSupportingFiles();
+  useEffect(() => {
+    if (files.length === 0 && sourceContentMode) {
+      dispatch(setSourceContentMode(false));
+    }
+  }, [dispatch, files.length, sourceContentMode]);
   const analysisSourceFile = useMemo(
     () => files.find((file) => /\.(?:ppt|pptx)$/i.test(file.name)) ?? null,
     [files],
@@ -186,15 +190,6 @@ const UploadPage = ({
   const masterBlocksGeneration = Boolean(masterAdmissionError);
   const generationBusy = loadingState.isLoading || isMasterResolving;
 
-  const handlePrimaryGenerate = useCallback(() => {
-    if (generationBusy) return;
-    if (masterBlocksGeneration) {
-      openMasterCatalog();
-      return;
-    }
-    void handleGeneratePresentation();
-  }, [generationBusy, handleGeneratePresentation, masterBlocksGeneration, openMasterCatalog]);
-
   const handleReviewThenGenerate = useCallback(() => {
     if (generationBusy) return;
     if (masterBlocksGeneration) {
@@ -203,6 +198,26 @@ const UploadPage = ({
     }
     void handleReviewOutline();
   }, [generationBusy, handleReviewOutline, masterBlocksGeneration, openMasterCatalog]);
+
+  const handlePrimaryGenerate = useCallback(() => {
+    if (reviewBeforeGeneration) {
+      handleReviewThenGenerate();
+      return;
+    }
+    if (generationBusy) return;
+    if (masterBlocksGeneration) {
+      openMasterCatalog();
+      return;
+    }
+    void handleGeneratePresentation();
+  }, [
+    generationBusy,
+    handleGeneratePresentation,
+    handleReviewThenGenerate,
+    masterBlocksGeneration,
+    openMasterCatalog,
+    reviewBeforeGeneration,
+  ]);
 
   const applyMaster = useCallback(
     (published: MasterRevisionEnvelope) => {
@@ -223,8 +238,28 @@ const UploadPage = ({
     clearLastUsedMasterId();
   }, [dispatch]);
 
+  const dashboardPromptHandoff = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    try {
+      if (dashboardPromptHandoff.current === undefined) {
+        dashboardPromptHandoff.current = window.sessionStorage.getItem("devax:dashboard-prompt");
+      }
+      const dashboardPrompt = dashboardPromptHandoff.current;
+      if (!dashboardPrompt) return;
+      if (config.prompt !== dashboardPrompt) {
+        handleConfigChange("prompt", dashboardPrompt);
+        return;
+      }
+      // Consume only after the controlled input has committed the transferred value.
+      window.sessionStorage.removeItem("devax:dashboard-prompt");
+      dashboardPromptHandoff.current = null;
+    } catch {
+      // A blocked session storage should not interrupt the normal upload flow.
+    }
+  }, [config.prompt, handleConfigChange]);
+
   return (
-    <Wrapper className="max-w-none pb-16">
+    <Wrapper className="max-w-none pb-20">
       <OverlayLoader
         show={loadingState.isLoading}
         text={loadingState.message}
@@ -242,32 +277,32 @@ const UploadPage = ({
 
       <main className="px-4 sm:px-6 lg:px-10">
         <section
-          className="flex flex-col items-center pt-10 md:pt-20"
+          className="flex flex-col items-center pt-10 md:pt-16"
           aria-labelledby="upload-hero-title"
         >
-          <div className="w-full max-w-[760px] text-center">
+          <div className="w-full max-w-[880px] text-center">
             <h1
               id="upload-hero-title"
-              className="text-[28px] font-semibold leading-tight tracking-[-0.035em] text-[#27251E] md:text-[34px] md:leading-[1.3]"
+              className="text-[28px] font-semibold leading-tight tracking-[-0.04em] text-slate-950 md:text-[40px] md:leading-[1.2]"
             >
-              {workspaceT("heroTitle")}
+              {t("simplify.title")}
             </h1>
-            <p className="sr-only">
-              {t("heroDescription")}
+            <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-slate-500 sm:text-base">
+              {t("simplify.description")}
             </p>
           </div>
 
           <div
             className={cn(
-              "mt-6 rounded-2xl border bg-white p-4 transition-colors md:p-5",
+              "mt-8 w-full rounded-3xl border bg-white p-5 transition-colors md:p-7",
               isDragOver
-                ? "border-[#6194F4] ring-2 ring-[#6194F4]/20"
-                : "border-[#EBEBEC]"
+                ? "border-violet-300 ring-4 ring-violet-100/60"
+                : "border-slate-200/90"
             )}
             style={{
-              inlineSize: "min(760px, 100%)",
+              inlineSize: "min(880px, 100%)",
               minBlockSize: 114,
-              boxShadow: "0 3px 8px rgb(97 148 244 / 10%)",
+              boxShadow: "0 12px 40px -16px rgb(15 23 42 / 14%)",
             }}
             onDragOver={handleCardDragOver}
             onDragLeave={handleCardDragLeave}
@@ -278,8 +313,14 @@ const UploadPage = ({
               value={config.prompt}
               onChange={(value) => handleConfigChange("prompt", value)}
               onSubmit={handlePrimaryGenerate}
-              label={sourceContentMode ? "추가 디자인 지시" : undefined}
-              placeholder={sourceContentMode ? "레이아웃·강조·밀도만 지시할 수 있습니다." : workspaceT("promptPlaceholder")}
+              label={
+                sourceContentMode ? t("simplify.sourcePromptLabel") : undefined
+              }
+              placeholder={
+                sourceContentMode
+                  ? t("simplify.sourcePromptPlaceholder")
+                  : t("simplify.promptPlaceholder")
+              }
             />
 
             <div className="mt-2">
@@ -288,7 +329,10 @@ const UploadPage = ({
                 onFilesChange={replaceFiles}
                 compact
               />
-              <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm font-medium text-[#242629]">
+              {files.length > 0 ? (
+                <details className="mt-4 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5">
+                  <summary className="cursor-pointer text-xs font-medium text-slate-500 transition-colors hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300">{t("sourceContentOptions")}</summary>
+                  <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm font-medium text-[#242629]">
                 <input
                   type="checkbox"
                   checked={sourceContentMode}
@@ -300,12 +344,14 @@ const UploadPage = ({
                   data-testid="source-content-mode-checkbox"
                 />
                 <span>
-                  원본 콘텐츠 유지
+                  {t("simplify.preserveSource")}
                   <span className="ml-2 font-normal text-[#737780]">
-                    페이지별 텍스트와 이미지(반복 포함)를 유지하고, 표·차트·기존 배치는 제외해 선택한 템플릿으로 다시 구성합니다.
+                    {t("simplify.preserveSourceDescription")}
                   </span>
                 </span>
               </label>
+                </details>
+              ) : null}
             </div>
 
             {sourceContentMode ? <div className="mt-4 rounded-xl border border-[#E4E6E9] bg-[#FAFAFB] px-3 py-3 text-sm text-[#33363A]" data-testid="source-content-selection-summary">
@@ -319,7 +365,7 @@ const UploadPage = ({
               </p> : null}
             </div> : null}
 
-            <div className="mt-4 flex flex-col gap-3 border-t border-[#F0F1F3] pt-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
                 <>
                   <ConfigurationSelects
@@ -327,23 +373,27 @@ const UploadPage = ({
                     onConfigChange={handleConfigChange}
                     sourceContentMode={sourceContentMode}
                   />
-                  <div className="min-w-0 max-w-full overflow-hidden">
-                    <CurrentConfig />
-                  </div>
                 </>
               </div>
-              {!sourceContentMode ? <Button
-                type="button"
-                variant="toolbar"
-                size="toolbar"
-                onClick={handleReviewThenGenerate}
-                disabled={generationBusy}
-                data-testid="review-outline-button"
-                className="h-11 shrink-0 rounded-full px-5 font-syne text-sm font-semibold"
-              >
-                <LayoutList className="h-4 w-4" aria-hidden="true" />
-                {t("reviewOutline")}
-              </Button> : null}
+              <label className="flex min-w-0 cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                <input
+                  type="checkbox"
+                  checked={reviewBeforeGeneration}
+                  onChange={(event) =>
+                    setReviewBeforeGeneration(event.target.checked)
+                  }
+                  data-testid="review-outline-checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-violet-600"
+                />
+                <span className="min-w-0">
+                  <span className="block font-medium">
+                    {t("simplify.reviewBeforeCreate")}
+                  </span>
+                  <span className="block text-xs text-slate-500 dark:text-slate-400">
+                    {t("simplify.reviewBeforeCreateDescription")}
+                  </span>
+                </span>
+              </label>
               <Button
                 type="button"
                 variant="toolbar"
@@ -351,15 +401,13 @@ const UploadPage = ({
                 onClick={handlePrimaryGenerate}
                 disabled={generationBusy}
                 data-testid="generate-presentation-button"
-                className="h-11 shrink-0 px-5 disabled:cursor-not-allowed"
+                className="h-11 shrink-0 rounded-xl bg-slate-900 px-5 text-white shadow-sm hover:bg-slate-800 focus-visible:ring-violet-400 disabled:cursor-not-allowed"
               >
                 <ArrowUp className="h-4 w-4" aria-hidden="true" />
                 <span>
                   {loadingState.isLoading
                     ? t("generating")
-                    : sourceContentMode
-                      ? "선택한 템플릿으로 재디자인"
-                      : t("generate")}
+                    : t("simplify.createPresentation")}
                 </span>
               </Button>
             </div>
@@ -388,21 +436,21 @@ const UploadPage = ({
         <UploadDesignGallery>
         {masterFeatureEnabled ? (
           <section
-            className="mx-auto mt-6 max-w-[1180px]"
+            className="mx-auto mt-6 max-w-[1080px]"
             aria-labelledby="upload-master-title"
             data-testid="upload-master-selection"
           >
-            <div className="flex flex-col gap-3 rounded-2xl border border-[#E5E7EA] bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F5F9FE] text-[#6194F4]">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
                   <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
                 </span>
                 <div className="min-w-0">
                   <h2 id="upload-master-title" className="text-sm font-bold text-[#242629]">
-                    {t("master.title")}
+                    {t("simplify.useCompanyTemplate")}
                   </h2>
                   {companyStandard ? (
-                    <p className="mt-1 truncate text-sm text-[#5E626A]" data-testid="company-standard-summary">
+                    <p className="mt-1 break-words text-sm text-slate-500" data-testid="company-standard-summary">
                       {t("master.selected", {
                         name: companyStandard.name,
                         version: companyStandard.revision,
@@ -411,7 +459,7 @@ const UploadPage = ({
                     </p>
                   ) : (
                     <p className="mt-1 text-sm text-[#737780]">
-                      {t("master.optional")}
+                      {t("simplify.companyTemplateDescription")}
                     </p>
                   )}
                 </div>
@@ -430,7 +478,7 @@ const UploadPage = ({
           </section>
         ) : null}
 
-        <section className="mx-auto mt-8 max-w-[1180px]">
+        <section className="mx-auto mt-10 max-w-[1080px]">
           <TemplateSelection />
         </section>
         </UploadDesignGallery>

@@ -45,6 +45,7 @@ MAX_WIRE_STDOUT_BYTES = 16 * 1024 * 1024
 MAX_WIRE_STDERR_BYTES = 1024 * 1024
 MAX_WIRE_STDIN_BYTES = 2 * 1024 * 1024
 MAX_EXPORT_BUNDLE_BYTES = 8 * 1024 * 1024
+MAX_OUTPUT_ARTIFACT_BYTES = 512 * 1024 * 1024
 _CHUNK_BYTES = 1024 * 1024
 
 
@@ -80,6 +81,8 @@ class ArtifactObjectStoreWireAdapter:
         opened = await self._object_store.open_read_stream(product_ref)
         destination.parent.mkdir(parents=True, exist_ok=True)
 
+        cancelled = threading.Event()
+
         def copy() -> None:
             temporary = destination.with_name(
                 f".{destination.name}.stage-{uuid.uuid4().hex}.tmp"
@@ -89,6 +92,8 @@ class ArtifactObjectStoreWireAdapter:
             try:
                 with temporary.open("xb") as target:
                     while True:
+                        if cancelled.is_set():
+                            return
                         chunk = opened.body.read(_CHUNK_BYTES)
                         if not chunk:
                             break
@@ -109,12 +114,32 @@ class ArtifactObjectStoreWireAdapter:
                     raise TrustedWorkerWireError(
                         "trusted_worker_artifact_digest_mismatch"
                     )
-                os.replace(temporary, destination)
+                if not cancelled.is_set():
+                    os.replace(temporary, destination)
             finally:
-                opened.close()
-                temporary.unlink(missing_ok=True)
+                try:
+                    opened.close()
+                finally:
+                    temporary.unlink(missing_ok=True)
 
-        await asyncio.to_thread(copy)
+        # Cancelling a to_thread await does not stop its filesystem writes.
+        # Retain the copy task until its stream and temporary file are closed,
+        # including when another cancellation arrives while draining it.
+        copying = asyncio.create_task(asyncio.to_thread(copy))
+        try:
+            await asyncio.shield(copying)
+        except asyncio.CancelledError:
+            cancelled.set()
+            while not copying.done():
+                try:
+                    await asyncio.shield(copying)
+                except asyncio.CancelledError:
+                    continue
+                except Exception:
+                    break
+            if not copying.cancelled():
+                copying.exception()
+            raise
 
     async def publish(self, *, reference: ArtifactRef, source: Path) -> None:
         _verify_artifact_file(reference, source)
@@ -190,6 +215,15 @@ class SupervisedStdioWireTransport:
             raise TrustedWorkerWireError("trusted_worker_transport_closed")
         if len(payload) > MAX_WIRE_STDIN_BYTES:
             raise TrustedWorkerWireError("trusted_worker_job_too_large")
+        try:
+            configured_output_limit = int(environment.get(
+                "PPT_WORKER_OUTPUT_LIMIT_BYTES", str(MAX_OUTPUT_ARTIFACT_BYTES)
+            ))
+        except ValueError as error:
+            raise TrustedWorkerWireError("trusted_worker_output_limit_invalid") from error
+        if configured_output_limit <= 0:
+            raise TrustedWorkerWireError("trusted_worker_output_limit_invalid")
+        output_limit = min(MAX_OUTPUT_ARTIFACT_BYTES, configured_output_limit)
         spec = work_item.launch_spec
         if spec.filesystem is None:
             raise TrustedWorkerWireError("trusted_worker_filesystem_missing")
@@ -247,6 +281,14 @@ class SupervisedStdioWireTransport:
         if not capability_key or not Path(capability_key).is_absolute():
             raise TrustedWorkerWireError("trusted_worker_capability_key_unavailable")
 
+        # Staging and scheduler waits cannot renew the admitted wall-clock budget.
+        remaining_seconds = job.deadline_epoch_seconds - time.time()
+        if remaining_seconds <= 0:
+            raise TrustedWorkerWireError("deadline_exceeded")
+        spec = replace(spec, limits=replace(
+            spec.limits,
+            deadline_seconds=min(spec.limits.deadline_seconds, remaining_seconds),
+        ))
         supervisor = self._supervisor_factory(spec.identity, spec.limits)
         resource_metrics: Mapping[str, object] = {}
         async with self._active_lock:
@@ -338,17 +380,23 @@ class SupervisedStdioWireTransport:
             if captured.exit_code != 0:
                 raise TrustedWorkerWireError("trusted_worker_success_exit_mismatch")
             output_path = output_root.joinpath(*output_reference.storage_key.split("/"))
-            _verify_artifact_file(output_reference, output_path)
+            _verify_artifact_file(output_reference, output_path, max_bytes=output_limit)
             render_outputs, render_runtime = _render_output_bundle_references(
                 job,
                 output_reference=output_reference,
                 path=output_path,
             )
+            # Validate every child before publishing any part of a render bundle.
+            # The child is untrusted and may bypass its own store/runtime checks.
             for render_output in render_outputs:
                 render_output_path = output_root.joinpath(
                     *render_output.storage_key.split("/")
                 )
-                _verify_artifact_file(render_output, render_output_path)
+                _verify_artifact_file(render_output, render_output_path, max_bytes=output_limit)
+            for render_output in render_outputs:
+                render_output_path = output_root.joinpath(
+                    *render_output.storage_key.split("/")
+                )
                 await self._artifact_authority.publish(
                     reference=render_output,
                     source=render_output_path,
@@ -452,11 +500,17 @@ def _supervisor_metrics_or_empty(
         return {}
 
 
-def _verify_artifact_file(reference: ArtifactRef, path: Path) -> None:
+def _verify_artifact_file(
+    reference: ArtifactRef, path: Path, *, max_bytes: int | None = None
+) -> None:
+    if max_bytes is not None and reference.size_bytes > max_bytes:
+        raise TrustedWorkerWireError("trusted_worker_output_limit_exceeded")
     try:
         size = path.stat().st_size
     except OSError as error:
         raise TrustedWorkerWireError("trusted_worker_artifact_unavailable") from error
+    if max_bytes is not None and size > max_bytes:
+        raise TrustedWorkerWireError("trusted_worker_output_limit_exceeded")
     if size != reference.size_bytes:
         raise TrustedWorkerWireError("trusted_worker_artifact_size_mismatch")
     digest = hashlib.sha256()

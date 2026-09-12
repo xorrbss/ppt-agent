@@ -86,6 +86,11 @@ def png_data_uri(path: Path | str, *, max_edge: int) -> Optional[str]:
 
 
 def icon_data_uri(path: Path | str) -> Optional[str]:
+    if str(path).lower().endswith(".svg"):
+        import base64
+        from pathlib import Path
+
+        return "data:image/svg+xml;base64," + base64.b64encode(Path(path).read_bytes()).decode("ascii")
     return png_data_uri(path, max_edge=ICON_MAX_EDGE)
 
 

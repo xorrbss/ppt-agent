@@ -8,7 +8,7 @@ export const EmptyState = ({
     description?: string;
 }) => {
     return (
-        <div className="flex flex-col items-center justify-center min-h-[70vh] bg-white/50 rounded-lg">
+        <div className="flex min-h-[240px] flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-200 bg-white px-6 py-10 text-center">
             <div className="mb-4">
                 <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M42 14.4V33.6C42 40.8 38 44.8 30.8 44.8H17.2C10 44.8 6 40.8 6 33.6V14.4C6 7.2 10 3.2 17.2 3.2H30.8C38 3.2 42 7.2 42 14.4Z" stroke="#667085" strokeWidth="3" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round" />
@@ -17,10 +17,10 @@ export const EmptyState = ({
                     <path d="M28.96 3.21875V14.2388" stroke="#667085" strokeWidth="3" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             </div>
-            <h3 className="text-[#101828] text-lg font-roboto font-medium mb-1">
+            <h3 className="mb-2 text-base font-medium text-zinc-700">
                 {title}
             </h3>
-            <p className="text-[#667085] text-base font-roboto">
+            <p className="text-sm leading-6 text-zinc-400">
                 {description}
             </p>
         </div>

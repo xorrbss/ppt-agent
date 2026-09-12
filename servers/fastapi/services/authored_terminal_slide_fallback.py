@@ -236,15 +236,19 @@ async def _admit_remade_slide(
         canonical, index=slide_index, capture=render_html_to_png_with_metrics
     )
     metrics = capture.browser_metrics
-    if metrics is None or capture.png == _placeholder_png():
+    prepared_html = capture.prepared_html
+    if prepared_html is None or metrics is None or capture.png == _placeholder_png():
         return None
-    if capacity_violations(canonical, metrics, capacity):
+    if capacity_violations(prepared_html, metrics, capacity):
         return None
     if _blocking_defects(
-        html=canonical, metrics=metrics, profile=profile, reference_mode=reference_mode
+        html=prepared_html,
+        metrics=metrics,
+        profile=profile,
+        reference_mode=reference_mode,
     ):
         return None
-    return canonical, capture.png, metrics
+    return prepared_html, capture.png, metrics
 
 
 async def remake_slide_once(

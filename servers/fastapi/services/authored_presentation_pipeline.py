@@ -5,7 +5,7 @@ from services import authored_presentation_author_batch as author_batch_impl
 from services import authored_presentation_pipeline_helpers as _pipeline_helpers
 from services.authored_local_fit_policy import local_fit_applies
 from services.authored_admission_producers import author_html as admit_author_html, source_image_html
-from services.authored_admission_capture import capture_once, capture_png_once, captured_metrics_or_existing
+from services.authored_admission_capture import capture_once, captured_metrics_or_existing
 from utils.slide_capture import get_cached_browser_metrics
 
 LOGGER = logging.getLogger(__name__)
@@ -928,6 +928,9 @@ async def _author_illustrate_render_pipeline(
                         else None
                     ),
                 )
+            from services.authored_admission_capture import canonical_capture_html
+
+            illustrated_html = canonical_capture_html(illustrated_html, index=index)
             # Capture the authored baseline before any local fit. A resumed
             # fitted checkpoint must not become a new baseline and acquire a
             # second ten-percent shrink allowance.
@@ -1049,6 +1052,14 @@ async def _author_illustrate_render_pipeline(
                     slide_index=index,
                 )
             illustrated_html = scene_envelope.html_projection
+            prepared_scene_html = canonical_capture_html(illustrated_html, index=index)
+            if prepared_scene_html != illustrated_html:
+                illustrated_html = prepared_scene_html
+                scene_envelope = seal_slide_scene_envelope(illustrated_html, slide_index=index)
+                if generation_job:
+                    persist_scene_envelope(generation_job.id, scene_envelope)
+                local_fit_checkpoint_reused = False
+                browser_metrics = None
             if (
                 local_fit_checkpoint_reused
                 and isinstance(local_fit_receipt, Mapping)
@@ -1145,13 +1156,19 @@ async def _author_illustrate_render_pipeline(
                             slide_index=index,
                         ):
                             if local_fit_policy_value is None:
-                                png = await capture_png_once(
-                                    illustrated_html, index=index, render=render_html_to_png,
-                                    read_metrics=get_cached_browser_metrics,
+                                final_capture = await capture_once(
+                                    illustrated_html,
+                                    index=index,
+                                    capture=render_html_to_png_with_metrics,
+                                    fit=False,
                                 )
-                                browser_metrics = get_cached_browser_metrics(
-                                    illustrated_html
-                                )
+                                if final_capture.prepared_html is None:
+                                    raise RuntimeError(
+                                        "authored_final_capture_missing_prepared_html"
+                                    )
+                                illustrated_html = final_capture.prepared_html
+                                png = final_capture.png
+                                browser_metrics = final_capture.browser_metrics
                             else:
                                 first_remaining = max(
                                     0.001,
@@ -1170,6 +1187,7 @@ async def _author_illustrate_render_pipeline(
                                             min(60, int(first_remaining)),
                                         ),
                                         fit=True,
+                                        defer_fit_proposal_admission=True,
                                         fit_policy=local_fit_policy_value,
                                         deck_scope=render_deck_scope,
                                     )
@@ -1210,14 +1228,6 @@ async def _author_illustrate_render_pipeline(
                             author_flagged_slides[index] = _local_fit_unresolved_flag(
                                 index, unresolved
                             )
-                        if illustrated_html != scene_envelope.html_projection:
-                            scene_envelope = seal_slide_scene_envelope(
-                                illustrated_html, slide_index=index
-                            )
-                            if generation_job is not None:
-                                persist_scene_envelope(
-                                    generation_job.id, scene_envelope
-                                )
                 except Exception as exc:
                     if (
                         local_fit_policy_value is not None
@@ -1280,6 +1290,12 @@ async def _author_illustrate_render_pipeline(
                 finally:
                     render_work = time.monotonic() - render_started
                     await record_local_stage(latency_ms=render_work * 1000)
+            if illustrated_html != scene_envelope.html_projection:
+                scene_envelope = seal_slide_scene_envelope(
+                    illustrated_html, slide_index=index
+                )
+                if generation_job is not None:
+                    persist_scene_envelope(generation_job.id, scene_envelope)
             if source_reflow and rescue is not None and source_block_bindings is not None:
                 flag = source_reflow_rescue_readback(
                     index=index, html=illustrated_html, metrics=browser_metrics,
@@ -1291,15 +1307,20 @@ async def _author_illustrate_render_pipeline(
                     author_flagged_slides[index] = flag
             if require_all_source_images:
                 try:
+                    if accepted_fit is not None and scene_envelope.html_projection != illustrated_html:
+                        scene_envelope = seal_slide_scene_envelope(illustrated_html, slide_index=index)
+                        if generation_job:
+                            persist_scene_envelope(generation_job.id, scene_envelope)
                     if browser_metrics is None:
                         browser_metrics = await captured_metrics_or_existing(
                             illustrated_html, index=index, ensure=ensure_browser_metrics,
                         )
-                    illustrated_html = validate_visible_source_images(
+                    if validate_visible_source_images(
                         illustrated_html,
                         offered or {},
                         browser_metrics,
-                    )
+                    ) != illustrated_html:
+                        raise ValueError("source_image_html_changed_after_capture")
                 except ValueError as exc:
                     # Re-open authoring on a durable retry. Marking the author
                     # stage failed makes start_stage invalidate the old

@@ -2870,18 +2870,7 @@ async def resolve_workspace_export_artifact(
 
     absolute_path: Path | None = None
     if artifact.public_artifact_id is not None:
-        public_artifact = await session.scalar(
-            select(PublicArtifact).where(
-                PublicArtifact.id == artifact.public_artifact_id,
-                PublicArtifact.owner_id == artifact.owner_id,
-                PublicArtifact.created_by_operation_id == artifact.operation_id,
-                PublicArtifact.sha256 == artifact.sha256,
-                PublicArtifact.size_bytes == artifact.size_bytes,
-            )
-        )
-        expected_public_kind = f"presentation-{artifact.kind.removeprefix('export.')}"
-        if public_artifact is None or public_artifact.kind != expected_public_kind:
-            raise WorkspaceArtifactPublicationError("workspace_export_missing")
+        await _resolve_public_workspace_export(session, artifact)
     else:
         absolute_path = (_app_data_root() / artifact.storage_key).resolve()
         try:
@@ -2907,6 +2896,40 @@ async def resolve_workspace_export_artifact(
     )
 
 
+async def _resolve_public_workspace_export(
+    session: AsyncSession,
+    artifact: WorkspaceArtifact | ResolvedWorkspaceExportArtifact,
+) -> PublicArtifact:
+    """Bind each download to durable admission authority and committed metadata."""
+
+    if artifact.kind not in {"export.pptx", "export.pdf"}:
+        raise WorkspaceArtifactPublicationError("workspace_export_missing")
+    public_artifact = await session.scalar(
+        select(PublicArtifact)
+        .join(
+            PublicOperationAdmission,
+            and_(
+                PublicOperationAdmission.operation_id == PublicArtifact.created_by_operation_id,
+                PublicOperationAdmission.owner_id == PublicArtifact.owner_id,
+                PublicOperationAdmission.tenant_id == PublicArtifact.tenant_id,
+            ),
+        )
+        .where(
+            PublicArtifact.id == artifact.public_artifact_id,
+            PublicArtifact.owner_id == get_current_owner_id(),
+            PublicArtifact.created_by_operation_id == artifact.operation_id,
+            PublicArtifact.sha256 == artifact.sha256,
+            PublicArtifact.size_bytes == artifact.size_bytes,
+            PublicArtifact.kind == f"presentation-{artifact.kind.removeprefix('export.')}",
+            PublicArtifact.retention_class == "published",
+            PublicArtifact.lifecycle_state == "committed",
+        )
+    )
+    if public_artifact is None:
+        raise WorkspaceArtifactPublicationError("workspace_export_missing")
+    return public_artifact
+
+
 async def read_workspace_export_artifact_bytes(
     session: AsyncSession,
     artifact: ResolvedWorkspaceExportArtifact,
@@ -2915,17 +2938,7 @@ async def read_workspace_export_artifact_bytes(
         if artifact.absolute_path is None:
             raise WorkspaceArtifactPublicationError("workspace_export_missing")
         return artifact.absolute_path.read_bytes()
-    public_artifact = await session.scalar(
-        select(PublicArtifact).where(
-            PublicArtifact.id == artifact.public_artifact_id,
-            PublicArtifact.owner_id == get_current_owner_id(),
-            PublicArtifact.created_by_operation_id == artifact.operation_id,
-            PublicArtifact.sha256 == artifact.sha256,
-            PublicArtifact.size_bytes == artifact.size_bytes,
-        )
-    )
-    if public_artifact is None:
-        raise WorkspaceArtifactPublicationError("workspace_export_missing")
+    public_artifact = await _resolve_public_workspace_export(session, artifact)
     from services.artifact_store import configured_public_artifact_service
 
     return await configured_public_artifact_service().read_ref_bytes(

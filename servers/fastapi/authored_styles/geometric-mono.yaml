@@ -22,34 +22,60 @@ preview:
     - "#333333"
     - "#000000"
   variant: light
+  image: catalogue-previews/geometric-mono.png
+reference_images:
+  content: [catalogue-previews/geometric-mono.png]
 brief: |-
   MOOD:
   Create cool architectural precision through monochrome mass, hard edges, and controlled photography. The tone is analytical and monumental, never playful. Distinguish this style from neo-grid-bold: use no visible grid-paper texture, no acid-lime accent, and no fragmented sticker energy; rely on continuous tonal slabs, grayscale architecture, and measured hierarchy.
 
+  Build a rigorous visual argument through proportion, alignment and positive/negative space. Geometric art must have a clear relationship to the content.
+
   PALETTE:
   Use only white #FFFFFF, light gray #E0E0E0, charcoal #333333, and black #000000. Encode hierarchy through value, opacity, outline, and negative space rather than color. Maintain crisp contrast and never introduce a chromatic accent.
 
+  Maintain black, white and restrained gray only. Use black/white for essential text; gray surfaces need a dark outline or direct label where adjacent values could be confused.
+
   TYPOGRAPHY:
   Use a bold geometric sans serif for short uppercase titles and a functional sans serif for body copy. Give numerals tabular, engineered presence with heavy weight and clear alignment. Keep body lines short and direct. Do not use serif, script, handwritten, or decorative faces.
+  Do not apply artificial uppercase spacing to Korean copy. Keep continuous prose and source notes readable with the installed Korean-capable fallback and runtime typography policy.
+
+  Use a strong sans-serif hierarchy with substantial weight contrast and clear numeral alignment. Keep text off geometric boundaries and do not distort glyphs to fit a shape. All Korean text must resolve through a local stack including "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif. At a 1280x720 canvas, target body 22-28px and labels at least 16px; 9.5pt (12.667px) is the hard floor for every text run, including SVG, captions and sources. If text cannot fit, shorten with evidence intact or split the slide; never shrink below the floor.
 
   LAYOUT SYSTEM:
   Compose hard-edged rectangular slabs, balanced 50/50 tonal splits, stepped tiers, and grayscale architectural photographs partially covered by opaque charcoal panels. Use a diagonal pointer, outline circle, or sharp node only when it clarifies direction. Favor large continuous masses over small modules and keep corners square.
+  Treat tonal splits as a starting point, adjusting their proportions for long Korean labels and paragraphs. Keep evidence images uncropped where detail matters and place text on solid slabs rather than textured photo regions. Vary between a broad reading slab, a large image and an open evidence field.
+
+  Use one dominant black or white mass with a sharply aligned evidence area. Alternate a geometry-led thesis, a white analytical spread and a reversed black comparison. Keep up to four comparable items; give long explanatory text a separate page with a wider reading measure. These are flexible compositional directions for freely authored HTML/CSS, not fixed layouts, slots, Deck IR or a layout engine.
 
   SIGNATURE ELEMENTS:
   Repeat black-and-white architecture, thick horizontal bars, white outline boxes around key numbers, stepped tonal planes, and an occasional triangle pointer or outline circle. Texture and color are absent by design; the silhouette of each block carries the identity.
 
+  Use circles, bars and cropped squares with consistent edges and intentionally different scales. A geometric mark is decorative unless its size is explicitly tied to a quantity; never let a motif resemble an unlabeled chart.
+
   DATA VISUALIZATION:
-  Build stepped price tiers, boxed values, monochrome bars, or waveform-like comparisons. Use white-to-black value shifts for categories, thin axes, precise alignment, and one outlined focal value. Never depend on hue, decorative icons, or glossy chart containers.
+  Use aligned monochrome bars, comparison tables or boxed values with explicit units, source context and meaningful baselines. Stepped tiers may describe a source-supported order but must not imply quantitative growth unless height is proportional to actual values. Use shade plus labels to distinguish categories and outline a focal value without changing its scale. Avoid waveform-like decoration that can be mistaken for measurement.
+
+  Use plain zero-baseline bars, direct-labeled dots or a strict comparison table. Distinguish series by fill, outline and line pattern rather than relying on near-identical grays. Preserve units, proportional lengths and source context.
 
   IMAGE DIRECTION:
   Select black-and-white glass, steel, concrete, transit, or office architecture with low-angle symmetry and hard shadows. Crop images into broad rectangles and preserve strong structural lines. Avoid colorful people photography, soft lifestyle scenes, and ornamental textures.
 
+  Use original black/white vector construction or one high-contrast supplied photograph with provenance. Avoid gratuitous texture; make cutouts and negative space direct the reading order.
+
   SLIDE ARCHETYPES:
-  - cover: Place a grayscale architectural image full bleed with a broad charcoal title slab anchored to one edge.
-  - content: Overlay one asymmetric black panel on a structural photograph and limit supporting copy to three points.
-  - data: Arrange three or four values as a rising tonal staircase with one outlined key number.
-  - timeline: Run a thick charcoal rail across the canvas with sharp triangle pointers and terse milestone labels.
-  - closing: Use a black field, one white uppercase statement, and a single outline-circle mark.
+  cover: Place a grayscale architectural image full bleed with a broad charcoal title slab anchored low.
+  agenda: Stack topic rows across alternating flat tonal bands with generous space for complete labels.
+  section: Use a single hard-edged slab, the section name and a restrained outline-circle accent.
+  content: Pair an asymmetric black text panel with a structural photograph, expanding the panel when the explanation is long.
+  data: Arrange actual values in aligned rows or a proportional monochrome chart; use a staircase only for an explicitly labeled ordered hierarchy.
+  timeline: Set source milestones along a thick charcoal datum, with short labels above or below. Use a vertical sequence when captions are longer and do not invent dates.
+  architecture: Use square labeled regions and clear straight connectors for source-supported systems or spatial relationships; avoid arrows that imply unsupported dependencies.
+  closing: Use a black field with a concise white statement and one outline-circle accent; apply uppercase only where the language supports it.
+
+  Compose — geometric thesis with one evidence point; four-item ranked comparison; positive/negative option spread; close-up structural study; compact criteria table; sequence of proportional stages; spare conclusion with a source note.
 
   AVOID:
   Avoid visible mesh or grid-paper backgrounds, acid lime, neon, colored accents, tiny bento fragments, rounded pills, soft shadows, serif type, ornamental textures, gradients, cluttered labels, and unreplaced template text.
+
+  Do not invent claims, measurements, quotations, citations or provenance. Keep illustrative data visibly labeled and supplied evidence traceable. Avoid repeating the same composition throughout a deck; alternate the narrative scenes above while retaining this style's visual identity. Keep all original reference images and their provenance intact.

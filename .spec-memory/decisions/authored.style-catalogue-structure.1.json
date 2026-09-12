@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.style-catalogue-structure",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Authored 카탈로그는 지정된 9개 brief 섹션과 8개 필수 역할을 검증하고 기존 image/comparison 선택 역할을 허용한다.",
+  "scope": [
+    "authored-style",
+    "catalogue-validation"
+  ],
+  "invariants": [
+    "Recognize only the nine declared brief section names and validate their order, presence, and uniqueness.",
+    "Require cover, section, agenda, content, architecture, data, timeline, and closing without imposing role order.",
+    "Allow the existing optional image and comparison archetypes; reject duplicate or unknown role labels.",
+    "Catalogue contract validation does not establish generated-slide visual quality."
+  ],
+  "forbidden": [
+    "Alter legitimate internal uppercase subheadings solely to satisfy a generic heading detector.",
+    "Delete existing optional image or comparison compositions to satisfy the required role list."
+  ],
+  "evidence": [
+    "servers/fastapi/tests/unit/test_authored_styles.py::test_authored_catalogue_has_complete_contracts",
+    "servers/fastapi/authored_styles/signal.yaml",
+    "servers/fastapi/authored_styles/atelier-monograph.yaml",
+    "servers/fastapi/authored_styles/decision-atlas.yaml"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T06:58:53.7248191+00:00"
+}

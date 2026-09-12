@@ -244,7 +244,7 @@ def validate_changed_capture(
         or metrics.get("local_fit_mode") is not True
         or not isinstance(final_html, str)
         or final_html == original_html
-        or getattr(capture, "html_digest", None) != html_digest(final_html)
+        or ((getattr(capture, "html_digest", None) != html_digest(original_html) or report.get("candidate_html_digest") != html_digest(final_html)) if report.get("fit_proposal") is True else (getattr(capture, "html_digest", None) != html_digest(final_html)))
         or policy.get("original_html_digest") != html_digest(original_html)
     ):
         raise AuthoredLocalFitRejected("reconstruction_mismatch")
@@ -271,13 +271,17 @@ def accept_verified_capture(
     verify_queued_at: float,
     verify_started_at: float,
     verify_finished_at: float,
+    prepared_html: str | None = None,
 ) -> AcceptedLocalFit:
     report = _report(fitted_capture)
     baseline = validate_changed_capture(
         fitted_capture, original_html=original_html, policy=policy,
     )
-    final_html = getattr(fitted_capture, "fitted_html", None)
-    if html_digest(final_html) != getattr(verify_capture, "html_digest", None):
+
+    # The proposal retains its original digest; only fresh verification can
+    # establish evidence for the policy-normalized output bytes.
+    final_html = prepared_html if prepared_html is not None else getattr(fitted_capture, "fitted_html", None)
+    if (html_digest(final_html) != getattr(verify_capture, "html_digest", None)):
         raise AuthoredLocalFitRejected("reconstruction_mismatch")
     verify_report = _report(verify_capture)
     verify_metrics = _metrics(verify_capture)

@@ -41,7 +41,9 @@ test("public v2 UI only offers fidelity export and separates terminal states", a
 
   const hook = await readFile(hookPath, "utf8");
   assert.match(hook, /visibilitychange/);
-  assert.match(hook, /snapshot\.status === "queued"/);
+  assert.match(hook, /shouldPollPublicV2Operation\(snapshot\)/);
+  assert.match(hook, /shouldPollPublicV2Operation\(current\)/);
+  assert.match(hook, /shouldPollPublicV2Operation\(latest\)/);
 
   const dashboardPage = await readFile(dashboardPagePath, "utf8");
   const dashboardClient = await readFile(dashboardClientPath, "utf8");

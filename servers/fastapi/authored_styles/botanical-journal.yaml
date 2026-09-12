@@ -23,34 +23,60 @@ preview:
     - "#D4E157"
     - "#26A69A"
   variant: light
+  image: catalogue-previews/botanical-journal.png
+reference_images:
+  content: [catalogue-previews/botanical-journal.png]
 brief: |-
   MOOD:
   Create a friendly eco field journal: handmade, observant, cheerful, and educational. Combine the clarity of a nature notebook with restrained scrapbook warmth. Keep the tone curious rather than childish and make every handmade mark support the story.
 
+  Keep the field-journal warmth while making observation rigorous: a botanical drawing, a recorded condition and a carefully worded finding.
+
   PALETTE:
   Use warm cream #F9F7F1 as paper, charcoal #333333 as ink, leaf green #7CB342 as the main accent, lime #D4E157 as a sparing highlight, and teal #26A69A for one secondary signal. Keep strong contrast for text and never place white copy on lime.
 
+  Keep warm cream, dark ink and the existing fresh green, yellow-green and teal. Use dark ink on light leaf shapes; small green text on cream needs a darker treatment.
+
   TYPOGRAPHY:
   Use a rounded hand-drawn display face for short headings, a friendly rounded sans serif for secondary copy, and a clean sans serif or approachable mono for body text and tables. Preserve table legibility and never set long passages in the display face.
+  Set long Korean explanations in upright, unrotated text on the main sheet; maintain readable body and source-note sizes within the runtime typography policy.
+
+  Use a friendly sans-serif for reading and a short expressive title; a handwritten feel belongs in isolated labels only when legibility is retained. All Korean text must resolve through a local stack including "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif. At a 1280x720 canvas, target body 22-28px and labels at least 16px; 9.5pt (12.667px) is the hard floor for every text run, including SVG, captions and sources. If text cannot fit, shorten with evidence intact or split the slide; never shrink below the floor.
 
   LAYOUT SYSTEM:
   Frame a central torn ruled or graph-paper sheet with botanical drawings. Attach up to three or four note or polaroid modules using a restrained set of washi strips. Use oval or circle image windows and only a few paper layers so reading order remains obvious.
+  Use taped notes for short observations, then switch to one broad paper sheet for long Korean prose or a detailed table. Keep paper edges, washi and leaf stems outside text and evidence areas; vary the sheet composition instead of repeating a fixed note count.
+
+  Pair one generous specimen drawing with an open observation ledger, using an irregular but clearly aligned notebook rhythm. Alternate specimen pages, field comparisons and simple seasonal traces. Limit a specimen to four labels and a ledger to three observations; extend detailed notes to a companion page. These are flexible compositional directions for freely authored HTML/CSS, not fixed layouts, slots, Deck IR or a layout engine.
 
   SIGNATURE ELEMENTS:
   Repeat black-ink leaves, vines, flower doodles, a crayon underline, dotted or striped washi, a torn lower edge, and simple hand-drawn checks. Keep foliage out of text zones and use one illustration style throughout.
 
+  Use leaf silhouettes, hand-drawn-looking but deliberate leaders, small field numbers and short underlines. Sketch marks should locate anatomy or a finding rather than clutter the page.
+
   DATA VISUALIZATION:
-  Draw simple tables or charts on a large torn graph-paper field. Use leaf-green axes, charcoal labels, hand-drawn checks, and one or two flat bar colors. Reserve a clean buffer around every value; botanical drawings belong at the perimeter, never behind data.
+  Place simple tables or charts on a clean graph-paper field, with charcoal labels and leaf green for one emphasis. Keep grid texture subordinate to axes, and reserve a clear buffer around values and source notes. Encode quantities from supplied data with proportional marks, explicit units and suitable scales; use a qualitative list when numbers are unavailable. Leaf shapes and check marks are decoration unless their meaning is explicitly labeled.
+
+  Use direct-labeled seasonal lines, paired condition bars or a small observation table. Name species only when provided, include units and sample scope, and separate an observed condition from inferred environmental benefit. Illustrative plant data must be explicitly labeled.
 
   IMAGE DIRECTION:
   Prefer flat botanical ink or crayon illustration. If photography is essential, use one natural documentary image in a single oval frame and keep the surrounding language illustrative. Do not mix photoreal flowers, clip art, and hand doodles on the same slide.
 
+  Draw original stylized botanical SVGs with simple stem/leaf geometry; distinguish illustration from scientific specimen photography. Preserve provenance on all supplied images and avoid implying species-level accuracy without evidence.
+
   SLIDE ARCHETYPES:
-  - cover: Center one torn title note within a botanical wreath or edge frame and keep the subtitle compact.
-  - content: Arrange no more than four taped notes or polaroids with one sentence or fact per module.
-  - data: Use one large torn graph-paper table or chart with ample blank space around labels.
-  - timeline: Follow a single vine from seed to sprout to leaf, using up to five concise milestones.
-  - closing: Place one small central note inside a quiet botanical wreath with a short invitation or takeaway.
+  cover: Center a short title in a botanical wreath, with a compact subtitle only when it adds context.
+  agenda: Place topic names on a single journal sheet with a restrained leaf margin; use roomy rows for long Korean labels.
+  section: Use one botanical sprig and the section title on open paper.
+  content: Arrange a few taped observations or a photograph with a caption. For extended explanations, use a broad uninterrupted reading area.
+  data: Give a graph-paper chart or table the main field and move botanical accents to the perimeter.
+  timeline: Follow a single sprout-like line with labeled milestones. Use source dates when available or a clearly ordered undated sequence.
+  architecture: Arrange source-supported concepts as labeled branches with plain connectors. Keep decorative vines distinct from relationship lines.
+  closing: Place the main takeaway inside a quiet botanical frame, adding an invitation only when the brief calls for one.
+
+  Explore — specimen with observation ledger; two-condition field comparison; three-stage growth sequence; seasonal measurement trace; anatomy close-up with four callouts; practice-and-evidence notes; next observation plan.
 
   AVOID:
   Avoid leaves behind text, white text on lime, more than four note cards, more than four tape patterns, mixed illustration styles, corporate gradients, glass effects, three-dimensional icons, excessive childish decoration, crowded paper layers, and unreplaced template text.
+
+  Do not invent claims, measurements, quotations, citations or provenance. Keep illustrative data visibly labeled and supplied evidence traceable. Avoid repeating the same composition throughout a deck; alternate the narrative scenes above while retaining this style's visual identity. Keep all original reference images and their provenance intact.

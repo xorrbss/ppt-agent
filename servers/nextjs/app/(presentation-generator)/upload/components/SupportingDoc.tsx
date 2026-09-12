@@ -203,9 +203,9 @@ const SupportingDoc = ({
     return (
         <div className="space-y-2" data-testid="attachments-uploader">
             {compact ? (
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-3">
                     <div
-                        className="relative inline-flex h-[34px] items-center gap-2 overflow-hidden rounded-full px-3.5 text-xs font-medium text-[#191919] font-syne shadow-sm ring-1 ring-inset ring-slate-200 transition-colors hover:ring-[#5146E5]/40 focus-within:ring-2 focus-within:ring-[#5146E5] focus-within:ring-offset-2"
+                        className="relative inline-flex h-9 items-center gap-2 overflow-hidden rounded-xl bg-slate-50 px-3 text-xs font-medium text-slate-600 font-syne ring-1 ring-inset ring-slate-200/80 transition-colors hover:bg-slate-100 focus-within:ring-2 focus-within:ring-violet-400 focus-within:ring-offset-2"
                     >
                         <input
                             ref={fileInputRef}
@@ -292,7 +292,7 @@ const SupportingDoc = ({
                         {filteredFiles.map((file, idx) => (
                             <li
                                 key={`${file.name}-${idx}`}
-                                className="flex items-center gap-3 rounded-md border border-gray-200 px-3 py-2"
+                                className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3"
                                 data-testid="attached-file-item"
                             >
                                 {previewUrls[idx] ? (
@@ -314,7 +314,7 @@ const SupportingDoc = ({
                                 <button
                                     type="button"
                                     onClick={() => handleRemoveFileAt(idx)}
-                                    className="ml-2 inline-flex h-8 w-8 items-center justify-center rounded text-red-600 hover:bg-red-50 hover:text-red-700"
+                                    className="ml-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
                                     aria-label={`${file.name} 삭제`}
                                     data-testid="remove-file-button"
                                 >

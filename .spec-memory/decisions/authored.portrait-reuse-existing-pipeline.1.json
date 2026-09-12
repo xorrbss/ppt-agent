@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.portrait-reuse-existing-pipeline",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "세로형은 기존 Authored 캔버스·스타일·품질·저장·출력 경로를 확장한다. DB 변경은 기존 저장 경로 검토 후 결정하며 세로 호환 스타일부터 지원한다.",
+  "scope": [
+    "portrait-generation"
+  ],
+  "invariants": [
+    "기존 CanvasContract와 레이아웃 snapshot 및 단위 변환·측정 기능을 우선 재사용한다.",
+    "회사 표준 마스터는 캔버스와 배치 호환성이 확보된 경우에만 허용한다.",
+    "기존 요청 저장과 문서 복원 경로의 결손이 확인된 경우에만 DB 변경을 검토한다.",
+    "렌더 검증과 PPTX 및 PDF의 가로 고정 계약을 필요한 범위에서 함께 일반화한다."
+  ],
+  "forbidden": [
+    "별도 세로 생성기·병렬 저장 체계·별도 품질 엔진을 신설하지 않는다.",
+    "가로 크기 거절 조건만 삭제해 세로 지원으로 처리하지 않는다."
+  ],
+  "evidence": [
+    "docs/authored-portrait-generation-design-20260912.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T14:55:17.9068612+00:00"
+}

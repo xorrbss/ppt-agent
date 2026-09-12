@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.portrait-generation-v1",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Authored 생성에서 가로 16:9와 세로 9:16을 선택하고 생성부터 미리보기 및 PPTX/PDF까지 같은 비율을 유지한다. 기존 기본값은 가로형이며 A4는 후속 범위다.",
+  "scope": [
+    "authored",
+    "portrait-generation"
+  ],
+  "invariants": [
+    "세로형은 처음부터 세로 공간에 맞춰 구성한다.",
+    "첫 버전은 Authored 9:16 지원으로 한정한다.",
+    "기존 가로형 기본 동작을 보존한다."
+  ],
+  "forbidden": [
+    "가로 슬라이드를 단순 축소하여 세로형 생성 완료로 처리하지 않는다."
+  ],
+  "evidence": [
+    "docs/authored-portrait-generation-design-20260912.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T14:38:59.8000769+00:00"
+}

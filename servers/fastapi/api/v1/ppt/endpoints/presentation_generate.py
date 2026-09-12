@@ -807,6 +807,10 @@ async def generate_presentation_handler(
     # Internal callers can bypass validation, so re-run owner, expiry, asset
     # state and digest admission before generation.
     if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+        if generation_job is not None:
+            from services.public_generation_route import restore_source_restyle_route
+
+            restore_source_restyle_route(request, generation_job.request_payload)
         # A retry must never trust a manifest object cached by another process.
         # Re-resolve owner scope and the immutable pin before any authoring work.
         await _validate_authored_master_pin_admission(request)

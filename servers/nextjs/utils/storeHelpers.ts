@@ -230,6 +230,14 @@ export const getLLMConfigValidationError = (
           return "OpenAI API key is required for GPT Image 1.5.";
         }
         break;
+      case "codex_image":
+        break; // OAuth credentials are checked by the server, never entered as API keys.
+      case "gpt-image-2.5-flare":
+      case "gpt-image-2.5-sunburst":
+        if (!isProvided(llmConfig.OPENAI_API_KEY)) {
+          return "OpenAI API key is required for GPT Image 2.5.";
+        }
+        break;
       case "gpt-image-2":
         if (!isProvided(llmConfig.OPENAI_API_KEY)) {
           return "OpenAI API key is required for GPT Image 2.";

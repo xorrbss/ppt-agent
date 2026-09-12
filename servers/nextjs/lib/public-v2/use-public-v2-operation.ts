@@ -4,6 +4,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 
 import {
   createPublicV2OperationClient,
+  shouldPollPublicV2Operation,
   type PublicV2ExportRequest,
   type PublicV2GenerationRequest,
   type PublicV2OperationClient,
@@ -57,10 +58,7 @@ export function usePublicV2Operation(options: UsePublicV2OperationOptions = {}):
     });
   }, [client, options.autoResume]);
 
-  const shouldPoll = Boolean(
-    snapshot.operationId
-    && (snapshot.status === "queued" || snapshot.status === "running"),
-  );
+  const shouldPoll = shouldPollPublicV2Operation(snapshot);
 
   useEffect(() => {
     if (!shouldPoll || typeof document === "undefined") return;
@@ -82,10 +80,7 @@ export function usePublicV2Operation(options: UsePublicV2OperationOptions = {}):
     const tick = async () => {
       if (disposed || inFlight) return;
       const current = client.snapshot;
-      if (
-        !current.operationId
-        || (current.status !== "queued" && current.status !== "running")
-      ) return;
+      if (!shouldPollPublicV2Operation(current)) return;
       inFlight = true;
       try {
         await client.refresh();
@@ -96,11 +91,7 @@ export function usePublicV2Operation(options: UsePublicV2OperationOptions = {}):
         inFlight = false;
       }
       const latest = client.snapshot;
-      if (
-        disposed
-        || !latest.operationId
-        || (latest.status !== "queued" && latest.status !== "running")
-      ) return;
+      if (disposed || !shouldPollPublicV2Operation(latest)) return;
       const retryBackoff = Math.min(
         visibleInterval * (2 ** Math.min(consecutiveFailures, 4)),
         30_000,

@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Pencil, Save, SlidersHorizontal, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import React, { useEffect, useState } from 'react';
+import CurrentConfig from "./CurrentConfig";
 import { PresentationConfig, ToneType, VerbosityType } from '../type';
 import { CODEX_GENERATION_PRESETS, type CodexGenerationPresetId } from '@/components/codex-config';
 
@@ -166,6 +167,10 @@ const AdvanceSettings = ({
                                     <Save className="h-4 w-4" aria-hidden="true" />
                                     {t('save')}
                                 </Button>
+                            </div>
+
+                            <div className="border-b border-slate-100 bg-white px-6 py-4">
+                                <CurrentConfig />
                             </div>
 
                             <div className="bg-[#ECE8F6] px-6  py-5">

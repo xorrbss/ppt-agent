@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createPublicV2OperationClient,
+  shouldPollPublicV2Operation,
   type PublicV2OperationClientOptions,
 } from "./operation-client.ts";
 
@@ -341,3 +342,48 @@ test("default browser checkpoint rotates when the server principal scope changes
     "principal-b",
   );
 });
+
+
+test("resume remains pollable after its first status request loses connection", async () => {
+  const storage = new MemoryStorage();
+  storage.setItem("test.public-v2.operation", JSON.stringify({
+    version: 1, kind: "presentation.generate", idempotencyKey: "public-v2:existing",
+    requestFingerprint: "a".repeat(64), presentationId, operationId, eventCursor: null,
+  }));
+  let disconnected = true;
+  const client = createPublicV2OperationClient(options(storage, async (input) => {
+    if (disconnected) throw new TypeError("connection unavailable");
+    if (String(input).includes("/events?")) {
+      return json({ schemaVersion: "operation-event-page/v2", operationId, events: [], nextCursor: null });
+    }
+    return json(status("failed"));
+  }));
+  assert.equal(shouldPollPublicV2Operation(client.snapshot), false);
+  await assert.rejects(client.resume());
+  assert.equal(client.snapshot.status, null);
+  assert.equal(client.snapshot.failure?.reasonCode, "public_v2_network_error");
+  assert.equal(shouldPollPublicV2Operation(client.snapshot), true);
+  disconnected = false;
+  await client.refresh();
+  assert.equal(client.snapshot.lifecycle, "failed");
+  assert.equal(shouldPollPublicV2Operation(client.snapshot), false);
+});
+
+for (const terminal of ["failed", "cancelled", "succeeded"] as const) {
+  test(`event lookup failure preserves ${terminal} status and its authoritative reason`, async () => {
+    const storage = new MemoryStorage();
+    storage.setItem("test.public-v2.operation", JSON.stringify({
+      version: 1, kind: "presentation.generate", idempotencyKey: "public-v2:existing",
+      requestFingerprint: "a".repeat(64), presentationId, operationId, eventCursor: null,
+    }));
+    const client = createPublicV2OperationClient(options(storage, async (input) => {
+      if (String(input).includes("/events?")) throw new TypeError("connection unavailable");
+      return json(status(terminal));
+    }));
+    await assert.rejects(client.resume());
+    assert.equal(client.snapshot.status, terminal);
+    assert.equal(client.snapshot.lifecycle, terminal);
+    assert.deepEqual(client.snapshot.failure, status(terminal).error);
+    assert.equal(shouldPollPublicV2Operation(client.snapshot), false);
+  });
+}

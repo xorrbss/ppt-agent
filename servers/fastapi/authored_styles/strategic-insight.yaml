@@ -31,11 +31,18 @@ brief: >-
 
   TYPOGRAPHY: Use a modern geometric sans-serif across the system with bold,
   compact headlines, medium-weight analytical labels, and regular body text. Keep
-  numerals tabular and hierarchy unambiguous.
+  numerals tabular and hierarchy unambiguous. Use an available Korean-capable
+  geometric sans-serif with regular Hangul spacing and phrase-based wraps. Give long
+  analytical labels their own width rather than squeezing tracking or type. Change
+  a crowded split into stacked evidence and implication rows while respecting the
+  runtime typography floor.
 
   LAYOUT SYSTEM: Use precise split screens, technical grids, alternating dark and
   pale analysis surfaces, and strong alignment between evidence and implication.
-  Reserve one zone on each slide for the strategic takeaway.
+  Reserve a takeaway zone on analytical slides and a separate source strip below
+  the evidence. Keep shared outer margins and title anchors across dark and pale
+  surfaces. Use navy labels on pale backgrounds; keep cyan signals out of small
+  body text. Leave grid and contour motifs outside text and plotting areas.
 
   SIGNATURE ELEMENTS: Use concentric contour lines, fine dot matrices, a recurring
   three-dot index, cyan signal bars, and small coordinate-like markers. Keep these
@@ -43,17 +50,28 @@ brief: >-
 
   DATA VISUALIZATION: Favor market landscapes, indexed trends, scenario matrices,
   quadrant maps, and annotated comparisons. Use cyan to indicate the chosen path,
-  label assumptions and units, and connect each chart to a specific strategic move.
+  label assumptions, units, periods, and supplied sources, and connect each chart
+  to a supported strategic move. A quadrant needs defined axes and evidenced
+  placement; without them use a qualitative comparison table. Indexed trends must
+  name their base period and value. Scenario lines represent supplied assumptions,
+  not measured outcomes; never fabricate forecasts, market shares, or scores for
+  a technical-looking visual. Use zero-baseline magnitude bars and comparable scales.
 
   IMAGE DIRECTION: Choose high-precision market, infrastructure, or strategy-workshop
   photography with cool grading and decisive crops. Use split-screen images or subtle
   contour overlays while preserving documentary credibility.
 
   SLIDE ARCHETYPES: cover: a midnight field with a bold insight title, contour motif,
-  and three-dot index; content: a split analysis with evidence on one side and the
+  and three-dot index; section: one bold chapter heading beside a peripheral contour
+  on midnight navy; agenda: aligned topic rows with one cyan current-section signal
+  when known; content: a split analysis with evidence on one side and the
   strategic implication on the other; data: a market map or scenario chart with a
-  cyan recommended path; timeline: three strategic horizons connected by an exact
-  progression rail; closing: a centered strategic choice with supporting rationale
+  cyan recommended path only when the inputs support it, otherwise a comparison
+  table; architecture: a technical layer diagram with labeled boundaries, consistent
+  reading direction, and straight or orthogonal connectors clear of labels;
+  timeline: the supplied strategic horizons on a progression rail, keeping sequence
+  distinct from duration and including dates or owners only when supplied;
+  closing: a centered strategic choice with supporting rationale
   and one clearly framed decision request.
 
   AVOID: Avoid serif report styling, fluid smoke textures, generic navy dashboards,

@@ -93,6 +93,8 @@ const mountHeader = (
 };
 
 const openExportOptions = () => cy.get('[data-testid="export-trigger"]').click();
+const openMoreOptions = () =>
+  cy.get('[data-testid="presentation-more-trigger"]').click();
 
 /**
  * Every export leaves the header as a durable workspace command. The direct
@@ -289,7 +291,11 @@ describe("PresentationHeader workspace controls", () => {
       deckId: "deck:normal-ai-publication",
       status: "shadow",
     });
-    cy.get('[data-testid="editable-hybrid-workbench-bridge"]').should("contain.text", "편집 가능한 Hybrid MVP");
+    openMoreOptions();
+    cy.get('[data-testid="editable-hybrid-workbench-bridge"]').should(
+      "contain.text",
+      enMessages.presentationHeader.editableHybridTitle,
+    );
     cy.get('[data-testid="editable-hybrid-workbench-link"]').should("have.attr", "href", "/authored-vnext/workbench?authoredDeckId=deck%3Anormal-ai-publication");
   });
 
@@ -305,6 +311,7 @@ describe("PresentationHeader workspace controls", () => {
       pageRemake,
     });
 
+    openMoreOptions();
     cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get("@pageRemake").should("have.been.calledOnceWith", 0);
     cy.get('[role="dialog"]').should("not.exist");
@@ -415,6 +422,7 @@ describe("PresentationHeader workspace controls", () => {
     cy.get('[data-testid="authored-export-hybrid-unavailable"]').should("not.exist");
     // The uncertified scope is disclosed in the status line, not by withholding
     // the export.
+    openMoreOptions();
     cy.get('[data-testid="authored-capability-status"]').should(
       "contain.text",
       "native subset은 지원하지 않으며",
@@ -527,9 +535,10 @@ describe("PresentationHeader workspace controls", () => {
     mountHeader(false, false);
 
     cy.get('[data-testid="presentation-title-edit"]').should("be.disabled");
-    cy.get('[data-testid="presentation-regenerate"]').should("have.class", "hidden");
-    cy.get('[data-testid="presentation-undo"]').should("have.class", "hidden");
-    cy.get('[data-testid="presentation-redo"]').should("have.class", "hidden");
+    cy.get('[data-testid="presentation-undo"]').should("not.exist");
+    cy.get('[data-testid="presentation-redo"]').should("not.exist");
+    openMoreOptions();
+    cy.get('[data-testid="presentation-regenerate"]').should("not.exist");
     cy.get('[data-testid="version-history-trigger"]').click();
     cy.get("@getPresentationVersions").should("have.been.calledOnce");
     cy.get('[data-testid="version-restore"]').should("have.class", "hidden");

@@ -126,12 +126,18 @@ class _ImageServiceLike(Protocol):
     async def generate_image(self, prompt: ImagePrompt) -> object: ...
 
 
-async def _render_correction_html(html: str, *, index: int | None = None) -> bytes:
+async def _render_correction_html(
+    html: str, *, index: int | None = None,
+) -> tuple[str, bytes]:
     """Render and retain browser metrics for the subsequent deterministic gate."""
     if render_html_to_png is not _ORIGINAL_RENDER_HTML_TO_PNG:
-        return await render_html_to_png(html)
-    png, _metrics = await capture_once(html, index=index, capture=render_html_to_png_with_metrics)
-    return png
+        return html, await render_html_to_png(html)
+    capture = await capture_once(
+        html, index=index, capture=render_html_to_png_with_metrics
+    )
+    if capture.prepared_html is None:
+        raise RuntimeError("VQA correction capture preparation unavailable")
+    return capture.prepared_html, capture.png
 
 
 def _env_int(name: str, default: int) -> int:
@@ -766,7 +772,7 @@ async def revise_authored_deck(
             new_html = ensure_authored_qids(new_html)
         elif return_details:
             validate_declared_authored_qids(new_html)
-        return new_html, await _render_correction_html(new_html, index=absolute_indices[i])
+        return await _render_correction_html(new_html, index=absolute_indices[i])
 
     async def review_and_fix(
         i: int,
@@ -950,7 +956,7 @@ async def revise_authored_deck(
                             fallback_reason = patch_failure["code"]
                         elif applied.ok and is_valid_slide_html(applied.html):
                             try:
-                                candidate_png = await _render_correction_html(
+                                candidate_html, candidate_png = await _render_correction_html(
                                     applied.html, index=absolute_indices[i]
                                 )
                             except Exception as error:
@@ -959,19 +965,19 @@ async def revise_authored_deck(
                                 fallback_reason = patch_failure["code"]
                             else:
                                 candidate_metrics = await metrics_for(
-                                    applied.html, absolute_indices[i]
+                                    candidate_html, absolute_indices[i]
                                 )
                                 if candidate_validator is not None:
                                     await candidate_validator(
                                         absolute_indices[i],
-                                        applied.html,
+                                        candidate_html,
                                         candidate_metrics,
                                     )
                                 if not has_dom_quality_regression(
                                     local_report(current_html, current_metrics),
-                                    local_report(applied.html, candidate_metrics),
+                                    local_report(candidate_html, candidate_metrics),
                                 ):
-                                    new_html, new_png = applied.html, candidate_png
+                                    new_html, new_png = candidate_html, candidate_png
                                     patch_succeeded = True
                                     element_changes = [
                                         {

@@ -26,7 +26,7 @@ from models.sse_response import (
 )
 from services.chat.conversation_store import ChatConversationStore
 from services.concurrent_service import ConcurrentService
-from services.export_task_service import EXPORT_TASK_SERVICE
+from services.pptx_import_conversions import EXPORT_TASK_SERVICE
 from templates.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from utils import ocr_language
 from utils.datetime_utils import get_current_utc_datetime

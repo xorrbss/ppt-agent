@@ -19,6 +19,7 @@ from utils.get_env import (
     get_dall_e_3_quality_env,
     get_gpt_image_1_5_quality_env,
     get_gpt_image_2_quality_env,
+    get_gpt_image_2_5_quality_env,
     get_pexels_api_key_env,
     get_open_webui_image_url_env,
     get_open_webui_image_api_key_env,
@@ -37,6 +38,7 @@ from utils.image_provider import (
     get_selected_image_provider,
     is_gpt_image_1_5_selected,
     is_gpt_image_2_selected,
+    is_gpt_image_2_5_selected,
     is_image_generation_disabled,
     is_pixels_selected,
     is_pixabay_selected,
@@ -44,6 +46,7 @@ from utils.image_provider import (
     is_nanobanana_pro_selected,
     is_dalle3_selected,
     is_comfyui_selected,
+    is_codex_image_selected,
     is_open_webui_selected,
     is_openai_compatible_selected,
 )
@@ -149,6 +152,8 @@ OPENAI_IMAGE_MAX_WAIT_SECONDS = 30.0
 OPENAI_IMAGE_DEFAULT_SIZE = "1024x1024"
 OPENAI_IMAGE_LANDSCAPE_SIZES = {
     "gpt-image-2": "1536x1024",
+    "gpt-image-2.5-flare": "1536x1024",
+    "gpt-image-2.5-sunburst": "1536x1024",
     "gpt-image-1.5": "1536x1024",
     "dall-e-3": "1792x1024",
 }
@@ -196,6 +201,10 @@ class ImageGenerationService:
             return self.generate_image_openai_gpt_image_1_5
         elif is_gpt_image_2_selected(self.settings):
             return self.generate_image_openai_gpt_image_2
+        elif is_gpt_image_2_5_selected(self.settings):
+            return self.generate_image_openai_gpt_image_2_5
+        elif is_codex_image_selected(self.settings):
+            return self.generate_image_codex
         elif is_comfyui_selected(self.settings):
             return self.generate_image_comfyui
         elif is_open_webui_selected(self.settings):
@@ -356,6 +365,21 @@ class ImageGenerationService:
             "gpt-image-2",
             get_gpt_image_2_quality_env(self.settings) or "medium",
         )
+    async def generate_image_openai_gpt_image_2_5(
+        self, prompt: str, output_directory: str
+    ) -> str:
+        return await self.generate_image_openai(
+            prompt,
+            output_directory,
+            get_selected_image_provider(self.settings).value,
+            get_gpt_image_2_5_quality_env(self.settings) or "medium",
+        )
+
+    async def generate_image_codex(self, prompt: str, output_directory: str) -> str:
+        from services.image_generation_codex_adapter import generate_codex_image
+
+        return await generate_codex_image(prompt, output_directory, self.settings)
+
     async def generate_image_open_webui(
         self, prompt: str, output_directory: str
     ) -> str:

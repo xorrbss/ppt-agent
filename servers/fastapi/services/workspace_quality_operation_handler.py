@@ -9,7 +9,7 @@ import logging
 import sys
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -992,30 +992,6 @@ async def validate_release_review_base_evidence_for_export(
             "release_quality_review_base_invalid"
         )
     return base_quality_digest.removeprefix("sha256:"), base_deck_digest
-
-
-def _resolve_workspace_export_options(
-    claim_payload: Mapping[str, Any],
-    *,
-    export_format: str,
-) -> tuple[Literal["fidelity", "hybrid"], bool]:
-    """Resolve existing workspace wire values without implicit Hybrid opt-in."""
-
-    command_context = _context(claim_payload)
-    raw_mode = command_context.get("pptx_mode")
-    if raw_mode is None:
-        pptx_mode: Literal["fidelity", "hybrid"] = "fidelity"
-    elif raw_mode in {"fidelity", "hybrid"}:
-        pptx_mode = cast(Literal["fidelity", "hybrid"], raw_mode)
-    else:
-        raise NonRetryableWorkspaceOperationError("workspace_export_pptx_mode_invalid")
-
-    font_embedding = command_context.get("font_embedding", False)
-    if not isinstance(font_embedding, bool):
-        raise NonRetryableWorkspaceOperationError("workspace_export_font_embedding_invalid")
-    if font_embedding and (export_format != "pptx" or pptx_mode != "hybrid"):
-        raise NonRetryableWorkspaceOperationError("workspace_export_font_embedding_requires_hybrid")
-    return pptx_mode, font_embedding
 
 
 class WorkspaceQualityReviewOperationHandler:

@@ -20,13 +20,16 @@ preview:
     - "#F4C542"
     - "#FFFFFF"
   variant: ink-notebook
+  image: catalogue-previews/sketch-note.png
 illustration:
   style_prompt: >-
     hand-drawn ink sketch illustration, confident black line art with loose
     cross-hatching, selective brick-red (#C74A33) and warm yellow (#F4C542)
     marker highlights, warm paper-white background, notebook doodle style,
     charming but precise, generous empty margin, no shading gradients
-brief: >-
+reference_images:
+  content: [catalogue-previews/sketch-note.png]
+brief: |-
   MOOD: Create the feeling of a brilliant teacher's notebook — hand-drawn
   warmth with rigorous structure. Slides should read like beautifully kept
   lecture notes that make hard ideas feel simple and memorable.
@@ -36,38 +39,50 @@ brief: >-
   slide, warm yellow (#F4C542) as a highlighter wash behind crucial phrases,
   and white (#FFFFFF) for note cards. Red and yellow are teaching signals,
   not decoration.
+  Use the original palette with strong text/background contrast. Pale tints serve as surfaces, not low-contrast body text; differentiate critical states with wording or shape as well as color.
 
   TYPOGRAPHY: A humanist sans-serif or a restrained handwriting-adjacent
   face for headings, with a highly legible sans for body text. Underlines,
   circled numbers and highlighter washes are drawn with CSS/SVG so Korean
   text stays crisp — never inside images.
+  Use the installed Korean-capable body fallback for complete explanations and evidence labels. Preserve required wording and keep text readable under the runtime typography policy.
+  At 1280x720, use the Korean-safe stack "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif for Korean text. Body text should normally be 22-28px; captions and source notes preferably at least 16px. The hard minimum for every visible text run is 9.5pt (12.667px). Recompose, shorten or split content before reducing readability; never shrink below this floor. Preserve any genre-specific display-face accents only where Korean fallback remains clear.
 
-  LAYOUT SYSTEM: Anchor each slide with ONE sketch illustration slot — a
+  LAYOUT SYSTEM: For illustration-led slides, anchor the composition with one sketch illustration slot — a
   hand-drawn scene or diagram occupying a third to half of the slide — and
   arrange note-style HTML around it: highlighted key sentences, numbered
   margin notes, small definition cards. Vary slot placement per slide.
   Reserve the slot area with explicit sizing so the layout holds without
   the image.
+  Let the sketch slot become small or disappear when a long Korean explanation, chart or relationship diagram needs the canvas. Keep all essential labels in upright HTML/SVG text, reserve note rotation for decoration, and use a broad open reading area instead of repeating small definition cards.
+  Use the notebook character to expose the reasoning behind a useful conclusion. Anchor the page in one legible diagram, comparison or evidence list, then let a few margin notes explain the choice. Alternate messy-question-to-clear-insight pages with calmer evidence and action pages; maintain deliberate alignment beneath the sketch. These are free compositional choices driven by content, never fixed layouts or required slots. Give the main evidence generous space and vary visual density across the deck.
 
   SIGNATURE ELEMENTS: Ink-sketch scenes, yellow highlighter washes behind
   key phrases, red circled numbers and arrows drawn as SVG, dashed rules,
-  slightly rotated note cards, hand-drawn-feel dividers.
+  upright note text with optional slightly rotated decorative backing, hand-drawn-feel dividers.
+  Use rust underlines, a few imperfect outlines and yellow marker patches behind short key phrases. Keep a coherent pen weight and let marks carry meaning; place annotation arrows so they do not cross Korean text.
 
-  DATA VISUALIZATION: Draw charts as inline SVG with a hand-sketched feel —
-  slightly imperfect axes, direct labels, red marking the insight. Keep all
-  numbers in HTML/SVG, never in the generated image.
+  DATA VISUALIZATION:
+  Render charts as inline SVG with straight, accurately positioned data marks and readable direct labels. A hand-sketched frame or annotation may sit outside the plot, but do not distort bar lengths, axes, table alignment or connector endpoints for effect. Use red to mark one supported insight, preserve source quantities, units and context, and keep all chart text out of generated images. Use a qualitative diagram when the source has no measurements.
+  Make data marks accurate even when their surroundings feel handmade. Use directly labeled bars or paired points and explain the comparison basis. Separate workshop ideas from observed evidence and label fictional examples; do not invent user quotations or research results.
 
-  IMAGE DIRECTION: Describe one clear sketched scene per slide that teaches
+  IMAGE DIRECTION: When an illustration helps, describe one clear sketched scene that teaches
   the concept visually (a lightbulb machine, gears meshing, a path up a
   mountain with flags, a magnifying glass over documents). Composition
   only — the image must contain no text.
 
-  SLIDE ARCHETYPES: cover: big warm title with a hero sketch and one yellow
-  highlight; content: sketch beside 3-4 highlighted teaching points; data:
-  one sketched-feel SVG chart with a red insight note; timeline: a drawn
-  path with numbered flag markers; closing: summary notes with a small
-  celebratory sketch and next steps.
+  SLIDE ARCHETYPES:
+  cover: Pair a warm title with a hero sketch and one yellow highlight.
+  agenda: Use a notebook list with roomy topic rows and red navigation numbers, plus one small optional doodle.
+  section: Use the section name on a clean paper area with a restrained yellow underline.
+  content: Pair a teaching sketch with the number of points the material requires. Widen the prose region for longer explanations.
+  data: Give a precise chart or table the main paper field with one sketched annotation outside the plotted evidence.
+  timeline: Use an open line with numbered milestones, adding dates only when supplied. Arrange long milestone descriptions vertically.
+  architecture: Keep supported entities, labels and connectors in HTML/SVG, using the sketch only as a separate illustrative aid.
+  closing: Present a concise summary and any supplied next steps, with a small sketch whose tone fits the conclusion.
+  Additional forms — observation-to-insight sketch; ranked friction points with a margin note; idea comparison with an explicit trade-off; experiment sequence linked to one hypothesis; decision recap showing the evidence still missing.
 
   AVOID: Avoid text baked into images, polished 3D or photographic imagery,
   more than one red emphasis per slide, overcrowded doodles, childish
   clip-art, and pale low-contrast ink.
+  Avoid a collage of sticky notes, random doodles, handwriting body text and visual informality that obscures the source or status of evidence.

@@ -699,6 +699,8 @@ def validate_authored_slide_html(
     allow_illustration_slots: bool = False,
     finalized: bool = False,
     normalization_receipt: list[dict] | None = None,
+    read_only: bool = False,
+    normalization_mode: str | None = None,
 ) -> str:
     """Return canonical HTML after applying the renderer's existing admission policy.
 
@@ -722,7 +724,7 @@ def validate_authored_slide_html(
     """
     canonical = canonicalize_authored_slide_html(html, finalized=finalized)
     if is_authored_html_normalize_enabled():
-        normalized = normalize_authored_html(canonical)
+        normalized = normalize_authored_html(canonical, mode=normalization_mode)
         # Adopt whenever the normalizer actually changed the bytes, not
         # whenever a rule fired: `legacy` only ever changes bytes when a rule
         # fires (byte-identical otherwise), so this is equivalent for it, but
@@ -744,6 +746,7 @@ def validate_authored_slide_html(
                 )
             else:
                 logger.info("authored_html_normalize adopted canonical reserialization (no rule fired)")
+
     validation_source = (
         _without_authoring_only_image_attributes(canonical)
         if allow_illustration_slots
@@ -755,6 +758,11 @@ def validate_authored_slide_html(
     except RendererPolicyError as error:
         error.rejected_html = canonical
         raise
+    if read_only and canonical != html:
+        error = RendererPolicyError("Captured authored HTML requires normalization.")
+        error.normalization_required = True
+        error.rejected_html = canonical
+        raise error
     return canonical
 
 

@@ -20,34 +20,60 @@ preview:
     - "#8A5A44"
     - "#B7AB98"
   variant: tactile-light
+  image: catalogue-previews/minimal-vellum.png
+reference_images:
+  content: [catalogue-previews/minimal-vellum.png]
 brief: |-
   MOOD
   Compose a calm, tactile presentation inspired by vellum paper, natural materials, and quiet editorial craft. Let restraint and close attention create the sense of quality.
 
+  Treat the vellum page as a curator's argument: a quiet observation, a carefully chosen specimen, then a traceable conclusion. Absorb monograph-style curation and gentle editorial pacing while keeping the existing warm paper and brown-ink identity.
+
   PALETTE
   Work with vellum #F3EFE5, soft white #FCFAF5, dark ink #28231F, muted brown #8A5A44, and warm taupe #B7AB98. Keep contrast gentle but readable.
 
+  Use brown ink for emphasis on warm paper, keeping muted sand to rules and broad surfaces; small text stays in the darkest ink.
+
   TYPOGRAPHY
   Use measured serif or humanist headings, relaxed leading, dark ink body text, and understated labels. Keep hierarchy clear without abrupt scale changes.
+  Keep Korean body copy and source notes readable with natural wrapping and the installed Korean-capable fallback. Preserve required wording and runtime typography requirements.
+
+  Use a warm serif for a short Latin display line when available and a calm sans-serif for Korean analysis. Keep captions visually subordinate through placement and weight rather than tiny type. All Korean text must resolve through a local stack including "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif. At a 1280x720 canvas, target body 22-28px and labels at least 16px; 9.5pt (12.667px) is the hard floor for every text run, including SVG, captions and sources. If text cannot fit, shorten with evidence intact or split the slide; never shrink below the floor.
 
   LAYOUT SYSTEM
   Use generous breathing room, sparse compositions, fine dividers, and carefully balanced text blocks. Let one meaningful object, quotation, or figure carry each slide whenever possible.
+  Preserve calm through fewer elements and a broad reading measure for Korean prose. Reduce excess margins or remove a secondary image when required evidence needs space, keeping captions and source notes readable. Alternate an essay-like page, a quiet object study and a wider evidence composition.
+
+  Use a generous outer margin and an asymmetric text-to-specimen relationship; let a margin note or caption rail support a larger primary object. Vary the sequence between a spacious specimen study, a two-option evidence spread and a compact research index. For dense material, give each observation its own short line and move methods to a companion page instead of compressing the folio. These are flexible compositional directions for freely authored HTML/CSS, not fixed layouts, slots, Deck IR or a layout engine.
 
   SIGNATURE ELEMENTS
   Use hairline rules, small brown folio marks, quiet margin notes, restrained quotation treatments, and softly framed details that suggest editorial craft without simulated paper noise.
 
+  Build a restrained vocabulary of specimen numbers, thin brown rules, inset detail frames and hanging captions. Align captions to the object they explain; reserve an unprinted area around the key sentence.
+
   DATA VISUALIZATION
-  Keep charts light and precise with hairline axes, direct labels, warm neutral comparison tones, and ample negative space. Emphasize one result with muted brown.
+  Keep charts light and precise with visible fine axes, direct labels, neutral comparison tones and one muted-brown emphasis. Use dark ink for values and source notes rather than pale hairlines or margin-note text. Preserve units, periods and baselines, with proportional marks grounded in supplied data. A qualitative finding should remain a labeled textual comparison instead of an invented metric.
+
+  Use a paired dot comparison, three-row evidence ledger or simple time trace with directly attached units. Separate observed facts, interpretation and the next question; carry the supplied source or specimen identifier beside the observation. Preserve denominators and uncertainty; a curated object is evidence only when its relation to the claim is stated.
 
   IMAGE DIRECTION
   Favor natural materials, crafted objects, calm portraits, architecture, or close observational details in soft daylight. Use simple crops with no artificial distressing effects.
 
+  Choose one material study or source-backed editorial crop; add a contextual caption and an optional detail enlargement with a locator. Retain all existing image provenance. A drawn specimen is an illustration, never documentary proof.
+
   SLIDE ARCHETYPES
-  cover: Place a measured title and small context line beside one quiet object or material detail.
-  content: Balance one short essay-like argument with a restrained image or quotation.
-  data: Present one precise chart or figure with direct labels and a compact interpretive note.
-  timeline: Use a fine rule, small dates, and three to five evenly paced milestones.
-  closing: Leave a concise reflection, implication, or next step within generous open space.
+  cover: Place a measured title and a small context line beside one quiet object or material detail.
+  agenda: List topics in open ink rows with restrained brown folios and ample room for long labels.
+  section: Use the section name and a single fine divider on an otherwise quiet vellum field.
+  content: Balance an essay-like argument with a restrained image or supplied quotation, widening the text area when necessary.
+  data: Present one precise chart, table or supported figure with direct labels and a compact interpretation.
+  timeline: Space the actual milestones according to content, using supplied dates where available and a labeled sequence otherwise.
+  architecture: Use a sparse ink diagram of supported concepts or components with clean connectors and a small brown emphasis.
+  closing: Leave one concise supported implication within generous space, adding an action only when the brief calls for it.
+
+  Compose freely from these narrative possibilities — specimen-and-margin opening; evidence-led two-option spread; annotated material close-up; three-observation research ledger; source-backed quotation with one counterpoint; quiet conclusion with an unresolved question.
 
   AVOID
   Avoid saturated colors, crowded dashboards, heavy borders, glossy effects, repeated dense cards, fake texture overlays, and visual accents without editorial purpose.
+
+  Do not invent claims, measurements, quotations, citations or provenance. Keep illustrative data visibly labeled and supplied evidence traceable. Avoid repeating the same composition throughout a deck; alternate the narrative scenes above while retaining this style's visual identity. Keep all original reference images and their provenance intact.

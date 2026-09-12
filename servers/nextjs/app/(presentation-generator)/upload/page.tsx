@@ -43,7 +43,7 @@ export const metadata: Metadata = {
 
 const page = () => {
   return (
-    <div className="devax-upload relative min-h-dvh bg-white">
+    <div className="devax-upload relative min-h-dvh bg-[#F8F9FB]">
       <Header />
       <UploadPage />
     </div>

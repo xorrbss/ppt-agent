@@ -9,6 +9,7 @@ import { useSelector } from "react-redux";
 import { RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { getPresentationDisplayTitle, getPresentationDisplayStatus } from "@/lib/presentation-display";
 import { tryResolveServerIssuedPresentationProfile } from "@/lib/presentation-profile";
 import type { RootState } from "@/store/store";
 import { DashboardApi, type PresentationResponse } from "../services/api/dashboard";
@@ -173,7 +174,8 @@ function DevaxSidebar() {
             <ul className="devax-sidebar__deck-list" aria-label={t("recentPresentations")}>
               {presentations.map((presentation) => {
                 const profile = tryResolveServerIssuedPresentationProfile(presentation);
-                const title = presentation.title?.trim() || t("untitledPresentation");
+                const title = getPresentationDisplayTitle(presentation, t("untitledPresentation"));
+                  const displayStatus = getPresentationDisplayStatus(presentation);
                 const slideCount = Number.isInteger(presentation.n_slides) && presentation.n_slides >= 0
                   ? presentation.n_slides
                   : presentation.slides?.length;
@@ -184,6 +186,7 @@ function DevaxSidebar() {
                   <>
                     <span className="devax-sidebar__deck-title">{title}</span>
                     <span className="devax-sidebar__deck-meta">
+                        {displayStatus && <span>{t(`presentationStatus.${displayStatus}`)}</span>}
                       {slideCount !== undefined ? <span>{t("slideCount", { count: slideCount })}</span> : null}
                       {dateLabel ? <span>{t("updatedDate", { date: dateLabel })}</span> : null}
                     </span>

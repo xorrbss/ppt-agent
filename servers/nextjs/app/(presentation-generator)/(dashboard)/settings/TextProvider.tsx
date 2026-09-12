@@ -31,12 +31,12 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
   } = useTextProviderForm({ onInputChange, llmConfig });
 
   return (
-    <div className="space-y-6 bg-[#F9F8F8] p-7 rounded-[12px] ">
+    <div className="space-y-5 pb-6">
       {/* API Key Input */}
-      <div className="mb-4 flex flex-col gap-8 rounded-[12px] bg-white pt-5 pb-10 px-10 lg:flex-row lg:items-end lg:justify-between lg:gap-6">
-        <div className="max-w-[290px] shrink-0 ">
+      <div className="flex flex-col gap-7 rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm sm:p-7 xl:flex-row xl:items-start xl:justify-between">
+        <div className="max-w-sm shrink-0 xl:max-w-[250px]">
           <div
-            className="w-[60px] h-[60px] rounded-[4px] flex items-center justify-center"
+            className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-50"
             style={{ backgroundColor: "#4C55541A" }}
           >
             <svg
@@ -69,10 +69,10 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
               />
             </svg>
           </div>
-          <h3 className="text-xl font-normal text-[#191919] py-2.5">
+          <h3 className="py-3 text-lg font-semibold tracking-tight text-zinc-900">
             텍스트 생성 설정
           </h3>
-          <p className=" text-sm  text-gray-500">
+          <p className="text-sm leading-relaxed text-zinc-500">
             텍스트 콘텐츠를 어디서 생성할지 선택하세요
           </p>
         </div>
@@ -182,17 +182,17 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
         </div>
       )}
 
-      {/* <div className="bg-white flex justify-between items-center p-10 rounded-[12px]">
+      {/* <div className="flex flex-col gap-5 rounded-2xl border border-zinc-200/80 bg-white p-5 sm:p-7 xl:flex-row xl:items-center xl:justify-between">
                 <div className=' max-w-[290px]'>
 
-                    <h4 className="text-xl font-normal text-[#191919]">Advanced</h4>
-                    <p className="mt-2.5 text-sm  text-gray-500">
+                    <h4 className="text-lg font-semibold tracking-tight text-zinc-900">Advanced</h4>
+                    <p className="mt-2.5text-sm leading-relaxed text-zinc-500">
                         Configure advanced AI features.
                     </p>
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className="w-[222px]">
-                        <div className="flex items-center  mb-4 gap-2.5 ">
+                <div className="flex w-full flex-wrap items-center gap-4 xl:w-auto">
+                    <div className="w-full sm:w-[262px]">
+                        <div className="flex items-center gap-3">
                             <Switch
                                 checked={!!llmConfig.WEB_GROUNDING}
                                 onCheckedChange={(checked) => onInputChange(checked, "WEB_GROUNDING")}

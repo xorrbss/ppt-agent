@@ -27,7 +27,7 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from services import template_v2_pptx_ingestion_service as ingestion
-from services.export_task_service import PptxToJsonDocument
+from services.export_task_contracts import PptxToJsonDocument
 
 
 RUNTIME_URL = "http://host/app_data/pptx-to-json/abc/images/x.png"

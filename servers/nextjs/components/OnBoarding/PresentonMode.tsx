@@ -282,25 +282,26 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             );
         }
 
-        if (llmConfig.IMAGE_PROVIDER === "gpt-image-2") {
+        if (llmConfig.IMAGE_PROVIDER === "gpt-image-2" || llmConfig.IMAGE_PROVIDER === "gpt-image-2.5-flare" || llmConfig.IMAGE_PROVIDER === "gpt-image-2.5-sunburst" || llmConfig.IMAGE_PROVIDER === "codex_image") {
+            const qualityKey = llmConfig.IMAGE_PROVIDER === "gpt-image-2" ? "GPT_IMAGE_2_QUALITY" : "GPT_IMAGE_2_5_QUALITY";
             return (
                 <div className="w-full">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        GPT Image 2 품질
+                        {IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER].label} 품질
                     </label>
                     <div className="">
                         <Select
-                            value={llmConfig.GPT_IMAGE_2_QUALITY || 'medium'}
+                            value={llmConfig[qualityKey] || 'medium'}
                             onValueChange={(value) => setLlmConfig((prev) => ({
                                 ...prev,
-                                GPT_IMAGE_2_QUALITY: value
+                                [qualityKey]: value
                             }))}
                         >
                             <SelectTrigger className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
                                 <SelectValue placeholder="품질 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                                {IMAGE_QUALITY_OPTIONS["gpt-image-2"].map((option) => (
+                                {IMAGE_QUALITY_OPTIONS[llmConfig.IMAGE_PROVIDER === "codex_image" ? "gpt-image-2.5-sunburst" : llmConfig.IMAGE_PROVIDER].map((option) => (
                                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -1033,6 +1034,10 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER] &&
                             (() => {
                                 const provider = IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER];
+                                            if (provider.value === "codex_image") {
+                                                return <p className="text-sm text-gray-600">기존 Codex 로그인을 사용하며 Codex 사용 한도가 적용됩니다. GPT Image 2.5 Sunburst를 요청하지만 실제 적용 모델은 서버가 공개하지 않습니다. 로그인은 ChatGPT 제공자 설정에서 관리합니다.</p>;
+                                            }
+
 
                                 if (provider.value === "openai_compatible") {
                                     return (

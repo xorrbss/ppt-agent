@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.fit-source-replayable-edits",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Fit observes all measured elements but edits only source-declared element IDs; unreplayable plans fail closed before mutation.",
+  "scope": [
+    "servers/fastapi/utils/authored_qid_namespace.py",
+    "servers/fastapi/utils/slide_capture.py",
+    "servers/fastapi/utils/slide_capture_fit_script.py",
+    "servers/fastapi/utils/slide_capture_fit_runner.py"
+  ],
+  "invariants": [
+    "All measured elements remain in geometry and font checks, including measurement-generated IDs.",
+    "Only source-declared IDs may receive fit edits; source HTML identity and replay validation remain enforced.",
+    "Unresolved layouts remain rejected or review required, never quality passed."
+  ],
+  "forbidden": [
+    "Filtering measurement coverage by source edit eligibility.",
+    "Ignoring unknown-ID replay failures or modifying HTML after final capture."
+  ],
+  "evidence": [
+    "artifacts/codex-parallel-20260913/august-current-four-slide-ab/fit-qid-fix-validation/current-17/diagnostic.json",
+    "artifacts/codex-parallel-20260913/august-current-four-slide-ab/fit-qid-fix-validation/candidate-17/diagnostic.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T16:43:23.1268214+00:00"
+}

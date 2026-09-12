@@ -52,31 +52,51 @@ brief: |-
   MOOD
   Create a crisp, optimistic technology explainer that makes a complex system feel immediately understandable. The deck should combine premium consulting discipline with the visual clarity of a modern product manual. It is precise and approachable, never childish or generic.
 
+  Present a technical proposition as a lucid working drawing: the reader should understand the mechanism and its limits before admiring the precision.
+
   PALETTE
   Use ice white #F7FAFC for the canvas and deep navy #0B1F3A for typography and icon outlines. Use cobalt #2878D8 for directional flow and primary emphasis, powder blue #72AEEF and pale blue #DCEBFA for structural zones, and mint #58B7A3 only for verified, improved, or successful states. One slide should have one dominant blue reading path and at most one mint outcome signal.
 
+  Preserve pale engineering paper, navy ink and technical blue, using teal only for the designated secondary role. Dark labels sit on pale surfaces; pale construction lines never carry essential meaning alone.
+
   TYPOGRAPHY
-  Use Noto Sans KR for Korean titles and body copy. Titles are bold, compact, and written as takeaway claims rather than topic labels. Keep supporting copy short, with labels limited to two lines. Use IBM Plex Mono sparingly for stage markers, system IDs, or small technical metadata. All meaningful text must remain editable HTML, never baked into an image.
+  Use Noto Sans KR for Korean titles and body copy. Titles are bold, compact, and grounded in the supplied evidence. Aim for short labels, but widen a label band or wrap at Korean phrase boundaries when names exceed two lines; never truncate a necessary component name. Reserve IBM Plex Mono for Latin IDs and numeric markers. Allow bold-text padding, preserve the runtime typography floor, and keep meaningful text editable HTML outside images.
+
+  Use a precise sans-serif with clear Korean fallbacks; use monospace only for short identifiers or units. Distinguish title, component name and annotation by weight and spacing. All Korean text must resolve through a local stack including "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif. At a 1280x720 canvas, target body 22-28px and labels at least 16px; 9.5pt (12.667px) is the hard floor for every text run, including SVG, captions and sources. If text cannot fit, shorten with evidence intact or split the slide; never shrink below the floor.
 
   LAYOUT SYSTEM
-  Organize every slide around one explanatory visual system, not a collection of unrelated cards. Use a 12-column grid, generous safe margins, a clear top-left title zone, and a deliberate left-to-right or top-to-bottom reading path. Comparison slides use two broad horizontal lanes; process slides use three to five connected nodes; architecture slides use one hub and no more than four surrounding domains. Reserve a slim implication ribbon at the bottom when a conclusion needs to be made explicit.
+  Organize every slide around one explanatory visual system, not a collection of unrelated cards. Use a 12-column grid, generous safe margins, a clear top-left title zone, and a deliberate left-to-right or top-to-bottom reading path. Comparison slides use two broad horizontal lanes. Use a small number of process nodes or hub domains per view, grouping larger systems into named zones without deleting required relationships. Reserve empty connector corridors and external label bands; add a bottom implication ribbon only when it carries a supported conclusion.
+
+  Use a large orthographic mechanism or system diagram with a calm adjacent annotation rail. Align callouts to components and keep the background grid subordinate. Alternate a system overview, a zoomed mechanism study and a white evidence sheet. Limit a diagram to five meaningful nodes; split deeper topology into a follow-on detail view. These are flexible compositional directions for freely authored HTML/CSS, not fixed layouts, slots, Deck IR or a layout engine.
 
   SIGNATURE ELEMENTS
   Use coherent navy outline icons, cobalt directional rails, small connector dots, pale-blue background zones, blank label tabs, and one restrained mint success marker. Rounded containers may group a complete idea, but borders must stay thin and light. Prefer visibly connected relationships over floating decoration.
 
+  Use measured blue construction lines, numbered callout dots, dimension ticks and clearly differentiated solid versus dashed paths. Dimensions appear only when supplied; otherwise label the sketch as schematic.
+
   DATA VISUALIZATION
-  Turn metrics into one dominant visual claim: a designed improvement curve, clock gauge, coverage network, shield state, or milestone rail. Draw charts and values as editable inline SVG or HTML. Direct-label the data, keep scales honest, and use mint only for the achieved state. Avoid default legends, detached chart chrome, and equal-weight KPI tile grids.
+  Use bars or dots on shared scales for metric comparisons and curves only for supplied time-series or explicitly identified model data. A clock gauge requires a defined bound and unit; a shield or coverage network explains a state or structure, not an invented score. Draw charts and values as editable inline SVG or HTML, with units, period, denominator where relevant, and source. Keep mint for documented achieved states and retain a legend when direct labels cannot explain the encoding.
+
+  Separate topology from quantity. Use flow arrows for direction and plain bars for measured comparisons; never imply capacity through decorative node area. Show input, transformation, output and boundary conditions, and provide units beside every measured label.
 
   IMAGE DIRECTION
   Use original flat 2D outline illustrations that embody the slide claim: a human facing fragmented browser windows, an agent coordinating a legacy server, a hub connected to enterprise domains, or an operational curve moving toward a verified outcome. Maintain one consistent stroke weight and palette. Visual references guide composition and style only; never reproduce their wording, logos, watermarks, or exact object arrangement.
 
+  Use original SVG linework or supplied technical imagery with preserved provenance. Build a coherent orthographic scene with consistent projection and explicit callout text in live HTML/SVG; decorative grids must not cross labels.
+
   SLIDE ARCHETYPES
   cover: Leave a large title and subtitle field on the left and place one integrated browser-agent ecosystem on the right.
   content: Use either a two-lane before-and-after comparison or a three-to-five-node process with bold directional flow and a bottom implication ribbon.
-  architecture: Place one orchestration hub in the center with up to four clearly differentiated domains and visible bidirectional or directional connectors.
-  data: Build one dominant improvement curve or gauge family with two or three supporting indicators and a short interpretation strip.
-  timeline: Use a single horizontal rail with four implementation stages, one coherent icon per stage, and compact editable labels below.
+  section: Use a spacious section title with one navy outline motif and a short cobalt rail.
+  agenda: Align the supplied topics along a blue guide rail without arrows that imply an execution sequence.
+  architecture: Place an orchestration hub and clearly differentiated domains with labels outside connector paths. Use bidirectional arrows only for documented two-way relationships; name boundary crossings and group complex domains into lanes.
+  data: Build one dominant comparison from supplied metrics with a short interpretation strip; do not imply an improvement without a comparable baseline.
+  timeline: Use a horizontal rail with the supplied implementation stages, coherent icons, and editable labels. Show dates and achieved states only when provided; wrap crowded stages into aligned lanes.
   closing: Pair a spacious vision statement with one memorable coordinated-system or verified-outcome symbol and one clear next action.
 
+  Compose — system overview with annotation rail; input-process-output drawing; component close-up; current/proposed mechanism comparison; bottleneck evidence chart; staged rollout drawing; limitations-and-boundaries sheet.
+
   AVOID
-  Avoid dated clip art, mixed illustration styles, thick dark borders, oversized block arrows, 3D objects, photorealistic imagery, decorative gradients, dense paragraphs, more than five process nodes, unlabeled floating icons, text inside generated images, generic card grids, and conclusions that are not visually connected to the evidence above them.
+  Avoid dated clip art, mixed illustration styles, thick dark borders, oversized block arrows, 3D objects, photorealistic imagery, decorative gradients, dense paragraphs, crowded process nodes, unlabeled floating icons, text inside generated images, generic card grids, and conclusions that are not visually connected to the evidence above them.
+
+  Do not invent claims, measurements, quotations, citations or provenance. Keep illustrative data visibly labeled and supplied evidence traceable. Avoid repeating the same composition throughout a deck; alternate the narrative scenes above while retaining this style's visual identity. Keep all original reference images and their provenance intact.

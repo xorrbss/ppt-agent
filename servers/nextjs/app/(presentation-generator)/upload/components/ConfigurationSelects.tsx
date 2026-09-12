@@ -77,7 +77,7 @@ const SlideCountSelect: React.FC<{
                     data-testid="slides-select"
                     aria-controls="slide-count-options"
                     aria-expanded={open}
-                    className="shrink-0 min-w-[150px] whitespace-nowrap font-syne font-medium text-[#191919] focus-visible:ring-[#5146E5]/30 flex justify-between items-center gap-2 h-[34px] rounded-full px-3.5 ring-1 ring-inset ring-slate-200 shadow-sm"
+                    className="shrink-0 min-w-[140px] max-w-full whitespace-nowrap font-syne font-medium text-slate-600 focus-visible:ring-violet-300 flex justify-between items-center gap-2 h-9 rounded-xl bg-slate-50 px-3 ring-1 ring-inset ring-slate-200/80 shadow-none hover:bg-slate-100"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none">
                         <path d="M4.0835 12.25H9.91683" stroke="black" strokeLinecap="round" strokeLinejoin="round" />
@@ -165,7 +165,7 @@ export function ConfigurationSelects({
     const [openSlides, setOpenSlides] = useState(false);
 
     return (
-        <div className="flex flex-wrap order-1 gap-4 items-center">
+        <div className="flex min-w-0 flex-wrap order-1 gap-2 items-center">
             {!sourceContentMode ? <SlideCountSelect
                 value={config.slides}
                 onValueChange={(value) => onConfigChange("slides", value)}

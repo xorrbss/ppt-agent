@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "storage.checkpoint-artifactref-authority",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Checkpoint ArtifactRefs require committed lifecycle and durable owner, tenant and origin binding; malformed refs never fall back to legacy local paths.",
+  "scope": [
+    "storage",
+    "authored"
+  ],
+  "invariants": [
+    "Legacy local checkpoint behavior is retained only when no ArtifactRef is supplied.",
+    "Corrupt bytes and invalid authority fail closed."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "servers/fastapi/services/authored_checkpoint_artifacts.py",
+    "servers/fastapi/services/artifact_store.py",
+    "servers/fastapi/tests/unit/test_checkpoint_artifact_authority.py",
+    "artifacts/codex-parallel-20260912/storage/report.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T04:35:17.4352001+00:00"
+}

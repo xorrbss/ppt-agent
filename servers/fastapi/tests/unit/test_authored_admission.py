@@ -177,7 +177,7 @@ def test_fixed_gate_order_and_post_expansion_policy(monkeypatch):
     calls.clear()
     ordinary = context(html_repr="captured", source_reflow=False)
     assert gate.admit_slide_html(ordinary, HTML, metrics={}).verdict == "admitted"
-    assert calls == ["raw", "policy", "policy"]
+    assert calls == ["raw", "policy"]
 
 
 def test_duplicate_attributes_fail_before_rewrite(monkeypatch):
@@ -446,6 +446,96 @@ def test_shadow_keeps_legacy_verdict_and_enforce_uses_gate_only(mode):
                 check_producer(HTML + "\x00", index=0, producer="author", legacy=legacy)
             assert not calls
     finally:
+        _SESSION.reset(token)
+
+
+def test_fit_edit_requires_canonical_recapture_and_missing_metrics_still_reject(caplog):
+    from services.authored_admission_capture import canonical_capture_html
+    from utils.authored_fit_edits import apply_fit_edits
+
+    with rollout_profile_scope(RolloutProfile(gate_mode="enforce", html_normalization="tree")):
+        original = gate.admit_slide_html(context(), HTML.replace("<h1>", '<h1 title="heading">')).html
+        fitted = apply_fit_edits(original, [{
+            "qid": deterministic_source_qid("b1"), "declarations": "font-size:20px",
+        }])
+        canonical = canonical_capture_html(fitted)
+        assert fitted != canonical
+        assert canonical_capture_html(canonical) == canonical
+        with caplog.at_level("INFO", logger=gate.__name__):
+            rejected = gate.admit_slide_html(context(html_repr="captured"), fitted, metrics=metrics(fitted))
+            missing = gate.admit_slide_html(context(html_repr="captured"), canonical)
+        assert rejected.predicate == missing.predicate == "capture_binding"
+        assert rejected.verdict == missing.verdict == "rejected"
+        assert not rejected.retryable and missing.retryable
+        assert rejected.html == fitted
+        assert '"reason":"html_changed"' in caplog.text
+        assert '"reason":"metrics_missing"' in caplog.text
+        admitted = gate.admit_slide_html(
+            context(html_repr="captured"), canonical, metrics=metrics(canonical), png=b"fresh",
+        )
+        assert admitted.verdict == "admitted"
+        assert admitted.receipt.html_digest == digest_html(canonical)
+
+
+@sync_async
+async def test_capture_last_waiter_drains_cleanup_even_after_second_cancel():
+    from services.authored_admission_capture import capture_ledger
+
+    started, cleaning, finish = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    cleaned = []
+
+    async def capture(_html):
+        started.set()
+        try:
+            await asyncio.Future()
+        finally:
+            cleaning.set()
+            await finish.wait()
+            cleaned.append(True)
+
+    session = AdmissionSession(mode="shadow")
+    token = _SESSION.set(session)
+    try:
+        waiter = asyncio.create_task(capture_once(HTML, capture=capture))
+        await started.wait()
+        waiter.cancel()
+        await cleaning.wait()
+        assert not waiter.done()
+        ledger = capture_ledger(session)
+        assert len(ledger.draining) == 1 and not session.captures
+        waiter.cancel()
+        await asyncio.gather(waiter, return_exceptions=True)
+        assert len(ledger.draining) == 1
+        finish.set()
+        await asyncio.gather(*ledger.draining, return_exceptions=True)
+        assert cleaned == [True] and not ledger.draining
+    finally:
+        finish.set()
+        _SESSION.reset(token)
+
+
+@sync_async
+async def test_capture_cancelled_waiter_preserves_other_consumer():
+    started, finish = asyncio.Event(), asyncio.Event()
+
+    async def capture(_html):
+        started.set()
+        await finish.wait()
+        return b"png"
+
+    session = AdmissionSession(mode="shadow")
+    token = _SESSION.set(session)
+    try:
+        first = asyncio.create_task(capture_once(HTML, capture=capture))
+        second = asyncio.create_task(capture_once(HTML, capture=capture))
+        await started.wait()
+        first.cancel()
+        await asyncio.gather(first, return_exceptions=True)
+        assert not next(iter(session.captures.values())).cancelled()
+        finish.set()
+        assert await second == b"png"
+    finally:
+        finish.set()
         _SESSION.reset(token)
 
 

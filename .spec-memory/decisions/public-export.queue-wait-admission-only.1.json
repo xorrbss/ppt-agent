@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.queue-wait-admission-only",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Export queue wait excludes transport execution, and one immutable dispatch deadline bounds both admission wait and the remaining execution budget.",
+  "scope": [
+    "public-export",
+    "worker"
+  ],
+  "invariants": [
+    "Queue wait measures scheduler admission only.",
+    "The original dispatch deadline is not renewed after waiting or staging."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "servers/fastapi/services/trusted_executor/worker_dispatcher.py",
+    "servers/fastapi/tests/unit/test_trusted_executor_worker_dispatcher_concurrency.py",
+    "artifacts/codex-parallel-20260912/export/report.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T04:35:11.2910711+00:00"
+}

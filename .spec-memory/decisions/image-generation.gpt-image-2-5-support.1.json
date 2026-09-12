@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "key": "image-generation.gpt-image-2-5-support",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "GPT Image 2.5 Flare and Sunburst use the existing OpenAI Images API; shared quality supports low, medium, high, xhigh, max and auto.",
+  "scope": [
+    "image-generation"
+  ],
+  "invariants": [
+    "Use official model IDs gpt-image-2.5-flare and gpt-image-2.5-sunburst.",
+    "Keep Korean text rendering eligibility gated on live verification."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "servers/fastapi/tests/unit/test_gpt_image_2.py",
+    "servers/fastapi/services/image_generation_service.py",
+    "servers/fastapi/constants/settings_registry.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T04:47:30.5745662+00:00"
+}

@@ -18,34 +18,60 @@ preview:
     - "#1C1B1A"
     - "#E85D4A"
   variant: magazine-tritone
+  image: catalogue-previews/editorial-tritone.png
+reference_images:
+  content: [catalogue-previews/editorial-tritone.png]
 brief: |-
   MOOD
   Create an art-directed magazine atmosphere that feels warm, observant, and deliberate. Each slide should carry one memorable editorial beat rather than resemble a corporate template.
 
+  Use the rigor of a contemporary printed essay: a decisive headline, a visible argument and one coral editorial intervention.
+
   PALETTE
   Keep the palette strictly tritone: warm cream #FFF8ED, near-black ink #1C1B1A, and coral #E85D4A. Use coral only to direct attention or punctuate a conclusion.
 
+  Keep only the existing cream, near-black and coral. Use ink for small text on cream and cream for text on black; coral is a large accent or a bounded highlight with ink labels.
+
   TYPOGRAPHY
   Establish expressive contrast between display headlines, calm reading text, compact captions, and oversized pull quotes or numerals. Keep long-form copy comfortably spaced.
+  Set long Korean paragraphs in the body face with natural wrapping, and retain required wording, full captions and readable source notes under the runtime typography policy.
+
+  Use bold editorial headlines with open sans-serif body text. A short large quote may contrast with the column rhythm; explanatory text remains aligned and comfortably spaced. All Korean text must resolve through a local stack including "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif. At a 1280x720 canvas, target body 22-28px and labels at least 16px; 9.5pt (12.667px) is the hard floor for every text run, including SVG, captions and sources. If text cannot fit, shorten with evidence intact or split the slide; never shrink below the floor.
 
   LAYOUT SYSTEM
   Compose deliberate text-image relationships with asymmetric columns, generous margins, and occasional full-bleed moments. Preserve a clear reading path despite the editorial variation.
+  Give Korean body text broad line lengths and keep quotations and image captions fully inside the canvas. Change the balance between a wide essay area, a photograph spread and an evidence page to suit the material; an off-grid accent must not interrupt reading order.
+
+  Compose across an open column rhythm with unequal text measures and generous gutters. Let a coral annotation interrupt an otherwise cream-and-ink spread. Alternate a headline-led essay, an evidence chart, an image-and-caption spread and a short rebuttal. Limit prose to three compact blocks; continue long arguments on a new page. These are flexible compositional directions for freely authored HTML/CSS, not fixed layouts, slots, Deck IR or a layout engine.
 
   SIGNATURE ELEMENTS
-  Use thin ink rules, coral folio marks, cropped captions, oversized quotation marks, and one off-grid element that reinforces the story.
+  Use thin ink rules, coral folio marks, fully visible captions beside cropped images, oversized quotation marks, and one off-grid element that reinforces the story.
+
+  Make coral brackets, oversized quotation marks or a single underlined phrase serve a specific editorial role. Give each rule a clear alignment purpose and keep page furniture away from data.
 
   DATA VISUALIZATION
-  Treat data as editorial evidence with thin rules, annotated figures, direct labels, and uncluttered tables. Use coral for the single finding the audience should remember.
+  Treat data as editorial evidence using thin ink rules, annotated figures, direct labels and uncluttered tables on cream. Use coral for one supported finding and ink for text that needs higher contrast. Preserve supplied quantities, units, dates and source context; use proportional marks and a meaningful comparison baseline. When evidence is qualitative, use a labeled comparison instead of inventing a figure.
+
+  Use black marks for the baseline and coral for the one comparison under discussion. Show paired bars, direct-labeled slopes or a short claim/evidence/caveat ledger. Preserve a common scale and units; coral denotes focus rather than automatic success or failure.
 
   IMAGE DIRECTION
   Favor documentary, culture, product, or portrait photography with natural texture and purposeful cropping. Pair each image with a concise caption or source when context matters.
 
+  Use a monochrome crop with a precise caption or an original ink-like cut-paper silhouette. Keep the three-color discipline; images should explain the essay's subject rather than fill a spare column.
+
   SLIDE ARCHETYPES
-  cover: Use a spacious cream field, expressive title, one editorial image, and a small coral folio.
-  content: Balance a narrative column with a cropped image, pull quote, or compact supporting facts.
-  data: Place one annotated figure beside a short interpretation and a restrained source line.
-  timeline: Build a vertical or horizontal editorial sequence using dates, captions, and alternating image moments.
-  closing: End with one resonant statement, a concise implication, and a small coral sign-off.
+  cover: Place an expressive title on a spacious cream field with one editorial image and a small coral folio.
+  agenda: List the topics as open ink rows, with coral navigation indices and room for long Korean names.
+  section: Use the section name, a coral rule and generous cream space, optionally with one relevant image detail.
+  content: Balance a narrative column with a captioned image or a supplied quotation. Expand to a wide reading area for longer explanations.
+  data: Place a sourced annotated figure beside a short interpretation, keeping labels and caveats visible.
+  timeline: Use an editorial sequence with supplied dates or undated ordered stages, short captions and occasional image moments.
+  architecture: Use a clean ink relationship diagram with source-supported nodes and connectors, highlighting one relevant path in coral.
+  closing: Leave one supported statement and its practical implication with a restrained coral sign-off.
+
+  Explore — cream manifesto with one proof point; paired evidence comparison; image-and-annotation essay; quote-and-rebuttal spread; chronological argument in three beats; compact evidence ledger; restrained closing proposition.
 
   AVOID
   Avoid corporate-blue defaults, glossy effects, generic icon rows, uniform modular panels, decorative image grids, and coral applied to every element.
+
+  Do not invent claims, measurements, quotations, citations or provenance. Keep illustrative data visibly labeled and supplied evidence traceable. Avoid repeating the same composition throughout a deck; alternate the narrative scenes above while retaining this style's visual identity. Keep all original reference images and their provenance intact.

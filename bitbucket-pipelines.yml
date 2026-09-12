@@ -99,6 +99,29 @@ pipelines:
       - step: *upstream-byte-parity-check
       - step: *workspace-chat-first-e2e
   custom:
+    FastAPI pytest baseline:
+      - step:
+          name: Collect FastAPI pytest baseline
+          size: 2x
+          max-time: 40
+          caches:
+            - node
+            - uv
+          script:
+            - apt-get update
+            - DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 python3-venv
+            - python3 -m venv .bitbucket-uv
+            - .bitbucket-uv/bin/python -m pip install --disable-pip-version-check uv==0.11.17
+            - npm ci --prefix servers/nextjs
+            - .bitbucket-uv/bin/uv sync --frozen --directory servers/fastapi
+            - .bitbucket-uv/bin/uv run --frozen --directory servers/fastapi python ../../scripts/collect-fastapi-pytest-baseline.py --output-dir ../../test-artifacts/fastapi-pytest-baseline
+          artifacts:
+            upload:
+              - name: fastapi-pytest-baseline
+                type: scoped
+                paths:
+                  - test-artifacts/fastapi-pytest-baseline/**
+                capture-on: always
     Authored release required-check verification:
       - step:
           name: Verify Bitbucket required merge checks

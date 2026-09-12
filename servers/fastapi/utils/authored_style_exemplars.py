@@ -5,8 +5,8 @@ model is asked for "McKinsey / Apple-keynote quality" and shown nothing that
 qualifies. An exemplar is the cheapest way to state density and visual language,
 because it demonstrates rather than describes them.
 
-An exemplar is ONE slide of a deck a human rated excellent for that style, with
-every image elided (the picture bytes teach nothing and would cost megabytes),
+An exemplar is ONE authored reference slide for that style, with
+image bytes elided (they would cost megabytes),
 capped so it stays a demonstration rather than a template to copy, and required
 to pass the same ``admit_authored_html`` policy a generated slide passes — a
 file that could not be rendered is not an example of anything.
@@ -88,7 +88,7 @@ def exemplar_block(style_id: str | None) -> str:
     if html is None:
         return ""
     return (
-        "\nEXEMPLAR (one slide from a deck rated excellent for this style; reuse its "
+        "\nEXEMPLAR (one authored reference slide for this style; reuse its "
         "visual language and density, never its text or layout): "
         f"{html}"
     )

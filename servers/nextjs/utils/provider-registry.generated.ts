@@ -393,6 +393,63 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     ]
   },
   {
+    "id": "gpt-image-2.5-flare",
+    "kind": "image",
+    "displayName": "GPT Image 2.5 Flare",
+    "icon": "/providers/openai.png",
+    "enabled": true,
+    "modelDiscovery": "none",
+    "capabilities": {
+      "webSearch": "unsupported",
+      "vision": "unsupported",
+      "thinking": "unsupported",
+      "structuredOutput": "unsupported",
+      "imageGeneration": "supported"
+    },
+    "presentationDrivers": [
+      "template-v2",
+      "authored"
+    ]
+  },
+  {
+    "id": "gpt-image-2.5-sunburst",
+    "kind": "image",
+    "displayName": "GPT Image 2.5 Sunburst",
+    "icon": "/providers/openai.png",
+    "enabled": true,
+    "modelDiscovery": "none",
+    "capabilities": {
+      "webSearch": "unsupported",
+      "vision": "unsupported",
+      "thinking": "unsupported",
+      "structuredOutput": "unsupported",
+      "imageGeneration": "supported"
+    },
+    "presentationDrivers": [
+      "template-v2",
+      "authored"
+    ]
+  },
+  {
+    "id": "codex_image",
+    "kind": "image",
+    "displayName": "Codex 이미지 (GPT Image 2.5 요청)",
+    "icon": "/providers/openai.png",
+    "enabled": true,
+    "modelDiscovery": "none",
+    "capabilities": {
+      "webSearch": "unsupported",
+      "vision": "unsupported",
+      "thinking": "unsupported",
+      "structuredOutput": "unsupported",
+      "imageGeneration": "supported"
+    },
+    "presentationDrivers": [
+      "template-v2",
+      "authored"
+    ]
+  },
+  {
     "id": "gemini_flash",
     "kind": "image",
     "displayName": "Gemini Flash",
@@ -915,6 +972,44 @@ export const PUBLIC_PROVIDER_CREDENTIAL_DESCRIPTORS: Readonly<Record<string, rea
       "inputType": "password"
     }
   ],
+  "gpt-image-2.5-flare": [
+    {
+      "settingKey": "OPENAI_API_KEY",
+      "kind": "secret",
+      "required": true,
+      "widget": "password",
+      "label": "OPENAI",
+      "inputType": "password"
+    }
+  ],
+  "gpt-image-2.5-sunburst": [
+    {
+      "settingKey": "OPENAI_API_KEY",
+      "kind": "secret",
+      "required": true,
+      "widget": "password",
+      "label": "OPENAI",
+      "inputType": "password"
+    }
+  ],
+  "codex_image": [
+    {
+      "settingKey": "CODEX_ACCESS_TOKEN",
+      "kind": "oauth",
+      "required": true,
+      "widget": "oauth-status",
+      "label": "CODEX ACCESS TOKEN",
+      "inputType": "password"
+    },
+    {
+      "settingKey": "CODEX_ACCOUNT_ID",
+      "kind": "setting",
+      "required": true,
+      "widget": "text",
+      "label": "CODEX ACCOUNT ID",
+      "inputType": "text"
+    }
+  ],
   "gemini_flash": [
     {
       "settingKey": "GOOGLE_API_KEY",
@@ -1124,6 +1219,21 @@ export const PROVIDER_MODEL_BINDINGS: Readonly<Record<string, ProviderModelBindi
     "manual": false,
     "discovery": "none"
   },
+  "gpt-image-2.5-flare": {
+    "settingKey": null,
+    "manual": false,
+    "discovery": "none"
+  },
+  "gpt-image-2.5-sunburst": {
+    "settingKey": null,
+    "manual": false,
+    "discovery": "none"
+  },
+  "codex_image": {
+    "settingKey": null,
+    "manual": false,
+    "discovery": "none"
+  },
   "gemini_flash": {
     "settingKey": null,
     "manual": false,
@@ -1195,4 +1305,4 @@ const providerOptions = (kind: ProviderKind): Readonly<Record<string, ProviderOp
 export const LLM_PROVIDER_OPTIONS = providerOptions("llm");
 export const IMAGE_PROVIDER_OPTIONS = providerOptions("image");
 export const WEB_SEARCH_PROVIDER_OPTIONS = providerOptions("web-search");
-export const IMAGE_QUALITY_OPTIONS = Object.freeze({ "dall-e-3": [{ label: "Standard", value: "standard", description: "Faster generation with lower cost" }, { label: "HD", value: "hd", description: "Higher quality with increased cost" }], "gpt-image-1.5": [{ label: "Low", value: "low", description: "Fastest and most cost-effective" }, { label: "Medium", value: "medium", description: "Balanced quality and speed" }, { label: "High", value: "high", description: "Best quality with longer generation time" }], "gpt-image-2": [{ label: "Low", value: "low", description: "Fastest and most cost-effective" }, { label: "Medium", value: "medium", description: "Balanced quality and speed" }, { label: "High", value: "high", description: "Best quality with longer generation time" }] } as const);
+export const IMAGE_QUALITY_OPTIONS = Object.freeze({ "dall-e-3": [{ label: "Standard", value: "standard", description: "Faster generation with lower cost" }, { label: "HD", value: "hd", description: "Higher quality with increased cost" }], "gpt-image-1.5": [{ label: "Low", value: "low", description: "Fastest and most cost-effective" }, { label: "Medium", value: "medium", description: "Balanced quality and speed" }, { label: "High", value: "high", description: "Best quality with longer generation time" }], "gpt-image-2": [{ label: "Low", value: "low", description: "Fastest and most cost-effective" }, { label: "Medium", value: "medium", description: "Balanced quality and speed" }, { label: "High", value: "high", description: "Best quality with longer generation time" }], "gpt-image-2.5-flare": [{"label": "Low", "value": "low", "description": "Fast drafts"}, {"label": "Medium", "value": "medium", "description": "Balanced quality and speed"}, {"label": "High", "value": "high", "description": "High quality"}, {"label": "Extra High", "value": "xhigh", "description": "Extra high quality"}, {"label": "Max", "value": "max", "description": "Maximum quality"}, {"label": "Auto", "value": "auto", "description": "Model-selected quality"}], "gpt-image-2.5-sunburst": [{"label": "Low", "value": "low", "description": "Fast drafts"}, {"label": "Medium", "value": "medium", "description": "Balanced quality and speed"}, {"label": "High", "value": "high", "description": "High quality"}, {"label": "Extra High", "value": "xhigh", "description": "Extra high quality"}, {"label": "Max", "value": "max", "description": "Maximum quality"}, {"label": "Auto", "value": "auto", "description": "Model-selected quality"}] } as const);

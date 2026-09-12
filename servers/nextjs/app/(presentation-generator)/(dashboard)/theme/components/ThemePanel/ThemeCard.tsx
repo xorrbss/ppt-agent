@@ -20,12 +20,12 @@ const ThemeCardContent: React.FC<ThemeCardProps> = ({ theme, onSelect, onDelete,
 
 
   return (<div
-    className={` group rounded-xl border w-[305px] cursor-pointer transition-all relative bg-white border-[#EDEEEF]   hover:shadow-md`}
+    className={`group relative w-full min-w-0 cursor-pointer rounded-2xl border border-zinc-200/80 bg-white transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400`}
     onClick={() => onSelect(theme)}
 
   >
     {showDeleteButton && <button
-      className="absolute hidden group-hover:block duration-300 transition-all -top-3 -right-3 z-10 bg-white rounded-full p-2  border border-[#EDEEEF] hover:bg-gray-100 hover:text-gray-700"
+      className="absolute right-2 top-2 z-10 rounded-lg border border-zinc-200 bg-white p-2 text-zinc-500 shadow-sm transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
       style={{ boxShadow: '0 6.6px 13.2px 0 rgba(0, 0, 0, 0.10)' }}
       onClick={(e) => {
         e.stopPropagation()
@@ -46,7 +46,7 @@ const ThemeCardContent: React.FC<ThemeCardProps> = ({ theme, onSelect, onDelete,
       >
         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
         <div
-          className="relative bg-white rounded-2xl w-[340px] shadow-2xl animate-[scaleIn_200ms_ease-out] "
+          className="relative w-[calc(100vw-2rem)] max-w-[340px] rounded-2xl bg-white shadow-2xl animate-[scaleIn_200ms_ease-out]"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="p-6 pb-4 flex flex-col items-center text-center">

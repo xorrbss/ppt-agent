@@ -472,7 +472,7 @@ async def _revise_source_gate_repair_candidates(
     return repaired[0], repaired[2]
 
 async def _bind_bounded_repair_evidence(
-    htmls: list[str], indices: Sequence[int] | None = None,
+    htmls: list[str], indices: Sequence[int | None] | None = None,
 ) -> tuple[list[str], list[bytes], list[object]]:
     """Capture exact final HTML/pixels/metrics for bounded repair results."""
 
@@ -484,9 +484,13 @@ async def _bind_bounded_repair_evidence(
         # title owner here.  ``index`` only attributes the capture to a slide.
         canonical_html = ensure_authored_semantic_roles(ensure_authored_qids(html))
         capture = await capture_once(canonical_html, index=index, capture=render_html_to_png_with_metrics)
-        if capture.png == _placeholder_png() or capture.browser_metrics is None:
+        if (
+            capture.prepared_html is None
+            or capture.png == _placeholder_png()
+            or capture.browser_metrics is None
+        ):
             raise RuntimeError("bounded repair browser evidence unavailable")
-        bound_htmls.append(canonical_html)
+        bound_htmls.append(capture.prepared_html)
         bound_pngs.append(capture.png)
         bound_metrics.append(capture.browser_metrics)
     return bound_htmls, bound_pngs, bound_metrics

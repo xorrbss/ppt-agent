@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "key": "workflow.spec-memory-task-scoped-reconciliation",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "기존 결정은 보존하고 현재 작업에 필요한 결정만 선택한다. 오래된 선택은 해제하고 충돌은 근거 확인 후 선별 갱신한다.",
+  "scope": [
+    "spec-memory-maintenance"
+  ],
+  "invariants": [
+    "코드 차이만으로 사용자 요구사항을 덮어쓰지 않는다.",
+    "제품 작업 시작 시 실제 작업 경로와 범위로 binding을 다시 선택한다."
+  ],
+  "forbidden": [
+    "기록 누락 추정만으로 원장 전체를 삭제하거나 accepted 결정을 일괄 폐기한다."
+  ],
+  "evidence": [
+    "docs/compiled-spec-memory-reconciliation-20260912.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T04:28:51.5271417+00:00"
+}

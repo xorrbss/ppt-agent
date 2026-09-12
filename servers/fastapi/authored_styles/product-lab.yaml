@@ -1,0 +1,57 @@
+id: product-lab
+name: 프로덕트 랩
+description: 미네랄 화이트와 버밀리언, 선명한 제품 도식과 관찰·검증 기록으로 기술의 가치를 설명하는 스타일
+category: technology
+tags:
+  - product
+  - engineering
+  - evidence
+use_cases:
+  - 기술 제품과 기능 발표
+  - 엔지니어링 설계 리뷰
+  - 제품 검증과 개선 로드맵
+preview:
+  bg: '#F1F4F2'
+  accent: '#BE432B'
+  palette: ['#F1F4F2', '#202B2E', '#BE432B', '#246968', '#D9E1DD']
+  variant: product-precision-grid
+design_tokens:
+  primary: '#BE432B'
+  background: '#F1F4F2'
+  heading_font: '"Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif'
+  body_font: '"Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif'
+  mono_font: '"Cascadia Mono", Consolas, "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", monospace'
+brief: |-
+  MOOD:
+  Create an open product laboratory: practical, exact, and visually confident. Explain what a product does, what its design enables, and what evidence supports it. Pair engineered forms with generous light space and a clear human benefit. Let product understanding carry the narrative; this is a mineral-white, graphite, and vermilion system with a measured teal evidence signal.
+
+  PALETTE:
+  Use mineral white #F1F4F2 for the main field, graphite #202B2E for essential text and product structure, vermilion #BE432B for the point of attention, deep teal #246968 for a measured observation, and pale gray-green #D9E1DD for supporting planes. Use dark text on pale fields and mineral white on graphite. Reserve vermilion for one focal detail, short label, or active trace; never rely on red-versus-green color alone to convey an outcome.
+
+  TYPOGRAPHY:
+  Use "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif for headings, explanations, and Korean labels. Short Latin technical identifiers and supplied numeric values may use "Cascadia Mono", Consolas, "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", monospace. Keep prose in the sans-serif stack and enable tabular numerals where alignment helps. On a 1280 by 720 CSS canvas, aim for 44-60px headings, 22-27px body text with 1.4-1.5 leading, 18-22px diagram labels, and 16-18px evidence notes. No text may fall below 9.5pt, equivalent to 12.667px at 96dpi. Recompose or split crowded explanations; do not solve density with tiny text or excessive Korean letter spacing.
+
+  LAYOUT SYSTEM:
+  Compose each slide freely from the question it answers. A product reveal can be mostly open space; an architecture explanation can be a wide labeled diagram; a verification page can pair a single trace with its observation conditions. Begin with about 64px of outer margin and a consistent baseline, then vary the proportions to suit the content. Alternate detail views, broad system views, editorial statements, comparisons, and sparse section pauses. Avoid a fixed set of frames, repeated three-card feature lists, or mandatory data slots.
+
+  SIGNATURE ELEMENTS:
+  Use small specification indexes, one vermilion locator line, clean cropped technical forms, and precise but sparse rules. Label conceptual diagrams honestly and keep every connector attached to a meaningful relationship. Use teal for an observation that the source actually supports, accompanied by a written status. Do not decorate empty areas with random coordinates, fake instrumentation, or implied measurements.
+
+  DATA VISUALIZATION:
+  Prefer directly labeled before-and-after comparisons on the same scale, a simple latency or throughput trace when data exists, compact specification tables, and clear flow diagrams with one reading direction. State test conditions, unit, sample size, period, baseline, and uncertainty only as supplied; explicitly distinguish measurements, targets, and open questions. Do not invent performance gains, certifications, availability claims, test results, or customer proof. Qualitative evidence is acceptable and should remain qualitative.
+
+  IMAGE DIRECTION:
+  Use user-provided product screenshots or hardware images only when they clarify the mechanism. Keep essential labels as readable HTML next to the visual rather than baking them into an image. If assets are absent, author simple original CSS or SVG conceptual diagrams and identify them as explanatory studies. Do not reproduce a known product interface, logo, branded launch image, or third-party benchmark. A useful diagram is sufficient; generated photography is optional, never a dependency.
+
+  SLIDE ARCHETYPES:
+  - cover: One product benefit statement on an open mineral field with a restrained conceptual form and a short vermilion index.
+  - agenda: A roomy progression from user problem to mechanism, supporting evidence, and next release decision.
+  - section: A sparse graphite field with a mineral-white engineering question and one vermilion locator.
+  - content: One clear capability explained through a spacious detail view and short, directly connected observations.
+  - architecture: A wide, labeled product flow or component relationship with a clear reading order and explicit system boundaries.
+  - data: A single supported comparison or trace, readable units, the relevant observation conditions, and one plain-language implication.
+  - timeline: A release or validation sequence with status, dependencies, and decision gates grounded in the supplied material.
+  - closing: A precise value statement followed by the next demonstration, verification task, or decision required.
+
+  AVOID:
+  Avoid blue-on-blue blueprint styling, neon and holographic effects, fake glass interfaces, glossy device mockups without source assets, decorative code blocks, unexplained connectors, dashboard walls, microscopic labels, color-only pass/fail signals, unsupported quantitative claims, and copying the exemplar's sample content or layout into a real presentation. Preserve the independent visual language of a light, evidence-led product laboratory.

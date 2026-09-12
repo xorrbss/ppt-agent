@@ -55,11 +55,11 @@ const LayoutPreview = () => {
   );
 
   return (
-    <div className="relative min-h-screen font-syne">
-      <div className="sticky right-0 top-0 z-50 px-6 py-7 backdrop-blur">
-        <div className="flex flex-col items-center justify-between gap-3 xl:flex-row">
+    <div className="relative min-h-screen bg-[#FAFAFA] font-syne">
+      <div className="border-b border-zinc-200/70 bg-white px-4 py-6 sm:px-8 sm:py-8">
+        <div className="flex flex-col items-start justify-between gap-4 xl:flex-row xl:items-center">
           <div>
-            <h3 className="font-unbounded text-[28px] font-normal tracking-[-0.84px] text-[#101828]">
+            <h3 className="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
               {t("title")}
             </h3>
             <p className="mt-2 text-sm text-slate-600">
@@ -69,8 +69,8 @@ const LayoutPreview = () => {
         </div>
       </div>
 
-      <div className="mx-auto px-6 py-8">
-        <section className="my-12">
+      <div className="mx-auto px-4 py-6 sm:px-8 sm:py-8">
+        <section className="mt-7">
           {loading ? (
             <div data-testid="template-v2-dashboard-loading" role="status">
               {t("loading")}
@@ -81,13 +81,13 @@ const LayoutPreview = () => {
               <button
                 type="button"
                 onClick={() => void refetch()}
-                className="mt-4 rounded-full bg-[#5146E5] px-5 py-2.5 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5146E5] focus-visible:ring-offset-2"
+                className="mt-4 rounded-xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2"
               >
                 {t("retry")}
               </button>
             </div>
           ) : templates.length === 0 ? (
-            <div className="rounded-2xl border border-[#E4E7EC] bg-[#F9FAFB] p-8 text-center" data-testid="template-v2-dashboard-empty" role="status">
+            <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center" data-testid="template-v2-dashboard-empty" role="status">
               <h4 className="text-lg font-semibold text-[#101828]">{t("emptyTitle")}</h4>
               <p className="mt-2 text-sm text-[#667085]">{t("emptyDescription")}</p>
             </div>
@@ -97,7 +97,7 @@ const LayoutPreview = () => {
             </div>
           ) : (
             <div
-              className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
               data-testid="template-v2-dashboard-grid"
             >
               {templateCards}

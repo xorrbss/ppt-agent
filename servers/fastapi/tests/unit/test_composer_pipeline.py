@@ -670,6 +670,106 @@ def test_admission_without_composer_flag_leaves_request_for_authored_reflow(monk
     assert request.source_mode == "source_content_restyle"
 
 
+
+@pytest.mark.parametrize("text_policy", ["verbatim", "outline"])
+@pytest.mark.parametrize("revision,floor", [
+    ("authored-local-fit/v1.3", 9.5),
+    ("authored-local-fit/v1.4", 9.0),
+    ("authored-local-fit/v1.5", 9.0),
+])
+def test_admission_restores_sealed_authored_route_before_live_composer_switch(
+    monkeypatch, text_policy, revision, floor,
+) -> None:
+    from hashlib import sha256
+    from api.v1.ppt.endpoints import presentation_generate as generation
+    from services.authored_local_fit_policy import policy_floor_pt
+    from services.public_generation_route import pin_source_restyle_authoring
+
+    _patch_admission(monkeypatch, enabled=False)
+    request = _admission_request()
+    request.content_policy = request.content_policy.model_copy(update={"text": text_policy})
+    pin_source_restyle_authoring(request)
+    request._authored_local_fit_policy_revision = revision
+    durable = generation._durable_request_payload(request)
+    receipt = {
+        "schemaVersion": "generation-route-receipt/v1",
+        "requestedMode": "free-design",
+        "selectedRoute": "authored-fallback",
+        "designPackPin": None,
+        "narrativeIrDigest": None,
+        "fallbackReason": "source-content-authored-reflow",
+        "outputCapability": "fidelity",
+    }
+    receipt["receiptDigest"] = "sha256:" + sha256(json.dumps(
+        receipt, ensure_ascii=True, sort_keys=True, separators=(",", ":"),
+    ).encode()).hexdigest()
+    durable["generation_route_receipt"] = receipt
+    restored = generation._request_from_durable_payload(durable)
+    # The private admission flag does not round-trip through public Pydantic
+    # fields; the handler must restore the sealed receipt before readmission.
+    assert not getattr(restored, "_source_content_sealed_authored_route", False)
+    restored._composer_restyle = True
+    _patch_admission(monkeypatch, enabled=True)
+
+    async def master_admission(request):
+        pass
+
+    async def source_admission(request, session):
+        await source_pipeline.admit_source_content_request(
+            request, sql_session=session, owner_id="owner-a",
+        )
+
+    class AdmissionObserved(Exception):
+        pass
+
+    async def reference_admission(request, session):
+        assert request._composer_restyle is False
+        assert request._source_content_sealed_authored_route is True
+        assert request._authored_local_fit_policy_revision == revision
+        assert policy_floor_pt(request._authored_local_fit_policy_revision) == floor
+        raise AdmissionObserved
+
+    monkeypatch.setattr(generation, "_validate_authored_master_pin_admission", master_admission)
+    monkeypatch.setattr(generation, "_admit_source_content_generation", source_admission)
+    monkeypatch.setattr(generation, "_admit_source_content_reference_snapshot", reference_admission)
+    with pytest.raises(AdmissionObserved):
+        asyncio.run(generation.generate_presentation_handler.__wrapped__(
+            request=restored, presentation_id=uuid.uuid4(), async_status=None,
+            generation_job=SimpleNamespace(request_payload=durable),
+            sql_session=object(),
+        ))
+
+
+def test_admission_historical_job_without_sealed_route_keeps_composer(monkeypatch) -> None:
+    from api.v1.ppt.endpoints.presentation_generate import (
+        _durable_request_payload, _request_from_durable_payload,
+    )
+    from services.public_generation_route import restore_source_restyle_route
+
+    _patch_admission(monkeypatch, enabled=True)
+    durable = _durable_request_payload(_admission_request())
+    restored = _request_from_durable_payload(durable)
+    restore_source_restyle_route(restored, durable)
+    asyncio.run(source_pipeline.admit_source_content_request(
+        restored, sql_session=object(), owner_id="owner-a",
+    ))
+    assert restored._composer_restyle is True
+    assert not restored._source_content_sealed_authored_route
+
+
+def test_admission_invalid_sealed_route_fails_closed() -> None:
+    from pydantic import ValidationError
+    from services.public_generation_route import restore_source_restyle_route
+
+    with pytest.raises(ValidationError):
+        restore_source_restyle_route(_admission_request(), {
+            "generation_route_receipt": {
+                "selectedRoute": "authored-fallback",
+                "fallbackReason": "source-content-authored-reflow",
+                "receiptDigest": "sha256:" + "0" * 64,
+            },
+        })
+
 # --- source image markers: defect 1 --------------------------------------------------
 
 

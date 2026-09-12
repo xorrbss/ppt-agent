@@ -303,6 +303,7 @@ export interface AuthoredStyleSummary {
   tags: string[];
   use_cases: string[];
   preview: AuthoredStylePreview;
+  aliases?: string[];
 }
 
 export const DEFAULT_AUTHORED_STYLE: AuthoredStyleSummary = {
@@ -376,7 +377,18 @@ function toAuthoredStyleSummary(value: unknown): AuthoredStyleSummary | null {
     tags: normalizeStringList(value.tags),
     use_cases: normalizeStringList(value.use_cases),
     preview: previewShape,
+    ...(Array.isArray(value.aliases)
+      ? { aliases: normalizeStringList(value.aliases) }
+      : {}),
   };
+}
+
+export function canonicalAuthoredStyleId(
+  styles: AuthoredStyleSummary[],
+  styleId: string,
+): string {
+  if (styles.some((style) => style.id === styleId)) return styleId;
+  return styles.find((style) => style.aliases?.includes(styleId))?.id ?? styleId;
 }
 
 export function normalizeAuthoredStyles(

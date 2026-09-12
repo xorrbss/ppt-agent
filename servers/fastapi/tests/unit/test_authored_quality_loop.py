@@ -6,6 +6,8 @@ import pytest
 
 from services.authored_figure_best_of import default_render, render_best_figure_candidate
 from services.authored_quality_loop import run_authored_quality_loop, should_critique
+from services.authored_local_fit_policy import html_digest
+from utils.slide_capture_result import RenderCapture
 from tests.unit.test_authored_figure_variants import FIGURE_HTML, QUIET_HTML
 from utils.authored_dom_quality import build_compact_dom_map, ensure_authored_qids
 from utils.authored_figure_variants import find_figure, set_emphasis
@@ -72,24 +74,28 @@ def test_default_render_goes_through_the_shared_capture_entry_point(monkeypatch)
 
     seen = []
 
-    class _Capture:
-        png = b"png"
-        browser_metrics = {"width": 1280, "height": 720, "elements": []}
 
     async def fake_capture(html):
         seen.append(html)
-        return _Capture()
+        return RenderCapture.from_payload(
+            html_digest=html_digest(html),
+            png=b"png",
+            browser_metrics={"width": 1280},
+            runtime_counters={},
+            prepared_html=html,
+        )
 
     monkeypatch.setattr(
         authored_figure_best_of, "render_html_to_png_with_metrics", fake_capture
     )
 
-    png, metrics = asyncio.run(default_render(FIGURE_HTML))
+    capture = asyncio.run(default_render(FIGURE_HTML))
 
     # One entry point means one Chromium session is reused across candidates.
     assert seen == [FIGURE_HTML]
-    assert png == b"png"
-    assert metrics["width"] == 1280
+    assert capture.prepared_html == FIGURE_HTML
+    assert capture.png == b"png"
+    assert capture.browser_metrics["width"] == 1280
 
 
 def test_best_of_renders_every_candidate_once_and_reports_the_added_time():

@@ -63,6 +63,7 @@ async def apply_slide_quality_loop(
         # the attempt that chose it and is not re-derived here.
         return reused, {}
     labels = tuple(node.label for node in infographic.nodes) if infographic else ()
+    prepared_candidates: dict[str, str] = {}
 
     async def render_candidate(candidate: str):
         # Every candidate render of this slide -- best-of variants and the one
@@ -74,7 +75,10 @@ async def apply_slide_quality_loop(
         capture = await capture_once(
             candidate, index=slide_index, capture=render_html_to_png_with_metrics
         )
-        return capture.png, capture.browser_metrics
+        if capture.prepared_html is None:
+            raise RuntimeError("authored quality capture preparation unavailable")
+        prepared_candidates[candidate] = capture.prepared_html
+        return capture
 
     try:
         outcome = await run_authored_quality_loop(
@@ -90,11 +94,11 @@ async def apply_slide_quality_loop(
         )
     except Exception as error:  # noqa: BLE001 - the loop is never load-bearing
         LOGGER.warning("[authored] quality loop failed, keeping the authored slide: %s", error)
-        return html, {}
+        return prepared_candidates.get(html, html), {}
     LOGGER.info(
         "[authored] slide %d quality loop: %s", slide_index + 1, outcome.receipt
     )
-    return outcome.html, dict(outcome.receipt)
+    return prepared_candidates.get(outcome.html, outcome.html), dict(outcome.receipt)
 
 
 __all__ = ["apply_slide_quality_loop"]

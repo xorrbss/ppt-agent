@@ -43,6 +43,8 @@
 [CmdletBinding()]
 param(
     [switch]$Stop,
+    [ValidateSet("api", "worker-generation", "worker-export")]
+    [string[]]$RestartComponent,
     [switch]$Status,
     [switch]$Adopt,
     [string]$ImportEnvironment,
@@ -359,6 +361,46 @@ function Invoke-Stop {
     Write-Host "local stack stopped."
 }
 
+function Invoke-RestartComponents {
+    $environments = Read-StackEnvironment $environmentStore
+    Assert-PostgreSqlRuntime $environments
+    $state = Read-State
+    $targets = @($RestartComponent | Select-Object -Unique)
+    $owned = @{}
+    $creationTimes = @{}
+    foreach ($component in $targets) {
+        if (-not $state.ContainsKey($component)) { throw "local stack: component owner is not recorded" }
+        $recorded = [int]$state[$component]
+        if ($recorded -le 0) { throw "local stack: invalid component owner" }
+        $process = Get-CimInstance Win32_Process -Filter "ProcessId=$recorded" -ErrorAction Stop
+        if ($null -eq $process -or -not [string]::Equals($process.ExecutablePath, $python, [StringComparison]::OrdinalIgnoreCase)) { throw "local stack: executable ownership mismatch" }
+        $expected = if ($component -eq "api") { 'server\.py\s+--port\s+' + $ApiPort + '(?:\s|$)' } else { '-m\s+services\.workspace_operation_worker(?:\s|$)' }
+        if ($process.CommandLine -notmatch $expected) { throw "local stack: command ownership mismatch" }
+        $tree = @(Get-DescendantPids @($recorded))
+        foreach ($other in $state.Keys) {
+            if ($other -ne $component -and [int]$state[$other] -in $tree) { throw "local stack: component ownership overlaps another component" }
+        }
+        if ($component -eq "api") {
+            $listener = Get-PortOwner $ApiPort
+            if ($null -eq $listener -or [int]$listener -notin $tree) { throw "local stack: API listener ownership mismatch" }
+        }
+        $owned[$component] = $recorded
+        $creationTimes[$component] = $process.CreationDate
+    }
+    $stamp = Get-Date -Format "yyyyMMdd-HHmmss-fff"
+    foreach ($component in $targets) {
+        $process = Get-CimInstance Win32_Process -Filter "ProcessId=$($owned[$component])" -ErrorAction Stop
+        if ($null -eq $process -or $process.CreationDate -ne $creationTimes[$component]) { throw "local stack: component ownership changed before restart" }
+        Stop-ProcessTree @([int]$owned[$component])
+        $arguments = if ($component -eq "api") { @("server.py", "--port", "$ApiPort", "--reload", "false") } else { @("-m", "services.workspace_operation_worker") }
+        $restarted = Start-LoggedProcess -FilePath $python -ArgumentList $arguments -WorkingDirectory $fastApi -Environment $environments[$component] -StdoutPath (Join-Path $logs "$component-$stamp.stdout.log") -StderrPath (Join-Path $logs "$component-$stamp.stderr.log")
+        $state[$component] = $restarted.Id
+        Write-State $state
+        if ($component -eq "api") { Wait-ForHttp200 "http://127.0.0.1:$ApiPort/api/v1/auth/status" }
+        Write-Host "  $component restarted (PID $($restarted.Id))"
+    }
+}
+
 function Invoke-Start {
     $environments = Read-StackEnvironment $environmentStore
     Assert-PostgreSqlRuntime $environments
@@ -431,6 +473,11 @@ function Invoke-Start {
     }
 }
 
+if ($RestartComponent) {
+    if ($Stop -or $Status -or $Adopt -or $ImportEnvironment) { throw "local stack: RestartComponent cannot combine lifecycle actions" }
+    Invoke-RestartComponents
+    return
+}
 if ($ImportEnvironment) { Import-EnvironmentDirectory $ImportEnvironment; return }
 if ($Status) { Invoke-Status; return }
 if ($Adopt) { Invoke-Adopt; return }

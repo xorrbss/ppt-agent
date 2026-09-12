@@ -11,7 +11,6 @@ from utils.owner_context import (
     set_current_owner_id,
     set_current_owner_is_admin,
 )
-from services.export_task_service import ExportTaskService
 from services.pptx_import_conversions import PptxImportConversionsService
 from utils.asset_directory_utils import resolve_app_path_to_filesystem
 
@@ -170,22 +169,3 @@ def test_conversion_artifacts_cannot_move_an_unrelated_app_data_directory(
     assert output_path.is_file()
 
 
-def test_export_cannot_move_another_users_file(monkeypatch, tmp_path):
-    app_data = tmp_path / "app_data"
-    owner_id = uuid.uuid4()
-    other_id = uuid.uuid4()
-    other_export = (
-        app_data / "exports" / "users" / str(other_id) / "private.pptx"
-    )
-    other_export.parent.mkdir(parents=True)
-    other_export.write_bytes(b"private")
-    monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
-
-    owner_token = set_current_owner_id(owner_id)
-    try:
-        with pytest.raises(HTTPException, match="outside its asset directory"):
-            ExportTaskService._move_export_to_owner(str(other_export))
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert other_export.read_bytes() == b"private"

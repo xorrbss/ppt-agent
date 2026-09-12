@@ -1922,6 +1922,7 @@ class DurableArtifactService:
                 PublicArtifact.owner_id == owner_id,
                 PublicArtifact.tenant_id == tenant_id,
                 PublicArtifact.sha256 == digest,
+                PublicArtifact.lifecycle_state == "committed",
             )
         )
         if artifact is None:

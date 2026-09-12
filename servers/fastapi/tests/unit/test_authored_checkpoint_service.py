@@ -107,6 +107,17 @@ def _install_one_slide_pipeline_fakes(monkeypatch, *, rendered_html):
     async def fake_render(html):
         rendered_html.append(html)
         return b"rendered-png"
+    async def fake_capture(html: str, **_kwargs):
+        from services.authored_local_fit_policy import html_digest
+        from utils.slide_capture_result import RenderCapture
+
+        return RenderCapture.from_payload(
+            html_digest=html_digest(html),
+            png=await fake_render(html),
+            browser_metrics={},
+            runtime_counters={},
+            prepared_html=html,
+        )
 
     async def no_recording(**_kwargs):
         return None
@@ -114,6 +125,11 @@ def _install_one_slide_pipeline_fakes(monkeypatch, *, rendered_html):
     monkeypatch.setattr(pipeline, "prepare_authored_deck", lambda *_args, **_kwargs: plan)
     monkeypatch.setattr(pipeline, "author_planned_slide", unexpected_author)
     monkeypatch.setattr(pipeline, "render_html_to_png", fake_render)
+    monkeypatch.setattr(
+        pipeline,
+        "render_html_to_png_with_metrics",
+        fake_capture,
+    )
     monkeypatch.setattr(pipeline, "record_local_stage", no_recording)
     # local_fit_applies() defaults on for an ordinary deck and routes render
     # through render_html_to_png_with_metrics instead of the mocked
@@ -1049,7 +1065,9 @@ def test_resumed_completed_html_is_canonicalized_then_rendered_normally(
             assert "viewport" not in rendered_html[0].lower()
             assert '<meta charset="utf-8">' in rendered_html[0]
             assert result.deck.htmls == rendered_html
+            assert resumable != rendered_html[0]
             resumed = await checkpoints.get_checkpoint(job.id, 0)
+            assert checkpoint_stage_html(resumed) == rendered_html[0]
             assert resumed.author_status == "completed"
             assert resumed.illustrate_status == "skipped"
             assert resumed.render_status == "completed"

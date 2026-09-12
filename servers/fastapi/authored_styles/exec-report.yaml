@@ -20,6 +20,9 @@ preview:
     - "#00A3E0"
     - "#A7B0B7"
   variant: executive-ledger
+  image: catalogue-previews/exec-report.png
+reference_images:
+  content: [catalogue-previews/exec-report.png]
 brief: >-
   MOOD: Create an authoritative executive report with sober confidence, disciplined
   density, and a clear point of view. Every slide should help a senior audience scan
@@ -27,25 +30,42 @@ brief: >-
 
   PALETTE: Use deep navy (#051C2C) for commanding fields and headers, white (#FFFFFF)
   for primary report surfaces, charcoal (#2E3338) for body text, bright blue
-  (#00A3E0) for the decisive signal, and cool gray (#A7B0B7) for rules and sources.
+  (#00A3E0) for the decisive signal, and cool gray (#A7B0B7) for rules and secondary marks.
+  Use charcoal for small source text on white and white for text on navy.
   Reserve bright blue for the finding that matters most.
+  Use the original palette with strong text/background contrast. Pale tints serve as surfaces, not low-contrast body text; differentiate critical states with wording or shape as well as color.
 
   TYPOGRAPHY: Pair an authoritative editorial serif for action titles and major
   numerals with a neutral professional sans-serif for labels, notes, and dense
-  reading. Keep titles declarative, compact, and visually dominant.
+  reading. Keep titles declarative, compact, and visually dominant. Choose available
+  Korean-capable faces with compatible proportions for Hangul; keep long Korean
+  labels left-aligned and naturally spaced. Set financial columns with tabular
+  numerals and consistent precision. Reflow dense evidence into rows or a wider
+  analysis area before reducing type, respecting the runtime typography floor.
+  At 1280x720, use the Korean-safe stack "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif for Korean text. Body text should normally be 22-28px; captions and source notes preferably at least 16px. The hard minimum for every visible text run is 9.5pt (12.667px). Recompose, shorten or split content before reducing readability; never shrink below this floor. Preserve any genre-specific display-face accents only where Korean fallback remains clear.
 
   LAYOUT SYSTEM: Build on a strict column grid with consistent title, evidence, and
   source zones. Favor one primary analysis frame, disciplined alignment, and compact
-  supporting annotations over decorative cards.
+  supporting annotations over decorative cards. Reserve the source strip and chart
+  label gutters before fitting the plot. A long title may occupy two balanced lines;
+  expand its band without letting it collide with the first evidence row. Align table
+  headers, values, and totals consistently and keep notes outside the plotting area.
+  Lead with the management conclusion and allocate most of the page to the evidence needed to challenge it. Use a generous chart field with a compact decision note, or a broad variance table with its consequence underneath. Across a deck, alternate performance, diagnosis and action; retain alignment while changing density. These are free compositional choices driven by content, never fixed layouts or required slots. Give the main evidence generous space and vary visual density across the deck.
 
   SIGNATURE ELEMENTS: Use full-width navy title bands, fine gray rules, restrained
   blue finding markers, serif KPI numerals, precise footnotes, and compact source
   lines that make the report feel audited and complete.
+  Use the cyan accent for the specific driver or decision under discussion. Pair a short navy finding rule with tabular numerals; reserve strong fills for totals or exceptions rather than framing every block.
 
   DATA VISUALIZATION: Prioritize waterfalls, variance bars, bridge charts, trend
   lines, and comparison tables. Direct-label key values, show units and periods,
   distinguish actuals from targets, and annotate the business implication beside
-  the relevant mark.
+  the relevant mark. Use waterfalls only for additive bridges with reconciled totals;
+  use zero-baseline bars for magnitude and mark any cropped line-chart axis clearly.
+  Keep comparison scales consistent. Include supplied source and denominator context;
+  never invent targets, periods, owners, or checkpoints to complete a report layout.
+  If figures are unavailable, present a qualitative evidence table without fake KPIs.
+  Separate actual, plan and forecast with explicit labels and distinguish their periods. Reconcile a variance bridge to its starting and ending total; show contribution bars when a bridge cannot be justified. An action note should identify owner or timing only when supplied, and mark unresolved information as pending.
 
   IMAGE DIRECTION: Use imagery only when it adds evidence or context: tightly cropped
   leadership, operations, infrastructure, or market scenes with neutral lighting and
@@ -53,12 +73,19 @@ brief: >-
   photography.
 
   SLIDE ARCHETYPES: cover: a deep-navy field with a concise serif title, reporting
-  period, and one restrained blue rule; content: a declarative action title above a
+  period when supplied, and one restrained blue rule; section: a navy chapter panel
+  with one serif heading and a short decision context; agenda: a white ledger of
+  supplied topics with aligned row labels and fine rules; content: a declarative action title above a
   two-column argument with evidence and implications; data: one dominant chart with
-  a finding callout and compact source line; timeline: a horizontal milestone rail
-  that separates completed, current, and next decisions; closing: a decision summary
-  with three prioritized actions, owners, and the immediate next checkpoint.
+  a finding callout and compact source line; architecture: a responsibility or
+  operating-model diagram on a white report surface, with navy layer labels and
+  orthogonal connectors separated from text; timeline: a horizontal milestone rail
+  that separates supplied completed, current, and next decisions without implying
+  unprovided status; closing: a decision summary with supported priorities and only
+  the owners and next checkpoint provided by the input.
+  Additional options: actual-versus-plan bullet comparison; reconciled driver bridge; exception table with one highlighted cause; exposure-versus-response pairing; decision memo with evidence, trade-off and next review point.
 
   AVOID: Avoid vague topic titles, ornamental dashboards, excessive card grids,
   unexplained metrics, decorative gradients, low-contrast navy text, generic stock
   imagery, and conclusions that merely repeat the data.
+  Avoid invented executive approval, decorative scorecards, unexplained traffic lights and a recommendation that lacks an evidence trail.

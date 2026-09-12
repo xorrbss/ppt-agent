@@ -42,9 +42,9 @@ const ProviderCredentialFields = ({ selectedProvider, llmConfig, onInputChange, 
             value={value}
             required={credential.required}
             onChange={(event) => onInputChange(event.target.value, credential.settingKey)}
-            className="w-full rounded-lg border border-gray-300 px-2 py-3 pr-10 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-3 pr-12 text-sm outline-none transition-colors focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/10"
           />
-          {sensitive ? <button type="button" aria-label={t("toggleCredentialVisibility")} onClick={() => setShowApiKey((current) => !current)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white px-2 py-1">{showApiKey ? <Eye className="h-4 w-4 text-gray-500" /> : <EyeOff className="h-4 w-4 text-gray-500" />}</button> : null}
+          {sensitive ? <button type="button" aria-label={t("toggleCredentialVisibility")} onClick={() => setShowApiKey((current) => !current)} className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg bg-white text-zinc-500 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400">{showApiKey ? <Eye className="h-4 w-4 text-gray-500" /> : <EyeOff className="h-4 w-4 text-gray-500" />}</button> : null}
         </div>
       </label>;
     })}

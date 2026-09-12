@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "key": "ui.genspark-inspired-workspace",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "젠스파크와 같은 중앙 입력 중심 UI/UX를 지향하며 기존 화면의 전면 개편을 허용한다.",
+  "scope": [
+    "frontend",
+    "ui",
+    "workspace"
+  ],
+  "invariants": [
+    "기존 사용자 변경과 기능을 보존하며 화면 간 디자인과 사용 흐름을 일관되게 개선한다."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "사용자 직접 요청: 젠스파크와 같은 UI/UX를 만들고 싶어 그런 형태로 갈아 엎어도 괜찮아"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T06:32:21.2485066+00:00"
+}

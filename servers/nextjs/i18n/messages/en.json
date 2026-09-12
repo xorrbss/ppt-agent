@@ -1,4 +1,53 @@
 {
+  "presentationHeader": {
+    "more": "More",
+    "moreAria": "Open more editing options",
+    "actions": "Actions",
+    "qualityReview": "Quality review",
+    "qualityReviewAria": "Open quality review options in chat",
+    "regenerate": "Regenerate presentation",
+    "advanced": "Advanced",
+    "editableHybridTitle": "Editable Hybrid MVP",
+    "workbenchReady": "Ready",
+    "workbenchShadow": "Shadow",
+    "workbenchBlocked": "Blocked",
+    "openWorkbench": "Edit in Workbench",
+    "workbenchBlockedFallback": "editable_hybrid_mvp_blocked",
+    "exportReadiness": "Export readiness",
+    "versionHistory": "Version history",
+    "undo": "Undo",
+    "redo": "Redo",
+    "startPresentation": "Present"
+  },
+  "dashboardHome": {
+    "heroTitle": "What would you like to create?",
+    "heroDescription": "Turn an idea or document into your next presentation.",
+    "promptLabel": "Describe your presentation",
+    "promptPlaceholder": "What would you like to share? Tell us about the topic, audience, and goal.",
+    "documentStart": "Start from a document",
+    "start": "Get started",
+    "createPresentation": "Create a presentation",
+    "createBlank": "Create a blank presentation",
+    "creating": "Creating presentation",
+    "blank": "Blank presentation",
+    "browseTemplates": "Browse templates",
+    "publicV2": "Public v2 preview",
+    "publicV2Label": "Create a presentation with the Public v2 preview",
+    "presentations": "Presentations",
+    "presentationCount": "{count, plural, one {# presentation} other {# presentations}}",
+    "searchLabel": "Search presentations",
+    "searchPlaceholder": "Search titles or content",
+    "toggleSort": "Toggle sort order",
+    "noResults": "No presentations found.",
+    "tryAnotherSearch": "Try a different search.",
+    "pagination": "Presentation pages",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "loading": "Loading dashboard",
+    "loadError": "Unable to load presentations. Please try again shortly.",
+    "handoffError": "Unable to transfer your prompt",
+    "handoffErrorDescription": "Check your browser storage settings and try again."
+  },
   "slideWorkspace": {
     "heroTitle": "Create AI slides",
     "promptPlaceholder": "Start with your idea",
@@ -29,7 +78,14 @@
     "recentEmpty": "No presentations yet",
     "recentEmptyDescription": "Enter an idea or start with a new slide.",
     "allPresentations": "View all presentations",
-    "createError": "Could not create a blank slide. Please try again."
+    "createError": "Could not create a blank slide. Please try again.",
+    "presentationStatus": {
+      "published": "Generated",
+      "draft": "Draft",
+      "generating": "Generating",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    }
   },
   "metadata": {
     "title": "DevAX - AI presentation generator",
@@ -2799,6 +2855,8 @@
     }
   },
   "upload": {
+    "sourceContentOptions": "Source content options",
+    "modelSettingsSummary": "Model settings",
     "eyebrow": "AI presentation studio",
     "heroTitle": "What would you like to create?",
     "heroDescription": "Describe your topic and requirements, then choose a template below to get started.",
@@ -2885,6 +2943,24 @@
         "standard": "Standard",
         "textHeavy": "Text heavy"
       }
+    },
+    "simplifyStyleLabel": "Selected style",
+    "simplifyStyleLoading": "Loading style",
+    "simplifyStyleChange": "Change style",
+    "simplifyStyleDone": "Done",
+    "simplify": {
+      "createPresentation": "Create presentation",
+      "reviewBeforeCreate": "Review outline before creating",
+      "reviewBeforeCreateDescription": "Check and edit the slide order first.",
+      "useCompanyTemplate": "Use company template",
+      "companyTemplateDescription": "Apply your organization’s logo, colors, and formatting.",
+      "title": "What are you presenting?",
+      "description": "Add a topic or source material and we’ll shape the story and design.",
+      "promptPlaceholder": "Example: Summarize our new product launch plan in 10 slides",
+      "sourcePromptLabel": "Additional design request",
+      "sourcePromptPlaceholder": "Example: Emphasize key figures and keep explanations concise",
+      "preserveSource": "Preserve source content",
+      "preserveSourceDescription": "Keep text and images while applying the selected style."
     }
   },
   "templates": {

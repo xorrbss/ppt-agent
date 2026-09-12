@@ -21,6 +21,7 @@ import yaml
 
 # Re-exported: the loader lives apart only because this file is past the ratchet.
 from utils.authored_style_exemplars import load_style_exemplar  # noqa: F401
+from utils.authored_style_catalogue import canonical_authored_style_id
 
 
 LOGGER = logging.getLogger(__name__)
@@ -677,6 +678,7 @@ def resolve_authored_style(
     styles = load_authored_styles(styles_directory)
     by_id = {style.id: style for style in styles}
     requested_id = (style_id or "").strip() or DEFAULT_AUTHORED_STYLE_ID
+    requested_id = canonical_authored_style_id(requested_id, by_id)
     resolved = by_id.get(requested_id)
     if resolved is not None:
         return resolved

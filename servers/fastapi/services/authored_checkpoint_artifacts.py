@@ -16,6 +16,7 @@ from sqlalchemy import and_, case, func, or_, select, update
 
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.public_artifact import ArtifactRef
+from models.sql.public_admission import PublicOperationAdmission
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services.database import async_session_maker
 from services.artifact_store import configured_public_artifact_service
@@ -513,15 +514,59 @@ def _checkpoint_artifact_ref(
     name: str,
 ) -> ArtifactRef | None:
     refs = checkpoint.artifact_refs
+    if refs is None:
+        return None
     if not isinstance(refs, dict):
+        raise SlideCheckpointCorrupt("checkpoint_artifact_ref_invalid")
+    if name not in refs:
         return None
     value = refs.get(name)
     if not isinstance(value, dict):
-        return None
+        raise SlideCheckpointCorrupt("checkpoint_artifact_ref_invalid")
     try:
         return ArtifactRef.model_validate(value)
     except Exception as exc:
         raise SlideCheckpointCorrupt("checkpoint_artifact_ref_invalid") from exc
+
+
+async def _read_bound_checkpoint_artifact(
+    checkpoint: AuthoredSlideCheckpoint, reference: ArtifactRef,
+) -> bytes:
+    """Resolve checkpoint bytes against durable admission and committed metadata."""
+
+    service = configured_public_artifact_service()
+    async with async_session_maker() as session:
+        binding = (await session.execute(
+            select(
+                PublicOperationAdmission.owner_id,
+                PublicOperationAdmission.tenant_id,
+                PublicOperationAdmission.operation_id,
+            ).join(
+                PresentationGenerationJob,
+                PresentationGenerationJob.workspace_operation_id
+                == PublicOperationAdmission.operation_id,
+            ).where(
+                PresentationGenerationJob.id == checkpoint.job_id,
+                PublicOperationAdmission.operation_kind == "generation",
+            )
+        )).one_or_none()
+        if binding is None or (
+            reference.owner_id != binding.owner_id
+            or reference.tenant_id != binding.tenant_id
+            or reference.created_by_operation_id != binding.operation_id
+            or reference.retention_class != "checkpoint"
+        ):
+            raise SlideCheckpointCorrupt("checkpoint_artifact_owner_binding_invalid")
+        resolved = await service.resolve_ref(
+            session,
+            artifact_id=reference.artifact_id,
+            owner_id=binding.owner_id,
+            tenant_id=binding.tenant_id,
+            expected_digest=reference.sha256,
+        )
+        if resolved != reference:
+            raise SlideCheckpointCorrupt("checkpoint_artifact_ref_binding_invalid")
+        return await service.read_ref_bytes(resolved)
 
 
 async def read_valid_render_artifact(
@@ -531,6 +576,8 @@ async def read_valid_render_artifact(
 
     reference = _checkpoint_artifact_ref(checkpoint, "render")
     if reference is None:
+        if checkpoint.artifact_refs is not None:
+            raise SlideCheckpointCorrupt("checkpoint_render_artifact_missing")
         return read_valid_render(checkpoint)
     if (
         reference.kind != "slide-png"
@@ -538,7 +585,7 @@ async def read_valid_render_artifact(
         or checkpoint.render_sha256 != reference.sha256
     ):
         raise SlideCheckpointCorrupt("checkpoint_render_artifact_binding_invalid")
-    return await configured_public_artifact_service().read_ref_bytes(reference)
+    return await _read_bound_checkpoint_artifact(checkpoint, reference)
 
 
 def _evidence_sidecar_path(render_path: Path) -> Path:
@@ -677,6 +724,8 @@ async def read_valid_evidence_artifact(
 
     reference = _checkpoint_artifact_ref(checkpoint, "evidence")
     if reference is None:
+        if checkpoint.artifact_refs is not None:
+            return None
         return read_valid_evidence(
             checkpoint,
             require_current_html_match=require_current_html_match,
@@ -688,7 +737,7 @@ async def read_valid_evidence_artifact(
         raise SlideCheckpointCorrupt("checkpoint_evidence_artifact_binding_invalid")
     try:
         payload = json.loads(
-            (await configured_public_artifact_service().read_ref_bytes(reference)).decode(
+            (await _read_bound_checkpoint_artifact(checkpoint, reference)).decode(
                 "utf-8"
             )
         )

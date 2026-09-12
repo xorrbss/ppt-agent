@@ -5,6 +5,10 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
 from utils.authored_styles import load_authored_styles
+from utils.authored_style_catalogue import (
+    authored_style_catalogue,
+    canonical_authored_style_id,
+)
 
 
 class AuthoredStylePreview(BaseModel):
@@ -26,6 +30,7 @@ class AuthoredStyleSummary(BaseModel):
     tags: list[str]
     use_cases: list[str]
     preview: AuthoredStylePreview
+    aliases: Optional[list[str]] = None
 
 
 AUTHORED_ROUTER = APIRouter(prefix="/authored", tags=["Authored"])
@@ -38,13 +43,14 @@ AUTHORED_ROUTER = APIRouter(prefix="/authored", tags=["Authored"])
 )
 def get_authored_styles() -> list[dict]:
     """List selectable authored styles without exposing their generation briefs."""
-    return [style.public_dict() for style in load_authored_styles()]
+    return authored_style_catalogue(load_authored_styles())
 
 
 @AUTHORED_ROUTER.get("/styles/{style_id}/preview", response_class=FileResponse)
 def get_authored_style_preview(style_id: str) -> FileResponse:
     """Serve only loader-validated preview assets from the authored asset root."""
-    style = next((item for item in load_authored_styles() if item.id == style_id), None)
+    by_id = {item.id: item for item in load_authored_styles()}
+    style = by_id.get(canonical_authored_style_id(style_id, by_id))
     if style is None or style.preview_image is None:
         raise HTTPException(status_code=404, detail="Authored style preview not found")
     return FileResponse(style.preview_image)

@@ -1,6 +1,5 @@
 'use client'
 import React, { useEffect, useRef } from "react";
-import Image from "next/image";
 
 import { Card } from "@/components/ui/card";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
@@ -25,12 +24,13 @@ import { DeferredSlideThumbnail } from "./DeferredSlideThumbnail";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { SharePopover } from "./SharePopover";
+import { getPresentationDisplayTitle } from "@/lib/presentation-display";
 import { tryResolveServerIssuedPresentationProfile } from "@/lib/presentation-profile";
 import { formatViewerDate } from "@/i18n/viewer-time";
 
 export const PresentationCard = ({
   id,
-  title,
+  title: storedTitle,
   presentation,
   onDeleted
 }: {
@@ -40,6 +40,8 @@ export const PresentationCard = ({
   onDeleted?: (presentationId: string) => void;
 }) => {
   const t = useTranslations("community");
+  const tWorkspace = useTranslations("slideWorkspace");
+  const title = getPresentationDisplayTitle({ ...presentation, title: storedTitle }, tWorkspace("untitledPresentation"));
   const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
@@ -158,7 +160,7 @@ export const PresentationCard = ({
       role="link"
       tabIndex={0}
       aria-label={`${title || "발표자료"} 열기`}
-      className="bg-[#F8FBFB] font-syne shadow-none sm:shadow-none presentation-card rounded-[12px] p-0 group hover:shadow-md transition-all duration-500 slide-theme cursor-pointer overflow-hidden flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5146E5] focus-visible:ring-offset-2"
+      className="bg-zinc-50 font-syne shadow-none presentation-card rounded-2xl border border-zinc-200 p-0 group hover:border-zinc-300 hover:shadow-[0_8px_24px_-12px_rgba(24,24,27,0.2)] transition-all duration-200 slide-theme cursor-pointer overflow-hidden flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2"
     >
       <div
         id={`dashboard-presentation-card-${id}`}
@@ -168,19 +170,19 @@ export const PresentationCard = ({
           {presentation.type}
         </p> */}
 
-        <Image src="/card_bg.svg" alt="" fill className="absolute object-cover" />
-        <div className="scale-[0.75] mt-4  border border-gray-300 rounded-lg overflow-hidden">
+        
+        <div className="scale-[0.85] my-3 border border-zinc-200 rounded-md overflow-hidden shadow-sm">
 
           <DeferredSlideThumbnail slide={firstSlide} />
         </div>
 
-        <div className="w-full py-3 px-5 mt-auto z-40 relative bg-white  border-t border-[#EDEEEF]">
-          <div className="flex items-center justify-between gap-7 w-full">
-            <div className="flex flex-col items-start gap-1">
+        <div className="w-full px-4 py-4 mt-auto z-40 relative bg-white border-t border-zinc-200/70">
+          <div className="flex items-center justify-between gap-3 w-full">
+            <div className="flex min-w-0 flex-col items-start gap-1.5">
               <div className="text-sm text-[#191919] font-semibold  overflow-hidden line-clamp-1">
                 <MarkdownRenderer content={title} className="text-sm mb-0  font-syne text-[#191919] font-semibold  overflow-hidden line-clamp-1" />
               </div>
-              <p className="text-[#808080] text-sm font-syne">
+              <p className="text-zinc-400 text-xs font-syne">
                 {formatViewerDate(presentation?.created_at, locale)}
               </p>
 
@@ -200,7 +202,7 @@ export const PresentationCard = ({
               >
                 <EllipsisVertical className="h-5 w-5 text-gray-500" />
               </PopoverTrigger>
-              <PopoverContent align="end" className="bg-white w-[200px]">
+              <PopoverContent align="end" className="w-[200px] rounded-xl border-zinc-200 bg-white p-1.5 shadow-lg">
                 <button
                   type="button"
                   className="flex w-full items-center justify-between px-2 py-1 hover:bg-gray-100"
@@ -223,7 +225,7 @@ export const PresentationCard = ({
                   }}
                 >
                   <p>삭제</p>
-                  <Trash className="w- h-4 text-red-500" />
+                  <Trash className="w-4 h-4 text-red-500" />
                 </button>
               </PopoverContent>
             </Popover>

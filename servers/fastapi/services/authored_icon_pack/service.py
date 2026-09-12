@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Sequence
 
+from services.authored_icon_pack.library import lookup_reusable_icons
 from services.authored_icon_pack.checks import check_no_text, check_transparency
 from services.authored_icon_pack.provider import TransparentPngProvider
 from services.authored_icon_pack.sheet import (
@@ -181,6 +182,10 @@ async def resolve_icons(
 
     async with pack_lock(pack.pack_key):
         found, missing = pack.lookup(wanted)
+        reusable = lookup_reusable_icons(missing, cache_directory=pack.directory, color=color)
+        for concept, path in reusable.items():
+            result.icons[concept_key(concept)] = ResolvedIcon(concept, str(path), 128, 128, "library")
+        missing = [concept for concept in missing if concept not in reusable]
         for key, entry in found.items():
             result.icons[key] = ResolvedIcon(
                 entry.concept, str(pack.path_for(entry)), entry.width, entry.height, "cached"

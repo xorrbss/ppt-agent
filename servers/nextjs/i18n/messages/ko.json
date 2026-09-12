@@ -1,4 +1,53 @@
 {
+  "presentationHeader": {
+    "more": "더보기",
+    "moreAria": "추가 편집 옵션 열기",
+    "actions": "작업",
+    "qualityReview": "고품질 검수",
+    "qualityReviewAria": "채팅에서 고품질 검수 옵션 열기",
+    "regenerate": "발표자료 재생성",
+    "advanced": "고급 정보",
+    "editableHybridTitle": "편집 가능한 Hybrid MVP",
+    "workbenchReady": "준비됨",
+    "workbenchShadow": "Shadow",
+    "workbenchBlocked": "차단됨",
+    "openWorkbench": "Workbench에서 편집",
+    "workbenchBlockedFallback": "editable_hybrid_mvp_blocked",
+    "exportReadiness": "내보내기 준비 상태",
+    "versionHistory": "버전 기록",
+    "undo": "실행 취소",
+    "redo": "다시 실행",
+    "startPresentation": "발표 시작"
+  },
+  "dashboardHome": {
+    "heroTitle": "어떤 발표자료를 만들까요?",
+    "heroDescription": "아이디어를 적거나 문서를 올리고, 발표자료를 완성해 보세요.",
+    "promptLabel": "만들고 싶은 발표자료",
+    "promptPlaceholder": "어떤 내용을 담고 싶으신가요? 주제, 대상, 목적을 자유롭게 적어 주세요.",
+    "documentStart": "문서로 시작",
+    "start": "시작하기",
+    "createPresentation": "발표자료 만들기",
+    "createBlank": "빈 발표자료 만들기",
+    "creating": "발표자료 생성 중",
+    "blank": "빈 발표자료",
+    "browseTemplates": "템플릿 둘러보기",
+    "publicV2": "Public v2 시험 운영",
+    "publicV2Label": "Public v2 시험 운영으로 발표자료 만들기",
+    "presentations": "발표자료",
+    "presentationCount": "{count}개",
+    "searchLabel": "발표자료 검색",
+    "searchPlaceholder": "제목 또는 내용 검색",
+    "toggleSort": "정렬 순서 전환",
+    "noResults": "검색 결과가 없습니다.",
+    "tryAnotherSearch": "다른 검색어로 다시 시도해 보세요.",
+    "pagination": "발표자료 페이지",
+    "previousPage": "이전 페이지",
+    "nextPage": "다음 페이지",
+    "loading": "대시보드 불러오는 중",
+    "loadError": "발표자료를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    "handoffError": "입력 내용을 전달할 수 없습니다",
+    "handoffErrorDescription": "브라우저 저장 공간을 확인한 후 다시 시도해 주세요."
+  },
   "slideWorkspace": {
     "heroTitle": "AI 슬라이드 만들기",
     "promptPlaceholder": "아이디어를 입력하고 시작해보세요",
@@ -29,7 +78,14 @@
     "recentEmpty": "아직 발표자료가 없습니다",
     "recentEmptyDescription": "아이디어를 입력하거나 새 슬라이드로 시작해 보세요.",
     "allPresentations": "모든 발표자료 보기",
-    "createError": "빈 슬라이드를 만들지 못했습니다. 다시 시도해 주세요."
+    "createError": "빈 슬라이드를 만들지 못했습니다. 다시 시도해 주세요.",
+    "presentationStatus": {
+      "published": "생성 완료",
+      "draft": "초안",
+      "generating": "생성 중",
+      "failed": "생성 실패",
+      "cancelled": "취소됨"
+    }
   },
   "metadata": {
     "title": "DevAX - AI 발표자료 생성기",
@@ -2799,6 +2855,8 @@
     }
   },
   "upload": {
+    "sourceContentOptions": "원본 콘텐츠 옵션",
+    "modelSettingsSummary": "모델 설정 확인",
     "eyebrow": "AI 프레젠테이션 스튜디오",
     "heroTitle": "무엇을 만들어 드릴까요?",
     "heroDescription": "주제와 요구사항을 입력하고, 아래에서 원하는 템플릿을 골라 바로 시작하세요.",
@@ -2885,6 +2943,24 @@
         "standard": "표준",
         "textHeavy": "상세하게"
       }
+    },
+    "simplifyStyleLabel": "선택한 스타일",
+    "simplifyStyleLoading": "스타일을 불러오는 중",
+    "simplifyStyleChange": "스타일 변경",
+    "simplifyStyleDone": "선택 완료",
+    "simplify": {
+      "createPresentation": "발표자료 만들기",
+      "reviewBeforeCreate": "만들기 전에 목차 확인",
+      "reviewBeforeCreateDescription": "슬라이드 순서를 먼저 확인하고 수정할 수 있어요.",
+      "useCompanyTemplate": "회사 양식 사용",
+      "companyTemplateDescription": "로고, 색상, 서식을 회사 기준에 맞춰요.",
+      "title": "무엇을 발표하나요?",
+      "description": "주제나 자료를 입력하면 발표 흐름과 디자인을 함께 만들어 드려요.",
+      "promptPlaceholder": "예: 신규 서비스 출시 계획을 10장으로 정리해 주세요",
+      "sourcePromptLabel": "추가 디자인 요청",
+      "sourcePromptPlaceholder": "예: 핵심 수치는 크게, 설명은 간결하게 배치해 주세요",
+      "preserveSource": "원본 내용 유지",
+      "preserveSourceDescription": "텍스트와 이미지를 유지하고 선택한 스타일로 다시 구성해요."
     }
   },
   "templates": {

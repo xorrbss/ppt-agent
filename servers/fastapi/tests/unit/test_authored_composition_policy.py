@@ -46,6 +46,43 @@ from services.source_content.browser_readback import BrowserSourceReadbackError
 from utils.renderer_isolation import admit_authored_html
 
 
+def test_bounded_repair_capture_canonicalizes_appended_header_attributes(monkeypatch):
+    from services.authored_admission_capture import canonical_capture_html
+    from services.authored_rollout_profile import RolloutProfile, rollout_profile_scope
+    from utils.authored_qid_namespace import ensure_authored_qids
+
+    source = (
+        '<!DOCTYPE html><html><head><style>body{margin:0}</style></head><body>'
+        '<div data-header-band="88" data-header-part="band" style="height:88px">'
+        '<h1 data-header-part="title" style="font-size:32px">Title</h1></div>'
+        '<div aria-label="chart" class="chart" data-qid="chart" role="img">Chart</div>'
+        '</body></html>'
+    )
+    captured = []
+
+    async def fake_capture(html):
+        captured.append(html)
+        return SimpleNamespace(
+            png=b"canonical-repair-png",
+            browser_metrics={"html_digest": "sha256:" + sha256(html.encode()).hexdigest()},
+        )
+
+    monkeypatch.setattr(
+        "services.authored_presentation_generation.render_html_to_png_with_metrics",
+        fake_capture,
+    )
+    with rollout_profile_scope(RolloutProfile(gate_mode="enforce", html_normalization="tree")):
+        stamped = ensure_authored_semantic_roles(ensure_authored_qids(source))
+        expected = canonical_capture_html(stamped)
+        assert stamped != expected
+        htmls, pngs, metrics = asyncio.run(_bind_bounded_repair_evidence([source], [17]))
+        assert canonical_capture_html(htmls[0]) == htmls[0]
+
+    assert captured == htmls == [expected]
+    assert pngs == [b"canonical-repair-png"]
+    assert metrics == [{"html_digest": "sha256:" + sha256(expected.encode()).hexdigest()}]
+
+
 def test_intrinsic_grid_overlap_repair_only_releases_measured_grid_items():
     html = """<!doctype html><html><body>
     <div data-qid="grid"><div data-qid="card-a">긴 원문 __________</div>

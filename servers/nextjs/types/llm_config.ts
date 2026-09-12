@@ -101,6 +101,8 @@ export interface LLMConfig {
   GPT_IMAGE_1_5_QUALITY?: string;
   // GPT Image 2 Quality
   GPT_IMAGE_2_QUALITY?: string;
+  // GPT Image 2.5 Flare and Sunburst quality
+  GPT_IMAGE_2_5_QUALITY?: string;
 
   // Other Configs
   DISABLE_THINKING?: boolean;

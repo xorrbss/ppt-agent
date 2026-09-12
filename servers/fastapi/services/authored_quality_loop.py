@@ -42,6 +42,7 @@ from services.authored_figure_best_of import (
     RenderCallable,
     default_render,
     render_best_figure_candidate,
+    resolve_render_result,
 )
 
 #: A corrected render may not score worse than the one it replaces.
@@ -104,7 +105,9 @@ async def _corrected_candidate(
         return html, png, metrics, 0.0, receipt
 
     started = time.monotonic()
-    corrected_png, corrected_metrics = await render(corrected)
+    corrected, corrected_png, corrected_metrics = resolve_render_result(
+        corrected, await render(corrected)
+    )
     elapsed = (time.monotonic() - started) * 1000.0
 
     baseline_report = inspect_authored_dom(

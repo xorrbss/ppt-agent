@@ -30,21 +30,34 @@ from utils.authored_figure_variants import (
 from utils.llm_calls.author_slide import STYLE_REFERENCE
 from services.authored_admission_capture import capture_once
 from utils.slide_capture import render_html_to_png_with_metrics
+from utils.slide_capture_result import RenderCapture
 
-RenderCallable = Callable[[str], Awaitable[tuple[bytes, Mapping[str, Any] | None]]]
+LegacyRenderResult = tuple[bytes, Mapping[str, Any] | None]
+RenderResult = RenderCapture | LegacyRenderResult
+RenderCallable = Callable[[str], Awaitable[RenderResult]]
 
 
-async def default_render(html: str) -> tuple[bytes, Mapping[str, Any] | None]:
+def resolve_render_result(
+    requested_html: str, result: RenderResult,
+) -> tuple[str, bytes, Mapping[str, Any] | None]:
+    """Expose the exact captured document while retaining legacy test adapters."""
+
+    if isinstance(result, RenderCapture):
+        if result.prepared_html is None:
+            raise RuntimeError("authored figure capture preparation unavailable")
+        return result.prepared_html, result.png, result.browser_metrics
+    png, metrics = result
+    return requested_html, png, metrics
+
+
+async def default_render(html: str) -> RenderResult:
     """Adapt the capture entry point to a plain ``(png, metrics)`` pair.
 
     Candidate variants differ by document, so each is a distinct capture; the
     owner is here for the variant a caller offers twice, and for the counters.
     """
     capture = await capture_once(html, capture=render_html_to_png_with_metrics)
-    if hasattr(capture, "png") and hasattr(capture, "browser_metrics"):
-        return capture.png, capture.browser_metrics
-    png, metrics = capture
-    return png, metrics
+    return capture
 
 
 @dataclass(frozen=True)
@@ -92,11 +105,13 @@ async def render_best_figure_candidate(
     variants = figure_variants(html, max_candidates=max_candidates)
 
     started = time.monotonic()
-    baseline_png, baseline_metrics = await render_one(variants[0].html)
+    baseline_html, baseline_png, baseline_metrics = resolve_render_result(
+        variants[0].html, await render_one(variants[0].html)
+    )
     baseline_render_ms = (time.monotonic() - started) * 1000.0
     if len(variants) == 1:
         return FigureBestOfResult(
-            html=variants[0].html,
+            html=baseline_html,
             png=baseline_png,
             browser_metrics=baseline_metrics,
             selection=None,
@@ -117,29 +132,31 @@ async def render_best_figure_candidate(
         RenderedCandidate(
             variant=variants[0],
             metrics=measure_candidate(baseline_metrics),
-            report=report_for(variants[0].html, baseline_metrics),
+            report=report_for(baseline_html, baseline_metrics),
         )
     ]
-    payloads: list[tuple[bytes, Mapping[str, Any] | None]] = [
-        (baseline_png, baseline_metrics)
+    payloads: list[tuple[str, bytes, Mapping[str, Any] | None]] = [
+        (baseline_html, baseline_png, baseline_metrics)
     ]
     extra_started = time.monotonic()
     for variant in variants[1:]:
-        png, metrics = await render_one(variant.html)
-        payloads.append((png, metrics))
+        prepared_html, png, metrics = resolve_render_result(
+            variant.html, await render_one(variant.html)
+        )
+        payloads.append((prepared_html, png, metrics))
         rendered.append(
             RenderedCandidate(
                 variant=variant,
                 metrics=measure_candidate(metrics),
-                report=report_for(variant.html, metrics),
+                report=report_for(prepared_html, metrics),
             )
         )
     added_render_ms = (time.monotonic() - extra_started) * 1000.0
 
     selection = select_candidate(rendered)
-    chosen_png, chosen_metrics = payloads[selection.chosen_index]
+    chosen_html, chosen_png, chosen_metrics = payloads[selection.chosen_index]
     return FigureBestOfResult(
-        html=selection.chosen.variant.html,
+        html=chosen_html,
         png=chosen_png,
         browser_metrics=chosen_metrics,
         selection=selection,
@@ -152,6 +169,8 @@ async def render_best_figure_candidate(
 __all__ = [
     "FigureBestOfResult",
     "RenderCallable",
+    "RenderResult",
     "default_render",
     "render_best_figure_candidate",
+    "resolve_render_result",
 ]

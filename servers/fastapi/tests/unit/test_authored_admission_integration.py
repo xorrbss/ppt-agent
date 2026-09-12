@@ -452,8 +452,10 @@ async def test_vqa_correction_reuses_captured_evidence(session, monkeypatch):
         )
     )
     monkeypatch.setattr(vqa, "render_html_to_png_with_metrics", capture)
-    assert await vqa._render_correction_html(html, index=0) == b"png"
-    assert await vqa._render_correction_html(html, index=0) == b"png"
+    first = await vqa._render_correction_html(html, index=0)
+    second = await vqa._render_correction_html(html, index=0)
+    assert first == (html, b"png")
+    assert second == first
     assert capture.await_count == 1
 
 

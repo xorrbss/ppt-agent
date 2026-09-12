@@ -127,6 +127,7 @@ _GETTER_KEYS = {
     "get_dall_e_3_quality_env": "DALL_E_3_QUALITY",
     "get_gpt_image_1_5_quality_env": "GPT_IMAGE_1_5_QUALITY",
     "get_gpt_image_2_quality_env": "GPT_IMAGE_2_QUALITY",
+    "get_gpt_image_2_5_quality_env": "GPT_IMAGE_2_5_QUALITY",
     "get_codex_access_token_env": "CODEX_ACCESS_TOKEN",
     "get_codex_refresh_token_env": "CODEX_REFRESH_TOKEN",
     "get_codex_token_expires_env": "CODEX_TOKEN_EXPIRES",

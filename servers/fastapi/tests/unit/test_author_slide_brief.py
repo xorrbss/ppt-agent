@@ -487,7 +487,7 @@ def test_the_exemplar_reaches_the_design_system_of_the_style_that_has_one():
     style = resolve_authored_style("hyundai-culture-center")
     system = build_design_system(_brand(), style)
 
-    assert "EXEMPLAR (one slide from a deck rated excellent" in system
+    assert "EXEMPLAR (one authored reference slide for this style" in system
     assert "never its text or layout" in system
     assert load_style_exemplar("hyundai-culture-center") in system
 

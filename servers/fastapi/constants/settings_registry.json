@@ -593,7 +593,7 @@
       "type": "enum",
       "default": null,
       "secret": false,
-      "choices": ["pexels", "pixabay", "gemini_flash", "nanobanana_pro", "dall-e-3", "gpt-image-1.5", "gpt-image-2", "comfyui", "open_webui", "openai_compatible"],
+      "choices": ["pexels", "pixabay", "gemini_flash", "nanobanana_pro", "dall-e-3", "gpt-image-1.5", "gpt-image-2", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "codex_image", "comfyui", "open_webui", "openai_compatible"],
       "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
       "group": "image",
       "description": "Image generation provider id."
@@ -708,6 +708,16 @@
       "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
       "group": "image.openai",
       "description": "GPT Image 2 output quality."
+    },
+    {
+      "key": "GPT_IMAGE_2_5_QUALITY",
+      "type": "enum",
+      "default": "medium",
+      "secret": false,
+      "choices": ["low", "medium", "high", "xhigh", "max", "auto"],
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image.openai",
+      "description": "GPT Image 2.5 Flare and Sunburst output quality."
     },
     {
       "key": "PUBLIC_PROVIDER_PRICING_REVISION",

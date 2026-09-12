@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from html.parser import HTMLParser
+import logging
 from typing import Any, Callable, Mapping
 
 from services.authored_admission_context import AdmissionContext, canonical_json, digest_bytes, digest_html
@@ -27,6 +28,8 @@ from services.source_content.text_stamping import stamp_source_blocks
 from utils.llm_calls.author_slide import validate_authored_slide_html
 from utils.renderer_isolation import MAX_HTML_BYTES, RendererPolicyError, duplicate_attribute_counts
 from services.authored_rollout_profile import current_rollout_profile
+
+LOGGER = logging.getLogger(__name__)
 
 
 class _RawAttributes(HTMLParser):
@@ -183,10 +186,13 @@ def admit_slide_html(
     *,
     metrics: Mapping[str, object] | None = None,
     png: bytes | None = None,
+    normalization_mode: str | None = None,
 ) -> Admission:
     """Raw diagnostics → rewrite/policy → binding → limits → captured readback."""
     predicate = "raw_diagnostics"
     normalizations: list[dict] = []
+    normalization_required = False
+    normalized_candidate: str | None = None
     expanded = html
     readback = None
     verdict, code, block_ids, retryable = "admitted", "", (), False
@@ -197,12 +203,21 @@ def admit_slide_html(
 
             check_placeholder_context(context, html)
         predicate = "rewrite_policy"
-        expanded = validate_authored_slide_html(
-            html,
-            allow_illustration_slots=context.allow_illustration_slots,
-            finalized=context.finalized,
-            normalization_receipt=normalizations,
-        )
+        try:
+            expanded = validate_authored_slide_html(
+                html,
+                allow_illustration_slots=context.allow_illustration_slots,
+                finalized=context.finalized,
+                normalization_receipt=normalizations,
+                read_only=context.state == "captured",
+                normalization_mode=normalization_mode,
+            )
+        except RendererPolicyError as error:
+            if context.state != "captured" or not getattr(error, "normalization_required", False):
+                raise
+            normalization_required = True
+            candidate = getattr(error, "rejected_html", None)
+            normalized_candidate = candidate if isinstance(candidate, str) else None
         predicate = "static_bindings"
         if context.state == "captured":
             if context.source_reflow and stamp_source_blocks(expanded, context.bindings).html != expanded:
@@ -215,17 +230,37 @@ def admit_slide_html(
             normalizations.extend(text_result.normalizations)
             context = context.for_state(text_result.state)
         predicate = "post_expansion_policy"
-        expanded = validate_authored_slide_html(
-            expanded,
-            allow_illustration_slots=context.allow_illustration_slots,
-            finalized=context.finalized,
-            normalization_receipt=normalizations,
-        )
+        if context.state != "captured":
+            expanded = validate_authored_slide_html(
+                expanded,
+                allow_illustration_slots=context.allow_illustration_slots,
+                finalized=context.finalized,
+                normalization_receipt=normalizations,
+                normalization_mode=normalization_mode,
+            )
         if context.state == "captured":
             predicate = "capture_binding"
+            if (normalization_required or expanded != html) or metrics is None:
+                # Digests and bounded structural facts distinguish a byte
+                # rewrite from absent telemetry without exposing source HTML.
+                LOGGER.info("authored_capture_binding %s", canonical_json({
+                    "contextDigest": context.identity_digest,
+                    "operationDigest": digest_html(context.operation_id),
+                    "presentationDigest": digest_html(context.presentation_id),
+                    "slideIndex": context.slide_index,
+                    "inputDigest": digest_html(html),
+                    "normalizedDigest": digest_html(normalized_candidate or expanded),
+                    "metricsPresent": metrics is not None,
+                    "reason": "html_changed" if (normalization_required or expanded != html) else "metrics_missing",
+                    "retryable": (
+                        not normalization_required and expanded == html and metrics is None
+                    ),
+                }))
             # A captured representation cannot be rewritten after the pixels exist.
-            if expanded != html:
+            if (normalization_required or expanded != html):
                 raise BrowserSourceReadbackError(SOURCE_READBACK_FAILED, detail=predicate)
+            if metrics is not None and metrics.get("local_fit_candidate_only"):
+                raise BrowserSourceReadbackError(SOURCE_READBACK_FAILED, detail="candidate_only_capture")
             if metrics is None:
                 retryable = True
                 raise BrowserSourceReadbackError(SOURCE_READBACK_FAILED, detail="capture telemetry is unavailable")

@@ -119,6 +119,11 @@ const __codexFit = {
     if (node.closest('svg') || node.closest('.ig')) return false;
     return !Array.from(node.classList || []).some((name) => name === 'ig' || name.indexOf('ig-') === 0);
   },
+  _replayable(node) {
+    const replayable = this.P._replayable_qids;
+    return this._eligible(node) && Array.isArray(replayable) &&
+      replayable.includes(String(node.getAttribute('data-qid') || ''));
+  },
   _ownedTextNodes(node) {
     const result = [], walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
     for (let text = walker.nextNode(); text; text = walker.nextNode()) {
@@ -321,6 +326,7 @@ __LOCAL_MORPH_MEMBERS__
       if (!run.editable || this._runs.some((item) => item.node === node && !item.editable)) {
         failures.push('unsupported_geometry'); continue;
       }
+      if (!this._replayable(node)) { failures.push('reconstruction_mismatch'); continue; }
       const position = this._struct(node).position, slot = this._slotFor(node), card = this._nearestCard(node);
       if (['absolute', 'fixed'].includes(position) && !slot) {
         failures.push('unsupported_geometry'); continue;
@@ -345,6 +351,8 @@ __LOCAL_MORPH_MEMBERS__
     return {plan: plan, failures: failures};
   },
   _applyPlan(plan) {
+    if (plan.some((item) => !this._replayable(item.node)))
+      throw new Error('source_qid_unavailable');
     const changed = new Set();
     for (const item of plan) {
       const entry = this._entry(item.node); entry[item.kind] = item.declarations;

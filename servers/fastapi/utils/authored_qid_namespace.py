@@ -173,7 +173,23 @@ def validate_declared_authored_qids(html: str) -> tuple[str, ...]:
     return tuple(qids)
 
 
+def declared_authored_qids(html: str) -> tuple[str, ...]:
+    """Return the source-declared QIDs without completing the namespace."""
+
+    if not isinstance(html, str):
+        raise TypeError("authored HTML must be a string")
+    parser = StartTagCollector()
+    parser.feed(html)
+    parser.close()
+    return tuple(
+        qid
+        for _tag, raw_attrs, _raw_tag in parser.tags
+        if (qid := attrs_dict(raw_attrs).get("data-qid")) is not None
+    )
+
+
 __all__ = [
+    "declared_authored_qids",
     "ensure_authored_qids",
     "is_valid_authored_qid",
     "validate_declared_authored_qids",

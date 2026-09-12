@@ -7,6 +7,7 @@ import { useDispatch, useSelector } from "react-redux";
 import AuthoredStylesApi, {
   AUTHORED_STYLE_CATEGORIES,
   DEFAULT_AUTHORED_STYLE,
+  canonicalAuthoredStyleId,
 } from "@/app/(presentation-generator)/services/api/authored";
 import type {
   AuthoredStyleCategory,
@@ -94,13 +95,13 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
   }, [dispatch]);
 
   useEffect(() => {
-    if (
-      loadStatus !== "loading" &&
-      !styles.some((style) => style.id === authoredStyle)
-    ) {
-      dispatch(
-        setPptGenUploadState({ authoredStyle: DEFAULT_AUTHORED_STYLE.id })
-      );
+    if (loadStatus === "loading") return;
+    const canonicalId = canonicalAuthoredStyleId(styles, authoredStyle);
+    const nextId = styles.some((style) => style.id === canonicalId)
+      ? canonicalId
+      : DEFAULT_AUTHORED_STYLE.id;
+    if (nextId !== authoredStyle) {
+      dispatch(setPptGenUploadState({ authoredStyle: nextId }));
     }
   }, [authoredStyle, dispatch, loadStatus, styles]);
 

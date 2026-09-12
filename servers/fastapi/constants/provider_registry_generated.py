@@ -617,6 +617,89 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       ]
     },
     {
+      "id": "gpt-image-2.5-flare",
+      "kind": "image",
+      "displayName": "GPT Image 2.5 Flare",
+      "icon": "/providers/openai.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "OPENAI_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "none",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "supported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "gpt-image-2.5-sunburst",
+      "kind": "image",
+      "displayName": "GPT Image 2.5 Sunburst",
+      "icon": "/providers/openai.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "OPENAI_API_KEY",
+          "kind": "secret",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "none",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "supported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
+      "id": "codex_image",
+      "kind": "image",
+      "displayName": "Codex 이미지 (GPT Image 2.5 요청)",
+      "icon": "/providers/openai.png",
+      "enabled": true,
+      "credentialSchema": [
+        {
+          "settingKey": "CODEX_ACCESS_TOKEN",
+          "kind": "oauth",
+          "required": true
+        },
+        {
+          "settingKey": "CODEX_ACCOUNT_ID",
+          "kind": "setting",
+          "required": true
+        }
+      ],
+      "modelDiscovery": "none",
+      "capabilities": {
+        "webSearch": "unsupported",
+        "vision": "unsupported",
+        "thinking": "unsupported",
+        "structuredOutput": "unsupported",
+        "imageGeneration": "supported"
+      },
+      "presentationDrivers": [
+        "template-v2",
+        "authored"
+      ]
+    },
+    {
       "id": "gemini_flash",
       "kind": "image",
       "displayName": "Gemini Flash",

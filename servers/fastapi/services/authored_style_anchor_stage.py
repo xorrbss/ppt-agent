@@ -237,24 +237,36 @@ def anchor_render_step(
     30 on 2026-09-06). Building the step here keeps that one line under test.
     """
 
-    from services.authored_admission_capture import capture_png_once
+    from services.authored_admission_capture import capture_once
+    from services.authored_admission_context import digest_html
     from utils.slide_capture import get_cached_browser_metrics
     from utils.slide_capture_deck_scope import set_render_deck_scope
+    from utils.slide_capture_result import RenderCapture
 
     async def render_anchor(html: str) -> None:
         # The anchor is rendered before illustration/substitution has consumed
         # authoring-only image slot metadata.  Admit a renderer-safe projection
         # while retaining the original HTML for the downstream authoring stages.
         renderable_html = canonicalize_authored_slide_html(html, finalized=True)
+
+        async def capture(value: str) -> RenderCapture:
+            png = await render_html(value)
+            return RenderCapture.from_payload(
+                html_digest=digest_html(value),
+                png=png,
+                browser_metrics=get_cached_browser_metrics(value),
+                runtime_counters={},
+            )
+
         async with render_gate:
             with set_render_deck_scope(deck_scope):
                 # The anchor candidate may be re-offered; the owner renders the
                 # same projection once. It has no deck index of its own.
-                await capture_png_once(
+                captured = await capture_once(
                     renderable_html,
-                    render=render_html,
-                    read_metrics=get_cached_browser_metrics,
+                    capture=capture,
                 )
+                _ = captured.png
 
     return render_anchor
 
