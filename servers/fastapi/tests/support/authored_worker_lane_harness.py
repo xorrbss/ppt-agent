@@ -664,6 +664,9 @@ def _install_chromium_and_gate_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
     # ``_sync_runtime_dependencies`` copies these from the service facade into
     # the pipeline/generation modules on every call, so patch the facade.
     monkeypatch.setattr(authored_service, "render_html_to_png", fake_render)
+    monkeypatch.setattr(
+        authored_service, "render_html_to_png_with_metrics", fake_capture
+    )
     monkeypatch.setattr(authored_service, "find_chrome", lambda: True)
     for module in (generation_mod, pipeline_mod, terminal_mod, preflight_mod):
         monkeypatch.setattr(
