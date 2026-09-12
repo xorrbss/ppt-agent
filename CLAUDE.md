@@ -99,7 +99,7 @@ npm run dev                                     # localhost:3000; set NEXT_PUBLI
 
 **FastAPI** (`servers/fastapi`, pytest; `testpaths = ["tests"]`):
 ```bash
-uv run pytest                                   # full suite (~1,880 tests)
+uv run pytest                                   # full suite (~7,520 tests, ~17 min)
 uv run pytest tests/unit/test_dict_utils.py     # single file
 uv run pytest tests/unit/test_dict_utils.py::test_name   # single test
 uv run pytest --cov                             # coverage config exists in pyproject; NOT run in CI, no threshold
