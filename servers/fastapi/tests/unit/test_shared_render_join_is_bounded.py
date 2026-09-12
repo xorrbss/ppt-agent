@@ -20,16 +20,21 @@ from pathlib import Path
 
 import pytest
 
-from utils import slide_capture
+from utils import shared_render_join, slide_capture
 
 
-_HELPER = "_await_shared_render_task"
+#: Both the facade name kept in ``slide_capture`` and the real one.
+_HELPERS = {"_await_shared_render_task", "await_shared_render_task"}
+_SCANNED = ("utils", "services")
 
 
 def test_the_shared_join_helper_has_no_unbounded_form():
     """``timeout`` is required, so a caller must name a bound to compile."""
 
-    signature = inspect.signature(slide_capture._await_shared_render_task)
+    signature = inspect.signature(shared_render_join.await_shared_render_task)
+    assert slide_capture._await_shared_render_task is (
+        shared_render_join.await_shared_render_task
+    ), "the facade must not diverge from the implementation it re-exports"
     timeout = signature.parameters["timeout"]
 
     assert timeout.kind is inspect.Parameter.KEYWORD_ONLY
@@ -42,25 +47,32 @@ def test_the_shared_join_helper_has_no_unbounded_form():
 
 
 def test_every_call_site_passes_a_bound():
-    """A guard against a joiner added later with the bound left off."""
+    """A guard against a joiner added later, anywhere, with the bound left off."""
 
-    source = Path(slide_capture.__file__).read_text(encoding="utf-8")
-    tree = ast.parse(source)
-
+    backend = Path(slide_capture.__file__).resolve().parent.parent
     unbounded = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        func = node.func
-        name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
-        if name != _HELPER:
-            continue
-        if not any(keyword.arg == "timeout" for keyword in node.keywords):
-            unbounded.append(node.lineno)
+    for package in _SCANNED:
+        for path in (backend / package).rglob("*.py"):
+            try:
+                tree = ast.parse(path.read_text(encoding="utf-8"))
+            except (OSError, SyntaxError):  # pragma: no cover - unreadable source
+                continue
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                name = (
+                    func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+                )
+                if name not in _HELPERS:
+                    continue
+                if not any(keyword.arg == "timeout" for keyword in node.keywords):
+                    rel = path.relative_to(backend).as_posix()
+                    unbounded.append(f"{rel}:{node.lineno}")
 
     assert not unbounded, (
-        f"{_HELPER} is called without a timeout at line(s) {unbounded}; a shared "
-        "render task that never finishes strands every joiner"
+        f"a shared render join is awaited without a timeout at {sorted(unbounded)}; "
+        "a shared task that never finishes strands every joiner"
     )
 
 
