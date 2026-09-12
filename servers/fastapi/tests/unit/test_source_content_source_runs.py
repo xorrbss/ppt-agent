@@ -513,3 +513,45 @@ def test_an_arrow_on_its_own_line_never_becomes_its_own_run() -> None:
     assert [run.body for run in project_source_runs("↓").runs] == ["↓"]
     # A page number is content, not presentation, however alone it stands.
     assert [run.body for run in project_source_runs("13").runs] == ["13"]
+
+
+def test_an_enumerator_on_its_own_line_or_piece_is_kept_not_deleted() -> None:
+    """An enumerator or corporate mark is content, unlike a template arrow.
+
+    ``"㈜"`` before a company name is routinely written on its own line in a
+    source deck (``"㈜\\n아이비즈소프트웨어"``). Unlike the arrow in
+    ``test_an_arrow_on_its_own_line_never_becomes_its_own_run``, it is a
+    printed character the deck actually shows, so ``_drop_marker_only_lines``/
+    ``_drop_marker_only_pieces`` must not delete it the way they delete a
+    decoration-only line or piece. It is kept as its own body-only run instead
+    (``_split_marker``'s own rule against consuming an entire segment already
+    produces that shape) rather than merged across a real separator, which
+    would stop the merged text being a substring of the source line.
+    """
+
+    mark = project_source_runs("㈜\n아이비즈소프트웨어")
+    assert [(run.marker, run.body) for run in mark.runs] == [
+        ("", "㈜"),
+        ("", "아이비즈소프트웨어"),
+    ]
+    assert "㈜" in mark.text and "아이비즈소프트웨어" in mark.text
+
+    numbered = project_source_runs("①\n하나")
+    assert [run.body for run in numbered.runs] == ["①", "하나"]
+
+    corporate_mark = project_source_runs("㈀\n내용")
+    assert [run.body for run in corporate_mark.runs] == ["㈀", "내용"]
+
+    # Split into its own piece by a real separator, the mark still survives --
+    # as its own run rather than merged with the piece the separator joins it
+    # to (see the module docstring on why merging is unsafe here).
+    piped = project_source_runs("㈜ | 아이비즈")
+    assert [(run.body, run.order_free_before) for run in piped.runs] == [
+        ("㈜", False),
+        ("아이비즈", True),
+    ]
+    assert piped.accepts(0, 1, "㈜ | 아이비즈")
+
+    # Nothing follows to fold into: the mark is kept standalone rather than
+    # discarded, exactly like a lone decorative glyph with no item either.
+    assert [run.body for run in project_source_runs("㈜").runs] == ["㈜"]

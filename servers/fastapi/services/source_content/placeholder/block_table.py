@@ -36,13 +36,17 @@ class SourceBlock:
             "id": self.id, "text": self.text, "fullText": self.full_text,
             "chars": len(self.text),
             "hardBreaks": [self.run_spans[start][0] for start, _ in self.projection.lines[1:]],
-            # Only markers actually dropped from canonical text (pure item
-            # glyphs) are reported here; a kept marker (enumerator, "n.",
-            # "㈜"-class mark) is already part of text/chars and needs no
-            # separate furniture from the model.
+            # A marker is reported here with exactly the glyphs its furniture
+            # drop actually removed from canonical text -- the whole marker
+            # for pure item-glyph furniture ("•"), or only the dropped part of
+            # a mixed one ("• ① " reports "• ", since the "①" is kept and is
+            # already in text/chars). A marker with no item glyph at all (a
+            # bare enumerator, "n.", "㈜"-class mark) drops nothing and needs
+            # no separate furniture from the model.
             "markers": [
-                [self.run_spans[run.index][0], run.marker]
-                for run in runs if run.marker and _is_pure_item_glyph_marker(run.marker)
+                [self.run_spans[run.index][0], dropped]
+                for run in runs
+                if run.marker and (dropped := _dropped_item_glyphs(run.marker))
             ],
             "pipes": [self.run_spans[run.index][0] for run in runs if run.order_free_before],
             # Inclusive boundary intervals compact the common all-single-codepoint case.
@@ -50,18 +54,31 @@ class SourceBlock:
         }
 
 
-def _is_pure_item_glyph_marker(marker: str) -> bool:
-    """Whether a run's peeled marker is only template furniture.
+_ITEM_GLYPH_RUN = re.compile(rf"[{re.escape(_ITEM_GLYPHS)}]+\s*")
 
-    ``_ITEM_GLYPHS`` (bullets, checkboxes, arrow heads) are drawn by the
-    template and carry no source characters, so a marker made entirely of
-    them (plus whitespace) is dropped from canonical text. Anything else --
-    an enumerator (``①``), digit numbering (``1.``/``2)``), a corporate mark
-    (``㈜``) -- is content and is kept, even inside a mixed marker.
+
+def _dropped_item_glyphs(marker: str) -> str:
+    """The ``_ITEM_GLYPHS`` furniture (each run, plus its own trailing space)
+    that ``_strip_item_glyphs`` removes from this marker; ``""`` if none.
     """
 
-    stripped = re.sub(r"\s+", "", marker)
-    return bool(stripped) and all(char in _ITEM_GLYPHS for char in stripped)
+    return "".join(_ITEM_GLYPH_RUN.findall(marker))
+
+
+def _strip_item_glyphs(marker: str) -> str:
+    """Drop only the ``_ITEM_GLYPHS`` furniture from a marker, keeping content.
+
+    ``_ITEM_GLYPHS`` (bullets, checkboxes, arrow heads) are drawn by the
+    template and carry no source characters, so they never reach canonical
+    text -- whether the whole marker is one of them (``"• "`` -> ``""``) or
+    only part of a mixed marker (``"• ① "`` -> ``"① "``, keeping the
+    enumerator's own separating space). Anything else -- an enumerator
+    (``①``), digit numbering (``1.``/``2)``), a corporate mark (``㈜``) -- is
+    content and is kept exactly as peeled, even beside a dropped glyph. A
+    marker with no item glyph at all is returned unchanged.
+    """
+
+    return _ITEM_GLYPH_RUN.sub("", marker)
 
 
 def _boundary_intervals(boundaries: tuple[int, ...]) -> list[list[int]]:
@@ -87,21 +104,21 @@ def build_block_table(bindings: Mapping[str, str] | Sequence[tuple[str, str]]) -
         seen.add(block_id)
         projection = project_source_runs(raw)
         # The existing accepts() predicate is the authority. A projection can
-        # begin after a discarded marker-only piece, and a pure-item-glyph
-        # run marker (bullet/checkbox furniture) is dropped. Any other marker
-        # -- an enumerator, digit numbering, a corporate mark like "㈜" -- is
-        # source content and is kept immediately before its run's body, which
-        # is exactly the position accepts()'s per-run pattern expects an
-        # (optional) marker to occupy. Inter-run separators remain exactly as
-        # projected.
+        # begin after a discarded marker-only piece, and any _ITEM_GLYPHS
+        # furniture inside a run marker (bullet/checkbox) is dropped, whole or
+        # in part -- a mixed marker like "• ①" keeps its enumerator and loses
+        # only the bullet. What remains of the marker is kept immediately
+        # before its run's body, which is exactly the position accepts()'s
+        # per-run pattern expects an (optional) marker to occupy. Inter-run
+        # separators remain exactly as projected.
         text = ""
         spans = []
         previous = projection.runs[0].begin
         for run in projection.runs:
             text += projection.text[previous:run.begin]
             begin = len(text)
-            if run.marker and not _is_pure_item_glyph_marker(run.marker):
-                text += run.marker
+            if run.marker:
+                text += _strip_item_glyphs(run.marker)
             text += run.body
             spans.append((begin, len(text)))
             previous = run.end

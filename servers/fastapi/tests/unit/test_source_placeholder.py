@@ -155,6 +155,35 @@ def test_canonical_text_keeps_content_markers_drops_item_glyphs():
     assert "•" not in block.text
     assert block.projection.accepts(*block.projection.whole, block.text)
 
+
+def test_enumerator_on_its_own_line_is_not_deleted():
+    # Regression: an enumerator or corporate mark written on a line of its
+    # own was deleted before the block table ever saw it, because the same
+    # marker-only drop that correctly discards a decoration-only line (a
+    # template arrow) also matched `_ENUMERATORS`. "㈜\n아이비즈소프트웨어" must
+    # keep its mark -- as its own line/run, since it is joined to the next
+    # line by a normal single space, not glued byte-for-byte the way the
+    # already-glued "㈜아이비즈소프트웨어" form is.
+    table = build_block_table({"a": "㈜\n아이비즈소프트웨어"})
+    block = table[0]
+    assert block.text == "㈜ 아이비즈소프트웨어"
+    assert block.projection.accepts(*block.projection.whole, block.text)
+
+
+def test_mixed_marker_drops_only_its_item_glyph():
+    # Regression: a mixed marker ("• ①") kept its bullet glyph in canonical
+    # text -- nothing renders it, so it could never find a DOM owner -- and
+    # `markers` reported nothing, leaving the model no furniture signal at
+    # all for the dropped bullet.
+    table = build_block_table({"a": "• ① 혼합 마커"})
+    block = table[0]
+    assert "•" not in block.text
+    assert "①" in block.text
+    assert block.projection.accepts(*block.projection.whole, block.text)
+    row = block.prompt_row()
+    assert row["markers"] and all("•" in marker for _, marker in row["markers"])
+    assert all("①" not in marker for _, marker in row["markers"])
+
     result = expand("<p>{{q:a}}</p>", {"a": "㈜아이비즈소프트웨어"})
     root = parse_authored_html(result.html, profile="fragment").root
     assert root[0].text == "㈜아이비즈소프트웨어"
