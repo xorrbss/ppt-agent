@@ -151,6 +151,9 @@ async_session_maker = async_sessionmaker(sql_engine, expire_on_commit=False)
 # for why it is derived from ``sql_engine`` rather than the environment.
 # ``get_sync_engine``/``sync_session_maker`` stay importable from here.
 from services.database_sync import get_sync_engine, sync_session_maker  # noqa: E402,F401
+from services.database_revision_authority import (  # noqa: E402
+    require_database_schema_revision_authority,
+)
 
 
 PUBLIC_CONTROLLER_DATABASE_ROLE = "presenton_public_controller"
@@ -278,8 +281,16 @@ async def require_public_controller_database_authority(
 async def require_public_api_database_authority(
     engine: AsyncEngine = sql_engine,
 ) -> None:
-    """Ensure a remote public API cannot inherit controller or BYPASSRLS power."""
+    """Ensure a remote public API cannot inherit controller or BYPASSRLS power.
 
+    Also the single point where the schema-revision contract is enforced: a
+    database stamped at a revision other than this code's head is refused here,
+    for *every* runtime and dialect, before ``api/lifespan.py`` starts a worker
+    or a dispatcher.  Checking it at admission time instead would let the
+    in-process workers that are already running straight past it.
+    """
+
+    await require_database_schema_revision_authority(engine)
     local_development = _local_development_environment()
     public_runtime = bool(
         (os.getenv("PUBLIC_DATABASE_PROCESS_ROLE") or "").strip()

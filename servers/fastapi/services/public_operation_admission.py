@@ -296,9 +296,10 @@ async def _require_phase2_provider_contract(
 async def load_public_policy(
     session: AsyncSession, version: str = PUBLIC_DEFAULT_POLICY_VERSION
 ) -> PublicPolicyProfile:
-    # The resolver may answer the current default with the previous default's
-    # row while a deployment is ahead of its migration.  The check below then
-    # applies to whatever row was actually resolved, and still fails closed.
+    # The resolver no longer substitutes the previous default's row for a
+    # missing current default: startup refuses a database behind the code, so
+    # that substitution would only hide a bypassed schema contract.  It raises
+    # instead, and the check below applies to the row that was actually found.
     row = await resolve_public_policy_row(session, version)
     if row is None:
         raise PublicAdmissionRejected("public_policy_unavailable")

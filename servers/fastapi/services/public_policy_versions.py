@@ -1,4 +1,4 @@
-"""Default public policy version and its deployment-ordering fallback.
+"""Default public policy version, and the deployment-ordering gap it closed.
 
 Admission pins exactly one ``public_policy_profiles`` row per operation and
 reads its columns as immutable ceilings.  Flipping the default version in code
@@ -6,29 +6,25 @@ and migrating the row that carries it are two separate deploy steps and they
 are not ordered: a rolling deploy, a worker replica started before the API, or
 an operator who forgot ``MIGRATE_DATABASE_ON_STARTUP=true`` all put code that
 asks for the new version in front of a database that does not have it yet.
-Admission fails closed with ``public_policy_unavailable`` when the requested
-row is missing, so without this seam that window rejects every deck outright.
+This module used to answer that window with the previous default's row and a
+warning, so decks kept generating under silently older ceilings.
 
-The fallback is deliberately one step wide and applies only to the *current
-default* version.  An operation pinned to an explicitly older version keeps
-that version's limits; nothing here redirects it.
+That window no longer exists.  ``require_database_schema_revision_authority``
+refuses startup when ``alembic_version`` does not match the code's head, so a
+process that asks for the current default version cannot be running against a
+database that lacks its row.  The one-step fallback is therefore unreachable,
+and what used to be a warning is now an error: reaching it means the schema
+contract was bypassed, and continuing on stale ceilings would hide that.
 
-Falling back is a degraded mode, not a resting state: the previous default
-carries the previous export-deadline ceiling, so large exports are capped
-again until the migration runs.  Every fallback logs a warning naming both
-versions.
+An operation pinned to an explicitly older version is still never redirected;
+a missing row for it returns ``None`` and the caller rejects, as before.
 """
 
 from __future__ import annotations
 
-import logging
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.public_admission import PublicPolicyProfile
-
-
-logger = logging.getLogger(__name__)
 
 
 # The policy row admission pins by default.  ``public-default/v5`` is a clone
@@ -38,18 +34,25 @@ logger = logging.getLogger(__name__)
 # generation ceiling; revision ``a2c4e6f8b1d3``.)
 PUBLIC_DEFAULT_POLICY_VERSION = "public-default/v5"
 
-# The one version the default may fall back to while a deployment still has
-# code in front of the migration.
+# The version the default used to fall back to.  Kept because the refusal
+# below names it, and because operations admitted under it are still pinned to
+# it in ``public_operation_admissions`` and ``public_quota_counters``.
 PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION = "public-default/v4"
 
 
 async def resolve_public_policy_row(
     session: AsyncSession, version: str
 ) -> PublicPolicyProfile | None:
-    """Return the enabled policy row for ``version``, or the previous default.
+    """Return the enabled policy row for ``version``.
 
     ``None`` means no usable row exists; the caller raises its own admission
-    rejection so this module never decides how a request fails.
+    rejection so this module never decides how a *request* fails.
+
+    Raises ``RuntimeError('public_policy_version_fallback')`` when the current
+    default's row is missing while the previous default's row is still present.
+    That is a database behind the code, which startup already refuses, so it is
+    an invariant violation rather than a request-level rejection -- and it must
+    not be answered by quietly generating under the older ceilings.
     """
 
     row = await session.get(PublicPolicyProfile, version)
@@ -62,14 +65,14 @@ async def resolve_public_policy_row(
     )
     if previous is None or not previous.enabled:
         return None
-    logger.warning(
-        "public_policy_version_fallback requested=%s applied=%s: the database "
-        "is behind the code. Run the Alembic migrations; until then the "
-        "previous export deadline ceiling caps large exports.",
-        version,
-        PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION,
+    raise RuntimeError(
+        "public_policy_version_fallback: the database has no enabled "
+        f"'{version}' policy row but still has "
+        f"'{PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION}', so it is behind this "
+        "code. Startup refuses that schema mismatch; reaching this point means "
+        "the check was bypassed. Run `uv run alembic upgrade head` in "
+        "servers/fastapi instead of generating under stale ceilings."
     )
-    return previous
 
 
 __all__ = [
