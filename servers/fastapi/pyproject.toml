@@ -70,6 +70,7 @@ include = [
 dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
+    "pytest-timeout>=2.4.0",
     "ruff>=0.16.2",
 ]
 
@@ -417,6 +418,27 @@ select = ["E", "F", "B", "ASYNC"]
 "utils/upload_limits.py" = ["ASYNC230", "ASYNC240"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# Per-test wall-clock ceiling. This exists to EXPOSE hangs, not to hide slow
+# tests: a run of tests/unit in a single process was observed making no
+# progress for 11 minutes, and without a per-test bound that stall silently
+# consumes the whole job budget and reports nothing.
+#
+# 300s is deliberately generous, and measured rather than guessed. On a clean
+# Linux runner the slowest healthy test in the whole suite is
+# tests/integration/test_authored_worker_lane_e2e_terminal.py::
+# test_persistent_renderer_policy_violation_fails_the_deck_when_flag_publishing_is_off
+# at 124.9s (real uvicorn on loopback); the slowest in tests/unit is 25.5s.
+# 300s therefore leaves 2.4x headroom over the slowest legitimate test while
+# still reporting a genuine hang in well under the 11 minutes the observed one
+# wasted. Raise it only against a new measurement, never to silence a stall.
+timeout = 300
+# timeout_method is intentionally left at the platform default: "signal" where
+# SIGALRM exists (Linux/macOS, i.e. CI), which dumps every thread's stack and
+# then fails only that test so the rest of the session still runs; Windows has
+# no SIGALRM and falls back to "thread", which dumps the same stacks but has to
+# kill the process. Pinning "signal" would break local Windows runs.
+# Fixture setup/teardown is covered too (timeout_func_only stays false).
 
 # Line coverage defaults (omit non-runtime / generated paths). Branch coverage doubles
 # the work for marginal signal; optimize for deterministic statement coverage runs.
