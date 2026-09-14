@@ -3410,6 +3410,56 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
       return requested.has(record.observation.id);
     });
     ensurePseudoSuppressionStyle();
+    var observedElements = new Set(records.filter(function (record) {
+      return !record.pseudo;
+    }).map(function (record) {
+      return record.element;
+    }));
+    function unobservedLayoutOnlyLeaf(element) {
+      // Line breaks and empty layout boxes have no independent paint owner.
+      // Keep their DOM and dimensions intact: hiding/removing BR changes text
+      // layout even though there are no pixels to isolate into a raster band.
+      if (
+        element.namespaceURI !== "http://www.w3.org/1999/xhtml" ||
+        !["BR", "WBR", "DIV", "SPAN"].includes(element.tagName.toUpperCase()) ||
+        element.childElementCount !== 0 || /\S/.test(element.textContent || "")
+      ) return false;
+      var style = getComputedStyle(element);
+      return style.filter === "none" && style.backdropFilter === "none" &&
+        style.mixBlendMode === "normal" &&
+        !paintedBackground(style) && !hasBorder(style) &&
+        !hasExternalPaint(style) && !pseudoPainted(element, "::before") &&
+        !pseudoPainted(element, "::after");
+    }
+    function canClearComplexAncestor(record) {
+      if (record.pseudo) return false;
+      var element = record.element;
+      if (!["DIV", "SECTION"].includes(element.tagName.toUpperCase())) return false;
+      if (!record.observation.fallbackReasons.every(function (reason) {
+        return reason === "complex-chart" || reason === "complex-diagram";
+      })) return false;
+      if (Array.from(element.childNodes).some(function (node) {
+        return node.nodeType === 3 && /\S/.test(node.nodeValue || "");
+      })) return false;
+      var style = getComputedStyle(element);
+      if (
+        style.opacity !== "1" || style.filter !== "none" ||
+        style.backdropFilter !== "none" || style.mixBlendMode !== "normal" ||
+        style.clipPath !== "none" || style.maskImage !== "none" ||
+        (style.transform && style.transform !== "none") || hasIndividualTransform(style)
+      ) return false;
+      return Array.from(element.querySelectorAll("*")).every(function (descendant) {
+        if (observedElements.has(descendant)) return true;
+        var descendantStyle = getComputedStyle(descendant);
+        return descendantStyle.display === "none" ||
+          descendantStyle.visibility === "hidden" || descendantStyle.opacity === "0" ||
+          unobservedLayoutOnlyLeaf(descendant);
+      });
+    }
+    // Decide ownership before band suppression changes computed visibility.
+    var clearableComplexAncestors = new Set(records.filter(function (record) {
+      return record.observation.candidateKind === "complex" && canClearComplexAncestor(record);
+    }));
     function clearOwnedPaint(record) {
       var element = record.element;
       var kind = record.observation.candidateKind;
@@ -3439,7 +3489,8 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
       });
       if (
         containsKeptPaint &&
-        record.observation.candidateKind === "complex"
+        record.observation.candidateKind === "complex" &&
+        !clearableComplexAncestors.has(record)
       ) {
         throw new Error("authored_hybrid_paint_band_complex_ancestor");
       }
