@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.local-fit-boundary-owned-text",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Local-fit hard boundaries use raw owned-text Range extents; internal spacing and overlap keep the existing ink estimate.",
+  "scope": [
+    "Authored local-fit hard boundaries for owned text."
+  ],
+  "invariants": [
+    "Raw owned-text Range extents are used only for candidate clipping and viewport boundary rejection.",
+    "Internal ink calculations for spacing, overlap, flow escape, and height estimation remain unchanged.",
+    "Existing QID replayability, protection, 12 CSS px font floor, content preservation, and strict admission gates remain in force."
+  ],
+  "forbidden": [
+    "Do not treat decorative wrapper bounds as owned-text Range evidence.",
+    "Do not infer that all slide quality defects or other-deck regressions are resolved from the limited six-case run.",
+    "Do not relax strict clipping or off-canvas admission to accept a candidate."
+  ],
+  "evidence": [
+    "servers/fastapi/utils/slide_capture_fit_script.py",
+    "servers/fastapi/utils/slide_capture_fit_geometry.py",
+    "servers/fastapi/utils/slide_capture_fit_search.py",
+    "artifacts/codex-authored-common-quality-20260913-round2/validation-strict/aborted-summary.json",
+    "artifacts/codex-authored-common-quality-20260913-round2/validation-strict/closure-summary.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T21:29:01.4625752+00:00"
+}

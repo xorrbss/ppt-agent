@@ -7,6 +7,7 @@ export type CodexReasoningEffort = "low" | "medium" | "high";
 export type CodexGenerationPresetId =
   | "luna-medium"
   | "luna-high"
+  | "sol-low"
   | "sol-medium"
   | "sol-high"
   | "astra-low"
@@ -38,6 +39,7 @@ export const CHATGPT_MODELS: CodexModel[] = [
 export const CODEX_GENERATION_PRESETS: CodexGenerationPreset[] = [
   { id: "luna-medium", modelId: "gpt-5.6-luna", effort: "medium", name: "Luna · Medium" },
   { id: "luna-high", modelId: "gpt-5.6-luna", effort: "high", name: "Luna · High" },
+  { id: "sol-low", modelId: "gpt-5.6-sol", effort: "low", name: "Sol · Low" },
   { id: "sol-medium", modelId: "gpt-5.6-sol", effort: "medium", name: "Sol · Medium" },
   { id: "sol-high", modelId: "gpt-5.6-sol", effort: "high", name: "Sol · High" },
   { id: "astra-low", modelId: "gpt-6-astra", effort: "low", name: "Astra · Low" },

@@ -749,7 +749,7 @@ function persistedExportRequest(value: unknown): PublicV2ExportRequest {
     output: {
       format: output.format,
       mode: "fidelity-raster",
-      fontEmbedding: "none",
+      ...(output.fontEmbedding === "none" ? { fontEmbedding: "none" as const } : {}),
       ...(requiredCapabilities === undefined ? {} : { requiredCapabilities }),
     },
   };
@@ -878,7 +878,7 @@ export class PublicV2OperationClient {
         output: {
           ...request.output,
           mode: "fidelity-raster",
-          fontEmbedding: "none",
+          ...(request.output.fontEmbedding === "none" ? { fontEmbedding: "none" as const } : {}),
         },
       },
     });

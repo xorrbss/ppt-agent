@@ -1,3 +1,4 @@
+import { LEGACY_AUTHORED_CANVAS, type AuthoredCanvasContract } from "../authored-canvas.ts";
 import { createHash } from "node:crypto";
 
 import sharp from "sharp";
@@ -39,6 +40,12 @@ import { outerShadowEffectXml, outerShadowMappingIsSafe } from "./shadow-effect.
 
 export const EMU_PER_CSS_PX = 9_525;
 export const MIN_EDITABLE_FONT_SIZE_PT = 9;
+
+function minimumEditableFontSizePt(style: AuthoredHybridTextStyle): number {
+  // The source-fit floor is canonical CSS px converted at 96dpi, before
+  // the existing canvas-to-slide mapping. Ordinary authored jobs keep 9pt.
+  return style.sourceFitPolicy === "composer-source-fit/v2" ? 7 * 0.75 : MIN_EDITABLE_FONT_SIZE_PT;
+}
 export const AUTHORED_NATIVE_OWNER_ALTERNATIVE_TEXT_PREFIX = "authored-vnext:";
 const EMU_PER_POINT = 12_700;
 const MAX_NATIVE_ELEMENTS_PER_SLIDE = 1_000;
@@ -89,6 +96,7 @@ type AuthoredHybridPromotableElement =
   | AuthoredHybridEditableShapeElement;
 
 export interface PrepareNativeElementOptions {
+  canvas?: AuthoredCanvasContract;
   includeRasterText?: boolean;
   includeRasterShapes?: boolean;
   /** Optional strict gate; omitted to preserve the v1 preparation contract. */
@@ -293,12 +301,14 @@ export function parseAuthoredNativeOwnerAlternativeText(
  * PowerPoint-compatible fallback policy.
  */
 export interface PowerPointTypefaceSerializationOptions {
+  canvas?: AuthoredCanvasContract;
   embeddedTypefaceFamilies?: readonly string[];
   /** Exact regular/bold/italic face evidence from OOXML packaging. */
   embeddedTypefaceFaces?: readonly AuthoredEmbeddedTypefaceFaceEvidence[];
 }
 
 export interface NativeTypographyPreflightOptions {
+  canvas?: AuthoredCanvasContract;
   readonly embeddedTypefaceFaces: readonly AuthoredEmbeddedTypefaceFaceEvidence[];
   readonly embeddedGlyphAvailable?: (
     typeface: string,
@@ -557,7 +567,7 @@ function xmlTextIsSafe(value: string): boolean {
   return true;
 }
 
-function boundsAreSafe(element: AuthoredHybridElement): boolean {
+function boundsAreSafe(element: AuthoredHybridElement, canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS): boolean {
   const { x, y, width, height } = element.bounds.px;
   const geometryIsValid =
     [x, y, width, height, element.rotationDeg, element.opacity].every(Number.isFinite) &&
@@ -573,26 +583,27 @@ function boundsAreSafe(element: AuthoredHybridElement): boolean {
     // intentionally inside it. PowerPoint clips slide content at the canvas,
     // so retain any text box that still intersects the slide instead of
     // silently dropping its complete text payload.
-    return x < 1280.01 && y < 720.01 && x + width > -0.01 && y + height > -0.01;
+    return x < (canvas.widthPx + .01) && y < (canvas.heightPx + .01) && x + width > -0.01 && y + height > -0.01;
   }
 
   return (
     x >= -0.01 &&
     y >= -0.01 &&
-    x + width <= 1280.01 &&
-    y + height <= 720.01
+    x + width <= (canvas.widthPx + .01) &&
+    y + height <= (canvas.heightPx + .01)
   );
 }
 
 function clipUnrotatedTextToSlide<T extends AuthoredHybridEditableTextElement>(
-  element: T
+  element: T,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS
 ): T {
   if (Math.abs(element.rotationDeg) >= 0.001) return element;
   const clip = (bounds: AuthoredHybridBounds): AuthoredHybridBounds => {
     const left = Math.max(0, bounds.px.x);
     const top = Math.max(0, bounds.px.y);
-    const right = Math.min(1280, bounds.px.x + bounds.px.width);
-    const bottom = Math.min(720, bounds.px.y + bounds.px.height);
+    const right = Math.min(canvas.widthPx, bounds.px.x + bounds.px.width);
+    const bottom = Math.min(canvas.heightPx, bounds.px.y + bounds.px.height);
     const px = {
       x: left,
       y: top,
@@ -1019,9 +1030,10 @@ export function preflightNativeTypography(
     const candidate = { ...element, text } as AuthoredHybridEditableTextElement;
     const correctedBounds = powerPointSafeTextBounds(
       candidate,
-      text.containerShape?.bounds.px ?? text.layout?.boxBounds.px ?? element.bounds.px
+      text.containerShape?.bounds.px ?? text.layout?.boxBounds.px ?? element.bounds.px,
+      options.canvas
     );
-    if (!rectContains({ x: 0, y: 0, width: 1280, height: 720 }, correctedBounds, tolerance)) {
+    if (!rectContains({ x: 0, y: 0, width: (options.canvas ?? LEGACY_AUTHORED_CANVAS).widthPx, height: (options.canvas ?? LEGACY_AUTHORED_CANVAS).heightPx }, correctedBounds, tolerance)) {
       issues.push({ code: "bounds-overflow", elementId: element.id });
     }
     const collisionBounds = textPaintBoundsForCollision(
@@ -1093,7 +1105,7 @@ export async function prepareNativeElements(
     .slice(0, MAX_NATIVE_ELEMENTS_PER_SLIDE);
   const prepared: PreparedNativeElement[] = [];
   for (const candidate of candidates) {
-    if (!boundsAreSafe(candidate)) continue;
+    if (!boundsAreSafe(candidate, options.canvas)) continue;
     try {
       if (isEditableTextCandidate(candidate)) {
         if (
@@ -1108,7 +1120,7 @@ export async function prepareNativeElements(
         }
         prepared.push({
           kind: "text",
-          source: clipUnrotatedTextToSlide(enforceMinimumTextSize(candidate)),
+          source: clipUnrotatedTextToSlide(enforceMinimumTextSize(candidate), options.canvas),
         });
       } else if (isEditableShapeCandidate(candidate)) {
         if (shapeIsSafe(candidate.shape)) {
@@ -1131,7 +1143,8 @@ export async function prepareNativeElements(
 }
 
 function isPaintlessStructuralContainer(
-  element: AuthoredHybridElement
+  element: AuthoredHybridElement,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS
 ): element is AuthoredHybridRasterElement {
   if (
     element.classification.mode !== "raster" ||
@@ -1141,7 +1154,7 @@ function isPaintlessStructuralContainer(
     element.identityAuthority !== "declared-qid" ||
     Math.abs(element.rotationDeg) >= 0.001 ||
     element.opacity !== 1 ||
-    !boundsAreSafe(element)
+    !boundsAreSafe(element, canvas)
   ) return false;
   if (!("shape" in element) || !element.shape) return false;
   return !element.shape.fill &&
@@ -1169,11 +1182,12 @@ export function prepareStructuralNativeGroups(
   elements: readonly AuthoredHybridElement[],
   prepared: readonly PreparedNativeElement[],
   declaredGroupElementIds: ReadonlySet<string>,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS,
 ): PreparedNativeElement[] {
   const preparedIds = new Set(prepared.map((item) => item.source.id));
   const structuralIds = new Set(
     elements
-      .filter(isPaintlessStructuralContainer)
+      .filter((element) => isPaintlessStructuralContainer(element, canvas))
       .filter((element) => declaredGroupElementIds.has(element.id))
       .map((element) => element.id)
   );
@@ -1198,7 +1212,7 @@ export function prepareStructuralNativeGroups(
     return descendants;
   };
   return elements
-    .filter(isPaintlessStructuralContainer)
+    .filter((element) => isPaintlessStructuralContainer(element, canvas))
     .filter((element) => declaredGroupElementIds.has(element.id))
     .flatMap((element): PreparedNativeElement[] => {
       const children = childrenByParent.get(element.id) ?? [];
@@ -1680,7 +1694,7 @@ function runPropertiesXml(
   const attributes = [
     `lang="ko-KR"`,
     `altLang="en-US"`,
-    `sz="${Math.round(Math.max(MIN_EDITABLE_FONT_SIZE_PT, style.fontSizePt) * 100)}"`,
+    `sz="${Math.round(Math.max(minimumEditableFontSizePt(style), style.fontSizePt) * 100)}"`,
     // Bold runs override the paragraph's explicit regular default. Keeping
     // `b="0"` on the paragraph end marker (rather than every regular run)
     // preserves mixed-weight semantics without changing regular glyph shaping
@@ -1766,7 +1780,7 @@ function textSegments(element: AuthoredHybridEditableTextElement): TextSegment[]
   );
   const hasMeaningfulRunStyleVariation = nonWhitespaceRunStyles.size > 1;
   const preservesRichTextAcrossSoftWraps =
-    hasMeaningfulRunStyleVariation &&
+    (hasMeaningfulRunStyleVariation || element.text.style.sourceFitPolicy === "composer-source-fit/v2") &&
     (
       joinedWithoutSoftBreaks === element.text.plainText ||
       sameTextIgnoringWhitespace
@@ -2068,7 +2082,8 @@ function capturedTextInsets(
 
 function powerPointSafeTextBounds(
   element: AuthoredHybridEditableTextElement,
-  bounds: AuthoredHybridRect
+  bounds: AuthoredHybridRect,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS
 ): AuthoredHybridRect {
   if (Math.abs(element.rotationDeg) >= 0.001) return bounds;
   let adjustedBounds = bounds;
@@ -2124,8 +2139,8 @@ function powerPointSafeTextBounds(
           : adjustedBounds.x;
       adjustedBounds = {
         ...adjustedBounds,
-        x: Math.max(0, Math.min(1280 - requiredWidth, x)),
-        width: Math.min(1280, requiredWidth),
+        x: Math.max(0, Math.min(canvas.widthPx - requiredWidth, x)),
+        width: Math.min(canvas.widthPx, requiredWidth),
       };
     }
   }
@@ -2163,7 +2178,7 @@ function powerPointSafeTextBounds(
         ...adjustedBounds,
         y,
         height: Math.min(
-          720 - y,
+          canvas.heightPx - y,
           adjustedBounds.height + adjustedBounds.y - y
         ),
       };
@@ -2210,7 +2225,7 @@ function powerPointSafeTextBounds(
       ? Math.max(4, lineCount * 6)
       : 4;
   const requiredHeight = Math.min(
-    720,
+    canvas.heightPx,
     Math.max(
       lineHeightsPx.reduce(
         (total, height) => total + Math.max(height, fallbackLineHeightPx),
@@ -2228,7 +2243,7 @@ function powerPointSafeTextBounds(
 
   // Keep the enlarged editable box on the slide. This prevents the safety
   // allowance itself from creating off-canvas text at footers and edge labels.
-  y = Math.max(0, Math.min(720 - requiredHeight, y));
+  y = Math.max(0, Math.min(canvas.heightPx - requiredHeight, y));
   return {
     x: adjustedBounds.x,
     y,
@@ -2239,7 +2254,8 @@ function powerPointSafeTextBounds(
 
 /** Browser-measured bounds after the PowerPoint title/multiline/label guard. */
 export function powerPointTextBoundsForPreflight(
-  element: AuthoredHybridElement
+  element: AuthoredHybridElement,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS
 ): AuthoredHybridRect | null {
   if (!("text" in element) || !element.text) return null;
   const editable = element as AuthoredHybridEditableTextElement;
@@ -2247,7 +2263,8 @@ export function powerPointTextBoundsForPreflight(
     editable,
     editable.text.containerShape?.bounds.px ??
       editable.text.layout?.boxBounds.px ??
-      editable.bounds.px
+      editable.bounds.px,
+    canvas
   );
 }
 
@@ -2735,7 +2752,8 @@ export function serializePreparedNativeElement(
     const shapeBounds = container?.bounds.px ??
       powerPointSafeTextBounds(
         element,
-        authoredBoxBounds ?? element.bounds.px
+        authoredBoxBounds ?? element.bounds.px,
+        options.canvas
       );
     const capturedInsets = capturedTextInsets(element, shapeBounds);
     const insets = powerPointSafeTextInsets(
@@ -2854,8 +2872,9 @@ export function serializePreparedNativeElementOverlay(
 function enforceMinimumTextStyle(
   style: AuthoredHybridTextStyle
 ): AuthoredHybridTextStyle {
-  if (style.fontSizePt >= MIN_EDITABLE_FONT_SIZE_PT) return style;
-  const fontSizePt = MIN_EDITABLE_FONT_SIZE_PT;
+  const minimum = minimumEditableFontSizePt(style);
+  if (style.fontSizePt >= minimum) return style;
+  const fontSizePt = minimum;
   return {
     ...style,
     fontSizePt,

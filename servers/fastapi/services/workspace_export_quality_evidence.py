@@ -150,8 +150,14 @@ def _validated_authored_quality_receipt_digest(
     *,
     allow_visual_review_pending: bool = False,
     allow_published_flagged_hybrid: bool = False,
+    allow_quality_advisory: bool = False,
 ) -> tuple[str, str | None]:
-    """Return a sealed V3 digest and any narrow export compatibility used."""
+    """Return a sealed V3 digest and any export compatibility used.
+
+    A regular source-preserving export may carry a failed or unassessed quality
+    receipt as advisory evidence.  This does not relax the receipt schema or
+    digest binding, and release-review exports never opt into the advisory path.
+    """
 
     if not isinstance(theme, Mapping):
         raise NonRetryableWorkspaceOperationError("quality_receipt_v3_required")
@@ -169,10 +175,15 @@ def _validated_authored_quality_receipt_digest(
         allow_published_flagged_hybrid
         and _published_flagged_hybrid_allowed(gate, receipt, published=True)
     )
+    quality_advisory = (
+        allow_quality_advisory
+        and receipt.get("gatePassed") is False
+    )
     if receipt.get("schemaVersion") != "quality-receipt/v3" or not (
         receipt.get("gatePassed") is True
         or visual_review_pending
         or published_flagged_hybrid
+        or quality_advisory
     ):
         raise NonRetryableWorkspaceOperationError("quality_receipt_v3_blocked")
     receipt_digest = receipt.get("receiptDigest")
@@ -216,6 +227,8 @@ def _validated_authored_quality_receipt_digest(
         if visual_review_pending
         else "published-flagged-hybrid"
         if published_flagged_hybrid
+        else "quality-advisory"
+        if quality_advisory
         else None
     )
     return receipt_digest.removeprefix("sha256:"), compatibility
@@ -246,21 +259,22 @@ def _resolved_authored_quality_digest(
     scene_digest: str,
     pptx_mode: str,
     published: bool = False,
+    allow_quality_advisory: bool = False,
 ) -> tuple[str, str | None]:
-    """Resolve strict evidence, or the narrow legacy Fidelity compatibility binding."""
+    """Resolve strict evidence or a source-preserving export compatibility."""
 
     try:
         digest, compatibility = _validated_authored_quality_receipt_digest(
             theme,
             allow_visual_review_pending=pptx_mode == "fidelity",
             allow_published_flagged_hybrid=published and pptx_mode == "hybrid",
+            allow_quality_advisory=allow_quality_advisory,
         )
         return digest, compatibility
     except NonRetryableWorkspaceOperationError as error:
-        # Compatibility covers only a wholly absent V3 receipt. A receipt that
-        # is present but blocked or digest-invalid still refuses every mode, and
-        # the projected public receipt stays releaseReadiness "blocked" with the
-        # missing-checker reason codes for Hybrid exactly as for Fidelity.
+        # Legacy compatibility covers only a wholly absent V3 receipt. A
+        # present receipt remains bound and must be well-formed; ordinary
+        # source-preserving exports may carry its failed state as advisory.
         if error.code != "quality_receipt_v3_required":
             raise
         return _legacy_fidelity_quality_digest(scene_digest), "legacy"

@@ -172,7 +172,7 @@ def resolve_generation_route(
             "selectedRoute": "authored-fallback",
             "designPackPin": None,
             "narrativeIrDigest": None,
-            "fallbackReason": "source-content-authored-reflow",
+            "fallbackReason": "source-content-composer-reflow",
         }
     if design_pack_pin is not None:
         package = load_pinned_design_pack(

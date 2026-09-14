@@ -32,6 +32,7 @@ from typing import Any
 from services.composer.classify_bindings import (
     TextBlock,
     bind_paragraphs,
+    bind_source_paragraphs,
     build_text_block,
     paragraph_for_span,
     table_rows,
@@ -82,6 +83,7 @@ def classify_unit(
 
     collected = _collect(unit, deck_context)
     page = collected.page
+    source_placements = _source_placements(collected)
     furniture: list[ComposerComponent] = []
     body: list[TextBlock] = []
     for block in collected.text_blocks:
@@ -130,6 +132,10 @@ def classify_unit(
     body_chars = sum(component_chars(component) for component in components)
     framing = [component for component in (title, subtitle, *furniture) if component is not None]
     text_chars = body_chars + sum(component_chars(component) for component in framing)
+    source_roles = {component.component_id: component.semantic_role for component in framing}
+    source_placements = [component.model_copy(update={"semantic_role": source_roles[component.component_id]})
+                         if component.component_id in source_roles else component
+                         for component in source_placements]
     cover = is_cover(
         title, subtitle, components, images,
         slide_index=slide_index,
@@ -150,8 +156,28 @@ def classify_unit(
         images=images,
         furniture=furniture,
         text_chars=text_chars,
+        source_placements=source_placements,
         notes=collected.notes,
     )
+
+
+def _source_placements(collected: _Collected) -> list[ComposerComponent]:
+    """Capture independent source boxes before furniture/title/group rules run."""
+    placed: list[ComposerComponent] = []
+    for block in collected.text_blocks:
+        component = _text_component(block, "paragraph", "body", collected.page)
+        placed.append(component.model_copy(update={
+            "paragraphs": bind_source_paragraphs(block), "source_order": block.source_shape_index,
+            "source_text_body": dict(block.text_body), "source_transform": dict(block.source_transform),
+        }))
+    for block_id, order, payload in collected.tables:
+        component = _table_component(block_id, payload, collected.page, collected.notes)
+        if component is not None:
+            placed.append(component.model_copy(update={"source_order": int(payload.get("sourceShapeIndex", order))}))
+    for block_id, order, payload in collected.images:
+        placed.append(_image_component(block_id, payload, collected.page, collected.notes).model_copy(
+            update={"source_order": int(payload.get("sourceShapeIndex", order))}))
+    return sorted(placed, key=lambda component: component.source_order)
 
 
 # --- Collection ------------------------------------------------------------------
@@ -280,13 +306,15 @@ def _table_component(
     if not rows:
         notes.append(f"table {block_id} has no cells")
         return None
-    if payload.get("mergedCells"):
-        notes.append(f"table {block_id} has merged cells the plan grid cannot express")
     return ComposerComponent(
         component_id=block_id,
         kind="table",
         semantic_role="body",
         table_rows=rows,
+        source_transform=dict(payload.get("geometry") or {}),
+        table_merged_cells=list(payload.get("mergedCells") or []),
+        table_column_widths_emu=list(payload.get("columnWidthsEmu") or []),
+        table_row_heights_emu=list(payload.get("rowHeightsEmu") or []),
         source_rect=normalized_rect(parse_geometry(payload), page),
     )
 
@@ -305,7 +333,10 @@ def _image_component(
         kind="image",
         semantic_role="image",
         asset_id=asset_id,
+        source_transform=dict(payload.get("geometry") or {}),
         occurrence_id=block_id,
+        image_crop=dict(payload.get("crop") or payload.get("srcRect") or {}),
+        image_color_transforms=list(payload.get("colorTransforms") or []),
         aspect_ratio=aspect,
         source_rect=normalized_rect(box, page),
     )

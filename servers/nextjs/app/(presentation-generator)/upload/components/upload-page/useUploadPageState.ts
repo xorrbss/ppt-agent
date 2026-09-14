@@ -24,7 +24,9 @@ import {
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { RootState } from "@/store/store";
 import { ImagesApi } from "../../../services/api/images";
-import AuthoredStylesApi from "../../../services/api/authored";
+import AuthoredStylesApi, {
+  DEFAULT_AUTHORED_STYLE,
+} from "../../../services/api/authored";
 import { resolveDeckTheme } from "../applyDeckTheme";
 import { abortDocumentProcessing } from "./abortDocumentProcessing";
 import { getFileCategory } from "./fileCategory";
@@ -112,6 +114,7 @@ export const useUploadPageState = ({
     includeTableOfContents: false,
     includeTitleSlide: false,
     webSearch: false,
+    aspectRatio: "16:9",
     codexGenerationPreset: ["codex", "chatgpt"].includes(llmConfig.LLM || "")
       ? CODEX_GENERATION_PRESETS.find(
           (preset) => preset.modelId === llmConfig.CODEX_MODEL
@@ -119,6 +122,20 @@ export const useUploadPageState = ({
         )?.id ?? "astra-medium"
       : null,
   });
+
+  useEffect(() => {
+    if (
+      !sourceContentMode && (
+        (config.aspectRatio === "9:16" && authoredStyle !== DEFAULT_AUTHORED_STYLE.id) ||
+        (config.aspectRatio === "9:13" &&
+          ![DEFAULT_AUTHORED_STYLE.id, "kbs-company-proposal"].includes(authoredStyle))
+      )
+    ) {
+      dispatch(
+        setPptGenUploadState({ authoredStyle: DEFAULT_AUTHORED_STYLE.id }),
+      );
+    }
+  }, [authoredStyle, config.aspectRatio, dispatch, sourceContentMode]);
 
   const [loadingState, setLoadingState] = useState<LoadingState>({
     isLoading: false,
@@ -242,6 +259,7 @@ export const useUploadPageState = ({
         ...(sourceContent ? { instructions: sourceContentInstructions || null } : {}),
         visionQa: sourceContent ? false : authoredVisionQa,
         authoredStyle,
+        aspectRatio: config.aspectRatio,
         ...(config.codexGenerationPreset
           ? { codexGenerationPreset: config.codexGenerationPreset }
           : {}),
@@ -252,7 +270,7 @@ export const useUploadPageState = ({
               contentPolicy: SOURCE_CONTENT_POLICY,
             }
           : {}),
-        ...(master
+        ...(master && !sourceContent
           ? {
               masterPin: {
                 masterId: master.masterId,
@@ -351,6 +369,18 @@ export const useUploadPageState = ({
    * @returns boolean indicating if the configuration is valid
    */
   const validateConfiguration = (selectedFiles: File[]): boolean => {
+        if (
+            !sourceContentMode &&
+            config.aspectRatio !== "16:9" &&
+            companyStandard
+        ) {
+      trackUploadValidationFailure("portrait_company_standard_unsupported");
+      notify.warning(
+        "세로형 생성 제한",
+        "세로형 Authored 생성은 회사 표준 마스터와 함께 사용할 수 없습니다. 마스터를 해제하거나 가로 16:9를 선택해 주세요.",
+      );
+      return false;
+    }
     if (sourceContentMode) {
       const sourceContentError = validateSourceContentFiles(selectedFiles);
       if (sourceContentError) {
@@ -595,6 +625,7 @@ export const useUploadPageState = ({
       include_table_of_contents: sourceContentMode ? false : !!config?.includeTableOfContents,
       include_title_slide: sourceContentMode ? false : !!config?.includeTitleSlide,
       web_search: sourceContentMode ? false : !!config?.webSearch,
+      aspect_ratio: config.aspectRatio,
       theme: selectedTheme,
     });
 
@@ -645,6 +676,7 @@ export const useUploadPageState = ({
       include_table_of_contents: !!config?.includeTableOfContents,
       include_title_slide: !!config?.includeTitleSlide,
       web_search: !!config?.webSearch,
+      aspect_ratio: config.aspectRatio,
       theme: selectedTheme,
     });
 

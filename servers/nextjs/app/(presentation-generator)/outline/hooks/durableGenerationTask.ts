@@ -35,6 +35,7 @@ export interface DurableGenerationTask {
     instructions?: string | null;
     visionQa: boolean;
     authoredStyle: string;
+    aspectRatio: "16:9" | "9:16" | "9:13";
     codexGenerationPreset?: CodexGenerationPresetId;
     masterPin?: {
       masterId: string;

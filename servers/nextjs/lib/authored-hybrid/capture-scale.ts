@@ -47,9 +47,14 @@ export interface BackplatePixelSize {
 }
 
 /** The exact backplate PNG pixel dimensions expected at {@link BACKPLATE_SCALE}. */
-export function backplatePixelSize(): BackplatePixelSize {
+export function backplatePixelSize(
+  canvas: { widthPx: number; heightPx: number } = {
+    widthPx: AUTHORED_SLIDE_WIDTH_PX,
+    heightPx: AUTHORED_SLIDE_HEIGHT_PX,
+  },
+): BackplatePixelSize {
   return {
-    width: AUTHORED_SLIDE_WIDTH_PX * BACKPLATE_SCALE,
-    height: AUTHORED_SLIDE_HEIGHT_PX * BACKPLATE_SCALE,
+    width: canvas.widthPx * BACKPLATE_SCALE,
+    height: canvas.heightPx * BACKPLATE_SCALE,
   };
 }

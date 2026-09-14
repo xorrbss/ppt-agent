@@ -1,12 +1,11 @@
 import { createHash } from "node:crypto";
+import { isSupportedAuthoredCanvasSize } from "../authored-canvas.ts";
 
 import {
   AUTHORED_CSS_DPI,
   AUTHORED_HYBRID_FALLBACK_REASONS,
   AUTHORED_HYBRID_SCHEMA_VERSION,
   AUTHORED_HYBRID_TYPOGRAPHY_ISSUE_CODES,
-  AUTHORED_SLIDE_HEIGHT_PX,
-  AUTHORED_SLIDE_WIDTH_PX,
   type AuthoredHybridElement,
   type AuthoredHybridElementBase,
   type AuthoredHybridSlideV1,
@@ -17,11 +16,7 @@ import type {
   BrowserAuthoredHybridObservation,
   BrowserElementObservation,
 } from "./observation.ts";
-import {
-  AUTHORED_SLIDE_HEIGHT_IN,
-  AUTHORED_SLIDE_WIDTH_IN,
-  rectPxToBounds,
-} from "./units.ts";
+import { pxToInches, rectPxToBounds } from "./units.ts";
 import { outerShadowIsSafe } from "./shadow-effect.ts";
 import { BACKPLATE_SCALE } from "./capture-scale.ts";
 import {
@@ -424,9 +419,11 @@ export function buildAuthoredHybridSlide(
   baseUrl: string | undefined
 ): AuthoredHybridSlideV1 {
   invariant(
-    browserObservation.viewport.widthPx === AUTHORED_SLIDE_WIDTH_PX &&
-      browserObservation.viewport.heightPx === AUTHORED_SLIDE_HEIGHT_PX,
-    `expected ${AUTHORED_SLIDE_WIDTH_PX}x${AUTHORED_SLIDE_HEIGHT_PX} viewport, received ${browserObservation.viewport.widthPx}x${browserObservation.viewport.heightPx}`
+    isSupportedAuthoredCanvasSize(
+      browserObservation.viewport.widthPx,
+      browserObservation.viewport.heightPx,
+    ),
+    `unsupported authored viewport ${browserObservation.viewport.widthPx}x${browserObservation.viewport.heightPx}`
   );
   invariant(
     browserObservation.viewport.devicePixelRatio === BACKPLATE_SCALE,
@@ -454,19 +451,19 @@ export function buildAuthoredHybridSlide(
       htmlSha256: authoredHtmlSha256(html),
       baseUrl: baseUrl ?? null,
       viewport: {
-        widthPx: AUTHORED_SLIDE_WIDTH_PX,
-        heightPx: AUTHORED_SLIDE_HEIGHT_PX,
+        widthPx: browserObservation.viewport.widthPx,
+        heightPx: browserObservation.viewport.heightPx,
         cssDpi: AUTHORED_CSS_DPI,
-        widthIn: AUTHORED_SLIDE_WIDTH_IN,
-        heightIn: AUTHORED_SLIDE_HEIGHT_IN,
+        widthIn: pxToInches(browserObservation.viewport.widthPx),
+        heightIn: pxToInches(browserObservation.viewport.heightPx),
       },
     },
     elements,
     backplate: {
       strategy: "hide-native-leaves",
       mediaType: "image/png",
-      widthPx: AUTHORED_SLIDE_WIDTH_PX,
-      heightPx: AUTHORED_SLIDE_HEIGHT_PX,
+      widthPx: browserObservation.viewport.widthPx,
+      heightPx: browserObservation.viewport.heightPx,
       transparentBackground: true,
       nativeChartElementIds: [],
       nativeTableElementIds: [],
@@ -534,12 +531,14 @@ export function assertAuthoredHybridSlide(
     "source.baseUrl must be a string or null"
   );
   invariant(
-    slide.source.viewport.widthPx === AUTHORED_SLIDE_WIDTH_PX &&
-      slide.source.viewport.heightPx === AUTHORED_SLIDE_HEIGHT_PX &&
+    isSupportedAuthoredCanvasSize(
+      slide.source.viewport.widthPx,
+      slide.source.viewport.heightPx,
+    ) &&
       slide.source.viewport.cssDpi === AUTHORED_CSS_DPI &&
-      slide.source.viewport.widthIn === AUTHORED_SLIDE_WIDTH_IN &&
-      slide.source.viewport.heightIn === AUTHORED_SLIDE_HEIGHT_IN,
-    "source.viewport must use the fixed 1280x720 @ 96 CSS dpi contract"
+      slide.source.viewport.widthIn === pxToInches(slide.source.viewport.widthPx) &&
+      slide.source.viewport.heightIn === pxToInches(slide.source.viewport.heightPx),
+    "source.viewport must use a supported authored canvas at 96 CSS dpi"
   );
   invariant(Array.isArray(slide.elements), "elements must be an array");
   const elements = slide.elements;
@@ -708,8 +707,8 @@ export function assertAuthoredHybridSlide(
   invariant(slide.backplate?.strategy === "hide-native-leaves", "backplate.strategy is invalid");
   invariant(slide.backplate.mediaType === "image/png", "backplate.mediaType is invalid");
   invariant(
-    slide.backplate.widthPx === AUTHORED_SLIDE_WIDTH_PX &&
-      slide.backplate.heightPx === AUTHORED_SLIDE_HEIGHT_PX &&
+    slide.backplate.widthPx === slide.source.viewport.widthPx &&
+      slide.backplate.heightPx === slide.source.viewport.heightPx &&
       slide.backplate.transparentBackground === true,
     "backplate dimensions/transparency are invalid"
   );

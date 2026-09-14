@@ -976,6 +976,7 @@ def test_semantic_import_retry_reuses_only_identical_scene_and_retained_telemetr
     class ImportedRepository:
         current = None
         append_count = 0
+        recovery_deck = None
         # This repository is synchronous.  Publication must reach it through
         # the async boundary, never on the event loop: with one shared
         # database, a blocked loop cannot let its own async writer commit and
@@ -1003,6 +1004,27 @@ def test_semantic_import_retry_reuses_only_identical_scene_and_retained_telemetr
             assert self.current is None
             self.current = deck
             self.append_count += 1
+
+        def append_staging_retry_imported_deck(self, deck, *, recovery_context):
+            self._record_thread()
+            assert recovery_context["stale_deck_id"] == f"deck:semantic-{presentation_id.hex}"
+            assert deck.deck_id != recovery_context["stale_deck_id"]
+            assert deck.revision == 1
+            self.recovery_deck = deck
+            self.append_count += 1
+            return {
+                "deck_id": deck.deck_id,
+                "deck_revision": deck.revision,
+                "deck_digest": deck.digest,
+                "scene_digest": deck.scene.scene_digest,
+                "presentation_id": str(presentation_id),
+                "job_id": str(recovery_context["job_id"]),
+                "operation_id": str(recovery_context["operation_id"]),
+                "attempt_token": recovery_context["attempt_token"],
+                "attempt_number": recovery_context["attempt_number"],
+                "fencing_token": recovery_context["fencing_token"],
+                "expected_public_revision": 0,
+            }
 
     repository = ImportedRepository()
     monkeypatch.setattr(
@@ -1109,10 +1131,32 @@ def test_semantic_import_retry_reuses_only_identical_scene_and_retained_telemetr
             )
         assert repository.current is stored
 
+        recovery_context = {
+            "presentation_id": presentation_id,
+            "job_id": uuid.uuid4(),
+            "operation_id": uuid.uuid4(),
+            "attempt_token": "recovery-token",
+            "attempt_number": 2,
+            "fencing_token": 3,
+            "stale_deck_id": f"deck:semantic-{presentation_id.hex}",
+        }
+        recovered_candidate = await generation._persist_master_pinned_editable_scene_deck(
+            **{
+                **arguments,
+                "browser_metrics_by_slide": [changed_metrics],
+                "recovery_context": recovery_context,
+            }
+        )
+        assert repository.current is stored
+        assert repository.recovery_deck is not None
+        assert repository.recovery_deck.deck_id != stored.deck_id
+        assert recovered_candidate == repository.recovery_deck.scene
+        assert request._authored_staging_scene_binding["deck_id"] == repository.recovery_deck.deck_id
+
         repository.current = stored.model_copy(update={"digest": "sha256:" + "0" * 64})
         with pytest.raises(DeckAlreadyExistsError):
             await generation._persist_master_pinned_editable_scene_deck(**arguments)
-        assert repository.append_count == 1
+        assert repository.append_count == 2
 
         with pytest.raises(ValueError, match="browser telemetry count differs"):
             await generation._persist_master_pinned_editable_scene_deck(

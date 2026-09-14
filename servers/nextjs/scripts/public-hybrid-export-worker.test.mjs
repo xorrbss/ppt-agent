@@ -11,6 +11,7 @@ import {
   mapHybridSlideFallbackCode,
 } from "./public-hybrid-export-worker.mjs";
 import { assembleWithPerSlideIntegrityFallback } from "./lib/hybrid-slide-assembly.mjs";
+import { prepareHybridSlideWithRecovery } from "./lib/hybrid-slide-fallback-code.mjs";
 
 const WORKER = fileURLToPath(new URL("./public-hybrid-export-worker.mjs", import.meta.url));
 const DIGEST = `sha256:${"a".repeat(64)}`;
@@ -40,6 +41,12 @@ test("slide preparation errors map to bounded stable fallback codes", () => {
 });
 
 test("an aggregate teardown failure is classified by the errors it carries", () => {
+  const captureAndCleanup = new AggregateError([
+    new Error("Protocol error: Target closed"),
+    new Error("Windows cleanup helper taskkill timed out after 10000ms."),
+  ], "Chrome capture failed and process/work-directory cleanup also failed: Target closed");
+  assert.equal(mapHybridSlideFallbackCode(captureAndCleanup), "browser-guard-rejected");
+  assert.match(describeHybridErrorChain(captureAndCleanup), /taskkill/u);
   // The exact shape an isolated export produced on every slide: the outer
   // message names only the teardown, and the reason lives in `errors[]`.
   // Reading the outer message alone reported `unknown-exception`, which is a
@@ -89,6 +96,44 @@ test("an aggregate teardown failure is classified by the errors it carries", () 
     ),
     "authored_hybrid_paint_band_qid_mismatch",
   );
+});
+
+test("page capture recovery retries transient failures once within budget admission", async () => {
+  for (const message of ["Connection closed", "Session closed"]) {
+    assert.equal(mapHybridSlideFallbackCode(new Error(message)), "browser-guard-rejected");
+    let calls = 0;
+    const receipt = {};
+    await prepareHybridSlideWithRecovery(async () => {
+      if (++calls === 1) throw new Error(message);
+      return { layer: { slideNumber: 65 } };
+    }, 200_000, receipt, () => 0);
+    assert.equal(calls, 2);
+    assert.equal(receipt.retryDisposition, "recovered");
+  }
+  let attempts = 0;
+  const diagnostics = {};
+  const result = await prepareHybridSlideWithRecovery(async () => {
+    if (++attempts === 1) throw new Error("Protocol error: Target closed");
+    return { layer: { slideNumber: 45 } };
+  }, 200_000, diagnostics, () => 0);
+  assert.equal(result.layer.slideNumber, 45);
+  assert.equal(attempts, 2);
+  assert.equal(diagnostics.retryDisposition, "recovered");
+  for (const [message, deadline, disposition, expectedAttempts] of [
+    ["Chrome capture timed out", 119_999, "budget-insufficient", 1],
+    ["authored_semantic_qid_mismatch", 200_000, "non-transient", 1],
+    ["Windows cleanup helper timed out", 200_000, "non-transient", 1],
+    ["Chrome capture timed out", 200_000, "failed", 2],
+  ]) {
+    attempts = 0;
+    const receipt = {};
+    await assert.rejects(prepareHybridSlideWithRecovery(async () => {
+      attempts++;
+      throw new Error(message);
+    }, deadline, receipt, () => 0));
+    assert.equal(attempts, expectedAttempts);
+    assert.equal(receipt.retryDisposition, disposition);
+  }
 });
 
 test("the error chain walk is bounded and cycle safe", () => {
@@ -174,6 +219,7 @@ function runWorker(job) {
     child.stdout.on("data", (chunk) => out.push(chunk));
     child.stderr.resume();
     child.once("error", reject);
+    child.stdin.on("error", (error) => { if (error.code !== "EPIPE") reject(error); });
     child.once("close", () => {
       const text = Buffer.concat(out).toString("utf8").trim();
       const line = text.split("\n").filter(Boolean).at(-1);
@@ -251,4 +297,14 @@ test("the job wire rejects relative paths", async () => {
   const result = await runWorker(baseJob({ basePptxPath: "relative/base.pptx" }));
   assert.equal(result.ok, false);
   assert.equal(result.errorCode, "hybrid_job_path_not_absolute");
+});
+
+test("wire byte boundary admits equal size and refuses excess before execution", async () => {
+  const limit = 8 * 1024 * 1024;
+  const job = baseJob({ basePptxPath: "relative/base.pptx", padding: "한글" });
+  const initial = Buffer.byteLength(JSON.stringify(job), "utf8");
+  for (const delta of [-1, 0, 1]) {
+    const result = await runWorker({ ...job, padding: job.padding + "x".repeat(limit - initial + delta) });
+    assert.equal(result.errorCode, delta > 0 ? "hybrid_job_wire_limit" : "hybrid_job_path_not_absolute");
+  }
 });

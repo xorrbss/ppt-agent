@@ -47,6 +47,8 @@ from models.sql.workspace import (
     WorkspaceOutbox,
     get_workspace_owner_scope,
 )
+from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+from models.sql.presentation_generation_job import PresentationGenerationJob
 from services.workspace_db_adapter import (
     bootstrap_workspace_turn,
     reserve_conversation_positions,
@@ -75,6 +77,7 @@ _ASSET_BLOCK_STATES = {"failed", "quarantined", "expired", "deleted"}
 _TERMINAL_OPERATION_STATES = {"succeeded", "failed", "cancelled", "dead_letter"}
 _DESTRUCTIVE_OPERATION_KINDS = WORKSPACE_DESTRUCTIVE_OPERATION_KINDS
 _DEFAULT_DESTRUCTIVE_APPROVAL_TTL_SECONDS = 24 * 60 * 60
+AUTHORED_LOCAL_FIT_CHECKPOINT_HYDRATION_REVISION = "authored-local-fit-checkpoint-hydration/v1"
 _SAFE_ERROR_MESSAGES = {
     "asset_processing_timeout": "An attachment did not finish processing in time.",
     "workspace_asset_failed": "An attachment failed processing and must be reprocessed.",
@@ -1270,6 +1273,112 @@ def _is_explicit_authored_capacity_recovery(
     )
 
 
+async def _verified_authored_local_fit_checkpoint_recovery(
+    session: AsyncSession,
+    operation: WorkspaceOperation,
+    request: WorkspaceOperationActionRequest,
+) -> AuthoredSlideCheckpoint | None:
+    """Return the one immutable render checkpoint eligible for hydration."""
+
+    if (
+        request.recovery_revision != AUTHORED_LOCAL_FIT_CHECKPOINT_HYDRATION_REVISION
+        or request.action != "retry"
+        or operation.kind not in {"template.apply", "design.apply"}
+        or operation.state not in {"failed", "dead_letter"}
+        or operation.error_code != "authored_local_fit_geometry_unresolved"
+        or not isinstance(operation.error_detail, Mapping)
+        or operation.error_detail.get("retryable") is not False
+    ):
+        return None
+    raw_job_id = operation.request_payload.get("job_id") if isinstance(operation.request_payload, Mapping) else None
+    try:
+        job_id = uuid.UUID(str(raw_job_id))
+    except (TypeError, ValueError, AttributeError):
+        return None
+    job = await session.scalar(
+        select(PresentationGenerationJob)
+        .where(PresentationGenerationJob.id == job_id)
+        .where(PresentationGenerationJob.workspace_operation_id == operation.id)
+        .where(PresentationGenerationJob.presentation_id == operation.presentation_id)
+        .with_for_update()
+    )
+    if (
+        job is None
+        or not isinstance(job.last_error, Mapping)
+        or not isinstance(job.request_payload, Mapping)
+        or job.request_payload.get("aspect_ratio") not in {None, "16:9"}
+    ):
+        return None
+    failure = job.last_error
+    slide_index = failure.get("slide_index")
+    if (
+        failure.get("code") != "authored_local_fit_geometry_unresolved"
+        or failure.get("stage") != "render"
+        or isinstance(slide_index, bool)
+        or not isinstance(slide_index, int)
+    ):
+        return None
+    checkpoint = await session.scalar(
+        select(AuthoredSlideCheckpoint)
+        .where(AuthoredSlideCheckpoint.job_id == job.id)
+        .where(AuthoredSlideCheckpoint.slide_index == slide_index)
+        .with_for_update()
+    )
+    if (
+        checkpoint is None
+        or checkpoint.author_status != "completed"
+        or checkpoint.illustrate_status not in {"completed", "skipped"}
+        or checkpoint.render_status != "failed"
+        or checkpoint.persist_status != "completed"
+        or checkpoint.failed_stage != "render"
+        or not isinstance(checkpoint.error, Mapping)
+        or checkpoint.error.get("code") != "authored_local_fit_geometry_unresolved"
+    ):
+        return None
+    try:
+        from services.authored_checkpoint_artifacts import read_valid_evidence_artifact
+        from services.authored_checkpoint_html import checkpoint_stage_html
+        from services.authored_local_fit_evidence_status import reusable_checkpoint_receipt
+        from services.authored_local_fit_policy import local_fit_policy
+
+        bundle = await read_valid_evidence_artifact(
+            checkpoint, expected_width_px=1280, expected_height_px=720
+        )
+    except Exception:
+        return None
+    if bundle is None or checkpoint_stage_html(checkpoint) != bundle.html:
+        return None
+    fit = bundle.metrics.get("authored_local_fit") if isinstance(bundle.metrics, Mapping) else None
+    manifest = fit.get("exportScaleManifest") if isinstance(fit, Mapping) else None
+    if not isinstance(fit, Mapping) or not isinstance(manifest, Mapping) or (
+        manifest.get("width_pt"), manifest.get("height_pt"),
+        manifest.get("viewport_width"), manifest.get("viewport_height"),
+    ) != (960, 540, 1280, 720):
+        return None
+    try:
+        policy = local_fit_policy(
+            author_revision=str(fit.get("authorRevision") or ""),
+            original_html_digest=str(fit.get("originalHtmlDigest") or ""),
+            export_width_pt=960, export_height_pt=540,
+            viewport_width=1280, viewport_height=720,
+            slide_index=checkpoint.slide_index,
+            policy_revision=str(fit.get("policyRevision") or ""),
+        )
+        receipt = reusable_checkpoint_receipt(
+            bundle.metrics, original_html=checkpoint_stage_html(checkpoint) or "",
+            final_html=bundle.html, slide_index=checkpoint.slide_index,
+            policy=policy, final_png=bundle.png,
+        )
+    except Exception:
+        return None
+    if not isinstance(receipt, Mapping) or (
+        receipt.get("status"), receipt.get("changed"), receipt.get("qualityStatus"),
+        receipt.get("unresolvedReasons"),
+    ) != ("unchanged", False, "passed", []):
+        return None
+    return checkpoint
+
+
 def _capacity_wait_projection(operation: WorkspaceOperation) -> tuple[bool, int | None]:
     """Return only durable, non-error capacity-wait metadata for clients."""
 
@@ -2022,7 +2131,17 @@ async def apply_workspace_action(
         operation,
         request,
     )
-    if request.recovery_revision is not None and not explicit_capacity_recovery:
+    checkpoint_recovery = await _verified_authored_local_fit_checkpoint_recovery(
+        session,
+        operation,
+        request,
+    )
+    explicit_checkpoint_recovery = checkpoint_recovery is not None
+    if (
+        request.recovery_revision is not None
+        and not explicit_capacity_recovery
+        and not explicit_checkpoint_recovery
+    ):
         raise WorkspaceServiceError("operation_not_retryable", status_code=409)
     if terminal_retry:
         if (
@@ -2036,6 +2155,7 @@ async def apply_workspace_action(
             and operation.error_detail.get("retryable") is False
             and not _is_retryable_template_v2_outline_admission(operation)
             and not explicit_capacity_recovery
+            and not explicit_checkpoint_recovery
         ):
             raise WorkspaceServiceError("operation_not_retryable", status_code=409)
         retry_of_operation_id = operation.id
@@ -2065,7 +2185,7 @@ async def apply_workspace_action(
             "retry_of_operation_id": str(source_operation.id),
             "account_deletion_generation": account_generation,
         }
-        if explicit_capacity_recovery:
+        if explicit_capacity_recovery or explicit_checkpoint_recovery:
             retry_payload["recovery_revision"] = request.recovery_revision
         retry_request_hash = canonical_payload_hash(
             {
@@ -2109,6 +2229,24 @@ async def apply_workspace_action(
             # SQLAlchemy cannot infer object ordering from UUID values alone,
             # and SQLite enforces the receipt FK immediately.
             await session.flush()
+            if operation.kind in {"export.pptx", "export.pdf"}:
+                try:
+                    await admit_public_operation(
+                        session,
+                        principal=current_principal_context(),
+                        operation_id=operation.id,
+                        operation_kind="export",
+                        request_plan=None,
+                        planned_slide_count=presentation.n_slides,
+                    )
+                except PublicAdmissionRejected as error:
+                    await session.rollback()
+                    raise WorkspaceServiceError(
+                        error.code,
+                        status_code=429,
+                        retryable=True,
+                        retry_after_seconds=error.retry_after_seconds or 15,
+                    ) from error
             linked_job_id = _linked_generation_job_id(source_operation)
             if linked_job_id is not None or source_operation.kind in {
                 "template.apply",
@@ -2130,6 +2268,13 @@ async def apply_workspace_action(
                     raise WorkspaceServiceError(
                         "operation_state_conflict", status_code=409
                     )
+                if checkpoint_recovery is not None:
+                    checkpoint_recovery.render_status = "completed"
+                    checkpoint_recovery.failed_stage = None
+                    checkpoint_recovery.error = None
+                    checkpoint_recovery.failed_at = None
+                    checkpoint_recovery.updated_at = now
+                    session.add(checkpoint_recovery)
         except IntegrityError:
             await session.rollback()
             return await _replay_action_receipt_after_conflict(

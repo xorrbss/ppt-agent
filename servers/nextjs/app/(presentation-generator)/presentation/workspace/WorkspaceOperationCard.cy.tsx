@@ -12,6 +12,97 @@ const mountCard = (card: React.ReactElement) =>
   );
 
 describe("WorkspaceOperationCard quality review", () => {
+  it("labels PPTX completion from editability evidence and lists image fallback pages", () => {
+    const exportOperation = (result: Record<string, unknown>) => ({
+      anchorType: "operation" as const,
+      id: "export-editability",
+      operationId: "export-editability",
+      position: 0,
+      operationType: "export.pptx" as const,
+      title: "PPTX 내보내기",
+      status: "succeeded" as const,
+      events: [],
+      allowedActions: [],
+      result: {
+        artifact_id: "artifact-editability",
+        format: "pptx",
+        ...result,
+      },
+    });
+
+    mountCard(
+      <WorkspaceOperationCard
+        operation={exportOperation({
+          public_export_worker_evidence: {
+            editability: {
+              verdict: "partially-editable",
+              imageOnlyPages: [9],
+              slides: [],
+            },
+            quality: {
+              status: "partially-editable",
+              imageFallbackSlides: 4,
+              slideFallbacks: [
+                { n: 45, code: "raster_fragment_missing" },
+                { n: 65, code: "raster_fragment_digest_mismatch" },
+                { n: 89, code: "raster_fragment_placement_mismatch" },
+              ],
+            },
+            producerTiming: {
+              slides: [
+                { n: 45, recovery: { cleanupFailure: true } },
+              ],
+            },
+          },
+        })}
+        onAction={() => undefined}
+      />,
+    );
+
+    cy.get('[data-testid="export-editability-verdict"]')
+      .should("contain.text", "내보내기 완료 · 일부 편집 가능")
+      .and("not.contain.text", "완전 편집형");
+    cy.get('[data-testid="export-image-fallback-pages"]')
+      .should("contain.text", "이미지로 대체된 페이지")
+      .should("contain.text", "9페이지")
+      .and("contain.text", "45페이지")
+      .and("contain.text", "65페이지")
+      .and("contain.text", "89페이지");
+    cy.get('[data-testid="export-image-fallback-reasons"]')
+      .should("contain.text", "그림 조각이 없어")
+      .and("contain.text", "식별값이 원본과 일치하지 않아")
+      .and("contain.text", "위치 측정값이 일치하지 않아")
+      .and("not.contain.text", "raster_fragment_");
+    cy.get('[data-testid="export-cleanup-status"]')
+      .should("contain.text", "내보내기 종료 정리")
+      .and("contain.text", "45페이지")
+      .and("contain.text", "결과 파일과 페이지 측정 판정은 유지됩니다");
+
+    mountCard(
+      <WorkspaceOperationCard
+        operation={exportOperation({
+          public_export_worker_evidence: {
+            editability: {
+              verdict: "fully-editable",
+              imageOnlyPages: [],
+              slides: [],
+            },
+            quality: {
+              status: "fully-editable",
+              imageFallbackSlides: 0,
+              slideFallbacks: [],
+            },
+          },
+        })}
+        onAction={() => undefined}
+      />,
+    );
+
+    cy.get('[data-testid="export-editability-verdict"]')
+      .should("contain.text", "내보내기 완료 · 완전 편집형 PPTX");
+    cy.get('[data-testid="export-image-fallback-pages"]').should("not.exist");
+  });
+
   it("does not present a design application as complete without retained-layout fidelity evidence", () => {
     mountCard(
       <WorkspaceOperationCard

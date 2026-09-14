@@ -19,6 +19,7 @@ from utils.runtime_settings import (
 CODEX_GENERATION_PRESETS: dict[str, tuple[str, str]] = {
     "luna-medium": ("gpt-5.6-luna", "medium"),
     "luna-high": ("gpt-5.6-luna", "high"),
+    "sol-low": ("gpt-5.6-sol", "low"),
     "sol-medium": ("gpt-5.6-sol", "medium"),
     "sol-high": ("gpt-5.6-sol", "high"),
     "astra-low": ("gpt-6-astra", "low"),

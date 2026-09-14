@@ -20,6 +20,10 @@ from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
 from utils.authored_styles import AuthoredStyle
 from services.database import sql_engine
 from services.authored_local_fit_policy import POLICY_REVISION, font_policy
+from services.authored_canvas import (
+    request_canvas_metadata,
+    restore_request_canvas_metadata,
+)
 from services.presentation_generation_export_orchestration import (
     publish_staged_presentation,
 )
@@ -49,6 +53,8 @@ INTERNAL_DECK_METADATA_KEY = "_internal_authored_deck_metadata"
 INTERNAL_SOURCE_SEMANTIC_SNAPSHOT_KEY = "_internal_authored_source_semantic_snapshot"
 INTERNAL_LOCAL_FIT_POLICY_REVISION_KEY = "_internal_authored_local_fit_policy_revision"
 INTERNAL_ROLLOUT_PROFILE_KEY = ROLLOUT_PROFILE_PAYLOAD_KEY
+INTERNAL_CANVAS_KEY = "_internal_authored_canvas"
+_MISSING_CANVAS_PAYLOAD = object()
 
 
 def _durable_style_snapshot(style: AuthoredStyle) -> dict[str, Any]:
@@ -71,6 +77,7 @@ def _durable_style_snapshot(style: AuthoredStyle) -> dict[str, Any]:
         "mono_font": style.mono_font,
         "illustration_prompt": style.illustration_prompt,
         "reference_mode": style.reference_mode,
+        "composer_profile": dict(style.composer_profile) if style.composer_profile is not None else None,
     }
 
 def _durable_request_payload(request: GeneratePresentationRequest) -> dict:
@@ -82,7 +89,13 @@ def _durable_request_payload(request: GeneratePresentationRequest) -> dict:
     # optional field's wire shape for old workers while ensuring its value can
     # never contain a locator.
     payload["files"] = None
+    composer_policy = getattr(request, "_composer_fit_policy", None)
+    if composer_policy is not None:
+        from services.public_generation_route import COMPOSER_FIT_POLICY_KEY
+
+        payload[COMPOSER_FIT_POLICY_KEY] = dict(composer_policy)
     if request.strategy == "authored" or str(request.template or "").lower() == "authored":
+        payload[INTERNAL_CANVAS_KEY] = request_canvas_metadata(request)
         policy_revision = (
             request._authored_local_fit_policy_revision or POLICY_REVISION
         )
@@ -281,11 +294,20 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
         INTERNAL_LOCAL_FIT_POLICY_REVISION_KEY, None
     )
     rollout_profile_payload = values.pop(INTERNAL_ROLLOUT_PROFILE_KEY, None)
+    canvas_payload = values.pop(INTERNAL_CANVAS_KEY, _MISSING_CANVAS_PAYLOAD)
     # Internal runner metadata is deliberately outside the public request
     # schema. It remains on the durable job across operation rebinds, but must
     # never be passed to Pydantic as caller input.
     values.pop(INTERNAL_ADMISSION_RETRY_KEY, None)
+    from services.public_generation_route import COMPOSER_FIT_POLICY_KEY
+
+    values.pop(COMPOSER_FIT_POLICY_KEY, None)
     request = GeneratePresentationRequest.model_validate(values)
+    restore_request_canvas_metadata(
+        request,
+        canvas_payload,
+        present=canvas_payload is not _MISSING_CANVAS_PAYLOAD,
+    )
     if snapshot_id is not None:
         request._authored_exact_snapshot_id = str(snapshot_id)
     if composition_payload is not None:
@@ -318,4 +340,3 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
             rollout_profile_payload
         ).as_dict()
     return request
-

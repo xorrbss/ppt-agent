@@ -18,7 +18,6 @@ export const sourceContentLosses = (
   summary: SourceContentAnalysisSummary,
 ): string[] => {
   const losses: string[] = [];
-  if (summary.tables > 0) losses.push(`표 ${summary.tables}개가 제외됩니다.`);
   if (summary.charts > 0) losses.push(`차트 ${summary.charts}개가 제외됩니다.`);
   if (summary.rasterFallbackBlocks > 0) {
     losses.push(

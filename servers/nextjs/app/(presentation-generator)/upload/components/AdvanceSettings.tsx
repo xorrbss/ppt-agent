@@ -125,7 +125,7 @@ const AdvanceSettings = ({
 
             {openAdvanced && (
                 <div
-                    className="fixed inset-0 z-[70] bg-black/35 flex items-center justify-center"
+                    className="fixed inset-0 z-[70] bg-slate-950/35 backdrop-blur-[2px] flex items-center justify-center p-4"
                     onClick={handleCloseAdvanced}
                     role="presentation"
                 >
@@ -133,25 +133,25 @@ const AdvanceSettings = ({
                         role="dialog"
                         aria-modal="true"
                         aria-label={t('title')}
-                        className="relative mx-auto mt-[108px] w-[calc(100vw-2rem)] max-w-[640px] overflow-visible"
+                        className="relative mx-auto w-full max-w-[640px]"
                         onClick={(event) => event.stopPropagation()}
                     >
                         <button
                             type="button"
                             onClick={handleCloseAdvanced}
                             aria-label={t('close')}
-                            className="absolute -top-[62px] right-2 flex h-[50px] w-[50px] items-center justify-center rounded-full border border-[#E7E7EC] bg-white text-[#2C2B35] shadow-sm transition hover:bg-[#F8F8FB]"
+                            className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none z-10"
                         >
                             <X className="h-3.5 w-3.5" />
                         </button>
 
-                        <div className="overflow-hidden rounded-[24px] border border-[#E7E9F2] bg-[#F3F3F6] shadow-[0_24px_80px_rgba(15,23,42,0.20)]">
-                            <div className="flex items-start justify-between gap-4 bg-[#F8F8FA] px-6 py-[22px] ">
+                        <div className="max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl border border-gray-200/80 bg-white shadow-[0_12px_40px_-16px_rgba(15,23,42,0.18)]">
+                            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 px-6 py-6 pr-16">
                                 <div>
-                                    <h2 className="font-syne text-lg font-semibold leading-none text-[#191919]">
+                                    <h2 className="break-keep text-xl font-semibold leading-7 tracking-tight text-gray-900">
                                         {t('title')}
                                     </h2>
-                                    <p className="mt-1 text-sm text-[#808080]">{t('description')}</p>
+                                    <p className="mt-2 break-keep text-sm leading-6 text-gray-500">{t('description')}</p>
                                     {sourceContentMode ? <p className="mt-3 text-sm font-semibold text-[#1F1D2A]" data-testid="source-content-advanced-notice">
                                         추가 디자인 지시만 적용합니다. 원문·수치·표·이미지는 변경하지 않습니다.
                                     </p> : null}
@@ -173,7 +173,7 @@ const AdvanceSettings = ({
                                 <CurrentConfig />
                             </div>
 
-                            <div className="bg-[#ECE8F6] px-6  py-5">
+                            <div className="border-b border-gray-100 bg-gray-50/70 px-6 py-5">
                                 <div className="flex items-start gap-2">
                                     <Pencil className="mt-[3px] h-3.5 w-3.5 text-[#1C1B24]" />
                                     <div className="w-full">

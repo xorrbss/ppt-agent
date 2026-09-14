@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Collection, Iterable
 
+from services.authored_canvas import supported_aspect_ratios_for_style
+
 if TYPE_CHECKING:
     from utils.authored_styles import AuthoredStyle
 
@@ -29,6 +31,7 @@ def authored_style_catalogue(styles: Iterable[AuthoredStyle]) -> list[dict]:
         if canonical_authored_style_id(style_id, by_id) != style_id:
             continue
         public = style.public_dict()
+        public["supportedAspectRatios"] = supported_aspect_ratios_for_style(style_id)
         aliases = sorted(
             old_id for old_id, target in AUTHORED_STYLE_ALIASES.items()
             if target == style_id

@@ -22,6 +22,7 @@ import {
   updateDurableGenerationTask,
 } from "./durableGenerationTask";
 import { generationMasterPin } from "@/lib/authored-vnext/master/selection-storage";
+import { DEFAULT_AUTHORED_STYLE } from "../../services/api/authored";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
@@ -313,7 +314,11 @@ export const usePresentationGeneration = (
       // The immutable source-content path must never enter vision re-authoring,
       // including outline reload/resume paths reconstructed from Redux.
       visionQa: isSourceContentGeneration ? false : authoredVisionQa,
-      authoredStyle,
+      authoredStyle:
+        generationConfig?.aspectRatio === "9:16"
+          ? DEFAULT_AUTHORED_STYLE.id
+          : authoredStyle,
+      aspectRatio: generationConfig?.aspectRatio ?? "16:9",
       ...(generationConfig?.codexGenerationPreset
         ? { codexGenerationPreset: generationConfig.codexGenerationPreset }
         : {}),
@@ -374,6 +379,7 @@ export const usePresentationGeneration = (
         language: authoredRequest.language,
         vision_qa: authoredRequest.visionQa,
         authored_style: authoredRequest.authoredStyle,
+        aspect_ratio: authoredRequest.aspectRatio,
         codex_generation_preset: authoredRequest.codexGenerationPreset,
         masterPin: authoredRequest.masterPin,
         sourceMode: authoredRequest.sourceMode,

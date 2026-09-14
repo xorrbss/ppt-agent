@@ -84,13 +84,32 @@ SEARCH_MEMBERS = r"""
     })) return {invalid: 'unsupported_geometry'};
     const font = this._fontPlan(region.leaves, defectLeaves, fontFactor, region);
     if (font.invalid) return font;
+    const heightRelaxationNodes = new Set((region.members || []).filter((member) => {
+      const item = this._struct(member.card);
+      return member.card !== region.card && item.explicitHeight > 0 &&
+        Math.max(member.escape_px || 0, member.flow_box_escape_px || 0) > this.C.escape_tolerance_px &&
+        this._plainGeometry(member.card) && ['static', 'relative'].includes(item.position) &&
+        this._replayable(member.card) && !this._protected(member.card) && !this._slotFor(member.card);
+    }).map((member) => member.card));
     const spacing = this._spacingPlan(
-      spacingNodes, spacingFactor, region.conflicts, spacingFactor < 1 || fontFactor === 1
+      spacingNodes, spacingFactor, region.conflicts,
+      spacingFactor < 1 || fontFactor === 1 || heightRelaxationNodes.size > 0,
+      heightRelaxationNodes
     );
     const maxSpacingReduction = spacing.length ? Math.max(0, ...spacing.flatMap((item) =>
       item.reductions.map((value) => value.before <= 0 ? 0 : 1 - value.after / value.before))) : 0;
+    const typographyNodes = new Map();
+    for (const item of font.plan.filter((entry) => entry.kind === 'text')) {
+      const declarations = item.declarations.split(';').filter(Boolean);
+      if (!declarations.length || declarations.some(value =>
+          !['font-size', 'line-height'].includes(value.split(':')[0].trim()))) continue;
+      const fontSize = declarations.find(value => value.split(':')[0].trim() === 'font-size');
+      if (!fontSize) continue;
+      typographyNodes.set(item.node, {beforeFontPx: this._px(getComputedStyle(item.node).fontSize),
+        targetFontPx: this._cssPx(fontSize.split(':').slice(1).join(':'))});
+    }
     return {plan: font.plan.concat(spacing), shrink: font.shrink,
-      spacing_reduction: maxSpacingReduction, factors: font.factors};
+      spacing_reduction: maxSpacingReduction, factors: font.factors, typographyNodes: typographyNodes};
   },
   _signature(region, plan) {
     return [region.card.getAttribute('data-qid')].concat(plan.map((item) =>
@@ -182,7 +201,7 @@ SEARCH_MEMBERS = r"""
         return {ok: false, reason: 'nested_escape'};
     }
     for (const leaf of region.leaves) {
-      const ink = this._ink(leaf); if (!ink) continue;
+      const ink = this._boundaryTextInk(leaf); if (!ink) continue;
       if (!baseline.occluded.get(leaf) && this._textOccluded(leaf)) return {ok: false, reason: 'occlusion'};
       if (ink.left < -0.5 || ink.top < -0.5 || ink.right > innerWidth + 0.5 || ink.bottom > innerHeight + 0.5)
         return {ok: false, reason: 'off_canvas'};

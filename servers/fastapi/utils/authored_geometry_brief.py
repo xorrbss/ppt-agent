@@ -44,6 +44,8 @@ def geometry_brief(
     *,
     page_number_mode: str | None = None,
     header_in_force: bool = False,
+    canvas_width_px: int = 1280,
+    canvas_height_px: int = 720,
 ) -> str:
     """The GEOMETRY paragraph for one slide with no composition envelope.
 
@@ -53,13 +55,18 @@ def geometry_brief(
     the deck's header contract; when it is, that rule leads the paragraph,
     since a dropped header band is the more expensive failure to catch late.
     """
-    bottom = content_bottom_px(page_number_mode)
+    bottom_inset = 72 if page_number_mode in {"template", "companyStandard"} else 32
+    bottom = canvas_height_px - bottom_inset
     bottom_sentence = (
         "The content field must end at or above the deck's bottom content "
         f"line, y={bottom}px."
     )
     sentences = [_HEADER_SENTENCE] if header_in_force else []
-    sentences.extend([_FRAME_SENTENCE, bottom_sentence, _OVERLAP_SENTENCE])
+    frame_sentence = (
+        f"The frame is exactly {canvas_width_px}x{canvas_height_px}px; every element, "
+        "including absolutely positioned ones, must lie entirely inside it."
+    )
+    sentences.extend([frame_sentence, bottom_sentence, _OVERLAP_SENTENCE])
     return "GEOMETRY: " + " ".join(sentences)
 
 
@@ -83,6 +90,8 @@ def relaxed_geometry_brief(plan: object, index: int) -> str:
     return geometry_brief(
         page_number_mode=getattr(plan, "page_number_mode", None),
         header_in_force=header_in_force,
+        canvas_width_px=getattr(plan, "canvas_width_px", 1280),
+        canvas_height_px=getattr(plan, "canvas_height_px", 720),
     )
 
 

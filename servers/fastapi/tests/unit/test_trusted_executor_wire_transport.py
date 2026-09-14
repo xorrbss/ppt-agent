@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import time
+from types import SimpleNamespace
 import uuid
 
 import pytest
@@ -17,8 +18,16 @@ from services.trusted_executor.composition import (
     create_trusted_worker_executor_runtime,
 )
 from services.trusted_executor.isolation_policy import IsolationUnavailableError
-from services.trusted_executor.wire_transport import ArtifactObjectStoreWireAdapter
+from services.trusted_executor.isolation_policy import SandboxFilesystemSpec
+from services.trusted_executor.wire_transport import (
+    ArtifactObjectStoreWireAdapter,
+    SupervisedStdioWireTransport,
+)
 from services.trusted_executor.worker_dispatcher import TrustedWorkerWireError
+from workers.public_worker_store import (
+    LocalContentAddressedStore,
+    PublicWorkerExecutionError,
+)
 
 
 _DOCKER_TEST_IMAGE = (
@@ -114,6 +123,140 @@ def test_object_store_wire_adapter_stages_in_one_bounded_verified_pass(
         assert destination.read_bytes() == payload
         assert store.probe.read_sizes
         assert max(store.probe.read_sizes) <= 1024 * 1024
+
+    asyncio.run(scenario())
+
+
+def test_job_owned_store_keeps_old_inputs_and_all_outputs_active_until_capacity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS", "1")
+    monkeypatch.setenv("PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES", "16")
+    monkeypatch.setenv("PPT_WORKER_OUTPUT_LIMIT_BYTES", "16")
+    input_root = (tmp_path / "input").resolve()
+    output_root = (tmp_path / "output").resolve()
+    input_root.mkdir()
+    active_deadline = time.time() + 30
+    store = LocalContentAddressedStore(
+        input_root, output_root,
+        active_deadline_epoch_seconds=active_deadline,
+    )
+    owner_id = uuid.uuid4()
+    operation_id = uuid.uuid4()
+    payload = b"old-input"
+    digest = hashlib.sha256(payload).hexdigest()
+    source = ArtifactRef(
+        artifact_id=uuid.uuid4(), owner_id=owner_id, tenant_id="tenant-active",
+        kind="slide-html", sha256=digest, size_bytes=len(payload),
+        media_type="text/html", storage_key=_storage_key(owner_id, "tenant-active", digest),
+        created_by_operation_id=operation_id, retention_class="ephemeral",
+    )
+    input_path = input_root.joinpath(*source.storage_key.split("/"))
+    input_path.parent.mkdir(parents=True)
+    input_path.write_bytes(payload)
+    old = time.time() - 3600
+    os.utime(input_path, (old, old))
+
+    assert store.verified_path(source) == input_path
+    first_path = tmp_path / "first.bin"
+    second_path = tmp_path / "second.bin"
+    overflow_path = tmp_path / "overflow.bin"
+    first_path.write_bytes(b"a" * 8)
+    second_path.write_bytes(b"b" * 8)
+    overflow_path.write_bytes(b"c")
+    first = store.put_path(
+        first_path, source=source, operation_id=operation_id,
+        kind="slide-png", media_type="image/png",
+    )
+    second = store.put_path(
+        second_path, source=source, operation_id=operation_id,
+        kind="slide-png", media_type="image/png",
+    )
+    with pytest.raises(PublicWorkerExecutionError, match="cache_budget_exceeded"):
+        store.put_path(
+            overflow_path, source=source, operation_id=operation_id,
+            kind="slide-png", media_type="image/png",
+        )
+    assert store.verified_path(first).is_file()
+    assert store.verified_path(second).is_file()
+
+    expired_store = LocalContentAddressedStore(
+        input_root, output_root,
+        active_deadline_epoch_seconds=time.time() - 1,
+    )
+    with pytest.raises(PublicWorkerExecutionError, match="artifact_expired"):
+        expired_store.verified_path(source)
+    with pytest.raises(PublicWorkerExecutionError, match="artifact_expired"):
+        expired_store.put_path(
+            overflow_path, source=source, operation_id=operation_id,
+            kind="slide-png", media_type="image/png",
+        )
+
+
+def test_transport_cancel_releases_staging_reservation_and_removes_attempt_tree(
+    tmp_path: Path,
+) -> None:
+    payload = b"0123456789"
+    owner_id = uuid.uuid4()
+    operation_id = uuid.uuid4()
+    digest = hashlib.sha256(payload).hexdigest()
+    reference = ArtifactRef(
+        artifact_id=uuid.uuid4(), owner_id=owner_id, tenant_id="tenant-capacity",
+        kind="slide-html", sha256=digest, size_bytes=len(payload),
+        media_type="text/html", storage_key=_storage_key(owner_id, "tenant-capacity", digest),
+        created_by_operation_id=operation_id, retention_class="ephemeral",
+    )
+    job = IsolatedWorkerJob(
+        role="render", operation_id=operation_id, attempt_token="capacity-attempt",
+        fencing_token=1, input_digest=digest, input_artifact=reference,
+        capability="test.capability", deadline_epoch_seconds=int(time.time()) + 30,
+    )
+
+    class _CancellingAuthority:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def stage(self, *, reference: ArtifactRef, destination: Path) -> None:
+            self.calls += 1
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(payload)
+            raise asyncio.CancelledError
+
+        async def publish(self, *, reference: ArtifactRef, source: Path) -> None:
+            raise AssertionError("cancelled staging must not publish")
+
+    authority = _CancellingAuthority()
+    transport = SupervisedStdioWireTransport(
+        artifact_authority=authority,
+        isolation_report=SimpleNamespace(),
+        staging_capacity_bytes=100,
+    )
+
+    async def scenario() -> None:
+        for index in range(2):
+            sandbox = (tmp_path / f"attempt-{index}").resolve()
+            filesystem = SandboxFilesystemSpec(
+                sandbox_root=sandbox,
+                input_root=sandbox / "input",
+                temporary_root=sandbox / "tmp",
+                staged_inputs=(sandbox / "input" / Path(reference.storage_key),),
+            )
+            work_item = SimpleNamespace(
+                launch_spec=SimpleNamespace(
+                    filesystem=filesystem,
+                    limits=SimpleNamespace(temporary_bytes=0),
+                )
+            )
+            with pytest.raises(asyncio.CancelledError):
+                await transport.execute(
+                    work_item=work_item, job=job, payload=b"{}",
+                    environment={
+                        "PPT_WORKER_OUTPUT_LIMIT_BYTES": "90",
+                        "PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES": "90",
+                    },
+                )
+            assert not sandbox.exists()
+        assert authority.calls == 2
 
     asyncio.run(scenario())
 

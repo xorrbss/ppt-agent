@@ -159,11 +159,22 @@ def _remove_partial_slide_pngs(
         shutil.rmtree(target)
 
 
-def _build_image_pdf(pngs: List[bytes], out_path: str) -> str:
+def _build_image_pdf(
+    pngs: List[bytes], out_path: str, *,
+    canvas_width_px: int = 1280, canvas_height_px: int = 720,
+) -> str:
     from PIL import Image
 
     imgs = [Image.open(io.BytesIO(p)).convert("RGB") for p in pngs]
-    imgs[0].save(out_path, save_all=True, append_images=imgs[1:])
+    expected_size = (int(canvas_width_px), int(canvas_height_px))
+    if any(image.size != expected_size for image in imgs):
+        raise ValueError("authored export image canvas mismatch")
+    imgs[0].save(
+        out_path,
+        save_all=True,
+        append_images=imgs[1:],
+        resolution=96.0,
+    )
     return out_path
 
 
@@ -174,6 +185,7 @@ def _build_authored_export(
     title: str,
     *,
     local_fit_receipts: Sequence[Mapping[str, object]] | None = None,
+    canvas: object | None = None,
 ) -> str:
     """Assemble the rendered slides into the requested export format (pure Python:
     python-pptx / PIL ??no external converter). Returns the absolute file path."""
@@ -181,12 +193,19 @@ def _build_authored_export(
     exports = os.path.dirname(destination)
     stem, extension = os.path.splitext(os.path.basename(destination))
     os.makedirs(exports, exist_ok=True)
+    canvas_width_px = int(getattr(canvas, "width_px", 1280))
+    canvas_height_px = int(getattr(canvas, "height_px", 720))
     if extension == ".pdf":
         from PIL import Image
 
         temporary = os.path.join(exports, f".{stem}.{uuid.uuid4().hex}.pdf")
         try:
-            _build_image_pdf(pngs, temporary)
+            _build_image_pdf(
+                pngs,
+                temporary,
+                canvas_width_px=canvas_width_px,
+                canvas_height_px=canvas_height_px,
+            )
             with Image.open(temporary) as exported_pdf:
                 if getattr(exported_pdf, "n_frames", 1) != len(pngs):
                     raise RuntimeError("authored PDF slide count validation failed")
@@ -197,7 +216,12 @@ def _build_authored_export(
         return destination
     temporary = os.path.join(exports, f".{stem}.{uuid.uuid4().hex}.pptx")
     try:
-        build_image_pptx(pngs, temporary)
+        build_image_pptx(
+            pngs,
+            temporary,
+            canvas_width_px=canvas_width_px,
+            canvas_height_px=canvas_height_px,
+        )
         from pptx import Presentation as PptxPresentation
 
         if len(PptxPresentation(temporary).slides) != len(pngs):

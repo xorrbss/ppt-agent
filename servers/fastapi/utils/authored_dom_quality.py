@@ -654,6 +654,8 @@ def inspect_authored_dom(
     *,
     reference_mode: str = STYLE_REFERENCE,
     strict_structural_off_canvas: bool = False,
+    viewport_width: int | None = None,
+    viewport_height: int | None = None,
 ) -> DomQualityReport:
     """Classify cheap, deterministic defects from browser-collected metrics.
 
@@ -670,8 +672,8 @@ def inspect_authored_dom(
     compact = build_compact_dom_map(html, normalized)
     expected = _expected_text_by_qid(html)
     issues: list[DomQualityIssue] = []
-    width = normalized["viewport"]["width"] or 1280
-    height = normalized["viewport"]["height"] or 720
+    width = normalized["viewport"]["width"] or viewport_width or 1280
+    height = normalized["viewport"]["height"] or viewport_height or 720
     elements = normalized["elements"]
     item_by_qid = {str(item.get("qid")): item for item in elements}
     parent_by_qid = {

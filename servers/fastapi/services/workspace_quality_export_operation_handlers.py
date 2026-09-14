@@ -90,6 +90,46 @@ InternalHeaderProvider = Callable[[], Awaitable[dict[str, str]]]
 LOGGER = logging.getLogger(__name__)
 QUALITY_REVIEW_PROGRESS_INTERVAL_SECONDS = 30.0
 
+_NON_RETRYABLE_PUBLIC_EXPORT_CODES = frozenset(
+    {
+        "public_export_admission_deadline_exhausted",
+        "public_export_delivered_mode_mismatch",
+        "public_export_editability_evidence_unavailable",
+        "public_export_hybrid_not_editable",
+        "public_export_singleflight_fence_stale",
+        "public_worker_cache_budget_exceeded",
+        "trusted_worker_staging_capacity_exceeded",
+        "hybrid_job_wire_limit",
+    }
+)
+_NON_RETRYABLE_PUBLIC_EXPORT_MARKERS = (
+    "binding_invalid",
+    "digest_mismatch",
+    "owner_mismatch",
+    "size_mismatch",
+    "wire_limit",
+    "bundle_too_large",
+    "input_too_large",
+    "payload_too_large",
+    "request_too_large",
+)
+
+
+def _public_export_error_code(error: Exception) -> str:
+    code = getattr(error, "code", None)
+    if isinstance(code, str) and code:
+        return code
+    value = str(error)
+    return value if value else "presentation_export_unexpected_failure"
+
+
+def _public_export_failure_is_non_retryable(code: str) -> bool:
+    if code.startswith("public_export_local_fit_"):
+        return True
+    if code in _NON_RETRYABLE_PUBLIC_EXPORT_CODES:
+        return True
+    return any(marker in code for marker in _NON_RETRYABLE_PUBLIC_EXPORT_MARKERS)
+
 
 
 
@@ -228,8 +268,12 @@ class WorkspaceExportOperationHandler:
                 if isinstance(presentation.theme, Mapping)
                 else None
             )
+            authored_vnext_master_present = (
+                isinstance(authored_vnext_projection, Mapping)
+                and authored_vnext_projection.get("masterPin") is not None
+            )
             authored_vnext_export_path = _authored_vnext_export_path(
-                projection_present=authored_vnext_projection is not None,
+                projection_present=authored_vnext_master_present,
                 export_format=export_format,
                 pptx_mode=pptx_mode,
             )
@@ -399,9 +443,8 @@ class WorkspaceExportOperationHandler:
                             "stale_presentation_revision"
                         )
             if (
-                authored_vnext_projection is not None
+                authored_vnext_export_path == "legacy-native"
                 and public_tenant_id is None
-                and authored_vnext_export_path != "semantic-hybrid"
             ):
                 _validate_authored_vnext_export_request(
                     claim.request_payload,
@@ -487,6 +530,7 @@ class WorkspaceExportOperationHandler:
         authored_scene_digest: str | None = None
         public_quality_receipt: dict[str, object] | None = None
         fidelity_quality_compatibility: str | None = None
+        export_editability: dict[str, object] | None = None
         try:
             if authored_vnext_export_path == "legacy-native":
                 if not isinstance(authored_vnext_projection, dict):
@@ -641,6 +685,11 @@ class WorkspaceExportOperationHandler:
                                 presentation.lifecycle_status
                                 == PRESENTATION_LIFECYCLE_PUBLISHED
                             ),
+                            # Original-source delivery keeps a sealed failed or
+                            # unassessed quality receipt as advisory evidence.
+                            # A release-review request takes the strict branch
+                            # above and never reaches this call.
+                            allow_quality_advisory=True,
                         )
                     )
                 if (
@@ -704,6 +753,9 @@ class WorkspaceExportOperationHandler:
                         "published_flagged_compatibility": (
                             fidelity_quality_compatibility
                             == "published-flagged-hybrid"
+                        ),
+                        "quality_advisory": (
+                            fidelity_quality_compatibility == "quality-advisory"
                         ),
                         "release_readiness": (
                             "blocked"
@@ -794,6 +846,17 @@ class WorkspaceExportOperationHandler:
                     if isinstance(worker_evidence, Mapping)
                     else {}
                 )
+                export_editability = worker_evidence.get("editability")
+                export_editability = (
+                    dict(export_editability)
+                    if isinstance(export_editability, Mapping)
+                    else None
+                )
+                if export_editability is not None:
+                    worker_resource_metrics = {
+                        **dict(worker_resource_metrics),
+                        "export_editability": export_editability,
+                    }
                 delivered_export_mode = str(
                     worker_evidence.get("deliveredExportMode")
                     or ("fidelity-raster" if export_format == "pptx" else "pdf-raster")
@@ -828,6 +891,7 @@ class WorkspaceExportOperationHandler:
                         ),
                         "delivered_export_mode": delivered_export_mode,
                         "hybrid_export_evidence": worker_evidence,
+                        "editability": export_editability,
                         "network_none_worker": (
                             worker_resource_metrics.get("network_none_worker") is True
                         ),
@@ -938,6 +1002,8 @@ class WorkspaceExportOperationHandler:
                             ),
                         ).model_dump(mode="json", by_alias=True)
                     )
+                if public_quality_receipt is not None and export_editability is not None:
+                    public_quality_receipt["exportEditability"] = export_editability
             if public_ref is None and artifact_sha256 != hashlib.sha256(
                 export_path.read_bytes()
             ).hexdigest():
@@ -1144,6 +1210,7 @@ class WorkspaceExportOperationHandler:
                     )
             raise
         except Exception as error:
+            error_code = _public_export_error_code(error)
             LOGGER.exception(
                 "Workspace presentation export failed after execution",
                 extra={
@@ -1161,11 +1228,7 @@ class WorkspaceExportOperationHandler:
                         expected_owner_id=execution.owner_id,
                         expected_owner_scope=execution.owner_scope,
                         expected_workspace_operation_id=(execution.workspace_operation_id),
-                        failure_code=getattr(
-                            error,
-                            "code",
-                            "presentation_export_unexpected_failure",
-                        ),
+                        failure_code=error_code,
                         failure_path=getattr(error, "path", None),
                     )
             elif native_export_attempt_id is not None:
@@ -1176,17 +1239,22 @@ class WorkspaceExportOperationHandler:
                         expected_owner_id=claim.owner_id,
                         expected_owner_scope=claim.owner_scope,
                         expected_workspace_operation_id=claim.operation_id,
-                        failure_code=getattr(
-                            error,
-                            "code",
-                            "presentation_export_unexpected_failure",
-                        ),
+                        failure_code=error_code,
                         failure_path=getattr(error, "path", None),
                         selected_adapter=(direct_export_selected_adapter or "native_reconstructed"),
                     )
             resource_detail = getattr(error, "resource_metrics", None)
-            raise RetryableWorkspaceOperationError(
-                "presentation_export_failed",
+            error_type = (
+                NonRetryableWorkspaceOperationError
+                if _public_export_failure_is_non_retryable(error_code)
+                else RetryableWorkspaceOperationError
+            )
+            raise error_type(
+                (
+                    error_code
+                    if _public_export_failure_is_non_retryable(error_code)
+                    else "presentation_export_failed"
+                ),
                 detail=(dict(resource_detail) if isinstance(resource_detail, Mapping) else None),
             ) from error
         await context.progress(stage="export_completed", percent=100)

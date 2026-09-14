@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.checkpoint-accepted-fit-hydration",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Resume restores a validated immutable local-fit acceptance tuple; explicit hydration recovery requires matching passed unchanged checkpoint evidence.",
+  "scope": [
+    "authored",
+    "workspace",
+    "generation"
+  ],
+  "invariants": [
+    "HTML normalization invalidates restored acceptance.",
+    "Recovery preserves the original terminal operation audit and reuses its generation job.",
+    "Wrong recovery revisions and invalid or changed evidence remain rejected."
+  ],
+  "forbidden": [
+    "Retrying nonretryable geometry failures without verified immutable acceptance evidence.",
+    "Bypassing native export readback validation."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_presentation_pipeline.py",
+    "servers/fastapi/services/workspace_service.py",
+    "servers/fastapi/tests/unit/test_authored_pipeline.py",
+    "artifacts/popup-recovery-20260914/recovery-action-receipt.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-13T23:33:57.6771000+00:00"
+}

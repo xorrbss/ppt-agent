@@ -20,6 +20,13 @@ from zipfile import ZipFile
 
 from lxml import etree
 
+from services.source_content.pptx_layout import (
+    paragraph_layout as resolve_paragraph_layout,
+    paragraph_properties as resolve_paragraph_properties,
+    resolved_font_family,
+    text_body_layout as resolve_text_body_layout,
+    theme_font_map,
+)
 from services.source_content.security import secure_xml
 
 P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
@@ -28,7 +35,7 @@ NS = {"p": P_NS, "a": A_NS}
 
 PRESENTATION_PART = "ppt/presentation.xml"
 
-#: ``{"sizePt": float | None, "bold": bool, "italic": bool, "color": str | None}``
+#: Resolved run typography. Source offsets are added by ``pptx_text_body.py``.
 RunStyle = dict[str, Any]
 
 #: ``(package, part_name) -> {rel_id: (target_part, rel_type)}``
@@ -46,7 +53,11 @@ MAX_LIST_LEVEL = 8
 #: ``manifest_id`` so an extractor upgrade seals a new manifest identity for
 #: the same snapshot instead of colliding with the previously stored digest
 #: under the old one.
-MANIFEST_ID_EXTRACTOR_REVISION = "typography-run-styles-v1+document-identity-v1"
+MANIFEST_ID_EXTRACTOR_REVISION = (
+    "typography-run-styles-v7+document-identity-v1+group-shapes-v1"
+    "+placeholder-geometry-v1+source-layout-v2+table-grid-v1+manifest-capability-v1"
+    "+source-bullets-v1+image-effects-v2"
+)
 
 _HEX_RE = re.compile(r"^[0-9A-Fa-f]{6}$")
 _SOLID_FILL_TAG = f"{{{A_NS}}}solidFill"
@@ -107,7 +118,11 @@ def _fill_color(properties: etree._Element) -> tuple[bool, str | None]:
     return False, None
 
 
-def resolve_run_style(chain: Iterable[etree._Element | None]) -> RunStyle:
+def resolve_run_style(
+    chain: Iterable[etree._Element | None],
+    *,
+    theme_fonts: dict[str, str] | None = None,
+) -> RunStyle:
     """First defined value wins per property, walking ``chain`` outwards.
 
     Scheme, gradient and pattern fills define the color without a literal
@@ -119,7 +134,8 @@ def resolve_run_style(chain: Iterable[etree._Element | None]) -> RunStyle:
     italic: bool | None = None
     color: str | None = None
     color_defined = False
-    for properties in chain:
+    properties_chain = tuple(chain)
+    for properties in properties_chain:
         if properties is None:
             continue
         if size is None:
@@ -130,7 +146,13 @@ def resolve_run_style(chain: Iterable[etree._Element | None]) -> RunStyle:
             italic = _flag(properties.get("i"))
         if not color_defined:
             color_defined, color = _fill_color(properties)
-    return {"sizePt": size, "bold": bool(bold), "italic": bool(italic), "color": color}
+    return {
+        "sizePt": size,
+        "bold": bool(bold),
+        "italic": bool(italic),
+        "color": color,
+        "fontFamily": resolved_font_family(properties_chain, theme_fonts or {}),
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,6 +209,10 @@ class ShapeTextContext:
     #: Layout placeholder, master placeholder, master ``p:txStyles`` family and
     #: ``p:defaultTextStyle`` list styles, nearest first.
     inherited: tuple[etree._Element, ...] = ()
+    #: Local, layout and master text-body properties, nearest first.
+    body_properties: tuple[etree._Element, ...] = ()
+    #: Theme scheme tokens mapped to concrete font families.
+    theme_fonts: dict[str, str] | None = None
 
     def _paragraph_chain(self, paragraph: etree._Element) -> Iterator[etree._Element | None]:
         level = paragraph_level(paragraph)
@@ -200,14 +226,37 @@ class ShapeTextContext:
     def run_style(self, run: etree._Element, paragraph: etree._Element) -> RunStyle:
         """Style of one ``a:r``, ``a:fld`` or ``a:br`` child of ``paragraph``."""
         return resolve_run_style(
-            [run.find("a:rPr", namespaces=NS), *self._paragraph_chain(paragraph)]
+            [run.find("a:rPr", namespaces=NS), *self._paragraph_chain(paragraph)],
+            theme_fonts=self.theme_fonts,
         )
 
     def mark_style(self, paragraph: etree._Element) -> RunStyle:
         """Style of the paragraph mark: ``a:endParaRPr`` first, then the chain."""
         return resolve_run_style(
-            [paragraph.find("a:endParaRPr", namespaces=NS), *self._paragraph_chain(paragraph)]
+            [paragraph.find("a:endParaRPr", namespaces=NS), *self._paragraph_chain(paragraph)],
+            theme_fonts=self.theme_fonts,
         )
+
+    def paragraph_layout(self, paragraph: etree._Element) -> dict[str, Any]:
+        return resolve_paragraph_layout(
+            paragraph,
+            level=paragraph_level(paragraph),
+            list_style=self.list_style,
+            inherited=self.inherited,
+        )
+
+    def paragraph_properties(
+        self, paragraph: etree._Element
+    ) -> tuple[etree._Element | None, ...]:
+        return resolve_paragraph_properties(
+            paragraph,
+            level=paragraph_level(paragraph),
+            list_style=self.list_style,
+            inherited=self.inherited,
+        )
+
+    def text_body_layout(self, element: etree._Element) -> dict[str, Any]:
+        return resolve_text_body_layout(element, inherited=self.body_properties)
 
 
 def _placeholder_shapes(
@@ -258,6 +307,12 @@ def _list_style_of(shape: etree._Element | None) -> etree._Element | None:
     return shape.find("p:txBody/a:lstStyle", namespaces=NS)
 
 
+def _body_properties_of(shape: etree._Element | None) -> etree._Element | None:
+    if shape is None:
+        return None
+    return shape.find("p:txBody/a:bodyPr", namespaces=NS)
+
+
 class PptxTypographyResolver:
     """Resolves shape text contexts against the package's layouts and masters.
 
@@ -304,25 +359,55 @@ class PptxTypographyResolver:
         cx, cy = _int_attr(size, "cx", 0), _int_attr(size, "cy", 0)
         return {"cx": cx, "cy": cy} if cx > 0 and cy > 0 else None
 
+    def placeholder_shape_chain(
+        self, shape: etree._Element, *, part_name: str
+    ) -> tuple[tuple[str, etree._Element], ...]:
+        """Matching layout then master placeholders for geometry and text."""
+
+        placeholder = placeholder_of(shape)
+        if placeholder is None:
+            return ()
+        layout_part = self._related_part(part_name, "/slideLayout")
+        layout_shape = _layout_placeholder(self._root(layout_part), placeholder)
+        layout_placeholder = placeholder_of(layout_shape) if layout_shape is not None else None
+        master_root = self._root(self._related_part(layout_part, "/slideMaster"))
+        master_type = (layout_placeholder or placeholder).master_type
+        master_shape = _master_placeholder(master_root, master_type)
+        result: list[tuple[str, etree._Element]] = []
+        if layout_shape is not None:
+            result.append(("layout", layout_shape))
+        if master_shape is not None:
+            result.append(("master", master_shape))
+        return tuple(result)
+
     def shape_context(self, shape: etree._Element, *, part_name: str) -> ShapeTextContext:
         """Resolve the inheritance chain of one ``p:sp`` on ``part_name``.
 
         Notes parts relate to a notes master rather than a slide layout, so
         their shapes inherit only from ``p:defaultTextStyle``.
         """
-        placeholder = placeholder_of(shape)
         layout_part = self._related_part(part_name, "/slideLayout")
-        master_root = self._root(self._related_part(layout_part, "/slideMaster"))
+        master_part = self._related_part(layout_part, "/slideMaster")
+        master_root = self._root(master_part)
+        placeholder = placeholder_of(shape)
+        placeholder_chain = self.placeholder_shape_chain(shape, part_name=part_name)
         inherited: list[etree._Element] = []
+        body_properties: list[etree._Element] = []
         master_type: str | None = None
         if placeholder is not None:
-            layout_shape = _layout_placeholder(self._root(layout_part), placeholder)
+            layout_shape = next(
+                (candidate for source, candidate in placeholder_chain if source == "layout"),
+                None,
+            )
             layout_placeholder = placeholder_of(layout_shape) if layout_shape is not None else None
             master_type = (layout_placeholder or placeholder).master_type
-            for candidate in (layout_shape, _master_placeholder(master_root, master_type)):
+            for _, candidate in placeholder_chain:
                 list_style = _list_style_of(candidate)
                 if list_style is not None:
                     inherited.append(list_style)
+                body_properties_node = _body_properties_of(candidate)
+                if body_properties_node is not None:
+                    body_properties.append(body_properties_node)
         if master_root is not None:
             family = _TX_STYLE_FAMILY.get(master_type or "", "otherStyle")
             tx_style = master_root.find(f"p:txStyles/p:{family}", namespaces=NS)
@@ -336,10 +421,13 @@ class PptxTypographyResolver:
         )
         if default_style is not None:
             inherited.append(default_style)
+        theme_root = self._root(self._related_part(master_part, "/theme"))
         return ShapeTextContext(
             placeholder=placeholder,
             list_style=_list_style_of(shape),
             inherited=tuple(inherited),
+            body_properties=tuple(body_properties),
+            theme_fonts=theme_font_map(theme_root),
         )
 
 

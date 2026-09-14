@@ -454,9 +454,17 @@ def admit_internal_instrumented_html(source: str, capability: str) -> AdmittedHt
     )
 
 
-def encode_request(html: str, timeout: int) -> bytes:
+def encode_request(
+    html: str, timeout: int, *, width_px: int = 1280, height_px: int = 720
+) -> bytes:
     wire = json.dumps(
-        {"schema_version": "authored-render-request/v1", "html": html, "timeout": timeout},
+        {
+            "schema_version": "authored-render-request/v1",
+            "html": html,
+            "timeout": timeout,
+            "width_px": int(width_px),
+            "height_px": int(height_px),
+        },
         ensure_ascii=True,
         separators=(",", ":"),
     ).encode("utf-8") + b"\n"

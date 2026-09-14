@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.quality-advisory",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Ordinary Hybrid, Fidelity and PDF exports preserve the current source and treat quality review results as nonblocking advisory evidence.",
+  "scope": [
+    "public-export",
+    "quality",
+    "authored-hybrid"
+  ],
+  "invariants": [
+    "Failed or unassessed quality review does not block ordinary source-preserving export.",
+    "Keep original slides, canvas and content unchanged; do not regenerate or repair during export.",
+    "Preserve failed quality receipts and release readiness without claiming a quality pass.",
+    "Keep source identity, authorization, schema and digest integrity validation and actual conversion errors.",
+    "Show nonblocking quality guidance without a confirmation dialog."
+  ],
+  "forbidden": [
+    "Promoting a failed quality receipt to passed.",
+    "Silently changing original slides to satisfy quality during export."
+  ],
+  "evidence": [
+    "User explicitly approved advisory-only quality export implementation and actual verification in this conversation."
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-14T03:08:00.0794332+00:00"
+}

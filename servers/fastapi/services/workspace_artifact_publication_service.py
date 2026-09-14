@@ -2237,7 +2237,15 @@ async def publish_workspace_generation_artifact(
                 else {}
             ),
         }
-        if result_evidence is not None:
+        native_export_evidence_keys = {
+            "readback_verified",
+            "preview_snapshot",
+            "native_pptx_snapshot",
+            "visual_fidelity",
+        }
+        if result_evidence is not None and native_export_evidence_keys.intersection(
+            result_evidence
+        ):
             preview = result_evidence.get("preview_snapshot")
             native = result_evidence.get("native_pptx_snapshot")
             fidelity = result_evidence.get("visual_fidelity")
@@ -2251,6 +2259,11 @@ async def publish_workspace_generation_artifact(
                 raise WorkspaceArtifactPublicationError(
                     "authored_template_visual_evidence_invalid"
                 )
+            result_payload = {**result_payload, **result_evidence}
+        elif result_evidence is not None:
+            # Native export is deferred to the isolated export worker.  A
+            # generation-quality summary is safe to publish here, but it is
+            # not a substitute for native readback evidence.
             result_payload = {**result_payload, **result_evidence}
     elif (
         operation_metadata is not None

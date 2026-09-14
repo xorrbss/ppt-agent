@@ -1,6 +1,11 @@
 import React, { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PresentationDriverId } from "@/lib/presentation-profile";
+import {
+    LEGACY_AUTHORED_CANVAS,
+    resolveAuthoredCanvas,
+    type AuthoredCanvasContract,
+} from "@/lib/authored-canvas";
 import { PresentationContentRender } from "./PresentationContentRender";
 
 
@@ -28,11 +33,14 @@ const FIT_RATIO = (BASE_HEIGHT / BASE_WIDTH) * FIT_SAFETY;
  * and nothing reflows when the stage materialises. Keep it derived from the
  * constants above so it cannot drift from `scale` below.
  */
-export const SLIDE_SCALE_RESERVED_HEIGHT_CSS = `min(calc(${(
-    FIT_RATIO * 100
-).toFixed(4)}% + ${(FIT_RATIO * FIT_WIDTH_BLEED).toFixed(
-    4
-)}px), ${BASE_HEIGHT}px)`;
+export function slideScaleReservedHeightCss(
+    canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS,
+): string {
+    const ratio = (canvas.heightPx / canvas.widthPx) * FIT_SAFETY;
+    return `min(calc(${(ratio * 100).toFixed(4)}% + ${(ratio * FIT_WIDTH_BLEED).toFixed(4)}px), ${canvas.heightPx}px)`;
+}
+
+export const SLIDE_SCALE_RESERVED_HEIGHT_CSS = slideScaleReservedHeightCss();
 
 const NEAR_VIEWPORT_ROOT_MARGIN = "900px 0px";
 
@@ -45,10 +53,12 @@ export function ViewportCulledSlide({
     children,
     enabled = false,
     priority = false,
+    canvas = LEGACY_AUTHORED_CANVAS,
 }: {
     children: ReactNode;
     enabled?: boolean;
     priority?: boolean;
+    canvas?: AuthoredCanvasContract;
 }) {
     const slotRef = useRef<HTMLDivElement | null>(null);
     const [isMounted, setIsMounted] = useState(() => !enabled || priority);
@@ -79,7 +89,7 @@ export function ViewportCulledSlide({
             className="relative w-full"
             data-render-state={isMounted ? "rendered" : "deferred"}
             data-testid="viewport-culled-slide"
-            style={{ paddingTop: SLIDE_SCALE_RESERVED_HEIGHT_CSS }}
+            style={{ paddingTop: slideScaleReservedHeightCss(canvas) }}
         >
             <div className="absolute inset-0">
                 {isMounted ? children : <div aria-hidden="true" className="h-full w-full bg-slate-100" />}
@@ -111,6 +121,13 @@ const SlideScale = ({
     driverId?: PresentationDriverId;
 }) => {
 
+    const isAuthoredSlide = driverId === "authored" ||
+        slide?.content?.__authored__ === true ||
+        slide?.layout_group === "authored";
+    const canvas = isAuthoredSlide
+        ? resolveAuthoredCanvas(theme)
+        : LEGACY_AUTHORED_CANVAS;
+
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [box, setBox] = useState({ w: 0, h: 0 });
 
@@ -119,14 +136,14 @@ const SlideScale = ({
         if (presentMode) {
             const { w, h } = box;
             if (w < 1 || h < 1) return 1;
-            const sx = (w / BASE_WIDTH) * 0.995;
-            const sy = (h / BASE_HEIGHT) * 0.995;
+            const sx = (w / canvas.widthPx) * 0.995;
+            const sy = (h / canvas.heightPx) * 0.995;
             return Math.min(sx, sy);
         }
         const safeWidth = Math.max(0, box.w + FIT_WIDTH_BLEED);
         if (!safeWidth) return 1;
-        return Math.min((safeWidth / BASE_WIDTH) * FIT_SAFETY, 1);
-    }, [fixedSize, presentMode, box]);
+        return Math.min((safeWidth / canvas.widthPx) * FIT_SAFETY, 1);
+    }, [fixedSize, presentMode, box, canvas]);
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -145,23 +162,24 @@ const SlideScale = ({
         ref={containerRef}
         className={
             fixedSize
-                ? "relative h-[720px] w-[1280px] overflow-hidden shadow-none"
+                ? "relative overflow-hidden shadow-none"
                 : `relative w-full ${presentMode ? "flex h-full min-h-0 items-center justify-center shadow-none" : "shadow-md"}`
         }
+        style={fixedSize ? { width: canvas.widthPx, height: canvas.heightPx } : undefined}
     >
         <div
             className={presentMode || fixedSize ? "relative mx-auto shrink-0" : "relative mx-auto max-w-[1280px]"}
             style={{
-                width: `${BASE_WIDTH * scale}px`,
-                height: `${BASE_HEIGHT * scale}px`,
+                width: `${canvas.widthPx * scale}px`,
+                height: `${canvas.heightPx * scale}px`,
                 overflow: "hidden",
             }}
         >
             <div
                 className="absolute top-0 left-0"
                 style={{
-                    width: BASE_WIDTH,
-                    height: BASE_HEIGHT,
+                    width: canvas.widthPx,
+                    height: canvas.heightPx,
                     transformOrigin: "top left",
                     transform: `scale(${scale})`,
                 }}
@@ -187,6 +205,7 @@ const SlideScale = ({
                         slide={slide}
                         preferAuthoredHtml={preferAuthoredHtml}
                         driverId={driverId}
+                        canvas={isAuthoredSlide ? canvas : undefined}
                     />
                     {showEditScan && (
                         <div

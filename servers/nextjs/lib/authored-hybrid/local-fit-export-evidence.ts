@@ -1,5 +1,11 @@
+import { isFragmentBand } from "./raster-fragments.ts";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
+import {
+  authoredCanvasPhysicalSize,
+  LEGACY_AUTHORED_CANVAS,
+  type AuthoredCanvasContract,
+} from "../authored-canvas.ts";
 import type { LocalFitObservation } from "./local-fit-browser.ts";
 import type { AuthoredHybridSlideLayer } from "./pptx-assembler.ts";
 import type { AuthoredHybridSlideV1 } from "./schema.ts";
@@ -49,7 +55,9 @@ export function localFitDigest(value: string | Buffer): string {
 export function createLocalFitExportEvidence(
   layers: readonly AuthoredHybridSlideLayer[], htmls: readonly string[],
   sourceDigest: string, bytes: Buffer,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS,
 ) {
+  const pageSize = authoredCanvasPhysicalSize(canvas);
   return {
     schemaVersion: "authored-local-fit-export-evidence/v1",
     sourceDigest, pptxDigest: localFitDigest(bytes),
@@ -64,7 +72,28 @@ export function createLocalFitExportEvidence(
         const pngDigest = localFitDigest(band.rasterPng);
         return {
           pngDigest, ownerQids: band.semanticOwnerQids, zBand: band.zBand,
-          placement: { x: 0, y: 0, widthPt: 960, heightPt: 540 },
+          ...(isFragmentBand(band) ? {
+            schemaVersion: band.schemaVersion,
+            sourceDigest: band.sourceDigest,
+            captureWidthPx: band.captureWidthPx,
+            captureHeightPx: band.captureHeightPx,
+            fragments: band.fragments.map(fragment => ({
+              id: fragment.id, order: fragment.order, rect: fragment.rect,
+              pngDigest: fragment.digest, sizeBytes: fragment.sizeBytes,
+              placement: {
+                x: fragment.rect.x / band.captureWidthPx * pageSize.widthPt,
+                y: fragment.rect.y / band.captureHeightPx * pageSize.heightPt,
+                widthPt: fragment.rect.width / band.captureWidthPx * pageSize.widthPt,
+                heightPt: fragment.rect.height / band.captureHeightPx * pageSize.heightPt,
+              },
+            })),
+          } : {}),
+          placement: {
+            x: 0,
+            y: 0,
+            widthPt: pageSize.widthPt,
+            heightPt: pageSize.heightPt,
+          },
           observation: durableObservation(layer.localFitCapture?.rasterObservations?.find(
             (capture) => capture.pngDigest === pngDigest,
           )?.observation),

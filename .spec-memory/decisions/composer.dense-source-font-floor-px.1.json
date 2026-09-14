@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "key": "composer.dense-source-font-floor-px",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Allow dense source-content restyle text to shrink to a minimum of 7 CSS px.",
+  "scope": [
+    "composer",
+    "source-content"
+  ],
+  "invariants": [
+    "Dense source-content text may shrink to 7 CSS px."
+  ],
+  "forbidden": [
+    "Shrinking dense source-content text below 7 CSS px."
+  ],
+  "evidence": [
+    "docs/composer-source-preservation-and-7px-fit-design-20260913.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-13T08:42:55.4318964+00:00"
+}

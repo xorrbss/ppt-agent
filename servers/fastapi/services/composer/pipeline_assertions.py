@@ -50,7 +50,10 @@ def classify_deck(
     context = deck_context.as_mapping()
     plans: list[ComposerSlidePlan] = []
     for index, unit in enumerate(units):
-        plan = classifier(unit=unit, slide_index=index, deck_context=context)
+        try:
+            plan = classifier(unit=unit, slide_index=index, deck_context=context)
+        except ValueError as error:
+            raise ComposerAssertionError(index, "composer_plan_invalid", type(error).__name__) from error
         if plan.slide_index != index:
             raise ComposerAssertionError(index, "composer_plan_index_mismatch", f"plan index {plan.slide_index}")
         plans.append(plan)
@@ -85,7 +88,9 @@ def assert_slide_bindings(
     for result, slide_bindings in zip(results, bindings, strict=True):
         index = result.slide_index
         issues = result.receipt.blocking_issues
-        if issues and not is_accepted_residual(result.receipt.rung, issues):
+        if issues and not is_accepted_residual(
+            result.receipt.rung, issues, fit_policy_revision=result.receipt.fit_policy_revision,
+        ):
             raise ComposerAssertionError(index, "composer_blocking_issues_remaining", "; ".join(issues))
         try:
             stamped = stamp_source_blocks(result.html, list(slide_bindings))

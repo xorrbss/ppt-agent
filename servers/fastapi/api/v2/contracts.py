@@ -124,6 +124,7 @@ class PresentationGenerationRequestV2(PublicWireModel):
     slide_count: int | None = Field(default=None, ge=1, le=100)
     language: str | None = Field(default=None, min_length=1, max_length=64)
     authored_style: str | None = Field(default=None, min_length=1, max_length=160)
+    aspect_ratio: Literal["16:9", "9:16"] = "16:9"
     master_pin: AuthoredMasterPinInput | None = None
     reference_snapshot_ids: list[str] = Field(default_factory=list, max_length=16)
     source_mode: Literal["source_content_restyle"] | None = None
@@ -209,6 +210,18 @@ class PresentationExportOutputV2(PublicWireModel):
         if any(not item for item in normalized) or len(set(normalized)) != len(normalized):
             raise ValueError("requiredCapabilities must be unique non-blank values")
         return normalized
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_editable_font_embedding(cls, value: Any) -> Any:
+        if (
+            isinstance(value, dict)
+            and value.get("mode") == "editable-hybrid"
+            and "fontEmbedding" not in value
+            and "font_embedding" not in value
+        ):
+            return {**value, "fontEmbedding": "subset"}
+        return value
 
     @model_validator(mode="after")
     def validate_mode(self) -> "PresentationExportOutputV2":

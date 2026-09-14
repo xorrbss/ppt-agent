@@ -57,6 +57,7 @@ from utils.authored_patch_engine import (
 )
 from utils.llm_calls.author_deck import plan_deck_roles
 from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
+from services.authored_canvas import presentation_canvas_metadata
 
 
 AUTHORED_OPERATIONS_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
@@ -269,6 +270,12 @@ async def build_authored_retemplate_generation_request(
             for snapshot_id in (source.reference_snapshot_ids or [])
         ],
     }
+    try:
+        payload["aspect_ratio"] = presentation_canvas_metadata(source.theme)[
+            "aspectRatio"
+        ]
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
     if source.tone:
         payload["tone"] = source.tone
     if source.verbosity:

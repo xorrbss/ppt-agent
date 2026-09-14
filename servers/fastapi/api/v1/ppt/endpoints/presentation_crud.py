@@ -44,6 +44,10 @@ from models.sql.workspace import (
 )
 from models.workspace import WorkspaceBootstrapRequest
 from services.database import get_async_session, sql_engine
+from services.authored_canvas import (
+    canvas_metadata_for_aspect_ratio,
+    merge_presentation_canvas,
+)
 from services.compatibility_migration.admission import (
     stamp_new_authored_presentation,
 )
@@ -426,6 +430,7 @@ async def create_presentation(
     include_title_slide: Annotated[bool, Body()] = True,
     web_search: Annotated[bool, Body()] = False,
     theme: Annotated[Optional[dict], Body()] = None,
+    aspect_ratio: Annotated[Literal["16:9", "9:16", "9:13"], Body()] = "16:9",
     idempotency_key: Annotated[
         Optional[str], Header(alias="Idempotency-Key")
     ] = None,
@@ -534,6 +539,12 @@ async def create_presentation(
         ),
     )
     stamp_new_authored_presentation(presentation)
+    presentation.theme = merge_presentation_canvas(
+        presentation.theme,
+        canvas_metadata_for_aspect_ratio(aspect_ratio).model_dump(
+            mode="json", by_alias=True
+        ),
+    )
     # Idempotency comparisons and workspace settings must use the same
     # server-issued theme identity that will be persisted.
     resolved_theme = presentation.theme
@@ -548,6 +559,7 @@ async def create_presentation(
             "include_table_of_contents": include_table_of_contents,
             "include_title_slide": include_title_slide,
             "web_search": web_search,
+            "aspect_ratio": aspect_ratio,
         }
         # Authored-only admission stamps a theme-less presentation with the
         # internal {"mode": "authored"} marker. That marker is not a catalog

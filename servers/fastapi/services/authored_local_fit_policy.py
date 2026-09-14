@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_CEILING
@@ -69,10 +70,36 @@ def _positive(value: float) -> float:
 
 
 def font_policy(policy_revision: str = POLICY_REVISION) -> AuthoredLocalFitFontPolicy:
+    custom = re.fullmatch(r"authored-local-fit/user-font-v1/([0-9]+(?:\.[0-9]+)?)", policy_revision)
+    if custom:
+        floor = Decimal(custom.group(1))
+        if not floor.is_finite() or floor <= 0:
+            raise ValueError("unsupported_policy_revision")
+        # Encode the request-specific floor in the existing durable policy
+        # identity so renderer, verification and export use the same value.
+        return AuthoredLocalFitFontPolicy(
+            revision=policy_revision, floor_pt=floor, max_shrink=Decimal("0.10"),
+        )
     try:
         return _FONT_POLICIES[policy_revision]
     except KeyError as exc:
         raise ValueError("unsupported_policy_revision") from exc
+
+
+def requested_font_policy_revision(
+    instructions: str | None, *, conversion: float = 0.75,
+    policy_revision: str = POLICY_REVISION,
+) -> str:
+    from utils.authored_font_policy import requested_font_floor_px
+
+    requested = requested_font_floor_px(instructions)
+    if requested is None:
+        return policy_revision
+    if Decimal(str(requested)) * Decimal(str(_positive(conversion))) >= font_policy(policy_revision).floor_pt:
+        return policy_revision
+    floor = min(Decimal(str(requested)) * Decimal(str(_positive(conversion))),
+                font_policy(policy_revision).floor_pt)
+    return f"authored-local-fit/user-font-v1/{format(floor.normalize(), 'f')}"
 
 
 def policy_floor_pt(policy_revision: str = POLICY_REVISION) -> float:
@@ -158,13 +185,15 @@ def local_fit_applies(
 
 def local_fit_policy(*, author_revision: str, original_html_digest: str,
                      export_width_pt: float = 960, export_height_pt: float = 540,
+                     viewport_width: int = 1280, viewport_height: int = 720,
                      baseline: Mapping[str, Any] | None = None,
                      slide_index: int = 0, fit_budget_ms: float = 6000,
                      policy_revision: str = POLICY_REVISION) -> dict[str, Any]:
     selected_font_policy = font_policy(policy_revision)
     scale = {
         "width_pt": _positive(export_width_pt), "height_pt": _positive(export_height_pt),
-        "viewport_width": 1280, "viewport_height": 720, "dpr": 1,
+        "viewport_width": int(_positive(viewport_width)),
+        "viewport_height": int(_positive(viewport_height)), "dpr": 1,
     }
     return {
         "policy_revision": selected_font_policy.revision,
@@ -173,7 +202,8 @@ def local_fit_policy(*, author_revision: str, original_html_digest: str,
         "preferred_max_shrink": float(selected_font_policy.max_shrink),
         "allow_extended_shrink": selected_font_policy.allow_extended_shrink,
         "pt_per_css_px": pt_per_css_px(
-            width_pt=export_width_pt, height_pt=export_height_pt),
+            width_pt=export_width_pt, height_pt=export_height_pt,
+            viewport_width=viewport_width, viewport_height=viewport_height),
         "export_scale_manifest": scale, "author_revision": author_revision,
         "original_html_digest": original_html_digest,
         "baseline_schema_revision": BASELINE_SCHEMA_REVISION,

@@ -15,6 +15,7 @@ import traceback
 import uuid
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
+from functools import partial
 from typing import Optional
 
 from sqlalchemy import func, or_, select
@@ -95,8 +96,10 @@ from services.authored_local_fit_policy import (
     html_digest,
     local_fit_applies,
     local_fit_policy,
+    requested_font_policy_revision,
     slide_budget,
 )
+from services.authored_canvas import request_canvas_contract
 from services.authored_flag_classification import (
     classify_flagged_slides, flag_pages, review_pages_for,
 )
@@ -629,6 +632,7 @@ async def _fit_content_revision(
     *,
     slide_index: int,
     policy_revision: str | None = None,
+    canvas: object | None = None,
 ) -> AcceptedLocalFit:
     """Run a provider content correction through the same local-fit boundary.
 
@@ -647,16 +651,31 @@ async def _fit_content_revision(
     first_deadline = min(
         slide_deadline, started_at + budget["first_seconds"]
     )
+    canvas_width_px = int(getattr(canvas, "width_px", 1280))
+    canvas_height_px = int(getattr(canvas, "height_px", 720))
+    render_kwargs = (
+        {}
+        if (canvas_width_px, canvas_height_px) == (1280, 720)
+        else {"width_px": canvas_width_px, "height_px": canvas_height_px}
+    )
+    render_capture = partial(
+        render_html_to_png_with_metrics,
+        **render_kwargs,
+    )
     policy = local_fit_policy(
         author_revision=original_digest,
         original_html_digest=original_digest,
+        export_width_pt=canvas_width_px * 0.75,
+        export_height_pt=canvas_height_px * 0.75,
+        viewport_width=canvas_width_px,
+        viewport_height=canvas_height_px,
         slide_index=slide_index,
         policy_revision=policy_revision or POLICY_REVISION,
     )
     first_remaining = max(0.001, first_deadline - time.monotonic())
     async with asyncio.timeout(first_remaining):
         fitted = await capture_once(
-            html, index=slide_index, capture=render_html_to_png_with_metrics,
+            html, index=slide_index, capture=render_capture,
             timeout=max(1, min(60, int(first_remaining))),
             fit=True,
             fit_policy=policy,
@@ -684,7 +703,7 @@ async def _fit_content_revision(
     verify_remaining = max(0.001, verify_deadline - time.monotonic())
     async with asyncio.timeout(verify_remaining):
         verified = await capture_once(
-            fitted.fitted_html, index=slide_index, capture=render_html_to_png_with_metrics,
+            fitted.fitted_html, index=slide_index, capture=render_capture,
             timeout=max(1, min(60, int(verify_remaining))),
             fit=False,
             fit_policy={
@@ -1013,6 +1032,7 @@ def _finalize_attempt_evidence(
     htmls: list[str],
     pngs: list[bytes],
     metrics_override: dict[int, object] | None = None,
+    *, width_px: int = 1280, height_px: int = 720,
 ):
     """Bind final slide bytes to the attempt ledger without browser replay."""
 
@@ -1040,7 +1060,9 @@ def _finalize_attempt_evidence(
             browser_metrics = (
                 metrics_override.get(index)
                 if metrics_override is not None and index in metrics_override
-                else get_cached_browser_metrics(html)
+                else get_cached_browser_metrics(
+                    html, width_px=width_px, height_px=height_px
+                )
             )
             evidence = ledger.record_slide(
                 attempt_id=attempt_id,
@@ -1156,6 +1178,30 @@ async def _generate_authored_presentation(
                 stage=stage,
             )
 
+    canvas = request_canvas_contract(request)
+    canvas_width_px = int(canvas.width_px)
+    canvas_height_px = int(canvas.height_px)
+    request._authored_local_fit_policy_revision = requested_font_policy_revision(
+        request.instructions,
+        policy_revision=getattr(request, "_authored_local_fit_policy_revision", None) or POLICY_REVISION,
+    )
+    render_kwargs = (
+        {}
+        if (canvas_width_px, canvas_height_px) == (1280, 720)
+        else {"width_px": canvas_width_px, "height_px": canvas_height_px}
+    )
+    render_capture = partial(
+        render_html_to_png_with_metrics,
+        **render_kwargs,
+    )
+    cached_metrics = partial(
+        get_cached_browser_metrics,
+        **render_kwargs,
+    )
+    ensure_metrics = partial(
+        ensure_browser_metrics,
+        **render_kwargs,
+    )
     title = authored_title(request, outline)
     style = request._authored_style_snapshot or resolve_authored_style(
         request.authored_style
@@ -1579,6 +1625,8 @@ async def _generate_authored_presentation(
         pipeline_kwargs["local_fit_policy_revision"] = getattr(
             request, "_authored_local_fit_policy_revision", None
         )
+    if _callable_accepts_keyword(_author_illustrate_render_pipeline, "canvas"):
+        pipeline_kwargs["canvas"] = canvas
     if source_text_bindings is not None:
         pipeline_kwargs["source_block_bindings"] = source_text_bindings
     if source_image_bindings is not None:
@@ -1701,7 +1749,7 @@ async def _generate_authored_presentation(
             )
             original_metrics = getattr(latest, "browser_metrics", None)
             if original_metrics is None:
-                original_metrics = get_cached_browser_metrics(original_html)
+                original_metrics = cached_metrics(original_html)
             if original_metrics is None:
                 continue
             source_issues = inspect_slide_source_visibility(
@@ -1752,11 +1800,15 @@ async def _generate_authored_presentation(
                 policy_revision=getattr(
                     request, "_authored_local_fit_policy_revision", None
                 ),
+                canvas=canvas,
             )
         except AuthoredLocalFitRejected:
             return None
         local_fit_receipts[index] = fitted.receipt
-        cache_accepted_capture(fitted, timeout=60)
+        cache_accepted_capture(
+            fitted, timeout=60,
+            width_px=canvas_width_px, height_px=canvas_height_px,
+        )
         return fitted.html, fitted.png, fitted.metrics
 
     source_repair_fit_receipts: dict[tuple[int, str], dict] = {}
@@ -1770,12 +1822,16 @@ async def _generate_authored_presentation(
             fitted = await _fit_content_revision(
                 candidate_html, slide_index=slide_index,
                 policy_revision=getattr(request, "_authored_local_fit_policy_revision", None),
+                canvas=canvas,
             )
             source_repair_fit_receipts[(slide_index, digest_html(fitted.html))] = fitted.receipt
-            cache_accepted_capture(fitted, timeout=60)
+            cache_accepted_capture(
+                fitted, timeout=60,
+                width_px=canvas_width_px, height_px=canvas_height_px,
+            )
             return fitted.html, fitted.png, fitted.metrics
         canonical = ensure_authored_semantic_roles(ensure_authored_qids(candidate_html))
-        capture = await capture_once(canonical, index=slide_index, capture=render_html_to_png_with_metrics)
+        capture = await capture_once(canonical, index=slide_index, capture=render_capture)
         if (
             capture.prepared_html is None
             or capture.png == _placeholder_png()
@@ -1805,7 +1861,7 @@ async def _generate_authored_presentation(
             )
             original_metrics = getattr(latest, "browser_metrics", None)
             if original_metrics is None:
-                original_metrics = get_cached_browser_metrics(original_html)
+                original_metrics = cached_metrics(original_html)
             plan = plan_decoration_containment(
                 original_html, original_metrics,
                 profile_id=composition_profile.profile_id, reference_mode=reference_mode,
@@ -1990,7 +2046,7 @@ async def _generate_authored_presentation(
             )
             original_metrics = getattr(latest, "browser_metrics", None)
             if original_metrics is None:
-                original_metrics = get_cached_browser_metrics(htmls[absolute_index])
+                original_metrics = cached_metrics(htmls[absolute_index])
             if source_reflow and (
                 not isinstance(original_metrics, Mapping)
                 or any(
@@ -2002,7 +2058,7 @@ async def _generate_authored_presentation(
             ):
                 # Older checkpoints predate exact clipping intersections.
                 # Refresh only this failed slide, retaining its exact HTML.
-                capture = await capture_once(htmls[absolute_index], index=absolute_index, capture=render_html_to_png_with_metrics)
+                capture = await capture_once(htmls[absolute_index], index=absolute_index, capture=render_capture)
                 if capture.prepared_html != htmls[absolute_index]:
                     raise AuthoredStageError(
                         slide_index=absolute_index, stage="render",
@@ -2460,7 +2516,7 @@ async def _generate_authored_presentation(
         pre_vqa_htmls = tuple(htmls)
         pre_vqa_pngs = tuple(pngs)
         pre_vqa_metrics_by_slide = {
-            index: (revised_metrics_by_slide.get(index) or get_cached_browser_metrics(pre_vqa_htmls[index]))
+            index: (revised_metrics_by_slide.get(index) or cached_metrics(pre_vqa_htmls[index]))
             for index in range(len(pre_vqa_htmls))
         }
         fixed, accepted_fixed, vqa_repair_details = [], [], []
@@ -2477,7 +2533,7 @@ async def _generate_authored_presentation(
             try:
                 vision_qa_kwargs = {}
                 if reference_mode == EXACT_RECONSTRUCTION:
-                    exact_plan = prepare_authored_deck(outline, brand, style)
+                    exact_plan = prepare_authored_deck(outline, brand, style, canvas=canvas)
                     vision_qa_kwargs["reference_images_by_slide"] = (
                         exact_plan.reference_images
                     )
@@ -2500,6 +2556,7 @@ async def _generate_authored_presentation(
                         not terminal_fallback_enabled
                     )
                 revise_kwargs: dict[str, object] = {
+                    "instructions": request.instructions,
                     "max_cycles": composition_profile.max_repair_cycles,
                     "style": style,
                     "return_details": source_reflow,
@@ -2507,6 +2564,7 @@ async def _generate_authored_presentation(
                     "capacity_briefs": capacity_briefs,
                     "repair_details_sink": vqa_repair_details,
                     "review_stats_sink": vqa_review_stats,
+                    "canvas": canvas,
                     **vision_qa_kwargs,
                 }
                 vqa_provider_recovery_allowed: list[bool] | None = None
@@ -2587,6 +2645,7 @@ async def _generate_authored_presentation(
                                     "_authored_local_fit_policy_revision",
                                     None,
                                 ),
+                                canvas=canvas,
                             )
                         except AuthoredLocalFitRejected as error:
                             LOGGER.warning(
@@ -2604,7 +2663,7 @@ async def _generate_authored_presentation(
                         # Measure the exact correction instead of consulting a
                         # potentially stale capture cache.
                         candidate_metrics = await captured_metrics_or_existing(
-                            candidate_html, index=index, ensure=ensure_browser_metrics,
+                            candidate_html, index=index, ensure=ensure_metrics,
                         )
                     if not await source_vqa_candidate_integrity_passes(
                         index, candidate_html, candidate_metrics, validate_source_repair_candidate
@@ -2633,7 +2692,11 @@ async def _generate_authored_presentation(
                         continue
                     if candidate_fit is not None:
                         local_fit_receipts[index] = candidate_fit.receipt
-                        cache_accepted_capture(candidate_fit, timeout=60)
+                        cache_accepted_capture(
+                            candidate_fit, timeout=60,
+                            width_px=canvas_width_px,
+                            height_px=canvas_height_px,
+                        )
                     accepted_fixed.append(index)
                     scene_envelope = replace_deck_scene_slide(
                         scene_envelope,
@@ -2808,7 +2871,8 @@ async def _generate_authored_presentation(
     checkpoint_started = time.monotonic()
     evidence_ledger, evidence_attempt_id, retained_final_metrics = (
         _finalize_attempt_evidence(
-            pipeline, htmls, pngs, metrics_override=revised_metrics_by_slide
+            pipeline, htmls, pngs, metrics_override=revised_metrics_by_slide,
+            width_px=canvas_width_px, height_px=canvas_height_px,
         )
     )
     # F4: the metrics of the HTML that is about to be published, and of nothing
@@ -2820,6 +2884,8 @@ async def _generate_authored_presentation(
             htmls,
             retained=(retained_final_metrics if evidence_ledger is not None else None),
             overrides=revised_metrics_by_slide,
+            width_px=canvas_width_px,
+            height_px=canvas_height_px,
         )
     )
 
@@ -3187,6 +3253,7 @@ async def _generate_authored_presentation(
             pngs,
             title,
             local_fit_receipts=(local_fit_receipts or None),
+            canvas=canvas,
         )
         quality_gate_receipt["documentStatus"] = "completed"
         quality_gate_receipt["documentCompleted"] = True
@@ -3233,6 +3300,22 @@ async def _generate_authored_presentation(
     semantic_components = list(scene_envelope.semantic_components)
     editable_scene = None
     publication_owner_id = existing.owner_id if existing is not None else None
+    staging_recovery_context = None
+    if (
+        generation_job is not None
+        and generation_job.workspace_operation_id is not None
+        and generation_job.attempt_token
+        and getattr(generation_job, "_workspace_fencing_token", None) is not None
+    ):
+        staging_recovery_context = {
+            "presentation_id": presentation_id,
+            "job_id": generation_job.id,
+            "operation_id": generation_job.workspace_operation_id,
+            "attempt_token": generation_job.attempt_token,
+            "attempt_number": generation_job.attempt_number,
+            "fencing_token": generation_job._workspace_fencing_token,
+            "stale_deck_id": f"deck:semantic-{presentation_id.hex}",
+        }
     if publication_owner_id is not None:
         # Source-image discovery above may reopen the caller's SQLite read
         # transaction after the admission boundary was released.  The vNext
@@ -3256,6 +3339,7 @@ async def _generate_authored_presentation(
             scene_envelope=scene_envelope,
             revision=(existing.revision if existing is not None else 0) + 1,
             browser_metrics_by_slide=final_browser_metrics,
+            recovery_context=staging_recovery_context,
         )
     published_path, persist_elapsed = await publish_authored_presentation(
         request=request,

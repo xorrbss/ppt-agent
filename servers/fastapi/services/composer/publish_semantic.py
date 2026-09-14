@@ -221,6 +221,10 @@ def semantic_draft_from_html(
     measures fails the exporter's identity check.
     """
 
+    if re.search(r'data-source-fit-policy=[\"\']composer-source-fit/v2[\"\']', html):
+        from services.composer.publish_source_semantic import source_semantic_draft
+        return source_semantic_draft(html, language=language, font_family=font_family, font_face=font_face, tokens=tokens)
+
     elements: list[dict[str, Any]] = []
     for index, item in enumerate(collect_qid_elements(html)):
         text = item["text"]

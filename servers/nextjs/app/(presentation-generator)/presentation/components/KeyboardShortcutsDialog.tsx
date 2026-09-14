@@ -70,7 +70,7 @@ export function KeyboardShortcutsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="z-[10021] max-h-[calc(100vh-32px)] w-[calc(100%-32px)] max-w-[780px] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden rounded-[20px] border border-[#E7E8EC] bg-white p-0 font-syne shadow-[0_24px_80px_rgba(16,24,40,0.24)]"
+        className="z-[10021] max-h-[calc(100vh-32px)] w-[calc(100%-32px)] max-w-[780px] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 font-syne"
         overlayClassName="z-[10020] bg-[#101323]/45 backdrop-blur-[2px]"
       >
         <DialogHeader className="space-y-0 border-b border-[#EAECF0] px-6 py-5 pr-14 text-left">
@@ -84,10 +84,10 @@ export function KeyboardShortcutsDialog({
                 />
               </span>
               <div>
-                <DialogTitle className="text-[18px] font-semibold leading-6 text-[#101323]">
+                <DialogTitle className="text-xl font-semibold leading-7 tracking-tight text-gray-900">
                   {t("title")}
                 </DialogTitle>
-                <DialogDescription className="mt-1 text-[13px] leading-5 text-[#667085]">
+                <DialogDescription className="mt-2 text-sm leading-6 text-gray-500">
                   {t("description")}
                 </DialogDescription>
               </div>

@@ -1,12 +1,17 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import {
+  LEGACY_AUTHORED_CANVAS,
+  type AuthoredCanvasContract,
+} from "@/lib/authored-canvas";
 
 interface AuthoredSlidePreviewProps {
   slideIndex: number;
   html?: unknown;
   imageSrc?: string;
   preferHtml?: boolean;
+  canvas?: AuthoredCanvasContract;
 }
 
 const AUTHORED_PREVIEW_CSP = [
@@ -55,6 +60,7 @@ export function AuthoredSlidePreview({
   html,
   imageSrc,
   preferHtml = false,
+  canvas = LEGACY_AUTHORED_CANVAS,
 }: AuthoredSlidePreviewProps) {
   // Fail closed during SSR/hydration. Only a confirmed ordinary web runtime
   // may construct authored srcDoc; Electron always consumes the isolated
@@ -77,7 +83,9 @@ export function AuthoredSlidePreview({
     <div
       data-testid={`authored-slide-preview-${slideIndex}`}
       data-authored-runtime={runtime}
-      className="aspect-video h-full w-full overflow-hidden bg-white"
+      data-authored-canvas={`${canvas.widthPx}x${canvas.heightPx}`}
+      className="h-full w-full overflow-hidden bg-white"
+      style={{ aspectRatio: `${canvas.widthPx} / ${canvas.heightPx}` }}
     >
       {canRenderHtml ? (
         <iframe

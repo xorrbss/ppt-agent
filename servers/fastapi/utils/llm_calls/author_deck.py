@@ -8,7 +8,7 @@ import asyncio
 import io
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Awaitable, Callable, List, Mapping, Optional, Sequence, Tuple
 
@@ -26,6 +26,7 @@ from models.authored_visual_plan import (
 )
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.authored_geometry_brief import relaxed_geometry_brief
+from utils.authored_font_policy import requested_font_floor_px
 from utils.authored_header_validation import validate_header_contract
 from utils.authored_infographic import CONTRACT_ERROR_PREFIX
 from services.source_images.models import SourceImageCandidate
@@ -148,6 +149,8 @@ class AuthoredDeckPlan:
     # Exact title/body/visible-text accounting produced before provider work.
     # It shares the capacity authority above and never mutates source content.
     text_plan: AuthoredTextPlan | None = None
+    canvas_width_px: int = 1280
+    canvas_height_px: int = 720
 
     def header_contract_at(self, index: int) -> AuthoredHeaderContract | None:
         """The contract governing one slide, or None when its source has none.
@@ -810,6 +813,8 @@ async def _author_one_resilient(
     # H2: fired deterministic repairs are appended here when the caller has a
     # per-slide quality receipt to carry them.
     normalization_receipt: list[dict] | None = None,
+    canvas_width_px: int = 1280,
+    canvas_height_px: int = 720,
 ) -> str:
     """Author one slide with one explicit correction and a branded fallback.
 
@@ -1159,6 +1164,8 @@ async def _author_one_resilient(
         index,
         n,
         page_number_mode=page_number_mode,
+        canvas_width_px=canvas_width_px,
+        canvas_height_px=canvas_height_px,
     )
 
 
@@ -1176,6 +1183,7 @@ def prepare_authored_deck(
     infographic_plan: AuthoredInfographicPlan | None = None,
     instructions: Optional[str] = None,
     composition_profile: CompositionProfile | None = None,
+    canvas: object | None = None,
 ) -> AuthoredDeckPlan:
     """Prepare the shared prompt inputs once, before slide-level pipelining starts.
 
@@ -1213,6 +1221,8 @@ def prepare_authored_deck(
             for value in structured_slide_contexts
         )
     effective_brand = apply_style_defaults(brand, style)
+    canvas_width_px = int(getattr(canvas, "width_px", 1280))
+    canvas_height_px = int(getattr(canvas, "height_px", 720))
     roles = tuple(plan_deck_roles(outline, chapter_plan))
     reference_mode = normalize_reference_mode(
         getattr(style, "reference_mode", STYLE_REFERENCE)
@@ -1244,6 +1254,12 @@ def prepare_authored_deck(
         "ordinary", "authored", True, True, 1
     )
     capacity_plan = build_authored_capacity_plan(contents, roles, profile)
+    requested_font_px = requested_font_floor_px(instructions)
+    if requested_font_px is not None and reference_mode != EXACT_RECONSTRUCTION:
+        capacity_plan = replace(capacity_plan, slides=tuple(
+            replace(slide, min_font_px=min(slide.min_font_px, requested_font_px))
+            for slide in capacity_plan.slides
+        ))
     # A relaxed envelope states no budget, so there is no text plan to freeze
     # against it; the prompt then carries neither brief.
     text_plan = (
@@ -1283,6 +1299,7 @@ def prepare_authored_deck(
         if infographic_plan is not None
         and reference_mode != EXACT_RECONSTRUCTION
         and not structured
+        and (canvas_width_px, canvas_height_px) == (1280, 720)
         else ()
     )
     visual_plan = (
@@ -1306,6 +1323,8 @@ def prepare_authored_deck(
             style,
             page_number_mode=page_number_mode,
             header_contract=effective_contract,
+            canvas_width_px=canvas_width_px,
+            canvas_height_px=canvas_height_px,
         ),
         structured_contexts=structured_contexts,
         page_number_mode=page_number_mode,
@@ -1322,6 +1341,8 @@ def prepare_authored_deck(
         visual_plan=visual_plan,
         capacity_plan=capacity_plan,
         text_plan=text_plan,
+        canvas_width_px=canvas_width_px,
+        canvas_height_px=canvas_height_px,
     )
 
 
@@ -1373,7 +1394,11 @@ def _capacity_brief(
         return None
     if not capacity.enforced:
         return relaxed_geometry_brief(plan, index)
-    brief = capacity.prompt_brief(capacity_plan.profile)
+    brief = capacity.prompt_brief(
+        capacity_plan.profile,
+        canvas_width_px=getattr(plan, "canvas_width_px", 1280),
+        canvas_height_px=getattr(plan, "canvas_height_px", 720),
+    )
     if not brief:
         return None
     text_plan = getattr(plan, "text_plan", None)
@@ -1710,6 +1735,8 @@ async def author_planned_slide(
         prior_failure_hint=prior_failure_hint,
         style_anchor=style_anchor,
         normalization_receipt=normalization_receipt,
+        canvas_width_px=getattr(plan, "canvas_width_px", 1280),
+        canvas_height_px=getattr(plan, "canvas_height_px", 720),
     )
 
 
@@ -1805,6 +1832,8 @@ async def author_deck(
             index,
             len(plan.contents),
             page_number_mode=plan.page_number_mode,
+            canvas_width_px=getattr(plan, "canvas_width_px", 1280),
+            canvas_height_px=getattr(plan, "canvas_height_px", 720),
         )
     return AuthoredDeckResult(
         htmls=[html_by_index[index] for index in range(len(plan.contents))],
@@ -1812,18 +1841,26 @@ async def author_deck(
     )
 
 
-def build_image_pptx(images: List[bytes], out_path: str) -> str:
-    """Assemble rendered slide PNGs into a 16:9 PPTX, one full-bleed picture per
+def build_image_pptx(
+    images: List[bytes], out_path: str, *,
+    canvas_width_px: int = 1280, canvas_height_px: int = 720,
+) -> str:
+    """Assemble rendered slide PNGs into a PPTX, one full-bleed picture per
     slide (perfect fidelity, opens in PowerPoint). Returns the saved path."""
     from pptx import Presentation
     from pptx.util import Emu
+    from PIL import Image
+
+    expected_size = (int(canvas_width_px), int(canvas_height_px))
+    if any(Image.open(io.BytesIO(image)).size != expected_size for image in images):
+        raise ValueError("authored export image canvas mismatch")
 
     prs = Presentation()
     # 1280x720 CSS px at 96dpi maps to an exact 960x540pt page.  The former
     # decimal-inch approximation was 0.024pt narrow and could not share the
     # local-fit export-scale identity.
-    prs.slide_width = Emu(12_192_000)
-    prs.slide_height = Emu(6_858_000)
+    prs.slide_width = Emu(int(canvas_width_px) * 9_525)
+    prs.slide_height = Emu(int(canvas_height_px) * 9_525)
     blank = prs.slide_layouts[6]
     for img in images:
         slide = prs.slides.add_slide(blank)

@@ -6,6 +6,10 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from pydantic import TypeAdapter
+
+from models.slidespec_v1 import RepairOperation
+
 from llmai.shared import SystemMessage, UserMessage
 
 from utils.llm_calls.propose_slidespec_repair import (
@@ -29,15 +33,43 @@ def _schema(allowed_operations: Sequence[str] | None = None) -> dict[str, Any]:
     )
     if not operation_enum:
         operation_enum = sorted(ALLOWED_OPERATIONS)
-    operation = {
-        "type": "object",
-        "required": ["op", "target"],
-        "properties": {
-            "op": {"type": "string", "enum": operation_enum},
-            "target": {"type": "string", "minLength": 1, "maxLength": 256},
-        },
-        "additionalProperties": True,
-    }
+    # The planner must receive the same required operands and numeric bounds
+    # the admission model enforces, rather than inventing arbitrary op values.
+    operation_contract = TypeAdapter(RepairOperation).json_schema(by_alias=True)
+    definitions = operation_contract.get("$defs", {})
+    alternatives = []
+    for branch in operation_contract["oneOf"]:
+        name = branch["$ref"].rsplit("/", 1)[-1]
+        definition = definitions[name]
+        op_schema = definition["properties"]["op"]
+        names = set(op_schema.get("enum", [op_schema.get("const")]))
+        supported = sorted(names.intersection(operation_enum))
+        if not supported:
+            continue
+        if "enum" in op_schema:
+            op_schema["enum"] = supported
+        alternatives.append(branch)
+    operation = {"anyOf": alternatives}
+
+    # Keep only definitions reachable from the allowed operations. In particular,
+    # local projection should not pay for the full subtree replacement schema.
+    referenced: dict[str, Any] = {}
+
+    def collect_refs(value: Any) -> None:
+        if isinstance(value, dict):
+            reference = value.get("$ref", "")
+            if reference.startswith("#/$defs/"):
+                name = reference.rsplit("/", 1)[-1]
+                if name not in referenced:
+                    referenced[name] = definitions[name]
+                    collect_refs(definitions[name])
+            for child in value.values():
+                collect_refs(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect_refs(child)
+
+    collect_refs(operation)
     plan = {
         "type": "object",
         "required": [
@@ -67,6 +99,7 @@ def _schema(allowed_operations: Sequence[str] | None = None) -> dict[str, Any]:
         "additionalProperties": True,
     }
     return {
+        "$defs": referenced,
         "type": "object",
         "required": ["plans"],
         "properties": {

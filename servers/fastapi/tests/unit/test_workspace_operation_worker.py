@@ -133,7 +133,14 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
         replace=True
     )
     profile = get_public_worker_profile("generation")
-    assert profile.operation_kinds == ("presentation.generate", "quality.review")
+    assert profile.operation_kinds == (
+        "presentation.generate",
+        "quality.review",
+        "slide.regenerate.preview",
+        "slide.regenerate",
+        "template.apply",
+        "design.apply",
+    )
     assert profile.canonical_database_access is True
     assert profile.provider_network_access is True
     assert profile.browser_allowed is False
@@ -143,11 +150,34 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
         registry.resolve("quality.review"), worker.WorkspaceQualityReviewOperationHandler
     )
     assert registry.recovery_policy("quality.review") == "automatic"
+    assert isinstance(
+        registry.resolve("slide.regenerate.preview"),
+        worker.WorkspacePageRemakePreviewOperationHandler,
+    )
+    assert registry.recovery_policy("slide.regenerate.preview") == "automatic"
+    assert isinstance(
+        registry.resolve("slide.regenerate"),
+        worker.WorkspacePageRemakeOperationHandler,
+    )
+    assert registry.recovery_policy("slide.regenerate") == "automatic"
+    for kind in ("template.apply", "design.apply"):
+        assert registry.resolve(kind) is not None
+        assert registry.recovery_policy(kind) == "automatic"
+    assert registry.resolve("presentation.edit") is None
+    assert registry.resolve("slide.regenerate.batch.preview") is None
+    assert registry.resolve("slide.regenerate.batch") is None
     assert registry.resolve("export.pptx") is None
     assert registry.resolve("export.pdf") is None
     worker.start_workspace_worker_metrics_exporter.assert_awaited_once_with()
     worker.start_workspace_operation_runner.assert_awaited_once_with(
-        allowed_kinds=("presentation.generate", "quality.review")
+        allowed_kinds=(
+            "presentation.generate",
+            "quality.review",
+            "slide.regenerate.preview",
+            "slide.regenerate",
+            "template.apply",
+            "design.apply",
+        )
     )
     worker.start_workspace_cleanup_maintenance.assert_awaited_once_with()
     worker.start_workspace_asset_maintenance.assert_awaited_once_with()

@@ -6,7 +6,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.authored_chapter_plan import AuthoredChapterPlan
@@ -25,6 +25,9 @@ from models.sql.presentation import (
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.slide import SlideModel
+from models.sql.workspace import WorkspaceOperation
+from models.sql.authored_semantic_bundle import AuthoredDeckEmissionActivePointer
+from models.sql.authored_vnext_repository import AuthoredVNextEntityHead
 from services.authored_checkpoint_service import (
     AuthoredStageError,
     begin_publish,
@@ -57,9 +60,99 @@ from services.authored_vnext.semantic.editable_scene import (
 )
 from models.authored_vnext.deck import DeckSceneIR
 from utils.llm_calls.author_slide import Brand
+from services.authored_canvas import (
+    merge_authored_vnext_projection,
+    merge_presentation_canvas,
+    request_canvas_metadata,
+)
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+async def _validate_staging_recovery_scene_binding(
+    *,
+    session: AsyncSession,
+    request: GeneratePresentationRequest,
+    presentation: PresentationModel,
+    canonical_scene: DeckSceneIR | None,
+) -> None:
+    """Re-check the private candidate fence before it becomes public state."""
+
+    binding = getattr(request, "_authored_staging_scene_binding", None)
+    if binding is None:
+        return
+    if not isinstance(binding, dict) or canonical_scene is None:
+        raise AuthoredStageError(
+            slide_index=0, stage="persist",
+            code="authored_staging_recovery_binding_invalid", retryable=False,
+        )
+    if (
+        binding.get("presentation_id") != str(presentation.id)
+        or binding.get("deck_id") != canonical_scene.deck_id
+        or binding.get("deck_revision") != canonical_scene.revision
+        or binding.get("scene_digest") != canonical_scene.scene_digest
+        or binding.get("expected_public_revision") != presentation.revision
+        or presentation.lifecycle_status != PRESENTATION_LIFECYCLE_STAGING
+        or presentation.revision != 0
+    ):
+        raise AuthoredStageError(
+            slide_index=0, stage="persist",
+            code="authored_staging_recovery_binding_stale", retryable=False,
+        )
+    try:
+        operation_id = uuid.UUID(str(binding["operation_id"]))
+        job_id = uuid.UUID(str(binding["job_id"]))
+    except (KeyError, TypeError, ValueError) as error:
+        raise AuthoredStageError(
+            slide_index=0, stage="persist",
+            code="authored_staging_recovery_binding_invalid", retryable=False,
+        ) from error
+    operation = await session.scalar(
+        select(WorkspaceOperation).where(
+            WorkspaceOperation.id == operation_id,
+            WorkspaceOperation.presentation_id == presentation.id,
+            WorkspaceOperation.owner_id == presentation.owner_id,
+            WorkspaceOperation.kind.in_(("design.apply", "template.apply")),
+            WorkspaceOperation.retry_of_operation_id.is_not(None),
+            WorkspaceOperation.state == "running",
+            WorkspaceOperation.cancel_requested_at.is_(None),
+            WorkspaceOperation.lease_expires_at > datetime.now(timezone.utc),
+            WorkspaceOperation.attempt_token == binding.get("attempt_token"),
+            WorkspaceOperation.attempt_number == binding.get("attempt_number"),
+            WorkspaceOperation.fencing_token == binding.get("fencing_token"),
+        )
+    )
+    job = await session.scalar(
+        select(PresentationGenerationJob).where(
+            PresentationGenerationJob.id == job_id,
+            PresentationGenerationJob.presentation_id == presentation.id,
+            PresentationGenerationJob.workspace_operation_id == operation_id,
+            PresentationGenerationJob.state.in_(("running", "staging")),
+            PresentationGenerationJob.attempt_token == binding.get("attempt_token"),
+            PresentationGenerationJob.attempt_number == binding.get("attempt_number"),
+        )
+    )
+    head = await session.scalar(
+        select(AuthoredVNextEntityHead).where(
+            AuthoredVNextEntityHead.owner_id == presentation.owner_id,
+            AuthoredVNextEntityHead.entity_kind == "deck",
+            AuthoredVNextEntityHead.entity_id == canonical_scene.deck_id,
+            AuthoredVNextEntityHead.revision == canonical_scene.revision,
+            AuthoredVNextEntityHead.digest == binding.get("deck_digest"),
+        )
+    )
+    active_manifest = await session.scalar(
+        select(AuthoredDeckEmissionActivePointer).where(
+            AuthoredDeckEmissionActivePointer.owner_id == presentation.owner_id,
+            AuthoredDeckEmissionActivePointer.presentation_id == presentation.id,
+        )
+    )
+    if operation is None or job is None or head is None or active_manifest is not None:
+        raise AuthoredStageError(
+            slide_index=0, stage="persist",
+            code="authored_staging_recovery_binding_stale", retryable=False,
+        )
 
 
 async def publish_authored_presentation(
@@ -225,12 +318,16 @@ async def publish_authored_presentation(
         presentation.mode = AUTHORED_TEMPLATE
         presentation.lifecycle_status = PRESENTATION_LIFECYCLE_STAGING
         presentation.theme = {
+            **dict(presentation.theme or {}),
             "mode": AUTHORED_TEMPLATE,
             "style": style.id,
             "primary": brand.primary,
             "fonts": brand.fonts,
             "language": brand.language,
         }
+        presentation.theme = merge_presentation_canvas(
+            presentation.theme, request_canvas_metadata(request)
+        )
         if quality_gate_receipt is not None:
             # Keep quality admission evidence separate from residual issue state:
             # the receipt describes the gate run, while ``status`` says whether
@@ -283,7 +380,14 @@ async def publish_authored_presentation(
                     retryable=False,
                 )
             pin = deck.master
+            current_authored_projection = presentation.theme.get("authored_vnext")
             presentation.theme["authored_vnext"] = {
+                **(
+                    dict(current_authored_projection)
+                    if isinstance(current_authored_projection, dict)
+                    else {}
+                ),
+                "canvas": request_canvas_metadata(request),
                 "schemaVersion": "authored-vnext-scene-projection/v1",
                 "deckId": deck.deck_id,
                 "deckRevision": deck.revision,
@@ -416,6 +520,7 @@ async def publish_authored_presentation(
         elif (
             canonical_scene.revision != expected_revision + 1
             or canonical_scene.deck_id != f"deck:semantic-{presentation_id.hex}"
+            and getattr(request, "_authored_staging_scene_binding", None) is None
         ):
             raise AuthoredStageError(
                 slide_index=0,
@@ -423,6 +528,12 @@ async def publish_authored_presentation(
                 code="authored_semantic_scene_identity_mismatch",
                 retryable=False,
             )
+        await _validate_staging_recovery_scene_binding(
+            session=sql_session,
+            request=request,
+            presentation=presentation,
+            canonical_scene=canonical_scene,
+        )
         try:
             semantic_manifest = await publish_authored_semantic_bundle_graph(
                 sql_session,
@@ -479,10 +590,10 @@ async def publish_authored_presentation(
             "promotionReady": False,  # omitted, this read as a claim
             "deploymentAuthorized": False,
         }
-        presentation.theme = {
-            **dict(presentation.theme or {}),
-            "authored_vnext": projection,
-        }
+        presentation.theme = merge_authored_vnext_projection(
+            presentation.theme,
+            projection,
+        )
         if canonical_scene is not None:
             for slide, scene_slide in zip(
                 slides, canonical_scene.slides, strict=True

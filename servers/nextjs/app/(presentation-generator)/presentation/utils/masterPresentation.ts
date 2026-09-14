@@ -199,51 +199,34 @@ export function masterPinnedBodyOnlyContext(
 function unresolvedQualityBlockers(presentation: unknown): string[] | undefined {
   const gate = record(record(record(presentation)?.theme)?.authoredQualityGate);
   const receipt = record(gate?.qualityReceiptV3);
-  // No receipt at all is the retained legacy-Fidelity compatibility path; it is
-  // the server's decision to make, not a reason to withhold anything here.
-  if (!receipt || receipt.gatePassed === true) return undefined;
+  if (!receipt) return [];
+  if (receipt.gatePassed === true) return undefined;
   return Array.isArray(receipt.blockers)
     ? receipt.blockers.filter((entry): entry is string => typeof entry === "string")
     : [];
 }
 
-/**
- * Why no export of this deck can succeed, if none can.
- *
- * `export.pptx` waives a pending visual review for Fidelity alone (decision
- * `public-export.fidelity-visual-review-pending`, which forbids the same waiver
- * for Hybrid). Every other unresolved blocker refuses all formats, so offering
- * the buttons would send the user into an export that fails in the timeline
- * with a message they cannot act on.
- */
-export function presentationExportBlockReason(
+/** A sealed quality result is reported with an export; it does not block it. */
+export function presentationExportQualityAdvisory(
   presentation: unknown,
 ): string | undefined {
   const blockers = unresolvedQualityBlockers(presentation);
   if (blockers === undefined) return undefined;
-  if (blockers.length === 1 && blockers[0] === "visualReview.required_failed") {
-    return undefined;
-  }
   if (blockers.includes("visualReview.failed")) {
-    return "시각 검수가 통과하지 못해 이 덱은 내보낼 수 없습니다. 페이지를 다시 만든 뒤 시도하세요.";
+    return "시각 검수 미통과 상태입니다. 원본 상태로 내보내며, 품질 결과는 이력에 유지됩니다.";
   }
-  return `품질 검수가 통과하지 않아 내보낼 수 없습니다: ${blockers.join(", ") || "사유 미기재"}`;
+  if (blockers.length === 1 && blockers[0] === "visualReview.required_failed") {
+    return "시각 검수 미실시 상태입니다. 원본 상태로 내보내며, 품질 결과는 이력에 유지됩니다.";
+  }
+  return "품질 검수 확인 필요 상태입니다. 원본 상태로 내보내며, 품질 결과는 이력에 유지됩니다.";
 }
 
-/**
- * Why the editable Hybrid export in particular would be refused.
- *
- * A review that never ran withholds Hybrid only; anything that stops the whole
- * deck is reported by `presentationExportBlockReason` and repeated here so the
- * Hybrid options are withheld too.
- */
-export function presentationHybridQualityBlockReason(
-  presentation: unknown,
-): string | undefined {
-  const blockers = unresolvedQualityBlockers(presentation);
-  if (blockers === undefined) return undefined;
-  if (blockers.length === 1 && blockers[0] === "visualReview.required_failed") {
-    return "이 덱은 시각 검수 없이 생성되어 편집 가능한 Hybrid를 사용할 수 없습니다. 다시 만들 때 '고품질 검수 (vision-QA)'를 켜세요. Fidelity PPTX와 PDF는 그대로 내보낼 수 있습니다.";
-  }
-  return presentationExportBlockReason(presentation);
+/** @deprecated Quality no longer withholds an original-source export. */
+export function presentationExportBlockReason(_presentation: unknown): undefined {
+  return undefined;
+}
+
+/** @deprecated Hybrid availability is now decided by its capability guards. */
+export function presentationHybridQualityBlockReason(_presentation: unknown): undefined {
+  return undefined;
 }

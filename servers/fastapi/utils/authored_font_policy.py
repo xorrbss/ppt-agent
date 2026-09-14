@@ -9,6 +9,7 @@ this policy at the call site because source fidelity is its primary contract.
 from __future__ import annotations
 
 import re
+import math
 
 from services.authored_vnext.capability_registry import (
     AUTHORED_FONT_FLOOR_PT,
@@ -17,6 +18,36 @@ from services.authored_vnext.capability_registry import (
 
 MIN_AUTHORED_FONT_SIZE_PX = AUTHORED_FONT_FLOOR_PX
 MIN_AUTHORED_FONT_SIZE_PT = AUTHORED_FONT_FLOOR_PT
+
+
+def requested_font_floor_px(instructions: str | None) -> float | None:
+    """Read explicit, unit-bearing typography values from the user's request only.
+
+    This is permission to preserve a requested size, not a replacement for the
+    author's interpretation of which typography role the request addresses.
+    Never pass extracted source documents or generated HTML here.
+    """
+    values = []
+    pattern = (
+        r"(?:본문|기본|전체|글자|글씨|글짜|폰트|body|base|default|font)"
+        r"(?:\s|글자|글씨|글짜|폰트|크기|사이즈|기본|본문|size|font|text|"
+        r"를|을|은|는|의|로|:|=|-)*"
+        r"(?P<size>\d+(?:\.\d+)?)\s*(?P<unit>px|pt|픽셀|포인트)"
+    )
+    for match in re.finditer(pattern, instructions or "", re.IGNORECASE):
+        # A rejected alternative is not an explicit size selection.
+        prefix = (instructions or "")[max(0, match.start() - 24):match.start()]
+        if re.search(r"(?:do\s+not|don't|avoid|not)\s+(?:use\s+)?$", prefix, re.IGNORECASE):
+            continue
+        tail = (instructions or "")[match.end():match.end() + 20]
+        if re.match(r"\s*(?:가?\s*아니|말고|대신|로?\s*하지|로?\s*하지마)", tail):
+            continue
+        value = float(match.group("size"))
+        if match.group("unit").lower() in {"pt", "포인트"}:
+            value /= 0.75
+        if math.isfinite(value) and value > 0:
+            values.append(value)
+    return min(values) if values else None
 
 _SCRIPT_BLOCK_RE = re.compile(
     r"(<script\b[^>]*>.*?</script\s*>)", re.IGNORECASE | re.DOTALL
@@ -103,22 +134,32 @@ def enforce_authored_font_floor(
     *,
     minimum_px: float = MIN_AUTHORED_FONT_SIZE_PX,
     minimum_pt: float | None = None,
+    instructions: str | None = None,
 ) -> str:
     """Raise explicit positive CSS font sizes below the requested floor.
 
     Script bodies are preserved byte-for-byte so CSS-looking strings in JavaScript
     are never rewritten. The default remains the 12px/9pt capability floor;
     generation may pass a stricter frozen slide-capacity floor before Chromium.
+    An explicit user typography size takes priority over those default floors.
     The transformation is deterministic and idempotent.
     """
     if not html:
         return html
 
-    minimum_px = max(float(minimum_px), MIN_AUTHORED_FONT_SIZE_PX)
-    minimum_pt = max(
-        MIN_AUTHORED_FONT_SIZE_PT,
-        minimum_px * 0.75 if minimum_pt is None else float(minimum_pt),
-    )
+    requested_px = requested_font_floor_px(instructions)
+    if requested_px is not None:
+        minimum_px = min(float(minimum_px), requested_px)
+        minimum_pt = min(
+            minimum_px * 0.75 if minimum_pt is None else float(minimum_pt),
+            requested_px * 0.75,
+        )
+    else:
+        minimum_px = max(float(minimum_px), MIN_AUTHORED_FONT_SIZE_PX)
+        minimum_pt = max(
+            MIN_AUTHORED_FONT_SIZE_PT,
+            minimum_px * 0.75 if minimum_pt is None else float(minimum_pt),
+        )
 
     parts = _SCRIPT_BLOCK_RE.split(html)
     return "".join(

@@ -12,7 +12,7 @@ import re
 from typing import Annotated, Any, Literal, TypeAlias
 import uuid
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from models.authored_vnext.master.base import Digest, StrictCamelModel
 from models.authored_vnext.deck.scene import DeckSceneIR
@@ -124,6 +124,22 @@ class TextPayloadV1(StrictCamelModel):
     whitespace: Literal["normal", "pre", "pre-wrap", "nowrap"] = "normal"
 
 
+class SourceTextRunV2(TextRunV1):
+    """Source run boundary spaces and explicit breaks are content, not padding."""
+
+    text: Annotated[str, StringConstraints(strip_whitespace=False)] = Field(max_length=16384)
+
+
+class SourceTextParagraphV2(TextParagraphV1):
+    runs: list[SourceTextRunV2] = Field(min_length=1, max_length=512)
+
+
+class SourceTextPayloadV2(TextPayloadV1):
+    schema_version: Literal["authored-source-text/v2"] = "authored-source-text/v2"
+    source_fit_policy: Literal["composer-source-fit/v2"]
+    paragraphs: list[SourceTextParagraphV2] = Field(min_length=1, max_length=256)
+
+
 class ImagePayloadV1(StrictCamelModel):
     asset_id: str = Field(pattern=r"^asset:[a-z0-9][a-z0-9._:-]{0,191}$")
     asset_digest: Digest
@@ -169,7 +185,7 @@ class SemanticElementBaseV1(StrictCamelModel):
 
 class TextElementV1(SemanticElementBaseV1):
     kind: Literal["text"]
-    payload: TextPayloadV1
+    payload: SourceTextPayloadV2 | TextPayloadV1
 
 
 class ImageElementV1(SemanticElementBaseV1):
@@ -235,20 +251,24 @@ class ChartElementV1(SemanticElementBaseV1):
 
 class TableCellV1(StrictCamelModel):
     text: str = Field(max_length=10000)
+    paragraphs: list[TextParagraphV1] | None = None
     fill: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
     text_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
     bold: bool = False
     font_family: str | None = Field(default=None, min_length=1, max_length=128)
-    font_size_pt: float | None = Field(default=None, ge=6, le=72)
+    font_size_pt: float | None = Field(default=None, ge=5.25, le=72)
 
 
 class TablePayloadV1(StrictCamelModel):
     schema_version: Literal["authored-native-table/v1"] = "authored-native-table/v1"
+    source_fit_policy: Literal["composer-source-fit/v2"] | None = None
+    merged_cells: list[dict[str, int]] | None = None
+    row_heights_pt: list[float] | None = None
     rows: list[list[TableCellV1]] = Field(min_length=1, max_length=100)
     column_widths: list[float] | None = Field(default=None, min_length=1, max_length=20)
     header_rows: int = Field(default=0, ge=0, le=100)
     font_family: str | None = Field(default=None, min_length=1, max_length=128)
-    font_size_pt: float | None = Field(default=None, ge=6, le=72)
+    font_size_pt: float | None = Field(default=None, ge=5.25, le=72)
 
     @model_validator(mode="after")
     def rectangular_bounded_grid(self) -> "TablePayloadV1":
@@ -264,12 +284,51 @@ class TablePayloadV1(StrictCamelModel):
                 raise ValueError("authored_table_column_widths_mismatch")
             if any(width <= 0 for width in self.column_widths):
                 raise ValueError("authored_table_column_width_invalid")
+        source_fit = self.schema_version == "authored-native-table/v2" and self.source_fit_policy == "composer-source-fit/v2"
+        if (self.schema_version == "authored-native-table/v2") != (self.source_fit_policy == "composer-source-fit/v2"):
+            raise ValueError("authored_table_fit_policy_invalid")
+        if not source_fit and any(size is not None and size < 6 for size in [self.font_size_pt, *(cell.font_size_pt for row in self.rows for cell in row)]):
+            raise ValueError("authored_table_font_size_invalid")
+        if not source_fit and any(cell.paragraphs is not None for row in self.rows for cell in row):
+            raise ValueError("authored_table_rich_text_requires_v2")
+        for row in self.rows:
+            for cell in row:
+                if cell.paragraphs is not None:
+                    if "\n".join("".join(run.text for run in paragraph.runs) for paragraph in cell.paragraphs) != cell.text:
+                        raise ValueError("authored_table_rich_text_mismatch")
+                    if any(run.font_size_pt < 5.25 for paragraph in cell.paragraphs for run in paragraph.runs):
+                        raise ValueError("authored_table_font_size_invalid")
+        if self.row_heights_pt is not None and (len(self.row_heights_pt) != len(self.rows) or any(height <= 0 for height in self.row_heights_pt)):
+            raise ValueError("authored_table_row_heights_invalid")
+        occupied = set()
+        for merge in self.merged_cells or []:
+            if set(merge) != {"row", "column", "rowSpan", "columnSpan"}:
+                raise ValueError("authored_table_merge_invalid")
+            r, c, rs, cs = (merge[key] for key in ("row", "column", "rowSpan", "columnSpan"))
+            if min(r, c) < 0 or min(rs, cs) < 1 or r + rs > len(self.rows) or c + cs > column_count or rs * cs == 1:
+                raise ValueError("authored_table_merge_invalid")
+            for rr in range(r, r + rs):
+                for cc in range(c, c + cs):
+                    if (rr, cc) in occupied or ((rr, cc) != (r, c) and self.rows[rr][cc].text):
+                        raise ValueError("authored_table_merge_invalid")
+                    occupied.add((rr, cc))
         return self
+
+
+class SourceTableCellV2(TableCellV1):
+    text: Annotated[str, StringConstraints(strip_whitespace=False)] = Field(max_length=10000)
+    paragraphs: list[SourceTextParagraphV2] | None = None
+
+
+class SourceTablePayloadV2(TablePayloadV1):
+    schema_version: Literal["authored-native-table/v2"] = "authored-native-table/v2"
+    source_fit_policy: Literal["composer-source-fit/v2"]
+    rows: list[list[SourceTableCellV2]] = Field(min_length=1, max_length=100)
 
 
 class TableElementV1(SemanticElementBaseV1):
     kind: Literal["table"]
-    payload: TablePayloadV1
+    payload: SourceTablePayloadV2 | TablePayloadV1
 
 
 class ReferencedTableElementV1(SemanticElementBaseV1):

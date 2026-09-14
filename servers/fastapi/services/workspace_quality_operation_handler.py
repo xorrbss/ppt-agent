@@ -36,6 +36,10 @@ from services.authored_quality_receipt_v2 import (
 )
 from services.authored_quality_review_service import run_authored_quality_review
 from services.authored_quality_telemetry import style_comparison_observation_metadata
+from services.authored_post_edit_evidence import (
+    AuthoredPostEditEvidenceError,
+    refresh_authored_post_edit_evidence,
+)
 from services.database import async_session_maker
 from services.presentation_publication_service import (
     PresentationPublicationConflict,
@@ -1430,6 +1434,30 @@ class WorkspaceQualityReviewOperationHandler:
                 if isinstance(value, int) and not isinstance(value, bool) and value >= 0
             ]
             result_revision = int(inspected_revision) + 1 if fixed_count > 0 else int(inspected_revision)
+            if fixed_count > 0:
+                refreshed_slide_rows = await session.execute(
+                    select(SlideModel)
+                    .where(SlideModel.presentation == claim.presentation_id)
+                    .order_by(SlideModel.index, SlideModel.id)
+                    .execution_options(populate_existing=True)
+                )
+                try:
+                    await refresh_authored_post_edit_evidence(
+                        session,
+                        presentation=presentation,
+                        slides=list(refreshed_slide_rows.scalars()),
+                        slide_indices=normalized_fixed_slide_indices,
+                        source_revision=int(inspected_revision),
+                        target_revision=result_revision,
+                        operation_id=claim.operation_id,
+                    )
+                except AuthoredPostEditEvidenceError as error:
+                    exception = (
+                        RetryableWorkspaceOperationError
+                        if error.retryable
+                        else NonRetryableWorkspaceOperationError
+                    )
+                    raise exception(error.code) from error
             release_result_deck_html_digest: str | None = None
             release_result_render_identity_digest: str | None = None
             release_recheck_base: Mapping[str, Any] | None = None

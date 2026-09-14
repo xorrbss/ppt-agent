@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from services.composer.plan import (
     ComposerComponent,
@@ -34,6 +34,10 @@ class RenderContext:
     #: Unused at rungs 4-5, where a title's own paragraphs size from their source.
     title_px: float
     subtitle_px: float
+    source_font_classes: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.registry.source_context = self
 
     @property
     def qids(self) -> QidFactory:

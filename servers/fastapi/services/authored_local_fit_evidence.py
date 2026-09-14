@@ -331,12 +331,18 @@ def accept_verified_capture(
     )
 
 
-def cache_accepted_capture(accepted: AcceptedLocalFit, *, timeout: int) -> None:
+def cache_accepted_capture(
+    accepted: AcceptedLocalFit, *, timeout: int,
+    width_px: int = 1280, height_px: int = 720,
+) -> None:
     """Publish only an accepted final tuple to the existing bounded caches."""
 
     from utils.slide_capture import RenderCapture, _cache_browser_metrics, _cache_capture
 
-    _cache_browser_metrics(accepted.html, accepted.metrics)
+    _cache_browser_metrics(
+        accepted.html, accepted.metrics,
+        width_px=width_px, height_px=height_px,
+    )
     capture = RenderCapture.from_payload(
         html_digest=html_digest(accepted.html),
         png=accepted.png,
@@ -344,7 +350,10 @@ def cache_accepted_capture(accepted: AcceptedLocalFit, *, timeout: int) -> None:
         runtime_counters={},
         fit_report=None,
     )
-    _cache_capture(accepted.html, timeout, capture)
+    _cache_capture(
+        accepted.html, timeout, capture,
+        width_px=width_px, height_px=height_px,
+    )
 
 
 __all__ = [

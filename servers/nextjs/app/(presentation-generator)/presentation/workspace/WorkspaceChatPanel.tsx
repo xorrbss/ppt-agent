@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { deriveFlaggedSlideMap, flaggedSlideKey } from "../utils/flaggedSlides";
 import { WorkspaceComposer } from "./WorkspaceComposer";
 import { WorkspaceMessage } from "./WorkspaceMessage";
 import { WorkspaceSuggestions } from "./WorkspaceSuggestions";
@@ -60,6 +61,7 @@ const SLIDESPEC_WORKSPACE_REPAIR_ENABLED =
 
 interface WorkspaceChatPanelProps {
   presentationId: string;
+  presentation?: Parameters<typeof deriveFlaggedSlideMap>[0];
   currentSlide?: number;
   commandsEnabled?: boolean;
   onPresentationChanged?: WorkspacePresentationChangedHandler;
@@ -82,6 +84,7 @@ interface WorkspaceChatPanelProps {
 
 export default function WorkspaceChatPanel({
   presentationId,
+  presentation,
   currentSlide,
   commandsEnabled = true,
   onPresentationChanged,
@@ -93,6 +96,13 @@ export default function WorkspaceChatPanel({
   onPageRemakeRequesterReady,
   onExportOperationStateChange,
 }: WorkspaceChatPanelProps) {
+  const reviewRequiredIndices = useMemo(() => {
+    const flags = deriveFlaggedSlideMap(presentation);
+    const slides = Array.isArray(presentation?.slides) ? presentation.slides : [];
+    return slides.flatMap((slide, position) =>
+      flags[flaggedSlideKey(slide, position)] ? [position] : [],
+    );
+  }, [presentation]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -293,6 +303,8 @@ export default function WorkspaceChatPanel({
     if (!qualityReviewPrompt) return;
     const selectedSlide = qualityReviewPrompt.currentSlide;
     const currentScopeSelected = qualityReviewScope === "current";
+    const reviewRequiredSelected = qualityReviewScope === "review_required";
+    if (reviewRequiredSelected && reviewRequiredIndices.length === 0) return;
     const subsetScopeSelected = qualityReviewScope === "subset";
     if (subsetScopeSelected && !qualityReviewRange) {
       setQualityReviewRangeError(
@@ -300,12 +312,16 @@ export default function WorkspaceChatPanel({
       );
       return;
     }
-    const slideIndices = subsetScopeSelected
+    const slideIndices = reviewRequiredSelected
+      ? reviewRequiredIndices
+      : subsetScopeSelected
       ? (qualityReviewRange?.indices ?? [])
       : currentScopeSelected && selectedSlide !== undefined
         ? [selectedSlide]
         : [];
-    const subject = subsetScopeSelected
+    const subject = reviewRequiredSelected
+      ? `검수 필요 ${reviewRequiredIndices.map((index) => index + 1).join(", ")}번 슬라이드를`
+      : subsetScopeSelected
       ? `${qualityReviewRange?.normalized}번 슬라이드를`
       : currentScopeSelected && selectedSlide !== undefined
         ? `현재 ${selectedSlide + 1}번 슬라이드를`
@@ -316,7 +332,7 @@ export default function WorkspaceChatPanel({
       {
         commandType: "quality.review",
         context: {
-          scope: subsetScopeSelected
+          scope: subsetScopeSelected || reviewRequiredSelected
             ? "subset"
             : currentScopeSelected
               ? "current"
@@ -338,6 +354,7 @@ export default function WorkspaceChatPanel({
     qualityReviewPrompt,
     qualityReviewRange,
     qualityReviewScope,
+    reviewRequiredIndices,
   ]);
 
   const handleQualityReviewRangeInput = useCallback(
@@ -674,10 +691,25 @@ export default function WorkspaceChatPanel({
                   검수 범위
                 </legend>
                 <div
-                  className="mt-2 grid grid-cols-3 gap-2"
+                  className="mt-2 grid grid-cols-2 gap-2"
                   role="radiogroup"
                   aria-label="검수 범위"
                 >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={qualityReviewScope === "review_required"}
+                    disabled={reviewRequiredIndices.length === 0}
+                    onClick={() => setQualityReviewScope("review_required")}
+                    data-testid="quality-review-scope-review-required"
+                    className={`rounded-xl border px-3 py-2 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                      qualityReviewScope === "review_required"
+                        ? "border-indigo-500 bg-indigo-50 font-semibold text-indigo-700"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    검수 필요 페이지만 ({reviewRequiredIndices.length}장)
+                  </button>
                   <button
                     type="button"
                     role="radio"
@@ -726,6 +758,18 @@ export default function WorkspaceChatPanel({
                   </button>
                 </div>
               </fieldset>
+
+              {qualityReviewScope === "review_required" && (
+                <p
+                  className="mt-4 text-xs font-medium text-emerald-700"
+                  aria-live="polite"
+                  data-testid="quality-review-required-confirmation"
+                >
+                  {reviewRequiredIndices.length > 0
+                    ? `검수 대상: ${reviewRequiredIndices.map((index) => index + 1).join(", ")}번 페이지`
+                    : "검수 필요로 표시된 페이지가 없습니다."}
+                </p>
+              )}
 
               {qualityReviewScope === "subset" && (
                 <div className="mt-4">
@@ -796,7 +840,8 @@ export default function WorkspaceChatPanel({
                   disabled={
                     submitting ||
                     !writesEnabled ||
-                    (qualityReviewScope === "subset" && !qualityReviewRange)
+                    (qualityReviewScope === "subset" && !qualityReviewRange) ||
+                    (qualityReviewScope === "review_required" && reviewRequiredIndices.length === 0)
                   }
                   data-testid="quality-review-options-submit"
                   className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"

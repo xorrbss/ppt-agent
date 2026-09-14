@@ -33,6 +33,7 @@ export interface HybridExportEvidenceProjection {
   rasterRemaining?: number;
   typographyIssues?: string[];
   fallbackReasons?: string[];
+  localFitFallbackPages?: number[];
 }
 
 export interface HybridExportHistoryAttempt {
@@ -171,6 +172,13 @@ function normalizeEvidence(value: unknown): HybridExportEvidenceProjection {
       return label ? [`${label}${occurrences === undefined ? "" : ` (${occurrences})`}`] : [];
     });
   };
+  const fallbackPages = (value: unknown) => Array.isArray(value)
+    ? value.flatMap((item) => {
+      const page = record(item);
+      const number = integer(page.n);
+      return number && number > 0 ? [number] : [];
+    })
+    : [];
   return {
     status,
     attemptId: requiredText(first(raw, "attemptId"), "evidence.attemptId"),
@@ -194,6 +202,7 @@ function normalizeEvidence(value: unknown): HybridExportEvidenceProjection {
     rasterRemaining: values("rasterRemaining"),
     typographyIssues: reasons("typographyIssues"),
     fallbackReasons: reasons("fallbackReasons").concat(reasons("fallbackReasonCounts")),
+    localFitFallbackPages: fallbackPages(raw.localFitFallbackPages),
   };
 }
 

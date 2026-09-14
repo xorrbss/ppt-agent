@@ -92,10 +92,13 @@ def test_a_request_cannot_close_its_own_data_boundary():
     assert "&lt;/untrusted_source_documents&gt;" in brief
 
 
-def test_the_request_is_capped_rather_than_carried_whole_onto_every_slide():
-    brief = user_direction_brief("가" * (MAX_INSTRUCTIONS_CHARS + 500))
+def test_a_trailing_user_design_constraint_is_not_truncated():
+    brief = user_direction_brief("가" * (MAX_INSTRUCTIONS_CHARS + 500) + "\n본문 10px, 상단 여백 20px")
 
-    assert brief.count("가") == MAX_INSTRUCTIONS_CHARS
+    assert brief.count("가") == MAX_INSTRUCTIONS_CHARS + 500
+    assert "본문 10px, 상단 여백 20px" in brief
+    assert "explicit user choices > selected style" in brief
+    assert "10 CSS pixels, not 10pt or a minimum" in brief
 
 
 def test_the_thin_wrapper_forwards_both_inputs():

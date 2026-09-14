@@ -14,7 +14,11 @@ from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_DELETED,
     PresentationModel,
 )
+from models.sql.async_presentation_generation_status import (
+    AsyncPresentationGenerationTaskModel,
+)
 from models.sql.account_deletion_request import AccountDeletionRequest
+from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.user import User
 from models.sql.workspace import (
@@ -52,6 +56,8 @@ RUNNER_TABLES = [
     WorkspaceOperation.__table__,
     WorkspaceOperationEvent.__table__,
     WorkspaceOutbox.__table__,
+    AsyncPresentationGenerationTaskModel.__table__,
+    PresentationGenerationJob.__table__,
     # The runner reads the public admission row when it fences a finished or
     # recovered operation, so the scratch schema has to carry that table too.
     PublicOperationAdmission.__table__,
@@ -338,6 +344,47 @@ async def _expired_manual_handler_requires_recovery(tmp_path: Path):
         assert events[0].payload["reason_code"] == "manual_recovery_required"
     finally:
         await engine.dispose()
+
+
+def test_apply_operations_project_their_linked_generation_job_on_claim(tmp_path: Path):
+    asyncio.run(_apply_operations_project_linked_generation_job_on_claim(tmp_path))
+
+
+async def _apply_operations_project_linked_generation_job_on_claim(tmp_path: Path):
+    for kind in ("template.apply", "design.apply"):
+        engine, maker = await _database(tmp_path / f"{kind}.db")
+        try:
+            presentation_id, operation_ids = await _seed_operations(maker, kind=kind)
+            operation_id = operation_ids[0]
+            task = AsyncPresentationGenerationTaskModel(status="pending")
+            job = PresentationGenerationJob(
+                task_id=task.id,
+                presentation_id=presentation_id,
+                workspace_operation_id=operation_id,
+                request_sha256="a" * 64,
+                request_payload={"strategy": "authored"},
+            )
+            async with maker() as session:
+                session.add_all((task, job))
+                await session.flush()
+                await session.execute(
+                    update(WorkspaceOperation)
+                    .where(WorkspaceOperation.id == operation_id)
+                    .values(request_payload={"job_id": str(job.id)})
+                )
+                await session.commit()
+
+            claim = await claim_next_workspace_operation(session_factory=maker)
+            assert claim is not None
+            assert claim.kind == kind
+            async with maker() as session:
+                projected = await session.get(PresentationGenerationJob, job.id)
+                assert projected is not None
+                assert projected.state == "running"
+                assert projected.attempt_token == claim.attempt_token
+                assert projected.attempt_number == claim.attempt_number
+        finally:
+            await engine.dispose()
 
 
 def test_registry_defaults_unknown_handlers_to_manual_and_generation_to_automatic():

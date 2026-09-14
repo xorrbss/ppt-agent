@@ -30,8 +30,8 @@ from utils.llm_utils import extract_structured_content, get_generate_kwargs
 
 
 LOGGER = logging.getLogger(__name__)
-PROMPT_VERSION = "slidespec-repair-plan/1.1"
-RESPONSE_SCHEMA_VERSION = "slidespec-repair-response/1.1"
+PROMPT_VERSION = "slidespec-repair-plan/1.2"
+RESPONSE_SCHEMA_VERSION = "slidespec-repair-response/1.2"
 MAX_CANDIDATES = 2
 MAX_OPERATIONS = 8
 MAX_AFFECTED_BLOCKS = 4

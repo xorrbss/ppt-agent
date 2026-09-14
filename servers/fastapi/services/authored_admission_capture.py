@@ -203,6 +203,8 @@ def _prepare_capture_kwargs(
         ),
         export_width_pt=float(scale.get("width_pt", 960)),
         export_height_pt=float(scale.get("height_pt", 540)),
+        viewport_width=int(scale.get("viewport_width", 1280)),
+        viewport_height=int(scale.get("viewport_height", 720)),
         baseline=(
             policy_value.get("baseline")
             if isinstance(policy_value.get("baseline"), Mapping)

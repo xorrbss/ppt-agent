@@ -63,21 +63,13 @@ import {
 } from "./PresentationTerminalStates";
 import { renderArtifactSlides } from "@/lib/render-service";
 import { usePresentationPreviewArtifact } from "../hooks/usePresentationPreviewArtifact";
-import { getWorkspaceTimeline } from "../../services/api/workspace";
+import { useWorkspaceStaging } from "../hooks/useWorkspaceStaging";
 /**
  * Every deck is served by the Slides Workbench, so the editor never takes a
  * direct write: the backend answers those with `chat_first_command_required`.
  * Inline editing stays rendered but read-only.
  */
 const INLINE_MUTATIONS_ENABLED = false;
-const WORKSPACE_STAGING_POLL_INTERVAL_MS = 2_000;
-const WORKSPACE_STAGING_FAILURE_STATES = new Set([
-  "failed",
-  "dead_letter",
-  "cancelled",
-  "rejected",
-  "expired",
-]);
 const NAVIGATION_HINT_STORAGE_KEY =
   "ppt-agent:workbench-slide-navigation-hint:v1";
 const NAVIGATION_HINT_KEYS = ["←", "↑", "↓", "→"];
@@ -158,9 +150,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     "slides" | "chat"
   >("chat");
   const [workspaceDrawerOpen, setWorkspaceDrawerOpen] = useState(true);
-  const [workspaceStagingFailure, setWorkspaceStagingFailure] = useState<
-    string | null
-  >(null);
   const [mobileThumbnailsOpen, setMobileThumbnailsOpen] = useState(false);
   const [showNavigationHint, setShowNavigationHint] = useState(false);
   const slidesScrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -237,90 +226,19 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     setLoading,
     setError,
   );
-  useEffect(() => {
-    if (!workspaceStaging || slidesLength > 0) return;
-
-    let cancelled = false;
-    let timer: number | null = null;
-    const scheduleNextPoll = () => {
-      if (!cancelled) {
-        timer = window.setTimeout(
-          pollWorkspaceStaging,
-          WORKSPACE_STAGING_POLL_INTERVAL_MS,
-        );
-      }
-    };
-    const pollWorkspaceStaging = async () => {
-      try {
-        const timeline = await getWorkspaceTimeline(presentation_id, {
-          limit: 8,
-        });
-        if (cancelled) return;
-        const designOperation = timeline.items.reduce<
-          | Extract<
-              (typeof timeline.items)[number],
-              { anchorType: "operation" }
-            >
-          | undefined
-        >((latest, item) => {
-          if (
-            item.anchorType !== "operation" ||
-            (item.operationType !== "design.apply" &&
-              item.operationType !== "template.apply")
-          ) {
-            return latest;
-          }
-          return latest === undefined || item.position > latest.position
-            ? item
-            : latest;
-        }, undefined);
-        if (
-          designOperation?.anchorType === "operation" &&
-          WORKSPACE_STAGING_FAILURE_STATES.has(designOperation.status)
-        ) {
-          setLoading(false);
-          setWorkspaceStagingFailure(
-            designOperation.error ||
-              "디자인 변경 작업을 완료하지 못했습니다. 원본 자료에서 다시 시도해 주세요.",
-          );
-          scheduleNextPoll();
-          return;
-        }
-
-        if (workspaceStagingFailure) setWorkspaceStagingFailure(null);
-
-        const refreshed = await fetchUserSlides({ clearHistory: false });
-        if (cancelled) return;
-        if ((refreshed?.slides?.length ?? 0) > 0) {
-          const params = new URLSearchParams(window.location.search);
-          params.delete("workspace_staging");
-          const query = params.toString();
-          router.replace(`${pathname}${query ? `?${query}` : ""}`);
-          return;
-        }
-      } catch (pollError) {
-        console.warn(
-          "Failed to refresh workspace staging presentation",
-          pollError,
-        );
-      }
-      scheduleNextPoll();
-    };
-
-    timer = window.setTimeout(pollWorkspaceStaging, 500);
-    return () => {
-      cancelled = true;
-      if (timer !== null) window.clearTimeout(timer);
-    };
-  }, [
-    fetchUserSlides,
-    pathname,
-    presentation_id,
-    router,
-    slidesLength,
+  const {
+    content: workspaceStagingContent,
+    pollingPaused: workspaceStagingPollingPaused,
+    refresh: refreshWorkspaceStaging,
+    terminal: workspaceStagingTerminal,
+  } = useWorkspaceStaging({
     workspaceStaging,
-    workspaceStagingFailure,
-  ]);
+    presentationId: presentation_id,
+    slidesLength,
+    pathname,
+    router,
+    fetchUserSlides,
+  });
   const {
     isPresentMode,
     stream,
@@ -640,6 +558,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     chatTargetedSlides.length,
     glowingSlideIndex,
   ]);
+  const openWorkspaceOperation = useCallback(() => {
+    setCompactWorkspacePane("chat");
+    setWorkspaceDrawerOpen(true);
+  }, []);
   if (error || previewArtifactState.error) {
     return <PresentationLoadError pathname={pathname} router={router} />;
   }
@@ -882,38 +804,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                   showWorkspaceStaging ||
                   (presentationData.slides.length === 0 && stream) ? (
                     <div className="relative w-full h-[calc(100vh-120px)] mx-auto hide-scrollbar">
-                      {workspaceStagingFailure ? (
-                        <div
-                          className="flex h-full items-center justify-center px-6"
-                          data-testid="workspace-staging-failure"
-                        >
-                          <div className="flex max-w-lg flex-col items-center rounded-2xl border border-red-200 bg-white px-8 py-10 text-center shadow-sm">
-                            <AlertCircle className="mb-4 h-12 w-12 text-red-500" />
-                            <h2 className="text-xl font-semibold text-gray-950">
-                              디자인 변경에 실패했습니다
-                            </h2>
-                            <p className="mt-3 text-sm leading-6 text-gray-600">
-                              {workspaceStagingFailure}
-                            </p>
-                            <div className="mt-6 flex gap-2">
-                              <Button
-                                type="button"
-                                onClick={() => window.close()}
-                              >
-                                창 닫기
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => router.push("/dashboard")}
-                              >
-                                대시보드로 이동
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
+                      <>
                           <div>
                             {Array.from({ length: 2 }).map((_, index) => (
                               <Skeleton
@@ -923,12 +814,22 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                             ))}
                           </div>
                           {(stream || showWorkspaceStaging) && (
-                            <div data-testid="workspace-staging-loading">
-                              <LoadingState />
+                            <div data-testid={workspaceStagingTerminal ? "workspace-staging-terminal" : "workspace-staging-loading"}>
+                              {showWorkspaceStaging ? (
+                                <LoadingState
+                                  title={workspaceStagingContent.title}
+                                  description={workspaceStagingContent.description}
+                                  notice={workspaceStagingContent.notice}
+                                  animate={!workspaceStagingPollingPaused && !workspaceStagingTerminal}
+                                  actions={<>
+                                    <Button type="button" variant="outline" size="sm" onClick={refreshWorkspaceStaging}>상태 새로 고침</Button>
+                                    <Button type="button" size="sm" onClick={openWorkspaceOperation}>작업 확인</Button>
+                                  </>}
+                                />
+                              ) : <LoadingState />}
                             </div>
                           )}
-                        </>
-                      )}
+                      </>
                     </div>
                   ) : presentationData.slides.length === 0 ? (
                     <div className="flex w-full h-[calc(100vh-160px)] flex-col items-center justify-center text-center">
@@ -1013,6 +914,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
             {workspaceReady ? (
               <WorkspaceChatPanel
                 presentationId={presentation_id}
+                presentation={presentationData}
                 currentSlide={selectedSlide}
                 commandsEnabled={workspaceCapability.commands}
                 onPresentationChanged={handlePresentationChanged}

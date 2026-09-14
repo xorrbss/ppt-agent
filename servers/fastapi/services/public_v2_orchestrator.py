@@ -51,6 +51,11 @@ from api.v2.orchestration import (
     PublicV2OrchestrationError,
 )
 from models.generate_presentation_request import GeneratePresentationRequest
+from services.authored_canvas import (
+    merge_presentation_canvas,
+    request_canvas_metadata,
+    validate_authored_canvas_admission,
+)
 from services.public_generation_slide_count import (
     resolve_source_content_admission_slide_count,
     source_content_admission_carrier,
@@ -173,6 +178,8 @@ def _generation_request_hash_payload(
     if "generation_mode" not in request.model_fields_set:
         payload.pop("generationMode", None)
         payload.pop("designPackPin", None)
+    if request.aspect_ratio == "16:9":
+        payload.pop("aspectRatio", None)
     return payload
 
 
@@ -259,6 +266,7 @@ async def _resolve_generation_route_receipt(
                 ),
                 source_mode=request.source_mode,
                 authored_style=request.authored_style,
+                aspect_ratio=request.aspect_ratio,
                 slide_count=slide_count,
             )
             if inspect.isawaitable(raw_resolution):
@@ -1019,6 +1027,7 @@ class SqlPublicV2Orchestrator:
                 visionQa=request.quality_policy == "release-v1",
                 reference_snapshot_ids=reference_ids,
                 authored_style=request.authored_style,
+                aspect_ratio=request.aspect_ratio,
                 masterPin=(
                     request.master_pin.model_dump(mode="json", by_alias=True)
                     if request.master_pin is not None
@@ -1042,6 +1051,23 @@ class SqlPublicV2Orchestrator:
                 designPackPin=internal_design_pack_pin,
                 generationEngine=effective_generation_engine,
             )
+            try:
+                if internal_request.master_pin is not None:
+                    from api.v1.ppt.endpoints.presentation_generate import (
+                        _validate_authored_master_pin_admission,
+                    )
+
+                    await _validate_authored_master_pin_admission(internal_request)
+                validate_authored_canvas_admission(
+                    internal_request,
+                    style_id=request.authored_style or "default",
+                )
+            except ValueError as error:
+                if str(error).startswith("authored_canvas") or str(error).startswith(
+                    "authored_portrait"
+                ):
+                    raise _public_error(422, str(error)) from error
+                raise
             # This has no provider side effect.  It must remain ahead of the
             # durable admission/reservation below so an operation is sealed as
             # deck-ir, legacy-authored, or reject before billable work exists.
@@ -1088,6 +1114,9 @@ class SqlPublicV2Orchestrator:
                 lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
             )
             stamp_new_authored_presentation(presentation)
+            presentation.theme = merge_presentation_canvas(
+                presentation.theme, request_canvas_metadata(internal_request)
+            )
             session.add(presentation)
             await session.flush()
             conversation, _message, operation, replayed = await bootstrap_workspace(
@@ -1103,6 +1132,7 @@ class SqlPublicV2Orchestrator:
                         "reference_snapshot_ids": [str(value) for value in reference_ids],
                         "quality_policy": request.quality_policy,
                         "authored_style": request.authored_style,
+                        "aspect_ratio": request.aspect_ratio,
                         "master_pin": (
                             request.master_pin.model_dump(mode="json", by_alias=True)
                             if request.master_pin is not None

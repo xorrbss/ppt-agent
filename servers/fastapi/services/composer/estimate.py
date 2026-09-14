@@ -112,10 +112,14 @@ from services.composer.render_components import FLOW_KINDS
 SAFETY_MARGIN = 1.05
 
 
-def content_area(params: FitParameters) -> tuple[float, float]:
+def content_area(params: FitParameters, deck: ComposerDeckPlan | None = None) -> tuple[float, float]:
     """Content area (width, height) in px for the step's chrome level."""
 
     width, height = CHROME_CONTENT_AREA[int(params.chrome_level)]
+    if deck is not None:
+        from services.composer.render_css import chrome_geometry
+        geometry = chrome_geometry(params.chrome_level, canvas=deck.canvas)
+        width, height = geometry.content_width, geometry.content_height
     return float(width), float(height)
 
 
@@ -196,7 +200,7 @@ def estimated_content_height(plan: ComposerSlidePlan, params: FitParameters, dec
     separate, sequential segments rather than one pool.
     """
 
-    area_width, area_height = content_area(params)
+    area_width, area_height = content_area(params, deck)
     density = int(params.density)
     gap = GAP_PX[density]
     columns = int(params.columns)
@@ -230,7 +234,7 @@ def estimate_fit(
     del tokens  # the look does not change the metrics this estimate models
     if params.source_geometry:
         return True
-    _, area_height = content_area(params)
+    _, area_height = content_area(params, deck)
     return estimated_content_height(plan, params, deck) * SAFETY_MARGIN <= area_height
 
 

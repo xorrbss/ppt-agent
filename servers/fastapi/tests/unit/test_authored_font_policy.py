@@ -1,4 +1,7 @@
 from utils.authored_font_policy import enforce_authored_font_floor
+import pytest
+
+from utils.authored_font_policy import requested_font_floor_px
 
 
 def test_enforce_authored_font_floor_clamps_style_blocks_and_inline_styles():
@@ -64,3 +67,55 @@ def test_enforce_authored_font_floor_uses_independent_px_and_pt_floors():
 
     assert ".page{font-size:12.6667px}" in result
     assert ".exact-floor{font-size:9.5pt}" in result
+
+
+@pytest.mark.parametrize("instruction,expected", [
+    ("글짜를 기본 10px로 해줘", 10),
+    ("본문 글자 크기는 10px", 10),
+    ("font-size: 7.5pt", 10),
+    ("body font size 10px", 10),
+    ("기본 여백 10px", None),
+    ("폰트 0px", None),
+    ("본문 10px 말고 크게", None),
+    ("", None),
+])
+def test_only_explicit_typography_sizes_override_defaults(instruction, expected):
+    assert requested_font_floor_px(instruction) == expected
+
+
+def test_user_size_survives_both_authoring_and_capacity_normalization():
+    html = '<style>.body{font-size:10px}.title{font-size:32px}</style>'
+    first = enforce_authored_font_floor(html, instructions="본문 10px")
+    final = enforce_authored_font_floor(first, minimum_px=15, instructions="본문 10px")
+    assert first == final == html
+    assert '.body{font-size:12px}' in enforce_authored_font_floor(html)
+
+
+def test_requested_floor_round_trips_to_renderer_and_export_policy():
+    from services.authored_local_fit_policy import (
+        POLICY_REVISION, font_policy, font_size_allowed, local_fit_policy,
+        requested_font_policy_revision,
+    )
+    from utils.slide_capture_local_fit import policy_from_request, policy_request_html
+
+    revision = requested_font_policy_revision("본문 10px")
+    policy = local_fit_policy(author_revision="request-test", original_html_digest="sha256:test",
+                              policy_revision=revision)
+    restored = policy_from_request(policy_request_html("<html></html>", policy, fit=True))
+    assert restored["floor_pt"] == 7.5
+    assert font_policy(restored["policy_revision"]).floor_pt == 7.5
+    assert font_size_allowed(7.5, 7.5, policy_revision=revision)
+    assert not font_size_allowed(7.5, 7.4, policy_revision=revision)
+    assert requested_font_policy_revision("간결하게") == POLICY_REVISION
+    assert requested_font_policy_revision("본문 18px") == POLICY_REVISION
+
+
+def test_user_floor_is_frozen_in_deck_capacity():
+    from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
+    from utils.llm_calls.author_deck import prepare_authored_deck
+    from utils.llm_calls.author_slide import Brand
+
+    outline = PresentationOutlineModel(slides=[SlideOutlineModel(content="개발방법론")])
+    plan = prepare_authored_deck(outline, Brand(topic="제안서"), instructions="본문 10px")
+    assert plan.capacity_plan.at(0).min_font_px == 10
+    assert plan.instructions == "본문 10px"

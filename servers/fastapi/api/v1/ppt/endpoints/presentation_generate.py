@@ -102,6 +102,13 @@ from services.authored_vnext.generation.legacy_pin import (
 )
 from services.authored_vnext.generation.scene_compiler import SceneTextFitError
 from services.authored_vnext.master.digests import canonical_digest
+from services.authored_canvas import (
+    canvas_metadata_for_aspect_ratio,
+    merge_presentation_canvas,
+    presentation_canvas_metadata,
+    request_canvas_metadata,
+    validate_authored_canvas_admission,
+)
 from services.concurrent_service import CONCURRENT_SERVICE
 from services.source_content.errors import SourceContentError
 from services.source_content.pipeline import (
@@ -491,11 +498,32 @@ async def check_if_api_request_is_valid(
 
     if request.strategy not in {None, "authored"}:
         raise HTTPException(status_code=400, detail="generation_strategy_conflict")
+    if (
+        request.aspect_ratio != "16:9"
+        and str(request.template or "").strip().lower() != AUTHORED_TEMPLATE
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="authored_portrait_combination_not_supported",
+        )
     # Any template name is normalised to the authored template rather than
     # rejected: a caller naming both a strategy and a template is asking for
     # the strategy, and this endpoint has normalised that since before the
     # strategy existed.
     request.template = AUTHORED_TEMPLATE
+    try:
+        canvas_style_id = (
+            resolve_authored_style(request.authored_style).id
+            if request.aspect_ratio != "16:9"
+            else request.authored_style or "default"
+        )
+        validate_authored_canvas_admission(request, style_id=canvas_style_id)
+    except ValueError as error:
+        if str(error).startswith("authored_canvas") or str(error).startswith(
+            "authored_portrait"
+        ):
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        raise
     _validate_authored_exact_admission(request)
     await _validate_authored_master_pin_admission(request)
     await _admit_source_content_generation(request, sql_session)
@@ -1524,6 +1552,9 @@ async def _bootstrap_generation_workspace(
     # Leaving the profile unset makes the documented one-call API fail with
     # ``unsupported_presentation_driver`` before it can enqueue its operation.
     stamp_new_authored_presentation(presentation)
+    presentation.theme = merge_presentation_canvas(
+        presentation.theme, request_canvas_metadata(request)
+    )
     sql_session.add(presentation)
     await sql_session.flush()
 
@@ -1547,6 +1578,7 @@ async def _bootstrap_generation_workspace(
                     "include_table_of_contents": request.include_table_of_contents,
                     "include_title_slide": request.include_title_slide,
                     "web_search": request.web_search,
+                    "aspect_ratio": request.aspect_ratio,
                     "reference_snapshot_ids": [
                         str(snapshot_id)
                         for snapshot_id in request.reference_snapshot_ids
@@ -1688,6 +1720,19 @@ async def queue_presentation_generation(
     # chat-first workspace bootstrap.  This keeps blocked Template V2/legacy
     # requests from minting even a temporary durable presentation shell.
     require_authored_vnext_creation_admission(request)
+    try:
+        canvas_style_id = (
+            resolve_authored_style(request.authored_style).id
+            if request.aspect_ratio != "16:9"
+            else request.authored_style or "default"
+        )
+        validate_authored_canvas_admission(request, style_id=canvas_style_id)
+    except ValueError as error:
+        if str(error).startswith("authored_canvas") or str(error).startswith(
+            "authored_portrait"
+        ):
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        raise
     # Workspace orchestration can deliberately create a separate, new deck
     # while keeping progress anchored to the source deck's operation timeline.
     # That nested generation job must use the existing durable generator rather
@@ -1826,6 +1871,34 @@ async def queue_presentation_generation(
             PresentationModel,
             presentation_id,
         )
+        if admitted_presentation is not None:
+            try:
+                persisted_canvas = presentation_canvas_metadata(
+                    admitted_presentation.theme
+                )
+            except ValueError as error:
+                raise HTTPException(status_code=422, detail=str(error)) from error
+            resolved_canvas = request_canvas_metadata(request)
+            generic_landscape_canvas = canvas_metadata_for_aspect_ratio(
+                "16:9"
+            ).model_dump(mode="json", by_alias=True)
+            can_freeze_resolved_master_canvas = (
+                admitted_presentation.lifecycle_status
+                == PRESENTATION_LIFECYCLE_STAGING
+                and request.aspect_ratio == "16:9"
+                and getattr(request, "_authored_master_contract", None) is not None
+                and persisted_canvas == generic_landscape_canvas
+            )
+            if persisted_canvas != resolved_canvas and can_freeze_resolved_master_canvas:
+                admitted_presentation.theme = merge_presentation_canvas(
+                    admitted_presentation.theme,
+                    resolved_canvas,
+                )
+                persisted_canvas = resolved_canvas
+            if persisted_canvas != resolved_canvas:
+                raise HTTPException(
+                    status_code=409, detail="authored_canvas_request_mismatch"
+                )
         workspace_operation = await sql_session.scalar(
             select(WorkspaceOperation)
             .where(
@@ -1955,9 +2028,15 @@ async def queue_presentation_generation(
             raise
         request = admitted_request
 
-    # Persist the exact admitted request that the worker will execute. The fingerprint remains
-    # tied to the caller's canonical submitted payload for stable replay.
+    # Persist the exact admitted request and server-owned route that the worker
+    # will execute. The fingerprint remains tied to the caller's canonical
+    # submitted payload for stable replay.
+    from services.public_generation_route import pin_source_restyle_authoring
+
+    generation_route_receipt = pin_source_restyle_authoring(request)
     payload = _durable_request_payload(request)
+    if generation_route_receipt is not None:
+        payload["generation_route_receipt"] = generation_route_receipt
 
     async_status = AsyncPresentationGenerationTaskModel(
         status="pending",
@@ -1998,15 +2077,20 @@ async def queue_presentation_generation(
     sql_session.add(job)
     if workspace_operation is not None and presentation is not None:
         try:
+            operation_request_payload = {
+                "generation_request": payload,
+                "task_id": async_status.id,
+                "job_id": str(job.id),
+            }
+            if generation_route_receipt is not None:
+                operation_request_payload["generation_route_receipt"] = (
+                    generation_route_receipt
+                )
             await activate_workspace_operation(
                 sql_session,
                 operation_id=workspace_operation.id,
                 request_hash=fingerprint,
-                request_payload={
-                    "generation_request": payload,
-                    "task_id": async_status.id,
-                    "job_id": str(job.id),
-                },
+                request_payload=operation_request_payload,
                 expected_revision=presentation.revision,
                 expected_operation_version=workspace_operation.version,
                 commit=False,

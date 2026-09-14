@@ -7,6 +7,7 @@ mode's in-memory HTML + PNGs. Best-effort: a failed critique/re-author/re-render
 leaves that slide unchanged. Never on the fast default path."""
 
 import asyncio
+from functools import partial
 import hashlib
 import logging
 import math
@@ -127,13 +128,21 @@ class _ImageServiceLike(Protocol):
 
 
 async def _render_correction_html(
-    html: str, *, index: int | None = None,
+    html: str, *, index: int | None = None, canvas: object | None = None,
 ) -> tuple[str, bytes]:
     """Render and retain browser metrics for the subsequent deterministic gate."""
+    width_px = int(getattr(canvas, "width_px", 1280))
+    height_px = int(getattr(canvas, "height_px", 720))
+    render_kwargs = (
+        {}
+        if (width_px, height_px) == (1280, 720)
+        else {"width_px": width_px, "height_px": height_px}
+    )
     if render_html_to_png is not _ORIGINAL_RENDER_HTML_TO_PNG:
-        return html, await render_html_to_png(html)
+        return html, await render_html_to_png(html, **render_kwargs)
     capture = await capture_once(
-        html, index=index, capture=render_html_to_png_with_metrics
+        html, index=index,
+        capture=partial(render_html_to_png_with_metrics, **render_kwargs),
     )
     if capture.prepared_html is None:
         raise RuntimeError("VQA correction capture preparation unavailable")
@@ -445,6 +454,7 @@ async def revise_authored_deck(
     total_slides: Optional[int] = None,
     *,
     initial_critiques: Optional[List[Optional[SlideCritique]]] = None,
+    instructions: Optional[str] = None,
     reference_images_by_slide: Optional[List[Tuple[Path, ...]]] = None,
     return_details: bool = False,
     force_full_reauthor_indices: Optional[Iterable[int]] = None,
@@ -481,6 +491,7 @@ async def revise_authored_deck(
         Callable[[str, int], Awaitable[tuple[str, bytes, Mapping[str, Any]]]]
     ] = None,
     structural_budgets: Optional[Mapping[int, StructuralRepairBudget]] = None,
+    canvas: object | None = None,
 ) -> Any:
     """Bounded critique -> re-author -> re-render loop over an authored deck. Returns
     the (possibly revised) htmls + pngs and the local indices that changed.
@@ -501,6 +512,18 @@ async def revise_authored_deck(
     other unresolved slot is removed.
     """
     n = len(htmls)
+    if instructions:
+        from utils.llm_calls.author_slide_prompt import user_direction_brief
+        design_system += "\n\n" + user_direction_brief(instructions)
+    canvas_width_px = int(getattr(canvas, "width_px", 1280))
+    canvas_height_px = int(getattr(canvas, "height_px", 720))
+    render_kwargs = (
+        {}
+        if (canvas_width_px, canvas_height_px) == (1280, 720)
+        else {"width_px": canvas_width_px, "height_px": canvas_height_px}
+    )
+    ensure_metrics = partial(ensure_browser_metrics, **render_kwargs)
+    cached_metrics = partial(get_cached_browser_metrics, **render_kwargs)
     if candidate_evaluator is not None and candidate_evaluators is not None:
         raise ValueError("candidate_evaluator and candidate_evaluators are mutually exclusive")
     if candidate_validator is not None and (
@@ -618,14 +641,14 @@ async def revise_authored_deck(
             await asyncio.gather(
                 *(
                     captured_metrics_or_existing(
-                        html, index=absolute_indices[i], ensure=ensure_browser_metrics
+                        html, index=absolute_indices[i], ensure=ensure_metrics
                     )
                     for i, html in enumerate(htmls)
                 )
             )
         )
         if fail_on_residual_dom_issues
-        else [get_cached_browser_metrics(html) for html in htmls]
+        else [cached_metrics(html) for html in htmls]
     )
 
     def local_report(html: str, metrics: Mapping[str, Any] | None):
@@ -639,9 +662,9 @@ async def revise_authored_deck(
     async def metrics_for(html: str, index: int | None = None) -> Mapping[str, Any] | None:
         if fail_on_residual_dom_issues:
             return await captured_metrics_or_existing(
-                html, index=index, ensure=ensure_browser_metrics
+                html, index=index, ensure=ensure_metrics
             )
-        return get_cached_browser_metrics(html)
+        return cached_metrics(html)
 
     def deterministic_critique(
         html: str, metrics: Mapping[str, Any] | None
@@ -705,6 +728,7 @@ async def revise_authored_deck(
             receipt_retry_class="recovery",
             receipt_attempt_ordinal=2,
             allow_provider_fallback=False,
+            instructions=instructions,
             **reference_kwargs,
         )
         new_html = admit_author_html(new_html, index=absolute_indices[i], producer="vqa_repair", validate_policy=False)
@@ -772,7 +796,9 @@ async def revise_authored_deck(
             new_html = ensure_authored_qids(new_html)
         elif return_details:
             validate_declared_authored_qids(new_html)
-        return await _render_correction_html(new_html, index=absolute_indices[i])
+        return await _render_correction_html(
+            new_html, index=absolute_indices[i], canvas=canvas
+        )
 
     async def review_and_fix(
         i: int,
@@ -906,7 +932,7 @@ async def revise_authored_deck(
                             (
                                 current_metrics
                                 if fail_on_residual_dom_issues
-                                else get_cached_browser_metrics(current_html)
+                                else cached_metrics(current_html)
                             ),
                         )
                     ]
@@ -957,7 +983,7 @@ async def revise_authored_deck(
                         elif applied.ok and is_valid_slide_html(applied.html):
                             try:
                                 candidate_html, candidate_png = await _render_correction_html(
-                                    applied.html, index=absolute_indices[i]
+                                    applied.html, index=absolute_indices[i], canvas=canvas
                                 )
                             except Exception as error:
                                 log_failure("patch_render", error)

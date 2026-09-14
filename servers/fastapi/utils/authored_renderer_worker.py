@@ -60,6 +60,8 @@ def _validate_request(value: Any) -> Mapping[str, Any]:
         "html",
         "timeout",
         "max_requests",
+        "width_px",
+        "height_px",
     }:
         raise RendererPolicyError("renderer request has an invalid shape")
     if value.get("schema_version") != "authored-render-request/v1":
@@ -72,6 +74,14 @@ def _validate_request(value: Any) -> Mapping[str, Any]:
         raise RendererPolicyError("renderer timeout must be between 1 and 120 seconds")
     if "max_requests" in fields:
         clamp_max_requests(value["max_requests"])
+    for field_name, default in (("width_px", 1280), ("height_px", 720)):
+        dimension = value.get(field_name, default)
+        if (
+            not isinstance(dimension, int)
+            or isinstance(dimension, bool)
+            or not 1 <= dimension <= 4096
+        ):
+            raise RendererPolicyError("renderer canvas dimensions are invalid")
     return value
 
 
@@ -106,12 +116,16 @@ async def _render(
     except RendererPolicyError:
         admitted = admit_static_output_html(source)
     timeout = int(request["timeout"])
+    width_px = int(request.get("width_px", 1280))
+    height_px = int(request.get("height_px", 720))
     if session is None:
         png, metrics = await slide_capture._render_admitted_html_in_worker(
-            admitted, timeout=timeout
+            admitted, timeout=timeout, width_px=width_px, height_px=height_px
         )
     else:
-        png, metrics = session.render(admitted, timeout)
+        png, metrics = session.render(
+            admitted, timeout, width_px=width_px, height_px=height_px
+        )
     metrics = dict(metrics)
     metrics["capabilityRegistry"] = capability_metadata(consumer="chromium")
     response: dict[str, Any] = {

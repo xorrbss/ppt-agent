@@ -4,6 +4,7 @@ import React from "react";
 import { useSelector } from "react-redux";
 
 import type { PresentationDriverId } from "@/lib/presentation-profile";
+import { resolveAuthoredCanvas, type AuthoredCanvasContract } from "@/lib/authored-canvas";
 import type { RootState } from "@/store/store";
 import { resolveAuthoredImageUrl } from "@/utils/api";
 
@@ -20,6 +21,7 @@ type PresentationContentRenderProps = {
   slide: SlideRecord;
   preferAuthoredHtml?: boolean;
   driverId?: PresentationDriverId;
+  canvas?: AuthoredCanvasContract;
 };
 
 type DriverRendererProps = PresentationContentRenderProps & {
@@ -29,6 +31,7 @@ type DriverRendererProps = PresentationContentRenderProps & {
 function AuthoredContent({
   slide,
   preferAuthoredHtml = false,
+  canvas,
 }: DriverRendererProps) {
   const imageRef = slide?.content?.image || slide?.properties?.image;
   const imageSrc = resolveAuthoredImageUrl(imageRef);
@@ -40,6 +43,7 @@ function AuthoredContent({
         html={slide.html_content}
         imageSrc={imageSrc}
         preferHtml={preferAuthoredHtml}
+        canvas={canvas}
       />
     </SlideErrorBoundary>
   );
@@ -78,6 +82,7 @@ export function PresentationContentRender({
   slide,
   preferAuthoredHtml = false,
   driverId,
+  canvas,
 }: PresentationContentRenderProps) {
   const presentationData = useSelector(
     (state: RootState) => state.presentationGeneration.presentationData,
@@ -98,12 +103,16 @@ export function PresentationContentRender({
   }
 
   const Renderer = PRESENTATION_CONTENT_RENDERER_REGISTRY[resolvedDriver];
+  const authoredCanvas = resolvedDriver === "authored"
+    ? canvas ?? resolveAuthoredCanvas(presentationData?.theme)
+    : undefined;
   return (
     <Renderer
       slide={slide}
       fonts={presentationData?.fonts}
       preferAuthoredHtml={preferAuthoredHtml}
       driverId={resolvedDriver}
+      canvas={authoredCanvas}
     />
   );
 }

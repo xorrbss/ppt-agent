@@ -1,4 +1,4 @@
-export type QualityReviewScope = "all" | "current" | "subset";
+export type QualityReviewScope = "all" | "current" | "subset" | "review_required";
 
 import { useEffect, useMemo } from "react";
 import type {

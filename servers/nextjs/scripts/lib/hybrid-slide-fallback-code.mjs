@@ -34,6 +34,54 @@ const CHROME_TEARDOWN_PATTERN =
   /windows cleanup helper|windows chrome could not be fully terminated|windows chrome cleanup|profile-associated process/iu;
 const TIMEOUT_PATTERN = /timeout|timed out/iu;
 
+function primaryCaptureError(error) {
+  let current = error;
+  const seen = new Set();
+  while (current && typeof current === "object" && !seen.has(current) && seen.size < MAX_ERROR_CHAIN_DEPTH) {
+    seen.add(current);
+    if (!Array.isArray(current.errors) || !current.errors.length ||
+        !/^Chrome capture failed and process\/work-directory cleanup also failed:/u.test(current.message ?? "")) break;
+    current = current.errors[0];
+  }
+  return current;
+}
+
+/** Retry only a transient capture refusal, and only once while budget admits it.
+ * Like the deck scheduler, this does not abandon a Chrome process in flight.
+ */
+export async function prepareHybridSlideWithRecovery(prepare, deadline, diagnostics, now = Date.now) {
+  const started = now();
+  diagnostics.attempts = 1;
+  try {
+    return await prepare();
+  } catch (error) {
+    const primary = primaryCaptureError(error);
+    const code = mapHybridSlideFallbackCode(primary);
+    diagnostics.firstFailureCode = code;
+    diagnostics.cleanupFailure = primary !== error;
+    const transient = code === "measurement-timeout" ||
+      (code === "browser-guard-rejected" && /target closed|page crashed|connection closed|session closed/iu.test(describeHybridErrorChain(primary)));
+    // A layer can need two 45-second Chrome passes plus cleanup. Reserve at
+    // least two minutes instead of retrying on a few remaining milliseconds.
+    const reserve = Math.max(120_000, Math.ceil((now() - started) * 1.5));
+    if (!transient || deadline - now() < reserve) {
+      diagnostics.retryDisposition = transient ? "budget-insufficient" : "non-transient";
+      throw error;
+    }
+    diagnostics.attempts = 2;
+    diagnostics.retryDisposition = "attempted";
+    try {
+      const result = await prepare();
+      diagnostics.retryDisposition = result?.layer ? "recovered" : "returned-fallback";
+      return result;
+    } catch (retryError) {
+      diagnostics.retryDisposition = "failed";
+      diagnostics.finalFailureCode = mapHybridSlideFallbackCode(retryError);
+      throw retryError;
+    }
+  }
+}
+
 /**
  * Collect the classifiable text of an error and of the errors it carries.
  *
@@ -76,7 +124,7 @@ export function describeHybridErrorChain(error) {
 
 /** Reduce an exception to a receipt-safe code without retaining its message. */
 export function mapHybridSlideFallbackCode(error) {
-  const fields = collectErrorFields(error);
+  const fields = collectErrorFields(primaryCaptureError(error));
   for (const code of AUTHORED_HYBRID_ERROR_CODES) {
     if (fields.some((value) => value === code || value.includes(code))) return code;
   }
@@ -92,7 +140,7 @@ export function mapHybridSlideFallbackCode(error) {
   }
   if (TIMEOUT_PATTERN.test(description)) return "measurement-timeout";
   if (/qid|semantic owner|ownership/iu.test(description)) return "qid-ownership-mismatch";
-  if (/browser|protocol error|target closed|page crashed|execution context/iu.test(description)) {
+  if (/browser|protocol error|target closed|page crashed|connection closed|session closed|execution context/iu.test(description)) {
     return "browser-guard-rejected";
   }
   return "unknown-exception";

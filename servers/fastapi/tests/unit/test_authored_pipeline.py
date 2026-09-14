@@ -82,6 +82,42 @@ def test_authored_render_workers_inherit_managed_render_ceiling():
     ) == 3
 
 
+def test_verified_local_fit_checkpoint_rehydrates_the_same_accepted_tuple():
+    html = "<html><body>accepted</body></html>"
+    png = b"immutable-rendered-png"
+    metrics = {"authored_local_fit": {"qualityStatus": "passed"}}
+    receipt = {
+        "qualityStatus": "passed",
+        "qualityPass": True,
+        "unresolvedReasons": [],
+        "png_digest": "sha256:" + hashlib.sha256(png).hexdigest(),
+    }
+
+    resumed = authored_pipeline_mod._rehydrate_accepted_local_fit(
+        receipt,
+        html=html,
+        png=png,
+        metrics=metrics,
+    )
+
+    assert resumed is not None
+    assert (resumed.html, resumed.png, resumed.metrics, resumed.receipt) == (
+        html,
+        png,
+        metrics,
+        receipt,
+    )
+    assert (
+        authored_pipeline_mod._rehydrate_accepted_local_fit(
+            receipt,
+            html=html,
+            png=b"different-png",
+            metrics=metrics,
+        )
+        is None
+    )
+
+
 def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypatch):
     calls = []
     candidate = (

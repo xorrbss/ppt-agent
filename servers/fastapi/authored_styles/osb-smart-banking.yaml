@@ -28,6 +28,24 @@ design_tokens:
   heading_font: Noto Sans KR
   body_font: Noto Sans KR
   mono_font: IBM Plex Mono
+composer_profile:
+  profile_id: banking-proposal-blue
+  version: composer-style/v1
+  header_style: tab-band
+  header_fill: "#173A63"
+  header_tab_fill: "#FFFFFF"
+  heading_color: "#173A63"
+  surface_color: "#DCECF6"
+  table_header_fill: "#0879B7"
+  table_header_text: "#FFFFFF"
+  footer_fill: "#FFFFFF"
+  footer_text: "#173A63"
+  cover_alignment: left
+  cover_fill: "#173A63"
+  cover_text: "#FFFFFF"
+  cover_accent_fill: "#0879B7"
+  emphasis_color: "#E7352A"
+  border_radius: 6
 illustration:
   # STYLE ONLY: palette, medium and finish. Subject matter belongs to the
   # slide's own scene prompt. This text is appended to every scene, so motifs

@@ -30,7 +30,18 @@ _PNG_1X1 = base64.b64decode(
     "AScY42YAAAAASUVORK5CYII="
 )
 _PICTURE_GEOMETRY = {"x": 914400, "y": 1828800, "cx": 2743200, "cy": 1828800}
-_STYLE_KEYS = {"sizePt", "bold", "italic", "color"}
+_STYLE_KEYS = {
+    "sizePt",
+    "bold",
+    "italic",
+    "color",
+    "fontFamily",
+    "sourceParagraphIndex",
+    "sourceRunIndex",
+    "sourceFlatRunIndex",
+    "textStart",
+    "textEnd",
+}
 
 
 def _override_layout_body_size(layout: Any, *, idx: int, size_hundredths: str) -> None:
@@ -47,6 +58,14 @@ def _override_layout_body_size(layout: Any, *, idx: int, size_hundredths: str) -
     default_run.set("sz", size_hundredths)
     level.append(default_run)
     list_style.append(level)
+
+
+def _append_bullet(paragraph: Any, kind: str, **attributes: str) -> None:
+    properties = paragraph._p.get_or_add_pPr()
+    bullet = OxmlElement(f"a:{kind}")
+    for name, value in attributes.items():
+        bullet.set(name, value)
+    properties.append(bullet)
 
 
 @pytest.fixture
@@ -72,9 +91,12 @@ def deck_path(tmp_path: Path) -> Path:
     explicit.font.italic = True
     inherited = frame.add_paragraph()
     inherited.text = "Inherited from the layout placeholder"
+    _append_bullet(inherited, "buAutoNum", type="arabicPeriod")
     nested = frame.add_paragraph()
     nested.text = "Inherited from master"
     nested.level = 1
+    _append_bullet(nested, "buFont", typeface="Wingdings")
+    _append_bullet(nested, "buChar", char="§")
 
     footer_layout = next(
         ph for ph in layout.placeholders if ph.placeholder_format.type == PP_PLACEHOLDER.FOOTER
@@ -91,13 +113,39 @@ def deck_path(tmp_path: Path) -> Path:
     table.cell(0, 1).text = "Value"
     table.cell(0, 0).text_frame.paragraphs[0].runs[0].font.size = Pt(11)
 
-    slide.shapes.add_picture(
+    picture = slide.shapes.add_picture(
         str(image_path),
         Emu(_PICTURE_GEOMETRY["x"]),
         Emu(_PICTURE_GEOMETRY["y"]),
         Emu(_PICTURE_GEOMETRY["cx"]),
         Emu(_PICTURE_GEOMETRY["cy"]),
     )
+    picture_rel_id = picture._element.blipFill.blip.get(qn("r:embed"))
+    assert picture_rel_id is not None
+    color_change = OxmlElement("a:clrChange")
+    color_change.set("useA", "1")
+    color_from = OxmlElement("a:clrFrom")
+    from_srgb = OxmlElement("a:srgbClr")
+    from_srgb.set("val", "FFFFFF")
+    color_from.append(from_srgb)
+    color_to = OxmlElement("a:clrTo")
+    to_srgb = OxmlElement("a:srgbClr")
+    to_srgb.set("val", "FFFFFF")
+    to_alpha = OxmlElement("a:alpha")
+    to_alpha.set("val", "0")
+    to_srgb.append(to_alpha)
+    color_to.append(to_srgb)
+    color_change.extend((color_from, color_to))
+    picture._element.blipFill.blip.append(color_change)
+    luminance = OxmlElement("a:lum")
+    luminance.set("bright", "-10000")
+    luminance.set("contrast", "60000")
+    picture._element.blipFill.blip.append(luminance)
+    picture_bullet = OxmlElement("a:buBlip")
+    bullet_blip = OxmlElement("a:blip")
+    bullet_blip.set(qn("r:embed"), picture_rel_id)
+    picture_bullet.append(bullet_blip)
+    table.cell(0, 1).text_frame.paragraphs[0]._p.get_or_add_pPr().append(picture_bullet)
     path = tmp_path / "deck.pptx"
     deck.save(str(path))
     return path
@@ -138,10 +186,21 @@ def test_title_run_carries_explicit_size_weight_and_color(manifest: SourceConten
     block = _text_blocks(manifest)["Quarterly Review"]
     payload = block.payload
     [style] = payload["paragraphs"][0]["runStyles"]
-    assert style == {"sizePt": 40.0, "bold": True, "italic": False, "color": "#1F2A44"}
+    assert {key: style[key] for key in ("sizePt", "bold", "italic", "color")} == {
+        "sizePt": 40.0,
+        "bold": True,
+        "italic": False,
+        "color": "#1F2A44",
+    }
+    assert style["fontFamily"]
+    assert (style["sourceParagraphIndex"], style["sourceRunIndex"]) == (0, 0)
+    assert (style["textStart"], style["textEnd"]) == (0, len("Quarterly Review"))
     assert payload["runStyles"] == [style]
     assert payload["dominantSizePt"] == 40.0
     assert (payload["placeholderType"], payload["placeholderIdx"]) == ("title", 0)
+    assert payload["geometry"]["source"] in {"layout", "master"}
+    assert payload["geometry"]["sourceBlockId"] == block.source_block_id
+    assert payload["textBody"]["marginLeftEmu"] > 0
     assert block.semantic_role == "title"
 
 
@@ -151,7 +210,10 @@ def test_body_runs_inherit_size_from_layout_then_master(manifest: SourceContentM
     assert [paragraph["runStyles"][0]["sizePt"] for paragraph in paragraphs] == [14.0, 20.0, 28.0]
     assert paragraphs[0]["runStyles"][0]["italic"] is True
     # No ``sz`` on the run: the layout placeholder's ``a:lstStyle`` level 1 wins.
-    assert paragraphs[1]["runStyles"][0] == {
+    assert {
+        key: paragraphs[1]["runStyles"][0][key]
+        for key in ("sizePt", "bold", "italic", "color")
+    } == {
         "sizePt": 20.0,
         "bold": False,
         "italic": False,
@@ -167,7 +229,15 @@ def test_body_runs_inherit_size_from_layout_then_master(manifest: SourceContentM
         ["Inherited from the layout placeholder"],
         ["Inherited from master"],
     ]
-    assert set(paragraphs[0]) == {"runs", "text", "bullet", "bulletKind", "level", "runStyles"}
+    assert paragraphs[1]["sourceParagraphIndex"] == 1
+    assert paragraphs[1]["bulletAutoNumType"] == "arabicPeriod"
+    assert paragraphs[1]["bulletStartAt"] is None
+    assert paragraphs[2]["bulletChar"] == "§"
+    assert paragraphs[2]["bulletFontFamily"] == "Wingdings"
+    assert paragraphs[1]["textStart"] == len("Explicit fourteen") + 1
+    assert {"alignment", "marginLeftEmu", "indentEmu", "spaceBeforePt", "lineSpacingPct"} <= set(
+        paragraphs[0]
+    )
     assert len(payload["runStyles"]) == len(payload["runs"]) == 5
     assert payload["runs"][1] == "\n"
     assert payload["runStyles"][1]["sizePt"] == 20.0
@@ -190,19 +260,43 @@ def test_picture_and_table_blocks_keep_geometry_and_gain_styles(
 ) -> None:
     [unit] = manifest.units
     [image] = [block for block in unit.blocks if block.kind == "image"]
-    assert image.payload["geometry"] == _PICTURE_GEOMETRY
+    assert {key: image.payload["geometry"][key] for key in _PICTURE_GEOMETRY} == _PICTURE_GEOMETRY
+    assert image.payload["crop"] == {"left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0}
+    assert image.payload["colorTransforms"] == [
+        {
+            "kind": "colorChange",
+            "fromColor": "#FFFFFF",
+            "fromAlpha": 1.0,
+            "toColor": "#FFFFFF",
+            "toAlpha": 0.0,
+            "useAlpha": True,
+        },
+        {"kind": "luminance", "brightness": -0.1, "contrast": 0.6},
+    ]
     assert (image.payload["placeholderType"], image.payload["placeholderIdx"]) == (None, None)
     [table] = [block for block in unit.blocks if block.kind == "table"]
     assert table.payload["cells"] == [["Metric", "Value"]]
     first, second = table.payload["rows"][0]
     assert first["paragraphs"][0]["runStyles"][0]["sizePt"] == 11.0
     assert second["paragraphs"][0]["runStyles"][0]["sizePt"] is None
+    picture_bullet = second["paragraphs"][0]
+    assert picture_bullet["bulletKind"] == "picture"
+    assert picture_bullet["bulletImageDataUri"].startswith("data:image/png;base64,")
+    assert picture_bullet["bulletImageDigest"].startswith("sha256:")
+    assert len(table.payload["columnWidthsEmu"]) == 2
+    assert sum(table.payload["columnWidthsEmu"]) == table.payload["geometry"]["cx"]
+    assert table.payload["rowHeightsEmu"] == [457200]
+    assert first["sourceCellId"].endswith(":row:0:column:0")
+    assert len(first["runs"]) == len(first["runStyles"])
+    assert manifest.counts.picture_bullet_count == 1
     assert "dominantSizePt" not in table.payload
 
 
 def test_slide_size_is_sealed_into_the_manifest_digest(manifest: SourceContentManifest) -> None:
     assert manifest.slide_size == SourceSlideSize(cx=9144000, cy=6858000)
+    assert manifest.source_layout_version == "source-layout/v2"
     public = manifest.model_dump(mode="json", by_alias=True)
+    assert public["sourceLayoutVersion"] == "source-layout/v2"
     assert public["slideSize"] == {"cx": 9144000, "cy": 6858000}
     unsigned = dict(public)
     unsigned.pop("manifestDigest")
@@ -218,7 +312,13 @@ def _legacy_public_payload(manifest: SourceContentManifest) -> dict[str, Any]:
     """The stored JSON of a manifest sealed before ``slideSize`` was captured."""
 
     public = manifest.model_dump(mode="json", by_alias=True)
-    legacy = {key: value for key, value in public.items() if key not in {"slideSize", "manifestDigest"}}
+    legacy = {
+        key: value
+        for key, value in public.items()
+        if key not in {"slideSize", "sourceLayoutVersion", "manifestDigest"}
+    }
+    legacy["counts"] = dict(legacy["counts"])
+    legacy["counts"].pop("pictureBulletCount")
     legacy["manifestDigest"] = digest_json(legacy)
     return legacy
 
@@ -229,8 +329,12 @@ def test_manifest_without_slide_size_still_validates_and_re_derives_digest(
     legacy = _legacy_public_payload(manifest)
     restored = SourceContentManifest.model_validate({**legacy, "ownerId": "owner-a"})
     assert restored.slide_size is None
+    assert restored.source_layout_version is None
+    assert restored.counts.picture_bullet_count is None
     dumped = restored.model_dump(mode="json", by_alias=True)
     assert "slideSize" not in dumped
+    assert "sourceLayoutVersion" not in dumped
+    assert "pictureBulletCount" not in dumped["counts"]
     unsigned = dict(dumped)
     unsigned.pop("manifestDigest")
     assert digest_json(unsigned) == legacy["manifestDigest"] == restored.manifest_digest

@@ -12,11 +12,113 @@ from api.v2.contracts import PublicArtifactV2
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import WorkspaceOperation
 from services.public_export_operation import (
+    HYBRID_EDITABILITY_POLICY_VERSION,
     PUBLIC_RENDER_WORKER_PROTOCOL_VERSION,
+    PublicExportHybridFallback,
+    _bounded_editability_evidence,
     public_render_runtime_binding_digest,
     render_and_export_authored_htmls,
 )
+from services.public_export_join import _cached_hybrid_worker_evidence
 from services.public_v2_orchestrator import SqlPublicV2Orchestrator
+
+
+def test_editable_export_delivery_keeps_partial_unknown_and_deterministic_failure_contract() -> None:
+    from services.workspace_quality_export_operation_handlers import (
+        _public_export_failure_is_non_retryable,
+    )
+
+    partial = {
+        "schemaVersion": "public-hybrid-editability/v1",
+        "verdict": "partially-editable",
+        "requiredTargetCount": 4,
+        "nativeCorrespondenceCount": 3,
+    }
+    assert _bounded_editability_evidence(partial) == partial
+    assert _bounded_editability_evidence(None)["verdict"] == "unknown"
+    assert HYBRID_EDITABILITY_POLICY_VERSION.startswith("public-hybrid-editability-policy/")
+    assert HYBRID_EDITABILITY_POLICY_VERSION != "public-hybrid-editability-policy/v1"
+    assert PublicExportHybridFallback("required-target-missing").code == (
+        "public_export_hybrid_not_editable"
+    )
+    assert _public_export_failure_is_non_retryable(
+        "public_export_hybrid_not_editable"
+    )
+    assert _public_export_failure_is_non_retryable("hybrid_job_wire_limit")
+    assert _public_export_failure_is_non_retryable(
+        "public_worker_payload_too_large"
+    )
+    assert _public_export_failure_is_non_retryable(
+        "public_worker_cache_budget_exceeded"
+    )
+    assert _public_export_failure_is_non_retryable(
+        "trusted_worker_staging_capacity_exceeded"
+    )
+    assert not _public_export_failure_is_non_retryable(
+        "public_export_editability_evidence_pending"
+    )
+
+    operation = WorkspaceOperation(
+        id=uuid.uuid4(),
+        owner_id=uuid.uuid4(),
+        owner_scope="owner",
+        conversation_id=uuid.uuid4(),
+        presentation_id=uuid.uuid4(),
+        anchor_position=1,
+        kind="export.pptx",
+        state="succeeded",
+        idempotency_key_hash="1" * 64,
+        request_hash="2" * 64,
+        result={
+            "public_export_worker_evidence": {
+                "editability": partial,
+                "quality": {
+                    "schemaVersion": "public-hybrid-quality-summary/v1",
+                    "status": "partially-editable",
+                    "editableSlides": 3,
+                    "imageFallbackSlides": 1,
+                    "slideFallbacks": [{"n": 4, "code": "selection-obstructed"}],
+                },
+                "timing": {
+                    "schemaVersion": "public-hybrid-timing/v1",
+                    "wallMillis": 321,
+                    "slides": [{"n": 4, "conversionMillis": 123, "recovery": {
+                        "attempts": 2, "firstFailureCode": "measurement-timeout",
+                        "cleanupFailure": True, "retryDisposition": "recovered",
+                        "rawError": "private source must not survive",
+                    }}],
+                },
+                "localFitFallbackPages": [{"n": 4, "code": "raster_fragment_placement_mismatch", "diagnostics": {
+                    "schemaVersion": "raster-fragment-diagnostic/v1", "bandIndex": 0,
+                    "expectedPlacementPt": {"x": 2.0, "y": float("nan"), "source": "private"},
+                    "candidates": [{"imageIndex": 1, "digestSha256": "a" * 64,
+                                    "placementPt": {"x": 3.0}, "rawError": "private"}] * 8,
+                    "rawError": "private",
+                }}],
+            }
+        },
+    )
+    cached = _cached_hybrid_worker_evidence(operation)
+    assert cached is not None
+    assert cached["editability"]["verdict"] == "partially-editable"
+    assert cached["editability"]["requiredTargetCount"] == 4
+    assert cached["editability"]["nativeCorrespondenceCount"] == 3
+    assert cached["quality"]["slideFallbacks"] == [
+        {"n": 4, "code": "selection-obstructed"}
+    ]
+    assert "timing" not in cached
+    assert cached["producerTiming"]["wallMillis"] == 321
+    assert cached["producerTiming"]["slides"] == [{
+        "n": 4, "conversionMillis": 123, "recovery": {
+            "attempts": 2, "firstFailureCode": "measurement-timeout",
+            "cleanupFailure": True, "retryDisposition": "recovered",
+        },
+    }]
+    diagnostic = cached["localFitFallbackPages"][0]["diagnostics"]
+    assert diagnostic["expectedPlacementPt"] == {"x": 2.0}
+    assert len(diagnostic["candidates"]) == 4
+    assert "rawError" not in diagnostic
+    assert "rawError" not in diagnostic["candidates"][0]
 
 
 def test_public_status_projects_bounded_export_execution_and_publication_receipt() -> None:

@@ -1,6 +1,6 @@
 # Authored 세로형 PPT 생성 설계
 
-작성일: 2026-09-12. 상태: 기존 기능 재사용 검토를 반영한 설계 v2, 제품 구현 전.
+작성일: 2026-09-12. 갱신일: 2026-09-13. 상태: 재사용 중심 상세 설계 v3, 제품 구현 전. 아래 10절은 1~9절에 남은 구현 선택을 구체화하며 충돌 시 10절을 우선한다. 선택안은 설계 결정이며 현재 구현된 계약으로 간주하지 않는다.
 
 ## 1. 목표와 결정 상태
 
@@ -127,3 +127,101 @@ PPTX에서는 `p:sldSz`뿐 아니라 전체 배경 이미지, 요소 좌표 변�
 - 비율이 다른 요청 간 캐시가 혼용되지 않고, 기존 digest·snapshot 검증을 우회하지 않는다.
 
 미해결 사항은 생성 화면의 정확한 진입 컴포넌트, 일반 Authored의 캔버스 해석 진입점, 문서 저장의 권위 위치, 공개 export의 최종 호출 체인, 초기 지원 스타일 목록이다. 이들은 구현 첫 단계에서 결정하며 기본 제품 범위를 다시 협의할 필요는 없다. 기존 함수·모델의 존재는 확인했으나 실제 세로 실행 지원이나 무수정 재사용이 검증된 것으로 표현하지 않는다.
+
+## 10. 구현 선택 구체화 — 2026-09-13
+
+### 10.1 확인된 실행 경로와 초안 정정
+
+`presentation_generate.py:271`에서 마스터 관련 pin이 모두 없는 요청은 마스터 해석 경로를 빠져나간다. 따라서 회사 마스터의 CanvasContract가 일반 Authored에도 자동으로 만들어진다고 가정하지 않는다. 일반 생성 접수에서 기존 CanvasContract 타입으로 캔버스를 해석하는 연결을 추가한다. 이를 위해 DeckMasterContract나 회사 마스터를 가짜로 만들지 않는다.
+
+`presentation_generation_staging.py`의 `_durable_request_payload`와 `_request_from_durable_payload`는 기존 요청과 composition/style/deck metadata를 직렬화·복원한다. 비율도 이 경로를 통과하게 한다. PrivateAttr는 자동 직렬화되지 않으므로 내부 객체에만 담고 완료했다고 판단하지 않는다.
+
+`authored_operations.py:297`은 문서 theme의 authored_vnext에서 deckMetadata를 읽어 재생성 요청에 사용하는 기존 패턴을 보여준다. 이 메타데이터 영역을 확장하는 저장안을 채택한다. 현재 비율 보존 기능이 이미 있다는 의미는 아니다.
+
+`lib/authored-hybrid/export.ts`의 `runAuthoredFidelityPresentationExport`는 `runBundledPresentationExport`를 호출한다. `assembleAuthoredHybridPptxAsync`는 hybrid 경로의 호출이다. 그러므로 앞 절의 hybrid 조립기는 첫 버전의 무조건적인 수정 대상이 아니다. fidelity PPTX의 실제 크기 변경은 번들 입력 계약과 그 입력을 읽는 런타임 소스에서 처리한다. 다운로드된 `presentation-export` 산출물을 직접 편집하지 않는다.
+
+PDF는 `runAuthoredPdfPresentationExport` → `buildRasterPdfFromPngs` 경로이며, 후자의 고정 페이지 크기와 배치 행렬을 수정한다. 공개 전략 선택은 기존 `presentation-export-strategy.ts`를 유지한다.
+
+### 10.2 입력·저장·전달의 권위
+
+공개 입력은 `aspect_ratio`이며 요청 기본값은 `16:9`다. 폭·높이의 별도 공개 입력은 제공하지 않는다. 서버가 비율을 기존 CanvasContract 타입으로 해석한다. 안전 영역은 선택한 레이아웃에서 계산하고 캔버스 안에 있는지 검증한다. 마스터의 안전 영역을 일반 생성의 기본값으로 복사하지 않는다.
+
+문서의 권위 위치는 기존 JSON 열인 `theme.authored_vnext.canvas`로 정한다. 새 하위 항목은 비율, CanvasContract 값, 해석 계약 버전을 함께 담는다. 기존 theme/authored_vnext의 다른 키를 보존하는 병합으로 기록한다. `deckMetadata`의 기존 의미를 비율 저장용으로 바꾸거나 다른 문서 열에 중복 권위를 만들지 않는다. 새 DB 열은 추가하지 않는 설계다.
+
+| 단계 | 전달값과 권위 | 필요한 연결 |
+| --- | --- | --- |
+| 생성 설정 | aspect_ratio 선택 | 현재 생성 폼과 요청 타입에 필드 추가 |
+| 생성 접수 | 정규화된 aspect_ratio와 해석된 CanvasContract | GeneratePresentationRequest와 실제 workspace/public 입력 정규화에 연결 |
+| durable job | 기존 request_payload의 선택값 및 해석 버전 | staging 직렬화·복원 시 누락 검증 |
+| 생성·체크포인트 | 해당 시도에서 확정한 캔버스와 기존 snapshot digest | 프로세스 전역값을 읽지 않고 함수 인자로 전달 |
+| 문서 발행 | theme.authored_vnext.canvas | 기존 문서 발행 트랜잭션에서 결과와 함께 기록 |
+| 재열기·내보내기 | 저장된 문서 캔버스 | 서버 projection에서 검증 후 UI·export payload로 전달 |
+| 복사·버전 복원 | 원본/해당 버전의 canvas | 기존 theme 보존 경로에 포함; 현재 설정을 재적용하지 않음 |
+| 페이지 재생성·스타일 적용 | 문서 canvas | 요청 비율 생략 시 문서 값을 상속; 명시 충돌은 거절 |
+
+저장 위치를 정했다는 사실이 기존 모든 복원 경로의 보존을 확인했다는 뜻은 아니다. 구현에서는 발행·복원 writer가 theme를 재구성하는 지점을 좁게 확인하고 canvas 병합 누락을 수정한다. 기존 JSON 경로가 특정 writer에서 빠진다면 해당 writer를 수정하며 바로 DB migration으로 확대하지 않는다.
+
+새 문서의 비율과 해석된 폭·높이가 불일치하면 거절한다. 체크포인트나 pinned snapshot의 치수가 다르면 새 비율로 강제 덮어쓰지 않는다. 미완료 요청의 비율 변경은 재시도로 처리하지 않고 새 생성 요청으로 취급한다.
+
+### 10.3 초기 스타일과 배치
+
+첫 구현 대상은 기존 `authored_styles/default.yaml`의 default 스타일 하나로 한정한다. 카탈로그 ID·색상·폰트·기존 스타일 loader를 재사용하고 새 스타일 ID를 만들지 않는다. 이 선택은 개발 대상 선정이며 현재 default가 세로형으로 검증됐다는 뜻은 아니다.
+
+표지는 제목·부제를 위쪽에, 본문은 제목 아래 단일 열, 이미지는 가로폭 안에 배치하고 캡션을 아래에 둔다. 차트·표는 폭 기준 수용량을 기존 측정 함수로 판단하고 가로 3열 카드를 세로 스택으로 구성한다. 마무리는 핵심 메시지와 다음 행동을 수직으로 배치한다. 기존 프롬프트/레이아웃 해석 지점에 선택 캔버스와 이 규칙을 추가한다. 별도 세로 생성 파이프라인은 만들지 않는다.
+
+default 외 스타일, 회사 마스터, registered-template 및 source-native/fidelity-first 조합의 9:16은 첫 릴리스에서 비활성화한다. 이후 각 조합의 호환 검증이 완료되면 기존 capability/라우팅 판정에 추가한다. 사용자가 고른 스타일을 default로 조용히 교체하지 않는다. 서버 판정이 권위이며 UI는 동일한 지원 정보를 표시한다. 가로형의 기존 지원 범위에는 이 제한을 적용하지 않는다.
+
+### 10.4 오류·과거 호환·노출 규칙
+
+| 상황 | 동작 |
+| --- | --- |
+| 새 생성에서 입력 생략 | 기존 가로형 기본값 |
+| 과거 문서에 canvas 항목 없음 | 가로형으로 읽고, 읽기만으로 DB를 수정하지 않음 |
+| canvas 항목이 있으나 형식이 잘못되었거나 일부 누락 | 무조건 가로 fallback하지 않고 계약 오류 |
+| 비율 값이 허용 목록 밖 | provider 호출 전 422 |
+| 세로형과 미지원 스타일/마스터/모드 결합 | durable 생성 시작 전 의미 있는 사유로 422 |
+| 문서·snapshot·render viewport 간 충돌 | 출력 차단; 가로 이미지 늘리기나 강제 회전 금지 |
+| 세로형에서 고정 장수 안에 내용이 안 들어감 | 기존 내용 보존·품질 실패/검토 계약 적용; 임의 장 확장과 글자 하한 완화 금지 |
+
+canvas 계약 버전이 없는 기존 결과는 과거 가로 계약으로만 해석한다. 9:16 결과에는 새 계약 버전을 명시하고 이를 모르는 소비자는 거절하도록 한다. 기존 snapshot의 digest를 바꾸지 않으며 새 크기가 들어간 snapshot은 기존 seal 함수로 새로 봉인한다. 캐시 식별에는 확정된 크기와 계약 버전을 포함한다.
+
+세로 옵션은 API·worker·renderer·PPTX·PDF 지원이 연결된 이후에만 활성화한다. 구현 단계의 테스트 통과만으로 지원 목록에 올리지 않고 실제 생성과 파일 readback까지 완료한 default 조합부터 노출한다.
+
+### 10.5 변경 범위와 구현 종료 조건
+
+필수 변경 층은 요청 모델/정규화, staging 직렬화, 문서 theme 발행·읽기·복원, 일반 Authored 캔버스 해석, default 구성 지침, 캡처 치수, 브라우저 viewport 계약, fidelity 번들 export 입력과 소유 소스, raster PDF, 생성 폼과 문서 미리보기다. 각 층은 기존 파일의 연결 지점을 확장한다.
+
+확정된 직접 파일은 `models/generate_presentation_request.py`, `api/v1/ppt/endpoints/presentation_generation_staging.py`, `api/v1/ppt/endpoints/presentation_generate.py`, `utils/slide_capture.py`, `utils/authored_styles.py`, `lib/authored-hybrid/export.ts`, `lib/run-bundled-presentation-export.ts`, `lib/authored-hybrid/raster-pdf.ts`다. schema·contract·browser-source는 실제 fidelity 렌더 호출의 사용 범위를 확인해 함께 변경한다. 생성 폼, 문서 발행/복원 writer, 번들 런타임의 소유 소스는 구현 직전 호출자에서 찾아 파일을 확정한다. 확인하지 않은 경로를 임의 파일명으로 채우지 않는다.
+
+조건부 변경 대상은 hybrid 조립기·회사 표준 composition·Design Pack이다. 첫 버전에서 미지원 조합을 제한할 수 있다면 해당 엔진 전체의 세로 확장은 하지 않는다. 검증 기준은 9절을 유지하며 추가로 요청 직렬화 왕복, 문서 복원, 가로/세로 캐시 분리, PDF 실제 페이지 크기를 변경층의 좁은 검증에 포함한다. 모든 검사를 매번 실행하는 계획은 아니다.
+
+설계의 주요 선택은 위와 같이 정했다. 아직 확인되지 않은 것은 일부 실제 writer/소유 소스 파일 위치와 실행 결과이며, 이는 구현 전 연결 확인과 제품 수용 검증의 대상이다. 이 문서를 세로 기능의 구현 완료 또는 무수정 재사용 보증으로 보고하지 않는다.
+
+### 10.6 구현 조사에서 확인한 연결 보완 (2026-09-13)
+
+아래는 구현 조사에서 현재 코드로 확인한 사실이며, 세로 지원 완료를 뜻하지 않는다. 파일별 소유권·확정 인터페이스·검증 결과는 `docs/authored-portrait-implementation-20260913.md`에 기록한다.
+
+- 일반 default의 실제 생성은 `authored_presentation_generation.py`와 `authored_presentation_pipeline.py`를 사용하며 회사 마스터 CanvasContract를 자동 해석하지 않는다. 기존 함수 인자와 renderer worker 직렬화에 캔버스를 연결한다.
+- theme 하위 wire는 기존 CanvasContract alias 관례를 따라 `contractVersion`, `aspectRatio`, `widthPx`, `heightPx`, `locale`, `safeArea`로 정했다. 공개 요청 이름 `aspect_ratio`와 문서 권위 위치는 10.2를 유지한다. 일반 안전 영역은 기존 공통 author 지침과 fallback의 64px 여백에서 계산하며 회사 마스터의 canonical 영역을 복사하지 않는다.
+- 문서 발행 writer는 `authored_presentation_publication.py`이다. 기존 복사는 theme 전체를 보존하며 버전 복원은 슬라이드를 복원하고 불변 문서 theme를 유지한다. canvas만 있는 authored_vnext 객체를 회사 마스터로 오인하던 workspace 분기는 명시적인 master pin 기준으로 구분한다.
+- 10.1의 번들 호출 설명은 현재 코드의 최종 writer까지 충분히 추적하지 못했다. Next Fidelity 경로는 번들 호출 뒤 기존 `prepareFidelitySlideLayer`와 `writeHybridPptx`를 통해 `assembleAuthoredHybridPptxAsync`로 최종물을 다시 작성한다. 따라서 이 checkout에서는 기존 조립기가 실제 수정 대상이다. 이는 hybrid 편집 출력의 공개 확대를 뜻하지 않는다.
+- public-v2 durable 출력은 별도로 이미 존재하는 `public_export_operation.py` → `public_render_worker.py` → `public_export_worker.py`를 사용한다. 이 저장소 소유 소스의 bundle·viewport·PPTX/PDF 치수를 함께 연결한다. 다운로드된 export 런타임은 직접 편집하지 않는다.
+- 실제 수용 전에는 default의 세로 공개 capability를 비활성 상태로 유지한다. 환경 및 코드 검사만으로 지원 완료를 선언하지 않는다.
+- 실제 5장 생성 검증에서 일반 생성 완료 시의 자동 출력도 별도 필수 연결로 확인했다. `authored_presentation_generation.py` → `authored_presentation_artifacts.py::_build_authored_export` → `author_deck.py::build_image_pptx`가 사용된다. 기존 가로 고정 페이지와 세로 local-fit 증거가 충돌해 실제 작업이 차단되었으며, 해당 저장소 소유 조립기에 캔버스·PNG 크기 검증을 연결한다. 기존 체크포인트와 HTML을 보존한 재시도로 최종 산출물을 확인해야 한다.
+
+
+### 10.7 실제 수용 실행으로 확인한 소유 경로와 정정 (2026-09-13)
+
+이 절은 설계 가정이 아니라 관리 스택·PostgreSQL·실제 provider·다운로드 파일에서 확인한 사실이다. 앞선 절과 경로 설명이 다르면 이 절을 우선한다.
+
+- 현재 화면 Fidelity/PDF는 workspace command → `workspace_quality_export_operation_handlers` → `render_and_export_authored_htmls` → Python public render/export worker를 사용한다. Next `runAuthoredFidelityPresentationExport`와 번들/최종 조립 helper는 현재 production 호출자가 없다. 해당 helper의 크기 지원과 실제 제품 사용 검증을 구분한다.
+- 생성 직후 자동 PPTX는 `authored_presentation_artifacts._build_authored_export` → `author_deck.build_image_pptx`를 사용한다. 이 소유 builder의 페이지 크기까지 전달해야 일반 Authored 세로 생성이 완료된다. 다운로드된 runtime을 편집하지 않는다.
+- 최초 admission은 원 생성 operation에만 연결된다. 재시도는 같은 generation job과 immutable 입력을 보존하면서 child operation, 새 canonical payload hash, parent action receipt를 만든다. 복원은 검증된 retry ancestry를 따라 원 admission과 artifact provenance를 확인하며, snapshot 또는 artifact digest를 수정하지 않는다.
+- 최종 semantic projection writer도 기존 `theme.authored_vnext.canvas` 및 snapshot 의미를 보존해야 한다. 단순 theme 하위 객체 대입은 staging에 저장한 canvas를 소실시켰으며 merge helper로 연결하였다. 과거 누락 문서는 읽기 projection에서만 가로 기본값을 제공한다.
+- 관리 generation controller의 기존 등록 범위에 단일 페이지 `slide.regenerate.preview`와 `slide.regenerate`를 포함한다. 일반 `presentation.edit` 및 batch 범위를 임의로 확대하지 않는다.
+- PostgreSQL slide content/properties는 JSON이다. 발행 CAS는 기존 JSONB 변환 비교 helper를 사용하며 기존 owner, source HTML, content, properties 경쟁 검사를 보존한다.
+- header chrome는 독립 `AuthoredHeaderContract`의 위치 규칙을 따른다. body safeArea 64px를 모든 header glyph의 경계로 재해석하지 않는다. 실제 상단 28px header는 기존 가로 계약에도 속하며 육안 잘림이 없었다.
+- 첫 지원 조합은 일반 default Authored + 9:16 + Fidelity/PDF이다. 회사 master, 다른 style, source-native/hybrid를 조용히 대체하지 않는다. 실제 생성·재열기·재생성 후 export 수용이 끝나기 전에는 catalog capability를 공개하지 않는다.
+
+- 페이지 재생성은 preview와 publish 모두 기존 `_fit_content_revision`에서 유효 local-fit 영수증을 만든다. publish는 승인 후보 canonical digest, 동일 HTML 바이트 및 content-addressed PNG를 확인하고, 새 대상 영수증과 slide/theme를 같은 transaction의 CAS로 저장한다. untouched slide 영수증은 현재 HTML digest와 계속 일치해야 한다. 기존 generation V2/V3·deck digest는 과거 생성 증거로 보존하며 새 revision의 release-ready 인증으로 재표기하지 않는다.
+- DOM footer 경계는 실제 viewport 높이에서 기존 720px 기준 inset(페이지 번호 있음 72px, 없음 32px)을 뺀다. 가로 648/688px 규칙은 그대로이며 세로는 1208/1248px이다. 세로형을 위해 기준을 낮춘 것이 아니라 같은 하단 여백 계약을 실제 canvas에 전달한 것이다.

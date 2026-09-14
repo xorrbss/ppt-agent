@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import threading
 import uuid
 from collections.abc import Callable, Mapping, Sequence
@@ -46,6 +47,7 @@ MAX_WIRE_STDERR_BYTES = 1024 * 1024
 MAX_WIRE_STDIN_BYTES = 2 * 1024 * 1024
 MAX_EXPORT_BUNDLE_BYTES = 8 * 1024 * 1024
 MAX_OUTPUT_ARTIFACT_BYTES = 512 * 1024 * 1024
+DEFAULT_STAGING_CAPACITY_BYTES = 4 * 1024 * 1024 * 1024
 _CHUNK_BYTES = 1024 * 1024
 
 
@@ -180,6 +182,47 @@ class _CapturedProcess:
     stdout_overflow: bool
 
 
+class _StagingCapacitySupervisor:
+    """Process-local admission for job-owned staging disk reservations."""
+
+    def __init__(self, capacity_bytes: int) -> None:
+        if capacity_bytes <= 0:
+            raise ValueError("staging capacity must be positive")
+        self.capacity_bytes = capacity_bytes
+        self._reserved_bytes = 0
+        self._lock = asyncio.Lock()
+
+    async def reserve(self, size_bytes: int) -> None:
+        if size_bytes < 0:
+            raise ValueError("staging reservation must be non-negative")
+        async with self._lock:
+            if self._reserved_bytes + size_bytes > self.capacity_bytes:
+                raise TrustedWorkerWireError("trusted_worker_staging_capacity_exceeded")
+            self._reserved_bytes += size_bytes
+
+    async def release(self, size_bytes: int) -> None:
+        async with self._lock:
+            self._reserved_bytes = max(0, self._reserved_bytes - size_bytes)
+
+
+class _StagingReservation:
+    def __init__(
+        self, supervisor: _StagingCapacitySupervisor, reserved_bytes: int
+    ) -> None:
+        self._supervisor = supervisor
+        self._reserved_bytes = reserved_bytes
+
+    async def grow(self, size_bytes: int) -> None:
+        await self._supervisor.reserve(size_bytes)
+        self._reserved_bytes += size_bytes
+
+    async def release(self) -> None:
+        reserved_bytes = self._reserved_bytes
+        self._reserved_bytes = 0
+        if reserved_bytes:
+            await self._supervisor.release(reserved_bytes)
+
+
 class SupervisedStdioWireTransport:
     """Job-owned concrete wire transport with bounded output and cancellation."""
 
@@ -191,6 +234,7 @@ class SupervisedStdioWireTransport:
         allow_local_development_isolation_gap: bool = False,
         zero_timeout_seconds: float = 5.0,
         supervisor_factory: Callable[..., OperationProcessSupervisor] = OperationProcessSupervisor,
+        staging_capacity_bytes: int = DEFAULT_STAGING_CAPACITY_BYTES,
     ) -> None:
         if zero_timeout_seconds <= 0:
             raise ValueError("zero timeout must be positive")
@@ -199,6 +243,7 @@ class SupervisedStdioWireTransport:
         self._allow_local_development_isolation_gap = allow_local_development_isolation_gap
         self._supervisor_factory = supervisor_factory
         self._zero_timeout_seconds = zero_timeout_seconds
+        self._staging_capacity = _StagingCapacitySupervisor(staging_capacity_bytes)
         self._closed = False
         self._active: set[OperationProcessSupervisor] = set()
         self._active_lock = asyncio.Lock()
@@ -224,9 +269,51 @@ class SupervisedStdioWireTransport:
         if configured_output_limit <= 0:
             raise TrustedWorkerWireError("trusted_worker_output_limit_invalid")
         output_limit = min(MAX_OUTPUT_ARTIFACT_BYTES, configured_output_limit)
+        try:
+            output_reservation = int(environment.get(
+                "PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES", str(output_limit)
+            ))
+        except ValueError as error:
+            raise TrustedWorkerWireError("trusted_worker_cache_limits_invalid") from error
+        if output_reservation <= 0:
+            raise TrustedWorkerWireError("trusted_worker_cache_limits_invalid")
         spec = work_item.launch_spec
         if spec.filesystem is None:
             raise TrustedWorkerWireError("trusted_worker_filesystem_missing")
+        reserved_bytes = (
+            job.input_artifact.size_bytes
+            + output_reservation
+            + spec.limits.temporary_bytes
+        )
+        await self._staging_capacity.reserve(reserved_bytes)
+        reservation = _StagingReservation(self._staging_capacity, reserved_bytes)
+        try:
+            return await self._execute_admitted(
+                work_item=work_item,
+                job=job,
+                payload=payload,
+                environment=environment,
+                output_limit=output_limit,
+                reservation=reservation,
+            )
+        finally:
+            try:
+                await asyncio.to_thread(_remove_operation_staging, spec.filesystem)
+            finally:
+                await reservation.release()
+
+    async def _execute_admitted(
+        self,
+        *,
+        work_item: TrustedExecutorWorkItem,
+        job: IsolatedWorkerJob,
+        payload: bytes,
+        environment: Mapping[str, str],
+        output_limit: int,
+        reservation: _StagingReservation,
+    ) -> TrustedWorkerWireResult:
+        spec = work_item.launch_spec
+        assert spec.filesystem is not None
         object_root = spec.filesystem.input_root
         output_root = spec.filesystem.sandbox_root / "output"
         spec.filesystem.sandbox_root.mkdir(parents=True, exist_ok=True)
@@ -240,6 +327,8 @@ class SupervisedStdioWireTransport:
             destination=primary_path,
         )
         references = _input_bundle_references(job, primary_path)
+        additional_input_bytes = sum(reference.size_bytes for reference in references)
+        await reservation.grow(additional_input_bytes)
         staged_paths = [primary_path]
         for reference in references:
             destination = object_root.joinpath(*reference.storage_key.split("/"))
@@ -273,6 +362,9 @@ class SupervisedStdioWireTransport:
         child_environment.pop("PUBLIC_WORKER_OBJECT_STORE_ROOT", None)
         child_environment["PUBLIC_WORKER_INPUT_STORE_ROOT"] = str(object_root)
         child_environment["PUBLIC_WORKER_OUTPUT_STORE_ROOT"] = str(output_root)
+        child_environment["TMPDIR"] = str(spec.filesystem.temporary_root)
+        child_environment["TEMP"] = str(spec.filesystem.temporary_root)
+        child_environment["TMP"] = str(spec.filesystem.temporary_root)
         if self._allow_local_development_isolation_gap:
             child_environment["PUBLIC_WORKER_LOCAL_DEVELOPMENT"] = "1"
         capability_key = child_environment.get(
@@ -500,6 +592,25 @@ def _supervisor_metrics_or_empty(
         return {}
 
 
+def _remove_operation_staging(filesystem: SandboxFilesystemSpec) -> None:
+    """Remove only the validated job-owned sandbox tree."""
+
+    root = filesystem.sandbox_root.resolve(strict=False)
+    if root == Path(root.anchor):
+        return
+    children = (
+        filesystem.input_root.resolve(strict=False),
+        filesystem.temporary_root.resolve(strict=False),
+        (filesystem.sandbox_root / "output").resolve(strict=False),
+    )
+    try:
+        for child in children:
+            child.relative_to(root)
+    except ValueError:
+        return
+    shutil.rmtree(root, ignore_errors=True)
+
+
 def _verify_artifact_file(
     reference: ArtifactRef, path: Path, *, max_bytes: int | None = None
 ) -> None:
@@ -537,7 +648,9 @@ def _input_bundle_references(
         raise TrustedWorkerWireError("trusted_worker_bundle_invalid") from error
     if not isinstance(value, Mapping) or not isinstance(value.get("slides"), list):
         raise TrustedWorkerWireError("trusted_worker_bundle_invalid")
-    if job.role == "render" and value.get("schemaVersion") != "public-render-bundle/v1":
+    if job.role == "render" and value.get("schemaVersion") not in {
+        "public-render-bundle/v1", "public-render-bundle/v2",
+    }:
         raise TrustedWorkerWireError("trusted_worker_render_bundle_invalid")
     expected_kind = "slide-html" if job.role == "render" else "slide-png"
     expected_media_type = "text/html" if job.role == "render" else "image/png"

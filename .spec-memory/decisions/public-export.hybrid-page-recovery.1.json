@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.hybrid-page-recovery",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Recover page-local Hybrid conversion failures with verified original slide PNGs while retaining healthy editable pages and reporting replacements.",
+  "scope": [
+    "public-export",
+    "authored-hybrid",
+    "quality"
+  ],
+  "invariants": [
+    "Only page-local conversion failures may replace a page with its identity-verified original PNG.",
+    "Preserve page count, order, canvas and healthy editable OOXML/font parts.",
+    "Keep source/receipt/package identity and authorization validation strict.",
+    "Report replaced pages and bounded failure reasons without claiming a quality pass.",
+    "Do not automatically retry deterministic preservation validation failures."
+  ],
+  "forbidden": [
+    "Silently rewriting original content or regenerating slides during export.",
+    "Replacing all pages solely because one page conversion failed.",
+    "Dropping source integrity checks to deliver an unverified file."
+  ],
+  "evidence": [
+    "User approved page-level fallback implementation and real export verification in this conversation."
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-14T04:20:38.1280628+00:00"
+}
