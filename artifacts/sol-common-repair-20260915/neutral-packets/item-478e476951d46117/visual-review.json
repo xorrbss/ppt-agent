@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "item_id": "item-478e476951d46117",
+  "method": "Direct PNG inspection against own packet source and requiredImages; no diagnostic or private files read",
+  "hash_verification": {
+    "html_sha256": "6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5",
+    "png_sha256": "3e81ef6aaca3c8e2e9852ed875e9065d34e60677f2844276ca2f8e39e0fb15ec",
+    "matches_packet_after_sha256_prefix_normalization": true
+  },
+  "verdict": "fail",
+  "readability_score": 1,
+  "style_score": 1,
+  "geometry": {
+    "pass": false,
+    "findings": [
+      "Quality column text and vertical rules extend below their inner card. Bottom-right principle text reaches/exceeds its white inset boundary."
+    ]
+  },
+  "readability": {
+    "pass": true,
+    "score": 1,
+    "findings": [
+      "Text is readable but narrow quality columns force excessive wrapping and crowding."
+    ]
+  },
+  "style": {
+    "verdict": "serviceable",
+    "score": 1,
+    "observation": "Palette and hierarchy consistent, but one crowded column and blank image holder degrade composition."
+  },
+  "required_images": {
+    "candidate_count": 1,
+    "require_all": false,
+    "verdict": "not_visible",
+    "visible_raster_images": false,
+    "observation": "Assigned target icon is not visible; lower-left holder is blank white. Required concentric rings cannot be seen."
+  },
+  "criteria_basis": {
+    "location": "packet.json requiredImages.placementPlan.assignments[0].purpose and candidates[0].protected_regions[0]",
+    "summary": "Assigned small target marker must preserve all concentric rings. No rings visible in supplied render."
+  }
+}

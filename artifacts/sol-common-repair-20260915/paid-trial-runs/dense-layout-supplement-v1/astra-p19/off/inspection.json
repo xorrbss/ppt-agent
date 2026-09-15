@@ -1,0 +1,26 @@
+{
+  "status": "failed",
+  "telemetryStatus": "available",
+  "blockingIssues": [
+    {
+      "category": "text_escapes_card",
+      "severity": "medium",
+      "detail": "text of s18-quality-load prints 12px below the bottom of its card s18-card-quality",
+      "qids": [
+        "s18-quality-load"
+      ],
+      "policy": "style_reference",
+      "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.055,
+        "excess_px_x": 0.0,
+        "excess_px_y": 12.0,
+        "card_qid": "s18-card-quality",
+        "element_kind": "text"
+      }
+    }
+  ],
+  "capacityEnforced": false,
+  "capacityViolations": [],
+  "repairTrigger": true
+}

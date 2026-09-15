@@ -1,0 +1,50 @@
+{
+  "schema": "sol-neutral-content-audit/v1",
+  "packetId": "item-591e72c73855feb6",
+  "reviewer": "independent-content",
+  "hashVerification": {
+    "html": true,
+    "png": true
+  },
+  "contentVerdict": "fail",
+  "passed": false,
+  "evidenceBasis": [
+    "this packet source and requiredImages",
+    "slide.html text cross-check",
+    "render.png visual inspection",
+    "whitelisted original image visual comparison"
+  ],
+  "requiredImageCount": 1,
+  "requiredImagesVerdict": "pass",
+  "imageEvidence": "Required dashboard appears as complete uncropped interface, including top navigation, sidebar, all summary cards, progress/action panel, other projects and notifications. Four callouts remain outside image. Small source labels are reduced; whole-image presence is not a guarantee of fine-print legibility.",
+  "propositions": [
+    {
+      "index": 1,
+      "verdict": "pass",
+      "evidence": "Required header identifiers/category and original dashboard visible."
+    },
+    {
+      "index": 2,
+      "verdict": "fail",
+      "evidence": "Four visible callouts cover current stage, pending actions/deadlines, supplementation and notifications/evaluation schedule. No callout covers core statistics or summary cards. Original summary card pixels alone do not satisfy the expressly requested statistics callout."
+    },
+    {
+      "index": 3,
+      "verdict": "pass",
+      "evidence": "Personal next action/deadline and all six administrator statuses visible; administrator functionality explicitly separated from depicted user-screen evidence."
+    },
+    {
+      "index": 4,
+      "verdict": "pass",
+      "evidence": "Detailed-list connection, card/chart drilldown and same-filter/aggregation criteria visible."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "type": "missing-required-callout-topic",
+      "detail": "Core statistics/summary cards omitted from external callouts."
+    }
+  ],
+  "uncertainties": []
+}

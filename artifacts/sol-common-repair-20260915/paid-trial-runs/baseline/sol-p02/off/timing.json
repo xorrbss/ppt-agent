@@ -1,0 +1,17 @@
+{
+  "strategyStartNs": 291098808363100,
+  "prepStartNs": 291098808363500,
+  "prepEndNs": 291099034189400,
+  "providerStartNs": 291099036458300,
+  "providerEndNs": 291206654790400,
+  "renderStartNs": 291206665810300,
+  "renderEndNs": 291210359137600,
+  "inspectionStartNs": 291210359140300,
+  "inspectionEndNs": 291210436682700,
+  "commonPrepMs": 225.826,
+  "providerPhaseMs": 107618.332,
+  "renderMs": 3693.327,
+  "inspectionMs": 77.542,
+  "firstRenderMs": 111550.774,
+  "endToEndMs": 111628.32
+}

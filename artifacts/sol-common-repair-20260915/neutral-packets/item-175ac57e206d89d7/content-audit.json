@@ -1,0 +1,59 @@
+{
+  "schema": "sol-neutral-content-audit/v1",
+  "packetId": "item-175ac57e206d89d7",
+  "reviewer": "independent-content",
+  "hashVerification": {
+    "html": true,
+    "png": true
+  },
+  "contentVerdict": "fail",
+  "passed": false,
+  "evidenceBasis": [
+    "this packet sourceContent and requiredImages",
+    "hash-verified slide.html text cross-check",
+    "this packet render.png direct visual inspection"
+  ],
+  "requiredImageCount": 0,
+  "requiredImagesVerdict": "not-applicable",
+  "propositions": [
+    {
+      "index": 1,
+      "verdict": "pass",
+      "evidence": "All seven checks and pre-completion condition visible; header TER/SER/+2 accepted under frozen ID overflow rule."
+    },
+    {
+      "index": 2,
+      "verdict": "pass",
+      "evidence": "Failure-to-rework and all five exception record fields with expiry/review prevent indefinite exception are visible."
+    },
+    {
+      "index": 3,
+      "verdict": "fail",
+      "evidence": "Visible flow inserts separate 승인권자 with final approval after 품질담당자. Source assigns retest confirmation followed by final approval to quality-owner phrasing; a separate final authority is not supported by source. Developer impact review and retest condition remain visible."
+    },
+    {
+      "index": 4,
+      "verdict": "pass",
+      "evidence": "Requirement/change/release version linkage and security/inspection/maintenance reuse are readable. Bottom maintenance text is within capture despite card boundary extending beyond canvas."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "type": "unsupported-role-relationship",
+      "location": "approval flow final node",
+      "detail": "Separate 승인권자 final-approval actor changes source responsibility assignment."
+    },
+    {
+      "severity": "moderate",
+      "type": "unsupported-condition",
+      "location": "failure branch",
+      "detail": "수정 후 전체 재검사 adds a mandatory full-retest scope not specified by source."
+    }
+  ],
+  "uncertainties": [],
+  "notes": [
+    "Identical verified HTML/PNG across the two assigned packets.",
+    "Clipped panel chrome alone does not imply missing source text; visible maintenance label was counted."
+  ]
+}

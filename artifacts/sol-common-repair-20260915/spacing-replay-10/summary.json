@@ -1,0 +1,636 @@
+[
+  {
+    "sourcePath": "runs/stage1/case-01/C",
+    "geometryPass": false,
+    "contentPreserved": true,
+    "automaticPass": true,
+    "defects": [
+      "parent_escape_sibling_overlap"
+    ],
+    "selectionReason": "nested painted cards escape outer card",
+    "ordinal": 1,
+    "selectedQids": [
+      "q-s1-analysis-box",
+      "q-s1-goal-box"
+    ],
+    "candidateChanged": true,
+    "noOpBytesPreserved": true,
+    "sourceSha256": "224c073feb4812c00197ed1873dcef8d64550792d48d98d1257c85f8dcb131b1",
+    "preparedSha256": "23f029283bd359648dd82e015c0741ed500ade58e731fb6e68e2d28d520592cb",
+    "candidateSha256": "627aa072c93eca640fb947f695242e097abc981a26f087a115b4e8970be926a1",
+    "htmlIdentityMatch": true,
+    "providerCalls": 0,
+    "totalMs": 3074.705,
+    "repairMs": 0.4781,
+    "renderMs": 2976.916,
+    "inspectionMs": 97.3109,
+    "textPreserved": true,
+    "fontSizesPreserved": true,
+    "blockers": [],
+    "imageSourcesAndNaturalSizesPreserved": true,
+    "semanticContentVerdictInherited": true,
+    "automaticPassNotVisualAcceptance": true
+  },
+  {
+    "sourcePath": "runs/stage1/case-01/A",
+    "geometryPass": false,
+    "contentPreserved": true,
+    "automaticPass": false,
+    "defects": [
+      "parent_escape_footer_overlap"
+    ],
+    "selectionReason": "owned text escapes card into footer",
+    "ordinal": 2,
+    "selectedQids": [],
+    "candidateChanged": false,
+    "noOpBytesPreserved": true,
+    "sourceSha256": "760cf680a9583b768efc7eb41bd460a43a6720eb3603a29e0963a38dfd5c0c20",
+    "preparedSha256": "64c86d474f5af272ab4bf1a33b62a0a169fcee7139008998e727938ca5d21cb2",
+    "candidateSha256": "64c86d474f5af272ab4bf1a33b62a0a169fcee7139008998e727938ca5d21cb2",
+    "htmlIdentityMatch": true,
+    "providerCalls": 0,
+    "totalMs": 1932.6201,
+    "repairMs": 0.2386,
+    "renderMs": 1858.0562,
+    "inspectionMs": 74.3253,
+    "textPreserved": true,
+    "fontSizesPreserved": true,
+    "blockers": [
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of q-strong-f2092292903b prints 41px below the bottom of its card s1-area-card-4",
+        "qids": [
+          "q-strong-f2092292903b"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.1962,
+          "excess_px_x": 0.0,
+          "excess_px_y": 41.0,
+          "card_qid": "s1-area-card-4",
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s1-after prints 3px below the bottom of its card s1-problem-card",
+        "qids": [
+          "s1-after"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0069,
+          "excess_px_x": 0.0,
+          "excess_px_y": 3.0,
+          "card_qid": "s1-problem-card",
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s1-area-copy-3 prints 16px below the bottom of its card s1-area-card-3",
+        "qids": [
+          "s1-area-copy-3"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0766,
+          "excess_px_x": 0.0,
+          "excess_px_y": 16.0,
+          "card_qid": "s1-area-card-3",
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s1-area-copy-4 prints 41px below the bottom of its card s1-area-card-4",
+        "qids": [
+          "s1-area-copy-4"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.1962,
+          "excess_px_x": 0.0,
+          "excess_px_y": 41.0,
+          "card_qid": "s1-area-card-4",
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s1-before prints 3px below the bottom of its card s1-problem-card",
+        "qids": [
+          "s1-before"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0069,
+          "excess_px_x": 0.0,
+          "excess_px_y": 3.0,
+          "card_qid": "s1-problem-card",
+          "element_kind": "text"
+        }
+      }
+    ],
+    "imageSourcesAndNaturalSizesPreserved": true,
+    "semanticContentVerdictInherited": true,
+    "automaticPassNotVisualAcceptance": true
+  },
+  {
+    "sourcePath": "runs/stage1/case-03/B",
+    "geometryPass": false,
+    "contentPreserved": false,
+    "automaticPass": true,
+    "defects": [
+      "parent_escape",
+      "forbidden_source_image_overlay"
+    ],
+    "selectionReason": "source image overlay plus card escape",
+    "ordinal": 3,
+    "selectedQids": [],
+    "candidateChanged": false,
+    "noOpBytesPreserved": true,
+    "sourceSha256": "609dc89a45fed38bb25973dea43539ed757e6300c2674c8de76ead9eb68e0587",
+    "preparedSha256": "609dc89a45fed38bb25973dea43539ed757e6300c2674c8de76ead9eb68e0587",
+    "candidateSha256": "609dc89a45fed38bb25973dea43539ed757e6300c2674c8de76ead9eb68e0587",
+    "htmlIdentityMatch": true,
+    "providerCalls": 0,
+    "totalMs": 2786.2771,
+    "repairMs": 0.0742,
+    "renderMs": 2736.3564,
+    "inspectionMs": 49.8465,
+    "textPreserved": true,
+    "fontSizesPreserved": true,
+    "blockers": [],
+    "imageSourcesAndNaturalSizesPreserved": true,
+    "semanticContentVerdictInherited": false,
+    "automaticPassNotVisualAcceptance": true
+  },
+  {
+    "sourcePath": "runs/stage1/case-04/C",
+    "geometryPass": false,
+    "contentPreserved": false,
+    "automaticPass": false,
+    "defects": [
+      "parent_escape_offcanvas"
+    ],
+    "selectionReason": "source proposition off canvas",
+    "ordinal": 4,
+    "selectedQids": [
+      "s24-flow-card-3"
+    ],
+    "candidateChanged": true,
+    "noOpBytesPreserved": true,
+    "sourceSha256": "779c3408d01f7a7ed81af301b036bf9195f5898c10cb68f3e302d2cf7e188903",
+    "preparedSha256": "779c3408d01f7a7ed81af301b036bf9195f5898c10cb68f3e302d2cf7e188903",
+    "candidateSha256": "3f7f7bca22f1c9a20387b773b17a49f8edac9162a191847632d50e7ff71df585",
+    "htmlIdentityMatch": true,
+    "providerCalls": 0,
+    "totalMs": 3336.6991,
+    "repairMs": 1.0276,
+    "renderMs": 3242.8382,
+    "inspectionMs": 92.8333,
+    "textPreserved": true,
+    "fontSizesPreserved": true,
+    "blockers": [
+      {
+        "category": "clipping",
+        "severity": "medium",
+        "detail": "browser reports clipped visible content",
+        "qids": [
+          "s24-change-note"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "hidden_fraction": 1.0,
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "clipping",
+        "severity": "medium",
+        "detail": "browser reports clipped visible content",
+        "qids": [
+          "s24-flow-copy-3"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "hidden_fraction": 0.63,
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "clipping",
+        "severity": "medium",
+        "detail": "browser reports clipped visible content",
+        "qids": [
+          "s24-flow-num-3"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "hidden_fraction": 0.583,
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "off_canvas",
+        "severity": "high",
+        "detail": "element extends outside the slide canvas",
+        "qids": [
+          "s24-change-note"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "overshoot_px_left": 0.0,
+          "overshoot_px_top": 0.0,
+          "overshoot_px_right": 0.0,
+          "overshoot_px_bottom": 91.0,
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "off_canvas",
+        "severity": "high",
+        "detail": "element extends outside the slide canvas",
+        "qids": [
+          "s24-flow-card-3"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "overshoot_px_left": 0.0,
+          "overshoot_px_top": 0.0,
+          "overshoot_px_right": 0.0,
+          "overshoot_px_bottom": 19.0,
+          "element_kind": "container"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s24-change-note prints 109px below the bottom of its card s24-change-panel",
+        "qids": [
+          "s24-change-note"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.229,
+          "excess_px_x": 0.0,
+          "excess_px_y": 109.0,
+          "card_qid": "s24-change-panel",
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s24-flow-copy-3 prints 40px below the bottom of its card s24-change-panel",
+        "qids": [
+          "s24-flow-copy-3"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0847,
+          "excess_px_x": 0.0,
+          "excess_px_y": 40.3,
+          "card_qid": "s24-change-panel",
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s24-flow-num-3 prints 40px below the bottom of its card s24-change-panel",
+        "qids": [
+          "s24-flow-num-3"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0837,
+          "excess_px_x": 0.0,
+          "excess_px_y": 39.84,
+          "card_qid": "s24-change-panel",
+          "element_kind": "text"
+        }
+      }
+    ],
+    "imageSourcesAndNaturalSizesPreserved": true,
+    "semanticContentVerdictInherited": false,
+    "automaticPassNotVisualAcceptance": true
+  },
+  {
+    "sourcePath": "runs/stage1/case-05/A",
+    "geometryPass": false,
+    "contentPreserved": false,
+    "automaticPass": true,
+    "defects": [
+      "connector_crosses_text"
+    ],
+    "selectionReason": "connector crosses meaningful labels",
+    "ordinal": 5,
+    "selectedQids": [],
+    "candidateChanged": false,
+    "noOpBytesPreserved": true,
+    "sourceSha256": "e512a9a2943f7958be5b13d7e686c765c47416ea8e7d8d62ab05fc7fc2f2f7a4",
+    "preparedSha256": "e512a9a2943f7958be5b13d7e686c765c47416ea8e7d8d62ab05fc7fc2f2f7a4",
+    "candidateSha256": "e512a9a2943f7958be5b13d7e686c765c47416ea8e7d8d62ab05fc7fc2f2f7a4",
+    "htmlIdentityMatch": true,
+    "providerCalls": 0,
+    "totalMs": 2006.3592,
+    "repairMs": 0.2886,
+    "renderMs": 1958.215,
+    "inspectionMs": 47.8556,
+    "textPreserved": true,
+    "fontSizesPreserved": true,
+    "blockers": [],
+    "imageSourcesAndNaturalSizesPreserved": true,
+    "semanticContentVerdictInherited": false,
+    "automaticPassNotVisualAcceptance": true
+  },
+  {
+    "sourcePath": "runs/stage2/round-2/case-05/C",
+    "geometryPass": false,
+    "contentPreserved": false,
+    "automaticPass": false,
+    "defects": [
+      "text_clipping_at_semantic_panel_boundary"
+    ],
+    "selectionReason": "text clipping at card boundary",
+    "ordinal": 6,
+    "selectedQids": [],
+    "candidateChanged": false,
+    "noOpBytesPreserved": true,
+    "sourceSha256": "a629fd030d3a733c2ff2387f12b641133997a095916df2dd8e18026f21189a8f",
+    "preparedSha256": "a629fd030d3a733c2ff2387f12b641133997a095916df2dd8e18026f21189a8f",
+    "candidateSha256": "a629fd030d3a733c2ff2387f12b641133997a095916df2dd8e18026f21189a8f",
+    "htmlIdentityMatch": true,
+    "providerCalls": 0,
+    "totalMs": 2731.9363,
+    "repairMs": 0.2975,
+    "renderMs": 2654.9183,
+    "inspectionMs": 76.7205,
+    "textPreserved": true,
+    "fontSizesPreserved": true,
+    "blockers": [
+      {
+        "category": "clipping",
+        "severity": "medium",
+        "detail": "browser reports clipped visible content",
+        "qids": [
+          "s5-owner-note"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "hidden_fraction": 0.727,
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "high",
+        "detail": "text of s5-owner-note prints 12px below the bottom of its card s5-card-owner, over q-div-a66a48f17ba3",
+        "qids": [
+          "s5-owner-note"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0476,
+          "excess_px_x": 0.0,
+          "excess_px_y": 12.0,
+          "card_qid": "s5-card-owner",
+          "element_kind": "text"
+        }
+      }
+    ],
+    "imageSourcesAndNaturalSizesPreserved": true,
+    "semanticContentVerdictInherited": false,
+    "automaticPassNotVisualAcceptance": true
+  },
+  {
+    "sourcePath": "runs/stage2/round-3/case-02/C",
+    "geometryPass": false,
+    "contentPreserved": false,
+    "automaticPass": false,
+    "defects": [
+      "sibling_text_overlap",
+      "semantic_panel_escape_and_sibling_occlusion",
+      "sibling_text_overlap"
+    ],
+    "selectionReason": "sibling text overlap",
+    "ordinal": 7,
+    "selectedQids": [
+      "s27-step4-card"
+    ],
+    "candidateChanged": true,
+    "noOpBytesPreserved": true,
+    "sourceSha256": "d5589ee2482fadf17e2eac9f42801205c6fcc7352a3c3068b21d7a9f310d45a1",
+    "preparedSha256": "d5589ee2482fadf17e2eac9f42801205c6fcc7352a3c3068b21d7a9f310d45a1",
+    "candidateSha256": "89f96f3124569015b90f96b70b6423555c23f1a0bed03d03f891fcf68fa31f79",
+    "htmlIdentityMatch": true,
+    "providerCalls": 0,
+    "totalMs": 1851.9099,
+    "repairMs": 0.3533,
+    "renderMs": 1780.7254,
+    "inspectionMs": 70.8312,
+    "textPreserved": true,
+    "fontSizesPreserved": true,
+    "blockers": [
+      {
+        "category": "overlap",
+        "severity": "medium",
+        "detail": "visible element boxes substantially overlap",
+        "qids": [
+          "q-div-219555098d0f",
+          "s27-gate-foot"
+        ],
+        "policy": "style_reference"
+      },
+      {
+        "category": "overlap",
+        "severity": "medium",
+        "detail": "browser pixel-area probe reports a continuous occluding layer",
+        "qids": [
+          "s27-exception-summary"
+        ],
+        "policy": "style_reference"
+      },
+      {
+        "category": "overlap",
+        "severity": "high",
+        "detail": "browser pixel-area probe reports a continuous occluding layer",
+        "qids": [
+          "s27-gate-accessibility"
+        ],
+        "policy": "style_reference"
+      },
+      {
+        "category": "overlap",
+        "severity": "high",
+        "detail": "browser pixel-area probe reports a continuous occluding layer",
+        "qids": [
+          "s27-step4-no"
+        ],
+        "policy": "style_reference"
+      },
+      {
+        "category": "overlap",
+        "severity": "high",
+        "detail": "browser pixel-area probe reports a continuous occluding layer",
+        "qids": [
+          "s27-step4-text"
+        ],
+        "policy": "style_reference"
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "high",
+        "detail": "text of s27-exception-summary prints 34px below the bottom of its card s27-exception-card, over s27-evidence-card",
+        "qids": [
+          "s27-exception-summary"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0852,
+          "excess_px_x": 0.0,
+          "excess_px_y": 34.0,
+          "card_qid": "s27-exception-card",
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "high",
+        "detail": "text of s27-step4-no prints 32px below the bottom of its card s27-approval-card, over s27-evidence-card",
+        "qids": [
+          "s27-step4-no"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0804,
+          "excess_px_x": 0.0,
+          "excess_px_y": 32.09,
+          "card_qid": "s27-approval-card",
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "high",
+        "detail": "text of s27-step4-text prints 32px below the bottom of its card s27-approval-card, over s27-evidence-card",
+        "qids": [
+          "s27-step4-text"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0804,
+          "excess_px_x": 0.0,
+          "excess_px_y": 32.09,
+          "card_qid": "s27-approval-card",
+          "element_kind": "text"
+        }
+      }
+    ],
+    "imageSourcesAndNaturalSizesPreserved": true,
+    "semanticContentVerdictInherited": false,
+    "automaticPassNotVisualAcceptance": true
+  },
+  {
+    "sourcePath": "runs/stage2/round-3/case-06/C",
+    "geometryPass": true,
+    "contentPreserved": false,
+    "automaticPass": true,
+    "defects": [
+      "assigned_image_loaded_but_invisible"
+    ],
+    "selectionReason": "assigned image loaded but invisible",
+    "ordinal": 8,
+    "selectedQids": [],
+    "candidateChanged": false,
+    "noOpBytesPreserved": true,
+    "sourceSha256": "2d7e7862614f46c72ccabda6dd646b663662d105d2ca7faab584d7168d2c226e",
+    "preparedSha256": "2d7e7862614f46c72ccabda6dd646b663662d105d2ca7faab584d7168d2c226e",
+    "candidateSha256": "2d7e7862614f46c72ccabda6dd646b663662d105d2ca7faab584d7168d2c226e",
+    "htmlIdentityMatch": true,
+    "providerCalls": 0,
+    "totalMs": 1938.9075,
+    "repairMs": 0.1097,
+    "renderMs": 1886.9465,
+    "inspectionMs": 51.8513,
+    "textPreserved": true,
+    "fontSizesPreserved": true,
+    "blockers": [],
+    "imageSourcesAndNaturalSizesPreserved": true,
+    "semanticContentVerdictInherited": false,
+    "automaticPassNotVisualAcceptance": true
+  },
+  {
+    "sourcePath": "runs/stage1/case-05/C",
+    "geometryPass": true,
+    "contentPreserved": true,
+    "automaticPass": true,
+    "defects": [],
+    "selectionReason": "normal roles control",
+    "ordinal": 9,
+    "selectedQids": [],
+    "candidateChanged": false,
+    "noOpBytesPreserved": true,
+    "sourceSha256": "de803026538c39d7c1cb5580c783a046eeb5d809e2f10cac730d4e833c1c571e",
+    "preparedSha256": "de803026538c39d7c1cb5580c783a046eeb5d809e2f10cac730d4e833c1c571e",
+    "candidateSha256": "de803026538c39d7c1cb5580c783a046eeb5d809e2f10cac730d4e833c1c571e",
+    "htmlIdentityMatch": true,
+    "providerCalls": 0,
+    "totalMs": 2054.9518,
+    "repairMs": 0.1787,
+    "renderMs": 1969.7563,
+    "inspectionMs": 85.0168,
+    "textPreserved": true,
+    "fontSizesPreserved": true,
+    "blockers": [],
+    "imageSourcesAndNaturalSizesPreserved": true,
+    "semanticContentVerdictInherited": true,
+    "automaticPassNotVisualAcceptance": true
+  },
+  {
+    "sourcePath": "runs/stage1/case-04/A",
+    "geometryPass": true,
+    "contentPreserved": true,
+    "automaticPass": true,
+    "defects": [],
+    "selectionReason": "normal trace/image control",
+    "ordinal": 10,
+    "selectedQids": [],
+    "candidateChanged": false,
+    "noOpBytesPreserved": true,
+    "sourceSha256": "409b90a5f9c2554cac3e6f6d5bfc43eff5d900ebfb7c5110ae79abb2cccc1684",
+    "preparedSha256": "409b90a5f9c2554cac3e6f6d5bfc43eff5d900ebfb7c5110ae79abb2cccc1684",
+    "candidateSha256": "409b90a5f9c2554cac3e6f6d5bfc43eff5d900ebfb7c5110ae79abb2cccc1684",
+    "htmlIdentityMatch": true,
+    "providerCalls": 0,
+    "totalMs": 3411.2974,
+    "repairMs": 0.2533,
+    "renderMs": 3326.8646,
+    "inspectionMs": 84.1795,
+    "textPreserved": true,
+    "fontSizesPreserved": true,
+    "blockers": [],
+    "imageSourcesAndNaturalSizesPreserved": true,
+    "semanticContentVerdictInherited": true,
+    "automaticPassNotVisualAcceptance": true
+  }
+]

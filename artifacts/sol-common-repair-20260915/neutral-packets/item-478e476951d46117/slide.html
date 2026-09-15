@@ -1,0 +1,156 @@
+<!DOCTYPE html><html lang="ko"><head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#00140E;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:20px;width:800px}
+.eyebrow{height:22px;font-size:16px;line-height:22px;font-weight:700;letter-spacing:0;color:#08916E}
+.slide-title{margin-top:8px;max-width:840px;font-size:32px;line-height:42px;font-weight:700;color:#00140E}
+.header-right{position:absolute;left:880px;top:20px;width:360px;text-align:right}
+.requirements{min-height:24px;font-size:14px;line-height:24px;font-weight:600;color:#00140E}
+.header-note{margin-top:6px;font-size:16px;line-height:22px;color:rgba(0,20,14,.68)}
+.divider{position:absolute;left:40px;right:40px;bottom:0;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;width:1280px;height:548px}
+.claim-row{width:1152px;height:48px;margin-left:64px;display:flex;align-items:center;justify-content:space-between}
+.claim{font-size:25px;line-height:34px;font-weight:700;letter-spacing:-.02em;color:#00140E}
+.claim strong{color:#08916E}
+.claim-key{display:flex;align-items:center;gap:10px;font-size:15px;line-height:22px;font-weight:700;color:rgba(0,20,14,.65)}
+.claim-key-box{width:10px;height:10px;background:#08916E;border-radius:12px}
+.roadmap{position:relative;width:1152px;height:352px;margin:16px 0 0 64px;padding:24px 18px 18px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;box-shadow:0 8px 20px rgba(0,20,14,.05)}
+.roadmap-head{height:36px;display:flex;align-items:flex-start;justify-content:space-between;padding:0 6px}
+.roadmap-label{font-size:20px;line-height:28px;font-weight:700;color:#00140E}
+.roadmap-caption{font-size:15px;line-height:22px;font-weight:600;color:rgba(0,20,14,.62)}
+.rail-zone{position:relative;height:54px}
+.rail{position:absolute;left:82px;right:82px;top:25px;height:4px;background:rgba(8,145,110,.24);border-radius:12px}
+.rail-active{position:absolute;left:82px;right:82px;top:25px;height:4px;background:#08916E;border-radius:12px}
+.nodes{position:absolute;left:0;right:0;top:5px;display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.node-wrap{display:flex;justify-content:center}
+.node{width:42px;height:42px;border:4px solid #FFFFFF;border-radius:12px;background:#08916E;box-shadow:0 0 0 1px #08916E;display:flex;align-items:center;justify-content:center;font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:20px;font-weight:700;color:#FFFFFF}
+.domain-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;height:218px}
+.domain-card{height:218px;padding:16px 14px;background:#F9F9F9;border:1px solid #E2E8F0;border-radius:12px}
+.domain-card.focus{background:rgba(8,145,110,.07);border-color:rgba(8,145,110,.42)}
+.domain-title{height:30px;font-size:19px;line-height:26px;font-weight:700;color:#00140E}
+.domain-title span{color:#08916E}
+.metric-list{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.metric{position:relative;padding-left:15px;font-size:18px;line-height:23px;font-weight:500;color:#00140E}
+.metric-mark{position:absolute;left:0;top:9px;width:6px;height:6px;background:#219F88;border-radius:12px}
+.quality-grid{margin-top:8px;display:grid;grid-template-columns:1fr 1fr;column-gap:8px;row-gap:5px}
+.quality-item{font-size:16px;line-height:21px;font-weight:600;color:#00140E;border-left:3px solid rgba(8,145,110,.38);padding-left:7px}
+.evidence-panel{width:1152px;height:116px;margin:16px 0 0 64px;display:grid;grid-template-columns:104px 1fr 254px;gap:24px;align-items:center;padding:14px 24px;background:rgba(8,145,110,.08);border:1px solid rgba(8,145,110,.28);border-radius:12px}
+.target-frame{width:82px;height:82px;padding:4px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;display:flex;align-items:center;justify-content:center}
+.target-frame img{display:block;width:72px;height:72px;object-fit:contain}
+.evidence-copy{min-width:0}
+.evidence-title{font-size:20px;line-height:27px;font-weight:700;color:#00140E}
+.evidence-text{margin-top:5px;font-size:18px;line-height:25px;color:#00140E}
+.evidence-text strong{color:#08916E}
+.guardrail{height:78px;padding:12px 14px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.guardrail-label{font-size:15px;line-height:20px;font-weight:700;color:#08916E}
+.guardrail-text{margin-top:4px;font-size:17px;line-height:23px;font-weight:700;color:#00140E}
+</style>
+</head>
+<body>
+<div class="header-band" data-header-band="108" data-header-part="band" style="height:108px" data-qid="q-div-75dcf98740c9">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0">
+    <div class="eyebrow" data-header-part="eyebrow" data-qid="s18-eyebrow" data-semantic-role="supporting">기대효과와 검증지표</div>
+    <div class="slide-title" data-header-part="title" data-qid="s18-title" data-semantic-role="title">성과를 5개 영역의 검증지표로 판정</div>
+  </div>
+  <div class="header-right" data-header-part="right" data-qid="q-div-73774be43d12">
+    <div class="requirements" data-header-part="requirements" data-qid="s18-requirements" data-requirement-ids="QUR-001~004,PMR-004" data-semantic-role="supporting">요구사항 QUR-001~004 · PMR-004</div>
+    <div class="header-note" data-qid="s18-header-note" data-semantic-role="supporting">기능·품질·가용성</div>
+  </div>
+  <div class="divider" data-header-part="divider" data-qid="q-div-59f86380b966"></div>
+</div>
+
+<div class="body-wrap" data-header-part="body" style="top:124px" data-qid="q-div-66757db28fba">
+  <div class="claim-row" data-qid="q-div-75b3498fbbe1">
+    <div class="claim" data-qid="s18-claim" data-semantic-role="body">측정 → 판정 → 증적의 연쇄로 <strong data-qid="q-strong-663977331dde">기대효과를 검증 가능한 성과</strong>로 전환합니다.</div>
+    <div class="claim-key" data-qid="s18-claim-key" data-semantic-role="supporting"><span class="claim-key-box" data-qid="q-span-ea0336e9396f"></span>5개 검증 영역</div>
+  </div>
+
+  <div class="roadmap" data-semantic-role="decoration" data-qid="q-div-2d8fd3599d50">
+    <div class="roadmap-head" data-qid="q-div-6ce2e5d31511">
+      <div class="roadmap-label" data-qid="s18-roadmap-label" data-semantic-role="supporting">영역별 검증 로드맵</div>
+      <div class="roadmap-caption" data-qid="s18-roadmap-caption" data-semantic-role="supporting">서비스 이용지표부터 품질증적·변경 통제까지 연결</div>
+    </div>
+
+    <div class="rail-zone" data-qid="q-div-18cdfb79b256">
+      <div class="rail" data-qid="q-div-d49ca096db52"></div>
+      <div class="rail-active" data-qid="q-div-26c3e613b75f"></div>
+      <div class="nodes" data-qid="q-div-e3c8af0f08be">
+        <div class="node-wrap" data-qid="q-div-8c29659176f9"><div class="node" data-qid="s18-node-01" data-semantic-role="supporting">01</div></div>
+        <div class="node-wrap" data-qid="q-div-7c5d9191b6a1"><div class="node" data-qid="s18-node-02" data-semantic-role="supporting">02</div></div>
+        <div class="node-wrap" data-qid="q-div-7f4997407f40"><div class="node" data-qid="s18-node-03" data-semantic-role="supporting">03</div></div>
+        <div class="node-wrap" data-qid="q-div-e93d01719cde"><div class="node" data-qid="s18-node-04" data-semantic-role="supporting">04</div></div>
+        <div class="node-wrap" data-qid="q-div-70d6fc6705bb"><div class="node" data-qid="s18-node-05" data-semantic-role="supporting">05</div></div>
+      </div>
+    </div>
+
+    <div class="domain-grid" data-qid="q-div-db39f82b1410">
+      <div class="domain-card" data-qid="s18-card-convenience">
+        <div class="domain-title" data-qid="s18-domain-convenience" data-semantic-role="supporting"><span data-qid="q-span-f32986c526a1">사용자</span> 편의</div>
+        <div class="metric-list" data-qid="q-div-a2e2659ffa74">
+          <div class="metric" data-qid="s18-metric-completion" data-semantic-role="body"><span class="metric-mark" data-qid="q-span-9c4463717dc2"></span>신청 완료율</div>
+          <div class="metric" data-qid="s18-metric-supplement" data-semantic-role="body"><span class="metric-mark" data-qid="q-span-6e123473b269"></span>보완 건수</div>
+          <div class="metric" data-qid="s18-metric-dropoff" data-semantic-role="body"><span class="metric-mark" data-qid="q-span-66058be9134f"></span>단계별 이탈</div>
+          <div class="metric" data-qid="s18-metric-complaint" data-semantic-role="body"><span class="metric-mark" data-qid="q-span-0650af7ae70b"></span>민원 유형</div>
+        </div>
+      </div>
+
+      <div class="domain-card" data-qid="s18-card-productivity">
+        <div class="domain-title" data-qid="s18-domain-productivity" data-semantic-role="supporting"><span data-qid="q-span-c83eac29f2ad">업무</span> 생산성</div>
+        <div class="metric-list" data-qid="q-div-f0227c17e5d3">
+          <div class="metric" data-qid="s18-metric-leadtime" data-semantic-role="body"><span class="metric-mark" data-qid="q-span-2789f400370a"></span>처리 리드타임</div>
+          <div class="metric" data-qid="s18-metric-incomplete" data-semantic-role="body"><span class="metric-mark" data-qid="q-span-24af63170fc0"></span>평가 미완료</div>
+          <div class="metric" data-qid="s18-metric-batch" data-semantic-role="body"><span class="metric-mark" data-qid="q-span-ca795282f600"></span>다건처리 시간</div>
+          <div class="metric" data-qid="s18-metric-download" data-semantic-role="body"><span class="metric-mark" data-qid="q-span-d96425b43f05"></span>수작업 다운로드 횟수</div>
+        </div>
+      </div>
+
+      <div class="domain-card" data-qid="s18-card-data">
+        <div class="domain-title" data-qid="s18-domain-data" data-semantic-role="supporting"><span data-qid="q-span-eedec0ea8962">데이터</span> 활용</div>
+        <div class="metric-list" data-qid="q-div-a683db5cf97a">
+          <div class="metric" data-qid="s18-metric-reuse" data-semantic-role="body"><span class="metric-mark" data-qid="q-span-eddbc4426b56"></span>재사용 모듈 비율</div>
+          <div class="metric" data-qid="s18-metric-evidence" data-semantic-role="body"><span class="metric-mark" data-qid="q-span-f9ea7c461f04"></span>자동 수집된 품질증적</div>
+        </div>
+      </div>
+
+      <div class="domain-card focus" data-qid="s18-card-quality">
+        <div class="domain-title" data-qid="s18-domain-quality" data-semantic-role="supporting"><span data-qid="q-span-2af01d53a93e">품질</span> 판정</div>
+        <div class="quality-grid" data-qid="q-div-fada4d2ecc4c">
+          <div class="quality-item" data-qid="s18-quality-req" data-semantic-role="body">요구사항 충족률</div>
+          <div class="quality-item" data-qid="s18-quality-first" data-semantic-role="body">최초 테스트 통과율</div>
+          <div class="quality-item" data-qid="s18-quality-critical" data-semantic-role="body">중대 결함</div>
+          <div class="quality-item" data-qid="s18-quality-regression" data-semantic-role="body">회귀 결함</div>
+          <div class="quality-item" data-qid="s18-quality-response" data-semantic-role="body">3초 응답기준</div>
+          <div class="quality-item" data-qid="s18-quality-load" data-semantic-role="body">동시 로그인 300명 부하시험</div>
+        </div>
+      </div>
+
+      <div class="domain-card" data-qid="s18-card-control">
+        <div class="domain-title" data-qid="s18-domain-control" data-semantic-role="supporting"><span data-qid="q-span-0856754b8eb9">운영</span> 통제</div>
+        <div class="metric-list" data-qid="q-div-90caff42c6df">
+          <div class="metric" data-qid="s18-metric-trace" data-semantic-role="body"><span class="metric-mark" data-qid="q-span-e00db55cb3f0"></span>요구-테스트 추적률</div>
+          <div class="metric" data-qid="s18-metric-rework" data-semantic-role="body"><span class="metric-mark" data-qid="q-span-e7d89e3717fd"></span>변경 재작업량</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="evidence-panel" data-qid="s18-evidence-panel">
+    <div class="target-frame" data-qid="q-div-3877ebc1a07a">
+      <img alt="검증 목표를 나타내는 과녁" data-qid="s18-target-image" data-semantic-role="image" src="data:image/png;base64,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" style="width:72px;height:72px">
+    </div>
+    <div class="evidence-copy" data-qid="q-div-90bdb3a375d8">
+      <div class="evidence-title" data-qid="s18-evidence-title" data-semantic-role="supporting">DevAX 적용효과 검증 기준</div>
+      <div class="evidence-text" data-qid="s18-evidence-text" data-semantic-role="body"><strong data-qid="q-strong-f213b54d7db8">재사용 모듈 비율·요구-테스트 추적률·자동 품질증적·변경 재작업량</strong>을 동일한 검증 흐름에서 확인합니다.</div>
+    </div>
+    <div class="guardrail" data-qid="s18-guardrail">
+      <div class="guardrail-label" data-qid="s18-guardrail-label" data-semantic-role="supporting">성과 판정 원칙</div>
+      <div class="guardrail-text" data-qid="s18-guardrail-text" data-semantic-role="body">검증되지 않은 절감률은 계약 성과로 단정하지 않음</div>
+    </div>
+  </div>
+</div>
+
+</body></html>

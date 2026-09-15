@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "sol-common-repair-measured-pipeline/v1",
+  "measurementKind": "offlineRepairCaptureInspection",
+  "completionLatencyAvailable": true,
+  "providerCalls": 0,
+  "html": {
+    "initialSha256": "339eab6310726b12b481cc040e756179b35c8ff3f0de8e6b78456c35b08d0441",
+    "repairCandidateSha256": "341f055e78c3092e0d27c07daf7810a0800c600396090d891d58abce8e7a1b5f",
+    "finalSha256": "2a92ed1e8ae0a36740947c20e244eff9c4270faed802b1e5b14539c5f14f94c5",
+    "sameBytes": false,
+    "captureChangedHtml": true
+  },
+  "timing": {
+    "clock": "time.perf_counter_ns",
+    "boundary": "repair start through completed inspection",
+    "totalStartNs": 289821288453900,
+    "totalEndNs": 289821290128200,
+    "completionLatencyMs": 1.674,
+    "phaseDurationSumMs": 1.605,
+    "unattributedWithinBoundaryMs": 0.069,
+    "phases": [
+      {
+        "name": "repair",
+        "startNs": 289821288461700,
+        "endNs": 289821288502500,
+        "durationMs": 0.041
+      },
+      {
+        "name": "preserveInitialHtml",
+        "startNs": 289821288527400,
+        "endNs": 289821289306100,
+        "durationMs": 0.779
+      },
+      {
+        "name": "capture",
+        "startNs": 289821289319000,
+        "endNs": 289821289330500,
+        "durationMs": 0.011
+      },
+      {
+        "name": "preserveFinalHtml",
+        "startNs": 289821289339900,
+        "endNs": 289821290107800,
+        "durationMs": 0.768
+      },
+      {
+        "name": "inspection",
+        "startNs": 289821290118700,
+        "endNs": 289821290124500,
+        "durationMs": 0.006
+      }
+    ]
+  }
+}

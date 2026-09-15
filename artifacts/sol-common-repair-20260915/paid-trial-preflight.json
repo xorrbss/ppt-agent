@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "sol-common-repair-paid-trial-preflight/v1",
+  "status": "ready_for_gates_not_execution",
+  "providerCalls": 0,
+  "sampleSha256": "64fca4ffb0aaaf39f23d1c57bfb8f1adbde1e28c1c4da6c639a36ce42ff27c5c",
+  "driverSha256": "24ef147f43bcfcf29497296ec5b208bc63cf3a66f6640d047c9b446220728d7c",
+  "promptInputs": [
+    {
+      "arm": "baseline",
+      "baseSha256": "ea4eaec034eff017e389a42f87f162f7574a108d758a686496aa0eb81bca7ec7",
+      "supplementSha256": null,
+      "effectivePromptAssembly": "base verbatim"
+    },
+    {
+      "arm": "dense-layout-supplement-v1",
+      "baseSha256": "ea4eaec034eff017e389a42f87f162f7574a108d758a686496aa0eb81bca7ec7",
+      "supplementSha256": "e59f38f3b2bb75b6420feb340d7a10250e5481714c756789c7568685c33741fb",
+      "effectivePromptAssembly": "base + newline + supplement"
+    }
+  ],
+  "accounting": {
+    "authorCallCap": 12,
+    "authorCallsScheduled": 12,
+    "rendersScheduled": 24
+  },
+  "reuse": {
+    "runnerModule": "artifacts/sol-speed-quality-20260915/runner/experiment.py",
+    "authorEntry": "author_one",
+    "modelPlanCalls": 0,
+    "modelRepairCalls": 0
+  },
+  "executionGates": [
+    "representative10CommonCorrectionPassed",
+    "rootExplicitExecutionInstruction",
+    "callLedgerCanReserveAll12WithoutExceedingCap"
+  ]
+}

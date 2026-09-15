@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "item_id": "item-8fe457a49e8d0495",
+  "method": "Direct inspection of this packet render, sourceContent and requiredImages only; no automated diagnostics or other audits read",
+  "hash_verification": {
+    "html_sha256": "2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb",
+    "png_sha256": "4d27dfff263d14da095687a8b0ea9cb79272a16d75218e37e936e6febd8cbe37",
+    "matches_packet_after_sha256_prefix_normalization": true
+  },
+  "verdict": "visual_pass",
+  "geometry": {
+    "pass": true,
+    "findings": [
+      "All table rows, process pills, connectors, and bottom summary are within the canvas. No visible collision, clipping, or obscured text."
+    ]
+  },
+  "readability": {
+    "pass": true,
+    "findings": [
+      "Role labels, process labels, and summary are readable. The final role label wraps to two lines but stays within its row."
+    ],
+    "score": 2
+  },
+  "required_images": {
+    "candidate_count": 0,
+    "require_all": false,
+    "verdict": "not_applicable",
+    "visible_raster_images": false
+  },
+  "style": {
+    "verdict": "coherent",
+    "observation": "Consistent mint/teal table, aligned columns and rows, clear hierarchy, and adequate whitespace.",
+    "score": 2
+  },
+  "content_visibility": {
+    "observation": "Visual legibility assessed against this source; exact semantic completeness or verbatim preservation is outside this visual review."
+  },
+  "readability_score": 2,
+  "style_score": 2
+}

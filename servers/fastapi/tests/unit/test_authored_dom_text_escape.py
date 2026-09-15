@@ -274,6 +274,31 @@ def test_glyphs_past_the_right_edge_are_reported():
     assert "past the right edge of" in text_escape_detail(escape)
 
 
+def test_nested_panel_text_is_checked_against_enclosing_content_card():
+    elements = [
+        _card("outer", y=100.0, height=100.0),
+        _card("inner", y=120.0, height=120.0, parent="outer"),
+        _text("copy", parent="inner", lines=[(0.0, 195.0, 150.0, 26.0)]),
+    ]
+
+    escape = find_text_escapes(elements)[0]
+    assert escape.card_qid == "outer"
+    assert escape.escape_px_bottom == pytest.approx(17.0)
+
+
+def test_intentional_absolute_badge_owns_copy_that_crosses_outer_card():
+    badge = _card("badge", y=180.0, height=40.0, parent="outer")
+    badge["computed_style"]["position"] = "absolute"
+    badge["intentional"] = True
+    elements = [
+        _card("outer", y=100.0, height=100.0),
+        badge,
+        _text("copy", parent="badge", lines=[(0.0, 190.0, 150.0, 26.0)]),
+    ]
+
+    assert find_text_escapes(elements) == ()
+
+
 def test_text_with_no_card_ancestor_is_left_alone():
     elements = [
         {

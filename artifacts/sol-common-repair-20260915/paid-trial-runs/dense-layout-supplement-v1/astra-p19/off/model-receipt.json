@@ -1,0 +1,102 @@
+{
+  "provider": "codex",
+  "requestedModel": "gpt-5.6-sol",
+  "requestedEffort": "medium",
+  "returnedModel": null,
+  "callOrdinal": 11,
+  "transportReceipt": {
+    "schemaVersion": 1,
+    "physicalCallCount": 1,
+    "overloadRetryCount": 0,
+    "cooldownWaitSeconds": 0.0,
+    "deadlineExhausted": false,
+    "quotaPauseResetAt": null,
+    "idempotencyCapable": false,
+    "replayUnavailable": "transport_idempotency_unconfirmed"
+  },
+  "usage": {
+    "input_tokens": 11660,
+    "output_tokens": 4637,
+    "total_tokens": 16297,
+    "details": {
+      "input_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 979
+      },
+      "attribution": {
+        "items": {
+          "msg_01818aef8a2996ec016aa9428f2b6087d0a10af4c116b13371": {
+            "cache_write_tokens": 0,
+            "cached_tokens": 0,
+            "content": [
+              {
+                "cache_write_tokens": 0,
+                "cached_tokens": 0,
+                "input_tokens": 70,
+                "output_tokens": 0
+              },
+              {
+                "cache_write_tokens": 0,
+                "cached_tokens": 0,
+                "input_tokens": 1241,
+                "output_tokens": 0
+              },
+              {
+                "cache_write_tokens": 0,
+                "cached_tokens": 0,
+                "input_tokens": 78,
+                "output_tokens": 0
+              }
+            ],
+            "input_tokens": 1389,
+            "output_tokens": 0
+          },
+          "rs_01818aef8a2996ec016aa94290b5b887d0881448a8b8543960": {
+            "cache_write_tokens": 0,
+            "cached_tokens": 0,
+            "input_tokens": 2,
+            "output_tokens": 516
+          },
+          "rs_01818aef8a2996ec016aa9429c18f087d092d89a3810cf2196": {
+            "cache_write_tokens": 0,
+            "cached_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 463
+          },
+          "msg_01818aef8a2996ec016aa942a80cfc87d0964bcdd4a09f1233": {
+            "cache_write_tokens": 0,
+            "cached_tokens": 0,
+            "content": [
+              {
+                "cache_write_tokens": 0,
+                "cached_tokens": 0,
+                "input_tokens": 0,
+                "output_tokens": 3658
+              }
+            ],
+            "input_tokens": 0,
+            "output_tokens": 3658
+          }
+        },
+        "request_fields": {
+          "instructions": {
+            "cache_write_tokens": 0,
+            "cached_tokens": 0,
+            "input_tokens": 10269,
+            "output_tokens": 0
+          }
+        }
+      }
+    },
+    "reasoning": {
+      "billed_tokens": 979,
+      "visible_tokens": 56,
+      "billed_estimated": false,
+      "visible_estimated": true,
+      "source": "provider_details"
+    }
+  }
+}

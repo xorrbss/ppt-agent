@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#00140E;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:20px;width:800px}
+.eyebrow{height:22px;font-size:16px;line-height:22px;font-weight:700;letter-spacing:0;color:#08916E}
+.slide-title{margin-top:8px;max-width:840px;font-size:32px;line-height:42px;font-weight:700;color:#00140E}
+.header-right{position:absolute;left:880px;top:20px;width:360px;text-align:right}
+.requirements{min-height:24px;font-size:14px;line-height:24px;font-weight:600;color:#00140E}
+.header-note{margin-top:6px;font-size:16px;line-height:22px;color:rgba(0,20,14,.68)}
+.divider{position:absolute;left:40px;right:40px;bottom:0;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;width:1280px;height:548px}
+.claim-row{width:1152px;height:48px;margin-left:64px;display:flex;align-items:center;justify-content:space-between}
+.claim{font-size:25px;line-height:34px;font-weight:700;letter-spacing:-.02em;color:#00140E}
+.claim strong{color:#08916E}
+.claim-key{display:flex;align-items:center;gap:10px;font-size:15px;line-height:22px;font-weight:700;color:rgba(0,20,14,.65)}
+.claim-key-box{width:10px;height:10px;background:#08916E;border-radius:12px}
+.roadmap{position:relative;width:1152px;height:352px;margin:16px 0 0 64px;padding:24px 18px 18px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;box-shadow:0 8px 20px rgba(0,20,14,.05)}
+.roadmap-head{height:36px;display:flex;align-items:flex-start;justify-content:space-between;padding:0 6px}
+.roadmap-label{font-size:20px;line-height:28px;font-weight:700;color:#00140E}
+.roadmap-caption{font-size:15px;line-height:22px;font-weight:600;color:rgba(0,20,14,.62)}
+.rail-zone{position:relative;height:54px}
+.rail{position:absolute;left:82px;right:82px;top:25px;height:4px;background:rgba(8,145,110,.24);border-radius:12px}
+.rail-active{position:absolute;left:82px;right:82px;top:25px;height:4px;background:#08916E;border-radius:12px}
+.nodes{position:absolute;left:0;right:0;top:5px;display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.node-wrap{display:flex;justify-content:center}
+.node{width:42px;height:42px;border:4px solid #FFFFFF;border-radius:12px;background:#08916E;box-shadow:0 0 0 1px #08916E;display:flex;align-items:center;justify-content:center;font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:20px;font-weight:700;color:#FFFFFF}
+.domain-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;height:218px}
+.domain-card{height:218px;padding:16px 14px;background:#F9F9F9;border:1px solid #E2E8F0;border-radius:12px}
+.domain-card.focus{background:rgba(8,145,110,.07);border-color:rgba(8,145,110,.42)}
+.domain-title{height:30px;font-size:19px;line-height:26px;font-weight:700;color:#00140E}
+.domain-title span{color:#08916E}
+.metric-list{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.metric{position:relative;padding-left:15px;font-size:18px;line-height:23px;font-weight:500;color:#00140E}
+.metric-mark{position:absolute;left:0;top:9px;width:6px;height:6px;background:#219F88;border-radius:12px}
+.quality-grid{margin-top:8px;display:grid;grid-template-columns:1fr 1fr;column-gap:8px;row-gap:5px}
+.quality-item{font-size:16px;line-height:21px;font-weight:600;color:#00140E;border-left:3px solid rgba(8,145,110,.38);padding-left:7px}
+.evidence-panel{width:1152px;height:116px;margin:16px 0 0 64px;display:grid;grid-template-columns:104px 1fr 254px;gap:24px;align-items:center;padding:14px 24px;background:rgba(8,145,110,.08);border:1px solid rgba(8,145,110,.28);border-radius:12px}
+.target-frame{width:82px;height:82px;padding:4px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;display:flex;align-items:center;justify-content:center}
+.target-frame img{display:block;width:72px;height:72px;object-fit:contain}
+.evidence-copy{min-width:0}
+.evidence-title{font-size:20px;line-height:27px;font-weight:700;color:#00140E}
+.evidence-text{margin-top:5px;font-size:18px;line-height:25px;color:#00140E}
+.evidence-text strong{color:#08916E}
+.guardrail{height:78px;padding:12px 14px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.guardrail-label{font-size:15px;line-height:20px;font-weight:700;color:#08916E}
+.guardrail-text{margin-top:4px;font-size:17px;line-height:23px;font-weight:700;color:#00140E}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="108" class="header-band" style="height:108px">
+  <div class="header-left">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="s18-eyebrow">기대효과와 검증지표</div>
+    <div data-header-part="title" class="slide-title" data-semantic-role="title" data-qid="s18-title">성과를 5개 영역의 검증지표로 판정</div>
+  </div>
+  <div data-header-part="right" class="header-right">
+    <div data-header-part="requirements" data-requirement-ids="QUR-001~004,PMR-004" class="requirements" data-semantic-role="supporting" data-qid="s18-requirements">요구사항 QUR-001~004 · PMR-004</div>
+    <div class="header-note" data-semantic-role="supporting" data-qid="s18-header-note">기능·품질·가용성</div>
+  </div>
+  <div data-header-part="divider" class="divider"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="top:124px">
+  <div class="claim-row">
+    <div class="claim" data-semantic-role="body" data-qid="s18-claim">측정 → 판정 → 증적의 연쇄로 <strong>기대효과를 검증 가능한 성과</strong>로 전환합니다.</div>
+    <div class="claim-key" data-semantic-role="supporting" data-qid="s18-claim-key"><span class="claim-key-box"></span>5개 검증 영역</div>
+  </div>
+
+  <div class="roadmap" data-semantic-role="decoration">
+    <div class="roadmap-head">
+      <div class="roadmap-label" data-semantic-role="supporting" data-qid="s18-roadmap-label">영역별 검증 로드맵</div>
+      <div class="roadmap-caption" data-semantic-role="supporting" data-qid="s18-roadmap-caption">서비스 이용지표부터 품질증적·변경 통제까지 연결</div>
+    </div>
+
+    <div class="rail-zone">
+      <div class="rail"></div>
+      <div class="rail-active"></div>
+      <div class="nodes">
+        <div class="node-wrap"><div class="node" data-semantic-role="supporting" data-qid="s18-node-01">01</div></div>
+        <div class="node-wrap"><div class="node" data-semantic-role="supporting" data-qid="s18-node-02">02</div></div>
+        <div class="node-wrap"><div class="node" data-semantic-role="supporting" data-qid="s18-node-03">03</div></div>
+        <div class="node-wrap"><div class="node" data-semantic-role="supporting" data-qid="s18-node-04">04</div></div>
+        <div class="node-wrap"><div class="node" data-semantic-role="supporting" data-qid="s18-node-05">05</div></div>
+      </div>
+    </div>
+
+    <div class="domain-grid">
+      <div class="domain-card" data-qid="s18-card-convenience">
+        <div class="domain-title" data-semantic-role="supporting" data-qid="s18-domain-convenience"><span>사용자</span> 편의</div>
+        <div class="metric-list">
+          <div class="metric" data-semantic-role="body" data-qid="s18-metric-completion"><span class="metric-mark"></span>신청 완료율</div>
+          <div class="metric" data-semantic-role="body" data-qid="s18-metric-supplement"><span class="metric-mark"></span>보완 건수</div>
+          <div class="metric" data-semantic-role="body" data-qid="s18-metric-dropoff"><span class="metric-mark"></span>단계별 이탈</div>
+          <div class="metric" data-semantic-role="body" data-qid="s18-metric-complaint"><span class="metric-mark"></span>민원 유형</div>
+        </div>
+      </div>
+
+      <div class="domain-card" data-qid="s18-card-productivity">
+        <div class="domain-title" data-semantic-role="supporting" data-qid="s18-domain-productivity"><span>업무</span> 생산성</div>
+        <div class="metric-list">
+          <div class="metric" data-semantic-role="body" data-qid="s18-metric-leadtime"><span class="metric-mark"></span>처리 리드타임</div>
+          <div class="metric" data-semantic-role="body" data-qid="s18-metric-incomplete"><span class="metric-mark"></span>평가 미완료</div>
+          <div class="metric" data-semantic-role="body" data-qid="s18-metric-batch"><span class="metric-mark"></span>다건처리 시간</div>
+          <div class="metric" data-semantic-role="body" data-qid="s18-metric-download"><span class="metric-mark"></span>수작업 다운로드 횟수</div>
+        </div>
+      </div>
+
+      <div class="domain-card" data-qid="s18-card-data">
+        <div class="domain-title" data-semantic-role="supporting" data-qid="s18-domain-data"><span>데이터</span> 활용</div>
+        <div class="metric-list">
+          <div class="metric" data-semantic-role="body" data-qid="s18-metric-reuse"><span class="metric-mark"></span>재사용 모듈 비율</div>
+          <div class="metric" data-semantic-role="body" data-qid="s18-metric-evidence"><span class="metric-mark"></span>자동 수집된 품질증적</div>
+        </div>
+      </div>
+
+      <div class="domain-card focus" data-qid="s18-card-quality">
+        <div class="domain-title" data-semantic-role="supporting" data-qid="s18-domain-quality"><span>품질</span> 판정</div>
+        <div class="quality-grid">
+          <div class="quality-item" data-semantic-role="body" data-qid="s18-quality-req">요구사항 충족률</div>
+          <div class="quality-item" data-semantic-role="body" data-qid="s18-quality-first">최초 테스트 통과율</div>
+          <div class="quality-item" data-semantic-role="body" data-qid="s18-quality-critical">중대 결함</div>
+          <div class="quality-item" data-semantic-role="body" data-qid="s18-quality-regression">회귀 결함</div>
+          <div class="quality-item" data-semantic-role="body" data-qid="s18-quality-response">3초 응답기준</div>
+          <div class="quality-item" data-semantic-role="body" data-qid="s18-quality-load">동시 로그인 300명 부하시험</div>
+        </div>
+      </div>
+
+      <div class="domain-card" data-qid="s18-card-control">
+        <div class="domain-title" data-semantic-role="supporting" data-qid="s18-domain-control"><span>운영</span> 통제</div>
+        <div class="metric-list">
+          <div class="metric" data-semantic-role="body" data-qid="s18-metric-trace"><span class="metric-mark"></span>요구-테스트 추적률</div>
+          <div class="metric" data-semantic-role="body" data-qid="s18-metric-rework"><span class="metric-mark"></span>변경 재작업량</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="evidence-panel" data-qid="s18-evidence-panel">
+    <div class="target-frame">
+      <img data-source-slot-id="source-slot-458435cdbfb150514f3b" alt="검증 목표를 나타내는 과녁" data-semantic-role="image" data-qid="s18-target-image" style="width:72px;height:72px">
+    </div>
+    <div class="evidence-copy">
+      <div class="evidence-title" data-semantic-role="supporting" data-qid="s18-evidence-title">DevAX 적용효과 검증 기준</div>
+      <div class="evidence-text" data-semantic-role="body" data-qid="s18-evidence-text"><strong>재사용 모듈 비율·요구-테스트 추적률·자동 품질증적·변경 재작업량</strong>을 동일한 검증 흐름에서 확인합니다.</div>
+    </div>
+    <div class="guardrail" data-qid="s18-guardrail">
+      <div class="guardrail-label" data-semantic-role="supporting" data-qid="s18-guardrail-label">성과 판정 원칙</div>
+      <div class="guardrail-text" data-semantic-role="body" data-qid="s18-guardrail-text">검증되지 않은 절감률은 계약 성과로 단정하지 않음</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

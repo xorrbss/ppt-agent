@@ -1,0 +1,74 @@
+{
+  "q-s1-business-card": {
+    "before": {
+      "x": 64,
+      "y": 197,
+      "width": 552,
+      "height": 218
+    },
+    "after": {
+      "x": 64,
+      "y": 197,
+      "width": 552,
+      "height": 218
+    }
+  },
+  "q-s1-analysis-box": {
+    "before": {
+      "x": 85,
+      "y": 260,
+      "width": 208,
+      "height": 186
+    },
+    "after": {
+      "x": 85,
+      "y": 260,
+      "width": 208,
+      "height": 137
+    }
+  },
+  "q-s1-analysis-sub": {
+    "before": {
+      "x": 100,
+      "y": 352,
+      "width": 178,
+      "height": 80
+    },
+    "after": {
+      "x": 100,
+      "y": 323.8125,
+      "width": 178,
+      "height": 61.625
+    }
+  },
+  "q-s1-goal-box": {
+    "before": {
+      "x": 335,
+      "y": 260,
+      "width": 260,
+      "height": 186
+    },
+    "after": {
+      "x": 335,
+      "y": 260,
+      "width": 260,
+      "height": 137
+    }
+  },
+  "q-s1-governance-card": {
+    "before": {
+      "x": 64,
+      "y": 439,
+      "width": 552,
+      "height": 249
+    },
+    "after": {
+      "x": 64,
+      "y": 439,
+      "width": 552,
+      "height": 249
+    }
+  },
+  "textPreserved": true,
+  "fontSizesPreserved": true
+}

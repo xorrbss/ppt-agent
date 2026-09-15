@@ -1,0 +1,392 @@
+{
+  "count": 42,
+  "categories": {
+    "parent_escape_sibling_overlap": 1,
+    "parent_escape_footer_overlap": 1,
+    "parent_escape": 7,
+    "forbidden_source_image_overlay": 2,
+    "parent_escape_offcanvas": 1,
+    "connector_crosses_text": 2,
+    "assigned_image_loaded_but_invisible": 4,
+    "semantic_panel_escape": 14,
+    "unintended_sibling_overlap": 1,
+    "semantic_panel_escape_and_sibling_occlusion": 3,
+    "semantic_panel_escape_and_text_visibility_loss": 1,
+    "connector_endpoint_occludes_text": 1,
+    "semantic_node_escape_and_connector_text_intersection": 1,
+    "text_clipping_at_semantic_panel_boundary": 1,
+    "sibling_text_overlap": 2,
+    "protected_source_image_overlay": 1
+  },
+  "rows": [
+    {
+      "sourcePath": "runs/stage1/case-01/C",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": true,
+      "defects": [
+        "parent_escape_sibling_overlap"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-01/A",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": false,
+      "defects": [
+        "parent_escape_footer_overlap"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-02/C",
+      "geometryPass": true,
+      "contentPreserved": true,
+      "automaticPass": true,
+      "defects": []
+    },
+    {
+      "sourcePath": "runs/stage1/case-02/B",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": false,
+      "defects": [
+        "parent_escape",
+        "parent_escape"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-02/A",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": false,
+      "defects": [
+        "parent_escape",
+        "parent_escape"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-03/B",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": true,
+      "defects": [
+        "parent_escape",
+        "forbidden_source_image_overlay"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-03/A",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": false,
+      "defects": [
+        "parent_escape",
+        "forbidden_source_image_overlay"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-03/C",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": false,
+      "defects": [
+        "parent_escape"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-04/C",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": false,
+      "defects": [
+        "parent_escape_offcanvas"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-04/A",
+      "geometryPass": true,
+      "contentPreserved": true,
+      "automaticPass": true,
+      "defects": []
+    },
+    {
+      "sourcePath": "runs/stage1/case-04/B",
+      "geometryPass": true,
+      "contentPreserved": true,
+      "automaticPass": true,
+      "defects": []
+    },
+    {
+      "sourcePath": "runs/stage1/case-05/A",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": true,
+      "defects": [
+        "connector_crosses_text"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-05/C",
+      "geometryPass": true,
+      "contentPreserved": true,
+      "automaticPass": true,
+      "defects": []
+    },
+    {
+      "sourcePath": "runs/stage1/case-05/B",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": true,
+      "defects": [
+        "connector_crosses_text"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-06/B",
+      "geometryPass": true,
+      "contentPreserved": false,
+      "automaticPass": true,
+      "defects": [
+        "assigned_image_loaded_but_invisible"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-06/C",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": false,
+      "defects": [
+        "semantic_panel_escape"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-06/A",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": false,
+      "defects": [
+        "semantic_panel_escape",
+        "assigned_image_loaded_but_invisible"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-01/B",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": false,
+      "defects": [
+        "semantic_panel_escape",
+        "unintended_sibling_overlap"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-2/case-01/A",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": false,
+      "defects": [
+        "semantic_panel_escape_and_sibling_occlusion"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-2/case-01/C",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": false,
+      "defects": [
+        "semantic_panel_escape_and_text_visibility_loss"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-2/case-02/C",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": false,
+      "defects": [
+        "semantic_panel_escape"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-2/case-02/A",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": true,
+      "defects": [
+        "connector_endpoint_occludes_text"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-2/case-03/A",
+      "geometryPass": true,
+      "contentPreserved": false,
+      "automaticPass": true,
+      "defects": []
+    },
+    {
+      "sourcePath": "runs/stage2/round-2/case-03/C",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": false,
+      "defects": [
+        "semantic_panel_escape",
+        "semantic_panel_escape"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-2/case-04/C",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": true,
+      "defects": [
+        "semantic_node_escape_and_connector_text_intersection"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-2/case-04/A",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": true,
+      "defects": [
+        "semantic_panel_escape"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-2/case-05/A",
+      "geometryPass": true,
+      "contentPreserved": false,
+      "automaticPass": true,
+      "defects": []
+    },
+    {
+      "sourcePath": "runs/stage2/round-2/case-05/C",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": false,
+      "defects": [
+        "text_clipping_at_semantic_panel_boundary"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-2/case-06/C",
+      "geometryPass": true,
+      "contentPreserved": true,
+      "automaticPass": true,
+      "defects": []
+    },
+    {
+      "sourcePath": "runs/stage2/round-2/case-06/A",
+      "geometryPass": true,
+      "contentPreserved": false,
+      "automaticPass": true,
+      "defects": [
+        "assigned_image_loaded_but_invisible"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-3/case-01/A",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": false,
+      "defects": [
+        "semantic_panel_escape_and_sibling_occlusion"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-3/case-01/C",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": false,
+      "defects": [
+        "semantic_panel_escape"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-3/case-02/C",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": false,
+      "defects": [
+        "sibling_text_overlap",
+        "semantic_panel_escape_and_sibling_occlusion",
+        "sibling_text_overlap"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-3/case-02/A",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": false,
+      "defects": [
+        "semantic_panel_escape",
+        "semantic_panel_escape"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-3/case-03/A",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": true,
+      "defects": [
+        "protected_source_image_overlay"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-3/case-03/C",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": false,
+      "defects": [
+        "semantic_panel_escape"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-3/case-04/C",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": false,
+      "defects": [
+        "semantic_panel_escape",
+        "semantic_panel_escape"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-3/case-04/A",
+      "geometryPass": true,
+      "contentPreserved": false,
+      "automaticPass": false,
+      "defects": []
+    },
+    {
+      "sourcePath": "runs/stage2/round-3/case-05/A",
+      "geometryPass": true,
+      "contentPreserved": false,
+      "automaticPass": true,
+      "defects": []
+    },
+    {
+      "sourcePath": "runs/stage2/round-3/case-05/C",
+      "geometryPass": true,
+      "contentPreserved": true,
+      "automaticPass": true,
+      "defects": []
+    },
+    {
+      "sourcePath": "runs/stage2/round-3/case-06/C",
+      "geometryPass": true,
+      "contentPreserved": false,
+      "automaticPass": true,
+      "defects": [
+        "assigned_image_loaded_but_invisible"
+      ]
+    },
+    {
+      "sourcePath": "runs/stage2/round-3/case-06/A",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": false,
+      "defects": [
+        "semantic_panel_escape"
+      ]
+    }
+  ]
+}

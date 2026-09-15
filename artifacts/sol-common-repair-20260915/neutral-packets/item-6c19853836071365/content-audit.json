@@ -1,0 +1,50 @@
+{
+  "schema": "sol-neutral-content-audit/v1",
+  "packetId": "item-6c19853836071365",
+  "reviewer": "independent-content",
+  "hashVerification": {
+    "html": true,
+    "png": true
+  },
+  "contentVerdict": "fail",
+  "passed": false,
+  "evidenceBasis": [
+    "packet source and requiredImages",
+    "HTML cross-check",
+    "PNG visual inspection"
+  ],
+  "requiredImageCount": 0,
+  "requiredImagesVerdict": "not-applicable",
+  "propositions": [
+    {
+      "index": 1,
+      "verdict": "pass",
+      "evidence": "Company steps visibly preserved; header overflow +2 permitted."
+    },
+    {
+      "index": 2,
+      "verdict": "pass",
+      "evidence": "Assigned company/evaluation period, forms, score validation/signature, post-submit restriction and fairness/auditability visible."
+    },
+    {
+      "index": 3,
+      "verdict": "uncertain",
+      "evidence": "Institution assigned-company report/status scope preserved. Combined administrator/staff row says permission-specific control but does not distinguish which actor receives assignment versus inquiry powers."
+    },
+    {
+      "index": 4,
+      "verdict": "fail",
+      "evidence": "Integrated inquiry lists intake/evaluation/notification/settlement/performance but omits documents (서류). Dashboard/deadlines and manual-reconciliation reduction visible."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "type": "missing-enumerated-information",
+      "detail": "서류 missing from staff integrated inquiry."
+    }
+  ],
+  "uncertainties": [
+    "Administrator/staff permission distinction compressed into a single row; refer role-boundary interpretation for adjudication."
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "sol-common-repair-measured-pipeline/v1",
+  "status": "completed",
+  "measurementKind": "offlineRepairCaptureInspection",
+  "completionLatencyAvailable": true,
+  "providerCalls": 0,
+  "providerCallsBasis": "caller contract: repair, capture, and inspection callables are offline",
+  "timing": {
+    "clock": "time.perf_counter_ns",
+    "boundary": "repair start through completed inspection or terminal failure",
+    "totalStartNs": 292337270801100,
+    "totalEndNs": 292341273769300,
+    "elapsedMs": 4002.968,
+    "completionLatencyMs": 4002.968,
+    "failedElapsedMs": null,
+    "phaseDurationSumMs": 4002.811,
+    "unattributedWithinBoundaryMs": 0.157,
+    "phases": [
+      {
+        "name": "repair",
+        "status": "completed",
+        "startNs": 292337270820000,
+        "endNs": 292337270832800,
+        "durationMs": 0.013
+      },
+      {
+        "name": "preserveInitialHtml",
+        "status": "completed",
+        "startNs": 292337270881400,
+        "endNs": 292337271495100,
+        "durationMs": 0.614
+      },
+      {
+        "name": "capture",
+        "status": "completed",
+        "startNs": 292337271504300,
+        "endNs": 292341192553400,
+        "durationMs": 3921.049
+      },
+      {
+        "name": "selectFittedHtml",
+        "status": "completed",
+        "startNs": 292341192570200,
+        "endNs": 292341192584500,
+        "durationMs": 0.014
+      },
+      {
+        "name": "preserveFinalHtml",
+        "status": "completed",
+        "startNs": 292341192618800,
+        "endNs": 292341195689300,
+        "durationMs": 3.071
+      },
+      {
+        "name": "inspection",
+        "status": "completed",
+        "startNs": 292341195705700,
+        "endNs": 292341273755900,
+        "durationMs": 78.05
+      }
+    ]
+  },
+  "html": {
+    "initialSha256": "7c69fcc767c16ff17a35ee1234cb94d2b084d38c5f1a9c66d601587fce7a2f7f",
+    "repairCandidateSha256": "7c69fcc767c16ff17a35ee1234cb94d2b084d38c5f1a9c66d601587fce7a2f7f",
+    "finalSha256": "7c69fcc767c16ff17a35ee1234cb94d2b084d38c5f1a9c66d601587fce7a2f7f",
+    "sameBytes": true,
+    "captureChangedHtml": false
+  }
+}

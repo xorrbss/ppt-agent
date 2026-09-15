@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "method": "Direct inspection of all four supplied render.png images only",
+  "limitations": ["No automated diagnostics or other audits read", "No HTML inspected", "Existing-fit QID preparation may be incomplete; no product fitter performance conclusion is made"],
+  "cases": [
+    {
+      "case_id": "case-01",
+      "visual_change": "No visible change between original and existing-fit render",
+      "card_overflow_before": true,
+      "card_overflow_after": true,
+      "observation": "Top-left business-understanding card ends around y=414, but both internal panels extend to around y=440. The following lower-left card covers their lower edges.",
+      "text_occlusion": "No clearly truncated text established visually; panel bottom occlusion is visible.",
+      "regression": "No additional visible regression"
+    },
+    {
+      "case_id": "case-05",
+      "visual_change": "No visible change between original and existing-fit render",
+      "card_overflow_before": false,
+      "card_overflow_after": false,
+      "text_occlusion": "No visible text occlusion",
+      "regression": "No visible regression on the otherwise normal page"
+    }
+  ]
+}

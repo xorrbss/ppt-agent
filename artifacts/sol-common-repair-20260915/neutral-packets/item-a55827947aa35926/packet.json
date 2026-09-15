@@ -1,0 +1,52 @@
+{
+  "sourceContent": "## 기대효과와 검증지표\n- 우측 상단에는 ‘QUR-001~004·PMR-004 | 기능·품질·가용성’을 표시하고, 효과를 사용자 편의·업무 생산성·데이터 활용·품질·운영 통제의 5개 영역으로 검증한다.\n- 사용자 편의는 신청 완료율·보완 건수·단계별 이탈·민원 유형으로, 업무 생산성은 처리 리드타임·평가 미완료·다건처리 시간·수작업 다운로드 횟수로 측정한다.\n- 품질은 요구사항 충족률·최초 테스트 통과율·중대 결함·회귀 결함·3초 응답기준·동시 로그인 300명 부하시험 결과로 판정한다.\n- DevAX 적용효과는 재사용 모듈 비율, 요구-테스트 추적률, 자동 수집된 품질증적, 변경 재작업량으로 확인하되 검증되지 않은 절감률을 계약 성과로 단정하지 않는다.",
+  "requiredImages": {
+    "candidates": [
+      {
+        "asset_id": "c419f06f-5bed-5e5c-97fb-ab70d2e944c3",
+        "path": "C:\\project\\PPT-agent\\ppt-agent\\app_data\\source_images\\a714aea6-73d9-47cf-8f1e-6fef3bdd4ed0\\d954239c88297fe1e72a7b323b95ca61f33ee33353784f5b67a0687c96f9c64c.png",
+        "mime_type": "image/png",
+        "width": 256,
+        "height": 256,
+        "digest": "d954239c88297fe1e72a7b323b95ca61f33ee33353784f5b67a0687c96f9c64c",
+        "source_slide_index": 6,
+        "source_heading": "02 · 제안 개요",
+        "source_text": "02 · 제안 개요 제안 개요 (Executive Summary) 본 제안은 DevAX 플랫폼으로 SI 프로젝트를 구축하여, 동일 범위 · 동일 품질 기준에서 구축 기간과 비용을 구조적으로 줄이는 방안을 제안합니다. DevAX 기반 SI 프로젝트 구축 제안서 | ㈜아이비즈소프트웨어 CONFIDENTIAL 7 / 43 제안 배경 AI 로 코드 생성은 빨라졌지만, SI 비용은 생성 이후 — 코드 이해 · 재작업 · 보안 · 성능 검증 · 배포 · 증적 작성 — 에서 발생합니다. 생성 속도만으로는 기간이 줄지 않습니다. 제안 목적 재사용 → 적응 → 최소 생성 원칙과 요구사항 자동 싱크, 사전 품질 게이트, 원버튼 배포, AI 운영으로 SI 전 단계의 공수를 줄이고 품질 · 통제성은 유지합니다. 제안 범위 요구사항 정의 → 설계 · 디자인 · 코드 · 테스트 → 모듈 임포트 → CI/CD 검증 → 승인 → 배포 → 운영까지 DevAX 18개 제품과 공통 기반(회원 · 권한 · 정책 · 크레딧)을 적용합니다. 기대 효과 사례 기준 구축 공수 평균 52% 절감, 100MD 기준 43MD 모델, 승인 후 중대 보안 결함 · 미승인 성능 회귀 0건 목표, 모듈 · 문서 ",
+        "original_name": null,
+        "ocr_text": null,
+        "semantic_description": "A simple target or bullseye icon: three concentric white circular bands surrounding a small black center on a black square background. It contains no visible text, labels, or quantitative information. Its likely presentation function is a visual symbol for goals, focus, or objectives. The supplied Korean proposal overview text is contextual data, not content visible in this image.",
+        "analysis_status": "analyzed",
+        "analysis_error": null,
+        "protected_regions": [
+          {
+            "x": 0.043,
+            "y": 0.043,
+            "width": 0.914,
+            "height": 0.914,
+            "label": "Entire concentric target symbol, including outer ring and center; preserve all rings without cropping."
+          }
+        ]
+      }
+    ],
+    "requireAll": false,
+    "placementPlan": {
+      "assignments": [
+        {
+          "asset_id": "c419f06f-5bed-5e5c-97fb-ab70d2e944c3",
+          "status": "assigned",
+          "slide_indices": [
+            18
+          ],
+          "reason": "과녁은 기대효과의 검증 목표와 지표 중심 평가를 상징한다.",
+          "purpose": "검증지표 패널의 작은 표식으로 모든 동심원을 보존한다. 수치나 성과를 대신하지 않는다.",
+          "group_id": "",
+          "allow_overlap": false
+        }
+      ]
+    }
+  },
+  "htmlPath": "slide.html",
+  "pngPath": "render.png",
+  "htmlSha256": "sha256:7c69fcc767c16ff17a35ee1234cb94d2b084d38c5f1a9c66d601587fce7a2f7f",
+  "pngSha256": "sha256:b49acbfc7ba481d66b0bdb52c458db4ced7371175105cc5c93b8a5cf87ffab72"
+}

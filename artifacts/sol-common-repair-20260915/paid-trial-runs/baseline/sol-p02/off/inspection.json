@@ -1,0 +1,201 @@
+{
+  "status": "failed",
+  "telemetryStatus": "available",
+  "blockingIssues": [
+    {
+      "category": "clipping",
+      "severity": "medium",
+      "detail": "browser reports clipped visible content",
+      "qids": [
+        "s1-problem-title"
+      ],
+      "policy": "style_reference",
+      "magnitude": {
+        "hidden_fraction": 0.071,
+        "element_kind": "text"
+      }
+    },
+    {
+      "category": "overlap",
+      "severity": "medium",
+      "detail": "browser pixel-area probe reports a continuous occluding layer",
+      "qids": [
+        "s1-takeaway-copy"
+      ],
+      "policy": "style_reference"
+    },
+    {
+      "category": "text_escapes_card",
+      "severity": "medium",
+      "detail": "text of s1-role-3 prints 24px below the bottom of its card s1-card-governance",
+      "qids": [
+        "s1-role-3"
+      ],
+      "policy": "style_reference",
+      "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.0822,
+        "excess_px_x": 0.0,
+        "excess_px_y": 24.0,
+        "card_qid": "s1-card-governance",
+        "element_kind": "text"
+      }
+    },
+    {
+      "category": "text_escapes_card",
+      "severity": "medium",
+      "detail": "text of s1-role-desc-3 prints 24px below the bottom of its card s1-card-governance",
+      "qids": [
+        "s1-role-desc-3"
+      ],
+      "policy": "style_reference",
+      "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.0839,
+        "excess_px_x": 0.0,
+        "excess_px_y": 24.5,
+        "card_qid": "s1-card-governance",
+        "element_kind": "text"
+      }
+    },
+    {
+      "category": "text_escapes_card",
+      "severity": "medium",
+      "detail": "text of s1-step-5 prints 13px below the bottom of its card s1-card-method",
+      "qids": [
+        "s1-step-5"
+      ],
+      "policy": "style_reference",
+      "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.0445,
+        "excess_px_x": 0.0,
+        "excess_px_y": 13.0,
+        "card_qid": "s1-card-method",
+        "element_kind": "text"
+      }
+    },
+    {
+      "category": "text_escapes_card",
+      "severity": "medium",
+      "detail": "text of s1-step-6 prints 13px below the bottom of its card s1-card-method",
+      "qids": [
+        "s1-step-6"
+      ],
+      "policy": "style_reference",
+      "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.0445,
+        "excess_px_x": 0.0,
+        "excess_px_y": 13.0,
+        "card_qid": "s1-card-method",
+        "element_kind": "text"
+      }
+    },
+    {
+      "category": "text_escapes_card",
+      "severity": "medium",
+      "detail": "text of s1-step-7 prints 54px below the bottom of its card s1-card-method",
+      "qids": [
+        "s1-step-7"
+      ],
+      "policy": "style_reference",
+      "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.1849,
+        "excess_px_x": 0.0,
+        "excess_px_y": 54.0,
+        "card_qid": "s1-card-method",
+        "element_kind": "text"
+      }
+    },
+    {
+      "category": "text_escapes_card",
+      "severity": "medium",
+      "detail": "text of s1-step-8 prints 54px below the bottom of its card s1-card-method",
+      "qids": [
+        "s1-step-8"
+      ],
+      "policy": "style_reference",
+      "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.1849,
+        "excess_px_x": 0.0,
+        "excess_px_y": 54.0,
+        "card_qid": "s1-card-method",
+        "element_kind": "text"
+      }
+    },
+    {
+      "category": "text_escapes_card",
+      "severity": "medium",
+      "detail": "text of s1-step-num-5 prints 13px below the bottom of its card s1-card-method",
+      "qids": [
+        "s1-step-num-5"
+      ],
+      "policy": "style_reference",
+      "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.0445,
+        "excess_px_x": 0.0,
+        "excess_px_y": 13.0,
+        "card_qid": "s1-card-method",
+        "element_kind": "text"
+      }
+    },
+    {
+      "category": "text_escapes_card",
+      "severity": "medium",
+      "detail": "text of s1-step-num-6 prints 13px below the bottom of its card s1-card-method",
+      "qids": [
+        "s1-step-num-6"
+      ],
+      "policy": "style_reference",
+      "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.0445,
+        "excess_px_x": 0.0,
+        "excess_px_y": 13.0,
+        "card_qid": "s1-card-method",
+        "element_kind": "text"
+      }
+    },
+    {
+      "category": "text_escapes_card",
+      "severity": "medium",
+      "detail": "text of s1-step-num-7 prints 54px below the bottom of its card s1-card-method",
+      "qids": [
+        "s1-step-num-7"
+      ],
+      "policy": "style_reference",
+      "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.1849,
+        "excess_px_x": 0.0,
+        "excess_px_y": 54.0,
+        "card_qid": "s1-card-method",
+        "element_kind": "text"
+      }
+    },
+    {
+      "category": "text_escapes_card",
+      "severity": "medium",
+      "detail": "text of s1-step-num-8 prints 54px below the bottom of its card s1-card-method",
+      "qids": [
+        "s1-step-num-8"
+      ],
+      "policy": "style_reference",
+      "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.1849,
+        "excess_px_x": 0.0,
+        "excess_px_y": 54.0,
+        "card_qid": "s1-card-method",
+        "element_kind": "text"
+      }
+    }
+  ],
+  "capacityEnforced": false,
+  "capacityViolations": [],
+  "repairTrigger": true
+}

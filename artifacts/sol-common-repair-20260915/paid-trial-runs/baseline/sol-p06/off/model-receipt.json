@@ -1,0 +1,96 @@
+{
+  "provider": "codex",
+  "requestedModel": "gpt-5.6-sol",
+  "requestedEffort": "medium",
+  "returnedModel": null,
+  "callOrdinal": 9,
+  "transportReceipt": {
+    "schemaVersion": 1,
+    "physicalCallCount": 1,
+    "overloadRetryCount": 0,
+    "cooldownWaitSeconds": 0.0,
+    "deadlineExhausted": false,
+    "quotaPauseResetAt": null,
+    "idempotencyCapable": false,
+    "replayUnavailable": "transport_idempotency_unconfirmed"
+  },
+  "usage": {
+    "input_tokens": 10956,
+    "output_tokens": 3981,
+    "total_tokens": 14937,
+    "details": {
+      "input_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 682
+      },
+      "attribution": {
+        "items": {
+          "msg_032a7b0ed860d47b016aa941df3ac887d0acf48015c58dd3ba": {
+            "cache_write_tokens": 0,
+            "cached_tokens": 0,
+            "content": [
+              {
+                "cache_write_tokens": 0,
+                "cached_tokens": 0,
+                "input_tokens": 70,
+                "output_tokens": 0
+              },
+              {
+                "cache_write_tokens": 0,
+                "cached_tokens": 0,
+                "input_tokens": 719,
+                "output_tokens": 0
+              }
+            ],
+            "input_tokens": 789,
+            "output_tokens": 0
+          },
+          "rs_032a7b0ed860d47b016aa941e04a4087d0a5e52d6d9c305bfb": {
+            "cache_write_tokens": 0,
+            "cached_tokens": 0,
+            "input_tokens": 2,
+            "output_tokens": 516
+          },
+          "rs_032a7b0ed860d47b016aa941ef70f887d0bbf0d296ee89cfd5": {
+            "cache_write_tokens": 0,
+            "cached_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 166
+          },
+          "msg_032a7b0ed860d47b016aa941f465a487d0b95a3f077801bcdc": {
+            "cache_write_tokens": 0,
+            "cached_tokens": 0,
+            "content": [
+              {
+                "cache_write_tokens": 0,
+                "cached_tokens": 0,
+                "input_tokens": 0,
+                "output_tokens": 3299
+              }
+            ],
+            "input_tokens": 0,
+            "output_tokens": 3299
+          }
+        },
+        "request_fields": {
+          "instructions": {
+            "cache_write_tokens": 0,
+            "cached_tokens": 0,
+            "input_tokens": 10165,
+            "output_tokens": 0
+          }
+        }
+      }
+    },
+    "reasoning": {
+      "billed_tokens": 682,
+      "visible_tokens": 48,
+      "billed_estimated": false,
+      "visible_estimated": true,
+      "source": "provider_details"
+    }
+  }
+}

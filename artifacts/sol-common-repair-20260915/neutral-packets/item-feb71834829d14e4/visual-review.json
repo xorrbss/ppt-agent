@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "item_id": "item-feb71834829d14e4",
+  "method": "Direct PNG inspection against own packet source and requiredImages; no diagnostic or private files read",
+  "hash_verification": {
+    "html_sha256": "613f5304a4e9c442342e5c4aa1b9b9590185d9f3432b265668d8dd39c578a704",
+    "png_sha256": "4de605a2a4ab0b06dfeb874fd0d4db6028dea42ef3083cbec0c6a64e65eaef2b",
+    "matches_packet_after_sha256_prefix_normalization": true
+  },
+  "verdict": "visual_pass",
+  "readability_score": 1,
+  "style_score": 2,
+  "geometry": {
+    "pass": true,
+    "findings": [
+      "All table contents contained without collisions; lower summary has tight vertical clearance."
+    ]
+  },
+  "readability": {
+    "pass": true,
+    "score": 1,
+    "findings": [
+      "Text is readable, with dense bottom summary."
+    ]
+  },
+  "style": {
+    "verdict": "coherent",
+    "score": 2,
+    "observation": "Consistent aligned table and teal hierarchy."
+  },
+  "required_images": {
+    "candidate_count": 0,
+    "require_all": false,
+    "verdict": "not_applicable",
+    "visible_raster_images": false,
+    "observation": "No image required."
+  },
+  "criteria_basis": {
+    "summary": "Existing frozen readability/style minimum met."
+  }
+}

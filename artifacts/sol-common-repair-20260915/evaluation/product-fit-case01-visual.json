@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "method": "Independent direct visual inspection of product-fit renders compared with previously directly inspected originals; no result or diagnostic files read",
+  "cases": [
+    {
+      "case_id": "case-01",
+      "original": "artifacts/sol-speed-quality-20260915/runs/stage1/case-01/C/render.png",
+      "candidate": "artifacts/sol-common-repair-20260915/product-fit-replay/case-01/render.png",
+      "card_escape_resolved": true,
+      "panel_occlusion_resolved": true,
+      "observation": "Top-left internal panels now end around y=412, within the parent ending around y=414, and no longer enter the following lower-left card. Bottom clearance inside the parent is tight but there is no visible overlap. This differs visibly from the earlier spacing candidate whose internal panels ended higher.",
+      "new_overlap": false,
+      "new_text_occlusion": false,
+      "readability": "Top-left body text is somewhat smaller and rewrapped compared with the original, but remains readable and separated. Other cards and the header show no visible regression.",
+      "font_size": "Computed size not measured; visual comparison only",
+      "verdict": "Visual pass for resolved overflow and occlusion with no visible new blocking defect"
+    },
+    {
+      "case_id": "case-09",
+      "original": "artifacts/sol-speed-quality-20260915/runs/stage1/case-05/C/render.png",
+      "candidate": "artifacts/sol-common-repair-20260915/product-fit-replay/case-09/render.png",
+      "new_overlap": false,
+      "new_text_occlusion": false,
+      "readability_regression": false,
+      "observation": "No visible change from the original normal control",
+      "verdict": "Normal control preserved visually"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "sol-common-repair-measured-pipeline/v1",
+  "status": "failed",
+  "measurementKind": "offlineRepairCaptureInspection",
+  "completionLatencyAvailable": false,
+  "providerCalls": 0,
+  "providerCallsBasis": "caller contract: repair, capture, and inspection callables are offline",
+  "timing": {
+    "clock": "time.perf_counter_ns",
+    "boundary": "repair start through completed inspection or terminal failure",
+    "totalStartNs": 290021228841300,
+    "totalEndNs": 290021231633600,
+    "elapsedMs": 2.792,
+    "completionLatencyMs": null,
+    "failedElapsedMs": 2.792,
+    "phaseDurationSumMs": 2.641,
+    "unattributedWithinBoundaryMs": 0.151,
+    "phases": [
+      {
+        "name": "repair",
+        "status": "completed",
+        "startNs": 290021228898900,
+        "endNs": 290021228950800,
+        "durationMs": 0.052
+      },
+      {
+        "name": "preserveInitialHtml",
+        "status": "completed",
+        "startNs": 290021228989100,
+        "endNs": 290021230176200,
+        "durationMs": 1.187
+      },
+      {
+        "name": "capture",
+        "status": "completed",
+        "startNs": 290021230191300,
+        "endNs": 290021230203500,
+        "durationMs": 0.012
+      },
+      {
+        "name": "selectFittedHtml",
+        "status": "completed",
+        "startNs": 290021230208400,
+        "endNs": 290021230215800,
+        "durationMs": 0.007
+      },
+      {
+        "name": "preserveFinalHtml",
+        "status": "completed",
+        "startNs": 290021230220600,
+        "endNs": 290021231072900,
+        "durationMs": 0.852
+      },
+      {
+        "name": "inspection",
+        "status": "failed",
+        "errorType": "RuntimeError",
+        "startNs": 290021231084100,
+        "endNs": 290021231615400,
+        "durationMs": 0.531
+      }
+    ]
+  },
+  "failure": {
+    "failedPhase": "inspection",
+    "errorType": "RuntimeError"
+  }
+}

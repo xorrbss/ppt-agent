@@ -82,6 +82,43 @@ GEOMETRY_MEMBERS = r"""
     return [root].concat(Array.from(root.querySelectorAll('[data-qid]')))
       .filter(node => this._eligible(node) && this._ownedTextNodes(node).length > 0);
   },
+  _intentionalContent(node) {
+    if (!node) return false;
+    const role = String(node.getAttribute('data-semantic-role') ||
+      node.getAttribute('data-role') || node.getAttribute('role') || '').toLowerCase();
+    return node.matches('[data-allow-overlap="true"], [data-intentional-crop="true"]') ||
+      role === 'decoration';
+  },
+  _nestedContentContainment(region) {
+    const root = region.card, defects = new Set(region.defectLeaves || []), targets = [];
+    for (const member of region.members || []) {
+      for (const node of [member.card].concat(Array.from(member.card.querySelectorAll('[data-qid]')))) {
+        if (!this._eligible(node) || this._intentionalContent(node) || !this._isCardLike(node)) continue;
+        if (Array.from(defects).some(leaf => node.contains(leaf))) targets.push({node, kind: 'flow_box_escape'});
+      }
+    }
+    for (const leaf of defects) if (!this._intentionalContent(leaf)) targets.push({node: leaf, kind: 'text_escape'});
+    const seen = new Set();
+    for (const target of targets) {
+      if (seen.has(target.node)) continue; seen.add(target.node);
+      const measured = target.kind === 'text_escape' ? this._ink(target.node) : this._box(target.node);
+      if (!measured) continue;
+      for (let ancestor = target.node.parentElement; ancestor && root.contains(ancestor);
+          ancestor = ancestor.parentElement) {
+        if (this._intentionalContent(ancestor)) break;
+        if (!this._eligible(ancestor) || !this._isCardLike(ancestor)) continue;
+        const boundary = this._box(ancestor);
+        const excessRight = measured.right - boundary.right;
+        const excessBottom = measured.bottom - boundary.bottom;
+        if (Math.max(excessRight, excessBottom) <= this.C.escape_tolerance_px) continue;
+        return {reason: target.kind, diagnostic: {
+          qid: target.node.getAttribute('data-qid'), boundary_qid: ancestor.getAttribute('data-qid'),
+          property: 'nested_content_containment', excess_px_x: this._round(Math.max(0, excessRight), 3),
+          excess_px_y: this._round(Math.max(0, excessBottom), 3)}};
+      }
+    }
+    return null;
+  },
   _paintRects(root, descendants) {
     const result = [], nodes = descendants ? [root].concat(Array.from(root.querySelectorAll('[data-qid]'))) : [root];
     for (const node of nodes) {
@@ -352,6 +389,8 @@ GEOMETRY_MEMBERS = r"""
           this._flowBoxEscape(member.card) > this.C.escape_tolerance_px || this._flowHeightConflicts(member.card, leaves).length)
         return {ok: false, reason: 'text_escape'};
     }
+    const containment = this._nestedContentContainment(region);
+    if (containment) return {ok: false, reason: containment.reason, diagnostic: containment.diagnostic};
     for (const seed of region.collisions) {
       const afterDepth = this._collision(seed.first, seed.second);
       if (afterDepth > 0) return {ok: false, reason: 'overlap', diagnostic: {

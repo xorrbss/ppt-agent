@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "method": "Direct comparison of eight before/after PNGs",
+  "limitations": ["Replay summary and result diagnostics were not read", "Representative mapping file exposed original classification fields alongside sourcePath, so this is not a fully classification-blind audit", "Conclusions below are based on visible PNG evidence; no HTML or computed font sizes inspected"],
+  "cases": [
+    {
+      "case_id": "case-04",
+      "sourcePath": "runs/stage1/case-04/C",
+      "new_overlap": false,
+      "readability_regression": false,
+      "image_damage": false,
+      "remaining_defects": ["Right baseline/change-management column continues below its parent and beyond canvas bottom; final numbered step remains mostly cut off"],
+      "observation": "Main layout and screenshot are visually unchanged. At the bottom, a little more of the next step text is visible, but the off-canvas defect is unresolved.",
+      "verdict": "Existing defect remains; no visible new regression"
+    },
+    {
+      "case_id": "case-07",
+      "sourcePath": "runs/stage2/round-3/case-02/C",
+      "new_overlap": false,
+      "readability_regression": false,
+      "image_damage": "No raster image in visible composition",
+      "remaining_defects": ["Left lower rule text overlaps the last check row", "Middle explanatory paragraph escapes its card and is obscured by the lower evidence panel", "Right approval step 04 is obscured by the lower evidence panel", "Bottom-right evidence-use labels are crowded and overlap vertically"],
+      "observation": "Candidate is visually unchanged in these problem areas.",
+      "verdict": "Existing overlaps and occlusion remain; no visible new regression"
+    },
+    {
+      "case_id": "case-09",
+      "sourcePath": "runs/stage1/case-05/C",
+      "new_overlap": false,
+      "readability_regression": false,
+      "image_damage": "No raster image in visible composition",
+      "remaining_defects": [],
+      "observation": "No visible before/after change. Text remains readable and contained.",
+      "verdict": "Normal control preserved visually"
+    },
+    {
+      "case_id": "case-10",
+      "sourcePath": "runs/stage1/case-04/A",
+      "new_overlap": false,
+      "readability_regression": false,
+      "image_damage": false,
+      "remaining_defects": [],
+      "observation": "No visible before/after change. Large source screenshot retains its content and size; surrounding text and cards remain readable and contained.",
+      "verdict": "Normal image control preserved visually"
+    }
+  ]
+}

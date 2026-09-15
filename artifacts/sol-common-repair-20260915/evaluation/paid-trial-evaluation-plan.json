@@ -1,0 +1,112 @@
+{
+  "schemaVersion": "sol-common-repair-paid-evaluation/v1",
+  "status": "frozen_root_approved",
+  "providerCallsOwned": 0,
+  "productCodeChangesOwned": false,
+  "sampleCount": 6,
+  "authorOutputsScheduled": 12,
+  "outcomesScheduled": 24,
+  "cells": [
+    {
+      "prompt": "baseline",
+      "correction": "off",
+      "scheduled": 6
+    },
+    {
+      "prompt": "baseline",
+      "correction": "on",
+      "scheduled": 6
+    },
+    {
+      "prompt": "dense-layout-supplement-v1",
+      "correction": "off",
+      "scheduled": 6
+    },
+    {
+      "prompt": "dense-layout-supplement-v1",
+      "correction": "on",
+      "scheduled": 6
+    }
+  ],
+  "contentRubric": {
+    "path": "artifacts\\sol-speed-quality-20260915\\evaluation\\content-rubric.json",
+    "sha256": "78005f62f972387ea523ab471a110169d264fd7bd9d5ab9df942d80cab41e726"
+  },
+  "visualRubric": {
+    "path": "artifacts\\sol-speed-quality-20260915\\visual-rubric.json",
+    "sha256": "9f381c2cee66af0d1859d0b7cb861ecbc490d714566058479b9549ae7ec2bba7"
+  },
+  "rules": [
+    "Use frozen source facts, directed relationships, qualifications, role restrictions, image assignments and visual contract.",
+    "Score off and on independently from their actual final HTML and PNG; retain initial verdict without overwrite.",
+    "DOM text equality alone cannot upgrade a failed content verdict. A visibility repair may upgrade only after independent visible-content audit.",
+    "No output or unavailable image evidence has null quality verdict and separate terminal/unknown category, never implicit pass.",
+    "Automatic detector pass, fit policy acceptance, independent visual/content acceptance and delivered execution completion remain separate fields.",
+    "Normal controls are sol-p06 and astra-p19. Normal means sampling class, not that every generated baseline passes.",
+    "New regressions are assessed per paired sample and defect, not hidden by aggregate net gains.",
+    "No further provider repetitions are authorized by this evaluation file. Root gate decision is required after initial results.",
+    "Before auditing verify complete source propositions and all required image assignments are actually included in neutral packet, not merely an HTML containing generated content."
+  ],
+  "summaryColumns": [
+    "scheduled",
+    "rendered",
+    "assessed",
+    "sourceContentPass",
+    "imagePass",
+    "geometryPass",
+    "jointPass",
+    "runtimeFailed",
+    "fitPolicyUnresolved",
+    "qualityUnknown",
+    "readabilityMean",
+    "styleMean"
+  ],
+  "pairedComparisons": [
+    {
+      "name": "initialPromptEffect",
+      "left": "baseline/off",
+      "right": "dense-layout-supplement-v1/off"
+    },
+    {
+      "name": "finalPromptEffect",
+      "left": "baseline/on",
+      "right": "dense-layout-supplement-v1/on"
+    },
+    {
+      "name": "baselineCorrectionEffect",
+      "left": "baseline/off",
+      "right": "baseline/on"
+    },
+    {
+      "name": "improvedCorrectionEffect",
+      "left": "dense-layout-supplement-v1/off",
+      "right": "dense-layout-supplement-v1/on"
+    }
+  ],
+  "pairedColumns": [
+    "qualityGains",
+    "qualityLosses",
+    "netGain",
+    "contentRegressions",
+    "imageRegressions",
+    "normalControlRegressions",
+    "pairedTimingEligibleN",
+    "pairedLatencyDeltaMs"
+  ],
+  "timingRules": [
+    "Use recorded monotonic phase durations and exact eligible matched sample sets.",
+    "Physical author output is shared by off/on and must not be billed twice.",
+    "Offline experiment sequential off+on wall time is not standalone product completion.",
+    "If standalone on/off completion is reconstructed from phases label it reconstructed, not measured continuous end-to-end.",
+    "Record candidate evaluations, fit search, actual captures and final HTML reconstruction count separately.",
+    "Failed or missing timing is null. Never infer time from file modification times.",
+    "Exclude blind-auditor waiting from automatic processing latency."
+  ],
+  "gate": {
+    "qualityRoute": "Within same correction condition, improved prompt joint pass gains with zero paired content/image/normal regressions; this permits repeats only.",
+    "speedRoute": "Same independently measured quality and faster actual monotonic author/off latency or measured correction-on incremental latency only; no reconstructed shared-branch sums.",
+    "correctionOnlyRoute": "If new common fix improves outputs but prompt does not, retain baseline prompt plus common fix as candidate and mark first-generation prompt objective unmet.",
+    "seedReporting": "List per-source sample gains, losses and new defects; no statistical stability claim from one generation per arm.",
+    "nextCalls": "Only root may authorize repetitions after this initial gate is evaluated."
+  }
+}

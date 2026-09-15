@@ -1,0 +1,218 @@
+<!DOCTYPE html><html lang="ko"><head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#00140E;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:18px;width:840px}
+.eyebrow{height:21px;font-size:15px;line-height:21px;font-weight:700;letter-spacing:0;color:#08916E}
+.slide-title{margin-top:6px;width:840px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:924px;top:18px;width:300px;height:27px;display:flex;justify-content:flex-end;align-items:center}
+.requirements{display:flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap}
+.req-label{font-size:13px;line-height:27px;font-weight:700;color:#00140E}
+.req-chip{height:27px;padding:0 9px;border:1px solid #08916E;border-radius:5px;background:#EAEDF2;font-size:13px;line-height:25px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;width:1280px;padding:0 64px}
+.claim-row{height:54px;display:flex;align-items:center;justify-content:space-between}
+.claim{font-size:25px;line-height:34px;font-weight:700;letter-spacing:-0.02em;color:#00140E}
+.claim strong{color:#08916E}
+.claim-meta{display:flex;align-items:center;gap:10px;font-size:15px;line-height:22px;font-weight:700;color:#00140E}
+.status-square{width:10px;height:10px;border-radius:3px;background:#08916E}
+.content-grid{display:grid;grid-template-columns:786px 342px;gap:24px;height:420px;margin-top:10px}
+.panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.main-panel{padding:22px 28px}
+.side-panel{padding:22px 24px}
+.panel-head{display:flex;align-items:flex-start;justify-content:space-between;height:30px}
+.panel-kicker{font-size:15px;line-height:21px;font-weight:700;color:#08916E}
+.panel-title{font-size:20px;line-height:28px;font-weight:700;color:#00140E}
+.mandatory-tag{height:27px;padding:2px 10px;border-radius:12px;background:#E8F5F1;border:1px solid #08916E;font-size:15px;line-height:21px;font-weight:700;color:#00140E}
+.gate-rail{position:relative;display:grid;grid-template-columns:repeat(7,1fr);gap:12px;height:82px;margin-top:13px}
+.rail-line{position:absolute;left:42px;right:42px;top:40px;height:2px;background:#08916E}
+.gate{position:relative;z-index:1;height:82px;padding:13px 5px 10px;border:1px solid #08916E;border-radius:12px;background:#F4FAF8;text-align:center}
+.gate-no{font-family:"IBM Plex Mono","Consolas",monospace;font-size:14px;line-height:18px;font-weight:700;color:#08916E}
+.gate-name{margin-top:6px;font-size:16px;line-height:22px;font-weight:700;color:#00140E}
+.state-lane{display:grid;grid-template-columns:170px 1fr 1fr;gap:12px;height:70px;margin-top:16px}
+.state-source,.state-result{display:flex;align-items:center;justify-content:center;border-radius:12px;text-align:center}
+.state-source{background:#00140E;color:#FFFFFF}
+.state-result{border:1px solid #E2E8F0;background:#F9F9F9}
+.state-result.pass{border-color:#08916E;background:#E8F5F1}
+.state-label{font-size:17px;line-height:23px;font-weight:700}
+.state-label small{display:block;margin-top:2px;font-size:14px;line-height:19px;font-weight:700;color:inherit}
+.approval-head{display:flex;align-items:center;gap:10px;height:27px;margin-top:15px}
+.approval-index{display:flex;align-items:center;justify-content:center;width:27px;height:27px;border-radius:12px;background:#08916E;color:#FFFFFF;font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:20px;font-weight:700}
+.approval-title{font-size:18px;line-height:27px;font-weight:700;color:#00140E}
+.approval-flow{display:grid;grid-template-columns:148px 22px 180px 22px 170px 22px 142px;align-items:stretch;height:102px;margin-top:10px}
+.approval-card{display:flex;flex-direction:column;justify-content:center;padding:11px 12px;border:1px solid #E2E8F0;border-radius:12px;background:#F9F9F9;text-align:center}
+.approval-card.final{border-color:#08916E;background:#E8F5F1}
+.approval-role{font-size:16px;line-height:22px;font-weight:700;color:#08916E}
+.approval-action{margin-top:4px;font-size:15px;line-height:21px;font-weight:700;color:#00140E}
+.connector{position:relative}
+.connector-line{position:absolute;left:0;right:0;top:50px;height:2px;background:#08916E}
+.connector-node{position:absolute;right:0;top:46px;width:10px;height:10px;border-radius:3px;background:#08916E}
+.side-section-title{font-size:19px;line-height:27px;font-weight:700;color:#00140E}
+.side-copy{margin-top:5px;font-size:16px;line-height:23px;color:#00140E}
+.exception-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.field{min-height:34px;padding:6px 8px;border-radius:12px;background:#EAEDF2;text-align:center;font-size:15px;line-height:20px;font-weight:700;color:#00140E}
+.field.expiry{background:#E8F5F1;border:1px solid #08916E;color:#00140E}
+.side-divider{height:1px;margin:17px 0 15px;background:#E2E8F0}
+.trace-stack{display:grid;grid-template-columns:1fr 18px 1fr 18px 1fr;align-items:center;margin-top:12px}
+.trace-box{display:flex;align-items:center;justify-content:center;height:49px;padding:5px;border:1px solid #08916E;border-radius:12px;background:#F4FAF8;text-align:center;font-size:15px;line-height:20px;font-weight:700;color:#00140E}
+.trace-arrow{height:2px;background:#08916E}
+.evidence-box{margin-top:12px;padding:11px 12px;border-radius:12px;background:#00140E;color:#FFFFFF}
+.evidence-title{font-size:16px;line-height:22px;font-weight:700}
+.evidence-copy{margin-top:4px;font-size:15px;line-height:21px;color:#FFFFFF}
+.usage-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.usage{padding:7px 5px;border:1px solid #E2E8F0;border-radius:12px;background:#FFFFFF;text-align:center;font-size:14px;line-height:19px;font-weight:700;color:#00140E}
+.takeaway{height:66px;margin-top:12px;display:grid;grid-template-columns:190px 1fr;align-items:center;border:1px solid #08916E;border-radius:12px;background:#E8F5F1}
+.takeaway-label{padding-left:24px;font-size:16px;line-height:22px;font-weight:700;color:#08916E}
+.takeaway-text{padding-right:24px;font-size:19px;line-height:27px;font-weight:700;color:#00140E}
+.takeaway-text strong{color:#08916E}
+</style>
+</head>
+<body>
+<div class="header-band" data-header-band="101" data-header-part="band" style="height:101px;" data-qid="q-div-75dcf98740c9">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0">
+    <div class="eyebrow" data-header-part="eyebrow" data-qid="s27-eyebrow" data-semantic-role="supporting">품질관리</div>
+    <div class="slide-title" data-header-part="title" data-qid="s27-title" data-semantic-role="title">자동 품질게이트와 승인</div>
+  </div>
+  <div class="header-right" data-header-part="right" data-qid="q-div-73774be43d12">
+    <div class="requirements" data-header-part="requirements" data-qid="s27-requirements" data-requirement-ids="TER-001~005,SER-007,PER-001~002,QUR-003">
+      <span class="req-label" data-qid="s27-req-label" data-semantic-role="supporting">요구사항 번호</span>
+      <span class="req-chip" data-qid="s27-req-1" data-semantic-role="supporting">TER-001~005</span>
+      <span class="req-chip" data-qid="s27-req-2" data-semantic-role="supporting">SER-007</span>
+      <span class="req-chip" data-qid="s27-req-more" data-semantic-role="supporting">+2</span>
+    </div>
+  </div>
+  <div class="divider" data-header-part="divider" data-qid="q-div-59f86380b966"></div>
+</div>
+
+<div class="body-wrap" data-header-part="body" style="top:115px;" data-qid="q-div-66757db28fba">
+  <div class="claim-row" data-qid="q-div-75b3498fbbe1">
+    <div class="claim" data-qid="s27-claim" data-semantic-role="body">완료 전 검사를 자동화하고, 사람의 검토를 결합해 <strong data-qid="q-strong-663977331dde">무기한 예외를 차단</strong>합니다.</div>
+    <div class="claim-meta" data-qid="s27-claim-meta" data-semantic-role="supporting"><span class="status-square" data-qid="q-span-f5d54ce87afd"></span>자동 검사 → 영향 검토 → 최종 승인</div>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200">
+    <section class="panel main-panel" data-qid="s27-main-card">
+      <div class="panel-head" data-qid="q-div-e25ca81e908c">
+        <div data-qid="q-div-54fdca616fb4">
+          <div class="panel-kicker" data-qid="s27-main-kicker" data-semantic-role="supporting">01 · 완료 상태 전환 조건</div>
+          <div class="panel-title" data-qid="s27-main-title" data-semantic-role="supporting">필수 품질게이트를 순차 실행하고 결과에 따라 상태를 분기</div>
+        </div>
+        <div class="mandatory-tag" data-qid="s27-mandatory" data-semantic-role="supporting">7개 검사 필수</div>
+      </div>
+
+      <div class="gate-rail" data-qid="q-div-dac171f82eb8">
+        <div class="rail-line" data-qid="q-div-42fed5087dc4"></div>
+        <div class="gate" data-qid="s27-gate-1">
+          <div class="gate-no" data-qid="s27-gate-no-1" data-semantic-role="supporting">01</div>
+          <div class="gate-name" data-qid="s27-gate-name-1" data-semantic-role="body">빌드</div>
+        </div>
+        <div class="gate" data-qid="s27-gate-2">
+          <div class="gate-no" data-qid="s27-gate-no-2" data-semantic-role="supporting">02</div>
+          <div class="gate-name" data-qid="s27-gate-name-2" data-semantic-role="body">정적분석</div>
+        </div>
+        <div class="gate" data-qid="s27-gate-3">
+          <div class="gate-no" data-qid="s27-gate-no-3" data-semantic-role="supporting">03</div>
+          <div class="gate-name" data-qid="s27-gate-name-3" data-semantic-role="body">단위검사</div>
+        </div>
+        <div class="gate" data-qid="s27-gate-4">
+          <div class="gate-no" data-qid="s27-gate-no-4" data-semantic-role="supporting">04</div>
+          <div class="gate-name" data-qid="s27-gate-name-4" data-semantic-role="body">통합검사</div>
+        </div>
+        <div class="gate" data-qid="s27-gate-5">
+          <div class="gate-no" data-qid="s27-gate-no-5" data-semantic-role="supporting">05</div>
+          <div class="gate-name" data-qid="s27-gate-name-5" data-semantic-role="body">보안검사</div>
+        </div>
+        <div class="gate" data-qid="s27-gate-6">
+          <div class="gate-no" data-qid="s27-gate-no-6" data-semantic-role="supporting">06</div>
+          <div class="gate-name" data-qid="s27-gate-name-6" data-semantic-role="body">성능검사</div>
+        </div>
+        <div class="gate" data-qid="s27-gate-7">
+          <div class="gate-no" data-qid="s27-gate-no-7" data-semantic-role="supporting">07</div>
+          <div class="gate-name" data-qid="s27-gate-name-7" data-semantic-role="body">접근성검사</div>
+        </div>
+      </div>
+
+      <div class="state-lane" data-qid="q-div-317dd78fdcc6">
+        <div class="state-source" data-qid="s27-state-source">
+          <div class="state-label" data-qid="s27-state-source-text" data-semantic-role="body">자동 검사 결과<small data-qid="q-small-f25946a31727">완료 전 판정</small></div>
+        </div>
+        <div class="state-result" data-qid="s27-state-fail">
+          <div class="state-label" data-qid="s27-state-fail-text" data-semantic-role="body">실패 → 재작업<small data-qid="q-small-26da42bd5e69">수정 후 전체 재검사</small></div>
+        </div>
+        <div class="state-result pass" data-qid="s27-state-pass">
+          <div class="state-label" data-qid="s27-state-pass-text" data-semantic-role="body">통과 → 승인 검토<small data-qid="q-small-06e16acd18b3">자동 통과만으로 완료 불가</small></div>
+        </div>
+      </div>
+
+      <div class="approval-head" data-qid="q-div-a8d77be7a7d1">
+        <div class="approval-index" data-qid="s27-approval-index" data-semantic-role="supporting">02</div>
+        <div class="approval-title" data-qid="s27-approval-title" data-semantic-role="supporting">DevAX 수정 제안의 사람 중심 승인 체계</div>
+      </div>
+
+      <div class="approval-flow" data-qid="q-div-21986879c9cf">
+        <div class="approval-card" data-qid="s27-approval-1">
+          <div class="approval-role" data-qid="s27-approval-role-1" data-semantic-role="supporting">DevAX</div>
+          <div class="approval-action" data-qid="s27-approval-action-1" data-semantic-role="body">수정안 제안</div>
+        </div>
+        <div class="connector" data-qid="q-div-1bfec761b021"><div class="connector-line" data-qid="q-div-b74025c79c7a"></div><div class="connector-node" data-qid="q-div-8b813e36675c"></div></div>
+        <div class="approval-card" data-qid="s27-approval-2">
+          <div class="approval-role" data-qid="s27-approval-role-2" data-semantic-role="supporting">개발자</div>
+          <div class="approval-action" data-qid="s27-approval-action-2" data-semantic-role="body">코드·데이터·권한<br>영향 검토</div>
+        </div>
+        <div class="connector" data-qid="q-div-f954d062b2c8"><div class="connector-line" data-qid="q-div-9640accc6886"></div><div class="connector-node" data-qid="q-div-8a31b39488c8"></div></div>
+        <div class="approval-card" data-qid="s27-approval-3">
+          <div class="approval-role" data-qid="s27-approval-role-3" data-semantic-role="supporting">품질담당자</div>
+          <div class="approval-action" data-qid="s27-approval-action-3" data-semantic-role="body">재시험 결과 확인</div>
+        </div>
+        <div class="connector" data-qid="q-div-d70e41e2467e"><div class="connector-line" data-qid="q-div-b117411b92eb"></div><div class="connector-node" data-qid="q-div-9a2b4e6f98a1"></div></div>
+        <div class="approval-card final" data-qid="s27-approval-4">
+          <div class="approval-role" data-qid="s27-approval-role-4" data-semantic-role="supporting">승인권자</div>
+          <div class="approval-action" data-qid="s27-approval-action-4" data-semantic-role="body">최종 승인</div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel side-panel" data-qid="s27-side-card">
+      <div class="side-section-title" data-qid="s27-exception-title" data-semantic-role="supporting">예외 승인 통제</div>
+      <div class="side-copy" data-qid="s27-exception-copy" data-semantic-role="body">예외는 필수 정보를 기록하고 만료 시 재검토하여 상시 우회를 방지합니다.</div>
+      <div class="exception-fields" data-qid="q-div-f2d04ca04bcd">
+        <div class="field" data-qid="s27-field-1" data-semantic-role="body">사유</div>
+        <div class="field" data-qid="s27-field-2" data-semantic-role="body">영향</div>
+        <div class="field" data-qid="s27-field-3" data-semantic-role="body">승인자</div>
+        <div class="field" data-qid="s27-field-4" data-semantic-role="body">보완조치</div>
+        <div class="field expiry" data-qid="s27-field-5" data-semantic-role="body">만료일</div>
+      </div>
+
+      <div class="side-divider" data-qid="q-div-65b67b2aaf77"></div>
+
+      <div class="side-section-title" data-qid="s27-trace-title" data-semantic-role="supporting">추적 가능한 품질 증적</div>
+      <div class="trace-stack" data-qid="q-div-7eb27891459d">
+        <div class="trace-box" data-qid="s27-trace-1" data-semantic-role="body">요구사항</div>
+        <div class="trace-arrow" data-qid="q-div-2ea12d61a8fb"></div>
+        <div class="trace-box" data-qid="s27-trace-2" data-semantic-role="body">변경</div>
+        <div class="trace-arrow" data-qid="q-div-96718ad76b1c"></div>
+        <div class="trace-box" data-qid="s27-trace-3" data-semantic-role="body">배포 버전</div>
+      </div>
+      <div class="evidence-box" data-qid="s27-evidence-box">
+        <div class="evidence-title" data-qid="s27-evidence-title" data-semantic-role="supporting">검사 결과 + 수정 이력</div>
+        <div class="evidence-copy" data-qid="s27-evidence-copy" data-semantic-role="body">연결 식별자를 유지해 동일 증적을 반복 활용</div>
+      </div>
+      <div class="usage-row" data-qid="q-div-e0746b586f9f">
+        <div class="usage" data-qid="s27-usage-1" data-semantic-role="body">보안성 검토</div>
+        <div class="usage" data-qid="s27-usage-2" data-semantic-role="body">검사·검수</div>
+        <div class="usage" data-qid="s27-usage-3" data-semantic-role="body">유지관리</div>
+        <div class="usage" data-qid="s27-usage-4" data-semantic-role="body">변경 추적</div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="takeaway" data-qid="s27-takeaway-card">
+    <div class="takeaway-label" data-qid="s27-takeaway-label" data-semantic-role="supporting">운영 원칙</div>
+    <div class="takeaway-text" data-qid="s27-takeaway-text" data-semantic-role="body">자동화는 결함을 조기에 차단하고, <strong data-qid="q-strong-f213b54d7db8">최종 책임과 예외 판단은 승인 체계</strong>에 남깁니다.</div>
+  </div>
+</div>
+
+</body></html>

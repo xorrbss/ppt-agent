@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "item_id": "item-92b14042c47f574a",
+  "method": "Direct inspection of this packet render and sourceContent/requiredImages only; no content-audit, private metadata, or automatic diagnostics read",
+  "hash_verification": {
+    "html_sha256": "674733529345692f7c56f8c70de727571d09c6be7a5ec8d81f2ba3a277cd8d59",
+    "png_sha256": "5dabc73fe6976b25429c45e6f4dee9d7c84c518221e6aa9a14d9d8eae966d90f",
+    "matches_packet_after_sha256_prefix_normalization": true
+  },
+  "verdict": "fail",
+  "geometry": {
+    "pass": false,
+    "findings": [
+      "Both major white cards continue beyond the 720px canvas bottom; their lower borders are not visible.",
+      "The bottom operating-principle band intersects the main cards. Its sentence reaches the right card and is cut/covered at that boundary.",
+      "Bottom-right reuse pills extend to the canvas bottom with their lower rounded edges cut."
+    ]
+  },
+  "readability": {
+    "pass": false,
+    "findings": [
+      "Most main body text remains readable, but the operating-principle sentence is not fully visible because the right card covers its end.",
+      "The top-left section description is very close to the test-card row, with little separation, but no definite character collision established."
+    ],
+    "score": 0
+  },
+  "required_images": {
+    "candidate_count": 0,
+    "require_all": false,
+    "verdict": "not_applicable",
+    "visible_raster_images": false
+  },
+  "style": {
+    "verdict": "coherent",
+    "observation": "Consistent teal/dark-green palette and card typography. Main-card height and footer placement cause visible geometric failure despite style coherence.",
+    "score": 1
+  },
+  "content_visibility": {
+    "observation": "The required source topics are visibly represented, but this is not a full-content or verbatim certificate; footer text and lower bounds are compromised."
+  },
+  "readability_score": 0,
+  "style_score": 1
+}

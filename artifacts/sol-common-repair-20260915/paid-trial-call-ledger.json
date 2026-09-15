@@ -1,0 +1,150 @@
+{
+  "calls": [
+    {
+      "ordinal": 1,
+      "status": "succeeded",
+      "reservedAt": 1789476479.7651432,
+      "stage": "paid-trial",
+      "attempt": true,
+      "candidate": "baseline",
+      "sampleId": "sol-p02",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "finishedAt": 1789476586.677259
+    },
+    {
+      "ordinal": 2,
+      "status": "succeeded",
+      "reservedAt": 1789476598.5940063,
+      "stage": "paid-trial",
+      "attempt": true,
+      "candidate": "dense-layout-supplement-v1",
+      "sampleId": "sol-p02",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "finishedAt": 1789476715.2062707
+    },
+    {
+      "ordinal": 3,
+      "status": "succeeded",
+      "reservedAt": 1789476725.1367147,
+      "stage": "paid-trial",
+      "attempt": true,
+      "candidate": "dense-layout-supplement-v1",
+      "sampleId": "sol-p28",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "finishedAt": 1789476809.742506
+    },
+    {
+      "ordinal": 4,
+      "status": "succeeded",
+      "reservedAt": 1789476819.1760008,
+      "stage": "paid-trial",
+      "attempt": true,
+      "candidate": "baseline",
+      "sampleId": "sol-p28",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "finishedAt": 1789476933.79794
+    },
+    {
+      "ordinal": 5,
+      "status": "succeeded",
+      "reservedAt": 1789476941.9503086,
+      "stage": "paid-trial",
+      "attempt": true,
+      "candidate": "baseline",
+      "sampleId": "astra-p17",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "finishedAt": 1789477048.3031788
+    },
+    {
+      "ordinal": 6,
+      "status": "succeeded",
+      "reservedAt": 1789477055.4429932,
+      "stage": "paid-trial",
+      "attempt": true,
+      "candidate": "dense-layout-supplement-v1",
+      "sampleId": "astra-p17",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "finishedAt": 1789477135.6752164
+    },
+    {
+      "ordinal": 7,
+      "status": "succeeded",
+      "reservedAt": 1789477140.1255345,
+      "stage": "paid-trial",
+      "attempt": true,
+      "candidate": "dense-layout-supplement-v1",
+      "sampleId": "astra-p25",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "finishedAt": 1789477229.0139723
+    },
+    {
+      "ordinal": 8,
+      "status": "succeeded",
+      "reservedAt": 1789477237.8417077,
+      "stage": "paid-trial",
+      "attempt": true,
+      "candidate": "baseline",
+      "sampleId": "astra-p25",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "finishedAt": 1789477335.0940757
+    },
+    {
+      "ordinal": 9,
+      "status": "succeeded",
+      "reservedAt": 1789477342.4869206,
+      "stage": "paid-trial",
+      "attempt": true,
+      "candidate": "baseline",
+      "sampleId": "sol-p06",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "finishedAt": 1789477416.1505246
+    },
+    {
+      "ordinal": 10,
+      "status": "succeeded",
+      "reservedAt": 1789477429.730499,
+      "stage": "paid-trial",
+      "attempt": true,
+      "candidate": "dense-layout-supplement-v1",
+      "sampleId": "sol-p06",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "finishedAt": 1789477512.4762375
+    },
+    {
+      "ordinal": 11,
+      "status": "succeeded",
+      "reservedAt": 1789477518.524866,
+      "stage": "paid-trial",
+      "attempt": true,
+      "candidate": "dense-layout-supplement-v1",
+      "sampleId": "astra-p19",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "finishedAt": 1789477604.4445395
+    },
+    {
+      "ordinal": 12,
+      "status": "succeeded",
+      "reservedAt": 1789477613.7520163,
+      "stage": "paid-trial",
+      "attempt": true,
+      "candidate": "baseline",
+      "sampleId": "astra-p19",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "finishedAt": 1789477714.265622
+    }
+  ],
+  "schemaVersion": "authored-prompt-call-ledger/v1",
+  "maxCalls": 12
+}

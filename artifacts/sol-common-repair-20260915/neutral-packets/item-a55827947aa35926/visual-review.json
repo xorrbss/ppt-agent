@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "item_id": "item-a55827947aa35926",
+  "method": "Direct inspection of own packet render, sourceContent and requiredImages; no private or automatic diagnostic files read",
+  "hash_verification": {
+    "html_sha256": "7c69fcc767c16ff17a35ee1234cb94d2b084d38c5f1a9c66d601587fce7a2f7f",
+    "png_sha256": "b49acbfc7ba481d66b0bdb52c458db4ced7371175105cc5c93b8a5cf87ffab72",
+    "matches_packet_after_sha256_prefix_normalization": true
+  },
+  "verdict": "visual_pass",
+  "readability_score": 2,
+  "style_score": 2,
+  "geometry": {
+    "pass": true,
+    "findings": [
+      "Five metric cards and bottom evidence band are contained, with no visible overlap, clipping, or off-canvas content."
+    ]
+  },
+  "readability": {
+    "pass": true,
+    "score": 2,
+    "findings": [
+      "Headings, metrics, numeric thresholds, and footer principle are clear and readable. Wrapped list items retain sufficient separation."
+    ]
+  },
+  "style": {
+    "verdict": "coherent",
+    "score": 2,
+    "observation": "Consistent teal hierarchy, aligned top markers, emphasized quality card, and contrasting footer."
+  },
+  "required_images": {
+    "candidate_count": 1,
+    "require_all": false,
+    "verdict": "visible_complete",
+    "visible_raster_images": true,
+    "observation": "Target icon is clearly visible at bottom left with complete outer ring, concentric bands, and center; no crop or overlapping text."
+  },
+  "criteria_basis": {
+    "location": "packet.json requiredImages.placementPlan.assignments[0].purpose and candidates[0].protected_regions[0]",
+    "summary": "Small target marker preserves all concentric rings and remains separate from metrics."
+  }
+}

@@ -1,0 +1,128 @@
+<!DOCTYPE html><html lang="ko"><head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:40px;top:20px;width:840px}
+.eyebrow{height:22px;font-size:16px;line-height:22px;font-weight:700;letter-spacing:0;color:#08916E}
+.title{margin-top:8px;max-width:840px;font-size:32px;line-height:42px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:880px;top:20px;width:360px;text-align:right}
+.requirements{font-size:14px;line-height:24px;font-weight:600;color:#1D1D1B}
+.header-note{margin-top:6px;font-size:16px;line-height:22px;color:#555555}
+.divider{position:absolute;left:40px;bottom:0;width:1200px;height:2px;background:#08916E}
+.body-wrap{width:1152px;height:564px;margin-left:64px}
+.claim-row{display:flex;align-items:center;justify-content:space-between;height:52px;margin-bottom:16px}
+.claim{font-size:24px;line-height:34px;font-weight:700;letter-spacing:-.02em;color:#00140E}
+.claim strong{color:#08916E}
+.scope-chip{display:flex;align-items:center;gap:10px;font-size:15px;line-height:22px;font-weight:700;color:#36544C}
+.scope-mark{width:10px;height:10px;border-radius:12px;background:#219F88}
+.main-grid{display:grid;grid-template-columns:704px 424px;gap:24px;height:496px}
+.screen-card{height:496px;padding:10px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;box-shadow:0 8px 20px rgba(0,20,14,.06)}
+.screen-frame{position:relative;width:682px;height:444px;display:flex;align-items:center;justify-content:center;background:#F9F9F9;border:1px solid #E2E8F0;border-radius:12px}
+.screen-frame img{display:block;width:680px;height:442px;object-fit:contain;border-radius:12px}
+.screen-label{display:flex;align-items:center;justify-content:space-between;height:30px;padding:4px 4px 0}
+.screen-caption{font-size:15px;line-height:22px;font-weight:700;color:#00140E}
+.evidence-note{font-size:13px;line-height:20px;color:#587068}
+.strategy-column{display:grid;grid-template-rows:42px 278px 152px;gap:12px;height:496px}
+.strategy-head{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #E2E8F0}
+.strategy-title{font-size:20px;line-height:28px;font-weight:700;color:#00140E}
+.strategy-kicker{font-family:"IBM Plex Mono","Consolas",monospace;font-size:13px;line-height:20px;font-weight:700;color:#08916E}
+.callout-list{display:grid;grid-template-rows:62px 62px 62px 62px;gap:10px}
+.callout{position:relative;display:grid;grid-template-columns:40px 1fr;align-items:center;padding:8px 14px 8px 12px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.connector{position:absolute;left:-24px;top:30px;width:24px;height:2px;background:#08916E}
+.node{position:absolute;left:-4px;top:26px;width:8px;height:8px;background:#08916E}
+.step-no{font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:20px;font-weight:700;color:#08916E}
+.callout-copy{font-size:17px;line-height:23px;font-weight:700;color:#00140E}
+.callout-copy span{font-size:14px;line-height:20px;font-weight:500;color:#587068}
+.decision-card{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:40px 1fr;background:#EAF7F4;border:1px solid #B8DED4;border-radius:12px}
+.decision-title{grid-column:1 / 3;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid #B8DED4;font-size:16px;line-height:22px;font-weight:700;color:#00140E}
+.decision-cell{padding:11px 14px}
+.decision-cell + .decision-cell{border-left:1px solid #B8DED4}
+.decision-label{font-size:14px;line-height:20px;font-weight:700;color:#08916E}
+.decision-copy{margin-top:4px;font-size:16px;line-height:23px;font-weight:600;color:#00140E}
+</style>
+</head>
+<body>
+  <div class="header-band" data-header-band="108" data-header-part="band" style="height:108px">
+    <div class="header-left">
+      <div class="eyebrow" data-header-part="eyebrow" data-qid="s16-eyebrow" data-semantic-role="supporting">통합플랫폼 고도화 전략</div>
+      <div class="title" data-header-part="title" data-qid="s16-title" data-semantic-role="title">통합 대시보드 구현전략</div>
+    </div>
+    <div class="header-right" data-header-part="right">
+      <div class="requirements" data-header-part="requirements" data-qid="s16-req" data-requirement-ids="SIR-001,SIR-007,MPR-002" data-semantic-role="supporting">요구사항 SIR-001 · SIR-007 · MPR-002</div>
+      <div class="header-note" data-qid="s16-note" data-semantic-role="supporting">UI/UX·목록·모니터링</div>
+    </div>
+    <div class="divider" data-header-part="divider" data-semantic-role="decoration"></div>
+  </div>
+
+  <div class="body-wrap" data-header-part="body" style="margin-top:16px">
+    <div class="claim-row">
+      <div class="claim" data-qid="s16-claim" data-semantic-role="body">사용자에게는 <strong>다음 행동</strong>을, 관리자에게는 운영 병목을 먼저 보여줍니다.</div>
+      <div class="scope-chip" data-qid="s16-scope" data-semantic-role="supporting"><span class="scope-mark" data-semantic-role="decoration"></span>화면 → 목록 → 동일 집계 기준</div>
+    </div>
+
+    <div class="main-grid">
+      <div class="screen-card" data-qid="s16-screen-card">
+        <div class="screen-frame">
+          <img alt="기업회원 통합 대시보드 전체 화면" data-qid="s16-source-image" data-semantic-role="image" data-source-slot-id="source-slot-78c3577e11f1428a8586">
+        </div>
+        <div class="screen-label">
+          <div class="screen-caption" data-qid="s16-screen-caption" data-semantic-role="supporting">기업회원 통합 현황관리 화면 예시</div>
+          <div class="evidence-note" data-qid="s16-evidence-note" data-semantic-role="supporting">전체 화면을 축소 없이 제시</div>
+        </div>
+      </div>
+
+      <div class="strategy-column">
+        <div class="strategy-head">
+          <div class="strategy-title" data-qid="s16-strategy-title" data-semantic-role="supporting">사용자 행동 중심 정보 흐름</div>
+          <div class="strategy-kicker" data-qid="s16-strategy-kicker" data-semantic-role="supporting">01—04</div>
+        </div>
+
+        <div class="callout-list">
+          <div class="callout" data-qid="s16-callout-1">
+            <div class="connector" data-semantic-role="decoration"></div>
+            <div class="node" data-semantic-role="decoration"></div>
+            <div class="step-no" data-semantic-role="supporting">01</div>
+            <div class="callout-copy" data-semantic-role="body">요약카드로 현재 상태 파악<br><span>참여사업·보완서류·평가·완료 현황</span></div>
+          </div>
+
+          <div class="callout" data-qid="s16-callout-2">
+            <div class="connector" data-semantic-role="decoration"></div>
+            <div class="node" data-semantic-role="decoration"></div>
+            <div class="step-no" data-semantic-role="supporting">02</div>
+            <div class="callout-copy" data-semantic-role="body">단계별 진행과 일정 추적<br><span>현재 단계와 평가·점검 일정을 연결</span></div>
+          </div>
+
+          <div class="callout" data-qid="s16-callout-3">
+            <div class="connector" data-semantic-role="decoration"></div>
+            <div class="node" data-semantic-role="decoration"></div>
+            <div class="step-no" data-semantic-role="supporting">03</div>
+            <div class="callout-copy" data-semantic-role="body">보완요청을 즉시 행동으로 전환<br><span>마감일·미처리 업무·제출 경로 우선</span></div>
+          </div>
+
+          <div class="callout" data-qid="s16-callout-4">
+            <div class="connector" data-semantic-role="decoration"></div>
+            <div class="node" data-semantic-role="decoration"></div>
+            <div class="step-no" data-semantic-role="supporting">04</div>
+            <div class="callout-copy" data-semantic-role="body">다른 사업과 최근 알림 통합<br><span>사업 전환 없이 후속 업무 확인</span></div>
+          </div>
+        </div>
+
+        <div class="decision-card" data-qid="s16-decision-card">
+          <div class="decision-title" data-semantic-role="supporting">구현 의사결정 — 화면별 역할과 데이터 원칙 분리</div>
+          <div class="decision-cell">
+            <div class="decision-label" data-semantic-role="supporting">관리자 대시보드 · 제안 범위</div>
+            <div class="decision-copy" data-semantic-role="body">접수·미배정·지연·보완·평가 미완료·오류 현황 제공</div>
+          </div>
+          <div class="decision-cell">
+            <div class="decision-label" data-semantic-role="supporting">드릴다운 · 공통 기준</div>
+            <div class="decision-copy" data-semantic-role="body">카드·차트와 상세 목록에 동일 필터·집계 기준 적용</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body></html>

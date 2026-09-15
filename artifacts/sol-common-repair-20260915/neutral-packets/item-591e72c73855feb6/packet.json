@@ -1,0 +1,141 @@
+{
+  "sourceContent": "## 통합 대시보드 구현전략\n- 우측 상단에는 ‘SIR-001·SIR-007·MPR-002 | UI/UX·목록·모니터링’을 표시하고, ‘02_통합_대시보드.png’를 사용자 중심 통합 현황관리의 대표 이미지로 배치한다.\n- 이미지에는 참여사업별 현재 단계, 미처리 업무, 서류 보완요청, 평가·점검 일정, 최근 알림과 핵심 통계를 표시하는 3~5개 콜아웃을 원본 화면을 가리지 않게 추가한다.\n- 사용자 대시보드는 개인에게 필요한 다음 행동과 마감일을 우선 제공하고, 관리자 대시보드는 접수·미배정·지연·보완·평가 미완료·오류 현황을 제공한다.\n- 카드와 차트의 수치는 상세 목록으로 드릴다운되며 동일한 필터와 집계 기준을 사용해 화면 간 수치 불일치를 방지한다.",
+  "requiredImages": {
+    "candidates": [
+      {
+        "asset_id": "3b978d95-43fe-597e-8467-5cce8a762e51",
+        "path": "C:\\project\\PPT-agent\\ppt-agent\\app_data\\source_images\\a714aea6-73d9-47cf-8f1e-6fef3bdd4ed0\\cdaf32956b4d5097483e5d970dcd58891f4456c7917bf76bdd64abdef16ff79b.png",
+        "mime_type": "image/png",
+        "width": 1440,
+        "height": 1036,
+        "digest": "cdaf32956b4d5097483e5d970dcd58891f4456c7917bf76bdd64abdef16ff79b",
+        "source_slide_index": null,
+        "source_heading": null,
+        "source_text": null,
+        "original_name": "02_통합_대시보드.png",
+        "ocr_text": null,
+        "semantic_description": "A Korean-language desktop screenshot of the KOSME ESG integrated-platform prototype, showing a corporate member’s “My Projects” dashboard. A top navigation bar and left sidebar surround a project-management workspace. Four summary cards report 3 ongoing projects, 2 documents needing supplementation, 1 scheduled evaluation, and 4 completed projects. The central carbon-neutral commercialization/demonstration project card shows its application identifier, a seven-stage progress tracker, a document-review supplementation status, and a next-action notice with a submission deadline and action button. Lower panels list two other ongoing projects and three recent notifications. A sidebar disclaimer identifies the screen as a proposal prototype based on public website and 2026 RFP analysis, without actual personal or project data. Its function is to consolidate application progress, required actions, evaluation schedules, and project notifications. Preserve the informative interface as a whole; small Korean labels, dates, identifiers, and status text require sufficient display size.",
+        "analysis_status": "analyzed",
+        "analysis_error": null,
+        "protected_regions": [
+          {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 1.0,
+            "height": 0.11,
+            "label": "Platform branding, main navigation, account links, and utility controls"
+          },
+          {
+            "x": 0.0,
+            "y": 0.11,
+            "width": 0.161,
+            "height": 0.761,
+            "label": "Member-role selector, full sidebar navigation, and prototype disclaimer"
+          },
+          {
+            "x": 0.184,
+            "y": 0.14,
+            "width": 0.793,
+            "height": 0.095,
+            "label": "Breadcrumb, My Projects heading and explanation, and new-project application button"
+          },
+          {
+            "x": 0.184,
+            "y": 0.257,
+            "width": 0.793,
+            "height": 0.13,
+            "label": "Four summary cards with project counts, document deadline, evaluation date, and completion information"
+          },
+          {
+            "x": 0.184,
+            "y": 0.407,
+            "width": 0.793,
+            "height": 0.225,
+            "label": "Featured project title and identifier, complete seven-stage tracker, supplementation notice, deadline, and action button"
+          },
+          {
+            "x": 0.184,
+            "y": 0.653,
+            "width": 0.391,
+            "height": 0.246,
+            "label": "Other ongoing projects panel with names, identifiers, current statuses, and next actions"
+          },
+          {
+            "x": 0.586,
+            "y": 0.653,
+            "width": 0.391,
+            "height": 0.246,
+            "label": "Recent notifications panel with timestamps, messages, and view-all control"
+          }
+        ]
+      }
+    ],
+    "requireAll": false,
+    "placementPlan": {
+      "assignments": [
+        {
+          "asset_id": "3b978d95-43fe-597e-8467-5cce8a762e51",
+          "slot_id": "source-slot-78c3577e11f1428a8586",
+          "group_id": "",
+          "purpose": "전체 화면을 크게 배치하고 요약카드·진행추적·보완 행동·다른 사업·알림을 외부 콜아웃으로 연결한다. 관리자 통계 기능은 이 기업회원 화면에서 입증된 것으로 표현하지 않는다.",
+          "allow_overlap": false,
+          "critical_regions": [
+            {
+              "x": 0.0,
+              "y": 0.0,
+              "width": 1.0,
+              "height": 0.11,
+              "label": "Platform branding, main navigation, account links, and utility controls"
+            },
+            {
+              "x": 0.0,
+              "y": 0.11,
+              "width": 0.161,
+              "height": 0.761,
+              "label": "Member-role selector, full sidebar navigation, and prototype disclaimer"
+            },
+            {
+              "x": 0.184,
+              "y": 0.14,
+              "width": 0.793,
+              "height": 0.095,
+              "label": "Breadcrumb, My Projects heading and explanation, and new-project application button"
+            },
+            {
+              "x": 0.184,
+              "y": 0.257,
+              "width": 0.793,
+              "height": 0.13,
+              "label": "Four summary cards with project counts, document deadline, evaluation date, and completion information"
+            },
+            {
+              "x": 0.184,
+              "y": 0.407,
+              "width": 0.793,
+              "height": 0.225,
+              "label": "Featured project title and identifier, complete seven-stage tracker, supplementation notice, deadline, and action button"
+            },
+            {
+              "x": 0.184,
+              "y": 0.653,
+              "width": 0.391,
+              "height": 0.246,
+              "label": "Other ongoing projects panel with names, identifiers, current statuses, and next actions"
+            },
+            {
+              "x": 0.586,
+              "y": 0.653,
+              "width": 0.391,
+              "height": 0.246,
+              "label": "Recent notifications panel with timestamps, messages, and view-all control"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "htmlPath": "slide.html",
+  "pngPath": "render.png",
+  "htmlSha256": "sha256:e48e4b4aebc629147c55ccc7a00e07cdcf969c06ce1d6d9fbfa8854120f66820",
+  "pngSha256": "sha256:942d1a59bbd1c283ce91c8a62dc428c37d38519e2ddbcd85cd48eea4e340e7f3"
+}

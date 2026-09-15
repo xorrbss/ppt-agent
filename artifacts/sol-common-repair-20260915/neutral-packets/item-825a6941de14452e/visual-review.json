@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "item_id": "item-825a6941de14452e",
+  "method": "Independent direct PNG inspection with this packet sourceContent and requiredImages; no automated diagnostics or other reviews read",
+  "hash_verification": {
+    "html_sha256": "e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f",
+    "png_sha256": "612c7168b8ec8c22b0dd7ee19d9183c7910868ebacfa64c3635a055e2cc02bc8",
+    "matches_packet_after_sha256_prefix_normalization": true
+  },
+  "verdict": "partial",
+  "geometry": {
+    "pass": false,
+    "findings": [
+      "In the approval flow, the developer label wraps to a final review line that extends below its pale inner panel ending around y=479. That line remains readable against the outer white card, with no sibling collision. This is a minor semantic-panel escape, not text occlusion."
+    ]
+  },
+  "readability": {
+    "pass": true,
+    "findings": [
+      "Visible text remains readable; no obscured text established."
+    ],
+    "score": 1
+  },
+  "required_images": {
+    "candidate_count": 0,
+    "require_all": false,
+    "verdict": "not_applicable",
+    "visible_raster_images": false
+  },
+  "style": {
+    "verdict": "coherent",
+    "observation": "Consistent teal and mint accents, dark green emphasis, white cards, and legible heading hierarchy.",
+    "score": 2
+  },
+  "content_visibility": {
+    "observation": "Visual legibility checked against supplied source. This review does not certify exact verbatim preservation."
+  },
+  "readability_score": 1,
+  "style_score": 2
+}

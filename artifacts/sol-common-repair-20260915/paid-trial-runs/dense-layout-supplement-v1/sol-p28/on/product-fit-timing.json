@@ -1,0 +1,4856 @@
+{
+  "fitRenderMs": 2995.1598,
+  "verifyRenderMs": 2779.2036,
+  "fitReport": {
+    "version": "authored-local-fit/v1.5",
+    "policy_id": "",
+    "policy_revision": "authored-local-fit/v1.5",
+    "requested": true,
+    "fit_state": "final",
+    "status": "spacing_adjusted",
+    "changed": true,
+    "partial": false,
+    "error": null,
+    "unresolved_reasons": [],
+    "operations": [
+      {
+        "kind": "parent_reflow",
+        "qid": "s27-approval-card",
+        "font_factor": 1,
+        "spacing_factor": 1,
+        "cost": 0.011972
+      }
+    ],
+    "edits": [
+      {
+        "qid": "s27-step-developer",
+        "declarations": "height:auto;flex-shrink:0"
+      }
+    ],
+    "baseline": {
+      "author_revision": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f",
+      "original_html_digest": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f",
+      "runs": [
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-eyebrow:0:0:4",
+          "owner_qid": "s27-eyebrow",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 4,
+          "ancestor_qids": [
+            "s27-eyebrow",
+            "q-div-76f0d626b7f0",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:309be5e1",
+          "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:79d3f3cb",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-title:0:0:12",
+          "owner_qid": "s27-title",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 12,
+          "ancestor_qids": [
+            "s27-title",
+            "q-div-76f0d626b7f0",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:9396f2bb",
+          "group_id": "q-div-75dcf98740c9|title|fnv1a32:241d4532",
+          "role": "title",
+          "original_pt": 25.5,
+          "font_px": 34,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-label:0:0:7",
+          "owner_qid": "s27-req-label",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 7,
+          "ancestor_qids": [
+            "s27-req-label",
+            "s27-requirements",
+            "q-div-73774be43d12",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:4b53330e",
+          "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:22b9f0dd",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-1:0:0:11",
+          "owner_qid": "s27-req-1",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 11,
+          "ancestor_qids": [
+            "s27-req-1",
+            "s27-requirements",
+            "q-div-73774be43d12",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:caa9a7fb",
+          "group_id": "s27-req-1|supporting|fnv1a32:cf89d3c8",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-2:0:0:7",
+          "owner_qid": "s27-req-2",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 7,
+          "ancestor_qids": [
+            "s27-req-2",
+            "s27-requirements",
+            "q-div-73774be43d12",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:6e578ccd",
+          "group_id": "s27-req-2|supporting|fnv1a32:cf89d3c8",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-more:0:0:2",
+          "owner_qid": "s27-req-more",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-req-more",
+            "s27-requirements",
+            "q-div-73774be43d12",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:15dc1648",
+          "group_id": "s27-req-more|supporting|fnv1a32:cf89d3c8",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-claim:0:0:21",
+          "owner_qid": "s27-claim",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 21,
+          "ancestor_qids": [
+            "s27-claim",
+            "q-div-75b3498fbbe1",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:58908b8e",
+          "group_id": "s27-claim|body|fnv1a32:68985f26",
+          "role": "body",
+          "original_pt": 18.75,
+          "font_px": 25,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:q-strong-663977331dde:0:0:9",
+          "owner_qid": "q-strong-663977331dde",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 9,
+          "ancestor_qids": [
+            "q-strong-663977331dde",
+            "s27-claim",
+            "q-div-75b3498fbbe1",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:948f8070",
+          "group_id": "q-strong-663977331dde|unknown|fnv1a32:f3504048",
+          "role": "unknown",
+          "original_pt": 18.75,
+          "font_px": 25,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-claim:1:0:8",
+          "owner_qid": "s27-claim",
+          "text_node_ordinal": 1,
+          "start_offset": 0,
+          "end_offset": 8,
+          "ancestor_qids": [
+            "s27-claim",
+            "q-div-75b3498fbbe1",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:0abad836",
+          "group_id": "s27-claim|body|fnv1a32:68985f26",
+          "role": "body",
+          "original_pt": 18.75,
+          "font_px": 25,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-claim-meta:0:0:11",
+          "owner_qid": "s27-claim-meta",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 11,
+          "ancestor_qids": [
+            "s27-claim-meta",
+            "q-div-75b3498fbbe1",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:44fdc8b2",
+          "group_id": "s27-claim-meta|supporting|fnv1a32:0d6ffc24",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-title:0:0:8",
+          "owner_qid": "s27-gate-title",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 8,
+          "ancestor_qids": [
+            "s27-gate-title",
+            "q-div-e25ca81e908c",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:55eacfb2",
+          "group_id": "s27-gate-card|supporting|fnv1a32:e7745f3c",
+          "role": "supporting",
+          "original_pt": 15,
+          "font_px": 20,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-note:0:0:17",
+          "owner_qid": "s27-gate-note",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 17,
+          "ancestor_qids": [
+            "s27-gate-note",
+            "q-div-e25ca81e908c",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:935a5838",
+          "group_id": "s27-gate-card|supporting|fnv1a32:0d6ffc24",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num1:0:0:2",
+          "owner_qid": "s27-gate-num1",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-gate-num1",
+            "s27-gate-build",
+            "q-div-848b08a8d873",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:20ed70ba",
+          "group_id": "s27-gate-build|supporting|fnv1a32:aa886333",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name1:0:0:2",
+          "owner_qid": "s27-gate-name1",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-gate-name1",
+            "s27-gate-build",
+            "q-div-848b08a8d873",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:c57cc755",
+          "group_id": "s27-gate-build|body|fnv1a32:e4a5932c",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num2:0:0:2",
+          "owner_qid": "s27-gate-num2",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-gate-num2",
+            "s27-gate-static",
+            "q-div-848b08a8d873",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:1fed6f27",
+          "group_id": "s27-gate-static|supporting|fnv1a32:aa886333",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name2:0:0:4",
+          "owner_qid": "s27-gate-name2",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 4,
+          "ancestor_qids": [
+            "s27-gate-name2",
+            "s27-gate-static",
+            "q-div-848b08a8d873",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:78833728",
+          "group_id": "s27-gate-static|body|fnv1a32:e4a5932c",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num3:0:0:2",
+          "owner_qid": "s27-gate-num3",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-gate-num3",
+            "s27-gate-unit",
+            "q-div-848b08a8d873",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:1eed6d94",
+          "group_id": "s27-gate-unit|supporting|fnv1a32:aa886333",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name3:0:0:2",
+          "owner_qid": "s27-gate-name3",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-gate-name3",
+            "s27-gate-unit",
+            "q-div-848b08a8d873",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:6bcb1829",
+          "group_id": "s27-gate-unit|body|fnv1a32:e4a5932c",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num4:0:0:2",
+          "owner_qid": "s27-gate-num4",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-gate-num4",
+            "s27-gate-integration",
+            "q-div-848b08a8d873",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:1ded6c01",
+          "group_id": "s27-gate-integration|supporting|fnv1a32:aa886333",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name4:0:0:2",
+          "owner_qid": "s27-gate-name4",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-gate-name4",
+            "s27-gate-integration",
+            "q-div-848b08a8d873",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:932f6cbb",
+          "group_id": "s27-gate-integration|body|fnv1a32:e4a5932c",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num5:0:0:2",
+          "owner_qid": "s27-gate-num5",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-gate-num5",
+            "s27-gate-security",
+            "q-div-848b08a8d873",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:1ced6a6e",
+          "group_id": "s27-gate-security|supporting|fnv1a32:aa886333",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name5:0:0:2",
+          "owner_qid": "s27-gate-name5",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-gate-name5",
+            "s27-gate-security",
+            "q-div-848b08a8d873",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:2d2a0771",
+          "group_id": "s27-gate-security|body|fnv1a32:e4a5932c",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num6:0:0:2",
+          "owner_qid": "s27-gate-num6",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-gate-num6",
+            "s27-gate-performance",
+            "q-div-848b08a8d873",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:1bed68db",
+          "group_id": "s27-gate-performance|supporting|fnv1a32:aa886333",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name6:0:0:2",
+          "owner_qid": "s27-gate-name6",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-gate-name6",
+            "s27-gate-performance",
+            "q-div-848b08a8d873",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:08bd353b",
+          "group_id": "s27-gate-performance|body|fnv1a32:e4a5932c",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num7:0:0:2",
+          "owner_qid": "s27-gate-num7",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-gate-num7",
+            "s27-gate-accessibility",
+            "q-div-848b08a8d873",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:1aed6748",
+          "group_id": "s27-gate-accessibility|supporting|fnv1a32:aa886333",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name7:0:0:3",
+          "owner_qid": "s27-gate-name7",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 3,
+          "ancestor_qids": [
+            "s27-gate-name7",
+            "s27-gate-accessibility",
+            "q-div-848b08a8d873",
+            "s27-gate-card",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:52012d63",
+          "group_id": "s27-gate-accessibility|body|fnv1a32:e4a5932c",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-exception-kicker:0:0:8",
+          "owner_qid": "s27-exception-kicker",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 8,
+          "ancestor_qids": [
+            "s27-exception-kicker",
+            "s27-exception-card",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:807788df",
+          "group_id": "s27-exception-card|supporting|fnv1a32:79d3f3cb",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-exception-title:0:0:29",
+          "owner_qid": "s27-exception-title",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 29,
+          "ancestor_qids": [
+            "s27-exception-title",
+            "s27-exception-card",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:75b9ab69",
+          "group_id": "s27-exception-card|body|fnv1a32:e93f0698",
+          "role": "body",
+          "original_pt": 16.5,
+          "font_px": 22,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-state-fail:0:0:8",
+          "owner_qid": "s27-state-fail",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 8,
+          "ancestor_qids": [
+            "s27-state-fail",
+            "q-div-2919d6547713",
+            "s27-exception-card",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:398815c2",
+          "group_id": "s27-state-fail|body|fnv1a32:79541966",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-state-rework:0:0:9",
+          "owner_qid": "s27-state-rework",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 9,
+          "ancestor_qids": [
+            "s27-state-rework",
+            "q-div-2919d6547713",
+            "s27-exception-card",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:75c40636",
+          "group_id": "s27-state-rework|body|fnv1a32:79541966",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-reason:0:0:2",
+          "owner_qid": "s27-field-reason",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-field-reason",
+            "q-div-f2d04ca04bcd",
+            "s27-exception-card",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:eb253971",
+          "group_id": "s27-field-reason|supporting|fnv1a32:4c82f805",
+          "role": "supporting",
+          "original_pt": 10.5,
+          "font_px": 14,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-impact:0:0:2",
+          "owner_qid": "s27-field-impact",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-field-impact",
+            "q-div-f2d04ca04bcd",
+            "s27-exception-card",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:e528208b",
+          "group_id": "s27-field-impact|supporting|fnv1a32:4c82f805",
+          "role": "supporting",
+          "original_pt": 10.5,
+          "font_px": 14,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-approver:0:0:3",
+          "owner_qid": "s27-field-approver",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 3,
+          "ancestor_qids": [
+            "s27-field-approver",
+            "q-div-f2d04ca04bcd",
+            "s27-exception-card",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:4cd642dc",
+          "group_id": "s27-field-approver|supporting|fnv1a32:4c82f805",
+          "role": "supporting",
+          "original_pt": 10.5,
+          "font_px": 14,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-action:0:0:4",
+          "owner_qid": "s27-field-action",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 4,
+          "ancestor_qids": [
+            "s27-field-action",
+            "q-div-f2d04ca04bcd",
+            "s27-exception-card",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:abd4a2b5",
+          "group_id": "s27-field-action|supporting|fnv1a32:4c82f805",
+          "role": "supporting",
+          "original_pt": 10.5,
+          "font_px": 14,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-expiry:0:0:21",
+          "owner_qid": "s27-field-expiry",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 21,
+          "ancestor_qids": [
+            "s27-field-expiry",
+            "q-div-f2d04ca04bcd",
+            "s27-exception-card",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:67f16ef4",
+          "group_id": "s27-field-expiry|body|fnv1a32:4c82f805",
+          "role": "body",
+          "original_pt": 10.5,
+          "font_px": 14,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-approval-title:0:0:12",
+          "owner_qid": "s27-approval-title",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 12,
+          "ancestor_qids": [
+            "s27-approval-title",
+            "q-div-22dee743943e",
+            "s27-approval-card",
+            "q-div-785cae1d733a",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:0060e688",
+          "group_id": "s27-approval-card|supporting|fnv1a32:e7745f3c",
+          "role": "supporting",
+          "original_pt": 15,
+          "font_px": 20,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-approval-badge:0:0:11",
+          "owner_qid": "s27-approval-badge",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 11,
+          "ancestor_qids": [
+            "s27-approval-badge",
+            "q-div-22dee743943e",
+            "s27-approval-card",
+            "q-div-785cae1d733a",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:fbfd97c3",
+          "group_id": "s27-approval-badge|supporting|fnv1a32:8bdcf537",
+          "role": "supporting",
+          "original_pt": 10.5,
+          "font_px": 14,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-owner-devax:0:0:5",
+          "owner_qid": "s27-owner-devax",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s27-owner-devax",
+            "s27-step-devax",
+            "q-div-21986879c9cf",
+            "s27-approval-card",
+            "q-div-785cae1d733a",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:db84c06d",
+          "group_id": "s27-step-devax|supporting|fnv1a32:4ff04dc9",
+          "role": "supporting",
+          "original_pt": 10.5,
+          "font_px": 14,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-action-devax:0:0:5",
+          "owner_qid": "s27-action-devax",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s27-action-devax",
+            "s27-step-devax",
+            "q-div-21986879c9cf",
+            "s27-approval-card",
+            "q-div-785cae1d733a",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:874747d6",
+          "group_id": "s27-step-devax|body|fnv1a32:9cfc0d1c",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-owner-developer:0:0:3",
+          "owner_qid": "s27-owner-developer",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 3,
+          "ancestor_qids": [
+            "s27-owner-developer",
+            "s27-step-developer",
+            "q-div-21986879c9cf",
+            "s27-approval-card",
+            "q-div-785cae1d733a",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:35a8060f",
+          "group_id": "s27-step-developer|supporting|fnv1a32:4ff04dc9",
+          "role": "supporting",
+          "original_pt": 10.5,
+          "font_px": 14,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-action-developer:0:0:15",
+          "owner_qid": "s27-action-developer",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 15,
+          "ancestor_qids": [
+            "s27-action-developer",
+            "s27-step-developer",
+            "q-div-21986879c9cf",
+            "s27-approval-card",
+            "q-div-785cae1d733a",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:10b44745",
+          "group_id": "s27-step-developer|body|fnv1a32:9cfc0d1c",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-owner-quality:0:0:5",
+          "owner_qid": "s27-owner-quality",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s27-owner-quality",
+            "s27-step-quality",
+            "q-div-21986879c9cf",
+            "s27-approval-card",
+            "q-div-785cae1d733a",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:26fa3ca2",
+          "group_id": "s27-step-quality|supporting|fnv1a32:4ff04dc9",
+          "role": "supporting",
+          "original_pt": 10.5,
+          "font_px": 14,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-action-quality:0:0:14",
+          "owner_qid": "s27-action-quality",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 14,
+          "ancestor_qids": [
+            "s27-action-quality",
+            "s27-step-quality",
+            "q-div-21986879c9cf",
+            "s27-approval-card",
+            "q-div-785cae1d733a",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:2c7ceecc",
+          "group_id": "s27-step-quality|body|fnv1a32:9cfc0d1c",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-evidence-title:0:0:12",
+          "owner_qid": "s27-evidence-title",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 12,
+          "ancestor_qids": [
+            "s27-evidence-title",
+            "q-div-be409439d65d",
+            "s27-evidence-card",
+            "q-div-785cae1d733a",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:3b691f45",
+          "group_id": "s27-evidence-card|supporting|fnv1a32:e7745f3c",
+          "role": "supporting",
+          "original_pt": 15,
+          "font_px": 20,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-evidence-badge:0:0:14",
+          "owner_qid": "s27-evidence-badge",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 14,
+          "ancestor_qids": [
+            "s27-evidence-badge",
+            "q-div-be409439d65d",
+            "s27-evidence-card",
+            "q-div-785cae1d733a",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:98d15956",
+          "group_id": "s27-evidence-badge|supporting|fnv1a32:8bdcf537",
+          "role": "supporting",
+          "original_pt": 10.5,
+          "font_px": 14,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-link-requirement:0:0:4",
+          "owner_qid": "s27-link-requirement",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 4,
+          "ancestor_qids": [
+            "s27-link-requirement",
+            "q-div-5ee5b7b472b2",
+            "q-div-472193667a77",
+            "s27-evidence-card",
+            "q-div-785cae1d733a",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:8b07c46a",
+          "group_id": "s27-link-requirement|body|fnv1a32:970b3c9e",
+          "role": "body",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-link-change:0:0:2",
+          "owner_qid": "s27-link-change",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s27-link-change",
+            "q-div-5ee5b7b472b2",
+            "q-div-472193667a77",
+            "s27-evidence-card",
+            "q-div-785cae1d733a",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:de4cfc46",
+          "group_id": "s27-link-change|body|fnv1a32:970b3c9e",
+          "role": "body",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-link-release:0:0:5",
+          "owner_qid": "s27-link-release",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s27-link-release",
+            "q-div-5ee5b7b472b2",
+            "q-div-472193667a77",
+            "s27-evidence-card",
+            "q-div-785cae1d733a",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:701f22eb",
+          "group_id": "s27-link-release|body|fnv1a32:970b3c9e",
+          "role": "body",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-reuse-copy:0:0:40",
+          "owner_qid": "s27-reuse-copy",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 40,
+          "ancestor_qids": [
+            "s27-reuse-copy",
+            "q-div-472193667a77",
+            "s27-evidence-card",
+            "q-div-785cae1d733a",
+            "q-div-91292a76f13a",
+            "q-div-948c49f110fb",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:98aa51f7",
+          "group_id": "s27-reuse-copy|body|fnv1a32:334da9f1",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:79d3f3cb",
+          "role": "supporting",
+          "card_qid": "q-div-75dcf98740c9",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-eyebrow:0:0:4"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "q-div-75dcf98740c9|title|fnv1a32:241d4532",
+          "role": "title",
+          "card_qid": "q-div-75dcf98740c9",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-title:0:0:12"
+          ],
+          "original_pt": 25.5
+        },
+        {
+          "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:22b9f0dd",
+          "role": "supporting",
+          "card_qid": "q-div-75dcf98740c9",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-label:0:0:7"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s27-req-1|supporting|fnv1a32:cf89d3c8",
+          "role": "supporting",
+          "card_qid": "s27-req-1",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-1:0:0:11"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s27-req-2|supporting|fnv1a32:cf89d3c8",
+          "role": "supporting",
+          "card_qid": "s27-req-2",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-2:0:0:7"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s27-req-more|supporting|fnv1a32:cf89d3c8",
+          "role": "supporting",
+          "card_qid": "s27-req-more",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-more:0:0:2"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s27-claim|body|fnv1a32:68985f26",
+          "role": "body",
+          "card_qid": null,
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-claim:0:0:21",
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-claim:1:0:8"
+          ],
+          "original_pt": 18.75
+        },
+        {
+          "group_id": "q-strong-663977331dde|unknown|fnv1a32:f3504048",
+          "role": "unknown",
+          "card_qid": null,
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:q-strong-663977331dde:0:0:9"
+          ],
+          "original_pt": 18.75
+        },
+        {
+          "group_id": "s27-claim-meta|supporting|fnv1a32:0d6ffc24",
+          "role": "supporting",
+          "card_qid": null,
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-claim-meta:0:0:11"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "s27-gate-card|supporting|fnv1a32:e7745f3c",
+          "role": "supporting",
+          "card_qid": "s27-gate-card",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-title:0:0:8"
+          ],
+          "original_pt": 15
+        },
+        {
+          "group_id": "s27-gate-card|supporting|fnv1a32:0d6ffc24",
+          "role": "supporting",
+          "card_qid": "s27-gate-card",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-note:0:0:17"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "s27-gate-build|supporting|fnv1a32:aa886333",
+          "role": "supporting",
+          "card_qid": "s27-gate-build",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num1:0:0:2"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s27-gate-build|body|fnv1a32:e4a5932c",
+          "role": "body",
+          "card_qid": "s27-gate-build",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name1:0:0:2"
+          ],
+          "original_pt": 13.5
+        },
+        {
+          "group_id": "s27-gate-static|supporting|fnv1a32:aa886333",
+          "role": "supporting",
+          "card_qid": "s27-gate-static",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num2:0:0:2"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s27-gate-static|body|fnv1a32:e4a5932c",
+          "role": "body",
+          "card_qid": "s27-gate-static",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name2:0:0:4"
+          ],
+          "original_pt": 13.5
+        },
+        {
+          "group_id": "s27-gate-unit|supporting|fnv1a32:aa886333",
+          "role": "supporting",
+          "card_qid": "s27-gate-unit",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num3:0:0:2"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s27-gate-unit|body|fnv1a32:e4a5932c",
+          "role": "body",
+          "card_qid": "s27-gate-unit",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name3:0:0:2"
+          ],
+          "original_pt": 13.5
+        },
+        {
+          "group_id": "s27-gate-integration|supporting|fnv1a32:aa886333",
+          "role": "supporting",
+          "card_qid": "s27-gate-integration",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num4:0:0:2"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s27-gate-integration|body|fnv1a32:e4a5932c",
+          "role": "body",
+          "card_qid": "s27-gate-integration",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name4:0:0:2"
+          ],
+          "original_pt": 13.5
+        },
+        {
+          "group_id": "s27-gate-security|supporting|fnv1a32:aa886333",
+          "role": "supporting",
+          "card_qid": "s27-gate-security",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num5:0:0:2"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s27-gate-security|body|fnv1a32:e4a5932c",
+          "role": "body",
+          "card_qid": "s27-gate-security",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name5:0:0:2"
+          ],
+          "original_pt": 13.5
+        },
+        {
+          "group_id": "s27-gate-performance|supporting|fnv1a32:aa886333",
+          "role": "supporting",
+          "card_qid": "s27-gate-performance",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num6:0:0:2"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s27-gate-performance|body|fnv1a32:e4a5932c",
+          "role": "body",
+          "card_qid": "s27-gate-performance",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name6:0:0:2"
+          ],
+          "original_pt": 13.5
+        },
+        {
+          "group_id": "s27-gate-accessibility|supporting|fnv1a32:aa886333",
+          "role": "supporting",
+          "card_qid": "s27-gate-accessibility",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num7:0:0:2"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s27-gate-accessibility|body|fnv1a32:e4a5932c",
+          "role": "body",
+          "card_qid": "s27-gate-accessibility",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name7:0:0:3"
+          ],
+          "original_pt": 13.5
+        },
+        {
+          "group_id": "s27-exception-card|supporting|fnv1a32:79d3f3cb",
+          "role": "supporting",
+          "card_qid": "s27-exception-card",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-exception-kicker:0:0:8"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "s27-exception-card|body|fnv1a32:e93f0698",
+          "role": "body",
+          "card_qid": "s27-exception-card",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-exception-title:0:0:29"
+          ],
+          "original_pt": 16.5
+        },
+        {
+          "group_id": "s27-state-fail|body|fnv1a32:79541966",
+          "role": "body",
+          "card_qid": "s27-state-fail",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-state-fail:0:0:8"
+          ],
+          "original_pt": 13.5
+        },
+        {
+          "group_id": "s27-state-rework|body|fnv1a32:79541966",
+          "role": "body",
+          "card_qid": "s27-state-rework",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-state-rework:0:0:9"
+          ],
+          "original_pt": 13.5
+        },
+        {
+          "group_id": "s27-field-reason|supporting|fnv1a32:4c82f805",
+          "role": "supporting",
+          "card_qid": "s27-field-reason",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-reason:0:0:2"
+          ],
+          "original_pt": 10.5
+        },
+        {
+          "group_id": "s27-field-impact|supporting|fnv1a32:4c82f805",
+          "role": "supporting",
+          "card_qid": "s27-field-impact",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-impact:0:0:2"
+          ],
+          "original_pt": 10.5
+        },
+        {
+          "group_id": "s27-field-approver|supporting|fnv1a32:4c82f805",
+          "role": "supporting",
+          "card_qid": "s27-field-approver",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-approver:0:0:3"
+          ],
+          "original_pt": 10.5
+        },
+        {
+          "group_id": "s27-field-action|supporting|fnv1a32:4c82f805",
+          "role": "supporting",
+          "card_qid": "s27-field-action",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-action:0:0:4"
+          ],
+          "original_pt": 10.5
+        },
+        {
+          "group_id": "s27-field-expiry|body|fnv1a32:4c82f805",
+          "role": "body",
+          "card_qid": "s27-field-expiry",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-expiry:0:0:21"
+          ],
+          "original_pt": 10.5
+        },
+        {
+          "group_id": "s27-approval-card|supporting|fnv1a32:e7745f3c",
+          "role": "supporting",
+          "card_qid": "s27-approval-card",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-approval-title:0:0:12"
+          ],
+          "original_pt": 15
+        },
+        {
+          "group_id": "s27-approval-badge|supporting|fnv1a32:8bdcf537",
+          "role": "supporting",
+          "card_qid": "s27-approval-badge",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-approval-badge:0:0:11"
+          ],
+          "original_pt": 10.5
+        },
+        {
+          "group_id": "s27-step-devax|supporting|fnv1a32:4ff04dc9",
+          "role": "supporting",
+          "card_qid": "s27-step-devax",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-owner-devax:0:0:5"
+          ],
+          "original_pt": 10.5
+        },
+        {
+          "group_id": "s27-step-devax|body|fnv1a32:9cfc0d1c",
+          "role": "body",
+          "card_qid": "s27-step-devax",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-action-devax:0:0:5"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s27-step-developer|supporting|fnv1a32:4ff04dc9",
+          "role": "supporting",
+          "card_qid": "s27-step-developer",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-owner-developer:0:0:3"
+          ],
+          "original_pt": 10.5
+        },
+        {
+          "group_id": "s27-step-developer|body|fnv1a32:9cfc0d1c",
+          "role": "body",
+          "card_qid": "s27-step-developer",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-action-developer:0:0:15"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s27-step-quality|supporting|fnv1a32:4ff04dc9",
+          "role": "supporting",
+          "card_qid": "s27-step-quality",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-owner-quality:0:0:5"
+          ],
+          "original_pt": 10.5
+        },
+        {
+          "group_id": "s27-step-quality|body|fnv1a32:9cfc0d1c",
+          "role": "body",
+          "card_qid": "s27-step-quality",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-action-quality:0:0:14"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s27-evidence-card|supporting|fnv1a32:e7745f3c",
+          "role": "supporting",
+          "card_qid": "s27-evidence-card",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-evidence-title:0:0:12"
+          ],
+          "original_pt": 15
+        },
+        {
+          "group_id": "s27-evidence-badge|supporting|fnv1a32:8bdcf537",
+          "role": "supporting",
+          "card_qid": "s27-evidence-badge",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-evidence-badge:0:0:14"
+          ],
+          "original_pt": 10.5
+        },
+        {
+          "group_id": "s27-link-requirement|body|fnv1a32:970b3c9e",
+          "role": "body",
+          "card_qid": "s27-link-requirement",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-link-requirement:0:0:4"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "s27-link-change|body|fnv1a32:970b3c9e",
+          "role": "body",
+          "card_qid": "s27-link-change",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-link-change:0:0:2"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "s27-link-release|body|fnv1a32:970b3c9e",
+          "role": "body",
+          "card_qid": "s27-link-release",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-link-release:0:0:5"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "s27-reuse-copy|body|fnv1a32:334da9f1",
+          "role": "body",
+          "card_qid": "s27-reuse-copy",
+          "run_ids": [
+            "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-reuse-copy:0:0:40"
+          ],
+          "original_pt": 12
+        }
+      ],
+      "unowned_text_count": 0,
+      "generated_text_count": 0,
+      "measurement_identity": "fnv1a32:af791113",
+      "complete": true
+    },
+    "runs": [
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-eyebrow:0:0:4",
+        "owner_qid": "s27-eyebrow",
+        "content_digest": "fnv1a32:309be5e1",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 4,
+        "ancestor_qids": [
+          "s27-eyebrow",
+          "q-div-76f0d626b7f0",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:79d3f3cb",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-title:0:0:12",
+        "owner_qid": "s27-title",
+        "content_digest": "fnv1a32:9396f2bb",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 12,
+        "ancestor_qids": [
+          "s27-title",
+          "q-div-76f0d626b7f0",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "q-div-75dcf98740c9|title|fnv1a32:241d4532",
+        "role": "title",
+        "original_pt": 25.5,
+        "final_pt": 25.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 22.95,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-label:0:0:7",
+        "owner_qid": "s27-req-label",
+        "content_digest": "fnv1a32:4b53330e",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 7,
+        "ancestor_qids": [
+          "s27-req-label",
+          "s27-requirements",
+          "q-div-73774be43d12",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:22b9f0dd",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-1:0:0:11",
+        "owner_qid": "s27-req-1",
+        "content_digest": "fnv1a32:caa9a7fb",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 11,
+        "ancestor_qids": [
+          "s27-req-1",
+          "s27-requirements",
+          "q-div-73774be43d12",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "s27-req-1|supporting|fnv1a32:cf89d3c8",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-2:0:0:7",
+        "owner_qid": "s27-req-2",
+        "content_digest": "fnv1a32:6e578ccd",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 7,
+        "ancestor_qids": [
+          "s27-req-2",
+          "s27-requirements",
+          "q-div-73774be43d12",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "s27-req-2|supporting|fnv1a32:cf89d3c8",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-more:0:0:2",
+        "owner_qid": "s27-req-more",
+        "content_digest": "fnv1a32:15dc1648",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-req-more",
+          "s27-requirements",
+          "q-div-73774be43d12",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "s27-req-more|supporting|fnv1a32:cf89d3c8",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-claim:0:0:21",
+        "owner_qid": "s27-claim",
+        "content_digest": "fnv1a32:58908b8e",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 21,
+        "ancestor_qids": [
+          "s27-claim",
+          "q-div-75b3498fbbe1",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-claim|body|fnv1a32:68985f26",
+        "role": "body",
+        "original_pt": 18.75,
+        "final_pt": 18.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 16.875,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:q-strong-663977331dde:0:0:9",
+        "owner_qid": "q-strong-663977331dde",
+        "content_digest": "fnv1a32:948f8070",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 9,
+        "ancestor_qids": [
+          "q-strong-663977331dde",
+          "s27-claim",
+          "q-div-75b3498fbbe1",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-strong-663977331dde|unknown|fnv1a32:f3504048",
+        "role": "unknown",
+        "original_pt": 18.75,
+        "final_pt": 18.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 16.875,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-claim:1:0:8",
+        "owner_qid": "s27-claim",
+        "content_digest": "fnv1a32:0abad836",
+        "text_node_ordinal": 1,
+        "start_offset": 0,
+        "end_offset": 8,
+        "ancestor_qids": [
+          "s27-claim",
+          "q-div-75b3498fbbe1",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-claim|body|fnv1a32:68985f26",
+        "role": "body",
+        "original_pt": 18.75,
+        "final_pt": 18.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 16.875,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-claim-meta:0:0:11",
+        "owner_qid": "s27-claim-meta",
+        "content_digest": "fnv1a32:44fdc8b2",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 11,
+        "ancestor_qids": [
+          "s27-claim-meta",
+          "q-div-75b3498fbbe1",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-claim-meta|supporting|fnv1a32:0d6ffc24",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-title:0:0:8",
+        "owner_qid": "s27-gate-title",
+        "content_digest": "fnv1a32:55eacfb2",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 8,
+        "ancestor_qids": [
+          "s27-gate-title",
+          "q-div-e25ca81e908c",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-card|supporting|fnv1a32:e7745f3c",
+        "role": "supporting",
+        "original_pt": 15,
+        "final_pt": 15,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 13.5,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-note:0:0:17",
+        "owner_qid": "s27-gate-note",
+        "content_digest": "fnv1a32:935a5838",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 17,
+        "ancestor_qids": [
+          "s27-gate-note",
+          "q-div-e25ca81e908c",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-card|supporting|fnv1a32:0d6ffc24",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num1:0:0:2",
+        "owner_qid": "s27-gate-num1",
+        "content_digest": "fnv1a32:20ed70ba",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-gate-num1",
+          "s27-gate-build",
+          "q-div-848b08a8d873",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-build|supporting|fnv1a32:aa886333",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name1:0:0:2",
+        "owner_qid": "s27-gate-name1",
+        "content_digest": "fnv1a32:c57cc755",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-gate-name1",
+          "s27-gate-build",
+          "q-div-848b08a8d873",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-build|body|fnv1a32:e4a5932c",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num2:0:0:2",
+        "owner_qid": "s27-gate-num2",
+        "content_digest": "fnv1a32:1fed6f27",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-gate-num2",
+          "s27-gate-static",
+          "q-div-848b08a8d873",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-static|supporting|fnv1a32:aa886333",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name2:0:0:4",
+        "owner_qid": "s27-gate-name2",
+        "content_digest": "fnv1a32:78833728",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 4,
+        "ancestor_qids": [
+          "s27-gate-name2",
+          "s27-gate-static",
+          "q-div-848b08a8d873",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-static|body|fnv1a32:e4a5932c",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num3:0:0:2",
+        "owner_qid": "s27-gate-num3",
+        "content_digest": "fnv1a32:1eed6d94",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-gate-num3",
+          "s27-gate-unit",
+          "q-div-848b08a8d873",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-unit|supporting|fnv1a32:aa886333",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name3:0:0:2",
+        "owner_qid": "s27-gate-name3",
+        "content_digest": "fnv1a32:6bcb1829",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-gate-name3",
+          "s27-gate-unit",
+          "q-div-848b08a8d873",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-unit|body|fnv1a32:e4a5932c",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num4:0:0:2",
+        "owner_qid": "s27-gate-num4",
+        "content_digest": "fnv1a32:1ded6c01",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-gate-num4",
+          "s27-gate-integration",
+          "q-div-848b08a8d873",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-integration|supporting|fnv1a32:aa886333",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name4:0:0:2",
+        "owner_qid": "s27-gate-name4",
+        "content_digest": "fnv1a32:932f6cbb",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-gate-name4",
+          "s27-gate-integration",
+          "q-div-848b08a8d873",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-integration|body|fnv1a32:e4a5932c",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num5:0:0:2",
+        "owner_qid": "s27-gate-num5",
+        "content_digest": "fnv1a32:1ced6a6e",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-gate-num5",
+          "s27-gate-security",
+          "q-div-848b08a8d873",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-security|supporting|fnv1a32:aa886333",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name5:0:0:2",
+        "owner_qid": "s27-gate-name5",
+        "content_digest": "fnv1a32:2d2a0771",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-gate-name5",
+          "s27-gate-security",
+          "q-div-848b08a8d873",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-security|body|fnv1a32:e4a5932c",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num6:0:0:2",
+        "owner_qid": "s27-gate-num6",
+        "content_digest": "fnv1a32:1bed68db",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-gate-num6",
+          "s27-gate-performance",
+          "q-div-848b08a8d873",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-performance|supporting|fnv1a32:aa886333",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name6:0:0:2",
+        "owner_qid": "s27-gate-name6",
+        "content_digest": "fnv1a32:08bd353b",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-gate-name6",
+          "s27-gate-performance",
+          "q-div-848b08a8d873",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-performance|body|fnv1a32:e4a5932c",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num7:0:0:2",
+        "owner_qid": "s27-gate-num7",
+        "content_digest": "fnv1a32:1aed6748",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-gate-num7",
+          "s27-gate-accessibility",
+          "q-div-848b08a8d873",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-accessibility|supporting|fnv1a32:aa886333",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name7:0:0:3",
+        "owner_qid": "s27-gate-name7",
+        "content_digest": "fnv1a32:52012d63",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 3,
+        "ancestor_qids": [
+          "s27-gate-name7",
+          "s27-gate-accessibility",
+          "q-div-848b08a8d873",
+          "s27-gate-card",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-gate-accessibility|body|fnv1a32:e4a5932c",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-exception-kicker:0:0:8",
+        "owner_qid": "s27-exception-kicker",
+        "content_digest": "fnv1a32:807788df",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 8,
+        "ancestor_qids": [
+          "s27-exception-kicker",
+          "s27-exception-card",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-exception-card|supporting|fnv1a32:79d3f3cb",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-exception-title:0:0:29",
+        "owner_qid": "s27-exception-title",
+        "content_digest": "fnv1a32:75b9ab69",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 29,
+        "ancestor_qids": [
+          "s27-exception-title",
+          "s27-exception-card",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-exception-card|body|fnv1a32:e93f0698",
+        "role": "body",
+        "original_pt": 16.5,
+        "final_pt": 16.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 14.85,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-state-fail:0:0:8",
+        "owner_qid": "s27-state-fail",
+        "content_digest": "fnv1a32:398815c2",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 8,
+        "ancestor_qids": [
+          "s27-state-fail",
+          "q-div-2919d6547713",
+          "s27-exception-card",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-state-fail|body|fnv1a32:79541966",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-state-rework:0:0:9",
+        "owner_qid": "s27-state-rework",
+        "content_digest": "fnv1a32:75c40636",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 9,
+        "ancestor_qids": [
+          "s27-state-rework",
+          "q-div-2919d6547713",
+          "s27-exception-card",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-state-rework|body|fnv1a32:79541966",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-reason:0:0:2",
+        "owner_qid": "s27-field-reason",
+        "content_digest": "fnv1a32:eb253971",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-field-reason",
+          "q-div-f2d04ca04bcd",
+          "s27-exception-card",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-field-reason|supporting|fnv1a32:4c82f805",
+        "role": "supporting",
+        "original_pt": 10.5,
+        "final_pt": 10.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9.450000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-impact:0:0:2",
+        "owner_qid": "s27-field-impact",
+        "content_digest": "fnv1a32:e528208b",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-field-impact",
+          "q-div-f2d04ca04bcd",
+          "s27-exception-card",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-field-impact|supporting|fnv1a32:4c82f805",
+        "role": "supporting",
+        "original_pt": 10.5,
+        "final_pt": 10.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9.450000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-approver:0:0:3",
+        "owner_qid": "s27-field-approver",
+        "content_digest": "fnv1a32:4cd642dc",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 3,
+        "ancestor_qids": [
+          "s27-field-approver",
+          "q-div-f2d04ca04bcd",
+          "s27-exception-card",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-field-approver|supporting|fnv1a32:4c82f805",
+        "role": "supporting",
+        "original_pt": 10.5,
+        "final_pt": 10.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9.450000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-action:0:0:4",
+        "owner_qid": "s27-field-action",
+        "content_digest": "fnv1a32:abd4a2b5",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 4,
+        "ancestor_qids": [
+          "s27-field-action",
+          "q-div-f2d04ca04bcd",
+          "s27-exception-card",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-field-action|supporting|fnv1a32:4c82f805",
+        "role": "supporting",
+        "original_pt": 10.5,
+        "final_pt": 10.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9.450000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-expiry:0:0:21",
+        "owner_qid": "s27-field-expiry",
+        "content_digest": "fnv1a32:67f16ef4",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 21,
+        "ancestor_qids": [
+          "s27-field-expiry",
+          "q-div-f2d04ca04bcd",
+          "s27-exception-card",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-field-expiry|body|fnv1a32:4c82f805",
+        "role": "body",
+        "original_pt": 10.5,
+        "final_pt": 10.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9.450000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-approval-title:0:0:12",
+        "owner_qid": "s27-approval-title",
+        "content_digest": "fnv1a32:0060e688",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 12,
+        "ancestor_qids": [
+          "s27-approval-title",
+          "q-div-22dee743943e",
+          "s27-approval-card",
+          "q-div-785cae1d733a",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-approval-card|supporting|fnv1a32:e7745f3c",
+        "role": "supporting",
+        "original_pt": 15,
+        "final_pt": 15,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 13.5,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-approval-badge:0:0:11",
+        "owner_qid": "s27-approval-badge",
+        "content_digest": "fnv1a32:fbfd97c3",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 11,
+        "ancestor_qids": [
+          "s27-approval-badge",
+          "q-div-22dee743943e",
+          "s27-approval-card",
+          "q-div-785cae1d733a",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-approval-badge|supporting|fnv1a32:8bdcf537",
+        "role": "supporting",
+        "original_pt": 10.5,
+        "final_pt": 10.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9.450000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-owner-devax:0:0:5",
+        "owner_qid": "s27-owner-devax",
+        "content_digest": "fnv1a32:db84c06d",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s27-owner-devax",
+          "s27-step-devax",
+          "q-div-21986879c9cf",
+          "s27-approval-card",
+          "q-div-785cae1d733a",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-step-devax|supporting|fnv1a32:4ff04dc9",
+        "role": "supporting",
+        "original_pt": 10.5,
+        "final_pt": 10.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9.450000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-action-devax:0:0:5",
+        "owner_qid": "s27-action-devax",
+        "content_digest": "fnv1a32:874747d6",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s27-action-devax",
+          "s27-step-devax",
+          "q-div-21986879c9cf",
+          "s27-approval-card",
+          "q-div-785cae1d733a",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-step-devax|body|fnv1a32:9cfc0d1c",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-owner-developer:0:0:3",
+        "owner_qid": "s27-owner-developer",
+        "content_digest": "fnv1a32:35a8060f",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 3,
+        "ancestor_qids": [
+          "s27-owner-developer",
+          "s27-step-developer",
+          "q-div-21986879c9cf",
+          "s27-approval-card",
+          "q-div-785cae1d733a",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-step-developer|supporting|fnv1a32:4ff04dc9",
+        "role": "supporting",
+        "original_pt": 10.5,
+        "final_pt": 10.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9.450000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-action-developer:0:0:15",
+        "owner_qid": "s27-action-developer",
+        "content_digest": "fnv1a32:10b44745",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 15,
+        "ancestor_qids": [
+          "s27-action-developer",
+          "s27-step-developer",
+          "q-div-21986879c9cf",
+          "s27-approval-card",
+          "q-div-785cae1d733a",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-step-developer|body|fnv1a32:9cfc0d1c",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-owner-quality:0:0:5",
+        "owner_qid": "s27-owner-quality",
+        "content_digest": "fnv1a32:26fa3ca2",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s27-owner-quality",
+          "s27-step-quality",
+          "q-div-21986879c9cf",
+          "s27-approval-card",
+          "q-div-785cae1d733a",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-step-quality|supporting|fnv1a32:4ff04dc9",
+        "role": "supporting",
+        "original_pt": 10.5,
+        "final_pt": 10.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9.450000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-action-quality:0:0:14",
+        "owner_qid": "s27-action-quality",
+        "content_digest": "fnv1a32:2c7ceecc",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 14,
+        "ancestor_qids": [
+          "s27-action-quality",
+          "s27-step-quality",
+          "q-div-21986879c9cf",
+          "s27-approval-card",
+          "q-div-785cae1d733a",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-step-quality|body|fnv1a32:9cfc0d1c",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-evidence-title:0:0:12",
+        "owner_qid": "s27-evidence-title",
+        "content_digest": "fnv1a32:3b691f45",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 12,
+        "ancestor_qids": [
+          "s27-evidence-title",
+          "q-div-be409439d65d",
+          "s27-evidence-card",
+          "q-div-785cae1d733a",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-evidence-card|supporting|fnv1a32:e7745f3c",
+        "role": "supporting",
+        "original_pt": 15,
+        "final_pt": 15,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 13.5,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-evidence-badge:0:0:14",
+        "owner_qid": "s27-evidence-badge",
+        "content_digest": "fnv1a32:98d15956",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 14,
+        "ancestor_qids": [
+          "s27-evidence-badge",
+          "q-div-be409439d65d",
+          "s27-evidence-card",
+          "q-div-785cae1d733a",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-evidence-badge|supporting|fnv1a32:8bdcf537",
+        "role": "supporting",
+        "original_pt": 10.5,
+        "final_pt": 10.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9.450000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-link-requirement:0:0:4",
+        "owner_qid": "s27-link-requirement",
+        "content_digest": "fnv1a32:8b07c46a",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 4,
+        "ancestor_qids": [
+          "s27-link-requirement",
+          "q-div-5ee5b7b472b2",
+          "q-div-472193667a77",
+          "s27-evidence-card",
+          "q-div-785cae1d733a",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-link-requirement|body|fnv1a32:970b3c9e",
+        "role": "body",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-link-change:0:0:2",
+        "owner_qid": "s27-link-change",
+        "content_digest": "fnv1a32:de4cfc46",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s27-link-change",
+          "q-div-5ee5b7b472b2",
+          "q-div-472193667a77",
+          "s27-evidence-card",
+          "q-div-785cae1d733a",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-link-change|body|fnv1a32:970b3c9e",
+        "role": "body",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-link-release:0:0:5",
+        "owner_qid": "s27-link-release",
+        "content_digest": "fnv1a32:701f22eb",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s27-link-release",
+          "q-div-5ee5b7b472b2",
+          "q-div-472193667a77",
+          "s27-evidence-card",
+          "q-div-785cae1d733a",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-link-release|body|fnv1a32:970b3c9e",
+        "role": "body",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-reuse-copy:0:0:40",
+        "owner_qid": "s27-reuse-copy",
+        "content_digest": "fnv1a32:98aa51f7",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 40,
+        "ancestor_qids": [
+          "s27-reuse-copy",
+          "q-div-472193667a77",
+          "s27-evidence-card",
+          "q-div-785cae1d733a",
+          "q-div-91292a76f13a",
+          "q-div-948c49f110fb",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s27-reuse-copy|body|fnv1a32:334da9f1",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      }
+    ],
+    "groups": [
+      {
+        "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:79d3f3cb",
+        "role": "supporting",
+        "card_qid": "q-div-75dcf98740c9",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-eyebrow:0:0:4"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "q-div-75dcf98740c9|title|fnv1a32:241d4532",
+        "role": "title",
+        "card_qid": "q-div-75dcf98740c9",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-title:0:0:12"
+        ],
+        "original_pt": 25.5
+      },
+      {
+        "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:22b9f0dd",
+        "role": "supporting",
+        "card_qid": "q-div-75dcf98740c9",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-label:0:0:7"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s27-req-1|supporting|fnv1a32:cf89d3c8",
+        "role": "supporting",
+        "card_qid": "s27-req-1",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-1:0:0:11"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s27-req-2|supporting|fnv1a32:cf89d3c8",
+        "role": "supporting",
+        "card_qid": "s27-req-2",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-2:0:0:7"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s27-req-more|supporting|fnv1a32:cf89d3c8",
+        "role": "supporting",
+        "card_qid": "s27-req-more",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-req-more:0:0:2"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s27-claim|body|fnv1a32:68985f26",
+        "role": "body",
+        "card_qid": null,
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-claim:0:0:21",
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-claim:1:0:8"
+        ],
+        "original_pt": 18.75
+      },
+      {
+        "group_id": "q-strong-663977331dde|unknown|fnv1a32:f3504048",
+        "role": "unknown",
+        "card_qid": null,
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:q-strong-663977331dde:0:0:9"
+        ],
+        "original_pt": 18.75
+      },
+      {
+        "group_id": "s27-claim-meta|supporting|fnv1a32:0d6ffc24",
+        "role": "supporting",
+        "card_qid": null,
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-claim-meta:0:0:11"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "s27-gate-card|supporting|fnv1a32:e7745f3c",
+        "role": "supporting",
+        "card_qid": "s27-gate-card",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-title:0:0:8"
+        ],
+        "original_pt": 15
+      },
+      {
+        "group_id": "s27-gate-card|supporting|fnv1a32:0d6ffc24",
+        "role": "supporting",
+        "card_qid": "s27-gate-card",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-note:0:0:17"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "s27-gate-build|supporting|fnv1a32:aa886333",
+        "role": "supporting",
+        "card_qid": "s27-gate-build",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num1:0:0:2"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s27-gate-build|body|fnv1a32:e4a5932c",
+        "role": "body",
+        "card_qid": "s27-gate-build",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name1:0:0:2"
+        ],
+        "original_pt": 13.5
+      },
+      {
+        "group_id": "s27-gate-static|supporting|fnv1a32:aa886333",
+        "role": "supporting",
+        "card_qid": "s27-gate-static",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num2:0:0:2"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s27-gate-static|body|fnv1a32:e4a5932c",
+        "role": "body",
+        "card_qid": "s27-gate-static",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name2:0:0:4"
+        ],
+        "original_pt": 13.5
+      },
+      {
+        "group_id": "s27-gate-unit|supporting|fnv1a32:aa886333",
+        "role": "supporting",
+        "card_qid": "s27-gate-unit",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num3:0:0:2"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s27-gate-unit|body|fnv1a32:e4a5932c",
+        "role": "body",
+        "card_qid": "s27-gate-unit",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name3:0:0:2"
+        ],
+        "original_pt": 13.5
+      },
+      {
+        "group_id": "s27-gate-integration|supporting|fnv1a32:aa886333",
+        "role": "supporting",
+        "card_qid": "s27-gate-integration",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num4:0:0:2"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s27-gate-integration|body|fnv1a32:e4a5932c",
+        "role": "body",
+        "card_qid": "s27-gate-integration",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name4:0:0:2"
+        ],
+        "original_pt": 13.5
+      },
+      {
+        "group_id": "s27-gate-security|supporting|fnv1a32:aa886333",
+        "role": "supporting",
+        "card_qid": "s27-gate-security",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num5:0:0:2"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s27-gate-security|body|fnv1a32:e4a5932c",
+        "role": "body",
+        "card_qid": "s27-gate-security",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name5:0:0:2"
+        ],
+        "original_pt": 13.5
+      },
+      {
+        "group_id": "s27-gate-performance|supporting|fnv1a32:aa886333",
+        "role": "supporting",
+        "card_qid": "s27-gate-performance",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num6:0:0:2"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s27-gate-performance|body|fnv1a32:e4a5932c",
+        "role": "body",
+        "card_qid": "s27-gate-performance",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name6:0:0:2"
+        ],
+        "original_pt": 13.5
+      },
+      {
+        "group_id": "s27-gate-accessibility|supporting|fnv1a32:aa886333",
+        "role": "supporting",
+        "card_qid": "s27-gate-accessibility",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-num7:0:0:2"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s27-gate-accessibility|body|fnv1a32:e4a5932c",
+        "role": "body",
+        "card_qid": "s27-gate-accessibility",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-gate-name7:0:0:3"
+        ],
+        "original_pt": 13.5
+      },
+      {
+        "group_id": "s27-exception-card|supporting|fnv1a32:79d3f3cb",
+        "role": "supporting",
+        "card_qid": "s27-exception-card",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-exception-kicker:0:0:8"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "s27-exception-card|body|fnv1a32:e93f0698",
+        "role": "body",
+        "card_qid": "s27-exception-card",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-exception-title:0:0:29"
+        ],
+        "original_pt": 16.5
+      },
+      {
+        "group_id": "s27-state-fail|body|fnv1a32:79541966",
+        "role": "body",
+        "card_qid": "s27-state-fail",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-state-fail:0:0:8"
+        ],
+        "original_pt": 13.5
+      },
+      {
+        "group_id": "s27-state-rework|body|fnv1a32:79541966",
+        "role": "body",
+        "card_qid": "s27-state-rework",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-state-rework:0:0:9"
+        ],
+        "original_pt": 13.5
+      },
+      {
+        "group_id": "s27-field-reason|supporting|fnv1a32:4c82f805",
+        "role": "supporting",
+        "card_qid": "s27-field-reason",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-reason:0:0:2"
+        ],
+        "original_pt": 10.5
+      },
+      {
+        "group_id": "s27-field-impact|supporting|fnv1a32:4c82f805",
+        "role": "supporting",
+        "card_qid": "s27-field-impact",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-impact:0:0:2"
+        ],
+        "original_pt": 10.5
+      },
+      {
+        "group_id": "s27-field-approver|supporting|fnv1a32:4c82f805",
+        "role": "supporting",
+        "card_qid": "s27-field-approver",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-approver:0:0:3"
+        ],
+        "original_pt": 10.5
+      },
+      {
+        "group_id": "s27-field-action|supporting|fnv1a32:4c82f805",
+        "role": "supporting",
+        "card_qid": "s27-field-action",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-action:0:0:4"
+        ],
+        "original_pt": 10.5
+      },
+      {
+        "group_id": "s27-field-expiry|body|fnv1a32:4c82f805",
+        "role": "body",
+        "card_qid": "s27-field-expiry",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-field-expiry:0:0:21"
+        ],
+        "original_pt": 10.5
+      },
+      {
+        "group_id": "s27-approval-card|supporting|fnv1a32:e7745f3c",
+        "role": "supporting",
+        "card_qid": "s27-approval-card",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-approval-title:0:0:12"
+        ],
+        "original_pt": 15
+      },
+      {
+        "group_id": "s27-approval-badge|supporting|fnv1a32:8bdcf537",
+        "role": "supporting",
+        "card_qid": "s27-approval-badge",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-approval-badge:0:0:11"
+        ],
+        "original_pt": 10.5
+      },
+      {
+        "group_id": "s27-step-devax|supporting|fnv1a32:4ff04dc9",
+        "role": "supporting",
+        "card_qid": "s27-step-devax",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-owner-devax:0:0:5"
+        ],
+        "original_pt": 10.5
+      },
+      {
+        "group_id": "s27-step-devax|body|fnv1a32:9cfc0d1c",
+        "role": "body",
+        "card_qid": "s27-step-devax",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-action-devax:0:0:5"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s27-step-developer|supporting|fnv1a32:4ff04dc9",
+        "role": "supporting",
+        "card_qid": "s27-step-developer",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-owner-developer:0:0:3"
+        ],
+        "original_pt": 10.5
+      },
+      {
+        "group_id": "s27-step-developer|body|fnv1a32:9cfc0d1c",
+        "role": "body",
+        "card_qid": "s27-step-developer",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-action-developer:0:0:15"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s27-step-quality|supporting|fnv1a32:4ff04dc9",
+        "role": "supporting",
+        "card_qid": "s27-step-quality",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-owner-quality:0:0:5"
+        ],
+        "original_pt": 10.5
+      },
+      {
+        "group_id": "s27-step-quality|body|fnv1a32:9cfc0d1c",
+        "role": "body",
+        "card_qid": "s27-step-quality",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-action-quality:0:0:14"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s27-evidence-card|supporting|fnv1a32:e7745f3c",
+        "role": "supporting",
+        "card_qid": "s27-evidence-card",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-evidence-title:0:0:12"
+        ],
+        "original_pt": 15
+      },
+      {
+        "group_id": "s27-evidence-badge|supporting|fnv1a32:8bdcf537",
+        "role": "supporting",
+        "card_qid": "s27-evidence-badge",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-evidence-badge:0:0:14"
+        ],
+        "original_pt": 10.5
+      },
+      {
+        "group_id": "s27-link-requirement|body|fnv1a32:970b3c9e",
+        "role": "body",
+        "card_qid": "s27-link-requirement",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-link-requirement:0:0:4"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "s27-link-change|body|fnv1a32:970b3c9e",
+        "role": "body",
+        "card_qid": "s27-link-change",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-link-change:0:0:2"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "s27-link-release|body|fnv1a32:970b3c9e",
+        "role": "body",
+        "card_qid": "s27-link-release",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-link-release:0:0:5"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "s27-reuse-copy|body|fnv1a32:334da9f1",
+        "role": "body",
+        "card_qid": "s27-reuse-copy",
+        "run_ids": [
+          "sha256:e3970da68a5f1757277fc387723512c6bc455ff2bdc1157ea7014532f9a5ac3f:s27-reuse-copy:0:0:40"
+        ],
+        "original_pt": 12
+      }
+    ],
+    "image_text": [],
+    "cards": [
+      {
+        "qid": "s27-approval-card",
+        "escape_px": 6,
+        "outcome": "parent_reflow",
+        "font_factor": 1,
+        "spacing_factor": 1
+      }
+    ],
+    "candidates": [
+      {
+        "candidate_id": "s27-approval-card:E:0",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 1,
+        "spacing_factor": 1,
+        "uses_parent_space": true,
+        "extended_shrink": false,
+        "order": 0,
+        "outcome": "committed",
+        "lower_bound": 0,
+        "cost": {
+          "T": 0,
+          "S": 0,
+          "D": 0.119718,
+          "M": 0,
+          "total": 0.011972
+        },
+        "actual_font_factors": [],
+        "floor_clamped": false,
+        "space": [],
+        "declarations": [
+          {
+            "qid": "s27-step-developer",
+            "kind": "spacing",
+            "declarations": "height:auto;flex-shrink:0"
+          }
+        ],
+        "commit": {
+          "status": "accepted",
+          "operation": "parent_reflow"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:1",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 1,
+        "spacing_factor": 0.85,
+        "uses_parent_space": true,
+        "extended_shrink": false,
+        "order": 1,
+        "outcome": "pruned:strict_cost_lb",
+        "lower_bound": 0.07499375,
+        "cost": null,
+        "actual_font_factors": [],
+        "floor_clamped": false,
+        "space": [],
+        "rejection": {
+          "code": "reject.dominated",
+          "stage": "cost_lower_bound",
+          "lower_bound": 0.07499375,
+          "selected_cost": 0.01197183
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:B:2",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 1,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": false,
+        "order": 2,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:3",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 1,
+        "spacing_factor": 0.85,
+        "uses_parent_space": false,
+        "extended_shrink": false,
+        "order": 3,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:B:4",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.975,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": false,
+        "order": 4,
+        "outcome": "passed",
+        "lower_bound": 0,
+        "cost": {
+          "T": 0.25,
+          "S": 0,
+          "D": 0.112016,
+          "M": 0,
+          "total": 0.161202
+        },
+        "actual_font_factors": [
+          0.975
+        ],
+        "floor_clamped": false,
+        "declarations": [
+          {
+            "qid": "s27-action-developer",
+            "kind": "text",
+            "declarations": "font-size:15.6px;line-height:21.45px"
+          },
+          {
+            "qid": "s27-step-developer",
+            "kind": "spacing",
+            "declarations": "height:auto;flex-shrink:0"
+          }
+        ]
+      },
+      {
+        "candidate_id": "s27-approval-card:B:5",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.95,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": false,
+        "order": 5,
+        "outcome": "passed",
+        "lower_bound": 0,
+        "cost": {
+          "T": 0.5,
+          "S": 0,
+          "D": 0.104313,
+          "M": 0,
+          "total": 0.310431
+        },
+        "actual_font_factors": [
+          0.95
+        ],
+        "floor_clamped": false,
+        "declarations": [
+          {
+            "qid": "s27-action-developer",
+            "kind": "text",
+            "declarations": "font-size:15.2px;line-height:20.9px"
+          },
+          {
+            "qid": "s27-step-developer",
+            "kind": "spacing",
+            "declarations": "height:auto;flex-shrink:0"
+          }
+        ]
+      },
+      {
+        "candidate_id": "s27-approval-card:B:6",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.925,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": false,
+        "order": 6,
+        "outcome": "passed",
+        "lower_bound": 0,
+        "cost": {
+          "T": 0.749937,
+          "S": 0,
+          "D": 0.096391,
+          "M": 0,
+          "total": 0.459602
+        },
+        "actual_font_factors": [
+          0.925
+        ],
+        "floor_clamped": false,
+        "declarations": [
+          {
+            "qid": "s27-action-developer",
+            "kind": "text",
+            "declarations": "font-size:14.8001px;line-height:20.3502px"
+          },
+          {
+            "qid": "s27-step-developer",
+            "kind": "spacing",
+            "declarations": "height:auto;flex-shrink:0"
+          }
+        ]
+      },
+      {
+        "candidate_id": "s27-approval-card:B:7",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.9,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": false,
+        "order": 7,
+        "outcome": "passed",
+        "lower_bound": 0,
+        "cost": {
+          "T": 1,
+          "S": 0,
+          "D": 0.170445,
+          "M": 0,
+          "total": 0.617044
+        },
+        "actual_font_factors": [
+          0.9
+        ],
+        "floor_clamped": false,
+        "declarations": [
+          {
+            "qid": "s27-action-developer",
+            "kind": "text",
+            "declarations": "font-size:14.4px;line-height:19.8px"
+          },
+          {
+            "qid": "s27-step-developer",
+            "kind": "spacing",
+            "declarations": "height:auto;flex-shrink:0"
+          }
+        ]
+      },
+      {
+        "candidate_id": "s27-approval-card:C:8",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 1,
+        "spacing_factor": 0.7,
+        "uses_parent_space": false,
+        "extended_shrink": false,
+        "order": 8,
+        "outcome": "pruned:strict_cost_lb",
+        "lower_bound": 0.14999375,
+        "cost": null,
+        "actual_font_factors": [],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.dominated",
+          "stage": "cost_lower_bound",
+          "lower_bound": 0.14999375,
+          "selected_cost": 0.01197183
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:9",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 1,
+        "spacing_factor": 0.55,
+        "uses_parent_space": false,
+        "extended_shrink": false,
+        "order": 9,
+        "outcome": "pruned:strict_cost_lb",
+        "lower_bound": 0.22499375,
+        "cost": null,
+        "actual_font_factors": [],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.dominated",
+          "stage": "cost_lower_bound",
+          "lower_bound": 0.22499375,
+          "selected_cost": 0.01197183
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:10",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 1,
+        "spacing_factor": 0.5,
+        "uses_parent_space": false,
+        "extended_shrink": false,
+        "order": 10,
+        "outcome": "pruned:strict_cost_lb",
+        "lower_bound": 0.24999375,
+        "cost": null,
+        "actual_font_factors": [],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.dominated",
+          "stage": "cost_lower_bound",
+          "lower_bound": 0.24999375,
+          "selected_cost": 0.01197183
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:11",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 1,
+        "spacing_factor": 0.4,
+        "uses_parent_space": false,
+        "extended_shrink": false,
+        "order": 11,
+        "outcome": "pruned:strict_cost_lb",
+        "lower_bound": 0.29999375,
+        "cost": null,
+        "actual_font_factors": [],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.dominated",
+          "stage": "cost_lower_bound",
+          "lower_bound": 0.29999375,
+          "selected_cost": 0.01197183
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:12",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.975,
+        "spacing_factor": 0.85,
+        "uses_parent_space": false,
+        "extended_shrink": false,
+        "order": 12,
+        "outcome": "pruned:strict_cost_lb",
+        "lower_bound": 0.07499375,
+        "cost": null,
+        "actual_font_factors": [
+          0.975
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.dominated",
+          "stage": "cost_lower_bound",
+          "lower_bound": 0.07499375,
+          "selected_cost": 0.01197183
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:13",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.95,
+        "spacing_factor": 0.7,
+        "uses_parent_space": false,
+        "extended_shrink": false,
+        "order": 13,
+        "outcome": "pruned:strict_cost_lb",
+        "lower_bound": 0.14999375,
+        "cost": null,
+        "actual_font_factors": [
+          0.95
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.dominated",
+          "stage": "cost_lower_bound",
+          "lower_bound": 0.14999375,
+          "selected_cost": 0.01197183
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:14",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.925,
+        "spacing_factor": 0.55,
+        "uses_parent_space": false,
+        "extended_shrink": false,
+        "order": 14,
+        "outcome": "pruned:strict_cost_lb",
+        "lower_bound": 0.22499375,
+        "cost": null,
+        "actual_font_factors": [
+          0.925
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.dominated",
+          "stage": "cost_lower_bound",
+          "lower_bound": 0.22499375,
+          "selected_cost": 0.01197183
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:15",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.9,
+        "spacing_factor": 0.4,
+        "uses_parent_space": false,
+        "extended_shrink": false,
+        "order": 15,
+        "outcome": "pruned:strict_cost_lb",
+        "lower_bound": 0.29999375,
+        "cost": null,
+        "actual_font_factors": [
+          0.9
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.dominated",
+          "stage": "cost_lower_bound",
+          "lower_bound": 0.29999375,
+          "selected_cost": 0.01197183
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:16",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 1,
+        "spacing_factor": 0.7,
+        "uses_parent_space": true,
+        "extended_shrink": false,
+        "order": 16,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [],
+        "floor_clamped": false,
+        "space": [],
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:17",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 1,
+        "spacing_factor": 0.4,
+        "uses_parent_space": true,
+        "extended_shrink": false,
+        "order": 17,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [],
+        "floor_clamped": false,
+        "space": [],
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:18",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.975,
+        "spacing_factor": 0.85,
+        "uses_parent_space": true,
+        "extended_shrink": false,
+        "order": 18,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.975
+        ],
+        "floor_clamped": false,
+        "space": [],
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:19",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.95,
+        "spacing_factor": 0.7,
+        "uses_parent_space": true,
+        "extended_shrink": false,
+        "order": 19,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.95
+        ],
+        "floor_clamped": false,
+        "space": [],
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:20",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.9,
+        "spacing_factor": 0.4,
+        "uses_parent_space": true,
+        "extended_shrink": false,
+        "order": 20,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.9
+        ],
+        "floor_clamped": false,
+        "space": [],
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:B:21",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.875,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 21,
+        "outcome": "rejected:font_or_hierarchy",
+        "lower_bound": 0,
+        "cost": null,
+        "actual_font_factors": [
+          0.875
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.font_or_hierarchy",
+          "stage": "hard_gate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:22",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.875,
+        "spacing_factor": 0.7,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 22,
+        "outcome": "pruned:strict_cost_lb",
+        "lower_bound": 0.14999375,
+        "cost": null,
+        "actual_font_factors": [
+          0.875
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.dominated",
+          "stage": "cost_lower_bound",
+          "lower_bound": 0.14999375,
+          "selected_cost": 0.01197183
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:23",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.875,
+        "spacing_factor": 0.7,
+        "uses_parent_space": true,
+        "extended_shrink": true,
+        "order": 23,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.875
+        ],
+        "floor_clamped": false,
+        "space": [],
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:B:24",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.85,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 24,
+        "outcome": "rejected:font_or_hierarchy",
+        "lower_bound": 0,
+        "cost": null,
+        "actual_font_factors": [
+          0.85
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.font_or_hierarchy",
+          "stage": "hard_gate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:25",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.85,
+        "spacing_factor": 0.7,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 25,
+        "outcome": "pruned:strict_cost_lb",
+        "lower_bound": 0.14999375,
+        "cost": null,
+        "actual_font_factors": [
+          0.85
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.dominated",
+          "stage": "cost_lower_bound",
+          "lower_bound": 0.14999375,
+          "selected_cost": 0.01197183
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:26",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.85,
+        "spacing_factor": 0.7,
+        "uses_parent_space": true,
+        "extended_shrink": true,
+        "order": 26,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.85
+        ],
+        "floor_clamped": false,
+        "space": [],
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:B:27",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.825,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 27,
+        "outcome": "rejected:font_or_hierarchy",
+        "lower_bound": 0,
+        "cost": null,
+        "actual_font_factors": [
+          0.825
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.font_or_hierarchy",
+          "stage": "hard_gate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:28",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.825,
+        "spacing_factor": 0.7,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 28,
+        "outcome": "pruned:strict_cost_lb",
+        "lower_bound": 0.14999375,
+        "cost": null,
+        "actual_font_factors": [
+          0.825
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.dominated",
+          "stage": "cost_lower_bound",
+          "lower_bound": 0.14999375,
+          "selected_cost": 0.01197183
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:29",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.825,
+        "spacing_factor": 0.7,
+        "uses_parent_space": true,
+        "extended_shrink": true,
+        "order": 29,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.825
+        ],
+        "floor_clamped": false,
+        "space": [],
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:B:30",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.8,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 30,
+        "outcome": "rejected:font_or_hierarchy",
+        "lower_bound": 0,
+        "cost": null,
+        "actual_font_factors": [
+          0.8
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.font_or_hierarchy",
+          "stage": "hard_gate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:31",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.8,
+        "spacing_factor": 0.7,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 31,
+        "outcome": "pruned:strict_cost_lb",
+        "lower_bound": 0.14999375,
+        "cost": null,
+        "actual_font_factors": [
+          0.8
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.dominated",
+          "stage": "cost_lower_bound",
+          "lower_bound": 0.14999375,
+          "selected_cost": 0.01197183
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:32",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.8,
+        "spacing_factor": 0.7,
+        "uses_parent_space": true,
+        "extended_shrink": true,
+        "order": 32,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.8
+        ],
+        "floor_clamped": false,
+        "space": [],
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:B:33",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.775,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 33,
+        "outcome": "rejected:font_or_hierarchy",
+        "lower_bound": 0,
+        "cost": null,
+        "actual_font_factors": [
+          0.775
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.font_or_hierarchy",
+          "stage": "hard_gate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:34",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.775,
+        "spacing_factor": 0.7,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 34,
+        "outcome": "pruned:strict_cost_lb",
+        "lower_bound": 0.14999375,
+        "cost": null,
+        "actual_font_factors": [
+          0.775
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.dominated",
+          "stage": "cost_lower_bound",
+          "lower_bound": 0.14999375,
+          "selected_cost": 0.01197183
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:35",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.775,
+        "spacing_factor": 0.7,
+        "uses_parent_space": true,
+        "extended_shrink": true,
+        "order": 35,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.775
+        ],
+        "floor_clamped": false,
+        "space": [],
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:B:36",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.75,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 36,
+        "outcome": "rejected:font_or_hierarchy",
+        "lower_bound": 0,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.font_or_hierarchy",
+          "stage": "hard_gate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:37",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.75,
+        "spacing_factor": 0.7,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 37,
+        "outcome": "pruned:strict_cost_lb",
+        "lower_bound": 0.14999375,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": false,
+        "rejection": {
+          "code": "reject.dominated",
+          "stage": "cost_lower_bound",
+          "lower_bound": 0.14999375,
+          "selected_cost": 0.01197183
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:38",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.75,
+        "spacing_factor": 0.7,
+        "uses_parent_space": true,
+        "extended_shrink": true,
+        "order": 38,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": false,
+        "space": [],
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:B:39",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.7,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 39,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": true,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:40",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.7,
+        "spacing_factor": 0.7,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 40,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": true,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:41",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.7,
+        "spacing_factor": 0.7,
+        "uses_parent_space": true,
+        "extended_shrink": true,
+        "order": 41,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": true,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:B:42",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.65,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 42,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": true,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:43",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.65,
+        "spacing_factor": 0.7,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 43,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": true,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:44",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.65,
+        "spacing_factor": 0.7,
+        "uses_parent_space": true,
+        "extended_shrink": true,
+        "order": 44,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": true,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:B:45",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.6,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 45,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": true,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:46",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.6,
+        "spacing_factor": 0.7,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 46,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": true,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:47",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.6,
+        "spacing_factor": 0.7,
+        "uses_parent_space": true,
+        "extended_shrink": true,
+        "order": 47,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": true,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:B:48",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.55,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 48,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": true,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:49",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.55,
+        "spacing_factor": 0.7,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 49,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": true,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:50",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.55,
+        "spacing_factor": 0.7,
+        "uses_parent_space": true,
+        "extended_shrink": true,
+        "order": 50,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": true,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:B:51",
+        "phase": "B",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.5,
+        "spacing_factor": 1,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 51,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": true,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:C:52",
+        "phase": "C",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.5,
+        "spacing_factor": 0.7,
+        "uses_parent_space": false,
+        "extended_shrink": true,
+        "order": 52,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": true,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      },
+      {
+        "candidate_id": "s27-approval-card:E:53",
+        "phase": "E",
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "font_factor": 0.5,
+        "spacing_factor": 0.7,
+        "uses_parent_space": true,
+        "extended_shrink": true,
+        "order": 53,
+        "outcome": "removed:duplicate_declarations",
+        "lower_bound": null,
+        "cost": null,
+        "actual_font_factors": [
+          0.75
+        ],
+        "floor_clamped": true,
+        "rejection": {
+          "code": "reject.duplicate_declarations",
+          "stage": "deduplicate"
+        }
+      }
+    ],
+    "scopes": [
+      {
+        "root_qid": "s27-approval-card",
+        "target_qids": [
+          "s27-action-developer"
+        ],
+        "seed_qids": [],
+        "protected_qids": [],
+        "allowed_axes": [
+          "y"
+        ],
+        "allowed_properties": [
+          "font-size",
+          "line-height",
+          "padding-top",
+          "padding-bottom",
+          "margin-top",
+          "margin-bottom",
+          "row-gap",
+          "height",
+          "min-height",
+          "top",
+          "bottom",
+          "flex-shrink",
+          "align-self",
+          "align-items",
+          "grid-template-rows",
+          "min-width"
+        ],
+        "preserved_properties": [
+          "left",
+          "width"
+        ]
+      }
+    ],
+    "search_termination": [],
+    "geometry_seeds": [],
+    "parent_exclusions": [
+      {
+        "qid": "q-div-21986879c9cf",
+        "seed_qid": "s27-step-developer",
+        "ancestor_distance": 1,
+        "reason": "fixed_boundary_unavailable"
+      }
+    ],
+    "telemetry": {
+      "candidate_total": 54,
+      "evaluated": 11,
+      "policy_removed": 0,
+      "duplicates": 28,
+      "pruned": 15,
+      "measurements": 65,
+      "fit_search_ms": 588.9
+    },
+    "fit_proposal": true,
+    "candidate_html_digest": "sha256:3a6fe393b958725a04659b1587c678670298042fb6c858b85f7976c66a90a3e1"
+  }
+}
