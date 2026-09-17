@@ -1,0 +1,55 @@
+{
+  "id": "health-20-care-hands",
+  "category": "health",
+  "tags": {
+    "ko": [
+      "건강",
+      "돌봄"
+    ],
+    "en": [
+      "health",
+      "care",
+      "hands"
+    ]
+  },
+  "alt": {
+    "ko": "돌봄 단색 벡터 인포그래픽",
+    "en": "care hands monochrome vector infographic"
+  },
+  "path": "originals/health-20-care-hands.svg",
+  "thumbnail": "thumbnails/health-20-care-hands.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 560,
+  "sha256": "1bb3777fbd1708435161d7ed2939d2196ea33ec6a5c89e02281802b35b4b9553",
+  "geometry_sha256": "7b9be0fe633d581e29bcbd958f75b07feff6bee3823905e2552126ce8ba7b7a5",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54486,
+    "preview_opaque_pixels": 9505,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "HandHeart"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

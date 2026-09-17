@@ -8,6 +8,7 @@ from typing import Any, Mapping
 from pydantic import BaseModel
 
 from .models.layouts import SlideLayout
+from utils.slide_source import validate_slide_source
 
 
 def _to_raw_tree(value: Any, active: set[int] | None = None) -> Any:
@@ -67,4 +68,5 @@ def canonicalize_slide_dump(value: Any) -> dict[str, Any]:
     canonical["ui"] = canonicalize_slide_ui(canonical.get("ui"))
     if canonical["ui"] is not None and canonical.get("html_content"):
         raise ValueError("slide_ui_and_authored_html_cannot_coexist")
+    validate_slide_source(canonical.get("source_format"), canonical.get("html_content"), canonical.get("svg_content"), canonical["ui"])
     return canonical

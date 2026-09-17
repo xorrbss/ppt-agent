@@ -1,0 +1,55 @@
+{
+  "id": "data-06-line-chart",
+  "category": "data",
+  "tags": {
+    "ko": [
+      "데이터",
+      "선차트"
+    ],
+    "en": [
+      "data",
+      "line",
+      "chart"
+    ]
+  },
+  "alt": {
+    "ko": "선차트 단색 벡터 인포그래픽",
+    "en": "line chart monochrome vector infographic"
+  },
+  "path": "originals/data-06-line-chart.svg",
+  "thumbnail": "thumbnails/data-06-line-chart.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 318,
+  "sha256": "5c7a7650e797865284a2a019ef1494324ccd22179212f9c831e41f89b69a7ff8",
+  "geometry_sha256": "ce0339314c87af8729ee3d7bbc13fa43d2e7c70d1d596aea0f1e5eaed77aab62",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57869,
+    "preview_opaque_pixels": 6588,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ChartLine"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

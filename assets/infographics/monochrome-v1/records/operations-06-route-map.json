@@ -1,0 +1,55 @@
+{
+  "id": "operations-06-route-map",
+  "category": "operations",
+  "tags": {
+    "ko": [
+      "운영",
+      "배송경로"
+    ],
+    "en": [
+      "operations",
+      "route",
+      "map"
+    ]
+  },
+  "alt": {
+    "ko": "배송경로 단색 벡터 인포그래픽",
+    "en": "route map monochrome vector infographic"
+  },
+  "path": "originals/operations-06-route-map.svg",
+  "thumbnail": "thumbnails/operations-06-route-map.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 524,
+  "sha256": "5ceae69d6a3b29388ca7a738e37cf5b27227716308b0efbd3595210785385527",
+  "geometry_sha256": "8b2a3e3633f7c25514f07ec7e1d88c96110d822252f120c1452d22a05d5e9147",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 52033,
+    "preview_opaque_pixels": 11605,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "MapPinned"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

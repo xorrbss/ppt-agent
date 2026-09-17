@@ -120,6 +120,7 @@ def authored_page_source_digest(slide: SlideModel) -> str:
             "slide_id": str(slide.id),
             "index": slide.index,
             "html": slide.html_content,
+            **({"svg": slide.svg_content, "source_format": "svg"} if slide.is_svg() else {}),
             "content": slide.content,
             "properties": slide.properties,
         }
@@ -176,9 +177,9 @@ async def _load_deck(
     unsupported_target = (
         slide_index is not None
         and 0 <= slide_index < len(slides)
-        and not slides[slide_index].is_authored()
+        and not (slides[slide_index].is_authored() or slides[slide_index].is_svg())
     )
-    if not slides or not presentation.is_authored() or unsupported_target:
+    if not slides or not (presentation.is_authored() or presentation.is_svg()) or unsupported_target:
         raise AuthoredPageRemakeError(
             "authored_page_remake_unsupported_presentation",
             stage="source_validation",
@@ -376,6 +377,10 @@ async def run_authored_page_remake_preview(
             "authored_page_remake_slide_out_of_range", stage="source_validation"
         )
     target = slides[slide_index]
+    if target.is_svg():
+        from services.svg_page_remake import preview_svg
+
+        return await preview_svg(presentation, slides, slide_index, request, task, session)
     if not target.html_content:
         raise AuthoredPageRemakeError(
             "authored_page_remake_source_html_missing", stage="source_validation"
@@ -739,7 +744,7 @@ async def queue_authored_page_remake_preview(
         raise HTTPException(
             status_code=400, detail="Slide index is outside the presentation"
         )
-    if not slides[slide_index].html_content:
+    if not slides[slide_index].html_content and not slides[slide_index].is_svg():
         raise HTTPException(status_code=400, detail="Slide has no authored HTML")
     # The stored workspace request is the restart-safe source of truth.  The
     # legacy task remains the polling/read model consumed by the current UI.
@@ -905,6 +910,9 @@ async def publish_authored_page_remake(
     slide_index: int,
     preview_task_id: str,
     snapshot: bool = True,
+    operation_id: uuid.UUID | None = None,
+    attempt_token: str | None = None,
+    expected_revision: int | None = None,
 ) -> dict[str, Any]:
     """Stage one preview publication in the caller-owned transaction."""
 
@@ -919,6 +927,11 @@ async def publish_authored_page_remake(
         raise AuthoredPageRemakeError(
             "authored_page_remake_preview_not_found", stage="publish_validation"
         )
+    if slide.is_svg():
+        from services.svg_page_remake import publish_svg_candidate
+
+        return await publish_svg_candidate(session, presentation, slides, slide_index, task, snapshot=snapshot,
+            operation_id=operation_id, attempt_token=attempt_token, expected_revision=expected_revision)
     data = _validated_preview_data(
         task,
         presentation=presentation,

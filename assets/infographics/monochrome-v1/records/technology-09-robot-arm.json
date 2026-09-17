@@ -1,0 +1,56 @@
+{
+  "id": "technology-09-robot-arm",
+  "category": "technology",
+  "tags": {
+    "ko": [
+      "기술",
+      "로봇팔"
+    ],
+    "en": [
+      "technology",
+      "robot",
+      "arm"
+    ]
+  },
+  "alt": {
+    "ko": "로봇팔 단색 벡터 인포그래픽",
+    "en": "robot arm monochrome vector infographic"
+  },
+  "path": "originals/technology-09-robot-arm.svg",
+  "thumbnail": "thumbnails/technology-09-robot-arm.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 775,
+  "sha256": "b0ac6320e28d5ad666758ab45f8a9451a798e4aa22ceff79462982cec740685e",
+  "geometry_sha256": "28f53635714e76326f3ea6a160497496ee6dad13c1a72c8c6f7068bbd23e1d4c",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57382,
+    "preview_opaque_pixels": 6465,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Bot",
+      "Cpu"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

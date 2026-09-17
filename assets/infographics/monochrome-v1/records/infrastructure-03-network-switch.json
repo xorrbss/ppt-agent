@@ -1,0 +1,56 @@
+{
+  "id": "infrastructure-03-network-switch",
+  "category": "infrastructure",
+  "tags": {
+    "ko": [
+      "인프라",
+      "네트워크스위치"
+    ],
+    "en": [
+      "infrastructure",
+      "network",
+      "switch"
+    ]
+  },
+  "alt": {
+    "ko": "네트워크스위치 단색 벡터 인포그래픽",
+    "en": "network switch monochrome vector infographic"
+  },
+  "path": "originals/infrastructure-03-network-switch.svg",
+  "thumbnail": "thumbnails/infrastructure-03-network-switch.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 823,
+  "sha256": "6d0f2060925f975a76ae90cd8b5d6dc0c71375ef9ea90e9e43b973a97c0dfe81",
+  "geometry_sha256": "77a6aa289a2cd09a7cc6b27bf7a9809004a5738e657d094c6de9d231df27aacc",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56192,
+    "preview_opaque_pixels": 7504,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Network",
+      "Cable"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

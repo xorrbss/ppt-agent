@@ -1,0 +1,56 @@
+{
+  "id": "finance-09-exchange-arrows",
+  "category": "finance",
+  "tags": {
+    "ko": [
+      "금융",
+      "환전"
+    ],
+    "en": [
+      "finance",
+      "exchange",
+      "arrows"
+    ]
+  },
+  "alt": {
+    "ko": "환전 단색 벡터 인포그래픽",
+    "en": "exchange arrows monochrome vector infographic"
+  },
+  "path": "originals/finance-09-exchange-arrows.svg",
+  "thumbnail": "thumbnails/finance-09-exchange-arrows.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 553,
+  "sha256": "3efc0e64aa35989b12bdb3c2f5b99e93842d8f821f301d72066c88fd082aab44",
+  "geometry_sha256": "8916cf06b6d7645fe4ff198af9d77e9dc5cee7a7e761850c04cafa097398f8fe",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 58955,
+    "preview_opaque_pixels": 5061,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ArrowLeftRight",
+      "Coins"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

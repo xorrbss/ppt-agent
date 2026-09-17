@@ -1,0 +1,55 @@
+{
+  "id": "finance-04-bank-building",
+  "category": "finance",
+  "tags": {
+    "ko": [
+      "금융",
+      "은행"
+    ],
+    "en": [
+      "finance",
+      "bank",
+      "building"
+    ]
+  },
+  "alt": {
+    "ko": "은행 단색 벡터 인포그래픽",
+    "en": "bank building monochrome vector infographic"
+  },
+  "path": "originals/finance-04-bank-building.svg",
+  "thumbnail": "thumbnails/finance-04-bank-building.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 505,
+  "sha256": "81e792df8c4293aa472f6a254e498fd423bab66f2300a6b67dd26edda7299e4e",
+  "geometry_sha256": "2a2a9bdded18fe1bcba4b0bb1e658f0342e54819660ce8de99693ba58cd51fcb",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 53470,
+    "preview_opaque_pixels": 10366,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Landmark"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

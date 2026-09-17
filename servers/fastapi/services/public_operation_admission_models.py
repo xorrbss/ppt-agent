@@ -17,6 +17,7 @@ from utils.owner_context import (
     get_current_trace_id,
 )
 from services.public_policy_versions import PUBLIC_DEFAULT_POLICY_VERSION
+from services.source_images.budget import SOURCE_IMAGE_PHYSICAL_CALL_LIMIT
 
 
 CONTENT_BRIEF_RETRY_REQUESTS = 1
@@ -60,6 +61,7 @@ class ProviderRequestPlan:
     image_budget: int
     repair_budget: int
     vqa_budget: int
+    source_image_budget: int = 0
 
     @property
     def initial_request_limit(self) -> int:
@@ -69,6 +71,9 @@ class ProviderRequestPlan:
             + min(self.image_budget, self.slide_count)
             + self.repair_budget
             + self.vqa_budget
+            + (SOURCE_IMAGE_PHYSICAL_CALL_LIMIT * (self.source_image_budget + 1)
+               if self.source_image_budget else 0)
+            + min(self.slide_count, self.source_image_budget)
         )
 
     @property
@@ -188,12 +193,14 @@ def current_principal_context() -> PrincipalContext:
 
 
 def plan_provider_requests(*, slide_count: int, image_budget: int,
-                           repair_budget: int, vqa_budget: int) -> ProviderRequestPlan:
+                           repair_budget: int, vqa_budget: int,
+                           source_image_budget: int = 0) -> ProviderRequestPlan:
     plan = ProviderRequestPlan(
         slide_count=_nonnegative(slide_count, "slide_count"),
         image_budget=_nonnegative(image_budget, "image_budget"),
         repair_budget=_nonnegative(repair_budget, "repair_budget"),
         vqa_budget=_nonnegative(vqa_budget, "vqa_budget"),
+        source_image_budget=_nonnegative(source_image_budget, "source_image_budget"),
     )
     if plan.slide_count < 1:
         raise ValueError("slide_count_must_be_positive")

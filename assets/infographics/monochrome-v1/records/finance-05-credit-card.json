@@ -1,0 +1,55 @@
+{
+  "id": "finance-05-credit-card",
+  "category": "finance",
+  "tags": {
+    "ko": [
+      "금융",
+      "신용카드"
+    ],
+    "en": [
+      "finance",
+      "credit",
+      "card"
+    ]
+  },
+  "alt": {
+    "ko": "신용카드 단색 벡터 인포그래픽",
+    "en": "credit card monochrome vector infographic"
+  },
+  "path": "originals/finance-05-credit-card.svg",
+  "thumbnail": "thumbnails/finance-05-credit-card.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 340,
+  "sha256": "37df7433b631c4b50edc7590e7e2b8272596b9d4c1ee13dcbd4033ca71327a20",
+  "geometry_sha256": "5582e55b72beedc32ca8d2643fff627b90959922ac34059e1d9c636fa5772731",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54011,
+    "preview_opaque_pixels": 10060,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "CreditCard"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

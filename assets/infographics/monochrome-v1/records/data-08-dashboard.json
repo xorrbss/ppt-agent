@@ -1,0 +1,55 @@
+{
+  "id": "data-08-dashboard",
+  "category": "data",
+  "tags": {
+    "ko": [
+      "데이터",
+      "대시보드"
+    ],
+    "en": [
+      "data",
+      "dashboard"
+    ]
+  },
+  "alt": {
+    "ko": "대시보드 단색 벡터 인포그래픽",
+    "en": "dashboard monochrome vector infographic"
+  },
+  "path": "originals/data-08-dashboard.svg",
+  "thumbnail": "thumbnails/data-08-dashboard.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 555,
+  "sha256": "50d26875dfac016670260eba8775ef500b7d09a1a98ad5cb0434ae01e854732c",
+  "geometry_sha256": "28855a6e89dc88093fad8c6d54e0feb16c69839431ce7ad73bda4000df9500e6",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55638,
+    "preview_opaque_pixels": 8077,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "PanelsTopLeft",
+      "ChartPie"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

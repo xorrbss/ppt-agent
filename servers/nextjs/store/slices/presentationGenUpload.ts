@@ -21,6 +21,8 @@ export interface SourceContentAdmissionSelection {
   referenceSnapshotId: string;
 }
 
+export type PresentationGenerationStrategy = "authored" | "svg";
+
 interface PresentationGenUploadState {
   config: PresentationConfig | null;
 
@@ -35,6 +37,9 @@ interface PresentationGenUploadState {
 
   /** Authored mode only: selected server-authored visual style id. */
   authoredStyle: string;
+
+  /** Rendering source selected for a new document. Authored remains default. */
+  generationStrategy: PresentationGenerationStrategy;
 
   /**
    * Company furniture/brand pin. This is deliberately independent from
@@ -58,6 +63,7 @@ const initialState: PresentationGenUploadState = {
   selectedTheme: null, // null = no preset; deck keeps the default (theme picked later in the editor)
   authoredVisionQa: false,
   authoredStyle: "default",
+  generationStrategy: "authored",
   companyStandard: null,
   sourceContentMode: false,
   sourceContentAdmission: null,
@@ -79,6 +85,7 @@ export const presentationGenUploadSlice = createSlice({
         selectedTheme,
         authoredVisionQa,
         authoredStyle,
+        generationStrategy,
         companyStandard,
         sourceContentMode,
         sourceContentAdmission,
@@ -88,6 +95,7 @@ export const presentationGenUploadSlice = createSlice({
       if (selectedTheme !== undefined) state.selectedTheme = selectedTheme;
       if (authoredVisionQa !== undefined) state.authoredVisionQa = authoredVisionQa;
       if (authoredStyle !== undefined) state.authoredStyle = authoredStyle;
+      if (generationStrategy !== undefined) state.generationStrategy = generationStrategy;
       if (companyStandard !== undefined) {
         state.companyStandard = companyStandard;
       }

@@ -1,0 +1,56 @@
+{
+  "id": "operations-17-resource-pool",
+  "category": "operations",
+  "tags": {
+    "ko": [
+      "운영",
+      "자원"
+    ],
+    "en": [
+      "operations",
+      "resource",
+      "pool"
+    ]
+  },
+  "alt": {
+    "ko": "자원 단색 벡터 인포그래픽",
+    "en": "resource pool monochrome vector infographic"
+  },
+  "path": "originals/operations-17-resource-pool.svg",
+  "thumbnail": "thumbnails/operations-17-resource-pool.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 1013,
+  "sha256": "33d87f04bc4b8292e7bca1ff978400b9f9467ab119861d06a95df07072ff26b0",
+  "geometry_sha256": "34a2513d6a8b2bedcb2108df320a088b6577f940429377068d751bede9c58e08",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 53906,
+    "preview_opaque_pixels": 9397,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Boxes",
+      "CirclePlus"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "id": "ai-11-knowledge-graph",
+  "category": "ai",
+  "tags": {
+    "ko": [
+      "인공지능",
+      "지식그래프"
+    ],
+    "en": [
+      "ai",
+      "knowledge",
+      "graph"
+    ]
+  },
+  "alt": {
+    "ko": "지식그래프 단색 벡터 인포그래픽",
+    "en": "knowledge graph monochrome vector infographic"
+  },
+  "path": "originals/ai-11-knowledge-graph.svg",
+  "thumbnail": "thumbnails/ai-11-knowledge-graph.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 704,
+  "sha256": "ca2945ef7d6cd2dca20ec8fa4c9c656120c21220065e93d039e6a2c803468066",
+  "geometry_sha256": "6beffe9b1d945131a436f2b0f0dfcaaaae3b89ace97ba4921c56ce86c827c093",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56251,
+    "preview_opaque_pixels": 7529,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Network",
+      "BookOpen"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -68,6 +68,9 @@ const UploadPage = ({
   const sourceContentMode = useSelector(
     (state: RootState) => state.pptGenUpload.sourceContentMode,
   );
+  const generationStrategy = useSelector(
+    (state: RootState) => state.pptGenUpload.generationStrategy,
+  );
   const [reviewBeforeGeneration, setReviewBeforeGeneration] = useState(false);
   const [masterCatalogOpen, setMasterCatalogOpen] = useState(false);
   const [masterCatalogEntryMode, setMasterCatalogEntryMode] =
@@ -356,6 +359,28 @@ const UploadPage = ({
               </label>
               ) : null}
             </div>
+
+            <fieldset className="mt-4" data-testid="generation-strategy-selector">
+              <legend className="mb-2 text-sm font-semibold text-[#242629]">생성 방식</legend>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ["authored", "AI 저작", "기본 방식"],
+                  ["svg", "SVG", "벡터 원본으로 생성"],
+                ] as const).map(([strategy, label, description]) => (
+                  <label key={strategy} className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                    <input
+                      type="radio"
+                      name="generation-strategy"
+                      value={strategy}
+                      checked={generationStrategy === strategy}
+                      onChange={() => dispatch(setPptGenUploadState({ generationStrategy: strategy }))}
+                      disabled={sourceContentMode && strategy === "svg"}
+                    />
+                    <span><span className="font-medium">{label}</span><span className="ml-1 text-xs text-slate-500">{description}</span></span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
 
             {sourceContentMode ? <div className="mt-4 rounded-xl border border-[#E4E6E9] bg-[#FAFAFB] px-3 py-3 text-sm text-[#33363A]" data-testid="source-content-selection-summary">
               <p className="font-semibold">콘텐츠 · 원본 유지</p>

@@ -1,0 +1,55 @@
+{
+  "id": "process-08-approval-stamp",
+  "category": "process",
+  "tags": {
+    "ko": [
+      "프로세스",
+      "승인"
+    ],
+    "en": [
+      "process",
+      "approval",
+      "stamp"
+    ]
+  },
+  "alt": {
+    "ko": "승인 단색 벡터 인포그래픽",
+    "en": "approval stamp monochrome vector infographic"
+  },
+  "path": "originals/process-08-approval-stamp.svg",
+  "thumbnail": "thumbnails/process-08-approval-stamp.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 493,
+  "sha256": "9e23403ad9debb336a9416134b355861c5773950423cd3e928ddcacd75dfcdb2",
+  "geometry_sha256": "1f17570d47dcd603e827fde5ab23ef5b9dcac49a563388ba8a163de852150937",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54559,
+    "preview_opaque_pixels": 9518,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Stamp"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

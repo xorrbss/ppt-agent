@@ -1,0 +1,55 @@
+{
+  "id": "growth-09-customer-plus",
+  "category": "growth",
+  "tags": {
+    "ko": [
+      "성장",
+      "고객증가"
+    ],
+    "en": [
+      "growth",
+      "customer",
+      "plus"
+    ]
+  },
+  "alt": {
+    "ko": "고객증가 단색 벡터 인포그래픽",
+    "en": "customer plus monochrome vector infographic"
+  },
+  "path": "originals/growth-09-customer-plus.svg",
+  "thumbnail": "thumbnails/growth-09-customer-plus.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 374,
+  "sha256": "d0709aebdd4669f80f37d38987b64718db0718467547d904600acf053a29621d",
+  "geometry_sha256": "4b4c8251a374d084c91dd872e4668283cdbe3cad11fba61390bc6aaf362cb6b6",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57113,
+    "preview_opaque_pixels": 7204,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "UserRoundPlus"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

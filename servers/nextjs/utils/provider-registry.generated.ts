@@ -27,7 +27,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -46,7 +47,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -65,7 +67,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -87,7 +90,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -109,7 +113,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -131,7 +136,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -150,7 +156,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -221,7 +228,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -240,7 +248,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -313,7 +322,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -332,7 +342,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -351,7 +362,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -370,7 +382,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -389,7 +402,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -408,7 +422,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -427,7 +442,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -446,7 +462,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -465,7 +482,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -484,7 +502,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -506,7 +525,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -528,7 +548,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -550,7 +571,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -569,7 +591,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -588,7 +611,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -607,7 +631,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -626,7 +651,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   },
   {
@@ -645,7 +671,8 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
     },
     "presentationDrivers": [
       "template-v2",
-      "authored"
+      "authored",
+      "svg-v1"
     ]
   }
 ] as const;

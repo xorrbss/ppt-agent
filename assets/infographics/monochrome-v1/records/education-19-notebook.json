@@ -1,0 +1,54 @@
+{
+  "id": "education-19-notebook",
+  "category": "education",
+  "tags": {
+    "ko": [
+      "교육",
+      "공책"
+    ],
+    "en": [
+      "education",
+      "notebook"
+    ]
+  },
+  "alt": {
+    "ko": "공책 단색 벡터 인포그래픽",
+    "en": "notebook monochrome vector infographic"
+  },
+  "path": "originals/education-19-notebook.svg",
+  "thumbnail": "thumbnails/education-19-notebook.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 564,
+  "sha256": "e8cc955353984bd6f7a1f7ee4021c0e1dbabe9223a4bce9c0ad9bd8963607de7",
+  "geometry_sha256": "a577dbf33b5206fc09e7f3717a877e3137ece173d4bdcffde097142bd83ce3bf",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 51806,
+    "preview_opaque_pixels": 11803,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "NotebookPen"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

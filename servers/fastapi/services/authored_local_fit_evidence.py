@@ -228,6 +228,39 @@ def retain_publishable_unresolved_capture(
     return AcceptedLocalFit(original_html, png, metrics, receipt)
 
 
+def accept_original_capture(
+    capture: object, *, original_html: str, policy: Mapping[str, Any]
+) -> AcceptedLocalFit:
+    """Accept a fit-disabled original after the caller's measured quality pass."""
+
+    # Reuse the independent original's HTML, PNG and renderer identity checks.
+    retained = retain_publishable_unresolved_capture(
+        capture, original_html=original_html, policy=policy,
+        unresolved_reasons=("original_quality_pending",),
+    )
+    report = _report(capture)
+    if (
+        report.get("partial") is not False
+        or report.get("error") not in (None, "")
+        or report.get("unresolved_reasons") not in ([], ())
+    ):
+        raise AuthoredLocalFitRejected("candidate_evidence_invalid")
+    _validate_image_text_scope(retained.metrics)
+    baseline = _baseline(report, policy=policy)
+    receipt = _receipt(
+        policy=policy, baseline=baseline, final_html=original_html,
+        report=report, final_metrics=retained.metrics, final_png=retained.png,
+        changed=False, verified=True, max_bbox_delta_px=0.0,
+        verify_wait_ms=0.0, verify_ms=0.0,
+    )
+    receipt.update(
+        status="unchanged", renderedFitDisabled=True,
+        verifiedFitDisabled=False, verificationCount=0,
+    )
+    metrics = {**retained.metrics, RECEIPT_KEY: receipt}
+    return AcceptedLocalFit(original_html, retained.png, metrics, receipt)
+
+
 def validate_changed_capture(
     capture: object, *, original_html: str, policy: Mapping[str, Any]
 ) -> dict[str, Any]:
@@ -362,6 +395,7 @@ __all__ = [
     "ORIGINAL_DELIVERY_REVISION",
     "RECEIPT_KEY",
     "accept_unchanged_capture",
+    "accept_original_capture",
     "accept_verified_capture",
     "cache_accepted_capture",
     "extended_shrink_basis_valid",

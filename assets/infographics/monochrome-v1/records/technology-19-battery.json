@@ -1,0 +1,54 @@
+{
+  "id": "technology-19-battery",
+  "category": "technology",
+  "tags": {
+    "ko": [
+      "기술",
+      "배터리"
+    ],
+    "en": [
+      "technology",
+      "battery"
+    ]
+  },
+  "alt": {
+    "ko": "배터리 단색 벡터 인포그래픽",
+    "en": "battery monochrome vector infographic"
+  },
+  "path": "originals/technology-19-battery.svg",
+  "thumbnail": "thumbnails/technology-19-battery.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 481,
+  "sha256": "f2ddaa56ea0d580094ec0cc14f3c9f9e2c3e7729eef0c8bde06b5bdb54079788",
+  "geometry_sha256": "52f5f3b680c50d22262708ba4ea6464178355ce725ff8ac765e0ca0df039c8e3",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56812,
+    "preview_opaque_pixels": 7467,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "BatteryFull"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

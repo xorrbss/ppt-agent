@@ -1,0 +1,55 @@
+{
+  "id": "collaboration-17-workshop",
+  "category": "collaboration",
+  "tags": {
+    "ko": [
+      "협업",
+      "워크숍"
+    ],
+    "en": [
+      "collaboration",
+      "workshop"
+    ]
+  },
+  "alt": {
+    "ko": "워크숍 단색 벡터 인포그래픽",
+    "en": "workshop monochrome vector infographic"
+  },
+  "path": "originals/collaboration-17-workshop.svg",
+  "thumbnail": "thumbnails/collaboration-17-workshop.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 734,
+  "sha256": "a22b81bb5c8931e2f88cba0831c5f7eb5796d626edea409d7d0f4db95c7c3be1",
+  "geometry_sha256": "ffb582b1581f40743baac55fef95a0a9b33ffbd4a220ef407efe8ca09d6f513c",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55336,
+    "preview_opaque_pixels": 8257,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "PanelsTopLeft",
+      "PenTool"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

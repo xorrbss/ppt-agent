@@ -1,0 +1,55 @@
+{
+  "id": "growth-11-accelerator",
+  "category": "growth",
+  "tags": {
+    "ko": [
+      "성장",
+      "가속"
+    ],
+    "en": [
+      "growth",
+      "accelerator"
+    ]
+  },
+  "alt": {
+    "ko": "가속 단색 벡터 인포그래픽",
+    "en": "accelerator monochrome vector infographic"
+  },
+  "path": "originals/growth-11-accelerator.svg",
+  "thumbnail": "thumbnails/growth-11-accelerator.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 530,
+  "sha256": "9f1aa2aacd16f15f36cd547556bbda2e3701f977b585eac84f63d6651d011ab5",
+  "geometry_sha256": "3d8c80ba274bd0237d8013c0c6b90432a59842f6c196d5ba332db5114c1218af",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 59726,
+    "preview_opaque_pixels": 4487,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Gauge",
+      "Zap"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

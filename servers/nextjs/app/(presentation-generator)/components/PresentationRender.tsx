@@ -108,6 +108,7 @@ const SlideScale = ({
     isClickable = true,
     fixedSize = false,
     preferAuthoredHtml = false,
+    resolveSvgAssets = false,
     driverId,
 }: {
     slide: any;
@@ -118,12 +119,13 @@ const SlideScale = ({
     isClickable?: boolean;
     fixedSize?: boolean;
     preferAuthoredHtml?: boolean;
+    resolveSvgAssets?: boolean;
     driverId?: PresentationDriverId;
 }) => {
 
-    const isAuthoredSlide = driverId === "authored" ||
+    const isAuthoredSlide = driverId === "authored" || driverId === "svg-v1" ||
         slide?.content?.__authored__ === true ||
-        slide?.layout_group === "authored";
+        slide?.layout_group === "authored" || slide?.layout_group === "svg";
     const canvas = isAuthoredSlide
         ? resolveAuthoredCanvas(theme)
         : LEGACY_AUTHORED_CANVAS;
@@ -204,6 +206,7 @@ const SlideScale = ({
                     <PresentationContentRender
                         slide={slide}
                         preferAuthoredHtml={preferAuthoredHtml}
+                        resolveSvgAssets={resolveSvgAssets}
                         driverId={driverId}
                         canvas={isAuthoredSlide ? canvas : undefined}
                     />

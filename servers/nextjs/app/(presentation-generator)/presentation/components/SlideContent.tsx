@@ -35,6 +35,7 @@ interface SlideContentProps {
   mutationsEnabled?: boolean;
   deferRender?: boolean;
   renderPriority?: boolean;
+  resolveSvgAssets?: boolean;
 }
 
 const SlideContent = ({
@@ -46,6 +47,7 @@ const SlideContent = ({
   mutationsEnabled = true,
   deferRender = false,
   renderPriority = false,
+  resolveSvgAssets = false,
 }: SlideContentProps) => {
   const dispatch = useDispatch();
   const [isUpdating, setIsUpdating] = useState(false);
@@ -56,7 +58,7 @@ const SlideContent = ({
     (state: RootState) => state.presentationGeneration
   );
   const flag = flaggedSlides[flaggedSlideKey(slide, index)] ?? null;
-  const canvas = slide?.content?.__authored__ === true || slide?.layout_group === "authored"
+  const canvas = slide?.content?.__authored__ === true || slide?.layout_group === "authored" || slide?.layout_group === "svg"
     ? resolveAuthoredCanvas(presentationData?.theme)
     : LEGACY_AUTHORED_CANVAS;
 
@@ -168,6 +170,7 @@ const SlideContent = ({
                   isEditMode={mutationsEnabled}
                   showEditScan={isChatEditing}
                   preferAuthoredHtml
+                  resolveSvgAssets={resolveSvgAssets}
                 />
               </div>
             </ViewportCulledSlide>

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.original-first-local-fit",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Preserve an independent original capture before optional local fit; skip fit on measured pass and retain valid originals for review on repair failure.",
+  "scope": [
+    "authored",
+    "local-fit"
+  ],
+  "invariants": [
+    "Bind original HTML PNG metrics policy and renderer identity before optional fitting.",
+    "Keep source integrity and safety gates; never label skipped quality checks as passed.",
+    "Retry only transient original capture failures once within the operation deadline."
+  ],
+  "forbidden": [
+    "Treating unusable originals as successful output."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_local_fit_admission.py",
+    "servers/fastapi/services/authored_original_capture_checkpoint.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-14T16:24:56.0459062+00:00"
+}

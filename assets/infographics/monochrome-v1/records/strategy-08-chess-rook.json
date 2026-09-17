@@ -1,0 +1,55 @@
+{
+  "id": "strategy-08-chess-rook",
+  "category": "strategy",
+  "tags": {
+    "ko": [
+      "전략",
+      "방어전략"
+    ],
+    "en": [
+      "strategy",
+      "chess",
+      "rook"
+    ]
+  },
+  "alt": {
+    "ko": "방어전략 단색 벡터 인포그래픽",
+    "en": "chess rook monochrome vector infographic"
+  },
+  "path": "originals/strategy-08-chess-rook.svg",
+  "thumbnail": "thumbnails/strategy-08-chess-rook.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 541,
+  "sha256": "975e8286846f659031180f7e1ff316bb95f40d0b6c4bbfc5ddde9f824a574347",
+  "geometry_sha256": "1756fd1ce91b2218f1fb986e44bba9669c21801672692a69515b4d5619ae8942",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 50073,
+    "preview_opaque_pixels": 13535,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Castle"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

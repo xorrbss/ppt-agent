@@ -84,6 +84,9 @@ export const usePresentationGeneration = (
   const authoredStyle = useSelector(
     (s: RootState) => s.pptGenUpload.authoredStyle
   );
+  const generationStrategy = useSelector(
+    (s: RootState) => s.pptGenUpload.generationStrategy,
+  );
   const companyStandard = useSelector(
     (s: RootState) => s.pptGenUpload.companyStandard
   );
@@ -303,6 +306,7 @@ export const usePresentationGeneration = (
     // "Auto" is a sentinel, not a real language: send null so the backend applies
     // its language-aware fallback instead of authoring with a literal "Auto".
     const reduxAuthoredRequest = {
+      strategy: generationStrategy,
       language: isSourceContentGeneration
         ? null
         : language && language !== LanguageType.Auto
@@ -313,7 +317,7 @@ export const usePresentationGeneration = (
         : {}),
       // The immutable source-content path must never enter vision re-authoring,
       // including outline reload/resume paths reconstructed from Redux.
-      visionQa: isSourceContentGeneration ? false : authoredVisionQa,
+      visionQa: isSourceContentGeneration || generationStrategy === "svg" ? false : authoredVisionQa,
       authoredStyle:
         generationConfig?.aspectRatio === "9:16"
           ? DEFAULT_AUTHORED_STYLE.id
@@ -349,10 +353,10 @@ export const usePresentationGeneration = (
     }
     // A "starting" record can survive a lost POST response. Reusing it here
     // resubmits with the same idempotency key instead of creating a second job.
-    if (!durableTask || durableTask.mode !== "authored") {
+    if (!durableTask || (durableTask.mode !== "authored" && durableTask.mode !== "svg")) {
       durableTask = saveDurableGenerationTask({
         ...createDurableGenerationTask({
-          mode: "authored",
+          mode: generationStrategy,
           sourcePresentationId: presentationId,
           timeoutMs: AUTHORED_TIMEOUT_MS,
           progressDurationSeconds: estSeconds,
@@ -378,6 +382,7 @@ export const usePresentationGeneration = (
           : {}),
         language: authoredRequest.language,
         vision_qa: authoredRequest.visionQa,
+        strategy: authoredRequest.strategy ?? "authored",
         authored_style: authoredRequest.authoredStyle,
         aspect_ratio: authoredRequest.aspectRatio,
         codex_generation_preset: authoredRequest.codexGenerationPreset,
@@ -431,6 +436,7 @@ export const usePresentationGeneration = (
     sourceContentMode,
     sourceContentAdmission,
     authoredStyle,
+    generationStrategy,
     companyStandard,
     onMasterRequired,
     openWorkspace,

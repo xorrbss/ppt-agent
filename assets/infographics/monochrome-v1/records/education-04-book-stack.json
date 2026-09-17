@@ -1,0 +1,55 @@
+{
+  "id": "education-04-book-stack",
+  "category": "education",
+  "tags": {
+    "ko": [
+      "교육",
+      "책더미"
+    ],
+    "en": [
+      "education",
+      "book",
+      "stack"
+    ]
+  },
+  "alt": {
+    "ko": "책더미 단색 벡터 인포그래픽",
+    "en": "book stack monochrome vector infographic"
+  },
+  "path": "originals/education-04-book-stack.svg",
+  "thumbnail": "thumbnails/education-04-book-stack.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 448,
+  "sha256": "c5e1b24fbc38f6678d047faf066aa529ed9ac76623b95937410592d6bdfefe30",
+  "geometry_sha256": "9397d65828fdfb7a813babbf1ca0cd3711d29d02e9c8894892d30b6e279ba041",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 50827,
+    "preview_opaque_pixels": 12813,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "LibraryBig"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

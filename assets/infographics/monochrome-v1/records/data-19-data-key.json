@@ -1,0 +1,56 @@
+{
+  "id": "data-19-data-key",
+  "category": "data",
+  "tags": {
+    "ko": [
+      "데이터",
+      "데이터접근"
+    ],
+    "en": [
+      "data",
+      "data",
+      "key"
+    ]
+  },
+  "alt": {
+    "ko": "데이터접근 단색 벡터 인포그래픽",
+    "en": "data key monochrome vector infographic"
+  },
+  "path": "originals/data-19-data-key.svg",
+  "thumbnail": "thumbnails/data-19-data-key.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 664,
+  "sha256": "accfae11d8527ba5eb59afccf04b62a4d4f8c21684f188db6275b97e5302f51a",
+  "geometry_sha256": "cd31106197a30252983052e1462b6b91af5afee2f427b192f40bc6de31a0b42b",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57475,
+    "preview_opaque_pixels": 6316,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "KeyRound",
+      "Database"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "id": "infrastructure-04-bridge",
+  "category": "infrastructure",
+  "tags": {
+    "ko": [
+      "인프라",
+      "교량"
+    ],
+    "en": [
+      "infrastructure",
+      "bridge"
+    ]
+  },
+  "alt": {
+    "ko": "교량 단색 벡터 인포그래픽",
+    "en": "bridge monochrome vector infographic"
+  },
+  "path": "originals/infrastructure-04-bridge.svg",
+  "thumbnail": "thumbnails/infrastructure-04-bridge.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 317,
+  "sha256": "e5b8f22659bacffe461c9ca9c1767ee67486cfb9b1418d50dc0be079422fe3c3",
+  "geometry_sha256": "d21edb0d03d5778eacabca5b530832273f5de105d7a9ba9da682b5195ca3d47c",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54873,
+    "preview_opaque_pixels": 9376,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Bridge"
+    ],
+    "custom_symbols": [
+      "Bridge"
+    ],
+    "parallel_jobs": 10
+  }
+}

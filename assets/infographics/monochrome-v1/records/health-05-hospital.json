@@ -1,0 +1,54 @@
+{
+  "id": "health-05-hospital",
+  "category": "health",
+  "tags": {
+    "ko": [
+      "건강",
+      "병원"
+    ],
+    "en": [
+      "health",
+      "hospital"
+    ]
+  },
+  "alt": {
+    "ko": "병원 단색 벡터 인포그래픽",
+    "en": "hospital monochrome vector infographic"
+  },
+  "path": "originals/health-05-hospital.svg",
+  "thumbnail": "thumbnails/health-05-hospital.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 496,
+  "sha256": "d9384faf77c556c22e2e56f3f0e5c031293905b6ce6eef59fca9c9b34996d681",
+  "geometry_sha256": "3ec252346ff7573587885024b10013d9bb2cc3c2c9008cce7a699b9c55b9657a",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 49616,
+    "preview_opaque_pixels": 13844,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Hospital"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

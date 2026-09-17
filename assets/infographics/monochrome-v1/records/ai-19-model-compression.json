@@ -1,0 +1,56 @@
+{
+  "id": "ai-19-model-compression",
+  "category": "ai",
+  "tags": {
+    "ko": [
+      "인공지능",
+      "모델압축"
+    ],
+    "en": [
+      "ai",
+      "model",
+      "compression"
+    ]
+  },
+  "alt": {
+    "ko": "모델압축 단색 벡터 인포그래픽",
+    "en": "model compression monochrome vector infographic"
+  },
+  "path": "originals/ai-19-model-compression.svg",
+  "thumbnail": "thumbnails/ai-19-model-compression.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 1043,
+  "sha256": "bb3fefd37921b6174a13c9c639286fc27ea9db0e26a3422bb4c3841f5cd51915",
+  "geometry_sha256": "b47cb97a89e8356bb662758f2f24693fc0b6032ab9930b4d0e9ae00d07156b28",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 59696,
+    "preview_opaque_pixels": 4623,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Minimize2",
+      "BrainCircuit"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -113,6 +113,64 @@ class AdmittedHtml:
     node_count: int
 
 
+def admit_authorized_svg_materialized(canonical_svg: str, materialized_svg: str, *,
+                                      source_manifest: dict, width_px: int, height_px: int) -> AdmittedHtml:
+    """Worker-only derivative admission after authenticated artifact resolution.
+
+    Canonical SVG keeps the normal source/structure limits. Only exact image
+    href replacement may grow; decoded resources have a separate page budget.
+    This does not admit arbitrary HTML, network locators, or filesystem paths.
+    """
+    import base64
+    import io
+    import xml.etree.ElementTree as ET
+    from PIL import Image
+    from services.svg_contract import validate_svg
+    validate_svg(canonical_svg, width=width_px, height=height_px, source_manifest=source_manifest)
+    if not isinstance(materialized_svg, str) or len(materialized_svg.encode("utf-8")) > 96 * 1024 * 1024:
+        raise RendererPolicyError("authorized SVG page wire budget exceeded")
+    if re.search(r"<!|<\?", materialized_svg):
+        raise RendererPolicyError("authorized SVG declarations forbidden")
+    canonical = ET.fromstring(canonical_svg)
+    resolved = ET.fromstring(materialized_svg)
+    canonical_images = [n for n in canonical.iter() if n.tag.rsplit("}", 1)[-1] == "image"]
+    resolved_images = [n for n in resolved.iter() if n.tag.rsplit("}", 1)[-1] == "image"]
+    if len(canonical_images) != len(resolved_images):
+        raise RendererPolicyError("authorized SVG image count mismatch")
+    asset_digests = []
+    total_bytes = total_pixels = 0
+    for original, image_node in zip(canonical_images, resolved_images):
+        href = image_node.get("href", "")
+        match = re.fullmatch(r"data:image/(png|jpeg);base64,([A-Za-z0-9+/=]+)", href)
+        if match is None:
+            raise RendererPolicyError("authorized SVG requires embedded raster bytes")
+        try:
+            payload = base64.b64decode(match[2], validate=True)
+            total_bytes += len(payload)
+            if len(payload) > 32 * 1024 * 1024 or total_bytes > 64 * 1024 * 1024:
+                raise RendererPolicyError("authorized SVG decoded byte budget exceeded")
+            with Image.open(io.BytesIO(payload)) as raster:
+                total_pixels += raster.width * raster.height
+                if (raster.format != {"png": "PNG", "jpeg": "JPEG"}[match[1]]
+                        or max(raster.size) > 16384 or total_pixels > 64_000_000
+                        or getattr(raster, "n_frames", 1) != 1):
+                    raise RendererPolicyError("authorized SVG decoded pixel budget exceeded")
+                raster.verify()
+        except (ValueError, OSError, SyntaxError, Image.DecompressionBombError) as error:
+            raise RendererPolicyError("authorized SVG raster decoder rejected") from error
+        asset_digests.append("sha256:" + hashlib.sha256(payload).hexdigest())
+        image_node.set("href", original.get("href", ""))
+    if ET.tostring(canonical) != ET.tostring(resolved):
+        raise RendererPolicyError("authorized SVG canonical source mismatch")
+    wrapper = (f'<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
+        f'html,body{{margin:0;width:{width_px}px;height:{height_px}px;overflow:hidden}}'
+        f'body>svg{{display:block}}</style></head><body>{materialized_svg}</body></html>')
+    nonce = secrets.token_urlsafe(24)
+    return AdmittedHtml(html=_inject_csp(wrapper, nonce), nonce=nonce,
+        source_digest="sha256:" + hashlib.sha256(wrapper.encode("utf-8")).hexdigest(),
+        asset_digests=tuple(asset_digests), node_count=sum(1 for _ in canonical.iter()) + 5)
+
+
 def duplicate_attribute_counts(
     attrs: list[tuple[str, str | None]],
 ) -> list[tuple[str, int]]:
@@ -263,12 +321,16 @@ class _PolicyParser(HTMLParser):
                 families = _validate_css(value)
                 self.font_declarations += value.lower().count("font-family")
                 self.font_families.update(families)
-            if name in {"href", "action", "formaction", "poster", "data", "xlink:href", "srcdoc"}:
+            if name in {"href", "action", "formaction", "poster", "data", "xlink:href", "srcdoc"} and not (tag == "image" and name == "href" and "svg" in self._stack):
                 raise RendererPolicyError(f"URL-bearing attribute is not allowed: {name}")
             if re.search(r"(?:^|[/\\])\.\.(?:[/\\]|%2f|%5c)", value, re.IGNORECASE):
                 raise RendererPolicyError("path traversal marker is not allowed")
         if tag == "img" and "src" in values:
             self._validate_image(values["src"], values)
+        if tag == "image":
+            if "svg" not in self._stack or "href" not in values:
+                raise RendererPolicyError("SVG images require an inline SVG and raster href")
+            self._validate_image(values["href"], values)
         if tag == "style":
             self._style_depth += 1
 

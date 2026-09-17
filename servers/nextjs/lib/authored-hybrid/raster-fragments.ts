@@ -78,7 +78,9 @@ export async function fragmentRasterBand(input: LegacyRasterBand, backgroundElig
   }
   const warnings: string[] = [];
   let crops = rects;
-  if(exceeded) { crops=maxX<0?[]:[{x:0,y:0,width:info.width,height:info.height}]; warnings.push("raster-fragment-count-limit"); }
+  // Preserve every painted pixel without turning a small fallback into a
+  // full-slide selection hitbox when scanline fragmentation exceeds budget.
+  if(exceeded) { crops=maxX<0?[]:[{x:minX,y:minY,width:maxX-minX+1,height:maxY-minY+1}]; warnings.push("raster-fragment-count-limit"); }
   if(backgroundEligible && opaque) crops=[{x:0,y:0,width:info.width,height:info.height}];
   let bytes=0;
   let fragments: FragmentRasterBand["fragments"][number][]=[];

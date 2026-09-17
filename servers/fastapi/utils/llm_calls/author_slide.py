@@ -946,6 +946,7 @@ async def author_slide_html(
     *,
     source_images: Mapping[str, SourceImageCandidate] | Sequence[SourceImageCandidate] = (),
     require_all_source_images: bool = False,
+    source_image_placement_plan: Mapping | None = None,
     # The user's request text and this slide's deck-scoped illustration decision;
     # both default to absent, reproducing the prompt for callers that have neither.
     instructions: Optional[str] = None,
@@ -1042,6 +1043,10 @@ async def author_slide_html(
         source_slot_candidates,
         required=require_all_source_images,
     )
+    if not require_all_source_images:
+        source_guidance += author_slide_prompt.planned_source_image_brief(
+            source_image_placement_plan or (structured_context or {}).get("source_image_placement_plan")
+        )
     if require_all_source_images and source_slot_candidates:
         source_guidance = (
             "\n\nSLIDE-SPECIFIC SOURCE AUTHORITY: The immutable source-content "

@@ -878,6 +878,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                             presentationId={presentation_id}
                             mutationsEnabled={INLINE_MUTATIONS_ENABLED}
                             deferRender
+                            resolveSvgAssets={index === selectedSlide}
                             renderPriority={
                               index === selectedSlide ||
                               index === highlightedSlideIndex ||

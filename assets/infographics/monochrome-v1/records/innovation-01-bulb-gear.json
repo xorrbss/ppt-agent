@@ -1,0 +1,56 @@
+{
+  "id": "innovation-01-bulb-gear",
+  "category": "innovation",
+  "tags": {
+    "ko": [
+      "혁신",
+      "혁신전구"
+    ],
+    "en": [
+      "innovation",
+      "bulb",
+      "gear"
+    ]
+  },
+  "alt": {
+    "ko": "혁신전구 단색 벡터 인포그래픽",
+    "en": "bulb gear monochrome vector infographic"
+  },
+  "path": "originals/innovation-01-bulb-gear.svg",
+  "thumbnail": "thumbnails/innovation-01-bulb-gear.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 930,
+  "sha256": "8733363ebcbc5cc2a4b52d3ed8f6862044000bbdda87efd3456682e0baaf958a",
+  "geometry_sha256": "cbee8e7353579d1f37ec1ec477698500a460397ae28aebe77e6bdad7a759c365",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 59247,
+    "preview_opaque_pixels": 4795,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Lightbulb",
+      "Cog"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

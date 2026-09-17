@@ -1,0 +1,54 @@
+{
+  "id": "process-09-queue",
+  "category": "process",
+  "tags": {
+    "ko": [
+      "프로세스",
+      "대기열"
+    ],
+    "en": [
+      "process",
+      "queue"
+    ]
+  },
+  "alt": {
+    "ko": "대기열 단색 벡터 인포그래픽",
+    "en": "queue monochrome vector infographic"
+  },
+  "path": "originals/process-09-queue.svg",
+  "thumbnail": "thumbnails/process-09-queue.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 392,
+  "sha256": "0756ce0e50d1cf76e99b1e2d47d3d5ede7aea7fd97ffd01cd73aa19ef54465a3",
+  "geometry_sha256": "801d5f01c24845b02008a5b1497328d0d03c41675a88c8bbe5cf5f6781148ddc",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56938,
+    "preview_opaque_pixels": 7372,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ListStart"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

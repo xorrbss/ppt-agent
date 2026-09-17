@@ -43,7 +43,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -69,7 +70,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -95,7 +97,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -139,7 +142,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -188,7 +192,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -242,7 +247,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -268,7 +274,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -367,7 +374,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -398,7 +406,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -509,7 +518,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -535,7 +545,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -561,7 +572,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -587,7 +599,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -613,7 +626,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -639,7 +653,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -665,7 +680,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -696,7 +712,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -722,7 +739,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -748,7 +766,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -777,7 +796,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -811,7 +831,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -845,7 +866,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -865,7 +887,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -891,7 +914,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -917,7 +941,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -943,7 +968,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     },
     {
@@ -969,7 +995,8 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
       },
       "presentationDrivers": [
         "template-v2",
-        "authored"
+        "authored",
+        "svg-v1"
       ]
     }
   ]

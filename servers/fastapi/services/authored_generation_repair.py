@@ -330,6 +330,8 @@ async def _revise_gate_repair_candidates(
         "illustration_slots",
         "infographic_briefs",
         "reference_images_by_slide",
+        "source_images_by_slide",
+        "source_image_placement_plans_by_slide",
     ):
         values = subset_kwargs.get(key)
         if values is not None:

@@ -1,0 +1,56 @@
+{
+  "id": "innovation-03-idea-cards",
+  "category": "innovation",
+  "tags": {
+    "ko": [
+      "혁신",
+      "아이디어카드"
+    ],
+    "en": [
+      "innovation",
+      "idea",
+      "cards"
+    ]
+  },
+  "alt": {
+    "ko": "아이디어카드 단색 벡터 인포그래픽",
+    "en": "idea cards monochrome vector infographic"
+  },
+  "path": "originals/innovation-03-idea-cards.svg",
+  "thumbnail": "thumbnails/innovation-03-idea-cards.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 569,
+  "sha256": "f5b4e94d940b122b09339b36fc3de8fe42b56f11d7de9e73dde414145d951377",
+  "geometry_sha256": "f5273dcd382935e15a58a3a3a7e0d10543efe4e93eccd801e48e6848c0a8d90e",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57967,
+    "preview_opaque_pixels": 6135,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "StickyNote",
+      "Lightbulb"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

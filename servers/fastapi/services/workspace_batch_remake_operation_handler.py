@@ -244,6 +244,9 @@ class WorkspaceBatchRemakeOperationHandler:
                             slide_index=slide_index,
                             preview_task_id=preview_task_id,
                             snapshot=False,
+                            operation_id=claim.operation_id,
+                            attempt_token=claim.attempt_token,
+                            expected_revision=claim.expected_revision,
                         )
                 except AuthoredPageRemakeError as error:
                     slide_results.append(

@@ -2796,7 +2796,10 @@ export function serializePreparedNativeElement(
     }
     element.shape.borderLines?.forEach((border) => {
       const lineShape: AuthoredHybridShapePayload = {
-        shape: element.shape.shape === "ellipse" ? "freeform" : "line",
+        // A preset line joins opposite corners of its nonzero transform box.
+        // Explicit endpoints keep borders axis-aligned even when that box is
+        // quantized to a minimum positive OOXML extent.
+        shape: "freeform",
         fill: null,
         stroke: border.color,
         strokeWidthPt: border.widthPt,
@@ -2806,7 +2809,9 @@ export function serializePreparedNativeElement(
         radiusPt: 0,
         points: element.shape.shape === "ellipse"
           ? ellipseBorderArcPoints(border.side)
-          : undefined,
+          : (border.side === "left" || border.side === "right")
+            ? [{ x: 0, y: 0 }, { x: 0, y: 1 }]
+            : [{ x: 0, y: 0 }, { x: 1, y: 0 }],
         closed: false,
       };
       const bounds = element.shape.shape === "ellipse"

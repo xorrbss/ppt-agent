@@ -1,0 +1,55 @@
+{
+  "id": "ai-01-neural-network",
+  "category": "ai",
+  "tags": {
+    "ko": [
+      "인공지능",
+      "신경망"
+    ],
+    "en": [
+      "ai",
+      "neural",
+      "network"
+    ]
+  },
+  "alt": {
+    "ko": "신경망 단색 벡터 인포그래픽",
+    "en": "neural network monochrome vector infographic"
+  },
+  "path": "originals/ai-01-neural-network.svg",
+  "thumbnail": "thumbnails/ai-01-neural-network.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 819,
+  "sha256": "09d71895d7d7fbe71c5dd0fdee8f8fe96521c37893f8469f20fad1218a018c2f",
+  "geometry_sha256": "4f57631c762646500a67fc8df609c3623dbed41d1788a83519036b02a4dba693",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 52770,
+    "preview_opaque_pixels": 11022,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "BrainCircuit"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

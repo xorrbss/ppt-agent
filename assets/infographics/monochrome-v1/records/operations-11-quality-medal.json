@@ -1,0 +1,55 @@
+{
+  "id": "operations-11-quality-medal",
+  "category": "operations",
+  "tags": {
+    "ko": [
+      "운영",
+      "품질"
+    ],
+    "en": [
+      "operations",
+      "quality",
+      "medal"
+    ]
+  },
+  "alt": {
+    "ko": "품질 단색 벡터 인포그래픽",
+    "en": "quality medal monochrome vector infographic"
+  },
+  "path": "originals/operations-11-quality-medal.svg",
+  "thumbnail": "thumbnails/operations-11-quality-medal.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 449,
+  "sha256": "349c7bec1d6eea4ee06459fb4727bdad7b6104168a2f9f94429e647c0b17cec0",
+  "geometry_sha256": "87227c22dc46be3b36deff2ea0fb01a6d66b4f6a5bc00a3853aa9cefbc090ccd",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55097,
+    "preview_opaque_pixels": 8875,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "BadgeCheck"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

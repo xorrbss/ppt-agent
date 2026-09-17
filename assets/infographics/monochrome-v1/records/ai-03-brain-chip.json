@@ -1,0 +1,56 @@
+{
+  "id": "ai-03-brain-chip",
+  "category": "ai",
+  "tags": {
+    "ko": [
+      "인공지능",
+      "두뇌칩"
+    ],
+    "en": [
+      "ai",
+      "brain",
+      "chip"
+    ]
+  },
+  "alt": {
+    "ko": "두뇌칩 단색 벡터 인포그래픽",
+    "en": "brain chip monochrome vector infographic"
+  },
+  "path": "originals/ai-03-brain-chip.svg",
+  "thumbnail": "thumbnails/ai-03-brain-chip.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 1147,
+  "sha256": "2543bb511ab21a27b022d701fb7efb47f5c4f36ddcfa17d2fe4df26be8fd2401",
+  "geometry_sha256": "0f7b03ad32f56dd2769f46889f577c31941c4f6160e5ab5939376ebd0410e6fc",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55010,
+    "preview_opaque_pixels": 8376,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Brain",
+      "Cpu"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

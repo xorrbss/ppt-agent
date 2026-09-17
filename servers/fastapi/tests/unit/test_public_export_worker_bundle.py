@@ -14,6 +14,7 @@ from pathlib import Path
 import uuid
 
 import pytest
+import services.public_export_worker_bundle as worker_bundle_module
 
 from models.sql.public_artifact import ArtifactRef, artifact_storage_key
 from services.public_export_identity import (
@@ -170,15 +171,32 @@ def test_the_fallback_digest_is_not_a_readable_bundle_digest(tmp_path: Path) -> 
     assert empty.digest != readable.digest
 
 
-def test_the_repository_bundle_is_readable_and_process_cached() -> None:
+def test_the_repository_bundle_is_readable() -> None:
     bundle = public_export_worker_bundle(PROTOCOL)
 
     # A checked-out tree must never export under the unattested marker.
     assert bundle.source == BUNDLE_SOURCE_FILES
     assert bundle.file_count > 0
     assert len(bundle.digest) == 64
-    assert public_export_worker_bundle(PROTOCOL) is bundle
+    assert public_export_worker_bundle(PROTOCOL).digest == bundle.digest
     assert bundle.evidence()["digest"] == bundle.digest
+
+
+def test_live_worker_source_change_invalidates_process_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A long-running local controller must not reuse an older source digest."""
+
+    nextjs = _worker_tree(tmp_path)
+    monkeypatch.setattr(worker_bundle_module, "_REPOSITORY_ROOT", tmp_path)
+
+    before = public_export_worker_bundle(PROTOCOL)
+    nextjs.joinpath("lib", "authored-hybrid", "pptx-assembler.ts").write_text(
+        "export const assemble = 2;\n", encoding="utf-8"
+    )
+    after = public_export_worker_bundle(PROTOCOL)
+
+    assert after.digest != before.digest
 
 
 def _identity(exporter_digest: str) -> CanonicalExportIdentity:

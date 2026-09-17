@@ -1,0 +1,56 @@
+{
+  "id": "innovation-19-transform-blocks",
+  "category": "innovation",
+  "tags": {
+    "ko": [
+      "혁신",
+      "변환"
+    ],
+    "en": [
+      "innovation",
+      "transform",
+      "blocks"
+    ]
+  },
+  "alt": {
+    "ko": "변환 단색 벡터 인포그래픽",
+    "en": "transform blocks monochrome vector infographic"
+  },
+  "path": "originals/innovation-19-transform-blocks.svg",
+  "thumbnail": "thumbnails/innovation-19-transform-blocks.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 601,
+  "sha256": "7e9e74618b8a9382a3631ddbc5db8f61a656e859c8c7c7ce0d9268c0f65fbc76",
+  "geometry_sha256": "8ae0cb320bfe3f2c42d1e55afe6b36af513be5005d6a66b5a77e5ebe85982837",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 58145,
+    "preview_opaque_pixels": 5840,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Shapes",
+      "ArrowRightLeft"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

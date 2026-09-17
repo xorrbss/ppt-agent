@@ -1,0 +1,54 @@
+{
+  "id": "operations-09-wrench",
+  "category": "operations",
+  "tags": {
+    "ko": [
+      "운영",
+      "정비"
+    ],
+    "en": [
+      "operations",
+      "wrench"
+    ]
+  },
+  "alt": {
+    "ko": "정비 단색 벡터 인포그래픽",
+    "en": "wrench monochrome vector infographic"
+  },
+  "path": "originals/operations-09-wrench.svg",
+  "thumbnail": "thumbnails/operations-09-wrench.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 411,
+  "sha256": "64153775dcc2099f1678b8f390552114bc2bc28eb0b096b8b6c51079cfaf066a",
+  "geometry_sha256": "80c548f5e3e8f234d7172ee2eb47032ddfcc23d0298dedff65ce45341cc8d92a",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55558,
+    "preview_opaque_pixels": 8438,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Wrench"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

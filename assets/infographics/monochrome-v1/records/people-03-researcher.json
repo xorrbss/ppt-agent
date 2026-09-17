@@ -1,0 +1,55 @@
+{
+  "id": "people-03-researcher",
+  "category": "people",
+  "tags": {
+    "ko": [
+      "사람",
+      "연구자"
+    ],
+    "en": [
+      "people",
+      "researcher"
+    ]
+  },
+  "alt": {
+    "ko": "연구자 단색 벡터 인포그래픽",
+    "en": "researcher monochrome vector infographic"
+  },
+  "path": "originals/people-03-researcher.svg",
+  "thumbnail": "thumbnails/people-03-researcher.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 542,
+  "sha256": "2c7bc0d4bcec51d1b22009e535cbe456460cad4b703353ed1dfa226d2c6fb26b",
+  "geometry_sha256": "9d2ce76d6a228420b060416f869b9763f7a52287a8c93ae5097fa69c49f7c039",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 59088,
+    "preview_opaque_pixels": 5100,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Search",
+      "FlaskConical"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

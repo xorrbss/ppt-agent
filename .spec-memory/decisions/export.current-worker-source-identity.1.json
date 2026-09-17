@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "export.current-worker-source-identity",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Compute export worker source identity for every export; a long-lived controller must not reuse completed outputs across worker source changes.",
+  "scope": [
+    "export",
+    "cache"
+  ],
+  "invariants": [
+    "Unchanged worker source bytes preserve canonical export reuse.",
+    "Changed worker source bytes invalidate the completed export identity without a controller restart."
+  ],
+  "forbidden": [
+    "Process-lifetime memoization of the on-disk worker bundle digest."
+  ],
+  "evidence": [
+    "servers/fastapi/services/public_export_worker_bundle.py",
+    "servers/fastapi/tests/unit/test_public_export_worker_bundle.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-14T16:39:41.6459217+00:00"
+}

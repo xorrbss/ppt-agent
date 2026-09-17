@@ -1,0 +1,55 @@
+{
+  "id": "health-08-shield-cross",
+  "category": "health",
+  "tags": {
+    "ko": [
+      "건강",
+      "건강보호"
+    ],
+    "en": [
+      "health",
+      "shield",
+      "cross"
+    ]
+  },
+  "alt": {
+    "ko": "건강보호 단색 벡터 인포그래픽",
+    "en": "shield cross monochrome vector infographic"
+  },
+  "path": "originals/health-08-shield-cross.svg",
+  "thumbnail": "thumbnails/health-08-shield-cross.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 471,
+  "sha256": "e8a0a4c454b312cb9459b8ac674e177085e61893296c26daa63951c0f43a2b91",
+  "geometry_sha256": "afb143875ca686bdb92cd45e27d5dd798c8ab3444d9c7f399803dfc212277176",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55409,
+    "preview_opaque_pixels": 8662,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ShieldPlus"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "id": "growth-07-revenue-arrow",
+  "category": "growth",
+  "tags": {
+    "ko": [
+      "성장",
+      "매출상승"
+    ],
+    "en": [
+      "growth",
+      "revenue",
+      "arrow"
+    ]
+  },
+  "alt": {
+    "ko": "매출상승 단색 벡터 인포그래픽",
+    "en": "revenue arrow monochrome vector infographic"
+  },
+  "path": "originals/growth-07-revenue-arrow.svg",
+  "thumbnail": "thumbnails/growth-07-revenue-arrow.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 649,
+  "sha256": "9802157b26a42b221125060593ff7c10cbedcbd6aea4a882d9f755b5daf1c4d7",
+  "geometry_sha256": "fe8b9002f4eb0a941db07f395c8681f2ff755d7a80a69168f05e4b00dd204850",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56273,
+    "preview_opaque_pixels": 7413,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "BadgeDollarSign",
+      "TrendingUp"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

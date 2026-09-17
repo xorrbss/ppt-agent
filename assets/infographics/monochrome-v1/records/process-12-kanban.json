@@ -1,0 +1,54 @@
+{
+  "id": "process-12-kanban",
+  "category": "process",
+  "tags": {
+    "ko": [
+      "프로세스",
+      "칸반"
+    ],
+    "en": [
+      "process",
+      "kanban"
+    ]
+  },
+  "alt": {
+    "ko": "칸반 단색 벡터 인포그래픽",
+    "en": "kanban monochrome vector infographic"
+  },
+  "path": "originals/process-12-kanban.svg",
+  "thumbnail": "thumbnails/process-12-kanban.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 347,
+  "sha256": "0ff2ec3ca86870470699c3f027bf3d6c3ce8a265c90f2d739585fb8eb0e4eea5",
+  "geometry_sha256": "e74660582799e5372cf8db6adda52400082d9f048ed14c5d4f41497df5446e60",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 51512,
+    "preview_opaque_pixels": 12288,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Columns3"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "id": "growth-15-upward-elevator",
+  "category": "growth",
+  "tags": {
+    "ko": [
+      "성장",
+      "상승"
+    ],
+    "en": [
+      "growth",
+      "upward",
+      "elevator"
+    ]
+  },
+  "alt": {
+    "ko": "상승 단색 벡터 인포그래픽",
+    "en": "upward elevator monochrome vector infographic"
+  },
+  "path": "originals/growth-15-upward-elevator.svg",
+  "thumbnail": "thumbnails/growth-15-upward-elevator.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 421,
+  "sha256": "a66e7a8ade620e47f1233a390d14e94f8053beaaa006d9eef88b36aec15146b7",
+  "geometry_sha256": "9a74efd10cc2aee90bae673082fc4c7812c0d6ce8512aa726bebde95ecfd9824",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 60004,
+    "preview_opaque_pixels": 4300,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ArrowUpFromLine",
+      "Square"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

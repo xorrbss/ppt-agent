@@ -1,0 +1,55 @@
+{
+  "id": "ai-18-document-understanding",
+  "category": "ai",
+  "tags": {
+    "ko": [
+      "인공지능",
+      "문서이해"
+    ],
+    "en": [
+      "ai",
+      "document",
+      "understanding"
+    ]
+  },
+  "alt": {
+    "ko": "문서이해 단색 벡터 인포그래픽",
+    "en": "document understanding monochrome vector infographic"
+  },
+  "path": "originals/ai-18-document-understanding.svg",
+  "thumbnail": "thumbnails/ai-18-document-understanding.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 438,
+  "sha256": "85fc1c48f67192918267b19b181e1fcafda068d815e6c6072c3666771dddcd9c",
+  "geometry_sha256": "e39ca487ded75275ae073790875284192fd43721f36782104b8f3c847f29dedd",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 53695,
+    "preview_opaque_pixels": 10244,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "FileSearch"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

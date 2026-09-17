@@ -80,6 +80,7 @@ class PresentationGenerationJob(SQLModel, table=True):
     )
     request_sha256: str = Field(sa_column=Column(String(64), nullable=False))
     request_payload: dict = Field(sa_column=Column(JSON, nullable=False))
+    svg_style_snapshot: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))
     template_v2_target: Optional[dict] = Field(
         default=None,
         sa_column=Column(JSON, nullable=True),

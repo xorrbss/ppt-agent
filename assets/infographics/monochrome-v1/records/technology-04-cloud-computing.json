@@ -1,0 +1,55 @@
+{
+  "id": "technology-04-cloud-computing",
+  "category": "technology",
+  "tags": {
+    "ko": [
+      "기술",
+      "클라우드"
+    ],
+    "en": [
+      "technology",
+      "cloud",
+      "computing"
+    ]
+  },
+  "alt": {
+    "ko": "클라우드 단색 벡터 인포그래픽",
+    "en": "cloud computing monochrome vector infographic"
+  },
+  "path": "originals/technology-04-cloud-computing.svg",
+  "thumbnail": "thumbnails/technology-04-cloud-computing.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 616,
+  "sha256": "4536b78cd81bcbeb24048921cee65f98006beff6a14c216ac87f6ef974753e44",
+  "geometry_sha256": "b43af6aa3465e4d4b29b8d9e92ff8f1e61d03beff92f567d430002c0bf963022",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56229,
+    "preview_opaque_pixels": 7935,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "CloudCog"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

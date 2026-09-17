@@ -1,0 +1,55 @@
+{
+  "id": "health-10-nutrition-plate",
+  "category": "health",
+  "tags": {
+    "ko": [
+      "건강",
+      "영양"
+    ],
+    "en": [
+      "health",
+      "nutrition",
+      "plate"
+    ]
+  },
+  "alt": {
+    "ko": "영양 단색 벡터 인포그래픽",
+    "en": "nutrition plate monochrome vector infographic"
+  },
+  "path": "originals/health-10-nutrition-plate.svg",
+  "thumbnail": "thumbnails/health-10-nutrition-plate.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 582,
+  "sha256": "a879f7a192ba4c56d7f00422da91119cb0f773b094d9e47f449907580cf841f3",
+  "geometry_sha256": "22f12a889a8fcf0ed7b50da49f46cb9ce549fd4cbead26b24a8c5af184b03218",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 52939,
+    "preview_opaque_pixels": 10969,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Salad"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

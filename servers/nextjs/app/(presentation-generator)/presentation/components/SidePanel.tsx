@@ -74,6 +74,7 @@ const SidePanel = ({
     ? presentationData.slides.length - 1
     : 0;
   const isTemplateFree = isTemplateFreePresentation(presentationData);
+  const canManageSlides = mutationsEnabled;
   const previewScale = displayMode === "drawer" ? 0.18 : undefined;
 
   useEffect(() => {
@@ -97,6 +98,7 @@ const SidePanel = ({
     if (target === null) return;
     container.scrollTo({ top: target, behavior: "smooth" });
   }, [presentationData?.slides?.length, selectedSlide]);
+
 
   const handleAddSlideClick = () => {
     if (!mutationsEnabled || !presentationData?.slides?.length || isStreaming) {
@@ -155,7 +157,7 @@ const SidePanel = ({
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
-    if (!mutationsEnabled) return;
+    if (!canManageSlides) return;
     const { active, over } = event;
 
     if (!active || !over || !presentationData?.slides) return;
@@ -239,7 +241,7 @@ const SidePanel = ({
               aria-label={t("thumbnails")}
               className="overflow-y-auto w-full hide-scrollbar min-h-0 flex-1 space-y-3.5"
             >
-              {isStreaming || !mutationsEnabled ? (
+              {isStreaming || !canManageSlides ? (
                 presentationData &&
                 presentationData?.slides.map((slide: Slide, index: number) => (
                   <SlideThumbnailCard

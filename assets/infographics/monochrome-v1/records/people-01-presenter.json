@@ -1,0 +1,54 @@
+{
+  "id": "people-01-presenter",
+  "category": "people",
+  "tags": {
+    "ko": [
+      "사람",
+      "발표자"
+    ],
+    "en": [
+      "people",
+      "presenter"
+    ]
+  },
+  "alt": {
+    "ko": "발표자 단색 벡터 인포그래픽",
+    "en": "presenter monochrome vector infographic"
+  },
+  "path": "originals/people-01-presenter.svg",
+  "thumbnail": "thumbnails/people-01-presenter.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 355,
+  "sha256": "c87d097ac6b06715f1ed091163acbe72d17a00c97f88ccd75d291735dcd2dc16",
+  "geometry_sha256": "3c2a6ed5389f75c53bb3d8105b91c0b16dc0ccb31e7c0aa2bf6f6e9171395b85",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55110,
+    "preview_opaque_pixels": 9098,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Presentation"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

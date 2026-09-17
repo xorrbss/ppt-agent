@@ -1,0 +1,55 @@
+{
+  "id": "technology-18-screen-share",
+  "category": "technology",
+  "tags": {
+    "ko": [
+      "기술",
+      "화면공유"
+    ],
+    "en": [
+      "technology",
+      "screen",
+      "share"
+    ]
+  },
+  "alt": {
+    "ko": "화면공유 단색 벡터 인포그래픽",
+    "en": "screen share monochrome vector infographic"
+  },
+  "path": "originals/technology-18-screen-share.svg",
+  "thumbnail": "thumbnails/technology-18-screen-share.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 404,
+  "sha256": "15a0d1350431c8bf97428c36aa645c61ee720c7064d71031e3e1166ddfaf37b8",
+  "geometry_sha256": "05af9246127c2faca53f27c9b20e28651619e49ea36a12b1ddef2fa79d9ef476",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 52842,
+    "preview_opaque_pixels": 11059,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "MonitorUp"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

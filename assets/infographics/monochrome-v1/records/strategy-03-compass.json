@@ -1,0 +1,54 @@
+{
+  "id": "strategy-03-compass",
+  "category": "strategy",
+  "tags": {
+    "ko": [
+      "전략",
+      "나침반"
+    ],
+    "en": [
+      "strategy",
+      "compass"
+    ]
+  },
+  "alt": {
+    "ko": "나침반 단색 벡터 인포그래픽",
+    "en": "compass monochrome vector infographic"
+  },
+  "path": "originals/strategy-03-compass.svg",
+  "thumbnail": "thumbnails/strategy-03-compass.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 390,
+  "sha256": "6e8522262cd936e16c5c64e85690777e805b865a671ccf300f78041210975c2c",
+  "geometry_sha256": "46277eaf13739e3111021fa68fc3d8d5c0858ccba9cc1dd0ce931b5a73487bd3",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 52945,
+    "preview_opaque_pixels": 10760,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Compass"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

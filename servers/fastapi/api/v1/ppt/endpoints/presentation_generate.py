@@ -12,6 +12,7 @@ behavior-changing refactor and is tracked apart from this move-only split.
 """
 
 import asyncio
+from services.source_images.budget import source_image_admission_budget
 import json
 import logging
 import os
@@ -496,8 +497,12 @@ async def check_if_api_request_is_valid(
             detail="Number of slides cannot be less than 3 if table of contents is included",
         )
 
-    if request.strategy not in {None, "authored"}:
+    if request.strategy not in {None, "authored", "svg"}:
         raise HTTPException(status_code=400, detail="generation_strategy_conflict")
+    if request.strategy == "svg":
+        from services.svg_generation_admission import require_svg_creation_admission
+
+        require_svg_creation_admission(request)
     if (
         request.aspect_ratio != "16:9"
         and str(request.template or "").strip().lower() != AUTHORED_TEMPLATE
@@ -1126,7 +1131,12 @@ async def generate_presentation_handler(
                 async_status.updated_at = datetime.now(timezone.utc)
                 sql_session.add(async_status)
                 await sql_session.commit()
-            response = await generate_authored_presentation(
+            generate_document = generate_authored_presentation
+            if request.strategy == "svg":
+                from services.svg_presentation_service import generate_svg_presentation
+
+                generate_document = generate_svg_presentation
+            response = await generate_document(
                 request,
                 presentation_id,
                 presentation_outlines,
@@ -1137,6 +1147,12 @@ async def generate_presentation_handler(
             # The single point where "generation finished and an export was
             # requested" is decided, for the synchronous and the durable path
             # alike: this is the one successful completion of the handler.
+            if request.strategy == "svg" and async_status is not None:
+                async_status.status = "completed"
+                async_status.message = "SVG presentation generation completed; review required"
+                async_status.data = {**response.model_dump(mode="json"), "quality_gate_status": "review_required"}
+                async_status.error = None
+                sql_session.add(async_status)
             response = await finalize_generation_export_chain(
                 sql_session,
                 response=response,
@@ -1427,7 +1443,7 @@ async def _resume_failed_authored_job(
         job.state != "failed"
         or not job.resume_allowed
         or (
-            job.request_payload.get("strategy") != "authored"
+            job.request_payload.get("strategy") not in {"authored", "svg"}
             and str(job.request_payload.get("template", "")).lower()
             != AUTHORED_TEMPLATE
         )
@@ -1551,7 +1567,12 @@ async def _bootstrap_generation_workspace(
     # same canonical Authored identity before workspace capability derivation.
     # Leaving the profile unset makes the documented one-call API fail with
     # ``unsupported_presentation_driver`` before it can enqueue its operation.
-    stamp_new_authored_presentation(presentation)
+    if request.strategy == "svg":
+        from services.compatibility_migration.admission import stamp_new_svg_presentation
+
+        stamp_new_svg_presentation(presentation)
+    else:
+        stamp_new_authored_presentation(presentation)
     presentation.theme = merge_presentation_canvas(
         presentation.theme, request_canvas_metadata(request)
     )
@@ -1682,6 +1703,9 @@ async def _admit_generation_operation_v2_compatible(
                 slide_count=slide_count,
                 image_budget=slide_count,
                 repair_budget=slide_count,
+                source_image_budget=source_image_admission_budget(
+                    request._reference_snapshots, request.files
+                ),
                 vqa_budget=slide_count if request.vision_qa else 0,
             ),
             resource_plan=plan_weighted_resources(

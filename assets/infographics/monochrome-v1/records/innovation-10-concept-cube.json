@@ -1,0 +1,56 @@
+{
+  "id": "innovation-10-concept-cube",
+  "category": "innovation",
+  "tags": {
+    "ko": [
+      "혁신",
+      "개념모형"
+    ],
+    "en": [
+      "innovation",
+      "concept",
+      "cube"
+    ]
+  },
+  "alt": {
+    "ko": "개념모형 단색 벡터 인포그래픽",
+    "en": "concept cube monochrome vector infographic"
+  },
+  "path": "originals/innovation-10-concept-cube.svg",
+  "thumbnail": "thumbnails/innovation-10-concept-cube.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 651,
+  "sha256": "0fc744e7f4d4522097ff8c3bc4ad433a40c02ac4eb4b131566b874f84441ef16",
+  "geometry_sha256": "16dfebcaa16c20b11a6421db957c2a02c3578fb7a1a347ef030c74355f2e365e",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57175,
+    "preview_opaque_pixels": 6666,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Box",
+      "Lightbulb"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

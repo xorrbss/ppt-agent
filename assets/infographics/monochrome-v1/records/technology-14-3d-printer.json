@@ -1,0 +1,56 @@
+{
+  "id": "technology-14-3d-printer",
+  "category": "technology",
+  "tags": {
+    "ko": [
+      "기술",
+      "삼차원프린터"
+    ],
+    "en": [
+      "technology",
+      "3d",
+      "printer"
+    ]
+  },
+  "alt": {
+    "ko": "삼차원프린터 단색 벡터 인포그래픽",
+    "en": "3d printer monochrome vector infographic"
+  },
+  "path": "originals/technology-14-3d-printer.svg",
+  "thumbnail": "thumbnails/technology-14-3d-printer.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 686,
+  "sha256": "469b43ec70f2c4a7ef65ef4464073d915277d286c8d6ef933f785786433d06b6",
+  "geometry_sha256": "b18a06a7e9bc618ce73f3c66072af954cc6787f759a8d9ef0d1dad2906cc94b8",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55172,
+    "preview_opaque_pixels": 8335,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Printer",
+      "Box"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

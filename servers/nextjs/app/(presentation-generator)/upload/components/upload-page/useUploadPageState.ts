@@ -47,7 +47,6 @@ import {
   createDurableGenerationTask,
   saveDurableGenerationTask,
 } from "../../../outline/hooks/durableGenerationTask";
-import { CODEX_GENERATION_PRESETS } from "@/components/codex-config";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 const masterClient = new AuthoredVnextMasterClient();
@@ -91,6 +90,9 @@ export const useUploadPageState = ({
   const authoredVisionQa = useSelector(
     (state: RootState) => state.pptGenUpload.authoredVisionQa,
   );
+  const generationStrategy = useSelector(
+    (state: RootState) => state.pptGenUpload.generationStrategy,
+  );
   const sourceContentMode = useSelector(
     (state: RootState) => state.pptGenUpload.sourceContentMode,
   );
@@ -116,10 +118,7 @@ export const useUploadPageState = ({
     webSearch: false,
     aspectRatio: "16:9",
     codexGenerationPreset: ["codex", "chatgpt"].includes(llmConfig.LLM || "")
-      ? CODEX_GENERATION_PRESETS.find(
-          (preset) => preset.modelId === llmConfig.CODEX_MODEL
-            && preset.effort === llmConfig.CODEX_REASONING_EFFORT,
-        )?.id ?? "astra-medium"
+      ? "sol-medium"
       : null,
   });
 
@@ -246,12 +245,13 @@ export const useUploadPageState = ({
       : Math.min(600, baseSeconds);
     saveDurableGenerationTask({
       ...createDurableGenerationTask({
-        mode: "authored",
+        mode: generationStrategy,
         sourcePresentationId: presentationId,
         timeoutMs: 30 * 60 * 1000,
         progressDurationSeconds,
       }),
       authoredRequest: {
+        strategy: generationStrategy,
         language:
           config.language && config.language !== LanguageType.Auto
             ? config.language
@@ -474,6 +474,15 @@ export const useUploadPageState = ({
       abandonRun();
       return;
     }
+    if (sourceContentMode && generationStrategy === "svg") {
+      trackUploadValidationFailure("svg_source_content_unsupported");
+      notify.warning(
+        "SVG 생성 제한",
+        "원본 콘텐츠 유지 생성은 현재 AI 저작 방식에서만 사용할 수 있습니다.",
+      );
+      abandonRun();
+      return;
+    }
     if (sourceContentMode && !(await ensureSourceContentAuthoredStyle())) {
       abandonRun();
       return;
@@ -627,6 +636,7 @@ export const useUploadPageState = ({
       web_search: sourceContentMode ? false : !!config?.webSearch,
       aspect_ratio: config.aspectRatio,
       theme: selectedTheme,
+      strategy: generationStrategy,
     });
 
     dispatch(setPresentationId(createResponse.id));
@@ -678,6 +688,7 @@ export const useUploadPageState = ({
       web_search: !!config?.webSearch,
       aspect_ratio: config.aspectRatio,
       theme: selectedTheme,
+      strategy: generationStrategy,
     });
 
 

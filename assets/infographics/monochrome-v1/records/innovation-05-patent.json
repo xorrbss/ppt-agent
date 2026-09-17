@@ -1,0 +1,55 @@
+{
+  "id": "innovation-05-patent",
+  "category": "innovation",
+  "tags": {
+    "ko": [
+      "혁신",
+      "특허"
+    ],
+    "en": [
+      "innovation",
+      "patent"
+    ]
+  },
+  "alt": {
+    "ko": "특허 단색 벡터 인포그래픽",
+    "en": "patent monochrome vector infographic"
+  },
+  "path": "originals/innovation-05-patent.svg",
+  "thumbnail": "thumbnails/innovation-05-patent.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 710,
+  "sha256": "4a0aafacfcccaa566fc6e76bfe341344e9d971a756630565cd64bfbd348669e9",
+  "geometry_sha256": "c4f86996b578b8abae0f4581987bc42fb45df146774cc52a5bcd3bf74d9e149e",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55604,
+    "preview_opaque_pixels": 7971,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ScrollText",
+      "BadgeCheck"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

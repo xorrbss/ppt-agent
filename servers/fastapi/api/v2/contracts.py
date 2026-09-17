@@ -79,7 +79,7 @@ class GenerationRouteReceiptV1(PublicWireModel):
         "generation-route-receipt/v1"
     )
     requested_mode: GenerationMode
-    selected_route: Literal["source-native", "authored-fallback"]
+    selected_route: Literal["source-native", "authored-fallback", "svg-native"]
     design_pack_pin: DesignPackPinV1 | None = None
     narrative_ir_digest: str | None = Field(default=None, pattern=DIGEST_PATTERN)
     fallback_reason: str | None = Field(default=None, min_length=1, max_length=160)
@@ -115,6 +115,7 @@ class PresentationGenerationRequestV2(PublicWireModel):
         "presentation-generation-request/v2"
     )
     engine: Literal["authored"] = "authored"
+    strategy: Literal["authored", "svg"] = "authored"
     generation_mode: GenerationMode = "auto"
     design_pack_pin: DesignPackPinV1 | None = None
     generation_engine: Literal["authored", "deck-ir"] | None = "authored"

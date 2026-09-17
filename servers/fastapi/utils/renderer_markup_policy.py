@@ -24,7 +24,7 @@ ALLOWED_TAGS = {
     "table", "caption", "colgroup", "col", "thead", "tbody", "tfoot", "tr",
     "th", "td", "strong", "b", "em", "i", "small", "sub", "sup", "br",
     "hr", "img", "figure", "figcaption", "blockquote", "style", "svg", "g", "path",
-    "rect", "circle", "ellipse", "line", "polyline", "polygon", "text", "tspan",
+    "rect", "circle", "ellipse", "line", "polyline", "polygon", "text", "tspan", "image",
     "defs", "lineargradient", "radialgradient", "stop", "clippath", "mask",
 }
 VOID_TAGS = {"meta", "br", "hr", "img", "col"}
@@ -117,6 +117,7 @@ TAG_ATTRIBUTES: Mapping[str, set[str]] = {
         "focusable", "xmlns", "overflow",
     ),
     "g": _svg(),
+    "image": _svg("x", "y", "width", "height", "href", "preserveaspectratio"),
     "path": _svg("d", "fill-rule", "clip-rule"),
     "rect": _svg("x", "y", "width", "height", "rx", "ry"),
     "circle": _svg("cx", "cy", "r"),

@@ -1803,6 +1803,10 @@ class DurableArtifactService:
         kind: Literal[
             "checkpoint",
             "slide-html",
+            "slide-svg",
+            "image-derivative",
+            "source-manifest",
+            "placement-manifest",
             "slide-png",
             "export-bundle",
             "presentation-pptx",
@@ -1882,6 +1886,10 @@ class DurableArtifactService:
         kind: Literal[
             "checkpoint",
             "slide-html",
+            "slide-svg",
+            "image-derivative",
+            "source-manifest",
+            "placement-manifest",
             "slide-png",
             "export-bundle",
             "presentation-pptx",
@@ -2545,10 +2553,27 @@ async def _locked_current_operation(
     attempt_number: int,
     attempt_token: str,
     fencing_token: int,
+    operation_kind: Literal["generation", "export"] = "export",
 ) -> WorkspaceOperation | None:
     """Lock the exact live operation attempt used by pointer mutations."""
 
+    if operation_kind not in ("generation", "export"):
+        raise ValueError("artifact operation kind is invalid")
     if attempt_number < 1 or fencing_token < 1 or not attempt_token:
+        return None
+    # Match the worker heartbeat/terminal transition lock order.
+    admission = await session.scalar(
+        select(PublicOperationAdmission)
+        .where(
+            PublicOperationAdmission.operation_id == operation_id,
+            PublicOperationAdmission.owner_id == owner_id,
+            PublicOperationAdmission.tenant_id == tenant_id,
+            PublicOperationAdmission.operation_kind == operation_kind,
+            PublicOperationAdmission.state == "active",
+        )
+        .with_for_update()
+    )
+    if admission is None:
         return None
     operation = await session.scalar(
         select(WorkspaceOperation)
@@ -2563,19 +2588,6 @@ async def _locked_current_operation(
         .with_for_update()
     )
     if operation is None:
-        return None
-    admission = await session.scalar(
-        select(PublicOperationAdmission)
-        .where(
-            PublicOperationAdmission.operation_id == operation_id,
-            PublicOperationAdmission.owner_id == owner_id,
-            PublicOperationAdmission.tenant_id == tenant_id,
-            PublicOperationAdmission.operation_kind == "export",
-            PublicOperationAdmission.state == "active",
-        )
-        .with_for_update()
-    )
-    if admission is None:
         return None
     if operation.contract_version == "public-operation/v2":
         return operation if admission.fence == fencing_token else None
@@ -2658,6 +2670,7 @@ async def promote_artifact_publication_if_current(
     quality_digest: str,
     artifact_id: uuid.UUID,
     now: datetime | None = None,
+    operation_kind: Literal["generation", "export"] = "export",
 ) -> PublicArtifactPublication | None:
     """CAS one publication pointer against the current operation fence.
 
@@ -2678,6 +2691,7 @@ async def promote_artifact_publication_if_current(
         attempt_number=attempt_number,
         attempt_token=attempt_token,
         fencing_token=fencing_token,
+        operation_kind=operation_kind,
     )
     if operation is None:
         return None
@@ -2752,6 +2766,7 @@ async def put_slide_checkpoint_if_current(
     input_digest: str,
     stage_version: str,
     artifact_id: uuid.UUID,
+    operation_kind: Literal["generation", "export"] = "export",
     now: datetime | None = None,
 ) -> PublicSlideCheckpoint | None:
     """CAS a committed checkpoint and its refcount under the operation fence."""
@@ -2768,6 +2783,7 @@ async def put_slide_checkpoint_if_current(
         attempt_number=attempt_number,
         attempt_token=attempt_token,
         fencing_token=fencing_token,
+        operation_kind=operation_kind,
     )
     if operation is None:
         return None

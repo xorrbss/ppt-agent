@@ -1,0 +1,56 @@
+{
+  "id": "technology-20-quantum-chip",
+  "category": "technology",
+  "tags": {
+    "ko": [
+      "기술",
+      "양자칩"
+    ],
+    "en": [
+      "technology",
+      "quantum",
+      "chip"
+    ]
+  },
+  "alt": {
+    "ko": "양자칩 단색 벡터 인포그래픽",
+    "en": "quantum chip monochrome vector infographic"
+  },
+  "path": "originals/technology-20-quantum-chip.svg",
+  "thumbnail": "thumbnails/technology-20-quantum-chip.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 914,
+  "sha256": "156eeddb0334fdf5319341694d6f51f48df0afdef9469b18549fd63284053667",
+  "geometry_sha256": "e12bd6c8ebff87315baa2337b6eebeefcf7773079a550f4705fe04190db4bb1a",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54190,
+    "preview_opaque_pixels": 9096,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Atom",
+      "Cpu"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

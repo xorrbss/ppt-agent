@@ -1,0 +1,56 @@
+{
+  "id": "growth-08-market-expansion",
+  "category": "growth",
+  "tags": {
+    "ko": [
+      "성장",
+      "시장확장"
+    ],
+    "en": [
+      "growth",
+      "market",
+      "expansion"
+    ]
+  },
+  "alt": {
+    "ko": "시장확장 단색 벡터 인포그래픽",
+    "en": "market expansion monochrome vector infographic"
+  },
+  "path": "originals/growth-08-market-expansion.svg",
+  "thumbnail": "thumbnails/growth-08-market-expansion.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 471,
+  "sha256": "98f3296863aa40be3f315c9c639035f7c7bd07d4059c85f3b6ede440fa4b9ddd",
+  "geometry_sha256": "cf2df3e884a7758ff3c6761af29a8ceea1b423f16c3c5657608e3755411a0834",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55297,
+    "preview_opaque_pixels": 8309,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Globe",
+      "MoveUpRight"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

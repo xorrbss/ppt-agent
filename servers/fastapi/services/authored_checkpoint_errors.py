@@ -143,6 +143,16 @@ class AuthoredStageError(RuntimeError):
             value["provider_attempt_count"] = self.provider_attempt_count
         if self.prior_failure:
             value["prior_failure"] = dict(self.prior_failure)
+        if self.code.startswith("authored_local_fit_"):
+            # Keep the classified capture cause through the stage wrapper.
+            # Exception messages may contain provider bodies; retain types only.
+            chain = []
+            nested = cause.__cause__
+            while nested is not None and len(chain) < 4:
+                chain.append(type(nested).__name__)
+                nested = nested.__cause__
+            if chain:
+                value["capture_cause_types"] = chain
         from services.authored_author_capacity_recovery import safe_owner_capacity_diagnostic
 
         diagnostic = safe_owner_capacity_diagnostic(

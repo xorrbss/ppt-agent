@@ -282,6 +282,16 @@ class WorkspaceExportOperationHandler:
                     PublicOperationAdmission.operation_id == claim.operation_id
                 )
             )
+            if presentation.mode == "svg":
+                from services.svg_export_operation import execute_svg_workspace_export
+                try:
+                    return await execute_svg_workspace_export(
+                        context, presentation=presentation, admission=admission,
+                        session_factory=self._session_factory,
+                    )
+                except Exception:
+                    LOGGER.exception("SVG export failed for operation %s", claim.operation_id)
+                    raise
             if admission is not None and admission.state == "active":
                 public_tenant_id = admission.tenant_id
                 # Public requests never execute Chrome or an OOXML converter in

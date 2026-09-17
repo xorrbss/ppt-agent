@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.upload-image-semantic-placement",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Match uploaded images to relevant slides; allow multiple images and intentional overlap; omit images only when no suitable slide exists.",
+  "scope": [
+    "authored",
+    "source-images"
+  ],
+  "invariants": [
+    "Protect important image content and slide text readability.",
+    "Distinguish irrelevant images from analysis or placement failures.",
+    "Use the same final HTML for capture, validation, storage and export."
+  ],
+  "forbidden": [
+    "Force every uploaded image into the presentation.",
+    "Treat technical failure as semantic irrelevance."
+  ],
+  "evidence": [],
+  "supersedes": null,
+  "recordedAt": "2026-09-14T13:27:45.4002509+00:00"
+}

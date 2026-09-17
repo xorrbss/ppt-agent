@@ -1,0 +1,54 @@
+{
+  "id": "education-08-certificate",
+  "category": "education",
+  "tags": {
+    "ko": [
+      "교육",
+      "수료증"
+    ],
+    "en": [
+      "education",
+      "certificate"
+    ]
+  },
+  "alt": {
+    "ko": "수료증 단색 벡터 인포그래픽",
+    "en": "certificate monochrome vector infographic"
+  },
+  "path": "originals/education-08-certificate.svg",
+  "thumbnail": "thumbnails/education-08-certificate.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 415,
+  "sha256": "f02f09fa5a81c824e94ee7f9ae7af973883cc9d74982b3d2da45897449242a42",
+  "geometry_sha256": "7e3efb29011a507d97e2ad23ffc48c01323a3d00d07736de9826c67ad0203747",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56289,
+    "preview_opaque_pixels": 7962,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Award"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

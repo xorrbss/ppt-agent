@@ -2137,10 +2137,13 @@ async def apply_workspace_action(
         request,
     )
     explicit_checkpoint_recovery = checkpoint_recovery is not None
+    from services.svg_checkpoint_recovery import verified_svg_recovery_checkpoints
+    svg_recovery = await verified_svg_recovery_checkpoints(session, operation, request)
     if (
         request.recovery_revision is not None
         and not explicit_capacity_recovery
         and not explicit_checkpoint_recovery
+        and svg_recovery is None
     ):
         raise WorkspaceServiceError("operation_not_retryable", status_code=409)
     if terminal_retry:
@@ -2156,6 +2159,7 @@ async def apply_workspace_action(
             and not _is_retryable_template_v2_outline_admission(operation)
             and not explicit_capacity_recovery
             and not explicit_checkpoint_recovery
+            and svg_recovery is None
         ):
             raise WorkspaceServiceError("operation_not_retryable", status_code=409)
         retry_of_operation_id = operation.id
@@ -2185,7 +2189,7 @@ async def apply_workspace_action(
             "retry_of_operation_id": str(source_operation.id),
             "account_deletion_generation": account_generation,
         }
-        if explicit_capacity_recovery or explicit_checkpoint_recovery:
+        if explicit_capacity_recovery or explicit_checkpoint_recovery or svg_recovery is not None:
             retry_payload["recovery_revision"] = request.recovery_revision
         retry_request_hash = canonical_payload_hash(
             {
@@ -2268,6 +2272,32 @@ async def apply_workspace_action(
                     raise WorkspaceServiceError(
                         "operation_state_conflict", status_code=409
                     )
+                if source_operation.kind == "presentation.generate":
+                    from fastapi import HTTPException
+                    from api.v1.ppt.endpoints.presentation_generate import (
+                        _admit_generation_operation_v2_compatible,
+                        _request_from_durable_payload,
+                    )
+
+                    retry_job = (await session.execute(
+                        select(PresentationGenerationJob).where(
+                            PresentationGenerationJob.workspace_operation_id == operation.id,
+                            PresentationGenerationJob.presentation_id == presentation.id,
+                        )
+                    )).scalar_one()
+                    try:
+                        await _admit_generation_operation_v2_compatible(
+                            session,
+                            request=_request_from_durable_payload(retry_job.request_payload),
+                            presentation=presentation,
+                            operation=operation,
+                        )
+                    except HTTPException as error:
+                        await session.rollback()
+                        raise WorkspaceServiceError(
+                            str(error.detail), status_code=error.status_code,
+                            retryable=error.status_code == 429,
+                        ) from error
                 if checkpoint_recovery is not None:
                     checkpoint_recovery.render_status = "completed"
                     checkpoint_recovery.failed_stage = None
@@ -2275,6 +2305,10 @@ async def apply_workspace_action(
                     checkpoint_recovery.failed_at = None
                     checkpoint_recovery.updated_at = now
                     session.add(checkpoint_recovery)
+                if svg_recovery is not None:
+                    from services.svg_checkpoint_recovery import reset_svg_recovery_checkpoints
+                    reset_svg_recovery_checkpoints(session, svg_recovery,
+                        operation_id=source_operation.id, now=now, recovery_revision=request.recovery_revision)
         except IntegrityError:
             await session.rollback()
             return await _replay_action_receipt_after_conflict(

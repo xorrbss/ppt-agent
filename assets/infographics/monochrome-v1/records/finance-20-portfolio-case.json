@@ -1,0 +1,56 @@
+{
+  "id": "finance-20-portfolio-case",
+  "category": "finance",
+  "tags": {
+    "ko": [
+      "금융",
+      "투자포트폴리오"
+    ],
+    "en": [
+      "finance",
+      "portfolio",
+      "case"
+    ]
+  },
+  "alt": {
+    "ko": "투자포트폴리오 단색 벡터 인포그래픽",
+    "en": "portfolio case monochrome vector infographic"
+  },
+  "path": "originals/finance-20-portfolio-case.svg",
+  "thumbnail": "thumbnails/finance-20-portfolio-case.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 548,
+  "sha256": "5f72d44330aea917c6005215705d0cfa7d899e15157bc9e696c0326946ebe3a8",
+  "geometry_sha256": "4052972202e49265ce4e5f0c81b85d73a17301b53561954e29b1de08dae0591f",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56410,
+    "preview_opaque_pixels": 7344,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "BriefcaseBusiness",
+      "ChartLine"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

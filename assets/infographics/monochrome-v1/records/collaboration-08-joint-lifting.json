@@ -1,0 +1,56 @@
+{
+  "id": "collaboration-08-joint-lifting",
+  "category": "collaboration",
+  "tags": {
+    "ko": [
+      "협업",
+      "공동운반"
+    ],
+    "en": [
+      "collaboration",
+      "joint",
+      "lifting"
+    ]
+  },
+  "alt": {
+    "ko": "공동운반 단색 벡터 인포그래픽",
+    "en": "joint lifting monochrome vector infographic"
+  },
+  "path": "originals/collaboration-08-joint-lifting.svg",
+  "thumbnail": "thumbnails/collaboration-08-joint-lifting.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 799,
+  "sha256": "11a913217ce6a046d89dcf2b35293a88a84ad00224351112396b8c7cf9783552",
+  "geometry_sha256": "26a618a7983f2602575d3732c7aba6b24b921643a62361e1de0ecda9dd546295",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55435,
+    "preview_opaque_pixels": 8029,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Package",
+      "Hand"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

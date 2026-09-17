@@ -29,6 +29,7 @@ const menuButtonClass =
 interface HeaderMoreMenuProps {
   presentationId: string;
   isAuthoredDeck: boolean;
+  canRemakePage?: boolean;
   currentSlide?: number;
   isStreaming: boolean | null;
   isPresentationSaving: boolean;
@@ -48,6 +49,7 @@ interface HeaderMoreMenuProps {
 const HeaderMoreMenu = ({
   presentationId,
   isAuthoredDeck,
+  canRemakePage = false,
   currentSlide,
   isStreaming,
   isPresentationSaving,
@@ -93,7 +95,7 @@ const HeaderMoreMenu = ({
           {t("actions")}
         </p>
         <div className="space-y-1">
-          {isAuthoredDeck ? (
+          {isAuthoredDeck || canRemakePage ? (
             <div
               className="[&>button]:h-9 [&>button]:w-full [&>button]:justify-start [&>button]:rounded-lg [&>button]:border-0 [&>button]:px-3 [&>button]:text-sm [&>button]:font-medium [&>button]:shadow-none"
             >

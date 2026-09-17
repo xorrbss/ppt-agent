@@ -142,6 +142,8 @@ def _slide_from_dump(presentation_id: uuid.UUID, dump: dict) -> SlideModel:
         index=canonical.get("index"),
         content=deepcopy(canonical.get("content") or {}),
         html_content=canonical.get("html_content"),
+        svg_content=canonical.get("svg_content"),
+        source_format=canonical.get("source_format"),
         ui=deepcopy(canonical.get("ui")),
         speaker_note=canonical.get("speaker_note"),
         properties=deepcopy(canonical.get("properties")),

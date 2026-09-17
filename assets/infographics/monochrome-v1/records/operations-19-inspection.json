@@ -1,0 +1,55 @@
+{
+  "id": "operations-19-inspection",
+  "category": "operations",
+  "tags": {
+    "ko": [
+      "운영",
+      "검수"
+    ],
+    "en": [
+      "operations",
+      "inspection"
+    ]
+  },
+  "alt": {
+    "ko": "검수 단색 벡터 인포그래픽",
+    "en": "inspection monochrome vector infographic"
+  },
+  "path": "originals/operations-19-inspection.svg",
+  "thumbnail": "thumbnails/operations-19-inspection.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 535,
+  "sha256": "b27c030c809cca9fa0c7ba2a54deb52b1caf6d0eb34813eab3a4886b6f978f80",
+  "geometry_sha256": "1e8ff5b1cdbec3679132f41696a91fd377f707bfd54fa7637c65fd9ea08c6f58",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57216,
+    "preview_opaque_pixels": 6619,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ClipboardCheck",
+      "Search"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

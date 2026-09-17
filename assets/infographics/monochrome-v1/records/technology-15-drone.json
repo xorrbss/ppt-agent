@@ -1,0 +1,56 @@
+{
+  "id": "technology-15-drone",
+  "category": "technology",
+  "tags": {
+    "ko": [
+      "기술",
+      "드론"
+    ],
+    "en": [
+      "technology",
+      "drone"
+    ]
+  },
+  "alt": {
+    "ko": "드론 단색 벡터 인포그래픽",
+    "en": "drone monochrome vector infographic"
+  },
+  "path": "originals/technology-15-drone.svg",
+  "thumbnail": "thumbnails/technology-15-drone.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 470,
+  "sha256": "dfeab38b174405c7535385fcec0405ad72a988479ee8392f2de44485301a4a69",
+  "geometry_sha256": "2b784314d17f6307eb78a965a266a786aa793021d8b68ccf5e8bac12479bdef7",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 47735,
+    "preview_opaque_pixels": 15620,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Drone"
+    ],
+    "custom_symbols": [
+      "Drone"
+    ],
+    "parallel_jobs": 10
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "id": "people-02-mentor",
+  "category": "people",
+  "tags": {
+    "ko": [
+      "사람",
+      "멘토"
+    ],
+    "en": [
+      "people",
+      "mentor"
+    ]
+  },
+  "alt": {
+    "ko": "멘토 단색 벡터 인포그래픽",
+    "en": "mentor monochrome vector infographic"
+  },
+  "path": "originals/people-02-mentor.svg",
+  "thumbnail": "thumbnails/people-02-mentor.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 467,
+  "sha256": "47369a9b268c275b3d04cd00a1a97500ed15036481303620922f4837a61c21c5",
+  "geometry_sha256": "c4e37af0bc1e20b1958156e9324d1be4636740911430603d76ef6e938547eaa6",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57890,
+    "preview_opaque_pixels": 5946,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "UsersRound",
+      "MessageCircle"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

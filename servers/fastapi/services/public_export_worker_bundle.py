@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from functools import lru_cache
 from hashlib import sha256
 from pathlib import Path
 
@@ -146,10 +145,16 @@ def compute_public_export_worker_bundle(
     nextjs_root = root / "servers" / "nextjs"
     try:
         files = _bundle_files(nextjs_root)
+        svg_root = root / "servers" / "fastapi"
+        svg_sources = [svg_root / "workers" / "public_svg_export_worker.py", svg_root / "services" / "svg_contract.py"]
+        vendor = svg_root / "vendor" / "slide_master"
+        svg_sources.extend(path for path in vendor.rglob("*") if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc")
         inventory = sorted(
             (path.relative_to(nextjs_root).as_posix(), _file_digest(path))
             for path in files
         )
+        inventory.extend(("../fastapi/" + path.relative_to(svg_root).as_posix(), _file_digest(path)) for path in svg_sources if path.is_file())
+        inventory.sort()
     except (PublicExportWorkerBundleError, OSError) as error:
         reason = (
             error.args[0]
@@ -181,9 +186,13 @@ def compute_public_export_worker_bundle(
     )
 
 
-@lru_cache(maxsize=4)
 def public_export_worker_bundle(protocol_version: str) -> PublicExportWorkerBundle:
-    """Process-cached bundle identity; the worker tree is immutable at runtime."""
+    """Read the current worker identity before each export admission.
+
+    A local controller can remain alive while its checked-out TypeScript sources
+    change.  Reusing a process-local digest in that case would point a new
+    export at a completed identity produced by older worker code.
+    """
 
     return compute_public_export_worker_bundle(protocol_version)
 

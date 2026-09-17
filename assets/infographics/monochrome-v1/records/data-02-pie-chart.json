@@ -1,0 +1,55 @@
+{
+  "id": "data-02-pie-chart",
+  "category": "data",
+  "tags": {
+    "ko": [
+      "데이터",
+      "원형차트"
+    ],
+    "en": [
+      "data",
+      "pie",
+      "chart"
+    ]
+  },
+  "alt": {
+    "ko": "원형차트 단색 벡터 인포그래픽",
+    "en": "pie chart monochrome vector infographic"
+  },
+  "path": "originals/data-02-pie-chart.svg",
+  "thumbnail": "thumbnails/data-02-pie-chart.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 408,
+  "sha256": "649ddf356a0f2340c9c314385c4085ee254916c749b0b13e5e81dfac6eb4504a",
+  "geometry_sha256": "86b55a45ee79aaeaeb4a9fba9d3f73c64c75d82b857325b99c8d5220c9a78513",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54949,
+    "preview_opaque_pixels": 9047,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ChartPie"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

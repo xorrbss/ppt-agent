@@ -33,6 +33,17 @@ test("public export admission creates one durable operation identity", () => {
   });
 });
 
+test("public export admission preserves an omitted font option for backend defaults", () => {
+  const admission = parsePublicExportAdmission({
+    id: PRESENTATION_ID,
+    format: "pptx",
+    expectedPresentationRevision: 7,
+    pptxMode: "hybrid",
+  });
+
+  assert.deepEqual(admission.context, { pptx_mode: "hybrid" });
+});
+
 test("public export admission rejects client-owned identity, paths, and sessions", () => {
   for (const forbidden of [
     { ownerId: "client-owner" },

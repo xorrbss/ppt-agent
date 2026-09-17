@@ -31,7 +31,8 @@ export interface PublicExportAdmission {
   expectedRevision: number;
   context: {
     pptx_mode: "fidelity" | "hybrid";
-    font_embedding: boolean;
+    /** Omitted means the backend may apply its language-aware default. */
+    font_embedding?: boolean;
   };
 }
 
@@ -62,7 +63,7 @@ function canonicalRequestIdentity(value: {
   format: string;
   expectedRevision: number;
   pptxMode: string;
-  fontEmbedding: boolean;
+  fontEmbedding?: boolean;
 }): string {
   return JSON.stringify([
     value.presentationId,
@@ -106,8 +107,8 @@ export function parsePublicExportAdmission(
   if (pptxMode !== "fidelity" && pptxMode !== "hybrid") {
     throw new PublicExportAdmissionError("Invalid PPTX export mode", 400);
   }
-  const fontEmbedding = value.fontEmbedding ?? false;
-  if (typeof fontEmbedding !== "boolean") {
+  const fontEmbedding = value.fontEmbedding;
+  if (fontEmbedding !== undefined && typeof fontEmbedding !== "boolean") {
     throw new PublicExportAdmissionError("Invalid font embedding option", 400);
   }
   if (fontEmbedding && (format !== "pptx" || pptxMode !== "hybrid")) {
@@ -140,7 +141,7 @@ export function parsePublicExportAdmission(
     expectedRevision,
     context: {
       pptx_mode: pptxMode,
-      font_embedding: fontEmbedding,
+      ...(fontEmbedding === undefined ? {} : { font_embedding: fontEmbedding }),
     },
   };
 }

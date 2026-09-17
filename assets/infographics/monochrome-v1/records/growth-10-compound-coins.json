@@ -1,0 +1,56 @@
+{
+  "id": "growth-10-compound-coins",
+  "category": "growth",
+  "tags": {
+    "ko": [
+      "성장",
+      "복리"
+    ],
+    "en": [
+      "growth",
+      "compound",
+      "coins"
+    ]
+  },
+  "alt": {
+    "ko": "복리 단색 벡터 인포그래픽",
+    "en": "compound coins monochrome vector infographic"
+  },
+  "path": "originals/growth-10-compound-coins.svg",
+  "thumbnail": "thumbnails/growth-10-compound-coins.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 492,
+  "sha256": "48e5d82353454412204551de51885e5a45deb148e14ca9ebc335f41f28ce7712",
+  "geometry_sha256": "5f867cbac73e5b30cc49eee9fb61c20e5b3a5b10a7bace585292155a1e5e1215",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 58588,
+    "preview_opaque_pixels": 5556,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Coins",
+      "Plus"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

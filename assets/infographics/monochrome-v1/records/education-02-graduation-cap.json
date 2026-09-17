@@ -1,0 +1,55 @@
+{
+  "id": "education-02-graduation-cap",
+  "category": "education",
+  "tags": {
+    "ko": [
+      "교육",
+      "학사모"
+    ],
+    "en": [
+      "education",
+      "graduation",
+      "cap"
+    ]
+  },
+  "alt": {
+    "ko": "학사모 단색 벡터 인포그래픽",
+    "en": "graduation cap monochrome vector infographic"
+  },
+  "path": "originals/education-02-graduation-cap.svg",
+  "thumbnail": "thumbnails/education-02-graduation-cap.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 451,
+  "sha256": "f5825cb3995d0baeb58ab03d0412dd73fc2a84bf735a83892966c2ef915d8517",
+  "geometry_sha256": "211a86d0edd6c1616b84cccadbf7d57d9c53fdfe35802154a700789793f9afa7",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55555,
+    "preview_opaque_pixels": 8574,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "GraduationCap"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -39,7 +39,7 @@ export const SlideThumbnailCard = forwardRef<
 }, ref) => {
   const t = useTranslations("slideNavigation");
   const theme = useSelector((state: RootState) => state.presentationGeneration.presentationData?.theme);
-  const canvas = slide?.content?.__authored__ === true || slide?.layout_group === "authored"
+  const canvas = slide?.content?.__authored__ === true || slide?.layout_group === "authored" || slide?.layout_group === "svg"
     ? resolveAuthoredCanvas(theme)
     : LEGACY_AUTHORED_CANVAS;
   const handleDragButtonClick = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -97,7 +97,7 @@ export const SlideThumbnailCard = forwardRef<
               transform: `scale(${previewScale})`,
             }}
           >
-            <PresentationContentRender slide={slide} canvas={canvas} />
+            <PresentationContentRender slide={slide} canvas={canvas} resolveSvgAssets={false} />
           </div>
         </div>
         {flag && (

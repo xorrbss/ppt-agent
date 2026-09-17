@@ -1,0 +1,56 @@
+{
+  "id": "ai-04-model-training",
+  "category": "ai",
+  "tags": {
+    "ko": [
+      "인공지능",
+      "모델학습"
+    ],
+    "en": [
+      "ai",
+      "model",
+      "training"
+    ]
+  },
+  "alt": {
+    "ko": "모델학습 단색 벡터 인포그래픽",
+    "en": "model training monochrome vector infographic"
+  },
+  "path": "originals/ai-04-model-training.svg",
+  "thumbnail": "thumbnails/ai-04-model-training.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 971,
+  "sha256": "c314a2fe9c0998ad2fa14eaf3ed205deb1b95c2d5952f543b91186fffac33cbd",
+  "geometry_sha256": "d45b7bc708de58afcba2e8a481af96e4ec69424e823d9640da84f797ea9f134a",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57338,
+    "preview_opaque_pixels": 6417,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "GraduationCap",
+      "Cog"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "id": "growth-16-launch-pad",
+  "category": "growth",
+  "tags": {
+    "ko": [
+      "성장",
+      "출발"
+    ],
+    "en": [
+      "growth",
+      "launch",
+      "pad"
+    ]
+  },
+  "alt": {
+    "ko": "출발 단색 벡터 인포그래픽",
+    "en": "launch pad monochrome vector infographic"
+  },
+  "path": "originals/growth-16-launch-pad.svg",
+  "thumbnail": "thumbnails/growth-16-launch-pad.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 803,
+  "sha256": "cea0e917befb7c8f082141f887ebbb08930f621d8c396506ac17dd28f0daaaf1",
+  "geometry_sha256": "fb1f7b0c275b6a33cc222701b2fff385213df50316d12535a8a415eb2febc56a",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57448,
+    "preview_opaque_pixels": 6400,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Rocket",
+      "Flame"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

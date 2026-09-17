@@ -611,6 +611,14 @@ async def execute_export(
     job: IsolatedWorkerJob,
     store: LocalContentAddressedStore,
 ) -> WorkerOutput:
+    from workers.public_svg_export_worker import is_svg_export_bundle, execute_svg_export
+    if is_svg_export_bundle(job, store):
+        try:
+            return await execute_svg_export(job, store)
+        except PublicWorkerExecutionError:
+            raise
+        except Exception as error:
+            raise PublicWorkerExecutionError("svg_export_" + type(error).__name__.lower()) from error
     bundle = _read_bundle(job, store)
     export_format = bundle.export_format
     with tempfile.TemporaryDirectory(prefix="public-export-") as temporary:

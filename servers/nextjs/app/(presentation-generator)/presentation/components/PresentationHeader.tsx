@@ -456,6 +456,7 @@ const PresentationHeader = ({
             <HeaderMoreMenu
               presentationId={presentation_id}
               isAuthoredDeck={isAuthoredDeck}
+              canRemakePage={presentationData?.capabilities?.editor?.slide_image_regenerate === true}
               currentSlide={currentSlide}
               isStreaming={isStreaming}
               isPresentationSaving={isPresentationSaving}

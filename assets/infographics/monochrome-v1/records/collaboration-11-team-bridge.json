@@ -1,0 +1,58 @@
+{
+  "id": "collaboration-11-team-bridge",
+  "category": "collaboration",
+  "tags": {
+    "ko": [
+      "협업",
+      "협력다리"
+    ],
+    "en": [
+      "collaboration",
+      "team",
+      "bridge"
+    ]
+  },
+  "alt": {
+    "ko": "협력다리 단색 벡터 인포그래픽",
+    "en": "team bridge monochrome vector infographic"
+  },
+  "path": "originals/collaboration-11-team-bridge.svg",
+  "thumbnail": "thumbnails/collaboration-11-team-bridge.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 495,
+  "sha256": "267ba3f2efc69ff3a8d2c2d33a720c6249c68d04d66da2506c3de95c303b6c2b",
+  "geometry_sha256": "5fe34f2d4091a65c3796b3332463c8fd729a2af5965d28ef1cb827921ab5c6db",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57532,
+    "preview_opaque_pixels": 6408,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Bridge",
+      "UsersRound"
+    ],
+    "custom_symbols": [
+      "Bridge"
+    ],
+    "parallel_jobs": 10
+  }
+}

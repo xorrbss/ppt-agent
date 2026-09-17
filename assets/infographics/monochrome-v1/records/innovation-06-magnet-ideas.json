@@ -1,0 +1,56 @@
+{
+  "id": "innovation-06-magnet-ideas",
+  "category": "innovation",
+  "tags": {
+    "ko": [
+      "혁신",
+      "아이디어수집"
+    ],
+    "en": [
+      "innovation",
+      "magnet",
+      "ideas"
+    ]
+  },
+  "alt": {
+    "ko": "아이디어수집 단색 벡터 인포그래픽",
+    "en": "magnet ideas monochrome vector infographic"
+  },
+  "path": "originals/innovation-06-magnet-ideas.svg",
+  "thumbnail": "thumbnails/innovation-06-magnet-ideas.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 611,
+  "sha256": "f02ac99f36dce9ef9aca1c69768bd062713e2d43e90bb60cd835cacc181c24d2",
+  "geometry_sha256": "1d5a056c3c5e18c9bdfa11dda8258ec2c6d3fa1b457c74f60d789a7f818238d5",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57290,
+    "preview_opaque_pixels": 6424,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Magnet",
+      "Lightbulb"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

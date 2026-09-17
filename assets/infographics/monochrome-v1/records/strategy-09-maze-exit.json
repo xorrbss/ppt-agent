@@ -1,0 +1,56 @@
+{
+  "id": "strategy-09-maze-exit",
+  "category": "strategy",
+  "tags": {
+    "ko": [
+      "전략",
+      "문제해결"
+    ],
+    "en": [
+      "strategy",
+      "maze",
+      "exit"
+    ]
+  },
+  "alt": {
+    "ko": "문제해결 단색 벡터 인포그래픽",
+    "en": "maze exit monochrome vector infographic"
+  },
+  "path": "originals/strategy-09-maze-exit.svg",
+  "thumbnail": "thumbnails/strategy-09-maze-exit.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 698,
+  "sha256": "a0de20fbc9f1d9931a4aba6ff45c72f153c8434cc729d525214be731ccf041a9",
+  "geometry_sha256": "be95725912a15974186fbf6579b0da2cf97b8bca50072595533e4ee75ab3e3b5",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57730,
+    "preview_opaque_pixels": 6178,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Waypoints",
+      "LogOut"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

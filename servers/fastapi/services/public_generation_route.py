@@ -17,6 +17,8 @@ COMPOSER_FIT_POLICY = {"revision": "composer-source-fit/v2", "font_floor_px": 7.
 def effective_generation_engine(
     request: PresentationGenerationRequestV2,
 ) -> str:
+    if request.strategy == "svg":
+        return "authored"
     if request.source_mode == "source_content_restyle":
         return "authored"
     if request.generation_mode == "registered-template":

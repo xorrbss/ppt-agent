@@ -1,0 +1,56 @@
+{
+  "id": "process-06-gear-pair",
+  "category": "process",
+  "tags": {
+    "ko": [
+      "프로세스",
+      "기어"
+    ],
+    "en": [
+      "process",
+      "gear",
+      "pair"
+    ]
+  },
+  "alt": {
+    "ko": "기어 단색 벡터 인포그래픽",
+    "en": "gear pair monochrome vector infographic"
+  },
+  "path": "originals/process-06-gear-pair.svg",
+  "thumbnail": "thumbnails/process-06-gear-pair.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 1383,
+  "sha256": "4a605bd3af4ffe5474f28c451c78fcb2f8c3550490fb16427b3f27f75de451a9",
+  "geometry_sha256": "da40db7fa56649c3c41148cc309c31da4e59d3f8779b74a0eab1208fe3ad987b",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55403,
+    "preview_opaque_pixels": 7968,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Cog",
+      "Settings"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

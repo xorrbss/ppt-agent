@@ -1,0 +1,55 @@
+{
+  "id": "data-14-stacked-files",
+  "category": "data",
+  "tags": {
+    "ko": [
+      "데이터",
+      "파일묶음"
+    ],
+    "en": [
+      "data",
+      "stacked",
+      "files"
+    ]
+  },
+  "alt": {
+    "ko": "파일묶음 단색 벡터 인포그래픽",
+    "en": "stacked files monochrome vector infographic"
+  },
+  "path": "originals/data-14-stacked-files.svg",
+  "thumbnail": "thumbnails/data-14-stacked-files.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 414,
+  "sha256": "087216152e1025155c923986ccbe5271b07b67a0d5f86e430f8bd867ea2c8522",
+  "geometry_sha256": "0bd926448ff2d1aad8ea2d766e9452fceeb80c49fb9697990be6fd7e9c425b34",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 53428,
+    "preview_opaque_pixels": 10547,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Files"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

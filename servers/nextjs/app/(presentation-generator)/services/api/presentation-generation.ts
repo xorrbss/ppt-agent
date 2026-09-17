@@ -358,6 +358,7 @@ export class PresentationGenerationApi {
     web_search,
     aspect_ratio,
     theme,
+    strategy = "authored",
   }: {
     presentation_id: string;
     idempotency_key: string;
@@ -374,6 +375,8 @@ export class PresentationGenerationApi {
     web_search?: boolean;
     aspect_ratio?: "16:9" | "9:16" | "9:13";
     theme?: PresentationThemePayload | null;
+    /** Server persists this before the async generation job is admitted. */
+    strategy?: "authored" | "svg";
   }) {
     try {
       const response = await fetch(
@@ -399,6 +402,7 @@ export class PresentationGenerationApi {
             web_search,
             aspect_ratio,
             theme,
+            strategy,
           }),
           cache: "no-cache",
         },
@@ -603,6 +607,7 @@ export class PresentationGenerationApi {
       content: string;
       slides_markdown?: string[];
       vision_qa?: boolean;
+      strategy?: "authored" | "svg";
       authored_style?: string;
       aspect_ratio?: "16:9" | "9:16" | "9:13";
       masterPin?: {
@@ -646,7 +651,7 @@ export class PresentationGenerationApi {
             ...(body.sourceMode ? {} : { slides_markdown: body.slides_markdown ?? [] }),
             ...generationPreferencesPayload(body),
             template: "authored",
-            strategy: "authored",
+            strategy: body.strategy ?? "authored",
             export_as: "pptx",
             // Export refuses a "development" receipt in every format.
             qualityProfile: "release",
@@ -654,7 +659,7 @@ export class PresentationGenerationApi {
             // OFF by default — it adds a second authoring round (~doubles time); the
             // design-system hardening already prevents most overflow/overlap. Opt in for
             // a max-quality, slower pass.
-            vision_qa: body.vision_qa ?? false,
+            vision_qa: body.strategy === "svg" ? false : (body.vision_qa ?? false),
             authored_style: body.authored_style ?? "default",
             aspect_ratio: body.aspect_ratio ?? "16:9",
             ...(body.masterPin ? { masterPin: body.masterPin } : {}),

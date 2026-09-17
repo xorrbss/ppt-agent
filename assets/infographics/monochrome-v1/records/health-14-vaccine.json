@@ -1,0 +1,54 @@
+{
+  "id": "health-14-vaccine",
+  "category": "health",
+  "tags": {
+    "ko": [
+      "건강",
+      "백신"
+    ],
+    "en": [
+      "health",
+      "vaccine"
+    ]
+  },
+  "alt": {
+    "ko": "백신 단색 벡터 인포그래픽",
+    "en": "vaccine monochrome vector infographic"
+  },
+  "path": "originals/health-14-vaccine.svg",
+  "thumbnail": "thumbnails/health-14-vaccine.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 454,
+  "sha256": "69730a1026361314e276ca547cf6fc628d3480ff055b6636ac1ccd810a58cf48",
+  "geometry_sha256": "4b2abd934f6af7212e3747cb89ce3c4f965f5536711b4f9fee02944686ef555a",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56616,
+    "preview_opaque_pixels": 7710,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Syringe"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "id": "data-20-backup",
+  "category": "data",
+  "tags": {
+    "ko": [
+      "데이터",
+      "백업"
+    ],
+    "en": [
+      "data",
+      "backup"
+    ]
+  },
+  "alt": {
+    "ko": "백업 단색 벡터 인포그래픽",
+    "en": "backup monochrome vector infographic"
+  },
+  "path": "originals/data-20-backup.svg",
+  "thumbnail": "thumbnails/data-20-backup.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 521,
+  "sha256": "273cad366e4256d5ad6efbb3aa82a28e4eb86290701408bfde0bf32f19851b4a",
+  "geometry_sha256": "d5f937a0b6af6a41cbdeaed05c8c2de7bfc520d1fe8a0ca26ccb252433466fe5",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 50930,
+    "preview_opaque_pixels": 12609,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "DatabaseBackup"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

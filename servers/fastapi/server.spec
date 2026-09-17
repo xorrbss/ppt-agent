@@ -68,6 +68,7 @@ a = Analysis(
         ("constants/settings_registry.json", "constants"),
         ("authored_styles", "authored_styles"),
         ("authored_style_assets", "authored_style_assets"),
+        ("vendor/slide_master", "vendor/slide_master"),
         ("templates/v2/manifests", "templates/v2/manifests"),
     ]
     + datas_fastembed_cache

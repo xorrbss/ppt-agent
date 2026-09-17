@@ -116,6 +116,7 @@ class AuthoredStyle:
     # Positional mapping is explicit even when scalar entries use list position.
     slide_reference_indices: tuple[int, ...] = ()
     composer_profile: Mapping[str, Any] | None = None
+    svg_overrides: Mapping[str, Any] | None = None
 
     def public_dict(self) -> dict[str, Any]:
         """Return only the fields safe and useful for style selection clients."""
@@ -494,6 +495,13 @@ def _parse_style(
 
     reference_images = _reference_images(data, source, assets_directory)
     composer_profile = data.get("composer_profile")
+    svg_overrides = data.get("svg_overrides")
+    if svg_overrides is not None:
+        if not isinstance(svg_overrides, Mapping) or set(svg_overrides) - {"layout_hints", "common_guidance", "resolved_sections"}:
+            raise ValueError(f"{source.name}: invalid svg_overrides")
+        for key, value in svg_overrides.items():
+            if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+                raise ValueError(f"{source.name}: svg_overrides.{key} must be a string list")
     if composer_profile is not None:
         from services.composer.plan import ComposerStyleProfile
 
@@ -538,6 +546,7 @@ def _parse_style(
         assets_root=assets_directory.resolve(),
         slide_reference_indices=slide_reference_indices,
         composer_profile=composer_profile,
+        svg_overrides=svg_overrides,
     )
 
 

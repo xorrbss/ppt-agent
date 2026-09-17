@@ -291,6 +291,31 @@ test("outline-only paint remains an audited raster owner without a grouped seria
   assert.match(xml, /<a:prstDash val="dot"\/>/);
 });
 
+test("CSS borders retain exact axis alignment after OOXML extent quantization", async () => {
+  for (const side of ["left", "right", "top", "bottom"]) {
+    const element = rasterShape({
+      id: `strategy-${side}`,
+      bounds: bounds(36.25, 89.5, 360, 28),
+      shape: {
+        shape: "rectangle", fill: null, stroke: null,
+        strokeWidthPt: 0, radiusPt: 0,
+        borderLines: [{ side, color: { hex: "08916E", alpha: 1 }, widthPt: 2.25 }],
+      },
+    });
+    const prepared = await prepareNativeElements([element], { includeRasterShapes: true });
+    assert.equal(prepared.length, 1);
+    const xml = serializePreparedNativeElement(prepared[0], 3);
+    const vertical = side === "left" || side === "right";
+    assert.match(xml, /<a:moveTo><a:pt x="0" y="0"\/><\/a:moveTo>/);
+    assert.ok(xml.includes(vertical
+      ? '<a:lnTo><a:pt x="0" y="100000"/></a:lnTo>'
+      : '<a:lnTo><a:pt x="100000" y="0"/></a:lnTo>'));
+    assert.doesNotMatch(xml, /prst="line"/);
+    assert.match(xml, /<a:ln w="28575"/);
+    assert.match(xml, /<a:srgbClr val="08916E">/);
+  }
+});
+
 test("thin filled CSS rails remain rectangles rather than becoming connector lines", async () => {
   const rail = rasterShape({
     id: "thin-rail",

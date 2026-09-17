@@ -239,6 +239,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
               isEditMode={false}
               presentMode
               preferAuthoredHtml
+              resolveSvgAssets
             />
           ) : null}
         </div>

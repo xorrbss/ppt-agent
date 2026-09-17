@@ -168,10 +168,17 @@
     "public-export.editable-preservation": "decisions/public-export.editable-preservation.1.json",
     "quality-review.flagged-pages-selection": "decisions/quality-review.flagged-pages-selection.1.json",
     "authored.hybrid-layout-only-leaves": "decisions/authored.hybrid-layout-only-leaves.1.json",
-    "public-export.editable-delivery-contract": "decisions/public-export.editable-delivery-contract.1.json"
+    "public-export.editable-delivery-contract": "decisions/public-export.editable-delivery-contract.1.json",
+    "authored.upload-image-semantic-placement": "decisions/authored.upload-image-semantic-placement.1.json",
+    "authored.editable-export-font-and-ownership": "decisions/authored.editable-export-font-and-ownership.1.json",
+    "authored.original-first-local-fit": "decisions/authored.original-first-local-fit.1.json",
+    "export.current-worker-source-identity": "decisions/export.current-worker-source-identity.1.json",
+    "authored.local-fit-nested-card-containment": "decisions/authored.local-fit-nested-card-containment.1.json",
+    "generation.svg-mode-shared-authored-styles": "decisions/generation.svg-mode-shared-authored-styles.2.json",
+    "generation.svg-image-asset-derivatives": "decisions/generation.svg-image-asset-derivatives.1.json"
   },
   "readFirst": [
     "docs/composer-source-preservation-and-7px-fit-design-20260913.md"
   ],
-  "updatedAt": "2026-09-14T12:36:28.9898189+00:00"
+  "updatedAt": "2026-09-16T14:16:02.2717803+00:00"
 }

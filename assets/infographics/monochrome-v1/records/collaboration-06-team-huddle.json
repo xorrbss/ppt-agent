@@ -1,0 +1,56 @@
+{
+  "id": "collaboration-06-team-huddle",
+  "category": "collaboration",
+  "tags": {
+    "ko": [
+      "협업",
+      "팀모임"
+    ],
+    "en": [
+      "collaboration",
+      "team",
+      "huddle"
+    ]
+  },
+  "alt": {
+    "ko": "팀모임 단색 벡터 인포그래픽",
+    "en": "team huddle monochrome vector infographic"
+  },
+  "path": "originals/collaboration-06-team-huddle.svg",
+  "thumbnail": "thumbnails/collaboration-06-team-huddle.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 459,
+  "sha256": "75edba75e827884875e5b9cd4024ce8f21fff386a512fc809b6354a5e5cca901",
+  "geometry_sha256": "f98c117b525e5828b3f596a30440d7edf4ed8a0af4ef7cab77e1e54ef14b155d",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57900,
+    "preview_opaque_pixels": 5948,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "UsersRound",
+      "Circle"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

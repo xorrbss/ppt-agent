@@ -1,0 +1,55 @@
+{
+  "id": "strategy-10-flag-milestone",
+  "category": "strategy",
+  "tags": {
+    "ko": [
+      "전략",
+      "이정표"
+    ],
+    "en": [
+      "strategy",
+      "flag",
+      "milestone"
+    ]
+  },
+  "alt": {
+    "ko": "이정표 단색 벡터 인포그래픽",
+    "en": "flag milestone monochrome vector infographic"
+  },
+  "path": "originals/strategy-10-flag-milestone.svg",
+  "thumbnail": "thumbnails/strategy-10-flag-milestone.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 276,
+  "sha256": "52b21f84013b10a880edfd7a1f45e7058fdf0875e88385068e1f43600a41579f",
+  "geometry_sha256": "4a28c2dcd371e52a3238aa5c58b6462b91392d8eda06cd47960bfc1864ad5c90",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 59750,
+    "preview_opaque_pixels": 5035,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "FlagTriangleRight"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

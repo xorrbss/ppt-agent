@@ -1413,6 +1413,7 @@ def _planned_batch_request(
     *,
     source_images: Sequence[SourceImageCandidate],
     require_all_source_images: bool,
+    source_image_placement_plan: Mapping | None = None,
     failure: AuthoredBatchFailure | None,
     style_anchor: object | None = None,
 ) -> AuthoredBatchSlideRequest:
@@ -1444,6 +1445,7 @@ def _planned_batch_request(
         capacity_brief=capacity_brief,
         source_images=tuple(source_images),
         require_all_source_images=require_all_source_images,
+        source_image_placement_plan=source_image_placement_plan,
         correction_hint=(failure.correction_hint if failure is not None else None),
         rejected_html=(failure.rejected_html if failure is not None else None),
         style_anchor=style_anchor,
@@ -1592,6 +1594,7 @@ async def author_planned_batch(
     *,
     source_images_by_index: Mapping[int, Sequence[SourceImageCandidate]] | None = None,
     require_all_source_images: bool = False,
+    source_image_placement_plans_by_index: Mapping[int, Mapping] | None = None,
     recovery: bool = False,
     prior_failures: Mapping[int, AuthoredBatchFailure] | None = None,
     raise_on_failure: bool = False,
@@ -1624,6 +1627,7 @@ async def author_planned_batch(
             index,
             source_images=tuple(sources.get(index, ())),
             require_all_source_images=require_all_source_images,
+            source_image_placement_plan=(source_image_placement_plans_by_index or {}).get(index),
             failure=(prior_failures or {}).get(index),
             style_anchor=style_anchor,
         )
@@ -1666,6 +1670,7 @@ async def author_planned_slide(
     raise_on_failure: bool = False,
     source_images: Sequence[SourceImageCandidate] = (),
     require_all_source_images: bool = False,
+    source_image_placement_plan: Mapping | None = None,
     attempt_observer: Callable[[int], None] | None = None,
     provider_attempt_offset: int = 0,
     provider_attempt_limit: int = _MAX_AUTHOR_CALLS_PER_SLIDE,
@@ -1701,7 +1706,10 @@ async def author_planned_slide(
         plan.reference_images[index],
         reference_mode=plan.reference_mode,
         raise_on_failure=raise_on_failure,
-        structured_context=plan.structured_contexts[index],
+        structured_context=(
+            {**(plan.structured_contexts[index] or {}), "source_image_placement_plan": source_image_placement_plan}
+            if source_image_placement_plan else plan.structured_contexts[index]
+        ),
         page_number_mode=plan.page_number_mode,
         header_contract=plan.header_contract_at(index),
         chapter_prefix=(

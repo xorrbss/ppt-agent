@@ -704,6 +704,8 @@ test("fragment bands preserve alpha pixels, empty ownership, and reject missing/
   const fallback=await fragmentRasterBand({zBand:2,rasterPng:png,semanticOwnerQids:[]},false,1);
   assert.deepEqual(fallback.warnings,["raster-fragment-count-limit"]);
   assert.equal(fallback.fragments.length,1);
+  assert.deepEqual(fallback.fragments[0].rect,{x:1,y:1,width:6,height:4});
+  await validateFragmentBand(fallback);
 });
 
 test("assembler promotes only audited lowest RGBA band and keeps upper fragments at scaled coordinates", async () => {

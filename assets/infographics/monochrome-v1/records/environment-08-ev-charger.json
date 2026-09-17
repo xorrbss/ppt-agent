@@ -1,0 +1,56 @@
+{
+  "id": "environment-08-ev-charger",
+  "category": "environment",
+  "tags": {
+    "ko": [
+      "환경",
+      "전기차충전"
+    ],
+    "en": [
+      "environment",
+      "ev",
+      "charger"
+    ]
+  },
+  "alt": {
+    "ko": "전기차충전 단색 벡터 인포그래픽",
+    "en": "ev charger monochrome vector infographic"
+  },
+  "path": "originals/environment-08-ev-charger.svg",
+  "thumbnail": "thumbnails/environment-08-ev-charger.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 742,
+  "sha256": "a043e33cea8ab8563cf4b73f8d6ca676aafb0610707b1d9e266372c9ea7b9fb8",
+  "geometry_sha256": "6371d83e15c1dbd76937608af51ee45e74e96bb4fb428d8583f65eba95d31de7",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56582,
+    "preview_opaque_pixels": 7161,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Fuel",
+      "PlugZap"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

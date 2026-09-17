@@ -1,0 +1,55 @@
+{
+  "id": "process-02-cycle-arrows",
+  "category": "process",
+  "tags": {
+    "ko": [
+      "프로세스",
+      "순환"
+    ],
+    "en": [
+      "process",
+      "cycle",
+      "arrows"
+    ]
+  },
+  "alt": {
+    "ko": "순환 단색 벡터 인포그래픽",
+    "en": "cycle arrows monochrome vector infographic"
+  },
+  "path": "originals/process-02-cycle-arrows.svg",
+  "thumbnail": "thumbnails/process-02-cycle-arrows.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 433,
+  "sha256": "69caac39d2ba65a0efe23fe7b299ade6901ad74179e903a36560d2646fae14ee",
+  "geometry_sha256": "02dd6319a77aecafeb5206187e9866d2c8847b8df60fdcc4910f359a15d72db2",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55648,
+    "preview_opaque_pixels": 8469,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "RefreshCw"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

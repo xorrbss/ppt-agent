@@ -101,7 +101,25 @@ const authoredAdapter = adapter({
   },
 });
 
+const svgAdapter = adapter({
+  driver_id: "svg-v1",
+  renderer_adapter_id: "svg-v1",
+  plan(request): RenderAdapterPlan {
+    for (const slide of request.snapshot.slides) {
+      if (slide.source_format !== "svg" || typeof slide.svg_content !== "string" || !slide.svg_content.trim()) {
+        throw new Error("render_svg_source_required");
+      }
+    }
+    return {
+      renderer_version: "svg-browser@1",
+      runtime_dependencies: [BASE_LAYOUT_RUNTIME],
+      payload: { slides: clone(request.snapshot.slides) },
+    };
+  },
+});
+
 export const PRESENTATION_RENDER_ADAPTER_REGISTRY = Object.freeze({
   "template-v2": templateV2Adapter,
   authored: authoredAdapter,
+  "svg-v1": svgAdapter,
 } satisfies PresentationRenderAdapterRegistry);

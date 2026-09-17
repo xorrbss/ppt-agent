@@ -1,0 +1,56 @@
+{
+  "id": "people-11-remote-worker",
+  "category": "people",
+  "tags": {
+    "ko": [
+      "사람",
+      "원격근무자"
+    ],
+    "en": [
+      "people",
+      "remote",
+      "worker"
+    ]
+  },
+  "alt": {
+    "ko": "원격근무자 단색 벡터 인포그래픽",
+    "en": "remote worker monochrome vector infographic"
+  },
+  "path": "originals/people-11-remote-worker.svg",
+  "thumbnail": "thumbnails/people-11-remote-worker.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 596,
+  "sha256": "a4e0c4c8232c9fe5f73a1adedbe6b5580bd4741042c9b2e26fa68ece8a3bf874",
+  "geometry_sha256": "e7cd9f80d8a7ee2e99d33d8fe0bb38cfb48f5c048e27c17660deaf59173ecf0f",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57266,
+    "preview_opaque_pixels": 6592,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Laptop",
+      "House"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

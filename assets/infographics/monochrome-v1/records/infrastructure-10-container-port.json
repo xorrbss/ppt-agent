@@ -1,0 +1,55 @@
+{
+  "id": "infrastructure-10-container-port",
+  "category": "infrastructure",
+  "tags": {
+    "ko": [
+      "인프라",
+      "항만"
+    ],
+    "en": [
+      "infrastructure",
+      "container",
+      "port"
+    ]
+  },
+  "alt": {
+    "ko": "항만 단색 벡터 인포그래픽",
+    "en": "container port monochrome vector infographic"
+  },
+  "path": "originals/infrastructure-10-container-port.svg",
+  "thumbnail": "thumbnails/infrastructure-10-container-port.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 549,
+  "sha256": "db6344bd03b0c8aba6d47713a9717ca0b2aa4cc98247688a64e8b229e8e16905",
+  "geometry_sha256": "1a878142fac82b3779b7751c94ed007b98056b5f3e0c8bfc438245a15db1544d",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 51254,
+    "preview_opaque_pixels": 12368,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Container"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

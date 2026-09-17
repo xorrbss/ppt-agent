@@ -1,0 +1,57 @@
+{
+  "id": "environment-04-wind-turbine",
+  "category": "environment",
+  "tags": {
+    "ko": [
+      "환경",
+      "풍력"
+    ],
+    "en": [
+      "environment",
+      "wind",
+      "turbine"
+    ]
+  },
+  "alt": {
+    "ko": "풍력 단색 벡터 인포그래픽",
+    "en": "wind turbine monochrome vector infographic"
+  },
+  "path": "originals/environment-04-wind-turbine.svg",
+  "thumbnail": "thumbnails/environment-04-wind-turbine.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 358,
+  "sha256": "8bdd0307a50d7a486e2d7397baf77046e8ac7a4c81654a5890bc8ada7d033f5c",
+  "geometry_sha256": "b8aadddb653982d492dc196081737783d35be958333b4fbe30e16f70cb9ad0d5",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 53170,
+    "preview_opaque_pixels": 10800,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "WindTurbine"
+    ],
+    "custom_symbols": [
+      "WindTurbine"
+    ],
+    "parallel_jobs": 10
+  }
+}

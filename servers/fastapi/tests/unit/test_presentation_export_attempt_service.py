@@ -33,6 +33,7 @@ from services.presentation_export_attempt_service import (
     build_export_source_snapshot_sha256,
     sha256_canonical_json,
     terminalize_export_attempt_failed,
+    terminalize_export_attempt_failed_if_current_workspace_claim,
     terminalize_export_attempt_succeeded,
 )
 from services.authored_quality_receipt_v2 import (
@@ -1330,6 +1331,145 @@ def test_terminalization_is_owner_operation_scoped_and_asset_fresh(
             async with maker() as session:
                 stored = await session.get(PresentationExportAttempt, attempt.id)
                 assert stored is not None and stored.state == "running"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_fenced_failure_terminalization_does_not_mutate_reclaimed_svg_attempt(
+    tmp_path: Path,
+) -> None:
+    async def scenario():
+        engine, maker = await _database(tmp_path / "svg-fenced-terminalization.db")
+        try:
+            presentation_id = await _seed_attempt_presentation(maker)
+            async with maker() as session, session.begin():
+                conversation = WorkspaceConversation(presentation_id=presentation_id)
+                session.add(conversation)
+                await session.flush()
+                operation = WorkspaceOperation(
+                    conversation_id=conversation.id,
+                    presentation_id=presentation_id,
+                    anchor_position=1,
+                    kind="export.pptx",
+                    state="running",
+                    idempotency_key_hash="a" * 64,
+                    request_hash="b" * 64,
+                    request_payload={},
+                    expected_revision=4,
+                    attempt_number=1,
+                    attempt_token="svg-attempt-1",
+                    fencing_token=7,
+                )
+                session.add(operation)
+                await session.flush()
+                operation_id = operation.id
+
+            async with maker() as session:
+                attempt = await begin_export_attempt(
+                    session,
+                    presentation_id=presentation_id,
+                    owner_id=None,
+                    owner_scope="anonymous",
+                    workspace_operation_id=operation_id,
+                    export_format="pptx",
+                    source_revision=4,
+                    source_snapshot_sha256="c" * 64,
+                    request_hash="b" * 64,
+                    idempotency_key_hash="a" * 64,
+                    requested_adapter="general",
+                    provenance=_provenance(),
+                )
+
+            async with maker() as session:
+                assert await terminalize_export_attempt_failed_if_current_workspace_claim(
+                    session,
+                    attempt_id=attempt.id,
+                    expected_owner_id=None,
+                    expected_owner_scope="anonymous",
+                    expected_workspace_operation_id=operation_id,
+                    expected_attempt_token="svg-attempt-1",
+                    expected_fencing_token=7,
+                    failure_code="presentation_export_cancelled",
+                    failure_path=None,
+                    selected_adapter="general",
+                )
+            async with maker() as session:
+                failed = await session.get(PresentationExportAttempt, attempt.id)
+                assert failed is not None and failed.state == "failed"
+
+            async with maker() as session:
+                resumed = await begin_export_attempt(
+                    session,
+                    presentation_id=presentation_id,
+                    owner_id=None,
+                    owner_scope="anonymous",
+                    workspace_operation_id=operation_id,
+                    export_format="pptx",
+                    source_revision=4,
+                    source_snapshot_sha256="c" * 64,
+                    request_hash="b" * 64,
+                    idempotency_key_hash="a" * 64,
+                    requested_adapter="general",
+                    provenance=_provenance(),
+                )
+                assert resumed.id == attempt.id
+
+            async with maker() as session, session.begin():
+                operation = await session.get(WorkspaceOperation, operation_id)
+                assert operation is not None
+                operation.attempt_token = "svg-attempt-2"
+                operation.fencing_token = 8
+
+            async with maker() as session:
+                assert not await terminalize_export_attempt_failed_if_current_workspace_claim(
+                    session,
+                    attempt_id=attempt.id,
+                    expected_owner_id=None,
+                    expected_owner_scope="anonymous",
+                    expected_workspace_operation_id=operation_id,
+                    expected_attempt_token="svg-attempt-1",
+                    expected_fencing_token=7,
+                    failure_code="operation_lease_lost",
+                    failure_path=None,
+                    selected_adapter="general",
+                )
+            async with maker() as session:
+                current = await session.get(PresentationExportAttempt, attempt.id)
+                assert current is not None and current.state == "running"
+
+            async with maker() as session, session.begin():
+                await terminalize_export_attempt_succeeded(
+                    session,
+                    attempt_id=attempt.id,
+                    presentation_id=presentation_id,
+                    expected_owner_id=None,
+                    expected_owner_scope="anonymous",
+                    expected_workspace_operation_id=operation_id,
+                    source_revision=4,
+                    source_snapshot_sha256="c" * 64,
+                    selected_adapter="general",
+                    artifact_sha256="d" * 64,
+                    artifact_size_bytes=5,
+                    provenance=_provenance(),
+                )
+            async with maker() as session:
+                assert not await terminalize_export_attempt_failed_if_current_workspace_claim(
+                    session,
+                    attempt_id=attempt.id,
+                    expected_owner_id=None,
+                    expected_owner_scope="anonymous",
+                    expected_workspace_operation_id=operation_id,
+                    expected_attempt_token="svg-attempt-1",
+                    expected_fencing_token=7,
+                    failure_code="operation_lease_lost",
+                    failure_path=None,
+                    selected_adapter="general",
+                )
+            async with maker() as session:
+                succeeded = await session.get(PresentationExportAttempt, attempt.id)
+                assert succeeded is not None and succeeded.state == "succeeded"
         finally:
             await engine.dispose()
 

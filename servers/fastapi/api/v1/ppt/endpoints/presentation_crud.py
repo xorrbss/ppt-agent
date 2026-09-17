@@ -429,6 +429,7 @@ async def create_presentation(
     include_table_of_contents: Annotated[bool, Body()] = False,
     include_title_slide: Annotated[bool, Body()] = True,
     web_search: Annotated[bool, Body()] = False,
+    strategy: Annotated[Literal["authored", "svg"], Body()] = "authored",
     theme: Annotated[Optional[dict], Body()] = None,
     aspect_ratio: Annotated[Literal["16:9", "9:16", "9:13"], Body()] = "16:9",
     idempotency_key: Annotated[
@@ -538,7 +539,12 @@ async def create_presentation(
             else PRESENTATION_LIFECYCLE_PUBLISHED
         ),
     )
-    stamp_new_authored_presentation(presentation)
+    if strategy == "svg":
+        from services.compatibility_migration.admission import stamp_new_svg_presentation
+
+        stamp_new_svg_presentation(presentation)
+    else:
+        stamp_new_authored_presentation(presentation)
     presentation.theme = merge_presentation_canvas(
         presentation.theme,
         canvas_metadata_for_aspect_ratio(aspect_ratio).model_dump(

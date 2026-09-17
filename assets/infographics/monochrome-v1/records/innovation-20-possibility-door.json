@@ -1,0 +1,56 @@
+{
+  "id": "innovation-20-possibility-door",
+  "category": "innovation",
+  "tags": {
+    "ko": [
+      "혁신",
+      "가능성"
+    ],
+    "en": [
+      "innovation",
+      "possibility",
+      "door"
+    ]
+  },
+  "alt": {
+    "ko": "가능성 단색 벡터 인포그래픽",
+    "en": "possibility door monochrome vector infographic"
+  },
+  "path": "originals/innovation-20-possibility-door.svg",
+  "thumbnail": "thumbnails/innovation-20-possibility-door.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 810,
+  "sha256": "12ab973e6e3234aeb0636b436407a76443f581c400f8e7dc896f0fe917859fea",
+  "geometry_sha256": "dc6b32a31699c94a572080244b2591884b7db689fd684fbd13dd524f664e3392",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57521,
+    "preview_opaque_pixels": 6382,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "DoorOpen",
+      "Sun"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

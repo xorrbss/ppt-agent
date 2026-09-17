@@ -176,6 +176,11 @@ def _requested_driver(request: object) -> str:
 def require_authored_vnext_creation_admission(request: object) -> None:
     """Reject legacy/template-v2 creation without touching durable state."""
 
+    if getattr(request, "strategy", None) == "svg":
+        from services.svg_generation_admission import require_svg_creation_admission
+
+        require_svg_creation_admission(request)
+        return
     readiness = authored_vnext_promotion_readiness()
     driver = _requested_driver(request)
     if driver == readiness.canonical_driver and readiness.creation_ready:

@@ -3,7 +3,7 @@ import re
 from typing import Any, List, Literal, Optional
 import uuid
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, field_serializer, field_validator, model_validator
 
 from models.sql.slide import SlideModel
 from services.presentation_profiles import (
@@ -30,12 +30,22 @@ class PresentationWithSlides(BaseModel):
     fonts: Optional[Any] = None
     generation_mode: Literal["standard"] = "standard"
     community_design_ids: Optional[List[int]] = None
-    mode: Optional[Literal["template", "authored"]] = None
+    mode: Optional[Literal["template", "authored", "svg"]] = None
     version: str = LEGACY_PRESENTATION_VERSION
     revision: int = 0
     lifecycle_status: str = "published"
     profile: PresentationProfile
     capabilities: PresentationCapabilities
+
+    @field_serializer("slides", mode="wrap")
+    def serialize_public_slides(self, slides, handler):
+        serialized = handler(slides)
+        for slide in serialized:
+            content = slide.get("content")
+            if isinstance(content, dict) and "svgAssetManifest" in content:
+                slide["content"] = {key: value for key, value in content.items()
+                                    if key != "svgAssetManifest"}
+        return serialized
 
     @model_validator(mode="before")
     @classmethod
@@ -201,6 +211,8 @@ class PublicSlide(BaseModel):
     index: int
     content: dict
     html_content: Optional[str] = None
+    svg_content: Optional[str] = None
+    source_format: Optional[Literal["html", "svg", "native"]] = None
     ui: Optional[dict] = None
     properties: Optional[dict] = None
 
@@ -209,7 +221,7 @@ class PublicSlide(BaseModel):
     def _project_nested_fields(cls, value: Any) -> Any:
         return project_public_value(value)
 
-    @field_validator("html_content", mode="before")
+    @field_validator("html_content", "svg_content", mode="before")
     @classmethod
     def _sanitize_html_content(cls, value: Any) -> Any:
         return sanitize_public_html_content(value)
@@ -225,7 +237,7 @@ class PublicPresentationWithSlides(BaseModel):
     slides: List[PublicSlide]
     theme: Optional[dict] = None
     fonts: Optional[Any] = None
-    mode: Optional[Literal["template", "authored"]] = None
+    mode: Optional[Literal["template", "authored", "svg"]] = None
     version: str = LEGACY_PRESENTATION_VERSION
 
     @model_validator(mode="before")

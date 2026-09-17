@@ -1207,10 +1207,20 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
     return value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
   }
 
+  function independentlyObservedText(element) {
+    // Explicitly declared text identities remain independent edit targets.
+    // Undeclared inline emphasis stays in its parent's styled text runs.
+    return declaredIdentity && declaredIdSet.has(element.getAttribute("data-qid")) &&
+      !complexKind(element) && textRoot(element) &&
+      !(looksLikeShape(element) && nestedBlockContent(element));
+  }
+
   function textRuns(element) {
     var runs = [];
     var failed = false;
     var activeLineBand = null;
+    var skippedOwnedInlineAfterText = false;
+    var discontinuousOwnership = false;
 
     function rectBand(rect) {
       return {
@@ -1256,6 +1266,7 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
       if (end <= start) return;
       var text = (node.textContent || "").slice(start, end);
       if (!text) return;
+      if (skippedOwnedInlineAfterText && text.trim()) discontinuousOwnership = true;
       scriptSlices(text).forEach(function (slice) {
         var range = document.createRange();
         range.setStart(node, start + slice.start);
@@ -1428,8 +1439,13 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
       if (node.nodeType !== Node.ELEMENT_NODE) return;
       if (
         node !== element &&
-        node.hasAttribute(ISOLATED_INLINE_ATTRIBUTE)
-      ) return;
+        (node.hasAttribute(ISOLATED_INLINE_ATTRIBUTE) || independentlyObservedText(node))
+      ) {
+        if (runs.some(function (run) { return Boolean(run.text.trim()); })) {
+          skippedOwnedInlineAfterText = true;
+        }
+        return;
+      }
       if (node.tagName === "BR") {
         var parent = node.parentElement || element;
         var rect = parent.getBoundingClientRect();
@@ -1462,7 +1478,7 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
     var identityText = runs.map(function (run) {
       return run.softLineBreak ? "" : run.text;
     }).join("");
-    return { runs: runs, failed: failed, identityText: identityText };
+    return { runs: runs, failed: failed, identityText: identityText, discontinuousOwnership: discontinuousOwnership };
   }
 
   function edgeValues(style, prefix, suffix) {
@@ -3863,10 +3879,14 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
           var browserPlainText = element.innerText ||
             (["TEXT", "TEXTPATH"].includes(tagName) ? element.textContent : "") || "";
           var extractedRuns = textRuns(element);
+          // One native textbox cannot preserve the hole occupied by an
+          // independently owned inline child. Keep only this parent's paint
+          // on the raster layer instead of collapsing its surrounding runs.
+          if (extractedRuns.discontinuousOwnership) reasons.push("complex-content");
           var renderedPlainText = extractedRuns.runs.map(function (run) { return run.text; }).join("");
           var ownsIsolatedInline = Boolean(
             element.querySelector("[" + ISOLATED_INLINE_ATTRIBUTE + "]")
-          );
+          ) || Array.from(element.querySelectorAll("[data-qid]")).some(independentlyObservedText);
           if (extractedRuns.failed) reasons.push("run-extraction-error");
           if (
             !ownsIsolatedInline &&

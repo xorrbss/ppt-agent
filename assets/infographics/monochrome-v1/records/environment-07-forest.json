@@ -1,0 +1,54 @@
+{
+  "id": "environment-07-forest",
+  "category": "environment",
+  "tags": {
+    "ko": [
+      "환경",
+      "숲"
+    ],
+    "en": [
+      "environment",
+      "forest"
+    ]
+  },
+  "alt": {
+    "ko": "숲 단색 벡터 인포그래픽",
+    "en": "forest monochrome vector infographic"
+  },
+  "path": "originals/environment-07-forest.svg",
+  "thumbnail": "thumbnails/environment-07-forest.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 482,
+  "sha256": "f3cde9259eaa255a478075e16bb53a94ff73e338402b2db86246316fb5cfe783",
+  "geometry_sha256": "25992c3c4aa8e72cd13fd02efff3d3d1ba51c7bd23e0b9f62e91244fa32bd23f",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55339,
+    "preview_opaque_pixels": 8723,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Trees"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "id": "people-06-designer",
+  "category": "people",
+  "tags": {
+    "ko": [
+      "사람",
+      "디자이너"
+    ],
+    "en": [
+      "people",
+      "designer"
+    ]
+  },
+  "alt": {
+    "ko": "디자이너 단색 벡터 인포그래픽",
+    "en": "designer monochrome vector infographic"
+  },
+  "path": "originals/people-06-designer.svg",
+  "thumbnail": "thumbnails/people-06-designer.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 1115,
+  "sha256": "9632441eea5dd320b02c6adf580ed47250498ec7ca21d074b869ee5f47c9d365",
+  "geometry_sha256": "8f2e21c64c35fa042de21841206757e845ccf4214985f8069dafa35c0200dc9b",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56887,
+    "preview_opaque_pixels": 6621,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Palette",
+      "PenTool"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

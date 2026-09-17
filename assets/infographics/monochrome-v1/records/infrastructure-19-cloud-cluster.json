@@ -1,0 +1,56 @@
+{
+  "id": "infrastructure-19-cloud-cluster",
+  "category": "infrastructure",
+  "tags": {
+    "ko": [
+      "인프라",
+      "클러스터"
+    ],
+    "en": [
+      "infrastructure",
+      "cloud",
+      "cluster"
+    ]
+  },
+  "alt": {
+    "ko": "클러스터 단색 벡터 인포그래픽",
+    "en": "cloud cluster monochrome vector infographic"
+  },
+  "path": "originals/infrastructure-19-cloud-cluster.svg",
+  "thumbnail": "thumbnails/infrastructure-19-cloud-cluster.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 565,
+  "sha256": "3a7c804c3a67f77ac09d8197ac54f0641c8b437694e780616bde420a28b460a1",
+  "geometry_sha256": "c527aee017c3aa7634c3cbe5784b24536ccf45280b66ef9d621a401f93867a12",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 58022,
+    "preview_opaque_pixels": 5836,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Cloud",
+      "Server"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

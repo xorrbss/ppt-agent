@@ -1,5 +1,5 @@
 from typing import Annotated, Optional
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 
@@ -22,6 +22,35 @@ from utils.process_slides import process_old_and_new_slides_and_fetch_assets
 
 SLIDE_ROUTER = APIRouter(prefix="/slide", tags=["Slide"])
 
+
+@SLIDE_ROUTER.get("/{id}/svg-preview")
+async def get_svg_preview(id: uuid.UUID,
+                          sql_session: AsyncSession = Depends(get_async_session)):
+    from services.artifact_store import ArtifactStoreError
+    from services.authored_canvas import presentation_canvas_contract
+    from services.presentation_access_service import require_live_presentation
+    from services.svg_asset_resolver import resolve_slide_svg_preview
+    from utils.owner_context import get_current_owner_id, get_current_tenant_id
+    owner_id, tenant_id = get_current_owner_id(), get_current_tenant_id()
+    if owner_id is None or not tenant_id:
+        raise HTTPException(status_code=401, detail="authentication_required")
+    slide = await sql_session.get(SlideModel, id)
+    if slide is None or slide.owner_id != owner_id or not slide.is_svg():
+        raise HTTPException(status_code=404, detail="Slide not found")
+    presentation = await require_live_presentation(sql_session, slide.presentation)
+    if presentation.owner_id != owner_id:
+        raise HTTPException(status_code=404, detail="Presentation not found")
+    canvas = presentation_canvas_contract(presentation.theme)
+    try:
+        svg = await resolve_slide_svg_preview(slide, session=sql_session,
+            owner_id=owner_id, tenant_id=tenant_id, width=canvas.width_px, height=canvas.height_px)
+    except (ValueError, KeyError, ArtifactStoreError) as error:
+        raise HTTPException(status_code=409, detail="svg_preview_unavailable") from error
+    return Response(svg, media_type="image/svg+xml", headers={
+        "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'",
+    })
+
 # Authored decks are model-authored images (no React layout), so per-slide LLM editing
 # does not apply — the deck is view-only in-app and edited in PowerPoint via the PPTX.
 _AUTHORED_NOT_EDITABLE = (
@@ -43,6 +72,8 @@ async def edit_slide(
     presentation = await sql_session.get(PresentationModel, slide.presentation)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
+    if presentation.is_svg() or slide.is_svg():
+        raise HTTPException(status_code=400, detail="svg_dom_edit_not_supported")
     if presentation.is_authored():
         raise HTTPException(
             status_code=400,
@@ -118,6 +149,8 @@ async def edit_slide_html(
     presentation = await sql_session.get(PresentationModel, slide.presentation)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
+    if presentation.is_svg() or slide.is_svg():
+        raise HTTPException(status_code=400, detail="svg_dom_edit_not_supported")
     if presentation.is_authored():
         raise HTTPException(
             status_code=400,

@@ -1,8 +1,8 @@
-export const PRESENTATION_DRIVER_IDS = ["template-v2", "authored"] as const;
+export const PRESENTATION_DRIVER_IDS = ["template-v2", "authored", "svg-v1"] as const;
 
 export type PresentationDriverId = (typeof PRESENTATION_DRIVER_IDS)[number];
-export type PresentationContentModel = "template-v2" | "authored";
-export type PresentationGenerationStrategy = "template" | "authored";
+export type PresentationContentModel = "template-v2" | "authored" | "svg";
+export type PresentationGenerationStrategy = "template" | "authored" | "svg";
 export type PresentationStyleSource = "imported" | "authored";
 export type LegacyGenerationMode = "standard";
 
@@ -25,7 +25,7 @@ export interface PresentationEditorCapabilities {
 }
 
 export interface PresentationCapabilities {
-  readonly schema_version: 1;
+  readonly schema_version: 1 | 2;
   readonly driver_id: PresentationDriverId;
   readonly renderer_adapter_id: string;
   readonly editor_adapter_id: string;
@@ -127,14 +127,14 @@ function parseProfile(value: unknown): PresentationProfile {
     );
   }
   if (
-    !["template-v2", "authored"].includes(String(value.content_model))
+    !["template-v2", "authored", "svg"].includes(String(value.content_model))
   ) {
     throw new PresentationProfileResolutionError(
       "unsupported_presentation_content_model",
     );
   }
   if (
-    !["template", "authored"].includes(
+    !["template", "authored", "svg"].includes(
       String(value.generation_strategy),
     )
   ) {
@@ -166,7 +166,7 @@ function parseProfile(value: unknown): PresentationProfile {
 }
 
 function parseCapabilities(value: unknown): PresentationCapabilities {
-  if (!isRecord(value) || value.schema_version !== 1) {
+  if (!isRecord(value) || (value.schema_version !== 1 && !(value.schema_version === 2 && value.driver_id === "svg-v1"))) {
     throw new PresentationProfileResolutionError(
       "unsupported_presentation_capability_version",
     );
@@ -188,7 +188,7 @@ function parseCapabilities(value: unknown): PresentationCapabilities {
     );
   }
   return Object.freeze({
-    schema_version: 1,
+    schema_version: value.schema_version as 1 | 2,
     driver_id: value.driver_id,
     renderer_adapter_id: value.renderer_adapter_id,
     editor_adapter_id: value.editor_adapter_id,
@@ -295,6 +295,25 @@ export const PRESENTATION_DRIVER_REGISTRY = Object.freeze({
     },
     agent_tool_capability: "authored",
     export_adapter_id: "authored-hybrid",
+    export_editable_pptx: true,
+  }),
+  "svg-v1": driver({
+    driver_id: "svg-v1",
+    content_model: "svg",
+    generation_strategy: "svg",
+    style_sources: ["authored"],
+    renderer_adapter_id: "svg-v1",
+    editor_adapter_id: "svg-readonly",
+    editor: {
+      element_text_edit: false,
+      element_geometry_edit: false,
+      chart_edit: false,
+      theme_apply: false,
+      template_apply: false,
+      slide_image_regenerate: true,
+    },
+    agent_tool_capability: "svg-v1",
+    export_adapter_id: "svg-v1",
     export_editable_pptx: true,
   }),
 } satisfies PresentationDriverRegistry);

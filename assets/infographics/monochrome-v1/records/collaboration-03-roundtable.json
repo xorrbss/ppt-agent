@@ -1,0 +1,55 @@
+{
+  "id": "collaboration-03-roundtable",
+  "category": "collaboration",
+  "tags": {
+    "ko": [
+      "협업",
+      "원탁회의"
+    ],
+    "en": [
+      "collaboration",
+      "roundtable"
+    ]
+  },
+  "alt": {
+    "ko": "원탁회의 단색 벡터 인포그래픽",
+    "en": "roundtable monochrome vector infographic"
+  },
+  "path": "originals/collaboration-03-roundtable.svg",
+  "thumbnail": "thumbnails/collaboration-03-roundtable.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 542,
+  "sha256": "db49bfe2a99a63e80d8e6efeab1eca9fcc66c9454267bfa25882e0668a27dc91",
+  "geometry_sha256": "ff7610b2b59b2fd514055c4e3ae0e0d6ce824ae948ace9948efdf859755c7fc3",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55364,
+    "preview_opaque_pixels": 8300,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Table2",
+      "UsersRound"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

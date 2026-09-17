@@ -197,10 +197,12 @@ async def illustrate_slide(
                     **illustration_kwargs,
                 )
             except Exception as exc:
-                if generating and not substituting:
+                if generating and not source_images:
                     # Generated artwork is an optional enhancement. A provider
                     # outage must not discard an otherwise valid authored
-                    # slide; remove the unresolved slot and publish the
+                    # slide. An empty offer still enables source-slot cleanup,
+                    # but carries no caller-owned image to preserve. Remove the
+                    # unresolved slot and publish the
                     # text/diagram composition. Source-image substitution is
                     # intentionally excluded because its validation is part of
                     # the caller-owned source contract and must stay fail-closed.

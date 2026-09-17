@@ -1,0 +1,56 @@
+{
+  "id": "collaboration-15-task-handoff",
+  "category": "collaboration",
+  "tags": {
+    "ko": [
+      "협업",
+      "업무인계"
+    ],
+    "en": [
+      "collaboration",
+      "task",
+      "handoff"
+    ]
+  },
+  "alt": {
+    "ko": "업무인계 단색 벡터 인포그래픽",
+    "en": "task handoff monochrome vector infographic"
+  },
+  "path": "originals/collaboration-15-task-handoff.svg",
+  "thumbnail": "thumbnails/collaboration-15-task-handoff.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 627,
+  "sha256": "f14fa22a422224e13a430785d1d59960c52adbb33d89816bd88ba47fd6a51184",
+  "geometry_sha256": "d0c2b9b3fdaf9024b26f8b26c2abaaf48516554be282f33ad011d804831880ff",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57105,
+    "preview_opaque_pixels": 6784,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "PackageCheck",
+      "ArrowRight"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

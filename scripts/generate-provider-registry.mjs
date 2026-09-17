@@ -13,7 +13,7 @@ const settingKeys = new Set(settings.settings.map((setting) => setting.key));
 const capabilities = ["webSearch", "vision", "thinking", "structuredOutput", "imageGeneration"];
 const kinds = new Set(["llm", "image", "web-search"]);
 const states = new Set(["supported", "unsupported", "conditional"]);
-const drivers = new Set(["template-v2", "authored"]);
+const drivers = new Set(["template-v2", "authored", "svg-v1"]);
 const credentialKinds = new Set(["secret", "oauth", "url", "setting"]);
 const widgets = new Set(["oauth-status", "password", "url", "text"]);
 

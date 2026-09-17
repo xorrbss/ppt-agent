@@ -113,6 +113,7 @@ class GeneratePresentationRequest(BaseModel):
     # through ``contentPolicy``; the server owns the effective profile.
     _authored_composition_profile: Any = PrivateAttr(default=None)
     _authored_canvas: Any = PrivateAttr(default=None)
+    _svg_style_snapshot: Any = PrivateAttr(default=None)
 
     # Chat-first async generation reuses the durable presentation shell and
     # awaiting-approval operation created by /presentation/create.  Legacy
@@ -158,7 +159,7 @@ class GeneratePresentationRequest(BaseModel):
             "server-owned pre-export and export evidence gates."
         ),
     )
-    strategy: Optional[Literal["authored"]] = Field(
+    strategy: Optional[Literal["authored", "svg"]] = Field(
         default=None,
         description=(
             "Explicit generation strategy. Omit to use the authored source."

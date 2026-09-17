@@ -1,0 +1,55 @@
+{
+  "id": "technology-13-wireless-router",
+  "category": "technology",
+  "tags": {
+    "ko": [
+      "기술",
+      "공유기"
+    ],
+    "en": [
+      "technology",
+      "wireless",
+      "router"
+    ]
+  },
+  "alt": {
+    "ko": "공유기 단색 벡터 인포그래픽",
+    "en": "wireless router monochrome vector infographic"
+  },
+  "path": "originals/technology-13-wireless-router.svg",
+  "thumbnail": "thumbnails/technology-13-wireless-router.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 473,
+  "sha256": "d35b36a47e18d9319fc63ff23bf5ff11729d1785dbbaf6291aaba90549f92ab6",
+  "geometry_sha256": "2c6beea2d600d3241cde7ebe0808f66d8b2d8e5ef498e06ed07180db7f7c2303",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54166,
+    "preview_opaque_pixels": 9723,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Router"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

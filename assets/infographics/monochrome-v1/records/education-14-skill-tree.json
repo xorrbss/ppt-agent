@@ -1,0 +1,56 @@
+{
+  "id": "education-14-skill-tree",
+  "category": "education",
+  "tags": {
+    "ko": [
+      "교육",
+      "역량트리"
+    ],
+    "en": [
+      "education",
+      "skill",
+      "tree"
+    ]
+  },
+  "alt": {
+    "ko": "역량트리 단색 벡터 인포그래픽",
+    "en": "skill tree monochrome vector infographic"
+  },
+  "path": "originals/education-14-skill-tree.svg",
+  "thumbnail": "thumbnails/education-14-skill-tree.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 648,
+  "sha256": "e42c4ee15904719aaad0cca1d6f1093853fae2169fa30dba1bdff4d6a410166c",
+  "geometry_sha256": "15db56581a0fdd766cb31662f239bada21ea5950f71b1d245ac95c1a8b884cf2",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 58667,
+    "preview_opaque_pixels": 5359,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "GitBranch",
+      "GraduationCap"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

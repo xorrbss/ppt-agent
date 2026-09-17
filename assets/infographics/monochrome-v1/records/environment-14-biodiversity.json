@@ -1,0 +1,55 @@
+{
+  "id": "environment-14-biodiversity",
+  "category": "environment",
+  "tags": {
+    "ko": [
+      "환경",
+      "생물다양성"
+    ],
+    "en": [
+      "environment",
+      "biodiversity"
+    ]
+  },
+  "alt": {
+    "ko": "생물다양성 단색 벡터 인포그래픽",
+    "en": "biodiversity monochrome vector infographic"
+  },
+  "path": "originals/environment-14-biodiversity.svg",
+  "thumbnail": "thumbnails/environment-14-biodiversity.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 818,
+  "sha256": "6b040347bccfa09735b2a5b4f82c8d34d78f1ef619563675032686ff57a9af0e",
+  "geometry_sha256": "6f0ad5bad8baa7b531bca5959e8f58a52294af5cc9fe89cf10757f6992a41f36",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57085,
+    "preview_opaque_pixels": 6654,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Bird",
+      "Flower2"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

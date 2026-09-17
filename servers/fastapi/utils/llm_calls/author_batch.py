@@ -101,6 +101,7 @@ class AuthoredBatchSlideRequest:
     capacity_brief: str | None = None
     source_images: tuple[SourceImageCandidate, ...] = ()
     require_all_source_images: bool = False
+    source_image_placement_plan: Mapping | None = None
     correction_hint: str | None = None
     rejected_html: str | None = None
     # G0: the deck's already-authored anchor slide, offered as data.
@@ -191,6 +192,10 @@ def _prepare_slide(
         source_slot_candidates,
         required=request.require_all_source_images,
     )
+    if not request.require_all_source_images:
+        source_guidance += author_slide_prompt.planned_source_image_brief(
+            request.source_image_placement_plan or (request.structured_context or {}).get("source_image_placement_plan")
+        )
     if request.require_all_source_images and source_slot_candidates:
         source_guidance = (
             "\n\nSLIDE-SPECIFIC SOURCE AUTHORITY: Every listed source slot is "

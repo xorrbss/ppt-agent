@@ -6,6 +6,8 @@ render, and export execution remains owned by the workspace worker boundary.
 
 from __future__ import annotations
 
+from services.source_images.budget import source_image_admission_budget
+
 from services.public_generation_route import (
     effective_generation_engine as _effective_generation_engine,
     pin_source_restyle_authoring,
@@ -248,6 +250,20 @@ async def _resolve_generation_route_receipt(
     slide_count: int,
     resolver: GenerationRouteResolver | None,
 ) -> GenerationRouteReceiptV1:
+    if request.strategy == "svg":
+        from services.svg_generation_admission import require_svg_creation_admission
+
+        require_svg_creation_admission(request)
+        payload = {
+            "schemaVersion": "generation-route-receipt/v1",
+            "requestedMode": request.generation_mode,
+            "selectedRoute": "svg-native", "designPackPin": None,
+            "narrativeIrDigest": None, "fallbackReason": None,
+            "outputCapability": "fidelity",
+        }
+        return GenerationRouteReceiptV1.model_validate({
+            **payload, "receiptDigest": _generation_route_digest(payload),
+        })
     active_resolver = resolver or _installed_generation_route_resolver()
     if active_resolver is None:
         resolution: Mapping[str, Any] = {
@@ -1020,7 +1036,7 @@ class SqlPublicV2Orchestrator:
                 n_slides=slide_count,
                 language=request.language,
                 template="authored",
-                strategy="authored",
+                strategy=request.strategy,
                 qualityProfile=(
                     "release" if request.quality_policy == "release-v1" else "development"
                 ),
@@ -1113,7 +1129,12 @@ class SqlPublicV2Orchestrator:
                 instructions=request.instructions,
                 lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
             )
-            stamp_new_authored_presentation(presentation)
+            if request.strategy == "svg":
+                from services.compatibility_migration.admission import stamp_new_svg_presentation
+
+                stamp_new_svg_presentation(presentation)
+            else:
+                stamp_new_authored_presentation(presentation)
             presentation.theme = merge_presentation_canvas(
                 presentation.theme, request_canvas_metadata(internal_request)
             )
@@ -1240,6 +1261,7 @@ class SqlPublicV2Orchestrator:
                     slide_count=slide_count,
                     image_budget=slide_count,
                     repair_budget=slide_count,
+                    source_image_budget=source_image_admission_budget(snapshots),
                     vqa_budget=(
                         slide_count if request.quality_policy == "release-v1" else 0
                     ),

@@ -88,13 +88,16 @@ def reusable_checkpoint_receipt(
     from utils.slide_capture_local_fit import local_fit_render_identity
 
     preserved_original = receipt_is_preserved_original(receipt)
-    if preserved_original and (
+    if (preserved_original or receipt.get("renderedFitDisabled") is True) and (
         final_png is None
         or receipt.get("png_digest")
         != "sha256:" + hashlib.sha256(final_png).hexdigest()
     ):
         return None
-    fit_mode = False if preserved_original else receipt.get("changed") is not True
+    fit_mode = (
+        False if preserved_original or receipt.get("renderedFitDisabled") is True
+        else receipt.get("changed") is not True
+    )
     current_identity = local_fit_render_identity(
         final_html, policy, fit=fit_mode
     )

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.local-fit-nested-card-containment",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Nested text must respect enclosing meaningful cards; local-fit must reject candidates that hide a measurement while leaving actual card escape.",
+  "scope": [
+    "authored",
+    "local-fit",
+    "quality"
+  ],
+  "invariants": [
+    "Respect explicit intentional and decorative boundaries.",
+    "Validate actual nested content bounds before accepting a local-fit candidate."
+  ],
+  "forbidden": [
+    "Treating height:auto alone as proof that enclosing-card escape was repaired."
+  ],
+  "evidence": [
+    "servers/fastapi/utils/authored_dom_text_escape.py",
+    "servers/fastapi/utils/slide_capture_fit_geometry.py",
+    "artifacts/sol-common-repair-20260915/inspector-change-replay-18.json",
+    "artifacts/sol-common-repair-20260915/product-fit-replay/summary.json",
+    "artifacts/sol-common-repair-20260915/evaluation/product-fit-case01-visual.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-15T13:12:33.9630119+00:00"
+}

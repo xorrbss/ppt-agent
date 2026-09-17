@@ -5,7 +5,7 @@ import type {
 import type { SourceContentPolicy } from "../../services/api/source-content/contract";
 import type { CodexGenerationPresetId } from "@/components/codex-config";
 
-export type DurableGenerationMode = "authored" | "template-v2";
+export type DurableGenerationMode = "authored" | "svg" | "template-v2";
 
 export type DurableGenerationStatus =
   | "starting"
@@ -31,6 +31,7 @@ export interface DurableGenerationTask {
   // Redux copies, and the server 409s a same-key re-POST whose payload drifts
   // (idempotency_key_payload_conflict), so a resume must resend these exactly.
   authoredRequest?: {
+    strategy?: "authored" | "svg";
     language: string | null;
     instructions?: string | null;
     visionQa: boolean;

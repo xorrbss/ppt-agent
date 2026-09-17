@@ -84,6 +84,10 @@ def _durable_request_payload(request: GeneratePresentationRequest) -> dict:
     """Persist canonical identities only, never admission-time raw paths."""
 
     payload = request.model_dump(mode="json")
+    if request.strategy == "svg":
+        from services.svg_generation_admission import pin_svg_style
+
+        payload["_internal_svg_style_snapshot"] = pin_svg_style(request)
     # ``files`` is a compatibility-only admission field. Validation has already
     # converted it to an immutable uploaded-document snapshot. Preserve the
     # optional field's wire shape for old workers while ensuring its value can
@@ -285,6 +289,7 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     composition_payload = values.pop(INTERNAL_COMPOSITION_PIN_KEY, None)
     resolved_master_payload = values.pop(INTERNAL_RESOLVED_MASTER_PIN_KEY, None)
     style_snapshot_payload = values.pop(INTERNAL_STYLE_SNAPSHOT_KEY, None)
+    svg_style_snapshot = values.pop("_internal_svg_style_snapshot", None)
     design_replay = values.pop(INTERNAL_DESIGN_REPLAY_KEY, False)
     deck_metadata_payload = values.pop(INTERNAL_DECK_METADATA_KEY, None)
     source_semantic_snapshot = values.pop(
@@ -303,6 +308,7 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
 
     values.pop(COMPOSER_FIT_POLICY_KEY, None)
     request = GeneratePresentationRequest.model_validate(values)
+    request._svg_style_snapshot = svg_style_snapshot
     restore_request_canvas_metadata(
         request,
         canvas_payload,
