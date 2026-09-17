@@ -182,6 +182,12 @@ class _CapturedProcess:
     stdout_overflow: bool
 
 
+@dataclass(frozen=True, slots=True)
+class _StagedArtifact:
+    reference: ArtifactRef
+    destination: Path
+
+
 class _StagingCapacitySupervisor:
     """Process-local admission for job-owned staging disk reservations."""
 
@@ -327,23 +333,28 @@ class SupervisedStdioWireTransport:
             destination=primary_path,
         )
         references = _input_bundle_references(job, primary_path)
-        additional_input_bytes = sum(reference.size_bytes for reference in references)
+        staging_plan = _physical_staging_plan(
+            object_root=object_root,
+            references=(job.input_artifact, *references),
+        )
+        if staging_plan[0].destination != primary_path:
+            raise TrustedWorkerWireError("trusted_worker_stage_binding_mismatch")
+        additional_input_bytes = sum(
+            item.reference.size_bytes for item in staging_plan[1:]
+        )
         await reservation.grow(additional_input_bytes)
-        staged_paths = [primary_path]
-        for reference in references:
-            destination = object_root.joinpath(*reference.storage_key.split("/"))
+        for item in staging_plan[1:]:
             await self._artifact_authority.stage(
-                reference=reference,
-                destination=destination,
+                reference=item.reference,
+                destination=item.destination,
             )
-            staged_paths.append(destination)
         spec = replace(
             spec,
             filesystem=SandboxFilesystemSpec(
                 sandbox_root=spec.filesystem.sandbox_root,
                 input_root=object_root,
                 temporary_root=spec.filesystem.temporary_root,
-                staged_inputs=tuple(staged_paths),
+                staged_inputs=tuple(item.destination for item in staging_plan),
             ),
         )
         if self._allow_local_development_isolation_gap:
@@ -422,10 +433,8 @@ class SupervisedStdioWireTransport:
                 raise TrustedWorkerWireError("trusted_worker_descendants_remained")
             tree_zero_at = datetime.now(timezone.utc)
             tree_zero_monotonic_ns = time.perf_counter_ns()
-            for reference, staged_path in zip(
-                (job.input_artifact, *references), staged_paths, strict=True
-            ):
-                _verify_artifact_file(reference, staged_path)
+            for item in staging_plan:
+                _verify_artifact_file(item.reference, item.destination)
             supervisor_metrics = await asyncio.to_thread(supervisor.telemetry)
             resource_metrics = {
                 **supervisor_metrics,
@@ -632,6 +641,29 @@ def _verify_artifact_file(
         raise TrustedWorkerWireError("trusted_worker_artifact_digest_mismatch")
 
 
+def _physical_staging_plan(
+    *, object_root: Path, references: Sequence[ArtifactRef]
+) -> tuple[_StagedArtifact, ...]:
+    plan: list[_StagedArtifact] = []
+    by_destination: dict[Path, _StagedArtifact] = {}
+    for reference in references:
+        destination = object_root.joinpath(*reference.storage_key.split("/"))
+        existing = by_destination.get(destination)
+        if existing is None:
+            item = _StagedArtifact(reference=reference, destination=destination)
+            by_destination[destination] = item
+            plan.append(item)
+            continue
+        if (
+            existing.reference.sha256 != reference.sha256
+            or existing.reference.size_bytes != reference.size_bytes
+        ):
+            raise TrustedWorkerWireError(
+                "trusted_worker_stage_destination_collision"
+            )
+    return tuple(plan)
+
+
 def _input_bundle_references(
     job: IsolatedWorkerJob, path: Path
 ) -> tuple[ArtifactRef, ...]:
@@ -652,13 +684,38 @@ def _input_bundle_references(
         "public-render-bundle/v1", "public-render-bundle/v2",
     }:
         raise TrustedWorkerWireError("trusted_worker_render_bundle_invalid")
-    expected_kind = "slide-html" if job.role == "render" else "slide-png"
-    expected_media_type = "text/html" if job.role == "render" else "image/png"
+    svg_export = job.role == "export" and value.get("schemaVersion") in {
+        "public-svg-export-bundle/v1", "public-svg-export-bundle/v2",
+    }
+    expected_kind = "slide-svg" if svg_export else ("slide-html" if job.role == "render" else "slide-png")
+    expected_media_type = "image/svg+xml" if svg_export else ("text/html" if job.role == "render" else "image/png")
     result = _staged_bundle_slides(
         job, value["slides"], kind=expected_kind, media_type=expected_media_type
     )
     if not 1 <= len(result) <= 100:
         raise TrustedWorkerWireError("trusted_worker_bundle_slide_count_invalid")
+    if svg_export and value.get("schemaVersion") == "public-svg-export-bundle/v2":
+        asset_refs = []
+        for entry in value["slides"]:
+            assets = entry.get("assets")
+            if assets is None:
+                continue
+            if (not isinstance(assets, Mapping)
+                    or set(assets) != {"sourceManifestRef", "placementManifestRef", "sourceManifestDigest",
+                                      "placementManifestDigest", "pageIndex", "slideRevision", "derivatives"}
+                    or not isinstance(assets["derivatives"], Mapping)
+                    or len(assets["derivatives"]) > 4096):
+                raise TrustedWorkerWireError("trusted_worker_svg_asset_bundle_invalid")
+            for name, kind in (("sourceManifestRef", "source-manifest"),
+                               ("placementManifestRef", "placement-manifest")):
+                asset_refs.extend(_staged_bundle_slides(job, [assets[name]], kind=kind, media_type="application/json"))
+            for wire in assets["derivatives"].values():
+                if not isinstance(wire, Mapping) or wire.get("mediaType") not in {"image/png", "image/jpeg"}:
+                    raise TrustedWorkerWireError("trusted_worker_svg_derivative_type_invalid")
+                asset_refs.extend(_staged_bundle_slides(job, [wire], kind="image-derivative", media_type=wire["mediaType"]))
+        if any(ref.created_by_operation_id != job.operation_id for ref in (*result, *asset_refs)):
+            raise TrustedWorkerWireError("trusted_worker_svg_asset_operation_mismatch")
+        result = (*result, *asset_refs)
     # An editable-hybrid export additionally measures the authored HTML inside
     # the isolated worker, so those sources must be staged with the rasters.
     sources = value.get("sourceSlides")
