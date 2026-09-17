@@ -24,7 +24,7 @@ const ExportQualityDialog = ({
     }}
   >
     <DialogContent
-      className="w-[420px] rounded-2xl sm:max-w-[420px]"
+      className="max-w-[420px]"
       data-testid="export-quality-dialog"
     >
       <DialogHeader>

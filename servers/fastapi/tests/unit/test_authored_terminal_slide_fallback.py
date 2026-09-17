@@ -295,7 +295,7 @@ def _install_deck_stubs(monkeypatch, tmp_path, htmls):
     monkeypatch.setattr(terminal_mod, "_placeholder_png", lambda: b"placeholder")
 
     async def fake_capture(html):
-        return SimpleNamespace(png=b"remade-png", browser_metrics={"telemetry": "ok"})
+        return SimpleNamespace(prepared_html=html, png=b"remade-png", browser_metrics={"telemetry": "ok"})
 
     monkeypatch.setattr(terminal_mod, "render_html_to_png_with_metrics", fake_capture)
 
@@ -732,7 +732,7 @@ def _install_repair_round(monkeypatch, *, raises, candidate=None):
     )
 
     async def fake_bind_capture(html):
-        return SimpleNamespace(png=b"bound-png", browser_metrics={"telemetry": "ok"})
+        return SimpleNamespace(prepared_html=html, png=b"bound-png", browser_metrics={"telemetry": "ok"})
 
     monkeypatch.setattr(
         authored_generation_mod, "render_html_to_png_with_metrics", fake_bind_capture
@@ -2168,7 +2168,7 @@ def _install_receipt_evidence(monkeypatch):
     attempt_id = public_attempt_id(str(uuid.uuid4()))
     ledger = DeckEvidenceLedger(attempt_id=attempt_id)
 
-    def tagged_metrics(html):
+    def tagged_metrics(html, **_capture_options):
         blocked = TERMINAL_MARKER in str(html) or _CAPACITY_MARKER in str(html)
         return {
             "telemetry": "ok",

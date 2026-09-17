@@ -1841,6 +1841,7 @@ describe("WorkspaceChatPanel", () => {
 
   it("collects high-quality review options in chat before dispatching", () => {
     const timeline = {
+      schema_version: 1,
       items: [firstUserMessage],
       event_high_watermark: "cursor-quality-options",
       revision: 7,
@@ -1861,6 +1862,17 @@ describe("WorkspaceChatPanel", () => {
     mountWithIntl(
       <WorkspaceChatPanel
         presentationId={PRESENTATION_ID}
+        presentation={{
+          slides: [{ id: "resolved", index: 0 }, { id: "review", index: 1 }],
+          theme: {
+            authoredQualityGate: {
+              flaggedSlides: [
+                { index: 0, slideId: "review", reason: "composition_safety:clipping", classification: "review_required" },
+                { index: 1, slideId: "resolved", reason: "composition_safety:clipping", classification: "repair_not_admitted" },
+              ],
+            },
+          },
+        }}
         currentSlide={2}
         onQualityReviewRequesterReady={(requester) => {
           openQualityReview = requester;
@@ -1911,6 +1923,19 @@ describe("WorkspaceChatPanel", () => {
       });
     });
     cy.get('[data-testid="quality-review-options"]').should("not.exist");
+    cy.then(() => openQualityReview?.(2));
+    cy.get('[data-testid="quality-review-scope-review-required"]')
+      .should("contain.text", "1장")
+      .click();
+    cy.get('[data-testid="quality-review-required-confirmation"]')
+      .should("contain.text", "2번 페이지");
+    cy.get('[data-testid="quality-review-options-submit"]').click();
+    cy.wait("@qualityReviewCommand");
+    cy.then(() => {
+      expect(commandBodies).to.have.length(2);
+      expect(commandBodies[1].context.scope).to.equal("subset");
+      expect(commandBodies[1].context.slide_indices).to.deep.equal([1]);
+    });
   });
 
   it("offers the remake flow on the page a chat turn was refused", () => {

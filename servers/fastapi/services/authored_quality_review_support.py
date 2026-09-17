@@ -184,12 +184,24 @@ def _serialize_critiques(positions: _service.Iterable[int], critiques: list) -> 
     return results
 
 
-async def _render_review_html(html: str) -> tuple[bytes, _service.Mapping | None]:
+async def _render_review_html(
+    html: str, *, canvas: object | None = None
+) -> tuple[bytes, _service.Mapping | None]:
     """Render with co-located telemetry while preserving legacy test doubles."""
+    width_px = int(getattr(canvas, "width_px", 1280))
+    height_px = int(getattr(canvas, "height_px", 720))
+    render_kwargs = (
+        {}
+        if (width_px, height_px) == (1280, 720)
+        else {"width_px": width_px, "height_px": height_px}
+    )
     if _service.render_html_to_png is not _service._ORIGINAL_RENDER_HTML_TO_PNG:
-        png = await _service.render_html_to_png(html)
-        return (png, _service.get_cached_browser_metrics(html))
-    return await _service.render_html_to_png_with_metrics(html)
+        png = await _service.render_html_to_png(html, **render_kwargs)
+        return (
+            png,
+            _service.get_cached_browser_metrics(html, **render_kwargs),
+        )
+    return await _service.render_html_to_png_with_metrics(html, **render_kwargs)
 
 
 async def _hybrid_style_initial_review(

@@ -6,6 +6,7 @@ import io
 import json
 import math
 import posixpath
+import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,42 @@ NS = {"p": "http://schemas.openxmlformats.org/presentationml/2006/main",
       "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
       "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
       "rel": "http://schemas.openxmlformats.org/package/2006/relationships"}
+
+
+class LocalFitPageVerificationError(ValueError):
+    """A hybrid-only page defect whose exact raster backplate is admissible."""
+
+    def __init__(self, failed_pages: Sequence[Mapping[str, object]]):
+        self.failed_pages = tuple(failed_pages)
+        super().__init__("authored_local_fit_export:hybrid_page_verification_failed")
+
+
+def _bounded_page_code(error: ValueError) -> str:
+    code = str(error).removeprefix("authored_local_fit_export:").lower()
+    code = re.sub(r"[^a-z0-9_-]+", "_", code).strip("_")
+    return (code[:96] if code and code[0].isalpha() else "hybrid_page_verification_failed")
+
+
+_HYBRID_NATIVE_TEXT_ADVISORY_CODES = frozenset({
+    "native_run_owner_unavailable",
+    "native_run_baseline_unavailable",
+    "unverifiable_font_size",
+    "font_floor_or_shrink_limit",
+})
+_HYBRID_CHART_ADVISORY_CODES = frozenset({
+    "chart_tick_baseline_unavailable",
+    "chart_label_baseline_unavailable",
+    "chart_data_label_baseline_unavailable",
+    "chart_font_evidence_unavailable",
+    "unverifiable_font_size",
+    "font_floor_or_shrink_limit",
+    "chart_group_transform_unverifiable",
+})
+_HYBRID_IMAGE_EVIDENCE_ADVISORY_CODES = frozenset({
+    "raster_evidence_mismatch",
+    "raster_font_evidence_unavailable",
+    "local_image_evidence_mismatch",
+})
 
 
 def _fail(reason: str) -> None:
@@ -341,15 +378,37 @@ def _hybrid_text(root: ET.Element, runs: list[Mapping[str, Any]],
 def verify_local_fit_pptx(path_or_bytes: str | Path | bytes,
                           receipts: Sequence[Mapping[str, Any]], *, mode: str = "fidelity",
                           pngs: Sequence[bytes] | None = None,
-                          export_evidence: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                          export_evidence: Mapping[str, Any] | None = None,
+                          collect_hybrid_page_failures: bool = False,
+                          strict_quality: bool = True) -> dict[str, Any]:
     from services.authored_local_fit_export_evidence import (
         load_export_evidence, validate_observation, validate_raster, validate_local_image,
+        validate_raster_fragments,
     )
     payload = path_or_bytes if isinstance(path_or_bytes, bytes) else Path(path_or_bytes).read_bytes()
     evidence = load_export_evidence(path_or_bytes, payload, receipts, export_evidence)
     native_runs = 0
     deck_policy_revision: str | None = None
     review_pages: list[int] = []
+    failed_pages: list[dict[str, object]] = []
+    hybrid_quality_advisories: list[dict[str, object]] = []
+
+    def advisory(index: int, error: ValueError) -> None:
+        hybrid_quality_advisories.append({
+            "slideIndex": index,
+            "code": _bounded_page_code(error),
+        })
+        if index not in review_pages:
+            review_pages.append(index)
+
+    def image_evidence_advisory(index: int, error: ValueError) -> bool:
+        if (not strict_quality
+                and _bounded_page_code(error)
+                in _HYBRID_IMAGE_EVIDENCE_ADVISORY_CODES):
+            advisory(index, error)
+            return True
+        return False
+
     with ZipFile(io.BytesIO(payload)) as archive:
         presentation = ET.fromstring(archive.read("ppt/presentation.xml"))
         dimensions = presentation.find("p:sldSz", NS)
@@ -375,102 +434,166 @@ def verify_local_fit_pptx(path_or_bytes: str | Path | bytes,
                 _fail("output_scale_mismatch")
             runs = _runs(receipt, required=quality_pass)
             if quality_pass:
-                _check_sizes(runs, policy_revision=policy_revision)
-            part = relations[slide.attrib["{" + NS["r"] + "}id"]]
-            root = ET.fromstring(archive.read(part))
-            pictures = root.findall(".//p:pic", NS)
-            slide_evidence = evidence["slides"][index] if evidence is not None else None
-            if slide_evidence is not None and quality_pass:
-                validate_observation(
-                    slide_evidence.get("observation"), runs, manifest,
-                    policy_revision=policy_revision,
-                    enforce_font_policy=quality_pass,
-                )
-            image_relations = _relationships(archive, part)
-            backgrounds = root.findall("p:cSld/p:bg/p:bgPr/a:blipFill", NS)
-            blips = []
-            placements = []
-            for picture in pictures:
+                try:
+                    _check_sizes(runs, policy_revision=policy_revision)
+                except ValueError as error:
+                    if (not strict_quality
+                            and _bounded_page_code(error)
+                            in _HYBRID_NATIVE_TEXT_ADVISORY_CODES):
+                        advisory(index, error)
+                        quality_pass = False
+                    else:
+                        raise
+            try:
+                part = relations[slide.attrib["{" + NS["r"] + "}id"]]
+                root = ET.fromstring(archive.read(part))
+                pictures = root.findall(".//p:pic", NS)
+                slide_evidence = evidence["slides"][index] if evidence is not None else None
+                if slide_evidence is not None and quality_pass and strict_quality:
+                    validate_observation(
+                        slide_evidence.get("observation"), runs, manifest,
+                        policy_revision=policy_revision,
+                        enforce_font_policy=True,
+                    )
+                image_relations = _relationships(archive, part)
+                backgrounds = root.findall("p:cSld/p:bg/p:bgPr/a:blipFill", NS)
+                blips = []
+                placements = []
+                for picture in pictures:
+                    if mode == "fidelity":
+                        _full_picture(picture, width, height)
+                    placements.append(_picture_placement(root, picture))
+                    blips.append(picture.find("p:blipFill/a:blip", NS))
+                for background in backgrounds:
+                    if background.find("a:stretch/a:fillRect", NS) is None:
+                        _fail("image_placement_mismatch")
+                    crop = background.find("a:srcRect", NS)
+                    if crop is not None and any(float(value) != 0 for value in crop.attrib.values()):
+                        _fail("image_crop_mismatch")
+                    blips.append(background.find("a:blip", NS))
+                    placements.append({"x":0, "y":0, "widthPt":width / 12700, "heightPt":height / 12700})
+                image_digests = []
+                image_payloads = []
+                for blip in blips:
+                    rel = blip.get("{" + NS["r"] + "}embed", "") if blip is not None else ""
+                    image_path = image_relations.get(rel)
+                    if not image_path:
+                        _fail("raster_evidence_mismatch")
+                    image_payload = archive.read(image_path)
+                    image_payloads.append(image_payload)
+                    image_digests.append("sha256:" + hashlib.sha256(image_payload).hexdigest())
                 if mode == "fidelity":
-                    _full_picture(picture, width, height)
-                placements.append(_picture_placement(root, picture))
-                blips.append(picture.find("p:blipFill/a:blip", NS))
-            for background in backgrounds:
-                if background.find("a:stretch/a:fillRect", NS) is None:
-                    _fail("image_placement_mismatch")
-                crop = background.find("a:srcRect", NS)
-                if crop is not None and any(float(value) != 0 for value in crop.attrib.values()):
-                    _fail("image_crop_mismatch")
-                blips.append(background.find("a:blip", NS))
-                placements.append({"x":0, "y":0, "widthPt":width / 12700, "heightPt":height / 12700})
-            image_digests = []
-            for blip in blips:
-                rel = blip.get("{" + NS["r"] + "}embed", "") if blip is not None else ""
-                image_path = image_relations.get(rel)
-                if not image_path:
-                    _fail("raster_evidence_mismatch")
-                image_digests.append("sha256:" + hashlib.sha256(archive.read(image_path)).hexdigest())
-            if mode == "fidelity":
-                if len(image_digests) != 1 or root.findall(".//a:t", NS):
-                    _fail("fidelity_content_mismatch")
-                expected = ("sha256:" + hashlib.sha256(pngs[index]).hexdigest()
-                            if pngs is not None else receipt.get("png_digest"))
-                if slide_evidence is not None:
-                    validate_raster(
-                        image_digests[0], slide_evidence, runs, manifest,
-                        policy_revision=policy_revision,
-                        enforce_font_policy=quality_pass,
-                    )
-                elif (not expected or image_digests[0] != expected
-                      or expected != receipt.get("png_digest")):
-                    _fail("raster_evidence_mismatch")
-            elif mode == "hybrid":
-                native_runs += _hybrid_text(
-                    root,
-                    runs,
-                    (slide_evidence or {}).get("observation"),
-                    policy_revision=policy_revision,
-                    enforce_font_policy=quality_pass,
-                )
-                for image_digest, placement in zip(image_digests, placements, strict=True):
-                    full = placement == {"x":0, "y":0, "widthPt":width / 12700, "heightPt":height / 12700}
-                    is_local = any(item.get("pngDigest") == image_digest
-                                   for item in (slide_evidence or {}).get("local_images", ()))
-                    if not full or is_local:
-                        validate_local_image(
-                            image_digest, placement, slide_evidence, runs, manifest,
+                    if len(image_digests) != 1 or root.findall(".//a:t", NS):
+                        _fail("fidelity_content_mismatch")
+                    expected = ("sha256:" + hashlib.sha256(pngs[index]).hexdigest()
+                                if pngs is not None else receipt.get("png_digest"))
+                    if (not expected or image_digests[0] != expected
+                            or expected != receipt.get("png_digest")):
+                        _fail("raster_evidence_mismatch")
+                    if slide_evidence is not None and strict_quality:
+                        validate_raster(
+                            image_digests[0], slide_evidence, runs, manifest,
                             policy_revision=policy_revision,
-                            enforce_font_policy=quality_pass,
+                            enforce_font_policy=quality_pass and strict_quality,
                         )
-                        continue
-                    if (slide_evidence is None and len(image_digests) == 1
-                            and not root.findall(".//a:t", NS)
-                            and image_digest == receipt.get("png_digest")):
-                        # A partial native fallback may retain the exact
-                        # approved full-slide PNG from the base deck.
-                        continue
-                    validate_raster(
-                        image_digest, slide_evidence, runs, manifest,
-                        policy_revision=policy_revision,
-                        enforce_font_policy=quality_pass,
+                elif mode == "hybrid":
+                    try:
+                        native_runs += _hybrid_text(
+                            root, runs, (slide_evidence or {}).get("observation"),
+                            policy_revision=policy_revision,
+                            enforce_font_policy=quality_pass and strict_quality,
+                        )
+                    except ValueError as error:
+                        if (not strict_quality
+                                and _bounded_page_code(error)
+                                in _HYBRID_NATIVE_TEXT_ADVISORY_CODES):
+                            advisory(index, error)
+                        else:
+                            raise
+                    fragment_indexes = validate_raster_fragments(
+                        list(zip(image_digests, placements, image_payloads, strict=True)),
+                        slide_evidence, runs, manifest, policy_revision=policy_revision,
+                        enforce_font_policy=quality_pass and strict_quality,
                     )
-                from services.authored_local_fit_chart_readback import verify_chart_labels
-                charts = root.findall(".//{http://schemas.openxmlformats.org/drawingml/2006/chart}chart")
-                if charts and root.findall(".//p:grpSp", NS):
-                    _fail("unverifiable_font_size")
-                for chart in (charts if quality_pass else ()):
-                    chart_path = image_relations.get(chart.get("{" + NS["r"] + "}id", ""))
-                    if not chart_path:
-                        _fail("chart_font_evidence_unavailable")
-                    native_runs += verify_chart_labels(
-                        archive.read(chart_path), runs,
-                        policy_revision=policy_revision,
-                    )
-            else:
-                _fail("unsupported_export_mode")
+                    for image_index, (image_digest, placement) in enumerate(zip(image_digests, placements, strict=True)):
+                        if image_index in fragment_indexes:
+                            continue
+                        full = placement == {"x":0, "y":0, "widthPt":width / 12700, "heightPt":height / 12700}
+                        is_local = any(item.get("pngDigest") == image_digest
+                                       for item in (slide_evidence or {}).get("local_images", ()))
+                        if not full or is_local:
+                            try:
+                                validate_local_image(
+                                    image_digest, placement, slide_evidence, runs, manifest,
+                                    policy_revision=policy_revision,
+                                    enforce_font_policy=quality_pass and strict_quality,
+                                )
+                            except ValueError as error:
+                                if not image_evidence_advisory(index, error):
+                                    raise
+                            continue
+                        if (slide_evidence is None and len(image_digests) == 1
+                                and not root.findall(".//a:t", NS)
+                                and image_digest == receipt.get("png_digest")):
+                            continue
+                        try:
+                            validate_raster(
+                                image_digest, slide_evidence, runs, manifest,
+                                policy_revision=policy_revision,
+                                enforce_font_policy=quality_pass and strict_quality,
+                            )
+                        except ValueError as error:
+                            if not image_evidence_advisory(index, error):
+                                raise
+                    from services.authored_local_fit_chart_readback import verify_chart_labels
+                    charts = root.findall(".//{http://schemas.openxmlformats.org/drawingml/2006/chart}chart")
+                    if charts and root.findall(".//p:grpSp", NS):
+                        error = ValueError(
+                            "authored_local_fit_export:chart_group_transform_unverifiable"
+                        )
+                        if not strict_quality:
+                            advisory(index, error)
+                            quality_pass = False
+                        else:
+                            raise error
+                    for chart in charts:
+                        chart_path = image_relations.get(chart.get("{" + NS["r"] + "}id", ""))
+                        if not chart_path:
+                            _fail("chart_font_evidence_unavailable")
+                        chart_payload = archive.read(chart_path)
+                        if not quality_pass:
+                            continue
+                        try:
+                            native_runs += verify_chart_labels(
+                                chart_payload, runs,
+                                policy_revision=policy_revision,
+                            )
+                        except ValueError as error:
+                            if (not strict_quality
+                                    and _bounded_page_code(error)
+                                    in _HYBRID_CHART_ADVISORY_CODES):
+                                advisory(index, error)
+                            else:
+                                raise
+                else:
+                    _fail("unsupported_export_mode")
+            except ValueError as error:
+                if str(error) == "authored_local_fit_export:invalid_relationship":
+                    raise
+                if mode != "hybrid" or not collect_hybrid_page_failures:
+                    raise
+                failure = {"slideIndex": index, "code": _bounded_page_code(error)}
+                from services.authored_local_fit_export_evidence import RasterFragmentVerificationError
+                if isinstance(error, RasterFragmentVerificationError):
+                    failure["diagnostics"] = error.diagnostics
+                failed_pages.append(failure)
+    if failed_pages:
+        raise LocalFitPageVerificationError(failed_pages)
+    quality_passed = not review_pages
     return {"policy_revision": deck_policy_revision or POLICY_REVISION,
-            "status": "passed", "mode": mode,
-            "documentStatus": "completed", "qualityPass": not review_pages,
+            "status": "review-required" if hybrid_quality_advisories else "passed", "mode": mode,
+            "documentStatus": "completed", "qualityPass": quality_passed,
             "reviewPages": review_pages,
+            "qualityAdvisories": hybrid_quality_advisories,
             "slides": len(receipts), "native_runs": native_runs,
             "pptx_digest": "sha256:" + hashlib.sha256(payload).hexdigest()}

@@ -1,6 +1,6 @@
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
@@ -31,6 +31,9 @@ class AuthoredStyleSummary(BaseModel):
     use_cases: list[str]
     preview: AuthoredStylePreview
     aliases: Optional[list[str]] = None
+    supported_aspect_ratios: list[Literal["16:9", "9:16", "9:13"]] = Field(
+        alias="supportedAspectRatios"
+    )
 
 
 AUTHORED_ROUTER = APIRouter(prefix="/authored", tags=["Authored"])

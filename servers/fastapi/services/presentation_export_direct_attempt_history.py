@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.presentation_export_attempt import PresentationExportAttempt
+from models.sql.workspace import WorkspaceOperation
 from models.sql.workspace import get_workspace_owner_scope
 from services.presentation_export_attempt_service import sha256_canonical_json
 from services.presentation_export_hybrid_attempt import provenance_is_hybrid_attempt
@@ -77,6 +78,12 @@ async def list_direct_hybrid_export_attempt_history(
         else:
             resolution = "active"
         provenance = attempt.provenance or {}
+        operation = (
+            await session.get(WorkspaceOperation, attempt.workspace_operation_id)
+            if attempt.workspace_operation_id is not None else None
+        )
+        operation_result = operation.result if operation is not None else {}
+        operation_result = operation_result if isinstance(operation_result, dict) else {}
         freshness = provenance.get("freshness") or {}
         parity = provenance.get("visual_parity") or {}
         binding = parity.get("binding") or {}
@@ -84,6 +91,17 @@ async def list_direct_hybrid_export_attempt_history(
         rendered = qa.get("rendered_png_sha256") or []
         coverage = provenance.get("coverage_manifest") or {}
         quality = provenance.get("quality_sidecar") or {}
+        capability = provenance.get("capability_evidence") or {}
+        worker_evidence = (
+            capability.get("hybrid_export_evidence")
+            if isinstance(capability, dict) else {}
+        )
+        worker_evidence = worker_evidence if isinstance(worker_evidence, dict) else {}
+        hybrid_attempt_evidence = operation_result.get("hybrid_attempt_evidence")
+        hybrid_attempt_evidence = (
+            hybrid_attempt_evidence
+            if isinstance(hybrid_attempt_evidence, dict) else {}
+        )
         expires_at = (
             attempt.completed_at + timedelta(days=HYBRID_EVIDENCE_RETENTION_DAYS)
             if attempt.completed_at
@@ -177,6 +195,11 @@ async def list_direct_hybrid_export_attempt_history(
                         quality, "fallback_reason_counts", "fallbackReasonCounts"
                     )
                     or {},
+                    "localFitFallbackPages": _projected_value(
+                        hybrid_attempt_evidence or worker_evidence,
+                        "local_fit_fallback_pages", "localFitFallbackPages"
+                    )
+                    or [],
                     "expiresAt": expires_at.isoformat() if expires_at else None,
                 },
             }

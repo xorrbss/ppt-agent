@@ -29,7 +29,10 @@ def policy_request_html(html: str, policy: Mapping[str, Any], *, fit: bool) -> s
     ).encode("utf-8")).decode("ascii")
     revision = str(policy.get("policy_revision") or POLICY_REVISION)
     font_policy(revision)
-    marker_revision = revision.rsplit("/v", 1)[-1].replace(".", "")
+    marker_revision = (
+        "15" if revision.startswith("authored-local-fit/user-font-v1/")
+        else revision.rsplit("/v", 1)[-1].replace(".", "")
+    )
     # A comment changes no selectors, authored styles or visual DOM structure.
     return html + f"<!--codex-local-fit-v{marker_revision}:" + encoded + "-->"
 
@@ -120,11 +123,20 @@ def merge_image_text_verdicts(metrics: Mapping[str, Any], report: Mapping[str, A
 
 
 async def capture_with_policy(html: str, timeout: int, *, deck_scope: str | None,
-                              fit: bool, policy: Mapping[str, Any], fresh: bool):
+                              fit: bool, policy: Mapping[str, Any], fresh: bool,
+                              width_px: int = 1280, height_px: int = 720):
     from services.authored_local_fit_policy import html_digest, image_text_evidence_for_html
     from utils import slide_capture as capture
     from utils.authored_fit_edits import apply_fit_edits
     from utils.authored_font_identity import installed_font_identity
+
+    scale = policy.get("export_scale_manifest")
+    scale = scale if isinstance(scale, Mapping) else {}
+    if (
+        int(scale.get("viewport_width", width_px)) != width_px
+        or int(scale.get("viewport_height", height_px)) != height_px
+    ):
+        raise ValueError("local fit canvas mismatch")
 
     # The producer supplies image/text evidence for the exact HTML being
     # rendered; a caller-supplied non-empty list is trusted as-is instead.
@@ -135,7 +147,8 @@ async def capture_with_policy(html: str, timeout: int, *, deck_scope: str | None
     request_html = (policy_request_html(html, {**policy, "_document_nonce": uuid.uuid4().hex}, fit=fit)
                     if fresh else canonical_request)
     measured = await capture.render_html_to_png_with_metrics(
-        request_html, timeout=timeout, deck_scope=deck_scope, fresh=fresh)
+        request_html, timeout=timeout, deck_scope=deck_scope, fresh=fresh,
+        width_px=width_px, height_px=height_px)
     metrics = dict(measured.browser_metrics or {})
     report = metrics.get("fit")
     if not isinstance(report, Mapping) or report.get("fit_state") != "final":
@@ -152,7 +165,8 @@ async def capture_with_policy(html: str, timeout: int, *, deck_scope: str | None
     # establish evidence for the reconstructed candidate HTML.
     source, rendered = capture._source_render_digests(html)
     metrics.update(source_digest=source, render_digest=rendered,
-                   metrics_cache_key=capture._metric_evidence_cache_key(html))
+                   metrics_cache_key=capture._metric_evidence_cache_key(
+                       html, width_px=width_px, height_px=height_px))
     metrics["local_fit_render_identity"] = local_fit_render_identity(html, policy, fit=fit)
     metrics["local_fit_mode"] = bool(fit)
     return capture.RenderCapture.from_payload(

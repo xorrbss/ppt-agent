@@ -287,6 +287,8 @@ def build_design_system(
     *,
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
     header_contract: Optional[AuthoredHeaderContract] = None,
+    canvas_width_px: int = 1280,
+    canvas_height_px: int = 720,
 ) -> str:
     """Build the concrete shared brief for a brand and optional authored style.
 
@@ -326,6 +328,8 @@ def build_design_system(
             if header_contract is not None
             else ""
         ),
+        canvas_width_px=canvas_width_px,
+        canvas_height_px=canvas_height_px,
     )
 
 
@@ -811,6 +815,8 @@ def fallback_slide_html(
     n: int,
     *,
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
+    canvas_width_px: int = 1280,
+    canvas_height_px: int = 720,
 ) -> str:
     """A clean, on-brand placeholder slide used when authoring a slide fails or returns
     invalid HTML — so one bad slide degrades to a simple branded slide instead of
@@ -834,11 +840,19 @@ def fallback_slide_html(
     bottom_padding = 72 if page_number_mode == TEMPLATE_PAGE_NUMBER_MODE else 32
     from services.authored_local_fit_policy import FONT_FLOOR_PT, pt_per_css_px, required_font_px
     footer_font_px = required_font_px(
-        FONT_FLOOR_PT, 1, pt_per_css_px(width_pt=960, height_pt=540))
+        FONT_FLOOR_PT,
+        1,
+        pt_per_css_px(
+            width_pt=canvas_width_px * 0.75,
+            height_pt=canvas_height_px * 0.75,
+            viewport_width=canvas_width_px,
+            viewport_height=canvas_height_px,
+        ),
+    )
     return (
         f"<!DOCTYPE html><html lang=\"ko\" {_FALLBACK_SLIDE_MARKER}>"
         "<head><meta charset=\"utf-8\"><style>"
-        f"body{{margin:0;width:1280px;height:720px;overflow:hidden;background:#F8FAFC;"
+        f"body{{margin:0;width:{canvas_width_px}px;height:{canvas_height_px}px;overflow:hidden;background:#F8FAFC;"
         f"font-family:{font_stack};"
         f"box-sizing:border-box;padding:64px 64px {bottom_padding}px;"
         "display:flex;flex-direction:column;position:relative;}"
@@ -932,6 +946,7 @@ async def author_slide_html(
     *,
     source_images: Mapping[str, SourceImageCandidate] | Sequence[SourceImageCandidate] = (),
     require_all_source_images: bool = False,
+    source_image_placement_plan: Mapping | None = None,
     # The user's request text and this slide's deck-scoped illustration decision;
     # both default to absent, reproducing the prompt for callers that have neither.
     instructions: Optional[str] = None,
@@ -1028,6 +1043,10 @@ async def author_slide_html(
         source_slot_candidates,
         required=require_all_source_images,
     )
+    if not require_all_source_images:
+        source_guidance += author_slide_prompt.planned_source_image_brief(
+            source_image_placement_plan or (structured_context or {}).get("source_image_placement_plan")
+        )
     if require_all_source_images and source_slot_candidates:
         source_guidance = (
             "\n\nSLIDE-SPECIFIC SOURCE AUTHORITY: The immutable source-content "
@@ -1035,7 +1054,7 @@ async def author_slide_html(
             "listed source slots are the required exception to any deck-wide "
             "optional-source-image prohibition; URL and invented-image bans "
             "remain in force. Render every source image materially inside the "
-            "1280x720 viewport: never use display:none, hidden visibility, low "
+            "declared canvas viewport: never use display:none, hidden visibility, low "
             "opacity, a 1x1/tiny box, an off-canvas position, or a distorted "
             "strip as a storage trick. Each image must be part of the visible "
             "slide composition. When five to eight images are required, reserve "
@@ -1207,7 +1226,7 @@ async def author_slide_html(
     authored_html = provider_raw_html(authored_html, index=index, normalization_receipt=normalization_receipt)
     authored_html = _strip_nonvisual_pointer_events(authored_html)
     if mode != EXACT_RECONSTRUCTION:
-        authored_html = enforce_authored_font_floor(authored_html)
+        authored_html = enforce_authored_font_floor(authored_html, instructions=instructions)
         # Give a pinned body wrapper horizontal extent before figure finalization.
         authored_html = ensure_body_root_horizontal_extent(authored_html)
         # A planned figure is held to its contract and given the library

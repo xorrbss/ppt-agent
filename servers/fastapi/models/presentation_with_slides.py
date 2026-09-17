@@ -11,6 +11,7 @@ from services.presentation_profiles import (
     PresentationProfile,
     resolve_presentation_driver,
 )
+from services.authored_canvas import merge_presentation_canvas, presentation_canvas_metadata
 from templates.v2.constants import LEGACY_PRESENTATION_VERSION
 
 
@@ -54,6 +55,14 @@ class PresentationWithSlides(BaseModel):
         profile, capabilities, _ = resolve_presentation_driver(projected)
         projected["profile"] = profile
         projected["capabilities"] = capabilities
+        theme = projected.get("theme")
+        authored = projected.get("mode") == "authored" or (
+            isinstance(theme, dict) and theme.get("mode") == "authored"
+        )
+        if authored:
+            projected["theme"] = merge_presentation_canvas(
+                theme, presentation_canvas_metadata(theme)
+            )
         return projected
 
 
@@ -218,6 +227,22 @@ class PublicPresentationWithSlides(BaseModel):
     fonts: Optional[Any] = None
     mode: Optional[Literal["template", "authored"]] = None
     version: str = LEGACY_PRESENTATION_VERSION
+
+    @model_validator(mode="before")
+    @classmethod
+    def project_authored_canvas(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        projected = dict(value)
+        theme = projected.get("theme")
+        authored = projected.get("mode") == "authored" or (
+            isinstance(theme, dict) and theme.get("mode") == "authored"
+        )
+        if authored:
+            projected["theme"] = merge_presentation_canvas(
+                theme, presentation_canvas_metadata(theme)
+            )
+        return projected
 
     @field_validator("theme", "fonts", mode="before")
     @classmethod

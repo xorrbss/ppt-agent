@@ -172,13 +172,28 @@ async def run_composer_restyle(
     timer = StageTimer()
     results: list[ComposerSlideResult] = []
     publication: Mapping[str, Any] | None = None
+    readback: Mapping[str, Any] | None = None
+    structure_readback: Mapping[str, Any] | None = None
     stamping_rebound: dict[int, bool] = {}
     recording = RecordingMeasurer(measurer or _default_measurer())
     try:
         timer.start("classify")
+        if (
+            getattr(request, "_composer_fit_policy", None)
+            and getattr(manifest, "source_layout_version", None) != "source-layout/v2"
+        ):
+            raise ComposerPipelineError("composer_source_reanalysis_required")
         units = units_in_outline_order(manifest, outline)
+        from services.authored_canvas import canvas_metadata_for_aspect_ratio, request_canvas_contract
+
+        canvas = (
+            request_canvas_contract(request)
+            if hasattr(request, "aspect_ratio")
+            else canvas_metadata_for_aspect_ratio("16:9").canvas_contract()
+        )
         deck_context = build_deck_context(manifest, units)
-        tokens = composer_tokens(_resolve_style(request), deck_title_text=deck_context.deck_title)
+        style = _resolve_style(request)
+        tokens = composer_tokens(style, deck_title_text=deck_context.deck_title)
         await _report(
             progress_reporter, stage=PROGRESS_STAGE_PLAN, current=0, total=len(units), percent=5,
             message="원본 페이지를 분류하고 있습니다.",
@@ -187,9 +202,14 @@ async def run_composer_restyle(
         from services.composer.contracts import source_px_scale
 
         emu = source_page_emu(manifest)
+        fit_policy = getattr(request, "_composer_fit_policy", None) or {}
         deck = ComposerDeckPlan(
-            slides=plans, tokens=tokens, source_page_emu=emu, source_px_scale=source_px_scale(emu),
-            title_px=deck_title_px(plans, tokens),
+            slides=plans, tokens=tokens, canvas=canvas,
+            style_profile=getattr(style, "composer_profile", None),
+            source_page_emu=emu, source_px_scale=source_px_scale(emu, canvas),
+            title_px=deck_title_px(plans, tokens, canvas=canvas),
+            fit_policy_revision=fit_policy.get("revision"),
+            font_floor_px=fit_policy.get("font_floor_px"),
         )
         classify_ms = timer.stop("classify")
         _record_stage(request, "outline", classify_ms)
@@ -201,6 +221,8 @@ async def run_composer_restyle(
         inlining = AssetInliningMeasurer(recording, thread_resolver)
 
         async def on_slide(result: ComposerSlideResult, completed: int) -> None:
+            # Retain completed-page evidence even when another page fails.
+            results.append(result)
             await _report(
                 progress_reporter, stage=PROGRESS_STAGE_RENDER, current=completed, total=total,
                 percent=10 + int(80 * completed / max(1, total)),
@@ -229,6 +251,10 @@ async def run_composer_restyle(
         assert_slide_bindings(results, source_text_bindings(units, outline), stamping_rebound)
         htmls = [result.html for result in results]
         readback = assert_verbatim_readback(manifest, outline, htmls)
+        if deck.fit_policy_revision == "composer-source-fit/v2":
+            from services.composer.source_structure_readback import assert_source_structure_readback
+
+            structure_readback = assert_source_structure_readback(manifest, htmls)
         pngs = await resolve_pngs(results, {plan.slide_index: plan for plan in plans}, recording)
         assert_ms = timer.stop("assert")
         _record_stage(request, "quality", assert_ms)
@@ -243,8 +269,11 @@ async def run_composer_restyle(
         receipt = build_composer_receipt(
             presentation_id=presentation_id, job_id=job_id, page_count=total, results=results,
             timings_ms=timer.as_dict(), stamping_rebound=stamping_rebound,
+            fit_policy=getattr(request, "_composer_fit_policy", None),
         )
         receipt["sourceReadback"] = dict(readback)
+        if structure_readback is not None:
+            receipt["sourceStructureReadback"] = dict(structure_readback)
         _log_stage(job_id, "publish_begin", 0, pages=total)
         publication = await (publisher or _default_publisher())(
             sql_session=sql_session, request=request, presentation_id=presentation_id,
@@ -255,12 +284,20 @@ async def run_composer_restyle(
         _record_stage(request, "publication", publish_ms)
         _log_stage(job_id, "publish_end", publish_ms)
     except ComposerPipelineError as error:
-        failure = {"code": error.code, "detail": error.detail, "slideIndex": getattr(error, "slide_index", None)}
+        failure = {
+            "code": error.code, "detail": error.detail,
+            "slideIndex": getattr(error, "slide_index", None),
+            "retryable": error.retryable,
+            "stage": timer.active_stage,
+            "fitPolicy": getattr(request, "_composer_fit_policy", None),
+        }
         await write_composer_receipt(
             build_composer_receipt(
                 presentation_id=presentation_id, job_id=job_id,
                 page_count=len(getattr(outline, "slides", ()) or ()), results=results,
                 timings_ms=timer.as_dict(), failure=failure, stamping_rebound=stamping_rebound,
+                fit_policy=getattr(request, "_composer_fit_policy", None), source_readback=readback,
+                source_structure_readback=structure_readback,
             ),
             job_id=job_id, presentation_id=presentation_id,
         )
@@ -269,6 +306,8 @@ async def run_composer_restyle(
         build_composer_receipt(
             presentation_id=presentation_id, job_id=job_id, page_count=len(results), results=results,
             timings_ms=timer.as_dict(), publication=publication, stamping_rebound=stamping_rebound,
+            fit_policy=getattr(request, "_composer_fit_policy", None), source_readback=readback,
+            source_structure_readback=structure_readback,
         ),
         job_id=job_id, presentation_id=presentation_id,
     )

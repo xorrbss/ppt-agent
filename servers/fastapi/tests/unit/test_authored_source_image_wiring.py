@@ -141,7 +141,7 @@ def test_gate_treats_everything_else_as_off(monkeypatch, value):
 
 
 def _install_registry(monkeypatch, calls, result=None, error=None):
-    async def fake_register(session, *, presentation_id, upload_paths):
+    async def fake_register(session, *, presentation_id, upload_paths, upload_metadata=None, registration_report=None):
         calls.append((presentation_id, list(upload_paths)))
         if error is not None:
             raise error
@@ -210,6 +210,7 @@ def test_reference_snapshot_assets_are_resolved_to_local_paths(monkeypatch):
     _install_registry(monkeypatch, calls, result=[_candidate("a", "매출")])
 
     snapshot = SimpleNamespace(
+        payload=lambda: {"documents": []},
         conversation_id=conversation_id,
         asset_bindings=(
             SimpleNamespace(asset_id=asset_id, kind="conversation_attachment"),
@@ -294,25 +295,24 @@ def test_no_uploads_means_no_registry_call(monkeypatch):
     assert calls == []
 
 
-def test_a_raising_registry_degrades_instead_of_failing_the_deck(monkeypatch):
+def test_a_raising_registry_reports_registration_failure(monkeypatch):
     monkeypatch.setenv("AUTHORED_SOURCE_IMAGES_ENABLED", "true")
     calls = []
     _install_registry(monkeypatch, calls, error=RuntimeError("storage is gone"))
 
     session = _Session()
-    got = _run(
-        seam.collect_source_image_candidates(
-            _request(files=["/tmp/deck.pptx"]), _style(), uuid.uuid4(), session
+    with pytest.raises(RuntimeError, match="authored_source_image_registration_failed"):
+        _run(
+            seam.collect_source_image_candidates(
+                _request(files=["/tmp/deck.pptx"]), _style(), uuid.uuid4(), session
+            )
         )
-    )
-
-    assert got == []
     assert session.commits == 0
     # The failed write must not be left pending for the publication transaction.
     assert session.rollbacks == 1
 
 
-def test_an_unresolvable_upload_degrades_instead_of_failing_the_deck(monkeypatch):
+def test_an_unresolvable_upload_reports_registration_failure(monkeypatch):
     monkeypatch.setenv("AUTHORED_SOURCE_IMAGES_ENABLED", "true")
 
     class _Gateway:
@@ -326,17 +326,17 @@ def test_an_unresolvable_upload_degrades_instead_of_failing_the_deck(monkeypatch
     request = _request()
     request._reference_snapshots = (
         SimpleNamespace(
+            payload=lambda: {"documents": []},
             conversation_id=None,
             asset_bindings=(SimpleNamespace(asset_id=uuid.uuid4(), kind="x"),),
         ),
     )
-    got = _run(
-        seam.collect_source_image_candidates(
-            request, _style(), uuid.uuid4(), _Session()
+    with pytest.raises(RuntimeError, match="authored_source_image_registration_failed"):
+        _run(
+            seam.collect_source_image_candidates(
+                request, _style(), uuid.uuid4(), _Session()
+            )
         )
-    )
-
-    assert got == []
     assert calls == []
 
 
@@ -478,10 +478,17 @@ def test_gate_on_hands_both_consumers_the_identical_set(monkeypatch):
         _candidate("sales", "매출 현황"),
         _candidate("safety", "창고 안전 수칙", slide_index=4),
     ]
+    offered = [{source_slot_id_for_asset(c.asset_id): c} for c in candidates]
+    placements = [{"assignments": [{"asset_id": c.asset_id}]} for c in candidates]
+    monkeypatch.setattr(
+        pipeline, "plan_slide_source_images",
+        lambda *args, **kwargs: pytest.fail("preplanned images must not be selected again"),
+    )
 
     _run(
         pipeline._author_illustrate_render_pipeline(
-            _outline(2), _brand(), _style(), source_images=candidates
+            _outline(2), _brand(), _style(), source_images=candidates,
+            preplanned_source_images=offered, source_image_placement_plans=placements,
         )
     )
 
@@ -493,6 +500,8 @@ def test_gate_on_hands_both_consumers_the_identical_set(monkeypatch):
         index: set(kwargs["source_images"]) for index, kwargs in illustrate_calls
     }
     assert authored == {0: {"sales"}, 1: {"safety"}}
+    assert all(kwargs["source_image_placement_plan"] == placements[index]
+               for index, kwargs in author_calls)
     assert substituted == {
         0: {source_slot_id_for_asset("sales")},
         1: {source_slot_id_for_asset("safety")},

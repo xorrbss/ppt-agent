@@ -179,6 +179,7 @@ class FormattedRun:
     italic: bool = False
     size_pt: float | None = None
     color: str | None = None
+    font_family: str | None = None
 
 
 def formatted_runs(payload: Mapping[str, Any]) -> tuple[FormattedRun, ...]:
@@ -211,6 +212,7 @@ def formatted_runs(payload: Mapping[str, Any]) -> tuple[FormattedRun, ...]:
                 italic=bool(style.get("italic")),
                 size_pt=positive_float(field(style, "sizePt", "size_pt")),
                 color=normalize_color(style.get("color")),
+                font_family=field(style, "fontFamily", "font_family"),
             )
         )
     return tuple(result)

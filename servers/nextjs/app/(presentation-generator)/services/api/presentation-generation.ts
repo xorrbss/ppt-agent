@@ -356,6 +356,7 @@ export class PresentationGenerationApi {
     include_table_of_contents,
     include_title_slide,
     web_search,
+    aspect_ratio,
     theme,
   }: {
     presentation_id: string;
@@ -371,6 +372,7 @@ export class PresentationGenerationApi {
     include_table_of_contents?: boolean;
     include_title_slide?: boolean;
     web_search?: boolean;
+    aspect_ratio?: "16:9" | "9:16" | "9:13";
     theme?: PresentationThemePayload | null;
   }) {
     try {
@@ -395,6 +397,7 @@ export class PresentationGenerationApi {
             include_table_of_contents,
             include_title_slide,
             web_search,
+            aspect_ratio,
             theme,
           }),
           cache: "no-cache",
@@ -601,6 +604,7 @@ export class PresentationGenerationApi {
       slides_markdown?: string[];
       vision_qa?: boolean;
       authored_style?: string;
+      aspect_ratio?: "16:9" | "9:16" | "9:13";
       masterPin?: {
         masterId: string;
         revision: number;
@@ -652,6 +656,7 @@ export class PresentationGenerationApi {
             // a max-quality, slower pass.
             vision_qa: body.vision_qa ?? false,
             authored_style: body.authored_style ?? "default",
+            aspect_ratio: body.aspect_ratio ?? "16:9",
             ...(body.masterPin ? { masterPin: body.masterPin } : {}),
             ...(body.sourceMode ? { sourceMode: body.sourceMode } : {}),
             ...(body.sourceContentManifestPin

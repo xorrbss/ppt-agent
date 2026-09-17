@@ -19,6 +19,14 @@ def _reject(reason: str) -> None:
     raise ValueError("authored_local_fit_export:" + reason)
 
 
+class RasterFragmentVerificationError(ValueError):
+    """Content-free, bounded evidence for a rejected packaged fragment."""
+
+    def __init__(self, reason: str, diagnostics: Mapping[str, Any]):
+        self.diagnostics = dict(diagnostics)
+        super().__init__("authored_local_fit_export:" + reason)
+
+
 def load_export_evidence(path: str | Path | bytes, payload: bytes,
                          receipts: Sequence[Mapping[str, Any]],
                          supplied: Mapping[str, Any] | None = None) -> Mapping[str, Any] | None:
@@ -159,3 +167,111 @@ def validate_local_image(digest: str, actual: Mapping[str, float],
             policy_revision=policy_revision, owners=item.get("ownerQids"),
             enforce_font_policy=enforce_font_policy,
         )
+
+
+def validate_raster_fragments(images: Sequence[tuple[str, Mapping[str, float], bytes]],
+                              evidence: Mapping[str, Any] | None,
+                              runs: Sequence[Mapping[str, Any]], manifest: Mapping[str, Any], *,
+                              policy_revision: str = POLICY_REVISION,
+                              enforce_font_policy: bool = True) -> set[int]:
+    """Bind every declared crop once to packaged bytes and its physical rect."""
+    import struct
+    matched: set[int] = set()
+    # Shared-edge rounding can differ by exactly one EMU in an extent;
+    # subtraction in point units must not turn that boundary into a rejection.
+    placement_tolerance_pt = 1 / 12700 + 1e-9
+    for band_index, band in enumerate((evidence or {}).get("raster", ())):
+        if band.get("schemaVersion") != "authored-raster-band/v2":
+            continue
+        width, height = band.get("captureWidthPx"), band.get("captureHeightPx")
+        if (type(width) is not int or type(height) is not int or min(width, height) <= 0
+                or width * height > 32_000_000
+                or not isinstance(band.get("sourceDigest"), str)
+                or band.get("sourceDigest") != band.get("pngDigest")):
+            _reject("raster_fragment_identity_mismatch")
+        fragments = band.get("fragments")
+        if not isinstance(fragments, list) or len(fragments) > 128:
+            _reject("raster_fragment_limit_invalid")
+        rects: list[Mapping[str, int]] = []
+        ids: set[str] = set()
+        for order, fragment in enumerate(fragments):
+            rect = fragment.get("rect", {})
+            identifier = fragment.get("id")
+            if (not isinstance(identifier, str) or not identifier or identifier in ids
+                    or fragment.get("order") != order
+                    or any(type(rect.get(k)) is not int for k in ("x", "y", "width", "height"))):
+                _reject("raster_fragment_rect_invalid")
+            ids.add(identifier)
+            x, y, w, h = (rect[k] for k in ("x", "y", "width", "height"))
+            if (min(x, y) < 0 or min(w, h) <= 0 or x + w > width or y + h > height
+                    or any(x < r["x"] + r["width"] and r["x"] < x + w
+                           and y < r["y"] + r["height"] and r["y"] < y + h for r in rects)):
+                _reject("raster_fragment_rect_invalid")
+            rects.append(rect)
+            expected = {"x": x / width * manifest["width_pt"], "y": y / height * manifest["height_pt"],
+                        "widthPt": w / width * manifest["width_pt"], "heightPt": h / height * manifest["height_pt"]}
+            declared = fragment.get("placement", {})
+            try:
+                valid = all(math.isfinite(float(declared[k])) and abs(float(declared[k]) - v) <= 1 / 12700
+                            for k, v in expected.items())
+            except (KeyError, TypeError, ValueError):
+                valid = False
+            if not valid:
+                _reject("raster_fragment_placement_mismatch")
+            def placement_matches(placement: Mapping[str, float]) -> bool:
+                try:
+                    return all(math.isfinite(float(placement[k]))
+                               and abs(float(placement[k]) - v) <= placement_tolerance_pt
+                               for k, v in expected.items())
+                except (KeyError, TypeError, ValueError):
+                    return False
+
+            available = [index for index in range(len(images)) if index not in matched]
+            digest_indexes = [index for index in available if images[index][0] == fragment.get("pngDigest")]
+            placement_indexes = [index for index in available if placement_matches(images[index][1])]
+            candidates = [(index, images[index][2]) for index in digest_indexes if index in placement_indexes]
+            if not candidates:
+                # A known image at another rectangle is a placement defect; an
+                # image at this rectangle with other bytes is a digest defect.
+                # Neither condition proves a missing image, and none authorizes
+                # moving/inserting pictures without their stacking provenance.
+                reason = ("raster_fragment_placement_mismatch" if digest_indexes else
+                          "raster_fragment_digest_mismatch" if placement_indexes else
+                          "raster_fragment_missing")
+                candidate_indexes = (digest_indexes or placement_indexes)[:4]
+                diagnostic_candidates = []
+                for candidate_index in candidate_indexes:
+                    _, actual, payload = images[candidate_index]
+                    diagnostic_candidates.append({
+                        "imageIndex": candidate_index,
+                        "digestSha256": hashlib.sha256(payload).hexdigest(),
+                        "placementPt": {key: float(actual[key]) for key in expected
+                                        if isinstance(actual.get(key), (int, float))
+                                        and math.isfinite(actual[key])},
+                    })
+                expected_digest = fragment.get("pngDigest", "")
+                raise RasterFragmentVerificationError(reason, {
+                    "schemaVersion": "raster-fragment-diagnostic/v1",
+                    "bandIndex": band_index, "fragmentOrder": order,
+                    "fragmentIdSha256": hashlib.sha256(identifier.encode("utf-8")).hexdigest(),
+                    "expectedDigest": expected_digest if (
+                        isinstance(expected_digest, str) and len(expected_digest) == 71
+                        and expected_digest.startswith("sha256:")
+                        and all(char in "0123456789abcdef" for char in expected_digest[7:])
+                    ) else None,
+                    "expectedPlacementPt": expected,
+                    "placementTolerancePt": placement_tolerance_pt,
+                    "packagedImageCount": len(images),
+                    "digestMatchCount": len(digest_indexes),
+                    "placementMatchCount": len(placement_indexes),
+                    "candidates": diagnostic_candidates,
+                })
+            index, payload = candidates[0]
+            if (len(payload) != fragment.get("sizeBytes") or len(payload) < 24
+                    or payload[:8] != b"\x89PNG\r\n\x1a\n" or struct.unpack(">II", payload[16:24]) != (w, h)):
+                _reject("raster_fragment_bytes_mismatch")
+            matched.add(index)
+        if enforce_font_policy:
+            validate_observation(band.get("observation"), runs, manifest, policy_revision=policy_revision,
+                                 owners=band.get("ownerQids"), enforce_font_policy=True)
+    return matched

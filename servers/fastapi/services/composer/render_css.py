@@ -135,6 +135,8 @@ class ChromeGeometry:
     title_band: int
     footer_band: int
     margin: int
+    canvas_width: int = CANVAS_WIDTH
+    canvas_height: int = CANVAS_HEIGHT
 
     @property
     def content_left(self) -> int:
@@ -146,11 +148,11 @@ class ChromeGeometry:
 
     @property
     def content_width(self) -> int:
-        return CANVAS_WIDTH - 2 * self.margin
+        return self.canvas_width - 2 * self.margin
 
     @property
     def content_height(self) -> int:
-        return CANVAS_HEIGHT - self.title_band - self.footer_band
+        return self.canvas_height - self.title_band - self.footer_band
 
     @property
     def subtitle_in_band(self) -> bool:
@@ -165,11 +167,11 @@ class ChromeGeometry:
         return _TITLE_BAND_PADDING_Y[self.level]
 
 
-def chrome_geometry(level: int) -> ChromeGeometry:
+def chrome_geometry(level: int, canvas=None) -> ChromeGeometry:
     title_band, footer_band, margin = _CHROME_BANDS[int(level)]
-    geometry = ChromeGeometry(int(level), title_band, footer_band, margin)
+    geometry = ChromeGeometry(int(level), title_band, footer_band, margin, canvas_width=canvas.width_px if canvas else CANVAS_WIDTH, canvas_height=canvas.height_px if canvas else CANVAS_HEIGHT)
     expected = CHROME_CONTENT_AREA[int(level)]
-    if (geometry.content_width, geometry.content_height) != expected:
+    if canvas is None and ((geometry.content_width, geometry.content_height) != expected):
         raise ValueError(f"chrome level {level} disagrees with CHROME_CONTENT_AREA")
     return geometry
 
@@ -236,7 +238,8 @@ def text_px(
         size = float(source_size_pt) * PX_PER_PT * deck.source_px_scale * factor
     else:
         size = template_px(role, params.type_scale, params.type_grow)
-    return max(size * float(box_scale), MIN_FONT_PX)
+    floor = deck.font_floor_px if deck.fit_policy_revision == "composer-source-fit/v2" and deck.font_floor_px is not None else MIN_FONT_PX
+    return max(size * float(box_scale), floor)
 
 
 def stylesheet(
@@ -263,14 +266,14 @@ def stylesheet(
         else f"border-bottom:2px solid {tokens.accent};"
     )
     return (
-        "html,body{width:1280px;height:720px;margin:0;padding:0;overflow:hidden;}"
+        ("html,body{width:{geometry.canvas_width}px;height:{geometry.canvas_height}px;margin:0;padding:0;overflow:hidden;}"
         f"body{{background:{tokens.background};color:{tokens.text_primary};"
         f"font-family:{tokens.font_family};position:relative;"
         "display:flex;flex-direction:column;}"
         "body *{box-sizing:border-box;}"
         ".cx-text{margin:0;min-width:0;overflow:visible;overflow-wrap:anywhere;"
         "word-break:keep-all;line-break:strict;white-space:normal;}"
-        ".cx-title-band{flex:0 0 auto;width:1280px;"
+        ".cx-title-band{flex:0 0 auto;width:{geometry.canvas_width}px;"
         f"min-height:{px(geometry.title_band)};padding:{px(geometry.title_padding_y)} {px(geometry.margin)} "
         f"{px(geometry.title_padding_y)} {px(TITLE_LEFT_PX)};"
         f"display:flex;align-items:center;justify-content:space-between;gap:24px;{band_paint}}}"
@@ -279,15 +282,15 @@ def stylesheet(
         f"letter-spacing:-0.01em;color:{tokens.text_primary};}}"
         f".cx-subtitle{{color:{tokens.text_secondary};line-height:{SUBTITLE_LINE_HEIGHT};}}"
         f".cx-running-header{{flex:0 0 auto;max-width:30%;text-align:right;color:{tokens.text_secondary};}}"
-        ".cx-footer-band{flex:0 0 auto;width:1280px;"
+        ".cx-footer-band{flex:0 0 auto;width:{geometry.canvas_width}px;"
         f"min-height:{px(geometry.footer_band)};padding:{px(FOOTER_BAND_PADDING_Y)} {px(geometry.margin)};display:flex;"
         f"align-items:center;justify-content:space-between;gap:24px;border-top:1px solid {tokens.rule};}}"
         ".cx-footer-group{display:flex;gap:16px;min-width:0;align-items:center;}"
         f".cx-furniture{{color:{tokens.text_secondary};line-height:1.3;}}"
-        ".cx-content{flex:1 1 auto;min-height:0;width:1280px;"
+        ".cx-content{flex:1 1 auto;min-height:0;width:{geometry.canvas_width}px;"
         f"padding:0 {px(geometry.margin)};"
         f"display:grid;gap:{px(gap)};align-content:start;align-items:start;overflow:visible;}}"
-        ".cx-cover{flex:1 1 auto;min-height:0;width:1280px;display:flex;"
+        ".cx-cover{flex:1 1 auto;min-height:0;width:{geometry.canvas_width}px;display:flex;"
         f"align-items:center;justify-content:center;padding:0 {px(geometry.margin)};}}"
         f".cx-cover-stack{{display:flex;flex-direction:column;align-items:center;"
         f"text-align:center;gap:{px(gap)};max-width:100%;min-height:0;}}"
@@ -346,7 +349,11 @@ def stylesheet(
         f".cx-accent{{color:{tokens.accent_text};font-weight:700;}}"
         f".cx-muted{{color:{tokens.text_secondary};}}"
         ".cx-geo{position:absolute;min-width:0;}"
-        f".cx-side-band{{position:absolute;background:{tokens.accent_soft};}}"
+        ".cx-source-text{display:flex;flex-direction:column;width:100%;height:100%;gap:0;min-height:0;}"
+        ".cx-source-text p{margin:0;flex-shrink:0;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal;}"
+        ".cx-source-table td,.cx-source-table th{padding:0;line-height:1.0;}"
+        ".cx-source-table p{margin:0;white-space:pre-wrap;line-height:1.0;}"
+        f".cx-side-band{{position:absolute;background:{tokens.accent_soft};}}").replace("{geometry.canvas_width}", str(geometry.canvas_width)).replace("{geometry.canvas_height}", str(geometry.canvas_height))
     )
 
 

@@ -148,7 +148,7 @@ class DeckContext:
         }
 
 
-def source_px_scale(source_page_emu: tuple[int, int] | None) -> float:
+def source_px_scale(source_page_emu: tuple[int, int] | None, canvas=None) -> float:
     """Uniform factor that maps the source page onto the 1280x720 canvas.
 
     16:9 at 13.333 in is exactly 1.0; a 4:3 page fits by height and leaves
@@ -162,7 +162,7 @@ def source_px_scale(source_page_emu: tuple[int, int] | None) -> float:
         return 1.0
     width_px = cx / 914400.0 * 96.0
     height_px = cy / 914400.0 * 96.0
-    return min(1280.0 / width_px, 720.0 / height_px)
+    return min((canvas.width_px if canvas else 1280.0) / width_px, (canvas.height_px if canvas else 720.0) / height_px)
 
 
 def repeated_texts(units: Sequence[Mapping[str, Any]], *, share: float = 0.6) -> frozenset[str]:

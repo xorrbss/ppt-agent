@@ -208,7 +208,8 @@ def _has_running_header(plan: ComposerSlidePlan) -> bool:
 
 
 def deck_title_px(
-    plans: Sequence[ComposerSlidePlan], tokens: ComposerTokens, chrome_level: int = 0
+    plans: Sequence[ComposerSlidePlan], tokens: ComposerTokens, chrome_level: int = 0,
+    *, canvas: Any = None,
 ) -> float | None:
     """The largest title size, in px, that fits every non-cover slide's title.
 
@@ -233,7 +234,7 @@ def deck_title_px(
     ]
     if not titled:
         return None
-    inner_width = float(chrome_geometry(chrome_level).content_width)
+    inner_width = float(chrome_geometry(chrome_level, canvas=canvas).content_width)
 
     def fits(size: float) -> bool:
         for plan in titled:

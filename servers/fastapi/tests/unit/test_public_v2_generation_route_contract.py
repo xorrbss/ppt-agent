@@ -178,7 +178,7 @@ def test_source_restyle_uses_authored_without_private_design_pack(
     assert captured["source_mode"] == "source_content_restyle"
     assert captured["authored_style"] == "devax-first-ten"
     assert receipt.selected_route == "authored-fallback"
-    assert receipt.fallback_reason == "source-content-authored-reflow"
+    assert receipt.fallback_reason == "source-content-composer-reflow"
     assert receipt.design_pack_pin is None
     assert receipt.output_capability == "fidelity"
     assert public_v2_orchestrator._effective_generation_engine(request) == "authored"

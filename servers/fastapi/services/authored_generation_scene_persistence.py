@@ -2,6 +2,53 @@
 
 from __future__ import annotations
 
+import logging
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _semantic_deck_difference_paths(
+    stored: object,
+    candidate: object,
+    *,
+    path: str = "$",
+    limit: int = 20,
+) -> list[str]:
+    """Return bounded structural paths without exposing scene payload values."""
+
+    if type(stored) is not type(candidate):
+        return [path]
+    if isinstance(stored, dict):
+        paths: list[str] = []
+        for key in sorted(set(stored) | set(candidate), key=str):
+            if len(paths) >= limit:
+                break
+            key_path = f"{path}.{key}"
+            if key not in stored or key not in candidate:
+                paths.append(key_path)
+                continue
+            paths.extend(
+                _semantic_deck_difference_paths(
+                    stored[key], candidate[key], path=key_path,
+                    limit=limit - len(paths),
+                )
+            )
+        return paths[:limit]
+    if isinstance(stored, list):
+        paths = []
+        if len(stored) != len(candidate):
+            paths.append(f"{path}.length")
+        for index, (left, right) in enumerate(zip(stored, candidate)):
+            if len(paths) >= limit:
+                break
+            paths.extend(
+                _semantic_deck_difference_paths(
+                    left, right, path=f"{path}[{index}]", limit=limit - len(paths)
+                )
+            )
+        return paths[:limit]
+    return [] if stored == candidate else [path]
 
 def _persist_or_reuse_identical_semantic_deck(
     repository,
@@ -38,8 +85,25 @@ def _persist_or_reuse_identical_semantic_deck(
             if isinstance(checkpoint, dict):
                 checkpoint.pop("validatedAt", None)
     if current.scene is None or stored_payload != candidate_payload:
+        paths = _semantic_deck_difference_paths(stored_payload, candidate_payload)
+        LOGGER.warning(
+            "authored semantic deck retry mismatch deck=%s paths=%s count=%d "
+            "source_digest_matches=%s",
+            deck.deck_id,
+            paths,
+            len(paths),
+            stored_payload.get("sourceDigest") == candidate_payload.get("sourceDigest"),
+        )
         raise DeckAlreadyExistsError()
     return current.scene
+
+
+def _append_staging_retry_semantic_deck(repository, deck, recovery_context):
+    """Append a separately named, fenced pre-publication recovery candidate."""
+
+    return repository.append_staging_retry_imported_deck(
+        deck, recovery_context=recovery_context
+    )
 
 async def _persist_master_pinned_editable_scene_deck(
     *,
@@ -54,6 +118,8 @@ async def _persist_master_pinned_editable_scene_deck(
     scene_envelope: AuthoredDeckSceneEnvelope,
     revision: int,
     browser_metrics_by_slide=None,
+    recovery_context=None,
+    recovery_deck_id: str | None = None,
 ):
     """Bridge normal Authored output into the vNext durable CAS deck log.
 
@@ -111,7 +177,7 @@ async def _persist_master_pinned_editable_scene_deck(
             )
     if any(metrics is None for metrics in telemetry):
         raise ValueError("editable Hybrid Scene browser telemetry is unavailable")
-    deck_id = f"deck:semantic-{presentation_id.hex}"
+    deck_id = recovery_deck_id or f"deck:semantic-{presentation_id.hex}"
     slide_ids = [f"slide:legacy-{index + 1}" for index in range(len(htmls))]
     scene = build_editable_hybrid_scene(
         presentation_id=str(presentation_id),
@@ -216,7 +282,48 @@ async def _persist_master_pinned_editable_scene_deck(
         slides=sealed_slides,
         canonical_scene=scene,
     )
-    return await repository.run(_persist_or_reuse_identical_semantic_deck, deck)
+    if recovery_deck_id is not None:
+        binding = await repository.run(
+            _append_staging_retry_semantic_deck, deck, recovery_context
+        )
+        object.__setattr__(request, "_authored_staging_scene_binding", binding)
+        return deck.scene
+    try:
+        return await repository.run(_persist_or_reuse_identical_semantic_deck, deck)
+    except DeckAlreadyExistsError:
+        if recovery_context is None:
+            raise
+        candidate_identity = canonical_digest(
+            {
+                "sceneEnvelope": scene_envelope.scene_digest,
+                "pngDigests": [sha256(png).hexdigest() for png in pngs],
+                # The sealed Scene carries all geometry.  Do not let transient
+                # browser timing/cache counters create a new recovery identity.
+                "sceneDigest": scene.scene_digest,
+                "masterDigest": resolved.pin.master_digest,
+                "compositionDigest": composition.digest,
+            }
+        )
+        candidate_uuid = uuid.uuid5(
+            uuid.NAMESPACE_URL,
+            "presenton:authored:staging-recovery:"
+            f"{presentation_id}:{recovery_context['job_id']}:{candidate_identity}",
+        )
+        return await _persist_master_pinned_editable_scene_deck(
+            request=request,
+            presentation_id=presentation_id,
+            outline=outline,
+            owner_id=owner_id,
+            style=style,
+            htmls=htmls,
+            pngs=pngs,
+            semantic_components=semantic_components,
+            scene_envelope=scene_envelope,
+            revision=1,
+            browser_metrics_by_slide=telemetry,
+            recovery_context=recovery_context,
+            recovery_deck_id=f"deck:semantic-{candidate_uuid.hex}",
+        )
 
 
 _LOCAL_NAMES = frozenset(globals())

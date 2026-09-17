@@ -120,6 +120,11 @@ async def run_author_batch(
             slide_index=None,
         ):
             batch_kwargs: dict[str, Any] = {}
+            placement_plans = context.get("source_image_placement_plans")
+            if placement_plans is not None:
+                batch_kwargs["source_image_placement_plans_by_index"] = {
+                    index: placement_plans[index] for index in selected
+                }
             if style_anchor is not None and runtime.accepts_style_anchor(
                 runtime.author_planned_batch
             ):

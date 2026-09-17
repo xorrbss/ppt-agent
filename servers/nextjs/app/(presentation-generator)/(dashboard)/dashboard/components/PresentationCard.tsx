@@ -173,7 +173,7 @@ export const PresentationCard = ({
         
         <div className="scale-[0.85] my-3 border border-zinc-200 rounded-md overflow-hidden shadow-sm">
 
-          <DeferredSlideThumbnail slide={firstSlide} />
+          <DeferredSlideThumbnail slide={firstSlide} theme={presentation?.theme} />
         </div>
 
         <div className="w-full px-4 py-4 mt-auto z-40 relative bg-white border-t border-zinc-200/70">
@@ -235,7 +235,7 @@ export const PresentationCard = ({
       </div>
       {showDeleteDialog && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center animate-[fadeIn_150ms_ease-out]"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 motion-safe:animate-[fadeIn_150ms_ease-out]"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -243,24 +243,24 @@ export const PresentationCard = ({
             setShowDeleteDialog(false);
           }}
         >
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+          <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-[2px]" />
           <div
             ref={deleteDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby={`presentation-delete-title-${id}`}
             aria-describedby={`presentation-delete-description-${id}`}
-            className="relative w-[360px] rounded-2xl bg-white shadow-2xl animate-[scaleIn_200ms_ease-out]"
+            className="relative w-full max-w-[400px] max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl border border-gray-200/80 bg-white shadow-[0_12px_40px_-16px_rgba(15,23,42,0.18)] motion-safe:animate-[scaleIn_200ms_ease-out]"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
             }}
           >
-            <div className="flex flex-col items-center p-6 pb-4 text-center">
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+            <div className="flex flex-col items-center px-6 pt-8 pb-6 sm:px-8 text-center">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50">
                 <AlertTriangle className="h-6 w-6 text-red-500" />
               </div>
-              <h3 id={`presentation-delete-title-${id}`} className="mb-2 text-lg font-semibold text-[#191919]">
+              <h3 id={`presentation-delete-title-${id}`} className="mb-2 break-keep text-xl font-semibold leading-7 tracking-tight text-gray-900">
                 발표자료를 삭제하시겠습니까?
               </h3>
               <p id={`presentation-delete-description-${id}`} className="text-sm leading-relaxed text-gray-500">
@@ -268,13 +268,13 @@ export const PresentationCard = ({
                 {" "}발표자료를 삭제하려고 합니다. 이 작업은 되돌릴 수 없습니다.
               </p>
             </div>
-            <div className="flex border-t border-gray-100">
+            <div className="flex flex-wrap justify-end gap-2 px-6 pb-6 sm:px-8">
               <button
                 ref={deleteDialogCancelRef}
                 type="button"
                 onClick={() => setShowDeleteDialog(false)}
                 disabled={isDeleting}
-                className="flex-1 px-4 py-3.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none disabled:opacity-50"
               >
                 취소
               </button>
@@ -282,7 +282,7 @@ export const PresentationCard = ({
                 type="button"
                 onClick={() => void handleDelete()}
                 disabled={isDeleting}
-                className="flex flex-1 items-center justify-center gap-2 border-l border-gray-100 px-4 py-3.5 text-sm font-medium text-red-500 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex-1 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:pointer-events-none disabled:opacity-50"
               >
                 {isDeleting ? (
                   <>

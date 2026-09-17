@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.editable-delivery-contract",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Editable export never silently becomes whole-deck raster; body correspondence evidence controls delivery and current-policy cache reuse.",
+  "scope": [
+    "public-export",
+    "authored-hybrid"
+  ],
+  "invariants": [
+    "Keep partial and unknown editability distinct from operation completion.",
+    "Exclude page numbers and hidden ownership carriers from editable body evidence.",
+    "Bind active staged files to the validated attempt deadline; preserve digest and owner checks."
+  ],
+  "forbidden": [
+    "Publish whole-deck raster fallback as editable success.",
+    "Reuse older policy evidence as verified current editability."
+  ],
+  "evidence": [
+    "docs/authored-editable-export-recovery-design-20260914.md",
+    "servers/fastapi/tests/unit/test_public_render_export_delivery.py",
+    "servers/nextjs/lib/authored-hybrid/editability-evidence.test.mjs"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-14T11:50:43.1001077+00:00"
+}

@@ -4,6 +4,11 @@ import path from "node:path";
 
 import { resolveAppDataDirectory } from "@/lib/app-data-directory";
 import {
+  authoredCanvasPhysicalSize,
+  resolveAuthoredCanvas,
+  type AuthoredCanvasContract,
+} from "@/lib/authored-canvas";
+import {
   getFastApiAuthHeaders,
   getFastApiBaseUrl,
 } from "@/lib/fastapi-internal";
@@ -224,12 +229,14 @@ async function writeHybridPptx(
   embeddedTypefaceFamilies: readonly string[] = [],
   artifactKind: "hybrid" | "authored-fidelity" = "hybrid",
   provenance?: AuthoredHybridPptxProvenance,
+  canvas?: AuthoredCanvasContract,
 ): Promise<{ path: string; bytes: Buffer }> {
   const safeFidelityPath = await resolveSafeFidelityPptx(fidelityPath);
   const fidelityBytes = basePptx ?? (await fs.readFile(safeFidelityPath));
   const hybridBytes = await assembleAuthoredHybridPptxAsync(fidelityBytes, layers, {
     embeddedTypefaceFamilies,
     provenance,
+    ...(canvas ? { canvas } : {}),
   });
   const parsed = path.parse(safeFidelityPath);
   const suffix = randomUUID();
@@ -280,6 +287,7 @@ export async function runAuthoredFidelityPresentationExport(
   ) {
     throw new Error("authored_fidelity_source_invalid");
   }
+  const canvas = resolveAuthoredCanvas(presentation.theme);
   const activeBinding = await resolveActiveEmissionBinding(
     params,
     presentation,
@@ -321,6 +329,7 @@ export async function runAuthoredFidelityPresentationExport(
           ),
           arrayIndex + 1,
           chromeExecutable,
+          canvas,
         );
         if (!prepared.layer) throw new Error("authored_fidelity_slide_capture_failed");
         completedSlides += 1;
@@ -350,10 +359,11 @@ export async function runAuthoredFidelityPresentationExport(
             : {}),
         sourceDigest: fetched.sourceSha256,
       },
+      canvas,
     );
     await writeLocalFitExportEvidence(resultArtifact.path, createLocalFitExportEvidence(
       layers, presentation.slides.map((slide) => isRecord(slide) && typeof slide.html_content === "string" ? slide.html_content : ""),
-      fetched.sourceSha256, resultArtifact.bytes,
+      fetched.sourceSha256, resultArtifact.bytes, canvas,
     ));
     recordExportProgress(progressKey, { phase: "completed" });
     return { path: resultArtifact.path };
@@ -386,6 +396,7 @@ export async function runAuthoredPdfPresentationExport(
     presentation.slides.length === 0 ||
     presentation.slides.length > MAX_HYBRID_SLIDES
   ) throw new Error("authored_pdf_source_invalid");
+  const canvas = resolveAuthoredCanvas(presentation.theme);
 
   const progressKey = `pdf:${params.exportAttemptId ?? `${params.presentationId}:${presentation.revision}:${fetched.sourceSha256}`}`;
   beginExportProgress(progressKey, params.operationId, Date.now());
@@ -413,6 +424,7 @@ export async function runAuthoredPdfPresentationExport(
           ),
           arrayIndex + 1,
           chromeExecutable,
+          canvas,
         );
         if (!prepared.layer) throw new Error("authored_pdf_slide_capture_failed");
         completedSlides += 1;
@@ -421,7 +433,11 @@ export async function runAuthoredPdfPresentationExport(
       },
     );
     recordExportProgress(progressKey, { phase: "assembly" });
-    const pdf = await buildRasterPdfFromPngs(pngs);
+    const physicalSize = authoredCanvasPhysicalSize(canvas);
+    const pdf = await buildRasterPdfFromPngs(pngs, {
+      widthPt: physicalSize.widthPt,
+      heightPt: physicalSize.heightPt,
+    });
     if (rasterPdfPageCount(pdf) !== presentation.slides.length) {
       throw new Error("authored_pdf_page_count_mismatch");
     }
@@ -473,6 +489,7 @@ async function runUncachedAuthoredHybridExport(
   cacheKey: string,
   requestStartedAt: number,
 ): Promise<BundledPresentationExportResult> {
+  const canvas = resolveAuthoredCanvas(presentation.theme);
   const fidelityStartedAt = performance.now();
   recordExportProgress(cacheKey, { phase: "fidelity" });
   const fidelity = await runBundledPresentationExport({
@@ -614,6 +631,7 @@ async function runUncachedAuthoredHybridExport(
                 declaredElements: semantic.declaredElements,
               },
               embeddedGlyphAvailable(fontEmbeddingPlan),
+              canvas,
             );
           } catch (error) {
             if (error instanceof AuthoredSemanticPublicationError) {
@@ -750,12 +768,13 @@ async function runUncachedAuthoredHybridExport(
         canonicalSourceDigest: params.canonicalSourceDigest,
         sourceDigest: sourceSha256,
       },
+      canvas,
     );
     const assemblyMs = elapsedMs(assemblyStartedAt);
     const hybridBytes = hybridArtifact.bytes;
     const localFitExportEvidence = createLocalFitExportEvidence(
       layers, slides.map((slide) => isRecord(slide) && typeof slide.html_content === "string" ? slide.html_content : ""),
-      sourceSha256, hybridBytes,
+      sourceSha256, hybridBytes, canvas,
     );
     await writeLocalFitExportEvidence(hybridArtifact.path, localFitExportEvidence);
     const quality = attachAuthoredHybridStage2ReadbackMetadata(
@@ -836,6 +855,7 @@ export async function runAuthoredHybridPresentationExport(
   ) {
     throw new Error("authored_hybrid_slide_count_unsupported");
   }
+  resolveAuthoredCanvas(presentation.theme);
   const activeBinding = await resolveActiveEmissionBinding(
     params,
     presentation,

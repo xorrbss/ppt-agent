@@ -223,6 +223,25 @@ __LOCAL_MORPH_MEMBERS__
       right: Math.max(...rects.map((rect) => rect.right)),
       bottom: Math.max(...rects.map((rect) => rect.bottom - Math.max(0, (rect.height - font) / 2)))};
   },
+
+  _boundaryTextInk(node) {
+    const rects = [];
+    for (const textNode of this._ownedTextNodes(node)) {
+      if (!String(textNode.nodeValue || "").trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(textNode);
+      for (const rect of Array.from(range.getClientRects())) {
+        if (rect.width > 0 && rect.height > 0) rects.push(rect);
+      }
+    }
+    if (!rects.length) return null;
+    return {
+      left: Math.min(...rects.map((rect) => rect.left)),
+      top: Math.min(...rects.map((rect) => rect.top)),
+      right: Math.max(...rects.map((rect) => rect.right)),
+      bottom: Math.max(...rects.map((rect) => rect.bottom)),
+    };
+  },
   _escape(card, leaves, margin) {
     const style = getComputedStyle(card), rect = card.getBoundingClientRect();
     const right = rect.right - this._cssPx(style.borderRightWidth) - margin;

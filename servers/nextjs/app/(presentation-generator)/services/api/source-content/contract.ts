@@ -50,7 +50,7 @@ export type SourceContentAnalysisResponseV1 = {
 
 export type SourceContentPolicy = {
   text: "verbatim" | "outline";
-  preserveAllTableCells: false;
+  preserveAllTableCells: true;
   preserveAllChartValues: false;
   preserveAllImageOccurrences: true;
   preserveSourceOrder: true;
@@ -62,7 +62,7 @@ export type SourceContentPolicy = {
 
 export const SOURCE_CONTENT_POLICY: SourceContentPolicy = {
   text: "verbatim",
-  preserveAllTableCells: false,
+  preserveAllTableCells: true,
   preserveAllChartValues: false,
   preserveAllImageOccurrences: true,
   preserveSourceOrder: true,

@@ -169,6 +169,108 @@ export function WorkspaceOperationCard({
     activity ? ["활동", activity] : undefined,
   ].filter((item): item is [string, string] => item !== undefined);
   const result = recordValue(operation.result);
+  const publicExportWorkerEvidence = recordValue(
+    result.public_export_worker_evidence ?? result.publicExportWorkerEvidence,
+  );
+  const exportEditability = recordValue(
+    publicExportWorkerEvidence.editability,
+  );
+  const exportQuality = recordValue(publicExportWorkerEvidence.quality);
+  const exportProducerTiming = recordValue(
+    publicExportWorkerEvidence.producerTiming,
+  );
+  const exportEditabilityVerdict = stringValue(
+    exportEditability.verdict,
+    exportEditability.status,
+  );
+  const exportQualityStatus = stringValue(exportQuality.status);
+  const exportEditabilityReasons = Array.isArray(exportEditability.reasonCodes)
+    ? exportEditability.reasonCodes.filter(
+        (reason): reason is string =>
+          typeof reason === "string" && reason.length > 0,
+      )
+    : [];
+  const exportEditabilityImageOnlyPages = Array.isArray(
+    exportEditability.imageOnlyPages,
+  )
+    ? exportEditability.imageOnlyPages.filter(
+        (page): page is number =>
+          typeof page === "number" && Number.isSafeInteger(page) && page >= 1,
+      )
+    : [];
+  const exportQualitySlideFallbacks = Array.isArray(exportQuality.slideFallbacks)
+    ? exportQuality.slideFallbacks.flatMap((value) => {
+        const fallback = recordValue(value);
+        const slideNumber = numberValue(fallback.n, fallback.slideNumber);
+        if (slideNumber === undefined || slideNumber < 1) return [];
+        return [{
+          slideNumber,
+          code: stringValue(fallback.code, fallback.reason) ?? "unknown",
+        }];
+      })
+    : [];
+  const exportImageFallbackPages = [...new Set([
+    ...exportEditabilityImageOnlyPages,
+    ...exportQualitySlideFallbacks.map((fallback) => fallback.slideNumber),
+  ])].sort((left, right) => left - right);
+  const exportCleanupFailurePages = Array.isArray(exportProducerTiming.slides)
+    ? exportProducerTiming.slides.flatMap((value) => {
+        const slide = recordValue(value);
+        const recovery = recordValue(slide.recovery);
+        const slideNumber = numberValue(slide.n, slide.slideNumber);
+        return recovery.cleanupFailure === true &&
+          slideNumber !== undefined &&
+          slideNumber >= 1
+          ? [slideNumber]
+          : [];
+      })
+    : [];
+  const exportEditabilitySlides = Array.isArray(exportEditability.slides)
+    ? exportEditability.slides.flatMap((value) => {
+        const slide = recordValue(value);
+        const slideNumber = numberValue(slide.slideNumber);
+        if (slideNumber === undefined || slideNumber < 1) return [];
+        const verdict = stringValue(slide.verdict, slide.status) ?? "unknown";
+        const reasons = Array.isArray(slide.reasons)
+          ? slide.reasons.filter(
+              (reason): reason is string =>
+                typeof reason === "string" && reason.length > 0,
+            )
+          : [];
+        const imageOnly = slide.imageOnly === true;
+        const photoOnlyExempt = slide.photoOnlyExempt === true;
+        if (
+          !imageOnly &&
+          !photoOnlyExempt &&
+          !["partially-editable", "unknown", "not-editable"].includes(verdict) &&
+          reasons.length === 0
+        )
+          return [];
+        return [{ slideNumber, verdict, imageOnly, photoOnlyExempt, reasons }];
+      })
+    : [];
+  const editabilityReasonLabels: Record<string, string> = {
+    "source-role-unknown": "원본 역할을 확인할 수 없습니다.",
+    "native-correspondence-missing": "대응하는 편집 개체가 없습니다.",
+    "native-kind-mismatch": "편집 개체 종류가 원본과 다릅니다.",
+    "native-text-unverified": "편집 가능한 텍스트를 검증하지 못했습니다.",
+    "native-text-mismatch": "편집 개체의 텍스트가 원본과 다릅니다.",
+    "native-outside-canvas": "편집 개체가 캔버스 밖에 있습니다.",
+    "native-readback-unverified": "PowerPoint 재확인 증거가 부족합니다.",
+    "rasterized-required-target": "필수 편집 대상이 이미지로 남았습니다.",
+    "required-target-missing": "필수 편집 대상이 누락되었습니다.",
+    "selection-obstructed": "다른 이미지가 선택을 가립니다.",
+    raster_fragment_missing: "페이지 검증에 필요한 그림 조각이 없어 페이지 전체를 이미지로 대체했습니다.",
+    raster_fragment_digest_mismatch: "그림 조각의 식별값이 원본과 일치하지 않아 페이지 전체를 이미지로 대체했습니다.",
+    raster_fragment_placement_mismatch: "그림 조각의 위치 측정값이 일치하지 않아 페이지 전체를 이미지로 대체했습니다.",
+    digest_mismatch: "식별값이 일치하지 않아 페이지 이미지로 대체했습니다.",
+    placement_mismatch: "배치가 일치하지 않아 페이지 이미지로 대체했습니다.",
+    local_fit_readback_failed: "페이지 위치 측정 검증을 통과하지 못해 페이지 전체를 이미지로 대체했습니다.",
+    "photo-only-page": "원본 사진 페이지입니다.",
+    "no-required-targets": "필수 편집 대상이 없습니다.",
+  };
+  const editabilityReasonLabel = (reason: string) =>
+    editabilityReasonLabels[reason] ?? "세부 확인 필요";
   const generationCompletion = isPresentationGeneration
     ? generationCompletionSummary(result)
     : undefined;
@@ -178,6 +280,27 @@ export function WorkspaceOperationCard({
   const isExport =
     operation.operationType === "export.pptx" ||
     operation.operationType === "export.pdf";
+  const isPptxExport = operation.operationType === "export.pptx";
+  const exportEditabilityCompletion = !isPptxExport
+    ? undefined
+    : exportQualityStatus === "image-only" ||
+        exportEditabilityVerdict === "not-editable"
+      ? "image-only"
+      : exportImageFallbackPages.length > 0 ||
+          exportQualityStatus === "partially-editable" ||
+          exportEditabilityVerdict === "partially-editable"
+        ? "partially-editable"
+        : exportEditabilityVerdict === "fully-editable" &&
+            exportQualityStatus !== "partially-editable" &&
+            exportQualityStatus !== "image-only"
+          ? "fully-editable"
+          : "unknown";
+  const exportCompletionLabel: Record<string, string> = {
+    "fully-editable": "내보내기 완료 · 완전 편집형 PPTX",
+    "partially-editable": "내보내기 완료 · 일부 편집 가능",
+    "image-only": "내보내기 완료 · 이미지 전용 PPTX",
+    unknown: "내보내기 완료 · 편집성 확인 필요",
+  };
   const isVersionRestore =
     operation.operationType === "version.restore" ||
     result.kind === "version.restore";
@@ -924,6 +1047,19 @@ export function WorkspaceOperationCard({
                   ? ` · 소스 리비전 ${sourceRevision}`
                   : ""}
               </p>
+              {exportEditabilityCompletion && (
+                <p
+                  className={
+                    exportEditabilityCompletion === "fully-editable"
+                      ? "mt-0.5 text-emerald-800"
+                      : "mt-0.5 font-medium text-amber-800"
+                  }
+                  role="status"
+                  data-testid="export-editability-verdict"
+                >
+                  {exportCompletionLabel[exportEditabilityCompletion]}
+                </p>
+              )}
             </div>
             {allowedAction("download") && (
               <button
@@ -943,6 +1079,65 @@ export function WorkspaceOperationCard({
               </button>
             )}
           </div>
+          {(exportEditabilitySlides.length > 0 ||
+            exportImageFallbackPages.length > 0 ||
+            exportEditabilityReasons.length > 0) && (
+            <div
+              className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-amber-950"
+              data-testid="export-editability-evidence"
+            >
+              <p className="font-medium">편집성 확인</p>
+              {exportEditabilityReasons.length > 0 && (
+                <p className="mt-1">
+                  사유: {exportEditabilityReasons.map(editabilityReasonLabel).join(" · ")}
+                </p>
+              )}
+              {exportEditabilitySlides.length > 0 && (
+                <ul className="mt-1 space-y-0.5">
+                  {exportEditabilitySlides.map((slide) => (
+                    <li key={slide.slideNumber}>
+                      {slide.slideNumber}페이지: {slide.photoOnlyExempt
+                        ? "원본 사진 페이지"
+                        : slide.imageOnly
+                          ? "이미지 전용"
+                          : slide.verdict === "partially-editable"
+                            ? "부분 편집 가능"
+                            : "확인 필요"}
+                      {slide.reasons.length > 0
+                        ? ` · ${slide.reasons.map(editabilityReasonLabel).join(" · ")}`
+                        : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {exportImageFallbackPages.length > 0 && (
+                <p className="mt-1 font-medium" data-testid="export-image-fallback-pages">
+                  이미지로 대체된 페이지: {exportImageFallbackPages
+                    .map((page) => `${page}페이지`)
+                    .join(", ")}
+                </p>
+              )}
+              {exportQualitySlideFallbacks.length > 0 && (
+                <ul className="mt-1 space-y-0.5" data-testid="export-image-fallback-reasons">
+                  {exportQualitySlideFallbacks.map((fallback) => (
+                    <li key={`${fallback.slideNumber}:${fallback.code}`}>
+                      {fallback.slideNumber}페이지: {editabilityReasonLabel(fallback.code)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {exportCleanupFailurePages.length > 0 && (
+            <p
+              className="mt-2 rounded-md bg-slate-100 px-2 py-1.5 text-slate-700"
+              data-testid="export-cleanup-status"
+            >
+              내보내기 종료 정리: {exportCleanupFailurePages
+                .map((page) => `${page}페이지`)
+                .join(", ")} 작업의 임시 실행 환경 정리를 완료하지 못했습니다. 결과 파일과 페이지 측정 판정은 유지됩니다.
+            </p>
+          )}
           {!artifactId && (
             <p
               className="mt-2 rounded-md bg-red-100 px-2 py-1.5 text-red-800"

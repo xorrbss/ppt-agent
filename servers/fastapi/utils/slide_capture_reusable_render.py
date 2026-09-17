@@ -27,6 +27,7 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
     enrich_contrast: Callable[..., Mapping[str, Any]], get_runtime: Callable[[], Any],
     instrument_html: Callable[..., tuple[str, str]], metrics_element_id: str,
     pixel_probe_document: Callable[[str], str], runtime_value: Callable[[Mapping[str, Any]], Any],
+    width_px: int = SLIDE_W, height_px: int = SLIDE_H,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     """Render through a disposable CDP page in the shared isolated process."""
 
@@ -77,8 +78,8 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                 await command(
                     "Emulation.setDeviceMetricsOverride",
                     {
-                        "width": SLIDE_W,
-                        "height": SLIDE_H,
+                        "width": width_px,
+                        "height": height_px,
                         "deviceScaleFactor": 1,
                         "mobile": False,
                     },
@@ -93,6 +94,8 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                     html,
                     script_nonce=script_nonce,
                     issue_capability=False,
+                    width_px=width_px,
+                    height_px=height_px,
                 )
                 await command(
                     "Page.setDocumentContent", {"frameId": frame_id, "html": instrumented}
@@ -136,7 +139,7 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                 if not image_bytes:
                     raise RuntimeError("Chrome DevTools screenshot is empty")
                 image = Image.open(io.BytesIO(image_bytes)).convert("RGB").crop(
-                    (0, 0, SLIDE_W, SLIDE_H)
+                    (0, 0, width_px, height_px)
                 )
 
                 if metrics is not None and any(
@@ -148,8 +151,8 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                     await command(
                         "Emulation.setDeviceMetricsOverride",
                         {
-                            "width": SLIDE_W,
-                            "height": SLIDE_H * 2,
+                            "width": width_px,
+                            "height": height_px * 2,
                             "deviceScaleFactor": 1,
                             "mobile": False,
                         },
@@ -158,7 +161,10 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                         "Page.setDocumentContent",
                         {
                             "frameId": frame_id,
-                            "html": pixel_probe_document(measured_html(html, metrics)),
+                            "html": pixel_probe_document(
+                                measured_html(html, metrics),
+                                width_px=width_px, height_px=height_px,
+                            ),
                         },
                     )
                     await command(
@@ -191,7 +197,7 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                         str(probe_shot.get("data") or "")
                     )
                     probe_image = Image.open(io.BytesIO(probe_bytes)).convert("RGB")
-                    if probe_image.size[0] < SLIDE_W or probe_image.size[1] < SLIDE_H * 2:
+                    if probe_image.size[0] < width_px or probe_image.size[1] < height_px * 2:
                         raise RuntimeError(
                             f"Chrome pixel probe has unexpected size {probe_image.size}"
                         )
@@ -202,8 +208,12 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                     from utils.slide_capture_local_fit import measured_html
                     metrics = await probe_glyph_clipping_async(
                         measured_html(html, metrics), metrics, output.getvalue(), command=command, frame_id=frame_id,
+                        width_px=width_px, height_px=height_px,
                     )
-                    cache_metrics(cache_html or html, metrics)
+                    cache_metrics(
+                        cache_html or html, metrics,
+                        width_px=width_px, height_px=height_px,
+                    )
 
             return output.getvalue(), metrics
     except BaseException:

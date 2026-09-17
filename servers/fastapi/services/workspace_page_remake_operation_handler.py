@@ -91,7 +91,9 @@ class WorkspacePageRemakeOperationHandler:
                 )
             theme = presentation.theme if isinstance(presentation.theme, dict) else {}
             projection = theme.get("authored_vnext")
-            pinned_body_only = projection is not None
+            pinned_body_only = isinstance(projection, Mapping) and isinstance(
+                projection.get("masterPin"), Mapping
+            )
             if pinned_body_only or master_pin is not None:
                 projected_pin = (
                     projection.get("masterPin")

@@ -88,8 +88,9 @@ async function terminateChrome(
     waitForExit: waitForChildExit,
     taskkill: taskkillProcessTree,
     terminateProfile: terminateWindowsProfileProcesses,
-  }
-): Promise<void> {
+  },
+  deferProfileCleanupAfterVerifiedGracefulExit = false,
+): Promise<boolean> {
   if (dependencies.platform === "win32") {
     let launcherTerminationError: unknown;
     // A completed capture asks Chrome to close over CDP before entering this
@@ -98,6 +99,14 @@ async function terminateChrome(
     // disproportionately expensive under the supervised Python worker tree.
     if (gracefulCloseRequested) {
       await tracePhase("terminate.waitGraceful", () => dependencies.waitForExit(child));
+      if (
+        deferProfileCleanupAfterVerifiedGracefulExit
+        && profilePath
+        && child.exitCode === 0
+        && child.signalCode === null
+      ) {
+        return true;
+      }
     }
     if (child.pid && child.exitCode === null && child.signalCode === null) {
       try {
@@ -152,12 +161,22 @@ async function terminateChrome(
         "Windows Chrome could not be fully terminated."
       );
     }
-    return;
+    return false;
   }
   if (child.pid && child.exitCode === null && child.signalCode === null) {
     child.kill("SIGKILL");
   }
   await dependencies.waitForExit(child);
+  return false;
+}
+
+function boundedCleanupError(error: unknown): string {
+  return describeError(error).replace(/\s+/g, " ").slice(0, 512);
+}
+
+function supervisedWindowsCleanupFastPath(): boolean {
+  return process.platform === "win32"
+    && process.env.AUTHORED_HYBRID_SUPERVISED_WINDOWS === "1";
 }
 
 export const __testOnlyTerminateChrome = terminateChrome;
@@ -330,6 +349,8 @@ async function runIsolatedAuthoredHybridChrome(
   const profilePath = path.join(workDirectory, "chrome-profile");
   let result: ChromeRunResult | undefined;
   let captureError: unknown;
+  let terminationError: unknown;
+  let profileCleanupDeferred = false;
   let child: ChildProcess | undefined;
   try {
     const windowSize = options.windowSizePx ?? { width: 1280, height: 720 };
@@ -360,13 +381,17 @@ async function runIsolatedAuthoredHybridChrome(
 
   if (child) {
     try {
-      await tracePhase("capture.terminate", () =>
-        terminateChrome(child as ChildProcess, profilePath, result !== undefined)
+      profileCleanupDeferred = await tracePhase("capture.terminate", () =>
+        terminateChrome(
+          child as ChildProcess,
+          profilePath,
+          result !== undefined,
+          undefined,
+          result !== undefined && supervisedWindowsCleanupFastPath(),
+        )
       );
     } catch (error) {
-      captureError = captureError === undefined
-        ? error
-        : new AggregateError([captureError, error], "Chrome capture and process cleanup failed.");
+      terminationError = error;
     }
   }
 
@@ -374,20 +399,36 @@ async function runIsolatedAuthoredHybridChrome(
   // cleanup problem remains observable, but must not erase the reason the
   // caller's Chrome capture originally failed.
   let cleanupError: unknown;
+  const removeWorkDirectory = () => fs.rm(workDirectory, {
+    recursive: true,
+    force: true,
+    // Windows can retain chrome_debug.log briefly after taskkill reports
+    // success. Node retries only transient filesystem errors here.
+    maxRetries: process.platform === "win32" ? 5 : 0,
+    retryDelay: 100,
+  });
   try {
-    await tracePhase("capture.rmWorkDir", () =>
-      fs
-      .rm(workDirectory, {
-        recursive: true,
-        force: true,
-        // Windows can retain chrome_debug.log briefly after taskkill reports
-        // success. Node retries only transient filesystem errors here.
-        maxRetries: process.platform === "win32" ? 5 : 0,
-        retryDelay: 100,
-      })
-    );
+    await tracePhase("capture.rmWorkDir", removeWorkDirectory);
   } catch (error) {
-    cleanupError = error;
+    if (profileCleanupDeferred) {
+      try {
+        await tracePhase("capture.profileCleanupAfterRmLock", () =>
+          terminateWindowsProfileProcesses(profilePath)
+        );
+      } catch (profileError) {
+        terminationError = profileError;
+      }
+      try {
+        await tracePhase("capture.rmWorkDirAfterProfileCleanup", removeWorkDirectory);
+      } catch (retryError) {
+        cleanupError = new AggregateError(
+          [error, retryError],
+          "Chrome work-directory cleanup failed after profile termination."
+        );
+      }
+    } else {
+      cleanupError = error;
+    }
   } finally {
     admission.release();
     traceEvent("capture.done", {
@@ -397,17 +438,29 @@ async function runIsolatedAuthoredHybridChrome(
     });
   }
   if (captureError !== undefined) {
-    if (cleanupError !== undefined) {
+    const cleanupErrors = [terminationError, cleanupError].filter(
+      (error): error is NonNullable<typeof error> => error !== undefined
+    );
+    if (cleanupErrors.length > 0) {
       throw new AggregateError(
-        [captureError, cleanupError],
-        `Chrome capture failed and its work-directory cleanup also failed: ${describeError(captureError)}`
+        [captureError, ...cleanupErrors],
+        `Chrome capture failed and process/work-directory cleanup also failed: ${describeError(captureError)}`
       );
     }
     throw captureError;
   }
-  if (cleanupError !== undefined) throw cleanupError;
   if (!result) {
     throw new Error("Chrome capture completed without a result.");
+  }
+  if (terminationError !== undefined || cleanupError !== undefined) {
+    const warning = {
+      termination: terminationError === undefined ? undefined : boundedCleanupError(terminationError),
+      workDirectory: cleanupError === undefined ? undefined : boundedCleanupError(cleanupError),
+    };
+    // The capture itself is complete, but operators still need one bounded
+    // signal when Chrome teardown or its private work directory was not clean.
+    console.warn("[authored-hybrid] completed Chrome capture cleanup failed", warning);
+    traceEvent("capture.cleanupWarning", warning);
   }
   return result;
 }

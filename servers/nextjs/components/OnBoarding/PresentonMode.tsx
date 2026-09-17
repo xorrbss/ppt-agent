@@ -1184,39 +1184,39 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             </div>
             {/* Download Progress Modal */}
             {showDownloadModal && downloadingModel && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-2xl max-w-md w-full p-6 relative">
+                <div className="fixed inset-0 bg-slate-950/35 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
+                    <div className="rounded-2xl border border-gray-200/80 bg-white shadow-[0_12px_40px_-16px_rgba(15,23,42,0.18)] max-w-[400px] max-h-[calc(100dvh-2rem)] overflow-y-auto w-full px-6 py-8 sm:px-8 relative">
                         {/* Modal Content */}
                         <div className="text-center">
                             {/* Icon */}
-                            <div className="mb-4">
+                            <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50">
                                 {downloadingModel.done ? (
-                                    <CheckCircle className="w-12 h-12 text-green-600 mx-auto" />
+                                    <CheckCircle className="w-6 h-6 text-green-600 mx-auto" />
                                 ) : (
-                                    <Download className="w-12 h-12 text-blue-600 mx-auto animate-pulse" />
+                                    <Download className="w-6 h-6 text-[#5141e5] mx-auto" />
                                 )}
                             </div>
 
                             {/* Title */}
-                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                            <h3 className="break-keep text-xl font-semibold leading-7 tracking-tight text-gray-900 mb-2">
                                 {downloadingModel.done ? "다운로드 완료!" : "모델 다운로드 중"}
                             </h3>
 
                             {/* Model Name */}
-                            <p className="text-sm text-gray-600 mb-6">
+                            <p className="break-words text-sm leading-6 text-gray-500 mb-6">
                                 {llmConfig.OLLAMA_MODEL}
                             </p>
 
                             {/* Progress Bar */}
                             {downloadProgress > 0 && (
                                 <div className="mb-4">
-                                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                                    <div className="w-full bg-gray-100 rounded-full h-1 overflow-hidden">
                                         <div
-                                            className="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
+                                            className="bg-[#5141e5]/80 h-1 rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none"
                                             style={{ width: `${downloadProgress}%` }}
                                         />
                                     </div>
-                                    <p className="text-sm text-gray-600 mt-2">
+                                    <p className="text-xs tabular-nums text-gray-500 mt-2">
                                         {downloadProgress}% 완료
                                     </p>
                                 </div>

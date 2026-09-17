@@ -292,7 +292,6 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
         output: {
           format,
           mode: "fidelity-raster",
-          fontEmbedding: "none",
         },
       });
     } catch (error) {

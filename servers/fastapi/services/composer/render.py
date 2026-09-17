@@ -35,6 +35,7 @@ from services.composer.plan import (
 )
 from services.composer.render_chrome import balanced_partition, layout_chrome, render_document
 from services.composer.render_context import RenderContext
+from services.composer.render_style_profile import apply_style_profile
 from services.composer.render_css import (
     MIN_FONT_PX,
     TITLE_LEFT_PX,
@@ -56,7 +57,7 @@ from utils.renderer_isolation import RendererPolicyError, admit_authored_html
 #: ``utils.llm_calls.author_slide``, admission is checked on a projection
 #: without it; the source-image stage resolves it to a ``src`` and strips it
 #: before final admission.
-_ASSET_MARKER = re.compile(r'\sdata-asset-id="[^"]*"')
+_ASSET_MARKER = re.compile(r'\s(?:data-asset-id|data-source-image-crop|data-source-image-flip|data-source-image-color-transforms)="[^"]*"')
 
 
 class ComposerRenderError(ValueError):
@@ -96,7 +97,7 @@ def build_context(
     """Geometry and density for one render; rung 5 always uses the dense variant."""
 
     density = density_spec(1 if params.source_geometry else params.density)
-    geometry = chrome_geometry(params.chrome_level)
+    geometry = chrome_geometry(params.chrome_level, canvas=deck.canvas)
     title_px = fitted_title_px(plan, deck, params, geometry)
     return RenderContext(
         tokens=tokens,
@@ -123,7 +124,11 @@ def render_slide(
         body = layout_source_geometry(plan, ctx) if params.source_geometry else layout_chrome(plan, ctx)
     except TextRenderError as error:
         raise ComposerRenderError("composer_render_plan_invalid", detail=str(error)) from error
-    html = render_document(body, stylesheet(tokens, ctx.geometry, ctx.density))
+    font_rules = "".join(f".{name}{{font-family:{family};}}" for family, name in ctx.source_font_classes.items())
+    html = render_document(body, stylesheet(tokens, ctx.geometry, ctx.density) + font_rules)
+    if deck.fit_policy_revision == "composer-source-fit/v2":
+        html = html.replace("<body", f'<body data-composer-canvas-width="{deck.canvas.width_px}" data-composer-canvas-height="{deck.canvas.height_px}" data-source-fit-policy="composer-source-fit/v2" data-source-font-floor-px="{deck.font_floor_px or 7.0:g}"', 1)
+    html = apply_style_profile(html, plan, ctx)
     validate_rendered_html(html)
     return html
 

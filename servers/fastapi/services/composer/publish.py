@@ -16,6 +16,7 @@ Export is a separate operation exactly as for Deck IR decks.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import uuid
 from collections.abc import Mapping, Sequence
@@ -23,6 +24,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
+from pydantic import ValidationError
 
 from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_PUBLISHED,
@@ -153,6 +155,13 @@ async def publish_composer_deck(
     count = len(results)
     if count == 0 or len(htmls) != count or len(pngs) != count:
         raise ComposerPublicationError("composer_publication_cardinality_mismatch")
+    if any(html != result.html for html, result in zip(htmls, results)):
+        raise ComposerPublicationError("composer_publication_final_html_mismatch")
+    fit_revision = getattr(deck, "fit_policy_revision", None)
+    if fit_revision == "composer-source-fit/v2" and any(
+        'data-source-fit-policy="composer-source-fit/v2"' not in html for html in htmls
+    ):
+        raise ComposerPublicationError("composer_publication_fit_policy_mismatch")
     presentation = await sql_session.get(PresentationModel, presentation_id)
     if presentation is None:
         raise ComposerPublicationError("composer_presentation_missing")
@@ -211,6 +220,16 @@ async def publish_composer_deck(
         font_manifest, font_bytes, font_family, font_face = (
             await composer_publication_font_materials()
         )
+        asset_manifests = None
+        artifact_bytes = dict(font_bytes)
+        if fit_revision == "composer-source-fit/v2":
+            from services.composer.publish_source_semantic import source_publication_assets
+
+            asset_manifests = []
+            for html in htmls:
+                asset_manifest, image_bytes = source_publication_assets(html)
+                asset_manifests.append(asset_manifest)
+                artifact_bytes.update(image_bytes)
         language = str(getattr(request, "language", None) or presentation.language or "ko")
         style = getattr(request, "_authored_style_snapshot", None)
         style_id = str(getattr(style, "id", None) or getattr(request, "authored_style", None) or "")
@@ -238,19 +257,39 @@ async def publish_composer_deck(
                         "schemaVersion": "composer-master/v1",
                         "styleId": style_id,
                         "tokens": deck.tokens.model_dump(mode="json"),
+                        "styleProfile": deck.style_profile.model_dump(mode="json") if deck.style_profile else None,
+                        "canvas": deck.canvas.model_dump(mode="json", by_alias=True),
                     }
                 ),
                 composition_digest=canonical_digest(deck.model_dump(mode="json")),
+                slide_asset_manifests=asset_manifests,
                 slide_font_manifests=[font_manifest for _ in slides],
-                resolved_artifact_bytes=font_bytes,
+                resolved_artifact_bytes=artifact_bytes,
             )
         except SemanticContractError as error:
-            raise ComposerPublicationError(str(error) or "authored_manifest_publication_failed") from error
+            cause = error.__cause__
+            detail = None
+            if isinstance(cause, ValidationError):
+                # Validation inputs and messages can contain source content.
+                # Preserve only bounded contract locations and error types.
+                failures = cause.errors(include_input=False, include_context=False)
+                detail = json.dumps({
+                    "validationErrors": [
+                        {"loc": list(failure["loc"]), "type": failure["type"]}
+                        for failure in failures[:64]
+                    ],
+                    "validationErrorCount": len(failures),
+                }, ensure_ascii=True, separators=(",", ":"))
+            raise ComposerPublicationError(
+                str(error) or "authored_manifest_publication_failed", detail=detail
+            ) from error
         publication = {
             "manifestDigest": manifest.canonical_digest,
             "revision": expected_revision + 1,
             "bundleCount": count,
             "generationRoute": publication_route,
+            "styleId": style_id,
+            "styleProfile": deck.style_profile.model_dump(mode="json") if deck.style_profile else None,
         }
         rung_histogram = dict((receipt or {}).get("rungHistogram") or {})
         theme = dict(presentation.theme or {})
@@ -263,6 +302,18 @@ async def publish_composer_deck(
                 "generationComposer": {**publication, "slideCount": count, "rungHistogram": rung_histogram},
             }
         )
+        from services.authored_canvas import AuthoredCanvasMetadata, merge_presentation_canvas
+
+        canvas_metadata = AuthoredCanvasMetadata(
+            contract_version="authored-canvas/v1",
+            aspect_ratio=getattr(request, "aspect_ratio", "16:9"),
+            width_px=deck.canvas.width_px,
+            height_px=deck.canvas.height_px,
+            locale=deck.canvas.locale,
+            safe_area=deck.canvas.safe_area,
+        ).model_dump(mode="json", by_alias=True)
+        theme = merge_presentation_canvas(theme, canvas_metadata)
+        publication["canvas"] = canvas_metadata
         presentation.title = title
         presentation.n_slides = count
         presentation.outlines = _outline_entries(results, deck)

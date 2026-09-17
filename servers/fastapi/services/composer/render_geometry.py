@@ -1,47 +1,15 @@
-"""Rung 5: every component set in its own source rectangle mapped onto the canvas.
+"""Rung 5 source placements on the fixed canvas.
 
-The source page is scaled uniformly by ``deck.source_px_scale x
-params.page_scale`` and centred; the canvas left over around it is painted
-with the template's soft accent. Each component is absolutely positioned at
-its ``source_rect`` and its text shrinks by ``params.box_text_scale``. No CSS
-transform is used anywhere: every length is computed numerically.
+New source-fit/v2 plans restore original blocks before classification, retain
+paragraph/run boundaries and draw the source boxes without estimated growth.
+The measured ladder then shrinks only identified overflowing text boxes. Rigid
+rotations preserve source orientation without changing computed font sizes;
+image crop/reflection is resolved into derivative pixels before capture.
 
-Source rectangles come from the captured page and can sit close enough that
-a neighbour's real (browser-measured) text height spills past its own box --
-``.cx-text`` is deliberately ``overflow:visible`` so wrapped text is never
-clipped. A component painted after the title in DOM order (``_placed``
-always places title first) would then visually paint over the title's own
-glyphs even though its declared box does not literally overlap the title's.
-``inspect_authored_dom``'s title-edge occlusion check treats this as a
-blocking defect regardless of how small the overlap is (unlike the general
-overlap checks, it does not tolerate a percentage of harmless overlap,
-because a title with even one occluded glyph reads as broken). The fix is
-paint order, not geometry: the title and subtitle wrappers carry an explicit
-``z-index`` so they are always the topmost element at any point they cover,
-which is exactly what the browser's ``elementsFromPoint``-based occlusion
-probe checks (``utils.slide_capture``) -- only elements painted *above* the
-target in that stack count as occluders.
-
-The z-index above only wins that pixel-occlusion probe (paint order); it does
-nothing about the plain bounding-box "overlap" check, which still flags a box
-whose own source rectangle is simply *too short* for the text it carries at
-the source's own font size -- including the title's, captured as a thin strip
-above a much taller neighbour on a dense page. Since nothing here clips an
-overflowing child (``.cx-geo`` sets no ``overflow``), the box's declared
-height is not what stops that overflow from painting over the next component;
-only the box's *real* rendered extent staying within the gap before that
-neighbour does. ``_fit_growable_box`` predicts that real extent with the same
-font-size and line-wrap model the renderer will actually use -- the floored
-one, so a box is never pinned to a height its text refused to shrink to --
-and: leaves the box alone when it already fits; grows it straight down, never
-past a horizontally overlapping neighbour's own top; lifts it into the free
-canvas above when that gap alone is too small; and only then shrinks the text
-(``box_text_scale``-style), with whatever still does not fit logged as an
-explicit residual and left visible in the box's own (honest) height rather
-than hidden behind a shorter one. This runs on every geometry-mode render,
-ahead of and independent of the ladder's own per-box shrink step
-(``fit._next_terminal_step``), which only ever applies a flat 10% cut to
-whatever the browser blamed on the *previous* render.
+Historical plans keep the previous component geometry correction: grow down to
+an overlapping neighbour, lift into available headroom, then estimate a bounded
+text shrink. Remaining clipping and overlap stay visible to the same QA gate.
+No final HTML is rewritten after measurement.
 """
 
 from __future__ import annotations
@@ -75,7 +43,7 @@ from services.composer.render_components import (
 )
 from services.composer.render_context import size_role
 from services.composer.render_css import px
-from services.composer.render_text import TextRenderError, dominant_size_pt, open_tag
+from services.composer.render_text import TextRenderError, dominant_size_pt, open_tag, render_source_text
 
 LOGGER = logging.getLogger(__name__)
 
@@ -135,9 +103,9 @@ def page_box(deck: ComposerDeckPlan, params: FitParameters) -> Box:
         width = cx / _EMU_PER_INCH * _PX_PER_INCH * scale
         height = cy / _EMU_PER_INCH * _PX_PER_INCH * scale
     else:
-        width = CANVAS_WIDTH * params.page_scale
-        height = CANVAS_HEIGHT * params.page_scale
-    return ((CANVAS_WIDTH - width) / 2.0, (CANVAS_HEIGHT - height) / 2.0, width, height)
+        width = deck.canvas.width_px * params.page_scale
+        height = deck.canvas.height_px * params.page_scale
+    return ((deck.canvas.width_px - width) / 2.0, (deck.canvas.height_px - height) / 2.0, width, height)
 
 
 def rect_box(rect: SourceRect, page: Box) -> Box:
@@ -171,15 +139,17 @@ def side_bands(page: Box, ctx: RenderContext) -> str:
     x1, y1 = x0 + width, y0 + height
     return "".join(
         (
-            _band(ctx, (0.0, 0.0, x0, float(CANVAS_HEIGHT))),
-            _band(ctx, (x1, 0.0, CANVAS_WIDTH - x1, float(CANVAS_HEIGHT))),
+            _band(ctx, (0.0, 0.0, x0, float(ctx.deck.canvas.height_px))),
+            _band(ctx, (x1, 0.0, ctx.deck.canvas.width_px - x1, float(ctx.deck.canvas.height_px))),
             _band(ctx, (x0, 0.0, width, y0)),
-            _band(ctx, (x0, y1, width, CANVAS_HEIGHT - y1)),
+            _band(ctx, (x0, y1, width, ctx.deck.canvas.height_px - y1)),
         )
     )
 
 
-def _placed(plan: ComposerSlidePlan) -> list[ComposerComponent]:
+def _placed(plan: ComposerSlidePlan, *, source_placements: bool = False) -> list[ComposerComponent]:
+    if source_placements and plan.source_placements:
+        return plan.source_placements
     components: list[ComposerComponent] = []
     if plan.title is not None:
         components.append(plan.title)
@@ -285,7 +255,7 @@ def _x_overlaps(a: Box, b: Box) -> bool:
     return ax0 < bx0 + bw and bx0 < ax0 + aw
 
 
-def _growth_ceiling(box: Box, others: list[Box]) -> float:
+def _growth_ceiling(box: Box, others: list[Box], canvas_height: float = CANVAS_HEIGHT) -> float:
     """The lowest top edge, among boxes below and horizontally overlapping
     ``box``, that growth must stop at -- the "next box" of the module
     docstring -- or the canvas's own bottom edge when nothing is in the way.
@@ -297,7 +267,7 @@ def _growth_ceiling(box: Box, others: list[Box]) -> float:
     into free canvas"."""
 
     _x, y, _width, _height = box
-    ceiling = float(CANVAS_HEIGHT)
+    ceiling = float(canvas_height)
     for other in others:
         _ox, oy, _ow, _oh = other
         if oy <= y + _FIT_EPS or not _x_overlaps(box, other):
@@ -399,7 +369,7 @@ def _fit_growable_box(
     natural = _natural_height_px(component, ctx, width_px=width, box_scale=ladder_scale)
     if natural <= height + _FIT_EPS:
         return _FittedBox(box, 1.0, 0.0)
-    headroom = max(height, _growth_ceiling(box, others) - y)
+    headroom = max(height, _growth_ceiling(box, others, canvas_height=ctx.deck.canvas.height_px) - y)
     if natural <= headroom:
         return _FittedBox((x, y, width, natural), 1.0, 0.0)
     lift_limit = max(0.0, y - _growth_floor(box, others))
@@ -441,7 +411,8 @@ def _fit_boxes(
 
 def layout_source_geometry(plan: ComposerSlidePlan, ctx: RenderContext) -> str:
     page = page_box(ctx.deck, ctx.params)
-    placed = _placed(plan)
+    original = bool(plan.source_placements) and ctx.deck.fit_policy_revision == "composer-source-fit/v2"
+    placed = _placed(plan, source_placements=original)
     boxes: list[Box] = []
     for component in placed:
         if component.source_rect is None:
@@ -449,17 +420,28 @@ def layout_source_geometry(plan: ComposerSlidePlan, ctx: RenderContext) -> str:
                 f"component {component.component_id!r} has no source rectangle for source geometry"
             )
         boxes.append(rect_box(component.source_rect, page))
-    fitted = _fit_boxes(placed, boxes, ctx)
+    fitted = [_FittedBox(box, 1.0, 0.0) for box in boxes] if original else _fit_boxes(placed, boxes, ctx)
     out = [side_bands(page, ctx)]
     for index, component in enumerate(placed):
         x, y, width, height = fitted[index].box
         ladder_scale = float(ctx.params.box_text_scale.get(component.component_id, 1.0))
         box_scale = ladder_scale * fitted[index].scale
-        inner = _render_placed(component, ctx, box_scale, width)
+        inner = (render_source_text(component, ctx, box_scale=box_scale)
+                 if original and component.paragraphs else _render_placed(component, ctx, box_scale, width))
         if not inner:
             continue
         style = f"left:{px(x)};top:{px(y)};width:{px(width)};height:{px(height)}"
-        if component.kind in _PROTECTED_KINDS:
+        if original:
+            style += f";z-index:{index}"
+            # Shape reflection does not reflect its text. Image reflections are
+            # resolved into derivative pixels before capture; only rigid rotation
+            # reaches the browser, preserving the effective font-size magnitude.
+            rotation = float(component.source_transform.get("rotationDegrees") or 0)
+            if component.paragraphs:
+                rotation = 0.0 if component.source_text_body.get("upright") else rotation + float(component.source_text_body.get("rotationDegrees") or 0)
+            if rotation % 360:
+                style += f";transform:rotate({rotation:g}deg);transform-origin:center center"
+        elif component.kind in _PROTECTED_KINDS:
             style += f";z-index:{_PROTECTED_TEXT_Z_INDEX}"
         #: A component whose smallest rendering still does not fit between its
         #: neighbours is named here rather than overflowing in silence. It

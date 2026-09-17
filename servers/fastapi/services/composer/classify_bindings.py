@@ -57,6 +57,9 @@ class TextBlock:
     #: Whitespace-free source text and, per character, the ``runs`` index it came from.
     squashed_raw: str
     char_runs: tuple[int, ...]
+    text_body: Mapping[str, Any]
+    source_shape_index: int
+    source_transform: Mapping[str, Any]
 
     @property
     def text(self) -> str:
@@ -112,6 +115,9 @@ def build_text_block(block: Mapping[str, Any]) -> TextBlock | None:
         dominant_size_pt=dominant_size_pt(payload, runs),
         runs=runs,
         paragraphs_meta=meta,
+        text_body=mapping_or_empty(payload.get("textBody")),
+        source_shape_index=int(payload.get("sourceShapeIndex", order)),
+        source_transform=mapping_or_empty(payload.get("geometry")),
         line_paragraph=_line_paragraphs(projection, meta),
         squashed_raw="".join(squash(run.text) for run in runs),
         char_runs=tuple(index for index, run in enumerate(runs) for _ in squash(run.text)),
@@ -158,6 +164,49 @@ def bind_paragraphs(block: TextBlock) -> list[Paragraph]:
     return [paragraph_for_span(block, index, index) for index in range(projection.run_count)]
 
 
+
+def bind_source_paragraphs(block: TextBlock) -> list[Paragraph]:
+    """Group projection fragments by actual a:p boundaries, using cumulative offsets.
+
+    Each paragraph's own projection determines its number of fragments. Repeated
+    text is safe because no substring search is used to recover its source index.
+    Formatting is copied directly from that paragraph's a:r/a:fld sequence.
+    """
+    if not block.paragraphs_meta:
+        return [paragraph_for_span(block, 0, block.projection.run_count - 1)]
+    result: list[Paragraph] = []
+    cursor = 0
+    for index, meta in enumerate(block.paragraphs_meta):
+        projection = _project_or_none(str(meta.get("text") or ""))
+        if projection is None:
+            result.append(Paragraph(text=str(meta.get("text") or ""),
+                source=SourceRunRef(block_id=block.block_id, binding_id=block.block_id),
+                layout={**dict(meta), "sourceParagraphIndex": index, "emptySourceParagraph": True}))
+            continue
+        end = cursor + projection.run_count - 1
+        if end >= block.projection.run_count:
+            raise ValueError(f"source paragraph range invalid: {block.block_id}")
+        span_text = block.projection.span_text(cursor, end)
+        if not projection.accepts(0, projection.run_count - 1, span_text):
+            raise ValueError(f"source paragraph projection mismatch: {block.block_id}")
+        runs = [TextRun(text=r.text, bold=r.bold, italic=r.italic, size_pt=r.size_pt,
+                        color=r.color, font_family=r.font_family) for r in formatted_runs(meta)]
+        # Source whitespace remains verbatim. The binding matcher owns normalized
+        # comparison; neither projected fragments nor formatting invent paragraphs.
+        whole = cursor == 0 and end == block.projection.run_count - 1
+        bound = Paragraph(text=str(meta.get("text") or ""), runs=runs,
+            bullet=bool(meta.get("bullet")), bullet_kind=meta.get("bulletKind"),
+            level=min(8, max(0, int(meta.get("level") or 0))),
+            source=SourceRunRef(block_id=block.block_id, run_start=None if whole else cursor,
+                run_end=None if whole else end,
+                binding_id=source_run_binding_id(block.block_id, cursor, end, block.projection.run_count)),
+            layout={**dict(meta), "sourceParagraphIndex": index})
+        result.append(bound)
+        cursor = end + 1
+    if cursor != block.projection.run_count:
+        raise ValueError(f"source paragraph coverage invalid: {block.block_id}")
+    return result
+
 def _whitespace_gaps_only(projection: SourceRunProjection) -> bool:
     if len(projection.lines) != 1:
         return False
@@ -187,7 +236,13 @@ def paragraph_for_span(block: TextBlock, start: int, end: int) -> Paragraph:
         level = min(max(int(meta.get("level") or 0), 0), 8)
     except (TypeError, ValueError):
         level = 0
+    source_paragraph_index = block.line_paragraph[first.line]
+    first_source_line = block.line_paragraph.index(source_paragraph_index)
+    layout = dict(meta)
+    layout["sourceParagraphIndex"] = source_paragraph_index
+    layout["sourceBulletOwner"] = start == projection.lines[first_source_line][0]
     return Paragraph(
+        layout=layout,
         text=text,
         runs=text_runs_for_span(block, start, end),
         bullet=bullet,
@@ -243,17 +298,18 @@ def text_runs_for_span(block: TextBlock, start: int, end: int) -> list[TextRun]:
         else:
             segments.append((run, [char]))
     return [
-        TextRun(text="".join(chars), bold=run.bold, italic=run.italic, size_pt=run.size_pt, color=run.color)
+        TextRun(text="".join(chars), bold=run.bold, italic=run.italic, size_pt=run.size_pt, color=run.color, font_family=run.font_family)
         for run, chars in segments
     ]
 
 
 def _same_format(left: FormattedRun, right: FormattedRun) -> bool:
-    return (left.bold, left.italic, left.size_pt, left.color) == (
+    return (left.bold, left.italic, left.size_pt, left.color, left.font_family) == (
         right.bold,
         right.italic,
         right.size_pt,
         right.color,
+        right.font_family,
     )
 
 
@@ -284,16 +340,19 @@ def table_rows(block_id: str, payload: Mapping[str, Any]) -> tuple[list[list[Par
 
     rows: list[list[Paragraph]] = []
     chars = 0
-    for row in _cell_texts(payload):
+    raw_rows = payload.get("rows") or []
+    for row_index, row in enumerate(_cell_texts(payload)):
         bound: list[Paragraph] = []
-        for text in row:
+        for column_index, text in enumerate(row):
+            cell = mapping_or_empty(raw_rows[row_index][column_index]) if row_index < len(raw_rows) and column_index < len(raw_rows[row_index]) else {}
             projection = _project_or_none(text)
-            cell_text = projection.text if projection is not None else ""
+            cell_text = text
             chars += len(cell_text)
             bound.append(
                 Paragraph(
                     text=cell_text,
-                    runs=[TextRun(text=cell_text)] if cell_text else [],
+                    runs=[TextRun(text=r.text, bold=r.bold, italic=r.italic, size_pt=r.size_pt, color=r.color, font_family=r.font_family) for r in formatted_runs(cell)] if cell else ([TextRun(text=cell_text)] if cell_text else []),
+                    layout=dict(cell),
                     source=SourceRunRef(block_id=block_id, binding_id=block_id),
                 )
             )

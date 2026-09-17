@@ -75,12 +75,18 @@ class StageTimer:
         total = int(round((time.monotonic() - self._started) * 1000))
         return {**self._stages, "total": max(0, total)}
 
+    @property
+    def active_stage(self) -> str | None:
+        return next(reversed(self._open), None)
+
 
 def _issue_category(issue: str) -> str:
     return issue.split(":", 1)[0].strip()
 
 
-def is_accepted_residual(rung: int, blocking_issues: Sequence[str]) -> bool:
+def is_accepted_residual(
+    rung: int, blocking_issues: Sequence[str], *, fit_policy_revision: str | None = None,
+) -> bool:
     """Rung 5's own overlap residue is the source page's geometry, not a defect.
 
     ``fit_slide`` always terminates rung 5 (source geometry, page_scale 0.90)
@@ -91,14 +97,16 @@ def is_accepted_residual(rung: int, blocking_issues: Sequence[str]) -> bool:
     any residual issue at a rung before 5, is never accepted.
     """
 
-    return rung == 5 and bool(blocking_issues) and all(
+    return fit_policy_revision != "composer-source-fit/v2" and rung == 5 and bool(blocking_issues) and all(
         _issue_category(issue) == "overlap" for issue in blocking_issues
     )
 
 
 def slide_receipt_entry(result: ComposerSlideResult, *, stamping_rebound: bool = False) -> dict[str, Any]:
     receipt = result.receipt
-    residual = is_accepted_residual(receipt.rung, receipt.blocking_issues)
+    residual = is_accepted_residual(
+        receipt.rung, receipt.blocking_issues, fit_policy_revision=receipt.fit_policy_revision,
+    )
     return {
         "index": receipt.slide_index,
         "rung": receipt.rung,
@@ -109,6 +117,7 @@ def slide_receipt_entry(result: ComposerSlideResult, *, stamping_rebound: bool =
         #: Accepted rung-5 overlap residue, kept for observability only; it
         #: never fails the operation (see ``is_accepted_residual``).
         "residualIssues": list(receipt.blocking_issues) if residual else [],
+        "sourceTopologyWitnesses": list(result.metrics.get("source_topology_witnesses", [])),
         "stampingRebound": bool(stamping_rebound),
         "trail": list(receipt.trail),
     }
@@ -132,6 +141,9 @@ def build_composer_receipt(
     failure: Mapping[str, Any] | None = None,
     publication: Mapping[str, Any] | None = None,
     stamping_rebound: Mapping[int, bool] | None = None,
+    fit_policy: Mapping[str, Any] | None = None,
+    source_readback: Mapping[str, Any] | None = None,
+    source_structure_readback: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     ordered = sorted(results, key=lambda item: item.slide_index)
     rebound = stamping_rebound or {}
@@ -150,6 +162,12 @@ def build_composer_receipt(
     }
     if failure:
         document["failure"] = dict(failure)
+    if fit_policy is not None:
+        document["fitPolicy"] = dict(fit_policy)
+    if source_readback is not None:
+        document["sourceReadback"] = dict(source_readback)
+    if source_structure_readback is not None:
+        document["sourceStructureReadback"] = dict(source_structure_readback)
     if publication:
         document["publication"] = dict(publication)
     return document

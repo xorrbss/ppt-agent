@@ -2,6 +2,8 @@
 
 import asyncio
 
+from jsonschema import Draft202012Validator
+
 from services.slidespec_acceptance import (
     AcceptanceEvidence,
     GateEvidence,
@@ -454,6 +456,21 @@ def test_llm_adapter_makes_one_call_and_returns_at_most_two_candidates(monkeypat
 
     async def fake_generate(client, model, messages):
         calls.append((client, model, messages))
+        schema = proposer._schema(["setSpacing", "setFontScale", "setBounds"])
+        Draft202012Validator.check_schema(schema)
+        validator = Draft202012Validator(schema)
+        validator.validate(_proposal())
+        validator.validate(_proposal(operation={
+            "op": "setBounds", "target": "sem:slide-11/title",
+            "bounds": {"x": 0.1, "y": 0.1, "width": 0.8, "height": 0.2},
+        }))
+        for operation in (
+            {"op": "setSpacing", "target": "sem:slide-11/title"},
+            {"op": "setFontScale", "target": "sem:slide-11/title", "scale": 0.1},
+            {"op": "setBounds", "target": "sem:slide-11/title", "bounds": {"x": 0}},
+            {"op": "setImageFit", "target": "sem:slide-11/title", "value": "contain"},
+        ):
+            assert list(validator.iter_errors(_proposal(operation=operation)))
         return _proposal()
 
     monkeypatch.setattr(proposer, "get_client", lambda *, config: "client")

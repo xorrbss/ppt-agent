@@ -129,6 +129,7 @@ export interface PresentationConfig {
   includeTableOfContents: boolean;
   includeTitleSlide: boolean;
   webSearch: boolean;
+  aspectRatio: "16:9" | "9:16" | "9:13";
   codexGenerationPreset: import("@/components/codex-config").CodexGenerationPresetId | null;
 }
 

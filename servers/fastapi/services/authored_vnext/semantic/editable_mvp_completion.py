@@ -27,6 +27,10 @@ from models.authored_vnext.semantic.editable_mvp_completion import (
 from models.sql.authored_editable_hybrid_mvp_completion import (
     AuthoredEditableHybridMvpCompletion,
 )
+from models.sql.authored_semantic_bundle import (
+    AuthoredDeckEmissionActivePointer,
+    AuthoredDeckEmissionManifestRecord,
+)
 from models.sql.authored_vnext_repository import (
     AuthoredVNextDeckRevision,
     AuthoredVNextEntityHead,
@@ -194,14 +198,9 @@ def _require_digest(value: Any, label: str) -> str:
     return value
 
 
-def _validate_result(result: dict[str, Any], deck_id: str) -> dict[str, Any]:
-    deck_subject = deck_id.removeprefix("deck:semantic-")
-    try:
-        presentation_id = str(uuid.UUID(hex=deck_subject))
-    except ValueError as error:
-        raise EditableMvpCompletionError(
-            "editable_mvp_deck_subject_invalid", status_code=422
-        ) from error
+def _validate_result(
+    result: dict[str, Any], deck_id: str, presentation_id: str
+) -> dict[str, Any]:
     if (
         result.get("schemaVersion")
         != "authored-editable-hybrid-gate1e-result-set/v1"
@@ -332,6 +331,72 @@ def _validate_result(result: dict[str, Any], deck_id: str) -> dict[str, Any]:
             "editable_mvp_result_set_digest_invalid", status_code=422
         )
     return attempt
+
+
+def _legacy_presentation_id(deck_id: str) -> str | None:
+    try:
+        return str(uuid.UUID(hex=deck_id.removeprefix("deck:semantic-")))
+    except ValueError:
+        return None
+
+
+def _candidate_scene_digest(result: dict[str, Any]) -> str | None:
+    attempt = result.get("attempt")
+    value = attempt.get("sceneDigest") if isinstance(attempt, dict) else None
+    return value if isinstance(value, str) and DIGEST_RE.fullmatch(value) else None
+
+
+def _resolve_completion_presentation_id(
+    repository: SqlGenerationRepository,
+    *,
+    deck_id: str,
+    result: dict[str, Any],
+) -> str:
+    scene_digest = _candidate_scene_digest(result)
+    attempt = result.get("attempt")
+    hinted_presentation_id = attempt.get("presentationId") if isinstance(attempt, dict) else None
+    try:
+        presentation_uuid = uuid.UUID(str(hinted_presentation_id))
+    except (TypeError, ValueError, AttributeError):
+        presentation_uuid = None
+    if scene_digest is None or presentation_uuid is None:
+        raise EditableMvpCompletionError("editable_mvp_deck_subject_invalid", status_code=422)
+    base = repository._base
+    with repository._sessions() as session:
+        pointers = session.scalars(
+            select(AuthoredDeckEmissionActivePointer).where(
+                AuthoredDeckEmissionActivePointer.owner_id == base.owner_id,
+                AuthoredDeckEmissionActivePointer.tenant_id == base.tenant_id,
+                AuthoredDeckEmissionActivePointer.presentation_id == presentation_uuid,
+                AuthoredDeckEmissionActivePointer.canonical_mode == "bundleGraph",
+            )
+        ).all()
+        for pointer in pointers:
+            if pointer.manifest_id is None:
+                continue
+            manifest = session.scalar(
+                select(AuthoredDeckEmissionManifestRecord).where(
+                    AuthoredDeckEmissionManifestRecord.id == pointer.manifest_id,
+                    AuthoredDeckEmissionManifestRecord.owner_id == base.owner_id,
+                    AuthoredDeckEmissionManifestRecord.tenant_id == base.tenant_id,
+                )
+            )
+            payload = manifest.payload if manifest is not None and isinstance(manifest.payload, dict) else None
+            scene = payload.get("scene") if isinstance(payload, dict) else None
+            if (
+                manifest is not None
+                and pointer.presentation_id == manifest.presentation_id
+                and pointer.presentation_revision == manifest.presentation_revision
+                and pointer.canonical_digest == manifest.canonical_digest
+                and isinstance(scene, dict)
+                and scene.get("deckId") == deck_id
+                and scene.get("sceneDigest") == scene_digest
+            ):
+                return str(manifest.presentation_id)
+    legacy = _legacy_presentation_id(deck_id)
+    if legacy is not None and legacy == str(presentation_uuid):
+        return legacy
+    raise EditableMvpCompletionError("editable_mvp_deck_subject_invalid", status_code=422)
 
 
 def _validate_trust_and_receipt(
@@ -489,7 +554,12 @@ def seal_import_editable_mvp_completion(
     receipt_bytes = _decode(request.validation_receipt_base64, "validation_receipt", maximum=64_000)
     trust_bytes = _decode(request.verifier_trust_base64, "verifier_trust", maximum=64_000)
     result = _json_bytes(result_bytes, "result_set", maximum=4_000_000)
-    attempt = _validate_result(result, deck_id)
+    presentation_id = _resolve_completion_presentation_id(
+        repository,
+        deck_id=deck_id,
+        result=result,
+    )
+    attempt = _validate_result(result, deck_id, presentation_id)
     receipt, issued_at, expires_at, trust_digest = _validate_trust_and_receipt(
         trust_bytes=trust_bytes,
         receipt_bytes=receipt_bytes,

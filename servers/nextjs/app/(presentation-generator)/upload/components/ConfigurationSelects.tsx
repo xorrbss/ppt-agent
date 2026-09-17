@@ -19,13 +19,18 @@ import {
     MAX_NUMBER_OF_SLIDES,
 } from "@/utils/presentationLimits";
 import AdvanceSettings from "./AdvanceSettings";
+import AuthoredStylesApi from "../../services/api/authored";
 
 // Types
 interface ConfigurationSelectsProps {
     config: PresentationConfig;
     onConfigChange: (key: keyof PresentationConfig, value: any) => void;
     sourceContentMode?: boolean;
+    authoredStyle: string;
+    hasCompanyStandard?: boolean;
 }
+
+type AspectRatio = PresentationConfig["aspectRatio"];
 
 // Constants
 const SLIDE_OPTIONS = [
@@ -161,8 +166,38 @@ export function ConfigurationSelects({
     config,
     onConfigChange,
     sourceContentMode = false,
+    authoredStyle,
+    hasCompanyStandard = false,
 }: ConfigurationSelectsProps) {
     const [openSlides, setOpenSlides] = useState(false);
+    const [supportedAspectRatios, setSupportedAspectRatios] = useState<AspectRatio[]>(["16:9"]);
+
+    useEffect(() => {
+        let cancelled = false;
+        void AuthoredStylesApi.getStyles()
+            .then((styles) => {
+                if (cancelled) return;
+                const selected = styles.find((style) => style.id === authoredStyle);
+                const supported = selected?.supportedAspectRatios;
+                setSupportedAspectRatios(
+                    Array.isArray(supported) && supported.length > 0
+                        ? supported
+                        : ["16:9"],
+                );
+            })
+            .catch(() => {
+                if (!cancelled) setSupportedAspectRatios(["16:9"]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [authoredStyle]);
+
+    const portraitSupported = sourceContentMode || (!hasCompanyStandard && supportedAspectRatios.includes("9:16"));
+    const proposalSupported = sourceContentMode || (!hasCompanyStandard && supportedAspectRatios.includes("9:13"));
+    const portraitUnavailableReason = hasCompanyStandard
+        ? "회사 표준 마스터에서는 세로형을 지원하지 않습니다"
+        : "선택한 템플릿에서 미지원";
 
     return (
         <div className="flex min-w-0 flex-wrap order-1 gap-2 items-center">
@@ -172,6 +207,25 @@ export function ConfigurationSelects({
                 open={openSlides}
                 onOpenChange={setOpenSlides}
             /> : null}
+            <label className="flex h-9 items-center gap-2 rounded-xl bg-slate-50 px-3 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-200/80">
+                <span>화면 비율</span>
+                <select
+                    value={config.aspectRatio}
+                    onChange={(event) => onConfigChange("aspectRatio", event.target.value as AspectRatio)}
+                    className="bg-transparent outline-none"
+                    aria-label="화면 비율"
+                    data-testid="aspect-ratio-select"
+                >
+                    <option value="16:9">가로 16:9</option>
+                    <option value="9:16" disabled={!portraitSupported}>세로 9:16{portraitSupported ? "" : ` (${portraitUnavailableReason})`}</option>
+                    <option value="9:13" disabled={!proposalSupported}>세로 9:13{proposalSupported ? "" : ` (${portraitUnavailableReason})`}</option>
+                </select>
+            </label>
+            {hasCompanyStandard && config.aspectRatio !== "16:9" ? (
+                <p className="w-full text-xs text-amber-700" role="note" data-testid="portrait-master-unavailable">
+                    세로형 Authored 생성은 회사 표준 마스터와 함께 사용할 수 없습니다. 마스터를 해제하거나 가로 16:9를 선택해 주세요.
+                </p>
+            ) : null}
             <AdvanceSettings
                 config={config}
                 onConfigChange={onConfigChange}

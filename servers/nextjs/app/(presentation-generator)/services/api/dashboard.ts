@@ -99,12 +99,13 @@ export class DashboardApi {
     }
   }
 
-  static async getPresentation(id: string) {
+  static async getPresentation(id: string, signal?: AbortSignal) {
     const response = await fetch(
       getApiUrl(`/api/v1/ppt/presentation/${id}`),
       {
         method: "GET",
         credentials: "include",
+        signal,
       }
     );
 

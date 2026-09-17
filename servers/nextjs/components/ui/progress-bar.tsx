@@ -51,14 +51,14 @@ export const ProgressBar = ({ duration, onComplete, value, label }: ProgressBarP
         <div className="w-full space-y-2">
             <div className="flex justify-between items-center text-sm">
                 {label ? (
-                    <span data-cy="progress-label" className="font-inter text-[#191919]/80 font-medium text-xs">
+                    <span data-cy="progress-label" className="tabular-nums text-gray-500 font-medium text-xs">
                         {label}
                     </span>
                 ) : <span />}
-                <span className='font-inter text-[#191919]/80 text-end font-medium text-xs'>{Math.round(displayedProgress)}%</span>
+                <span className='tabular-nums text-gray-500 text-end font-medium text-xs'>{Math.round(displayedProgress)}%</span>
             </div>
             <div
-                className="w-full bg-white/40 rounded-full h-2 overflow-hidden"
+                className="w-full bg-gray-100 rounded-full h-1 overflow-hidden"
                 role="progressbar"
                 aria-valuemin={0}
                 aria-valuemax={100}
@@ -66,29 +66,12 @@ export const ProgressBar = ({ duration, onComplete, value, label }: ProgressBarP
                 aria-label={label || "Presentation generation progress"}
             >
                 <div
-                    className="h-full bg-gradient-to-r from-[#9034EA] via-[#5146E5] to-[#9034EA] rounded-full animate-gradient transition-all duration-300 ease-out"
+                    className="h-full bg-[#5141e5]/80 rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none"
                     style={{
                         width: `${displayedProgress}%`,
-                        backgroundSize: '200% 100%',
                     }}
                 />
             </div>
-            <style jsx>{`
-                @keyframes gradient {
-                    0% {
-                        background-position: 0% 50%;
-                    }
-                    50% {
-                        background-position: 100% 50%;
-                    }
-                    100% {
-                        background-position: 0% 50%;
-                    }
-                }
-                .animate-gradient {
-                    animation: gradient 2s linear infinite;
-                }
-            `}</style>
         </div>
     );
 };

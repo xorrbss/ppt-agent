@@ -110,13 +110,21 @@ async def stage_workspace_artifact(
         return None
     # Lazy: these modules pull the authored runtime and the settings registry.
     from services.authored_presentation_artifacts import _build_authored_export
+    from services.authored_canvas import canvas_metadata_for_aspect_ratio, request_canvas_contract
     from services.workspace_artifact_publication_service import (
         WorkspaceArtifactPublicationError,
         fence_workspace_generation_publication,
         prepare_workspace_generation_artifact,
     )
 
-    export_path = await asyncio.to_thread(_build_authored_export, request, presentation_id, list(pngs), title)
+    canvas = (
+        request_canvas_contract(request)
+        if hasattr(request, "aspect_ratio")
+        else canvas_metadata_for_aspect_ratio("16:9").canvas_contract()
+    )
+    export_path = await asyncio.to_thread(
+        _build_authored_export, request, presentation_id, list(pngs), title, canvas=canvas
+    )
     try:
         artifact = await prepare_workspace_generation_artifact(
             session,

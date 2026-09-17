@@ -1,3 +1,5 @@
+import { AUTHORED_CANVAS_BY_ASPECT_RATIO } from "../authored-canvas.ts";
+import { fragmentRasterBand, validateFragmentBand } from "./raster-fragments.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -244,7 +246,7 @@ test("assembler preserves audited raster-native-raster z-band order", async () =
   assert.equal((xml.match(/presenton-semantic-raster-ownership-v1:/g) ?? []).length, 2);
 });
 
-test("assembler stores an opaque full-slide residual as the slide background", async () => {
+test("assembler keeps an unaudited opaque residual as a picture and retains native background", async () => {
   const backplate = await sharp({
     create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 3, background: "#F7FAFC" },
   })
@@ -276,9 +278,9 @@ test("assembler stores an opaque full-slide residual as the slide background", a
   const entries = readPptxArchive(output);
   const slideXml = entries.get("ppt/slides/slide1.xml").toString("utf8");
 
-  assert.match(slideXml, /<p:bg><p:bgPr><a:blipFill[^>]*><a:blip r:embed="rId3"\/>/);
-  assert.doesNotMatch(slideXml, /DevAX hybrid backplate/);
-  assert.doesNotMatch(slideXml, /DevAX hybrid shape editable-canvas/);
+  assert.doesNotMatch(slideXml, /<p:bg>/);
+  assert.match(slideXml, /DevAX hybrid backplate/);
+  assert.match(slideXml, /DevAX hybrid shape editable-canvas/);
 });
 
 test("assembler preserves the exact raster semantic QID set in PowerPoint-readable ownership shapes", async () => {
@@ -296,7 +298,7 @@ test("assembler preserves the exact raster semantic QID set in PowerPoint-readab
     .get("ppt/slides/slide1.xml")
     .toString("utf8");
 
-  assert.match(slideXml, /<p:bg>/);
+  assert.doesNotMatch(slideXml, /<p:bg>/);
   for (const qid of qids) {
     assert.match(
       slideXml,
@@ -515,7 +517,7 @@ test("assembler fails closed for an incompatible slide size or malformed PNG", a
       assembleAuthoredHybridPptx(skeleton("100"), [
         { slideNumber: 1, backplatePng: png, elements: [] },
       ]),
-    /fixed 16:9/
+    /unsupported authored slide size/
   );
   assert.throws(
     () =>
@@ -681,4 +683,49 @@ test("assembler writes provenance as valid, merge-safe PPTX custom properties", 
   assert.match(rootRelationships, /relationships\/custom-properties" Target="docProps\/custom\.xml"/);
   assert.equal((rootRelationships.match(/relationships\/custom-properties/g) ?? []).length, 1);
   assert.match(contentTypes, /PartName="\/docProps\/custom\.xml" ContentType="application\/vnd\.openxmlformats-officedocument\.custom-properties\+xml"/);
+});
+
+
+test("fragment bands preserve alpha pixels, empty ownership, and reject missing/overlapping fragments", async () => {
+  const pixels=Buffer.alloc(8*6*4);
+  for(const [x,y,alpha] of [[1,1,1],[6,4,127]]) { const i=(y*8+x)*4; pixels[i]=30; pixels[i+3]=alpha; }
+  const png=await sharp(pixels,{raw:{width:8,height:6,channels:4}}).png().toBuffer();
+  const band=await fragmentRasterBand({zBand:2,rasterPng:png,semanticOwnerQids:["body-raster"]});
+  assert.equal(band.fragments.length,2);
+  assert.deepEqual(band.fragments.map(f=>f.rect),[{x:1,y:1,width:1,height:1},{x:6,y:4,width:1,height:1}]);
+  await assert.rejects(validateFragmentBand({...band,fragments:band.fragments.slice(1).map((f,i)=>({...f,order:i}))}),/omitted painted/);
+  await assert.rejects(validateFragmentBand({...band,fragments:[band.fragments[0],{...band.fragments[0],id:"duplicate",order:1}]}),/overlap/);
+  await assert.rejects(validateFragmentBand({...band,sourceDigest:"sha256:bad"}),/digest/);
+  await assert.rejects(validateFragmentBand({...band,fragments:[{...band.fragments[0],digest:"sha256:bad"},band.fragments[1]]}),/digest/);
+  const empty=await sharp({create:{width:8,height:6,channels:4,background:"transparent"}}).png().toBuffer();
+  const emptyBand=await fragmentRasterBand({zBand:0,rasterPng:empty,semanticOwnerQids:["empty-owner"]});
+  assert.equal(emptyBand.fragments.length,0);
+  assert.deepEqual(emptyBand.semanticOwnerQids,["empty-owner"]);
+  const fallback=await fragmentRasterBand({zBand:2,rasterPng:png,semanticOwnerQids:[]},false,1);
+  assert.deepEqual(fallback.warnings,["raster-fragment-count-limit"]);
+  assert.equal(fallback.fragments.length,1);
+});
+
+test("assembler promotes only audited lowest RGBA band and keeps upper fragments at scaled coordinates", async () => {
+  const opaque=await sharp({create:{width:8,height:6,channels:4,background:"white"}}).png().toBuffer();
+  const bottom=await fragmentRasterBand({zBand:0,rasterPng:opaque,semanticOwnerQids:[]},true);
+  const pixels=Buffer.alloc(8*6*4);pixels[(3*8+4)*4+3]=127;
+  const top=await fragmentRasterBand({zBand:2,rasterPng:await sharp(pixels,{raw:{width:8,height:6,channels:4}}).png().toBuffer(),semanticOwnerQids:["top-owner"]});
+  const backplate=await sharp({create:{width:BACKPLATE_WIDTH,height:BACKPLATE_HEIGHT,channels:4,background:"white"}}).png().toBuffer();
+  const output=assembleAuthoredHybridPptx(skeleton(),[{slideNumber:1,backplatePng:backplate,elements:[],rasterBands:[bottom,top]}]);
+  const xml=readPptxArchive(output).get("ppt/slides/slide1.xml").toString("utf8");
+  assert.match(xml,/<p:bg>/);
+  assert.equal((xml.match(/<p:pic>/g)??[]).length,1);
+  assert.match(xml,/<a:off x="6096000" y="3429000"\/><a:ext cx="1524000" cy="1143000"\/>/);
+  assert.equal((xml.match(/semantic-owner"/g)??[]).length,1);
+});
+
+
+test("fragment placement preserves portrait canvas with an independent capture scale", async () => {
+  const canvas=AUTHORED_CANVAS_BY_ASPECT_RATIO["9:16"], size=backplatePixelSize(canvas);
+  const backplate=await sharp({create:{width:size.width,height:size.height,channels:4,background:"transparent"}}).png().toBuffer();
+  const raw=Buffer.alloc(9*16*4);raw[(8*9+3)*4+3]=1;
+  const band=await fragmentRasterBand({zBand:0,rasterPng:await sharp(raw,{raw:{width:9,height:16,channels:4}}).png().toBuffer(),semanticOwnerQids:[]});
+  const xml=readPptxArchive(assembleAuthoredHybridPptx(skeleton(),[{slideNumber:1,backplatePng:backplate,elements:[],rasterBands:[band]}],{canvas})).get("ppt/slides/slide1.xml").toString("utf8");
+  assert.match(xml,/<a:off x="2286000" y="6096000"\/><a:ext cx="762000" cy="762000"\/>/);
 });

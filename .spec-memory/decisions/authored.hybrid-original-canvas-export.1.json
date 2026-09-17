@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.hybrid-original-canvas-export",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Hybrid export uses the finalized document canvas dimensions directly without preset aspect-ratio restrictions or export-time reflow.",
+  "scope": [
+    "authored",
+    "export",
+    "canvas"
+  ],
+  "invariants": [
+    "Stored document width and height are authoritative for capture, coordinates and final PPTX size.",
+    "Aspect ratio is display metadata and must not select or replace stored dimensions.",
+    "Preserve finalized content and layout; reuse the existing Hybrid conversion path.",
+    "Generation preset selection remains separate from export size admission.",
+    "Only absent legacy canvas metadata may use the legacy canvas; malformed explicit metadata must fail."
+  ],
+  "forbidden": [
+    "Adding ratio-specific Hybrid enablement branches.",
+    "Silently resizing a document to a preset during export.",
+    "Claiming every Hybrid element is editable or equating file creation with visual acceptance."
+  ],
+  "evidence": [
+    "User approved design-implementation-verification workflow in this conversation."
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-14T02:18:21.2819109+00:00"
+}

@@ -133,8 +133,8 @@ def _install_fakes(monkeypatch: pytest.MonkeyPatch, calls: Calls, *, publish_err
     def remove_pngs(presentation_id: uuid.UUID, pngs: list[bytes], token: str | None = None) -> None:
         calls.record("remove_pngs", presentation_id=presentation_id, token=token)
 
-    def build_export(request: Any, presentation_id: uuid.UUID, pngs: list[bytes], title: str) -> str:
-        calls.record("build_export", presentation_id=presentation_id, count=len(pngs), title=title)
+    def build_export(request: Any, presentation_id: uuid.UUID, pngs: list[bytes], title: str, *, canvas: Any = None) -> str:
+        calls.record("build_export", presentation_id=presentation_id, count=len(pngs), title=title, canvas=canvas)
         return f"C:/app_data/exports/{presentation_id}.pptx"
 
     async def begin_publish(session: Any, **kwargs: Any) -> None:
@@ -239,6 +239,8 @@ def test_workspace_lane_publishes_through_the_artifact_cas_only(monkeypatch) -> 
     assert prepared["source_revision"] == EXPECTED_REVISION + 1
     assert prepared["source_path"].endswith(".pptx")
     assert calls["build_export"][0]["title"] == "Composer deck"
+    assert calls["build_export"][0]["canvas"].width_px == 1280
+    assert presentation.theme["authored_vnext"]["canvas"]["widthPx"] == 1280
     assert calls["fence_artifact"] == [{"artifact": artifact}]
     [published] = calls["publish_artifact"]
     assert published["artifact"] is artifact

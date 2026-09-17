@@ -239,7 +239,9 @@ def component_identifiers(component: ComposerComponent) -> frozenset[str]:
     """Tokens by which a blocking issue can name this component: its id, the
     binding ids of its paragraphs and the QIDs the renderer derives from them."""
 
-    identifiers = {component.component_id}
+    safe = re.sub(r"[^A-Za-z0-9._:-]+", "-", component.component_id).strip("-")
+    identifiers = {component.component_id, deterministic_source_qid(component.component_id),
+                   "cx-" + safe[:96], "cx-" + (safe + "-geo")[:96]}
     if component.occurrence_id:
         identifiers.add(component.occurrence_id)
     if component.asset_id:
@@ -258,7 +260,7 @@ def issue_tokens(issues: Iterable[str]) -> frozenset[str]:
     return frozenset(tokens)
 
 
-def blamed_components(plan: ComposerSlidePlan, issues: Sequence[str]) -> tuple[str, ...]:
+def blamed_components(plan: ComposerSlidePlan, issues: Sequence[str], *, source_geometry: bool = False, fallback_all: bool = True) -> tuple[str, ...]:
     """Component ids named by the issues; every text component when none is named."""
 
     tokens = issue_tokens(issues)
@@ -266,10 +268,12 @@ def blamed_components(plan: ComposerSlidePlan, issues: Sequence[str]) -> tuple[s
     everything.extend(plan.components)
     everything.extend(plan.images)
     everything.extend(plan.furniture)
-    blamed = tuple(c.component_id for c in everything if component_identifiers(c) & tokens)
+    if source_geometry and plan.source_placements:
+        everything = plan.source_placements
+    blamed = tuple(c.component_id for c in everything if c.kind != "image" and component_identifiers(c) & tokens)
     if blamed:
         return blamed
-    return tuple(c.component_id for c in text_components(plan))
+    return tuple(c.component_id for c in everything if c.kind != "image") if fallback_all else ()
 
 
 def title_only_blocking(plan: ComposerSlidePlan, issues: Sequence[str]) -> bool:

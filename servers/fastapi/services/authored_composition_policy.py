@@ -159,7 +159,13 @@ class SlideCapacity:
             enforced=self.enforced,
         )
 
-    def prompt_brief(self, profile: CompositionProfile) -> str:
+    def prompt_brief(
+        self,
+        profile: CompositionProfile,
+        *,
+        canvas_width_px: int = 1280,
+        canvas_height_px: int = 720,
+    ) -> str:
         if not self.enforced:
             return ""
         source_rule = {
@@ -198,7 +204,7 @@ class SlideCapacity:
         )
         return (
             "SERVER-FROZEN COMPOSITION ENVELOPE (do not negotiate): "
-            "viewport 1280x720; keep every painted target inside the viewport; "
+            f"viewport {canvas_width_px}x{canvas_height_px}; keep every painted target inside the viewport; "
             f"combined text across all title owners <= {self.title_max_chars} chars; "
             f"combined text across all body owners <= {self.body_max_chars} chars "
             "(do not repeat the same words in nested owners), and total visible text "
@@ -1473,7 +1479,7 @@ def capacity_violations(
                 ):
                     violations.append(f"browser_font_unverified:{qid or 'unknown'}")
                 else:
-                    font_floor = 12 if is_supporting else capacity.min_font_px
+                    font_floor = min(12, capacity.min_font_px) if is_supporting else capacity.min_font_px
                     if 0 < float(font_size) < font_floor:
                         prefix = "supporting_font" if is_supporting else "font"
                         violations.append(
@@ -2029,7 +2035,9 @@ def repair_authored_owned_text_paint_order(
         or "data-source-" in html.lower()
         or not isinstance(browser_metrics, Mapping)
         or browser_metrics.get("dom_metrics_version") != "authored-dom-metrics-v16-owned-text"
-        or browser_metrics.get("width") != 1280 or browser_metrics.get("height") != 720
+        or (
+            browser_metrics.get("width"), browser_metrics.get("height")
+        ) not in {(1280, 720), (720, 1280)}
         or browser_metrics.get("fonts_ready") is not True
         or browser_metrics.get("source_digest") != "sha256:" + sha256(html.encode("utf-8")).hexdigest()
         or re.fullmatch(r"sha256:[0-9a-f]{64}", str(browser_metrics.get("render_digest", ""))) is None

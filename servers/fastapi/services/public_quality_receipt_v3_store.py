@@ -28,6 +28,9 @@ _EVENT_TYPE = "quality.receipt.v3"
 _SCHEMA_VERSION = "quality-receipt-event/v3"
 _MAX_EVENT_BYTES = 2 * 1024 * 1024
 _MAX_REVIEW_CHAIN_HOPS = 32
+_GENERATION_OPERATION_KINDS = frozenset({
+    "presentation.generate", "design.apply", "template.apply",
+})
 
 
 def quality_evidence_digest(payload: Mapping[str, object]) -> str:
@@ -79,7 +82,8 @@ async def load_public_quality_evidence(
         schema = payload.get("schemaVersion")
         if schema == _SCHEMA_VERSION:
             parsed = validate_quality_receipt_v3_payload(receipt)
-            if operation.kind != "presentation.generate" or quality_evidence_digest(evidence) != parsed.evidence_digest:
+            if (operation.kind not in _GENERATION_OPERATION_KINDS
+                    or quality_evidence_digest(evidence) != parsed.evidence_digest):
                 raise ValueError("quality_receipt_v3_evidence_digest_mismatch")
         elif schema == "export-review-evidence/v1":
             if operation.kind != "quality.review" or payload.get("snapshotDigest") != quality_evidence_digest(evidence):

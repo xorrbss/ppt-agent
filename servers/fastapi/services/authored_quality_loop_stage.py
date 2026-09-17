@@ -46,6 +46,7 @@ async def apply_slide_quality_loop(
     composition_profile: Any = None,
     slide_content: str = "",
     infographic: AuthoredSlideInfographic | None = None,
+    capture=None,
 ) -> tuple[str, dict[str, Any]]:
     """Return the slide's chosen HTML and the receipt describing the choice.
 
@@ -70,15 +71,20 @@ async def apply_slide_quality_loop(
         # critique correction alike -- goes through the deck's capture owner,
         # attributed to this slide.
         from services.authored_admission_capture import capture_once
-        from utils.slide_capture import render_html_to_png_with_metrics
+        if capture is None:
+            from utils.slide_capture import render_html_to_png_with_metrics
 
-        capture = await capture_once(
-            candidate, index=slide_index, capture=render_html_to_png_with_metrics
+            capture_fn = render_html_to_png_with_metrics
+        else:
+            capture_fn = capture
+
+        result = await capture_once(
+            candidate, index=slide_index, capture=capture_fn
         )
-        if capture.prepared_html is None:
+        if result.prepared_html is None:
             raise RuntimeError("authored quality capture preparation unavailable")
-        prepared_candidates[candidate] = capture.prepared_html
-        return capture
+        prepared_candidates[candidate] = result.prepared_html
+        return result
 
     try:
         outcome = await run_authored_quality_loop(

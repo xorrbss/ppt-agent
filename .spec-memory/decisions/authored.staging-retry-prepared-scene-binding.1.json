@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.staging-retry-prepared-scene-binding",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Unpublished design retries preserve stale semantic decks and publish a separately identified immutable candidate through a trusted active-manifest binding.",
+  "scope": [
+    "authored",
+    "workspace",
+    "publication",
+    "export"
+  ],
+  "invariants": [
+    "Candidate admission requires the live workspace operation fence and the same linked generation job.",
+    "Candidate preparation avoids nested authoritative row locks; final publication retains its atomic fence.",
+    "Completion resolves candidate deck identity through the owner-scoped active manifest.",
+    "Public presentation revision and existing canonical deck compatibility remain unchanged."
+  ],
+  "forbidden": [
+    "Overwriting a stale or published semantic deck to hide content differences.",
+    "Treating a compatibility-job lease as the authoritative workspace lease."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_generation_scene_persistence.py",
+    "servers/fastapi/services/authored_vnext/generation/sql_repository.py",
+    "servers/fastapi/services/authored_presentation_publication.py",
+    "servers/fastapi/services/authored_vnext/semantic/editable_mvp_completion.py",
+    "artifacts/popup-recovery-20260914"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-14T00:02:05.6540182+00:00"
+}

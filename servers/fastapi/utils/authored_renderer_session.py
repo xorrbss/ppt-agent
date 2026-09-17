@@ -45,23 +45,31 @@ def _pipe_bindings() -> dict[str, Any]:
 
 
 def render_admitted_html_over_pipe(
-    admitted: AdmittedHtml, timeout: int
+    admitted: AdmittedHtml, timeout: int, *,
+    width_px: int = 1280, height_px: int = 720,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     """Render one admitted document in a private, single-use Chrome process."""
 
     from utils.slide_capture_pipe_render import render_admitted_html_over_pipe as render_one
 
-    return render_one(admitted, timeout, **_pipe_bindings())
+    return render_one(
+        admitted, timeout, width_px=width_px, height_px=height_px,
+        **_pipe_bindings(),
+    )
 
 
 def render_admitted_htmls_over_pipe(
-    admitted_htmls: Sequence[AdmittedHtml], timeout: int
+    admitted_htmls: Sequence[AdmittedHtml], timeout: int, *,
+    width_px: int = 1280, height_px: int = 720,
 ) -> list[tuple[bytes, Mapping[str, Any] | None]]:
     """Worker-only operation batch using one Chrome pipe and fresh targets."""
 
     from utils.slide_capture_pipe_render import render_admitted_htmls_over_pipe as render_many
 
-    return render_many(admitted_htmls, timeout, **_pipe_bindings())
+    return render_many(
+        admitted_htmls, timeout, width_px=width_px, height_px=height_px,
+        **_pipe_bindings(),
+    )
 
 
 class _RetainedTransport:
@@ -99,13 +107,17 @@ class RendererChromiumSession:
         return self._transport is not None
 
     def render(
-        self, admitted: AdmittedHtml, timeout: int
+        self, admitted: AdmittedHtml, timeout: int, *,
+        width_px: int = 1280, height_px: int = 720,
     ) -> tuple[bytes, Mapping[str, Any] | None]:
         from utils.slide_capture_pipe_render import render_admitted_html_over_pipe as render_one
 
         bindings = dict(_pipe_bindings())
         bindings["chrome_pipe"] = self._chrome_pipe
-        result = render_one(admitted, timeout, **bindings)
+        result = render_one(
+            admitted, timeout, width_px=width_px, height_px=height_px,
+            **bindings,
+        )
         self._renders += 1
         return result
 

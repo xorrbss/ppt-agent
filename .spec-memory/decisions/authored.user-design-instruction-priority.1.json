@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.user-design-instruction-priority",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Explicit user design instructions take precedence over preset style and inferred defaults; preserve requested font units and sizes.",
+  "scope": [
+    "authored",
+    "generation",
+    "typography"
+  ],
+  "invariants": [
+    "Apply user design choices to the requested scope; use defaults only for unspecified properties.",
+    "Preserve user design instructions during automatic rewriting and font normalization."
+  ],
+  "forbidden": [
+    "Silently replace an explicit user typography size with a preset default."
+  ],
+  "evidence": [
+    "servers/fastapi/utils/llm_calls/author_slide_prompt.py",
+    "servers/fastapi/utils/authored_font_policy.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-14T04:56:59.6092256+00:00"
+}

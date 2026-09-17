@@ -36,7 +36,12 @@ DROP_TAGS = {
 }
 GLOBAL_ATTRIBUTES = {
     "id", "class", "role", "aria-label", "aria-hidden", "lang", "dir", "style",
-    "title", "data-qid", "data-qid-ignore", "data-allow-overlap",
+    "title", "data-qid",
+    "data-source-fit-policy",
+    "data-composer-canvas-width",
+    "data-composer-canvas-height",
+    "data-composer-style-profile",
+    "data-composer-style-role", "data-source-font-floor-px", "data-source-row", "data-source-column", "data-source-paragraph", "data-source-run", "data-qid-ignore", "data-allow-overlap",
     # Inert browser-readback classification. Capacity and receipt gates validate
     # the value; admitting the attribute keeps model-declared and deterministic
     # post-processed semantic roles on the same renderer-safe path.

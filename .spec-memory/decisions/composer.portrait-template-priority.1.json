@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "composer.portrait-template-priority",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Composer 원본 재구성은 선택한 세로 캔버스를 모든 페이지와 내보내기에 유지하고, 선택 템플릿 적용을 먼저 검증한 뒤 나머지 내보내기 결함을 수정한다.",
+  "scope": [
+    "composer",
+    "source-content",
+    "portrait",
+    "export"
+  ],
+  "invariants": [
+    "원본 배치 대체에서도 출력 캔버스 방향을 유지한다.",
+    "원문과 표와 이미지를 같은 페이지에 보존하고 필요한 텍스트만 최소 7 CSS px까지 축소한다.",
+    "세로 통일 및 템플릿 적용은 실제 전체 슬라이드와 PPTX로 검증한다."
+  ],
+  "forbidden": [
+    "가로 또는 다른 템플릿으로 조용히 대체하지 않는다."
+  ],
+  "evidence": [],
+  "supersedes": null,
+  "recordedAt": "2026-09-13T10:55:04.4116490+00:00"
+}

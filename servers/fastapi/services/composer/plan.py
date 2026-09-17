@@ -15,6 +15,9 @@ from __future__ import annotations
 
 from typing import Literal
 
+from models.authored_vnext.master.contract import CanvasContract
+from services.authored_canvas import canvas_metadata_for_aspect_ratio
+
 from pydantic import BaseModel, ConfigDict, Field
 
 #: The authored frame. Every slide is rendered against this exact box.
@@ -96,8 +99,8 @@ CHROME_CONTENT_AREA: dict[int, tuple[int, int]] = {
     3: (1232, 648),
 }
 
-#: The ladder. Rung 5 always terminates: the source page laid this content
-#: out at this size once already, so a uniform scale of it always fits.
+#: The final source-placement rung terminates with measured evidence; residual
+#: issues remain blocking and are never proof that source geometry fits.
 FitRung = Literal[0, 1, 2, 3, 4, 5]
 
 
@@ -137,6 +140,7 @@ class TextRun(StrictModel):
     italic: bool = False
     size_pt: float | None = Field(default=None, gt=0)
     color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    font_family: str | None = None
 
 
 class Paragraph(StrictModel):
@@ -148,6 +152,7 @@ class Paragraph(StrictModel):
     bullet_kind: str | None = None
     level: int = Field(default=0, ge=0, le=8)
     source: SourceRunRef
+    layout: dict = Field(default_factory=dict)
 
 
 class ComposerComponent(StrictModel):
@@ -170,6 +175,14 @@ class ComposerComponent(StrictModel):
     source_rect: SourceRect | None = None
     #: Character-weighted dominant size of the component's runs, in pt.
     source_size_pt: float | None = Field(default=None, gt=0)
+    source_order: int = 0
+    source_text_body: dict = Field(default_factory=dict)
+    source_transform: dict = Field(default_factory=dict)
+    table_merged_cells: list[dict] = Field(default_factory=list)
+    table_column_widths_emu: list[float] = Field(default_factory=list)
+    table_row_heights_emu: list[float] = Field(default_factory=list)
+    image_crop: dict = Field(default_factory=dict)
+    image_color_transforms: list[dict] = Field(default_factory=list)
     emphasis: Literal["none", "accent", "muted"] = "none"
 
 
@@ -182,6 +195,9 @@ class ComposerSlidePlan(StrictModel):
     components: list[ComposerComponent] = Field(default_factory=list)
     images: list[ComposerComponent] = Field(default_factory=list)
     furniture: list[ComposerComponent] = Field(default_factory=list)
+    source_placements: list[ComposerComponent] = Field(default_factory=list)
+    #: Trusted per-capture resolver evidence; never populated from request HTML.
+    source_image_materializations: dict[str, dict] = Field(default_factory=dict)
     #: Total verbatim characters on the page, for density estimates.
     text_chars: int = Field(default=0, ge=0)
     notes: list[str] = Field(default_factory=list)
@@ -207,8 +223,34 @@ class ComposerTokens(StrictModel):
     deck_title: str = ""
 
 
+class ComposerStyleProfile(StrictModel):
+    """Explicit reusable style grammar supplied by a selected style definition."""
+
+    profile_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
+    version: Literal["composer-style/v1"] = "composer-style/v1"
+    header_style: Literal["tab-band", "rule"] = "rule"
+    header_fill: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    header_tab_fill: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    heading_color: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    surface_color: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    table_header_fill: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    table_header_text: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    footer_fill: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    footer_text: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    cover_alignment: Literal["left", "center"] = "left"
+    border_radius: float = Field(default=0.0, ge=0.0, le=32.0)
+    cover_fill: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    cover_text: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    cover_accent_fill: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    emphasis_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
 class ComposerDeckPlan(StrictModel):
+    style_profile: ComposerStyleProfile | None = None
+    canvas: CanvasContract = Field(default_factory=lambda: canvas_metadata_for_aspect_ratio("16:9").canvas_contract())
     slides: list[ComposerSlidePlan]
+    fit_policy_revision: str | None = None
+    font_floor_px: float | None = Field(default=None, ge=7.0)
     tokens: ComposerTokens
     #: Source page size in EMU; ``None`` when the manifest predates capture.
     source_page_emu: tuple[int, int] | None = None
@@ -249,6 +291,7 @@ class FitParameters(StrictModel):
 
 
 class FitReceipt(StrictModel):
+    fit_policy_revision: str | None = None
     slide_index: int = Field(ge=0)
     rung: FitRung
     parameters: FitParameters

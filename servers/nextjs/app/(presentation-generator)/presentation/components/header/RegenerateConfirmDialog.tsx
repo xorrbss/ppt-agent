@@ -21,12 +21,12 @@ const RegenerateConfirmDialog = ({
   handleReGenerate: () => void;
 }) => (
   <Dialog open={open} onOpenChange={setIsRegenerateConfirmOpen}>
-    <DialogContent className="w-[360px] rounded-2xl border-0 p-0 shadow-2xl sm:max-w-[360px]">
-      <DialogHeader className="items-center px-6 pb-4 pt-6 text-center">
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+    <DialogContent className="max-w-[400px] gap-0 p-0">
+      <DialogHeader className="items-center px-6 pb-6 pt-8 text-center sm:px-8">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50">
           <AlertTriangle className="h-6 w-6 text-red-500" />
         </div>
-        <DialogTitle className="text-lg font-semibold text-[#191919]">
+        <DialogTitle className="text-xl font-semibold leading-7 tracking-tight text-gray-900">
           발표자료를 재생성할까요?
         </DialogTitle>
         <DialogDescription className="text-sm leading-relaxed text-gray-500">
@@ -34,12 +34,12 @@ const RegenerateConfirmDialog = ({
           삭제됩니다. 현재 편집 내용이 사라질 수 있습니다.
         </DialogDescription>
       </DialogHeader>
-      <DialogFooter className="flex-row border-t border-gray-100 p-0 sm:space-x-0">
+      <DialogFooter className="flex-row px-6 pb-6 pt-0 sm:px-8">
         <Button
           type="button"
           variant="ghost"
           onClick={() => setIsRegenerateConfirmOpen(false)}
-          className="h-auto flex-1 rounded-none rounded-bl-2xl px-4 py-3.5 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-700"
+          className="flex-1 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none disabled:opacity-50"
         >
           취소
         </Button>
@@ -47,7 +47,7 @@ const RegenerateConfirmDialog = ({
           type="button"
           variant="ghost"
           onClick={handleReGenerate}
-          className="h-auto flex-1 rounded-none rounded-br-2xl border-l border-gray-100 px-4 py-3.5 text-sm font-medium text-red-500 hover:bg-red-50 hover:text-red-600"
+          className="flex-1 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:pointer-events-none disabled:opacity-50"
         >
           재생성
         </Button>

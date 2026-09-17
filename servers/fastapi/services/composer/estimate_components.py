@@ -117,13 +117,12 @@ def paragraph_font_px(
 ) -> float:
     """Font size the renderer will set for this paragraph under ``params``."""
 
-    if params.source_relative:
-        size_pt = paragraph_source_size_pt(paragraph) if paragraph is not None else None
-        if size_pt is None:
-            size_pt = component.source_size_pt
-        if size_pt is not None:
-            return size_pt * PX_PER_PT * deck.source_px_scale * params.source_factor
-    return template_font_px(component, params)
+    from services.composer.render_css import text_px
+    from services.composer.render_context import size_role
+    size_pt = paragraph_source_size_pt(paragraph) if paragraph is not None else None
+    return text_px(size_role(component, params), size_pt or component.source_size_pt,
+                   params, deck, box_scale=params.box_text_scale.get(component.component_id, 1.0))
+
 
 
 def paragraph_height_px(paragraph: Paragraph, *, width_px: float, font_px: float, line_height: float) -> float:

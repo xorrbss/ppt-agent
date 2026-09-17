@@ -21,9 +21,14 @@ export const usePresentationData = (
 ) => {
   const dispatch = useDispatch();
 
-  const fetchUserSlides = useCallback(async (options?: { clearHistory?: boolean }) => {
+  const fetchUserSlides = useCallback(async (options?: {
+    clearHistory?: boolean;
+    quiet?: boolean;
+    signal?: AbortSignal;
+  }) => {
     try {
-      const data = await DashboardApi.getPresentation(presentationId);
+      const data = await DashboardApi.getPresentation(presentationId, options?.signal);
+      if (options?.signal?.aborted) return undefined;
       const normalizedData = normalizeBackendAssetUrls(data);
 
 
@@ -46,10 +51,12 @@ export const usePresentationData = (
         return normalizedData;
       }
     } catch (error) {
+      if (options?.signal?.aborted) return undefined;
       if (isUnauthorizedApiError(error)) {
         setLoading(false);
         return;
       }
+      if (options?.quiet) return undefined;
       setError(true);
       notify.error("프레젠테이션을 불러오지 못했습니다", "프레젠테이션을 불러올 수 없습니다. 다시 시도해 주세요.");
       console.error("Error fetching user slides:", error);

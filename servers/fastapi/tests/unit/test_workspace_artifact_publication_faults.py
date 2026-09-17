@@ -1022,6 +1022,91 @@ def test_ambiguous_design_apply_commit_keeps_composition_artifact(
     asyncio.run(scenario())
 
 
+def test_design_apply_accepts_quality_only_evidence_but_rejects_partial_native_evidence(
+    tmp_path: Path,
+    monkeypatch,
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "design-quality-evidence.db")
+        app_data = tmp_path / "app-data"
+        source = app_data / "exports" / "deck.pptx"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"quality-only immutable bytes")
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+        try:
+            presentation_id, operation_id = await _seed_running_operation(maker)
+            source_presentation_id = uuid.uuid4()
+            async with maker() as session, session.begin():
+                operation = await session.get(WorkspaceOperation, operation_id)
+                assert operation is not None
+                operation.kind = "design.apply"
+                operation.request_payload = {
+                    "generation_settings": {
+                        "source_presentation_id": str(source_presentation_id),
+                        "source_revision": 1,
+                        "authored_style": "osb-smart-banking",
+                    }
+                }
+            async with maker() as session:
+                artifact = await publication.prepare_workspace_generation_artifact(
+                    session,
+                    source_path=str(source),
+                    operation_id=operation_id,
+                    presentation_id=presentation_id,
+                    source_revision=1,
+                )
+            quality_only = {"generationQualityReceipt": {"passed": True}}
+            async with maker() as session:
+                await publication.publish_workspace_generation_artifact(
+                    session,
+                    artifact=artifact,
+                    expected_revision=0,
+                    attempt_token="attempt-1",
+                    result_evidence=quality_only,
+                )
+            async with maker() as session:
+                operation = await session.get(WorkspaceOperation, operation_id)
+                assert operation is not None and operation.result is not None
+                assert operation.result["generationQualityReceipt"] == {"passed": True}
+
+            second_id, second_operation_id = await _seed_running_operation(maker)
+            async with maker() as session, session.begin():
+                operation = await session.get(WorkspaceOperation, second_operation_id)
+                assert operation is not None
+                operation.kind = "design.apply"
+                operation.request_payload = {
+                    "generation_settings": {
+                        "source_presentation_id": str(uuid.uuid4()),
+                        "source_revision": 1,
+                        "authored_style": "osb-smart-banking",
+                    }
+                }
+            async with maker() as session:
+                artifact = await publication.prepare_workspace_generation_artifact(
+                    session,
+                    source_path=str(source),
+                    operation_id=second_operation_id,
+                    presentation_id=second_id,
+                    source_revision=1,
+                )
+            async with maker() as session:
+                with pytest.raises(
+                    publication.WorkspaceArtifactPublicationError,
+                    match="authored_template_visual_evidence_invalid",
+                ):
+                    await publication.publish_workspace_generation_artifact(
+                        session,
+                        artifact=artifact,
+                        expected_revision=0,
+                        attempt_token="attempt-1",
+                        result_evidence={"readback_verified": True},
+                    )
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_failed_compensation_records_cleanup_pending_in_independent_transaction(
     tmp_path: Path,
     monkeypatch,

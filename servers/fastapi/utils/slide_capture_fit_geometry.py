@@ -17,6 +17,67 @@ GEOMETRY_MEMBERS = r"""
       String(s.animationName || 'none').split(',').every(value => value.trim() === 'none') &&
       String(s.transitionDuration || '0s').split(',').every(value => this._px(value) === 0);
   },
+  _constrainsWidth(node) {
+    const names = ['width', 'min-width', 'max-width', 'inline-size', 'min-inline-size',
+      'max-inline-size', 'flex', 'flex-basis', 'flex-grow', 'flex-shrink'];
+    if (node.style && names.some(name => String(node.style.getPropertyValue(name) || '').trim())) return true;
+    let declared = false, unknown = false;
+    const visit = rules => {
+      for (const rule of Array.from(rules || [])) {
+        let nested = null; try { nested = rule.cssRules; } catch (_) { unknown = true; continue; }
+        if (nested) { visit(nested); if (declared) return; continue; }
+        const constrained = rule && rule.style && names.some(name =>
+          String(rule.style.getPropertyValue(name) || '').trim());
+        let matched = false; try { matched = constrained ? node.matches(rule.selectorText) : false; }
+        catch (_) { unknown = true; continue; }
+        if (matched) { declared = true; return; }
+      }
+    };
+    for (const sheet of Array.from(document.styleSheets || [])) {
+      let rules = null; try { rules = sheet.cssRules; } catch (_) { unknown = true; continue; }
+      visit(rules); if (declared) break;
+    }
+    return declared || unknown;
+  },
+  _intrinsicTextReflow(node, before, after, candidate, baseline) {
+    const targets = candidate && candidate.typographyNodes;
+    const typography = targets instanceof Map ? targets.get(node) : null;
+    if (!typography || !this._replayable(node) ||
+        this._protected(node) || this._slotFor(node) || !this._plainGeometry(node) ||
+        node.children.length || !this._ownedTextNodes(node).length || this._constrainsWidth(node)) return false;
+    const style = getComputedStyle(node), parent = node.parentElement;
+    const actualFontPx = this._px(style.fontSize);
+    if (!(actualFontPx < typography.beforeFontPx - 1e-6) ||
+        Math.abs(actualFontPx - typography.targetFontPx) > 0.05) return false;
+    if (!parent || !['static', 'relative'].includes(style.position)) return false;
+    const parentStyle = getComputedStyle(parent);
+    const inlineFlow = ['inline', 'inline-block'].includes(style.display) &&
+      !['flex', 'grid'].includes(parentStyle.display);
+    const blockifiedFlexItem = style.display === 'block' && parentStyle.display === 'flex' &&
+      parentStyle.flexDirection === 'row' && parentStyle.flexWrap === 'nowrap' &&
+      this._number(style.flexGrow, -1) === 0 && this._number(style.flexShrink, -1) === 1 &&
+      style.flexBasis === 'auto';
+    if ((!inlineFlow && !blockifiedFlexItem) ||
+        style.backgroundImage !== 'none' || style.boxShadow !== 'none' || Number(style.opacity) !== 1) return false;
+    const background = String(style.backgroundColor || '').replace(/ /g, '').toLowerCase();
+    if (background && !this.C.transparent_backgrounds.includes(background)) return false;
+    if (['Top', 'Right', 'Bottom', 'Left'].some(side => this._px(style['border' + side + 'Width']) > 0)) return false;
+    for (const pseudo of ['::before', '::after']) {
+      const content = String(getComputedStyle(node, pseudo).content || '').trim().toLowerCase();
+      if (content && !['none', 'normal', '""', "''"].includes(content)) return false;
+    }
+    const parentBefore = baseline.boxes.get(parent), parentAfter = parentBefore && this._box(parent);
+    if (!parentBefore || Math.abs(parentAfter.left - parentBefore.left) > this.C.geometry_tolerance_px ||
+        Math.abs(parentAfter.width - parentBefore.width) > this.C.geometry_tolerance_px) return false;
+    const widthReduction = before.width - after.width;
+    return widthReduction >= -this.C.geometry_tolerance_px &&
+      after.height <= before.height + this.C.geometry_tolerance_px &&
+      Math.abs(after.left - before.left) <= Math.max(0, widthReduction) + this.C.geometry_tolerance_px &&
+      before.left >= parentBefore.left - this.C.geometry_tolerance_px &&
+      before.right <= parentBefore.right + this.C.geometry_tolerance_px &&
+      after.left >= parentAfter.left - this.C.geometry_tolerance_px &&
+      after.right <= parentAfter.right + this.C.geometry_tolerance_px;
+  },
   _allLeaves(root) {
     return [root].concat(Array.from(root.querySelectorAll('[data-qid]')))
       .filter(node => this._eligible(node) && this._ownedTextNodes(node).length > 0);
@@ -170,6 +231,8 @@ GEOMETRY_MEMBERS = r"""
       if (ink && (ink.right > box.right + this.C.escape_tolerance_px || ink.bottom > box.bottom + this.C.escape_tolerance_px) ||
           (member.conflicts || []).some(conflict => conflict.owned.includes(leaf))) defects.add(leaf);
     }
+    for (const member of members) if (member.flow_box_escape_px > this.C.escape_tolerance_px)
+      for (const leaf of member.leaves) defects.add(leaf);
     for (const seed of collisions) {
       const paint = this._paintRects(seed.second, true);
       for (const leaf of this._allLeaves(seed.first)) {
@@ -256,7 +319,8 @@ GEOMETRY_MEMBERS = r"""
       const after = this._box(node), movement = Math.abs(after.top - before.top), growth = Math.abs(after.height - before.height);
       const internalReflow = morph && morph.internalReflowNodes.has(node);
       const labelMorph = morph && morph.labelNodes.has(node);
-      const horizontal = !labelMorph && (Math.abs(after.left - before.left) > this.C.geometry_tolerance_px ||
+      const intrinsicTextReflow = this._intrinsicTextReflow(node, before, after, candidate, baseline);
+      const horizontal = !labelMorph && !intrinsicTextReflow && (Math.abs(after.left - before.left) > this.C.geometry_tolerance_px ||
         Math.abs(after.width - before.width) > this.C.geometry_tolerance_px);
       const moved = !internalReflow && movement > maxMove + this.C.geometry_tolerance_px;
       const protectedChanged = this._protected(node) && !this._sameBox(before, after);
@@ -316,7 +380,7 @@ GEOMETRY_MEMBERS = r"""
     }
     for (const leaf of region.leaves) {
       if (!baseline.occluded.get(leaf) && this._textOccluded(leaf)) return {ok: false, reason: 'occlusion'};
-      const ink = this._ink(leaf); if (!ink) continue;
+      const ink = this._boundaryTextInk(leaf); if (!ink) continue;
       for (let node = leaf; node && root.contains(node); node = node.parentElement) {
         const style = getComputedStyle(node), box = this._box(node);
         if (['hidden', 'clip'].includes(style.overflowX) && (ink.left < box.left - 0.5 || ink.right > box.right + 0.5) ||

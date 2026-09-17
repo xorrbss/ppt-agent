@@ -47,6 +47,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from models.sql.public_artifact import ArtifactRef, PublicExportIdentity
+from models.sql.workspace import WorkspaceOperation
 from services.artifact_store import (
     configured_public_artifact_service,
     heartbeat_export_identity,
@@ -54,6 +55,7 @@ from services.artifact_store import (
 
 from services.public_export_deadline import PublicExportDeadlineGrant
 from services.public_export_errors import PublicExportOperationError
+from services.public_export_hybrid_evidence import bounded_hybrid_worker_evidence
 from services.public_export_identity import (
     CanonicalExportExecution,
     claim_canonical_export_identity,
@@ -86,6 +88,36 @@ Sleeper = Callable[[float], Awaitable[None]]
 #: Resolved by the caller, never re-resolved here: the export adapter is the
 #: one place that decides which durable artifact service this run uses.
 ArtifactServiceFactory = Callable[[], Any]
+
+HYBRID_EDITABILITY_SCHEMA = "public-hybrid-editability/v1"
+HYBRID_EDITABILITY_VERDICTS = frozenset(
+    {
+        "fully-editable",
+        "partially-editable",
+        "not-applicable",
+        "unknown",
+    }
+)
+
+
+def _cached_hybrid_worker_evidence(
+    operation: WorkspaceOperation,
+) -> dict[str, Any] | None:
+    result = operation.result if isinstance(operation.result, dict) else {}
+    worker_evidence = result.get("public_export_worker_evidence")
+    worker_evidence = worker_evidence if isinstance(worker_evidence, dict) else {}
+    bounded = bounded_hybrid_worker_evidence(worker_evidence)
+    editability = bounded.get("editability")
+    if (
+        not isinstance(editability, dict)
+        or editability.get("schemaVersion") != HYBRID_EDITABILITY_SCHEMA
+        or editability.get("verdict") not in HYBRID_EDITABILITY_VERDICTS
+    ):
+        return None
+    producer_timing = bounded.pop("timing", None)
+    if isinstance(producer_timing, dict):
+        bounded["producerTiming"] = producer_timing
+    return bounded
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +220,23 @@ async def _resolved_outcome(
         execution=execution, operation_claim=operation_claim
     )
     async with session_factory() as session:
+        cached_worker_evidence: dict[str, Any] | None = None
+        if execution.identity.export_mode == "editable-hybrid":
+            producer_operation_id = leading_operation_id or execution.operation_id
+            producer = await session.scalar(
+                select(WorkspaceOperation).where(
+                    WorkspaceOperation.id == producer_operation_id
+                )
+            )
+            if producer is None or producer.state != "succeeded":
+                raise PublicExportOperationError(
+                    "public_export_editability_evidence_pending"
+                )
+            cached_worker_evidence = _cached_hybrid_worker_evidence(producer)
+            if cached_worker_evidence is None:
+                raise PublicExportOperationError(
+                    "public_export_editability_evidence_unavailable"
+                )
         # Keep the completed identity's producer immutable. The public
         # publisher requires a separately registered consumer operation ref
         # even when both refs share the same verified CAS bytes.
@@ -206,6 +255,7 @@ async def _resolved_outcome(
                 # statement of what these bytes are: an identity only completes
                 # when the worker delivered the mode it names.
                 "public_export_worker_evidence": {
+                    **(cached_worker_evidence or {}),
                     "requestedExportMode": execution.identity.export_mode,
                     "deliveredExportMode": execution.identity.export_mode,
                     "fallbackReason": None,

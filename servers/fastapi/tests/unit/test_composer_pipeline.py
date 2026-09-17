@@ -677,10 +677,9 @@ def test_admission_without_composer_flag_leaves_request_for_authored_reflow(monk
     ("authored-local-fit/v1.4", 9.0),
     ("authored-local-fit/v1.5", 9.0),
 ])
-def test_admission_restores_sealed_authored_route_before_live_composer_switch(
+def test_admission_restores_sealed_composer_route_before_live_switch(
     monkeypatch, text_policy, revision, floor,
 ) -> None:
-    from hashlib import sha256
     from api.v1.ppt.endpoints import presentation_generate as generation
     from services.authored_local_fit_policy import policy_floor_pt
     from services.public_generation_route import pin_source_restyle_authoring
@@ -688,28 +687,18 @@ def test_admission_restores_sealed_authored_route_before_live_composer_switch(
     _patch_admission(monkeypatch, enabled=False)
     request = _admission_request()
     request.content_policy = request.content_policy.model_copy(update={"text": text_policy})
-    pin_source_restyle_authoring(request)
+    receipt = pin_source_restyle_authoring(request)
+    assert receipt is not None
+    assert receipt["fallbackReason"] == "source-content-composer-reflow"
     request._authored_local_fit_policy_revision = revision
     durable = generation._durable_request_payload(request)
-    receipt = {
-        "schemaVersion": "generation-route-receipt/v1",
-        "requestedMode": "free-design",
-        "selectedRoute": "authored-fallback",
-        "designPackPin": None,
-        "narrativeIrDigest": None,
-        "fallbackReason": "source-content-authored-reflow",
-        "outputCapability": "fidelity",
-    }
-    receipt["receiptDigest"] = "sha256:" + sha256(json.dumps(
-        receipt, ensure_ascii=True, sort_keys=True, separators=(",", ":"),
-    ).encode()).hexdigest()
     durable["generation_route_receipt"] = receipt
     restored = generation._request_from_durable_payload(durable)
     # The private admission flag does not round-trip through public Pydantic
     # fields; the handler must restore the sealed receipt before readmission.
     assert not getattr(restored, "_source_content_sealed_authored_route", False)
-    restored._composer_restyle = True
-    _patch_admission(monkeypatch, enabled=True)
+    restored._composer_restyle = False
+    _patch_admission(monkeypatch, enabled=False)
 
     async def master_admission(request):
         pass
@@ -723,8 +712,8 @@ def test_admission_restores_sealed_authored_route_before_live_composer_switch(
         pass
 
     async def reference_admission(request, session):
-        assert request._composer_restyle is False
-        assert request._source_content_sealed_authored_route is True
+        assert request._composer_restyle is True
+        assert request._source_content_sealed_authored_route is False
         assert request._authored_local_fit_policy_revision == revision
         assert policy_floor_pt(request._authored_local_fit_policy_revision) == floor
         raise AdmissionObserved

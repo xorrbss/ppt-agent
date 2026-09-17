@@ -19,6 +19,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 
+from services.authored_canvas import (
+    AuthoredCanvasMetadata,
+    presentation_canvas_metadata,
+)
 from models.sql.public_artifact import (
     ArtifactRef as PublicArtifactRef,
     normalize_sha256,
@@ -226,26 +230,53 @@ MAX_PUBLIC_EXPORT_DEADLINE_SECONDS = PUBLIC_EXPORT_DEADLINE_MAX_SECONDS
 
 
 class PublicExportHybridFallback(PublicExportOperationError):
-    """The worker delivered the fidelity raster instead of an editable deck.
-
-    The produced bytes are good; only the richer path failed. The editable
-    identity is failed rather than completed so a later request retries Hybrid
-    instead of inheriting a raster result forever.
-    """
+    """The worker could not deliver a publishable editable-hybrid result."""
 
     def __init__(
         self,
         reason: str,
         *,
+        code: str = "public_export_hybrid_not_editable",
         evidence: Mapping[str, Any] | None = None,
         resource_metrics: Mapping[str, Any] | None = None,
     ) -> None:
+        self.code = code
         self.reason = reason
         #: What the assembler reported before giving up. Losing it would leave
         #: a fallback with a code and no account of itself.
         self.evidence = dict(evidence or {})
         self.resource_metrics = dict(resource_metrics or {})
         super().__init__(reason)
+
+
+HYBRID_EDITABILITY_SCHEMA = "public-hybrid-editability/v1"
+HYBRID_EDITABILITY_POLICY_VERSION = "public-hybrid-editability-policy/v3"
+HYBRID_EDITABILITY_VERDICTS = frozenset(
+    {
+        "fully-editable",
+        "partially-editable",
+        "not-editable",
+        "not-applicable",
+        "unknown",
+    }
+)
+
+
+def _bounded_editability_evidence(value: object) -> dict[str, Any]:
+    """Keep a compatible, explicit verdict even when worker evidence is absent."""
+
+    if (
+        isinstance(value, Mapping)
+        and value.get("schemaVersion") == HYBRID_EDITABILITY_SCHEMA
+        and value.get("verdict") in HYBRID_EDITABILITY_VERDICTS
+    ):
+        return dict(value)
+    return {
+        "schemaVersion": HYBRID_EDITABILITY_SCHEMA,
+        "verdict": "unknown",
+        "slides": [],
+        "powerpointInteraction": {"status": "not-run"},
+    }
 
 
 def build_isolated_operation_job(
@@ -472,6 +503,7 @@ async def build_isolated_hybrid_semantic_slides(
 def build_validated_checkpoint_export_bundle(
     identity: CanonicalExportIdentity,
     *,
+    canvas: Mapping[str, object] | None = None,
     source_slides: Sequence[PublicArtifactRef] = (),
     semantic_slides: Sequence[Mapping[str, Any]] = (),
     export_attempt_id: str | None = None,
@@ -488,6 +520,17 @@ def build_validated_checkpoint_export_bundle(
     """
 
     hybrid = identity.export_mode == "editable-hybrid"
+    if canvas is None:
+        resolved_canvas = presentation_canvas_metadata({})
+    else:
+        try:
+            resolved_canvas = AuthoredCanvasMetadata.model_validate(canvas).model_dump(
+                mode="json", by_alias=True
+            )
+        except (TypeError, ValueError) as error:
+            raise PublicExportOperationError(
+                "public_export_canvas_contract_invalid"
+            ) from error
     if hybrid and len(source_slides) != len(identity.slides):
         raise PublicExportOperationError("public_export_hybrid_sources_invalid")
     payload: dict[str, object] = {
@@ -496,6 +539,7 @@ def build_validated_checkpoint_export_bundle(
         "exportFormat": identity.export_format,
         "exportMode": identity.export_mode,
         "renderAdapter": identity.render_adapter,
+        "canvas": resolved_canvas,
         "slides": [
             {
                 "slideIndex": checkpoint.slide_index,
@@ -564,12 +608,28 @@ def partition_public_render_references(
     )
 
 
-def build_public_render_bundle(references: list[PublicArtifactRef]) -> bytes:
+def build_public_render_bundle(
+    references: list[PublicArtifactRef],
+    *,
+    canvas: Mapping[str, object] | None = None,
+) -> bytes:
     if not 1 <= len(references) <= MAX_PUBLIC_RENDER_BATCH_SLIDES:
         raise PublicExportOperationError("public_render_bundle_slide_count_invalid")
+    if canvas is None:
+        resolved_canvas = presentation_canvas_metadata({})
+    else:
+        try:
+            resolved_canvas = AuthoredCanvasMetadata.model_validate(canvas).model_dump(
+                mode="json", by_alias=True
+            )
+        except (TypeError, ValueError) as error:
+            raise PublicExportOperationError(
+                "public_render_canvas_contract_invalid"
+            ) from error
     return json.dumps(
         {
-            "schemaVersion": "public-render-bundle/v1",
+            "schemaVersion": "public-render-bundle/v2",
+            "canvas": resolved_canvas,
             "slides": [
                 {
                     "slideIndex": index,
@@ -710,6 +770,7 @@ async def execute_canonical_export_execution(
     claim: WorkspaceOperationClaim,
     *,
     execution: CanonicalExportExecution,
+    canvas: Mapping[str, object] | None = None,
     source_slides: Sequence[PublicArtifactRef] = (),
     semantic_slides: Sequence[PublicArtifactRef] = (),
     export_attempt_id: str | None = None,
@@ -743,6 +804,7 @@ async def execute_canonical_export_execution(
     artifact_service = configured_public_artifact_service()
     bundle = build_validated_checkpoint_export_bundle(
         execution.identity,
+        canvas=canvas,
         source_slides=source_slides,
         semantic_slides=semantic_slides,
         export_attempt_id=export_attempt_id,
@@ -783,11 +845,32 @@ async def execute_canonical_export_execution(
         exported.execution_evidence.get("deliveredExportMode")
         or execution.identity.export_mode
     )
+    worker_evidence = bounded_hybrid_worker_evidence(exported.execution_evidence)
+    editability: dict[str, Any] | None = None
+    failure_code: str | None = None
+    failure_reason: str | None = None
+    if execution.identity.export_mode == "editable-hybrid":
+        editability = _bounded_editability_evidence(worker_evidence.get("editability"))
+        worker_evidence["editability"] = editability
+        if editability["verdict"] == "not-editable":
+            failure_code = "public_export_hybrid_not_editable"
+            raw_slides = editability.get("slides")
+            failure_reason = (
+                str(raw_slides[0]["reasons"][0])
+                if isinstance(raw_slides, Sequence)
+                and not isinstance(raw_slides, (str, bytes))
+                and raw_slides
+                and isinstance(raw_slides[0], Mapping)
+                and isinstance(raw_slides[0].get("reasons"), Sequence)
+                and raw_slides[0]["reasons"]
+                else failure_code
+            )
     if delivered_mode != execution.identity.export_mode:
-        reason = str(
-            exported.execution_evidence.get("fallbackReason")
-            or "public_export_delivered_mode_mismatch"
+        failure_code = "public_export_delivered_mode_mismatch"
+        failure_reason = str(
+            exported.execution_evidence.get("fallbackReason") or failure_code
         )
+    if failure_code is not None:
         async with session_factory() as session:
             await fail_export_identity(
                 session,
@@ -795,13 +878,18 @@ async def execute_canonical_export_execution(
                 worker_id=execution.worker_id,
                 attempt_token=execution.singleflight.attempt_token or "",
                 fencing_token=execution.singleflight.fencing_token,
-                error_code="public_export_delivered_mode_mismatch",
+                error_code=failure_code,
             )
             await session.commit()
         raise PublicExportHybridFallback(
-            reason,
-            evidence=bounded_hybrid_worker_evidence(exported.execution_evidence),
-            resource_metrics={"role": exported.role, **exported.resource_metrics},
+            failure_reason or failure_code,
+            code=failure_code,
+            evidence=worker_evidence,
+            resource_metrics={
+                "role": exported.role,
+                **exported.resource_metrics,
+                "public_export_worker_evidence": worker_evidence,
+            },
         )
     result_ref = _public_worker_output(
         dict(exported.output_artifact or {}),
@@ -822,7 +910,7 @@ async def execute_canonical_export_execution(
             "role": exported.role,
             **exported.resource_metrics,
             "public_export_worker_evidence": {
-                **bounded_hybrid_worker_evidence(exported.execution_evidence),
+                **worker_evidence,
                 **join.evidence(),
             },
         },
@@ -862,11 +950,11 @@ async def render_and_export_authored_htmls(
     )
     local_fit_receipts: tuple[Mapping[str, object], ...] = ()
     persisted_slides: list[SlideModel] = []
-    if export_format == "pptx":
-        async with session_factory() as session:
-            presentation = await session.get(
-                PresentationModel, claim.presentation_id
-            )
+    async with session_factory() as session:
+        presentation = await session.get(
+            PresentationModel, claim.presentation_id
+        )
+        if export_format == "pptx":
             persisted_slides = (
                 await session.execute(
                     select(SlideModel)
@@ -874,8 +962,15 @@ async def render_and_export_authored_htmls(
                     .order_by(SlideModel.index, SlideModel.id)
                 )
             ).scalars().all()
-        if presentation is None:
-            raise PublicExportOperationError("presentation_not_found")
+    if presentation is None:
+        raise PublicExportOperationError("presentation_not_found")
+    try:
+        canvas = presentation_canvas_metadata(presentation.theme)
+    except ValueError as error:
+        raise PublicExportOperationError(
+            "public_export_canvas_contract_invalid"
+        ) from error
+    if export_format == "pptx":
         local_fit_receipts = resolve_authored_local_fit_receipts(
             presentation, persisted_slides
         )
@@ -908,13 +1003,9 @@ async def render_and_export_authored_htmls(
     hybrid_requested = pptx_mode == "hybrid" and export_format == "pptx"
     if font_embedding and not hybrid_requested:
         raise PublicExportOperationError("public_export_font_embedding_invalid")
-    # What the caller asked for, kept separate from what is still being
-    # attempted after a fallback, so the receipt can report both truthfully.
     requested_export_mode = (
         "editable-hybrid" if hybrid_requested else "fidelity-raster"
     )
-    hybrid_degraded_reason: str | None = None
-    hybrid_attempt_evidence: dict[str, Any] = {}
 
     artifact_metrics_before = public_artifact_store_metrics_snapshot()
     artifact_service = configured_public_artifact_service()
@@ -981,7 +1072,7 @@ async def render_and_export_authored_htmls(
                 slide_count=len(htmls),
             )
         if declared is None:
-            hybrid_degraded_reason = "hybrid_declared_graph_unavailable"
+            semantic_slides = []
         else:
             semantic_slides = declared
             # The declared graph changes what the assembler may promote, so it
@@ -1100,7 +1191,7 @@ async def render_and_export_authored_htmls(
         nonlocal render_worker_millis
         if not references:
             return ()
-        bundle = build_public_render_bundle(references)
+        bundle = build_public_render_bundle(references, canvas=canvas)
         async with session_factory() as session:
             bundle_ref = await artifact_service.persist_bytes(
                 session,
@@ -1230,6 +1321,9 @@ async def render_and_export_authored_htmls(
         ).encode("utf-8")
     ).hexdigest()
     render_runtime_binding = public_render_runtime_binding()
+    canvas_discriminator = (
+        f"{canvas['contractVersion']}:{canvas['widthPx']}x{canvas['heightPx']}"
+    )
     render_runtime_binding_digest = public_render_runtime_binding_digest(
         render_runtime_binding
     )
@@ -1268,7 +1362,7 @@ async def render_and_export_authored_htmls(
             render_adapter="public-isolated-fidelity",
             renderer_version=public_slide_renderer_version(
                 htmls[index], runtime_binding=render_runtime_binding
-            ),
+            ) + f":{canvas_discriminator}",
         )
         for index, reference in enumerate(html_refs)
     )
@@ -1473,7 +1567,14 @@ async def render_and_export_authored_htmls(
                 if hybrid
                 else "public-isolated-fidelity"
             ),
-            exporter_version=PUBLIC_RENDER_WORKER_PROTOCOL_VERSION,
+            exporter_version=(
+                (
+                    f"{PUBLIC_RENDER_WORKER_PROTOCOL_VERSION}:"
+                    f"{canvas_discriminator}:{HYBRID_EDITABILITY_POLICY_VERSION}"
+                )
+                if hybrid
+                else f"{PUBLIC_RENDER_WORKER_PROTOCOL_VERSION}:{canvas_discriminator}"
+            ),
             evidence=ExportEvidenceDigests(
                 scene_digest=normalized_scene_digest,
                 semantic_digest=semantic_digest,
@@ -1532,6 +1633,7 @@ async def render_and_export_authored_htmls(
         return await execute_canonical_export_execution(
             claim,
             execution=execution,
+            canvas=canvas,
             source_slides=html_refs if hybrid else (),
             semantic_slides=semantic_slides if hybrid else (),
             export_attempt_id=(
@@ -1550,19 +1652,7 @@ async def render_and_export_authored_htmls(
         )
 
     export_started = time.perf_counter()
-    try:
-        canonical_result = await run_canonical(hybrid=hybrid_requested)
-    except PublicExportHybridFallback as fallback:
-        # The worker already produced a good raster deck; publish it under
-        # the identity that honestly describes it, and keep the abandoned
-        # attempt's account of itself so the receipt can explain the
-        # downgrade instead of only naming it.
-        hybrid_degraded_reason = fallback.reason
-        hybrid_attempt_evidence = fallback.evidence
-        if fallback.resource_metrics:
-            resource_samples.append(fallback.resource_metrics)
-        hybrid_requested = False
-        canonical_result = await run_canonical(hybrid=False)
+    canonical_result = await run_canonical(hybrid=hybrid_requested)
     # A completed identity only verifies/registers the consumer ref, and
     # reports only what the bytes are. Its elapsed work belongs to
     # operationWallMillis, not to a worker that never ran.
@@ -1592,16 +1682,6 @@ async def render_and_export_authored_htmls(
                     "public_export_worker_evidence", {}
                 )
                 or {}
-            ),
-            **(
-                {"hybrid_degraded_reason": hybrid_degraded_reason}
-                if hybrid_degraded_reason
-                else {}
-            ),
-            **(
-                {"hybrid_attempt_evidence": hybrid_attempt_evidence}
-                if hybrid_attempt_evidence
-                else {}
             ),
             "public_export_execution_receipt": execution_receipt(
                 export_millis=export_millis,

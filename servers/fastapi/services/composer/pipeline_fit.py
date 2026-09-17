@@ -256,6 +256,7 @@ async def fit_deck(
     """
 
     from services.composer.fit import ComposerMeasurementError
+    from services.composer.render import ComposerRenderError
 
     semaphore = asyncio.Semaphore(max(1, concurrency))
     report_lock = asyncio.Lock()
@@ -279,6 +280,8 @@ async def fit_deck(
                 ) from error
             except ComposerAssetError as error:
                 raise ComposerAssertionError(error.slide_index, error.code, error.detail) from error
+            except ComposerRenderError as error:
+                raise ComposerAssertionError(plan.slide_index, error.code, error.detail) from error
         completed += 1
         if on_slide is not None or extend_lease is not None:
             # Serialize: on_slide ultimately writes an optimistic-concurrency
@@ -292,7 +295,14 @@ async def fit_deck(
                 await maybe_extend_lease(extend_lease, extend_lease_seconds)
         return result
 
-    results = await asyncio.gather(*(one(plan) for plan in deck.slides))
+    # Drain all in-flight render threads before publishing the failure receipt;
+    # a failed sibling must not leave background captures/progress writes alive.
+    outcomes = await asyncio.gather(*(one(plan) for plan in deck.slides), return_exceptions=True)
+    results = []
+    for outcome in outcomes:
+        if isinstance(outcome, BaseException):
+            raise outcome
+        results.append(outcome)
     return sorted(results, key=lambda item: item.slide_index)
 
 

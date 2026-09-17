@@ -115,6 +115,7 @@ class AuthoredStyle:
     assets_root: Optional[Path] = None
     # Positional mapping is explicit even when scalar entries use list position.
     slide_reference_indices: tuple[int, ...] = ()
+    composer_profile: Mapping[str, Any] | None = None
 
     def public_dict(self) -> dict[str, Any]:
         """Return only the fields safe and useful for style selection clients."""
@@ -492,6 +493,11 @@ def _parse_style(
         preview_image = _asset_path(preview["image"], source, assets_directory)
 
     reference_images = _reference_images(data, source, assets_directory)
+    composer_profile = data.get("composer_profile")
+    if composer_profile is not None:
+        from services.composer.plan import ComposerStyleProfile
+
+        composer_profile = ComposerStyleProfile.model_validate(composer_profile).model_dump(mode="json")
     reference_mode = _reference_mode(data, source)
     slide_reference_images, slide_reference_indices = _slide_reference_images(
         data,
@@ -531,6 +537,7 @@ def _parse_style(
         reference_mode=reference_mode,
         assets_root=assets_directory.resolve(),
         slide_reference_indices=slide_reference_indices,
+        composer_profile=composer_profile,
     )
 
 

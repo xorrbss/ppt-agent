@@ -24,6 +24,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from services.authored_composition_policy import blocking_safety_issues
+from services.composer.canvas import declared_canvas_dimensions
 from services.composer.contracts import Measurement
 from services.composer.plan import ComposerSlidePlan
 from utils.authored_dom_quality import (
@@ -147,17 +148,19 @@ async def measure_slide(
     pipeline.
     """
 
-    del plan
+    from services.composer.source_topology import reconcile_source_image_overlaps
     # Lazy: slide_capture pulls aiohttp and the renderer runtime at import time.
     from utils.slide_capture import render_html_to_png_with_metrics
 
-    capture = await render_html_to_png_with_metrics(html, timeout=render_timeout_seconds)
-    return measurement_from_capture(
+    canvas_width, canvas_height = declared_canvas_dimensions(html)
+    capture = await render_html_to_png_with_metrics(html, timeout=render_timeout_seconds, width_px=canvas_width, height_px=canvas_height)
+    measured = measurement_from_capture(
         html,
         capture.browser_metrics,
         capture.png,
         strict_structural_off_canvas=strict_structural_off_canvas,
     )
+    return reconcile_source_image_overlaps(html, plan, measured)
 
 
 class ChromiumMeasurer:

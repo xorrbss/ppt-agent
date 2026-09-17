@@ -114,7 +114,10 @@ def encode_json_frame(value: Mapping[str, Any], *, limit: int) -> bytes:
     return encode_frame(payload, limit=limit)
 
 
-def encode_framed_request(html: str, timeout: int, *, max_requests: int | None = None) -> bytes:
+def encode_framed_request(
+    html: str, timeout: int, *, max_requests: int | None = None,
+    width_px: int = 1280, height_px: int = 720,
+) -> bytes:
     """Encode one framed render request.
 
     ``max_requests`` is meaningful only on a session's first request: it tells
@@ -128,6 +131,8 @@ def encode_framed_request(html: str, timeout: int, *, max_requests: int | None =
         "schema_version": REQUEST_SCHEMA,
         "html": html,
         "timeout": timeout,
+        "width_px": int(width_px),
+        "height_px": int(height_px),
     }
     if max_requests is not None:
         request["max_requests"] = clamp_max_requests(max_requests)

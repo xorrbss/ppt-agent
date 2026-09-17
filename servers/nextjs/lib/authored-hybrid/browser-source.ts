@@ -27,8 +27,12 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
   var COMPLETION_MARKER_NAME = "__presenton_authored_hybrid_complete_v1__";
   var ELEMENT_ATTRIBUTE = "data-presenton-authored-hybrid-id";
   var ISOLATED_INLINE_ATTRIBUTE = "data-presenton-authored-layout-isolated-inline";
-  var WIDTH = 1280;
-  var HEIGHT = 720;
+  var sourceFitV2 = Boolean(document.querySelector('[data-source-fit-policy="composer-source-fit/v2"]'));
+  var WIDTH = window.innerWidth;
+  var HEIGHT = window.innerHeight;
+  if (!((WIDTH === 1280 && HEIGHT === 720) || (WIDTH === 720 && HEIGHT === 1280))) {
+    throw new Error("Unsupported authored canvas viewport " + WIDTH + "x" + HEIGHT + ".");
+  }
   var config = window.__PRESENTON_AUTHORED_HYBRID_CONFIG__ || {};
   var captureMode = ["observation", "hybrid-backplate", "hybrid-paint-band", "fidelity"].includes(
     config.captureMode
@@ -249,7 +253,7 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
       }
       if (horizontalLayoutAlignment === "center") alignment = "center";
     }
-    var fontSizePt = Math.max(9, round(fontSizePx * 0.75));
+    var fontSizePt = sourceFitV2 ? round(fontSizePx * 0.75) : Math.max(9, round(fontSizePx * 0.75));
     var lineHeightMultiple = round(lineHeightPx / Math.max(fontSizePx, 0.01));
     // Which alignment property maps to the vertical (block) axis depends on the
     // layout: a flex ROW centers vertically via align-items (cross axis) while its
@@ -278,6 +282,7 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
       fontFamilies: families.length ? families : ["sans-serif"],
       cjkFallbackFamilies: cjkFallbacks(text, families),
       fontSizePt: fontSizePt,
+      ...(sourceFitV2 ? { sourceFitPolicy: "composer-source-fit/v2" } : {}),
       fontWeight: fontWeight,
       bold: fontWeight >= 600,
       italic: style.fontStyle === "italic" || style.fontStyle === "oblique",
@@ -774,7 +779,22 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
     });
   }
 
+  function sourceTablePaintOrder(element) {
+    if (!sourceFitV2 || element.tagName !== "TABLE" ||
+        element.getAttribute("data-native") !== "table" ||
+        !element.getAttribute("data-source-block-id")) return null;
+    var wrapper = element.parentElement;
+    if (!wrapper || !wrapper.classList.contains("cx-geo")) return null;
+    var ownStyle = getComputedStyle(element);
+    var wrapperStyle = getComputedStyle(wrapper);
+    if (ownStyle.zIndex !== "auto" || wrapperStyle.position !== "absolute" ||
+        !/^-?\d+$/.test(wrapperStyle.zIndex)) return null;
+    var zIndex = Number(wrapperStyle.zIndex);
+    return Number.isSafeInteger(zIndex) ? { wrapper: wrapper, zIndex: zIndex } : null;
+  }
+
   function safetyReasons(element, kind, transform) {
+    var sourceTableOrder = sourceTablePaintOrder(element);
     var reasons = [];
     var current = element;
     while (current) {
@@ -832,7 +852,8 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
       if (style.animationName && style.animationName !== "none") {
         reasons.push("animated");
       }
-      if (style.zIndex && style.zIndex !== "auto") reasons.push("unknown-z-order");
+      if (style.zIndex && style.zIndex !== "auto" &&
+          (!sourceTableOrder || current !== sourceTableOrder.wrapper)) reasons.push("unknown-z-order");
       if (style.position === "fixed" || style.position === "sticky") {
         reasons.push("unknown-z-order");
       }
@@ -935,7 +956,8 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
         }
         if (
           target !== element &&
-          ((targetStyle.zIndex && targetStyle.zIndex !== "auto") ||
+          ((targetStyle.zIndex && targetStyle.zIndex !== "auto" &&
+            (!sourceTableOrder || target !== sourceTableOrder.wrapper)) ||
             targetStyle.position === "fixed" ||
             targetStyle.position === "sticky" ||
             targetStyle.isolation === "isolate" ||
@@ -1482,17 +1504,23 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
 
   function measuredLineRects(runs) {
     var lines = [];
+    var sourceLineEpoch = 0;
     runs.forEach(function (run) {
+      // Font metric rectangles can overlap across tightly spaced source lines.
+      // A captured break is authoritative even when those rectangles overlap.
+      if (sourceFitV2 && run.text === "\n") { sourceLineEpoch += 1; return; }
       if (run.text === "\n") return;
       (run.fragmentRectsPx || []).forEach(function (rect) {
         if (!rect || rect.height <= 0 || !Object.values(rect).every(Number.isFinite)) return;
         var match = lines.find(function (line) {
+          if (sourceFitV2 && line.sourceLineEpoch !== sourceLineEpoch) return false;
           var overlap = Math.min(line.bottom, rect.y + rect.height) -
             Math.max(line.top, rect.y);
           return overlap >= Math.min(line.height, rect.height) * 0.25;
         });
         if (!match) {
           lines.push({
+            sourceLineEpoch: sourceLineEpoch,
             left: rect.x,
             top: rect.y,
             right: rect.x + rect.width,
@@ -1509,7 +1537,7 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
       });
     });
     return lines
-      .sort(function (left, right) { return left.top - right.top || left.left - right.left; })
+      .sort(function (left, right) { return (sourceFitV2 ? left.sourceLineEpoch - right.sourceLineEpoch : 0) || left.top - right.top || left.left - right.left; })
       .map(function (line) {
         return {
           x: round(line.left),
@@ -1655,19 +1683,64 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
     };
   }
 
+  function sourceCellParagraphs(cell) {
+    var paragraphs = [];
+    var candidates = Array.from(cell.querySelectorAll("p"));
+    if (!candidates.length) candidates = [cell];
+    candidates.forEach(function (paragraph) {
+      var runs = [];
+      var lastRunOwner = null;
+      function walk(node) {
+        Array.from(node.childNodes).forEach(function (child) {
+          if (child.nodeType === Node.TEXT_NODE && child.textContent) {
+            var style = getComputedStyle(child.parentElement);
+            var color = parseColor(style.color);
+            if (runs.length && lastRunOwner === child.parentElement) { runs[runs.length - 1].text += child.textContent; return; }
+            lastRunOwner = child.parentElement;
+            runs.push({ text: child.textContent, fontFamily: fontFamilies(style.fontFamily)[0], fontSizePt: round(number(style.fontSize, 0) * 0.75), weight: parseInt(style.fontWeight, 10) || 400, italic: style.fontStyle === "italic", underline: (style.textDecorationLine || "").includes("underline"), color: "#" + color.hex });
+          } else if (child.nodeType === Node.ELEMENT_NODE) {
+            if (child.tagName === "BR") {
+              if (!runs.length) {
+                var breakStyle = getComputedStyle(child.parentElement);
+                lastRunOwner = child.parentElement;
+                runs.push({ text: "", fontFamily: fontFamilies(breakStyle.fontFamily)[0], fontSizePt: round(number(breakStyle.fontSize, 0) * .75), weight: parseInt(breakStyle.fontWeight, 10) || 400, italic: breakStyle.fontStyle === "italic", underline: (breakStyle.textDecorationLine || "").includes("underline"), color: "#" + parseColor(breakStyle.color).hex });
+              }
+              runs[runs.length - 1].text += "\n";
+            }
+            else walk(child);
+          }
+        });
+      }
+      walk(paragraph);
+      if (!runs.length && paragraph === cell) return;
+      if (!runs.length) {
+        var emptyStyle = getComputedStyle(paragraph.querySelector("span") || paragraph);
+        runs.push({ text: "", fontFamily: fontFamilies(emptyStyle.fontFamily)[0], fontSizePt: round(number(emptyStyle.fontSize, 0) * .75), weight: parseInt(emptyStyle.fontWeight, 10) || 400, italic: emptyStyle.fontStyle === "italic", underline: (emptyStyle.textDecorationLine || "").includes("underline"), color: "#" + parseColor(emptyStyle.color).hex });
+      }
+      var paragraphStyle = getComputedStyle(paragraph);
+      var alignment = paragraphStyle.textAlign;
+      var lineHeight = number(paragraphStyle.lineHeight, Number.NaN);
+      paragraphs.push({ runs: runs, alignment: alignment === "center" ? "center" : alignment === "right" || alignment === "end" ? "right" : alignment === "justify" ? "justify" : "left",
+        ...(Number.isFinite(lineHeight) && lineHeight > 0 ? { lineHeightPt: round(lineHeight * .75) } : {}),
+        spaceBeforePt: round(Math.max(0, number(paragraphStyle.marginTop, 0)) * .75),
+        spaceAfterPt: round(Math.max(0, number(paragraphStyle.marginBottom, 0)) * .75) });
+    });
+    return paragraphs;
+  }
+
   function tableCellEvidence(element) {
     if (element.tagName.toUpperCase() !== "TABLE" || !element.rows) return null;
     var rows = Array.from(element.rows);
     if (!rows.length || rows.length > 100) return null;
-    var width = rows[0].cells.length;
-    if (!width || width > 20 || rows.some(function (row) { return row.cells.length !== width; })) return null;
-    var result = [];
+    var result = rows.map(function () { return []; });
+    var logicalCells = rows.map(function () { return []; });
+    var merges = [];
     for (var rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-      var row = rows[rowIndex];
-      var cells = [];
-      for (var cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
-        var cell = row.cells[cellIndex];
-        if (cell.rowSpan !== 1 || cell.colSpan !== 1) return null;
+      var column = 0;
+      for (var cell of Array.from(rows[rowIndex].cells)) {
+        while (result[rowIndex][column]) column += 1;
+        if (!sourceFitV2 && (cell.rowSpan !== 1 || cell.colSpan !== 1)) return null;
+        if (rowIndex + cell.rowSpan > rows.length || column + cell.colSpan > 20) return null;
         var style = getComputedStyle(cell);
         var fill = parseColor(style.backgroundColor);
         var color = parseColor(style.color);
@@ -1675,24 +1748,34 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
         var sizePx = number(style.fontSize, Number.NaN);
         var weight = Number.parseInt(style.fontWeight, 10);
         if (!Number.isFinite(weight)) weight = style.fontWeight === "bold" ? 700 : 400;
-        if (
-          !color || color.alpha !== 1 || !families.length || !Number.isFinite(sizePx) ||
-          (fill && fill.alpha !== 0 && fill.alpha !== 1) ||
-          style.fontStyle !== "normal" ||
-          (style.textDecorationLine && style.textDecorationLine !== "none")
-        ) return null;
-        cells.push({
-          text: String(cell.innerText || cell.textContent || "").replace(/\r\n?/g, "\n").trim(),
+        if (!color || color.alpha !== 1 || !families.length || !Number.isFinite(sizePx) || (fill && fill.alpha !== 0 && fill.alpha !== 1) || style.fontStyle !== "normal" || (style.textDecorationLine && style.textDecorationLine !== "none")) return null;
+        var paragraphs = sourceFitV2 ? sourceCellParagraphs(cell) : null;
+        var value = {
+          text: paragraphs ? paragraphs.map(function (p) { return p.runs.map(function (r) { return r.text; }).join(""); }).join("\n") : String(cell.innerText || cell.textContent || "").replace(/\r\n?/g, "\n").trim(),
           ...(fill && fill.alpha === 1 ? { fill: "#" + fill.hex } : {}),
-          textColor: "#" + color.hex,
-          bold: weight >= 600,
-          fontFamily: families[0],
-          fontSizePt: round(sizePx * 0.75),
-        });
+          textColor: "#" + color.hex, bold: weight >= 600, fontFamily: families[0], fontSizePt: round(sizePx * 0.75),
+          ...(paragraphs && paragraphs.length ? { paragraphs: paragraphs } : {}),
+        };
+        if (cell.rowSpan > 1 || cell.colSpan > 1) merges.push({ row: rowIndex, column: column, rowSpan: cell.rowSpan, columnSpan: cell.colSpan });
+        for (var r = rowIndex; r < rowIndex + cell.rowSpan; r += 1) for (var c = column; c < column + cell.colSpan; c += 1) {
+          if (result[r][c]) return null;
+          result[r][c] = r === rowIndex && c === column ? value : Object.assign({}, value, { text: "", paragraphs: undefined });
+          logicalCells[r][c] = cell;
+        }
+        column += cell.colSpan;
       }
-      result.push(cells);
     }
-    return Object.assign({ rows: result }, tableLayoutEvidence(element, rows));
+    var width = result[0].length;
+    if (!width || result.some(function (row) { return row.length !== width || Array.from(row).some(function (cell) { return !cell; }); })) return null;
+    var layout = tableLayoutEvidence(element, rows);
+    if (sourceFitV2) {
+      layout.cellStyles = logicalCells.map(function (cells) { return cells.map(function (cell) { return layout.cellStyles[cell.parentElement.rowIndex][cell.cellIndex]; }); });
+      var cols = Array.from(element.querySelectorAll("col"));
+      layout.columnWidthsPx = cols.length === width ? cols.map(function (col) { return round(col.getBoundingClientRect().width); }) : logicalCells[0].map(function (cell) { return round(cell.getBoundingClientRect().width / cell.colSpan); });
+      layout.mergedCells = merges;
+      layout.sourceFitPolicy = "composer-source-fit/v2";
+    }
+    return Object.assign({ rows: result }, layout);
   }
 
   // Geometry and style facts for markup-driven native tables. Kept outside
@@ -1733,6 +1816,7 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
             : textAlign === "justify" ? "justify" : "left",
           verticalAlign: vertical === "top" ? "top" : vertical === "bottom" ? "bottom" : "middle",
           borders: borders,
+          ...(sourceFitV2 ? { paddingPx: { top: number(style.paddingTop, 0), right: number(style.paddingRight, 0), bottom: number(style.paddingBottom, 0), left: number(style.paddingLeft, 0) } } : {}),
         };
       });
     });
@@ -3742,7 +3826,8 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
         reasons.push("outside-slide");
       }
 
-      var zIndexText = getComputedStyle(element).zIndex;
+      var sourceTableOrder = sourceTablePaintOrder(element);
+      var zIndexText = sourceTableOrder ? String(sourceTableOrder.zIndex) : getComputedStyle(element).zIndex;
       var zIndex = /^-?\d+$/.test(zIndexText) ? Number.parseInt(zIndexText, 10) : null;
       var observation = {
         id: id,
@@ -3903,7 +3988,7 @@ ${AUTHORED_HYBRID_CSS_PAINT_BROWSER_SOURCE}
 
     if (window.innerWidth !== WIDTH || window.innerHeight !== HEIGHT) {
       warnings.push(
-        "Expected a 1280x720 viewport but observed " + window.innerWidth + "x" + window.innerHeight + "."
+        "Expected a " + WIDTH + "x" + HEIGHT + " viewport but observed " + window.innerWidth + "x" + window.innerHeight + "."
       );
     }
     if (window.devicePixelRatio !== CAPTURE_SCALE) {

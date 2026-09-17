@@ -101,7 +101,13 @@ const UploadPage = ({
     handleCardDragOver,
     handleCardDragLeave,
     handleCardDrop,
-  } = useSupportingFiles();
+  } = useSupportingFiles({
+    onFilesChange: (nextFiles) => {
+      const isSinglePptx =
+        nextFiles.length === 1 && /\.pptx$/i.test(nextFiles[0].name);
+      dispatch(setSourceContentMode(isSinglePptx));
+    },
+  });
   useEffect(() => {
     if (files.length === 0 && sourceContentMode) {
       dispatch(setSourceContentMode(false));
@@ -330,9 +336,7 @@ const UploadPage = ({
                 compact
               />
               {files.length > 0 ? (
-                <details className="mt-4 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5">
-                  <summary className="cursor-pointer text-xs font-medium text-slate-500 transition-colors hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300">{t("sourceContentOptions")}</summary>
-                  <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm font-medium text-[#242629]">
+                <label className="mt-4 flex cursor-pointer items-center gap-2 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 text-sm font-medium text-[#242629]">
                 <input
                   type="checkbox"
                   checked={sourceContentMode}
@@ -350,7 +354,6 @@ const UploadPage = ({
                   </span>
                 </span>
               </label>
-                </details>
               ) : null}
             </div>
 
@@ -361,7 +364,7 @@ const UploadPage = ({
               <p className="mt-1 text-[#5E626A]">페이지 수 고정 · 같은 페이지에서 다시 구성할 수 없으면 생성하지 않음</p>
               {isSourceContentAnalyzing ? <p className="mt-2 text-xs text-[#737780]">원본 콘텐츠를 안전하게 분석하는 중입니다.</p> : null}
               {sourceContentSummary ? <p className="mt-2 text-xs text-[#737780]" data-testid="source-content-analysis-summary">
-                {sourceContentSummary.sourceType.toUpperCase()} {sourceContentSummary.sourceUnits}페이지 · 텍스트 {sourceContentSummary.textBlocks}개 · 제외된 표/차트 {sourceContentSummary.tables}/{sourceContentSummary.charts}개 · 이미지 {sourceContentSummary.uniqueImages}종(표시 {sourceContentSummary.imageOccurrences}회) · 이미지로 보관 {sourceContentSummary.rasterFallbackBlocks}개
+                {sourceContentSummary.sourceType.toUpperCase()} {sourceContentSummary.sourceUnits}페이지 · 텍스트 {sourceContentSummary.textBlocks}개 · 표 {sourceContentSummary.tables}개 · 제외된 차트 {sourceContentSummary.charts}개 · 이미지 {sourceContentSummary.uniqueImages}종(표시 {sourceContentSummary.imageOccurrences}회) · 이미지로 보관 {sourceContentSummary.rasterFallbackBlocks}개
               </p> : null}
             </div> : null}
 
@@ -372,6 +375,8 @@ const UploadPage = ({
                     config={config}
                     onConfigChange={handleConfigChange}
                     sourceContentMode={sourceContentMode}
+                    authoredStyle={authoredStyle}
+                    hasCompanyStandard={Boolean(companyStandard)}
                   />
                 </>
               </div>

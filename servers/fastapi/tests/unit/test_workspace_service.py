@@ -39,6 +39,7 @@ from services.workspace_service import (
     workspace_events,
     workspace_timeline,
 )
+from services.public_operation_admission_models import PublicAdmissionRejected
 from services.workspace_api_contract import project_workspace_timeline
 from services.workspace_asset_service import transition_workspace_asset
 from utils.datetime_utils import get_current_utc_datetime
@@ -1673,6 +1674,81 @@ async def _action_idempotency_scope(tmp_path: Path):
 
 def test_terminal_retry_creates_one_new_operation_and_preserves_source(tmp_path: Path):
     asyncio.run(_terminal_retry_creates_one_new_operation_and_preserves_source(tmp_path))
+
+
+def test_terminal_export_retry_creates_admission_before_queueing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    asyncio.run(_terminal_export_retry_creates_admission_before_queueing(tmp_path, monkeypatch))
+
+
+async def _terminal_export_retry_creates_admission_before_queueing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    engine, maker = await _database(tmp_path / "terminal-export-retry.db")
+    admissions: list[dict] = []
+
+    async def admit_export(_session, **kwargs):
+        admissions.append(kwargs)
+        if len(admissions) == 2:
+            raise PublicAdmissionRejected(
+                "public_test_export_admission_denied", retry_after_seconds=4
+            )
+        return object()
+
+    monkeypatch.setattr("services.workspace_service.admit_public_operation", admit_export)
+    monkeypatch.setattr("services.workspace_service.current_principal_context", lambda: object())
+    try:
+        presentation = await _create_presentation(maker)
+        async with maker() as session:
+            _, _, source, _ = await bootstrap_workspace(
+                session, presentation_id=presentation.id,
+                request=_bootstrap_request(key="terminal-export-retry"),
+            )
+            source.kind = "export.pptx"
+            source.state = "failed"
+            source.error_code = "presentation_export_failed"
+            source.error_detail = {"retryable": True}
+            source.version = 4
+            await session.commit()
+
+        retry_request = WorkspaceOperationActionRequest(
+            action="retry", idempotency_key="terminal-export-retry-1",
+            expected_operation_version=4, expected_revision=0,
+        )
+        async with maker() as session:
+            _, retry, duplicate = await apply_workspace_action(
+                session, operation_id=source.id, request=retry_request,
+            )
+            assert duplicate is False
+            assert retry.kind == "export.pptx"
+            assert retry.state == "queued"
+            assert len(admissions) == 1
+            assert admissions[0]["operation_id"] == retry.id
+            assert admissions[0]["operation_kind"] == "export"
+            assert admissions[0]["request_plan"] is None
+            assert admissions[0]["planned_slide_count"] == presentation.n_slides
+            retry.state = "failed"
+            retry.error_detail = {"retryable": True}
+            await session.commit()
+
+        async with maker() as session:
+            with pytest.raises(WorkspaceServiceError) as denied:
+                await apply_workspace_action(
+                    session, operation_id=retry.id,
+                    request=WorkspaceOperationActionRequest(
+                        action="retry", idempotency_key="terminal-export-retry-2",
+                        expected_operation_version=0, expected_revision=0,
+                    ),
+                )
+            assert denied.value.code == "public_test_export_admission_denied"
+            assert denied.value.retryable is True
+        async with maker() as session:
+            assert await session.scalar(
+                select(func.count()).select_from(WorkspaceOperation)
+            ) == 2
+    finally:
+        await engine.dispose()
 
 
 async def _terminal_retry_creates_one_new_operation_and_preserves_source(

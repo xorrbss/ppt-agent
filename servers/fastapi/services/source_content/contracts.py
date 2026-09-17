@@ -19,6 +19,7 @@ from pydantic import (
 # incomplete. Speaker notes remain metadata and are not rendered on slides.
 RESTYLE_CONTENT_KINDS = frozenset({"text", "table", "chart", "image", "shape"})
 DESIGN_ONLY_KINDS = frozenset({"source_note"})
+SOURCE_LAYOUT_VERSION_V2 = "source-layout/v2"
 
 
 def _camel(name: str) -> str:
@@ -79,7 +80,18 @@ class SourceContentCounts(ContractModel):
     chart_values: int = Field(ge=0)
     unique_images: int = Field(ge=0)
     image_occurrences: int = Field(ge=0)
+    #: DrawingML picture bullets are paragraph layout resources, not ``p:pic``
+    #: content occurrences. Omitted for manifests sealed before this capture.
+    picture_bullet_count: int | None = Field(default=None, ge=0)
     raster_fallback_blocks: int = Field(default=0, ge=0)
+
+    @model_serializer(mode="wrap")
+    def _omit_uncaptured_fields(self, handler: SerializerFunctionWrapHandler):
+        data = handler(self)
+        for key in ("pictureBulletCount", "picture_bullet_count"):
+            if key in data and data[key] is None:
+                del data[key]
+        return data
 
 
 class SourceSlideSize(ContractModel):
@@ -103,6 +115,10 @@ class SourceContentManifest(ContractModel):
     units: tuple[SourceContentUnit, ...]
     counts: SourceContentCounts
     manifest_digest: str
+    #: Capability marker for manifests carrying source-preserving geometry,
+    #: paragraph/run offsets, text-body layout and table-grid metadata.
+    #: Omitted for older sealed manifests so their recorded digest stays stable.
+    source_layout_version: Literal["source-layout/v2"] | None = None
     #: Captured since the Composer enrichment; ``None`` for manifests sealed
     #: before it. Omitted from dumps while ``None`` so those stored manifests
     #: still re-derive their recorded digest byte for byte.
@@ -127,6 +143,8 @@ class SourceContentManifest(ContractModel):
             "document_title",
             "sourceFileTitle",
             "source_file_title",
+            "sourceLayoutVersion",
+            "source_layout_version",
         ):
             if key in data and data[key] is None:
                 del data[key]

@@ -83,13 +83,18 @@ async def terminate_process_tree(process: Any) -> None:
 class RendererWorkerSession:
     """A reusable framed exchange with one isolated renderer worker process."""
 
-    def __init__(self, *, max_requests: int | None = None) -> None:
+    def __init__(
+        self, *, max_requests: int | None = None,
+        width_px: int = 1280, height_px: int = 720,
+    ) -> None:
         self._max_requests = clamp_max_requests(
             DEFAULT_MAX_REQUESTS_PER_PROCESS if max_requests is None else max_requests
         )
         self._process: Any = None
         self._served = 0
         self._closed = False
+        self._width_px = int(width_px)
+        self._height_px = int(height_px)
 
     @property
     def is_closed(self) -> bool:
@@ -128,7 +133,8 @@ class RendererWorkerSession:
         _live_processes.add(self._process)
 
     async def render(  # noqa: ASYNC109
-        self, html: str, timeout: int = 60
+        self, html: str, timeout: int = 60, *,
+        width_px: int | None = None, height_px: int | None = None,
     ) -> tuple[bytes, Mapping[str, Any] | None]:
         """Render one authored document over this session's worker process."""
 
@@ -137,11 +143,14 @@ class RendererWorkerSession:
         from utils.slide_capture import _admit_render_source, _cache_browser_metrics
 
         admitted = _admit_render_source(html)
+        width_px = self._width_px if width_px is None else int(width_px)
+        height_px = self._height_px if height_px is None else int(height_px)
         first = self._process is None
         if first:
             await self._start()
         request = encode_framed_request(
-            html, timeout, max_requests=self._max_requests if first else None
+            html, timeout, max_requests=self._max_requests if first else None,
+            width_px=width_px, height_px=height_px,
         )
         try:
             payload = await asyncio.wait_for(
@@ -172,7 +181,9 @@ class RendererWorkerSession:
             raise
         self._served = expected_ordinal
         if metrics is not None:
-            _cache_browser_metrics(html, metrics)
+            _cache_browser_metrics(
+                html, metrics, width_px=width_px, height_px=height_px
+            )
         if self._served >= self._max_requests:
             # The worker exits on its own after this many renders; close in
             # step with it so the next render opens a fresh process.

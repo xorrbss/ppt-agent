@@ -853,10 +853,18 @@ def sanitize_workspace_event_payload(
     return safe
 
 
-def _linked_generation_job_id(operation: WorkspaceOperation) -> uuid.UUID | None:
-    """Return the durable compatibility job id only for admitted generation."""
+_LINKED_GENERATION_OPERATION_KINDS = frozenset(
+    {"presentation.generate", "template.apply", "design.apply"}
+)
 
-    if operation.kind != "presentation.generate" or not isinstance(operation.request_payload, Mapping):
+
+def _linked_generation_job_id(operation: WorkspaceOperation) -> uuid.UUID | None:
+    """Return the durable compatibility job id for generation-backed operations."""
+
+    if (
+        operation.kind not in _LINKED_GENERATION_OPERATION_KINDS
+        or not isinstance(operation.request_payload, Mapping)
+    ):
         return None
     raw_job_id = operation.request_payload.get("job_id")
     if raw_job_id is None:

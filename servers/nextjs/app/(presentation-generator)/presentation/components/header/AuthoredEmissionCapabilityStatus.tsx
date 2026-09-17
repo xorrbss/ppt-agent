@@ -6,7 +6,6 @@ import type {
   AuthoredReleaseReadinessProjectionV3,
   AuthoredSemanticDecision,
 } from "../../../services/api/authored-emission-capability";
-import { presentationHybridQualityBlockReason } from "../../utils/masterPresentation";
 
 export type AuthoredEmissionCapabilityStatus =
   | { state: "checking" }
@@ -69,13 +68,10 @@ function decisionClass(decision: AuthoredSemanticDecision): string {
 export function authoredHybridUnavailableReason(
   status: AuthoredEmissionCapabilityStatus,
   expectedRevision?: number,
-  presentation?: unknown,
+  _presentation?: unknown,
 ): string | undefined {
-  // Two independent authorities can withhold Hybrid. The deck's own quality
-  // receipt is checked first: it is already loaded, and its reason is the one
-  // the user can act on.
-  const qualityBlock = presentationHybridQualityBlockReason(presentation);
-  if (qualityBlock) return qualityBlock;
+  // Quality is advisory for original-source export. The capability and immutable
+  // manifest checks below remain admission guards for editable Hybrid output.
   if (status.state === "checking") return "capability projection을 확인하는 중입니다.";
   if (status.state === "unavailable") return status.reason ?? "Hybrid capability projection을 확인하지 못했습니다.";
   const { readiness } = status;

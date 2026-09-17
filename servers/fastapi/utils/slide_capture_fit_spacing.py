@@ -43,7 +43,7 @@ SPACING_MEMBERS = r"""
     }
     return conflicts;
   },
-  _spacingPlan(nodes, factor, conflicts, relaxHeights) {
+  _spacingPlan(nodes, factor, conflicts, relaxHeights, heightRelaxationNodes) {
     const plan = [];
     for (const node of nodes) {
       const item = this._struct(node), declarations = [], reductions = [];
@@ -69,7 +69,8 @@ SPACING_MEMBERS = r"""
         if (item.ownText && item.explicitHeight !== null) declarations.push('height:' +
           this._round(Math.max(0, item.explicitHeight - removedPadding), 2) + 'px');
       }
-      if (relaxHeights && conflicts.some((conflict) => conflict.first === node)) {
+      if (relaxHeights && (conflicts.some((conflict) => conflict.first === node) ||
+          heightRelaxationNodes && heightRelaxationNodes.has(node))) {
         declarations.push('height:auto', 'flex-shrink:0');
       }
       if (declarations.length) plan.push({node, kind: 'spacing', declarations: declarations.join(';'), reductions});

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.published-flagged-hybrid",
+  "revision": 2,
+  "status": "rejected",
+  "authority": "user",
+  "summary": "Superseded by public-export.quality-advisory: ordinary exports allow quality warnings while integrity and release certification remain strict.",
+  "scope": [
+    "public-export",
+    "authored-hybrid",
+    "quality-receipt"
+  ],
+  "invariants": [
+    "Use public-export.quality-advisory for ordinary source-preserving exports."
+  ],
+  "forbidden": [
+    "Treating this retired narrow compatibility policy as an ordinary export quality blocker."
+  ],
+  "evidence": [
+    "User explicitly replaced quality-based export blocking with advisory-only behavior."
+  ],
+  "supersedes": "public-export.published-flagged-hybrid@1",
+  "recordedAt": "2026-09-14T03:08:03.6022039+00:00"
+}

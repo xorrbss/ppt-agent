@@ -27,6 +27,7 @@ GenerationMode = Literal[
 CodexGenerationPreset = Literal[
     "luna-medium",
     "luna-high",
+    "sol-low",
     "sol-medium",
     "sol-high",
     "astra-low",
@@ -111,6 +112,7 @@ class GeneratePresentationRequest(BaseModel):
     # publication.  It is intentionally private: callers select source policy
     # through ``contentPolicy``; the server owns the effective profile.
     _authored_composition_profile: Any = PrivateAttr(default=None)
+    _authored_canvas: Any = PrivateAttr(default=None)
 
     # Chat-first async generation reuses the durable presentation shell and
     # awaiting-approval operation created by /presentation/create.  Legacy
@@ -143,6 +145,10 @@ class GeneratePresentationRequest(BaseModel):
     )
     template: str = Field(
         default="authored", description="Presentation source to use for generation"
+    )
+    aspect_ratio: Literal["16:9", "9:16", "9:13"] = Field(
+        default="16:9",
+        description="Authored presentation canvas aspect ratio.",
     )
     quality_profile: Literal["development", "release"] = Field(
         default="development",

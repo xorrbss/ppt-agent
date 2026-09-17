@@ -20,6 +20,7 @@ import { installNextjsModuleAliasHooks } from "./lib/nextjs-module-alias-hooks.m
 import {
   describeHybridErrorChain,
   mapHybridSlideFallbackCode,
+  prepareHybridSlideWithRecovery,
 } from "./lib/hybrid-slide-fallback-code.mjs";
 import { mapWithDeckBudget } from "./lib/hybrid-deck-budget.mjs";
 import {
@@ -33,7 +34,10 @@ export { describeHybridErrorChain, mapHybridSlideFallbackCode };
 const JOB_SCHEMA = "public-hybrid-export-job/v1";
 const RESULT_SCHEMA = "public-hybrid-export-result/v1";
 const MAX_SLIDES = 100;
-const MAX_JOB_BYTES = 1024 * 1024;
+// The parent already admits and stages export bundles at an 8 MiB boundary.
+// A 100-slide declared semantic graph can legitimately exceed 1 MiB even
+// though every slide and artifact reference has passed that outer admission.
+const MAX_JOB_BYTES = 8 * 1024 * 1024;
 const MAX_BASE_PPTX_BYTES = 512 * 1024 * 1024;
 const MAX_SLIDE_FALLBACKS = 200;
 const KOREAN_NATIVE_EMBEDDING_FAMILY = "Noto Sans KR";
@@ -146,6 +150,7 @@ async function readJob() {
     scratchDirectory: value.scratchDirectory,
     fontAllowlistDirectory,
     fontEmbedding: value.fontEmbedding,
+    canvas: value.canvas,
     exportAttemptId,
     rendererSourceDigest,
     semanticSlides,
@@ -161,7 +166,7 @@ async function loadHybridModules() {
   const libRoot = pathToFileURL(
     path.join(path.resolve(path.join(import.meta.dirname, "..")), "lib", path.sep),
   ).href;
-  const [index, slideLayer, assembler, fontEmbedding, fontPolicy, quality, inspection, slideQuality, localFit] =
+  const [index, slideLayer, assembler, fontEmbedding, fontPolicy, quality, inspection, slideQuality, localFit, canvasApi, editability] =
     await Promise.all([
       import(`${libRoot}authored-hybrid/index.ts`),
       import(`${libRoot}authored-hybrid/slide-layer.ts`),
@@ -172,10 +177,14 @@ async function loadHybridModules() {
       import(`${libRoot}authored-hybrid/pptx-quality-inspection.ts`),
       import(`${libRoot}authored-hybrid/export-slide-quality.ts`),
       import(`${libRoot}authored-hybrid/local-fit-export-evidence.ts`),
+      import(`${libRoot}authored-canvas.ts`),
+      import(`${libRoot}authored-hybrid/editability-evidence.ts`),
     ]);
   return {
     resolveAuthoredHybridChromeExecutable: index.resolveAuthoredHybridChromeExecutable,
     prepareSlideLayer: slideLayer.prepareSlideLayer,
+    createPublicHybridEditabilityEvidence: editability.createPublicHybridEditabilityEvidence,
+    resolveAuthoredCanvas: canvasApi.resolveAuthoredCanvas,
     assembleAuthoredHybridPptxAsync: assembler.assembleAuthoredHybridPptxAsync,
     prepareFontEmbedding: fontEmbedding.prepareFontEmbedding,
     embeddedGlyphAvailable: fontEmbedding.embeddedGlyphAvailable,
@@ -258,6 +267,9 @@ function summarizeQuality(report, deckBudgetMillis) {
 }
 
 async function run() {
+  const started = performance.now();
+  const timing = { schemaVersion: "public-hybrid-timing/v1", slides: [] };
+  const elapsed = (start) => Math.round(performance.now() - start);
   const job = await readJob();
   // Bundled fonts ship beside the Next.js server; the worker's cwd is its own
   // sandbox, so point the reader at the repository copy explicitly. App data
@@ -274,6 +286,8 @@ async function run() {
   }
 
   const modules = await loadHybridModules();
+  const canvas = modules.resolveAuthoredCanvas(job.canvas === undefined
+    ? undefined : { authored_vnext: { canvas: job.canvas } });
   const chromeExecutable = await modules.resolveAuthoredHybridChromeExecutable();
   if (!chromeExecutable) throw new HybridWorkerError("hybrid_chrome_unavailable");
 
@@ -289,6 +303,8 @@ async function run() {
     (_slide, index) => job.semanticSlides[index] ?? null,
   );
 
+  timing.setupMillis = elapsed(started);
+  const fontStarted = performance.now();
   const fontPlan = await modules.resolveFontEmbeddingPlan({
     requested: job.fontEmbedding,
     // Browser CSS often names only the Latin face while Hangul resolves through
@@ -326,6 +342,8 @@ async function run() {
     };
   }
 
+  timing.fontEmbeddingMillis = elapsed(fontStarted);
+  const conversionStarted = performance.now();
   const deadline = Date.now() + job.budgetMillis;
   const glyphAvailable = modules.embeddedGlyphAvailable(fontPlan);
   const { output: outcomes, telemetry: budget } = await mapWithDeckBudget(
@@ -337,6 +355,8 @@ async function run() {
     job.concurrency,
     deadline,
     async (slide) => {
+      const slideStarted = performance.now();
+      const recovery = {};
       const semanticContext = slide.semantic
         ? {
             exportAttemptId: job.exportAttemptId,
@@ -348,7 +368,7 @@ async function run() {
           }
         : undefined;
       try {
-        return await modules.prepareSlideLayer(
+        return await prepareHybridSlideWithRecovery(() => modules.prepareSlideLayer(
           slide.html,
           slide.slideNumber,
           chromeExecutable,
@@ -356,7 +376,8 @@ async function run() {
           embedding.embeddedTypefaceFaces,
           semanticContext,
           glyphAvailable,
-        );
+          canvas,
+        ), deadline, recovery);
       } catch (error) {
         // A declared graph that does not reconcile with what the browser
         // observed costs this slide its native layer, never the export. The
@@ -377,6 +398,8 @@ async function run() {
           ),
           fontRendering: modules.noFontRenderingTelemetry(),
         };
+      } finally {
+        timing.slides.push({ n: slide.slideNumber, conversionMillis: elapsed(slideStarted), recovery });
       }
     },
     (slide) => ({
@@ -392,6 +415,10 @@ async function run() {
       + `medianSlideMs=${budget.observedMedianMillis ?? "n/a"} maxSlideMs=${budget.observedMaxMillis ?? "n/a"}
 `,
   );
+  timing.conversionWallMillis = elapsed(conversionStarted);
+  timing.slides.sort((a, b) => a.n - b.n);
+  timing.slidesNotAttempted = job.slides.length - timing.slides.length;
+  const assemblyStarted = performance.now();
   let finalOutcomes = outcomes;
   let layers = finalOutcomes.map((outcome) => outcome.layer).filter(Boolean);
   let report = createHybridWorkerQualityReport(
@@ -404,12 +431,14 @@ async function run() {
     // the caller with a downgrade it can name but cannot explain or act on.
     const noLayers = new HybridWorkerError("hybrid_no_native_layers");
     noLayers.quality = summarizeQuality(report, job.budgetMillis);
-    throw noLayers;
+    noLayers.timing = { ...timing, wallMillis: elapsed(started) };
+    noLayers.editability = modules.createPublicHybridEditabilityEvidence({ outcomes: finalOutcomes, semantics, htmls, pptxBytes: embedding.pptx });
+    if (noLayers.editability.verdict !== "not-applicable") throw noLayers;
   }
   const assembled = await assembleWithPerSlideIntegrityFallback({
     basePptx: embedding.pptx,
     outcomes: finalOutcomes,
-    assemblerOptions: { embeddedTypefaceFamilies: embedding.embeddedTypefaceFamilies },
+    assemblerOptions: { embeddedTypefaceFamilies: embedding.embeddedTypefaceFamilies, canvas },
     assemble: modules.assembleAuthoredHybridPptxAsync,
     mapFallbackCode: mapHybridSlideFallbackCode,
     createFallbackOutcome: (slideNumber, code) => ({
@@ -432,17 +461,26 @@ async function run() {
   if (!assembled.hybridBytes) {
     const noLayers = new HybridWorkerError("hybrid_no_native_layers");
     noLayers.quality = summarizeQuality(report, job.budgetMillis);
-    throw noLayers;
+    noLayers.timing = { ...timing, wallMillis: elapsed(started) };
+    noLayers.editability = modules.createPublicHybridEditabilityEvidence({ outcomes: finalOutcomes, semantics, htmls, pptxBytes: embedding.pptx });
+    if (noLayers.editability.verdict !== "not-applicable") throw noLayers;
   }
-  const hybridBytes = assembled.hybridBytes;
+  const hybridBytes = assembled.hybridBytes ?? embedding.pptx;
+  timing.assemblyMillis = elapsed(assemblyStarted);
+  const verificationStarted = performance.now();
   await writeFile(job.outputPath, hybridBytes, { flag: "wx", mode: 0o600 });
   await modules.writeLocalFitExportEvidence(job.outputPath,
-    modules.createLocalFitExportEvidence(layers, htmls, job.rendererSourceDigest ?? "", hybridBytes));
+    modules.createLocalFitExportEvidence(layers, htmls, job.rendererSourceDigest ?? "", hybridBytes, canvas));
   const structural = modules.inspectPptxEditability(hybridBytes);
+  const editability = modules.createPublicHybridEditabilityEvidence({ outcomes: finalOutcomes, semantics, htmls, pptxBytes: hybridBytes });
+  timing.writeAndVerificationMillis = elapsed(verificationStarted);
+  timing.wallMillis = elapsed(started);
 
   return {
     schemaVersion: RESULT_SCHEMA,
     ok: true,
+    timing,
+    editability,
     errorCode: null,
     quality: summarizeQuality(report, job.budgetMillis),
     structural: summarizeStructural(structural),
@@ -477,6 +515,8 @@ async function main() {
         schemaVersion: RESULT_SCHEMA,
         ok: false,
         errorCode: code,
+        ...(error instanceof HybridWorkerError && error.timing ? { timing: error.timing } : {}),
+        ...(error instanceof HybridWorkerError && error.editability ? { editability: error.editability } : {}),
         // A refusal still owes an account of itself when it has one.
         ...(error instanceof HybridWorkerError && error.quality
           ? { quality: error.quality }

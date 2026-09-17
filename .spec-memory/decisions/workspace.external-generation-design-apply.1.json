@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "workspace.external-generation-design-apply",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "External generation owns design.apply and template.apply, including handler registration and the linked generation job claim, terminal and recovery lifecycle.",
+  "scope": [
+    "workspace",
+    "generation",
+    "worker"
+  ],
+  "invariants": [
+    "Design application reuses its existing target operation and linked generation job.",
+    "Export remains owned by the export controller."
+  ],
+  "forbidden": [
+    "Admitting a design application that no generation controller can claim."
+  ],
+  "evidence": [
+    "servers/fastapi/services/public_worker_profiles.py",
+    "servers/fastapi/services/workspace_operation_worker.py",
+    "servers/fastapi/services/workspace_operation_runner.py",
+    "servers/fastapi/tests/unit/test_workspace_operation_worker.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-13T23:08:17.5357322+00:00"
+}

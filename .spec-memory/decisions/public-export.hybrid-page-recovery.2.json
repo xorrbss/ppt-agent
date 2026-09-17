@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.hybrid-page-recovery",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Preserve verified editable output, retry only transient page failures once within budget, and explicitly report image-page replacements.",
+  "scope": [
+    "public-export",
+    "authored-hybrid",
+    "quality"
+  ],
+  "invariants": [
+    "Preserve successful captures despite cleanup failure; classify primary capture errors separately.",
+    "Retry only the affected page once for transient capture failure when the existing deadline admits it.",
+    "Distinguish fragment absence, digest mismatch and placement mismatch; retain bounded content-free diagnostics.",
+    "Preserve healthy editable pages; repair smaller regions only when exact content and stacking are verified, otherwise explicitly report page image replacement.",
+    "Never present partial or unknown editability as fully editable completion; preserve page order, canvas, source identity and package integrity."
+  ],
+  "forbidden": [
+    "Retry deterministic integrity failures automatically.",
+    "Increase coordinate tolerance without numerical evidence.",
+    "Silently substitute a whole image deck for requested editable output.",
+    "Persist source HTML, browser logs or local paths in public diagnostic evidence."
+  ],
+  "evidence": [
+    "User approved this direction and difficulty-matched multi-agent implementation.",
+    "servers/fastapi/tests/unit/test_public_render_export_delivery.py",
+    "servers/nextjs/scripts/lib/hybrid-slide-fallback-code.mjs"
+  ],
+  "supersedes": "public-export.hybrid-page-recovery@1",
+  "recordedAt": "2026-09-14T12:36:28.9579040+00:00"
+}

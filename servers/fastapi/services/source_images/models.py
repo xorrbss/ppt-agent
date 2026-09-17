@@ -55,6 +55,13 @@ class SourceImageCandidate:
     #: What the source slide says, condensed. This is the matching signal: a
     #: proposal deck's headings are often section markers that carry no subject.
     source_text: Optional[str] = None
+    original_name: Optional[str] = None
+    ocr_text: Optional[str] = None
+    semantic_description: Optional[str] = None
+    analysis_status: str = "not_analyzed"
+    analysis_error: Optional[str] = None
+    #: Normalized source coordinates; unknown regions conservatively protect all pixels.
+    protected_regions: tuple[dict, ...] = ()
 
     @property
     def aspect_ratio(self) -> float:

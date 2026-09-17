@@ -66,7 +66,7 @@ export function PageRemakePreviewImage({
           // stays correct even where the utility stylesheet is absent.
           <div
             style={{ pointerEvents: "auto" }}
-            className="fixed inset-0 z-[80] flex cursor-zoom-out items-center justify-center bg-black/80 p-4"
+            className="fixed inset-0 z-[80] flex cursor-zoom-out items-center justify-center bg-slate-950/35 backdrop-blur-[2px] p-4"
             onClick={() => setIsZoomed(false)}
             role="dialog"
             aria-modal="true"
@@ -77,7 +77,7 @@ export function PageRemakePreviewImage({
             <img
               src={source}
               alt={label}
-              className="max-h-[95vh] max-w-[95vw] object-contain shadow-2xl"
+              className="max-h-[calc(100dvh-2rem)] max-w-full rounded-2xl border border-gray-200/80 bg-white object-contain shadow-[0_12px_40px_-16px_rgba(15,23,42,0.18)]"
             />
           </div>,
           document.body,

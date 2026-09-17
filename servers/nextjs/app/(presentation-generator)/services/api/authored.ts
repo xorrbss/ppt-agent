@@ -304,6 +304,7 @@ export interface AuthoredStyleSummary {
   use_cases: string[];
   preview: AuthoredStylePreview;
   aliases?: string[];
+  supportedAspectRatios: Array<"16:9" | "9:16" | "9:13">;
 }
 
 export const DEFAULT_AUTHORED_STYLE: AuthoredStyleSummary = {
@@ -313,6 +314,7 @@ export const DEFAULT_AUTHORED_STYLE: AuthoredStyleSummary = {
   category: "general",
   tags: ["범용", "깔끔한", "컨설팅"],
   use_cases: ["회사 소개", "프로젝트 제안", "일반 보고서"],
+  supportedAspectRatios: ["16:9"],
   preview: {
     bg: "#F8FAFC",
     accent: "#2563EB",
@@ -376,6 +378,11 @@ function toAuthoredStyleSummary(value: unknown): AuthoredStyleSummary | null {
     category: normalizeCategory(value.category),
     tags: normalizeStringList(value.tags),
     use_cases: normalizeStringList(value.use_cases),
+    supportedAspectRatios: Array.isArray(value.supportedAspectRatios)
+      ? value.supportedAspectRatios.filter(
+          (ratio): ratio is "16:9" | "9:16" | "9:13" => ratio === "16:9" || ratio === "9:16" || ratio === "9:13",
+        )
+      : ["16:9"],
     preview: previewShape,
     ...(Array.isArray(value.aliases)
       ? { aliases: normalizeStringList(value.aliases) }

@@ -5,6 +5,7 @@ import {
   AuthoredSlidePreview,
   isolateAuthoredPreviewHtml,
 } from "./AuthoredSlidePreview";
+import { AUTHORED_CANVAS_BY_ASPECT_RATIO } from "@/lib/authored-canvas";
 
 describe("AuthoredSlidePreview", () => {
   beforeEach(() => {
@@ -30,7 +31,7 @@ describe("AuthoredSlidePreview", () => {
       .and("have.class", "h-full")
       .and("have.class", "w-full");
     cy.get('[data-testid="authored-slide-preview-2"]')
-      .should("have.class", "aspect-video");
+      .should("have.attr", "data-authored-canvas", "1280x720");
     cy.get('img[src="/stale-slide.png"]').should("not.exist");
     cy.window().its("__authoredScriptRan").should("be.undefined");
   });
@@ -48,7 +49,7 @@ describe("AuthoredSlidePreview", () => {
     cy.get("iframe").should("not.exist");
   });
 
-  it("keeps the HTML render kind and 16:9 stage when only the cached asset refreshes", () => {
+  it("keeps the HTML render kind and portrait canvas when only the cached asset refreshes", () => {
     const html = "<div>persisted authored source</div>";
     let originalFrame: HTMLIFrameElement | undefined;
     let rerender: (component: React.ReactNode) => void = () => {
@@ -61,6 +62,7 @@ describe("AuthoredSlidePreview", () => {
         html={html}
         imageSrc="/cached-before.png"
         preferHtml
+        canvas={AUTHORED_CANVAS_BY_ASPECT_RATIO["9:16"]}
       />
     ).then((mounted) => {
       rerender = mounted.rerender;
@@ -79,12 +81,13 @@ describe("AuthoredSlidePreview", () => {
           html={html}
           imageSrc="/cached-after.png"
           preferHtml
+          canvas={AUTHORED_CANVAS_BY_ASPECT_RATIO["9:16"]}
         />
       );
     });
 
     cy.get('[data-testid="authored-slide-preview-89"]')
-      .should("have.class", "aspect-video");
+      .should("have.attr", "data-authored-canvas", "720x1280");
     cy.get('[data-testid="authored-html-preview-89"]')
       .should("have.attr", "srcdoc", isolateAuthoredPreviewHtml(html))
       .and("have.class", "h-full")

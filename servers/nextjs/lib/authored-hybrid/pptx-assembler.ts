@@ -1,4 +1,10 @@
+import { assertFragmentBand, isFragmentBand, validateFragmentBand, RASTER_FRAGMENT_LIMIT, RASTER_FRAGMENT_BYTES, type RasterBand } from "./raster-fragments.ts";
 import { createHash } from "node:crypto";
+import {
+  authoredCanvasPhysicalSize,
+  LEGACY_AUTHORED_CANVAS,
+  type AuthoredCanvasContract,
+} from "../authored-canvas.ts";
 import type { LocalFitCaptureEvidence } from "./local-fit-export-evidence.ts";
 
 import {
@@ -42,8 +48,6 @@ import {
 
 const SLIDE_WIDTH_EMU = 12_192_000;
 const SLIDE_HEIGHT_EMU = 6_858_000;
-const SLIDE_WIDTH_PX = 1_280;
-const SLIDE_HEIGHT_PX = 720;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 export interface AuthoredHybridSlideLayer {
   localFitCapture?: LocalFitCaptureEvidence;
@@ -55,11 +59,8 @@ export interface AuthoredHybridSlideLayer {
   /** Ordered semantic QIDs represented by native objects or this slide's raster. */
   semanticOwnerQids?: readonly string[];
   /** Transparent Chromium raster bands in audited paint order. */
-  rasterBands?: readonly {
-    readonly zBand: number;
-    readonly rasterPng: Buffer;
-    readonly semanticOwnerQids: readonly string[];
-  }[];
+  rasterBands?: readonly RasterBand[];
+  selectionObstructions?: readonly { zBand: number; elementId: string; reason: string }[];
   /** Exact band assignment for each top-level native owner. */
   nativeZBandByElementId?: Readonly<Record<string, number>>;
 }
@@ -70,6 +71,7 @@ export interface AuthoredHybridPptxProvenance {
 }
 export interface AuthoredHybridAssemblerOptions extends PowerPointTypefaceSerializationOptions {
   readonly provenance?: AuthoredHybridPptxProvenance;
+  readonly canvas?: AuthoredCanvasContract;
 }
 
 function xmlAttribute(xml: string, element: string, attribute: string): number | null {
@@ -78,25 +80,46 @@ function xmlAttribute(xml: string, element: string, attribute: string): number |
   return value === undefined ? null : Number(value);
 }
 
-function assertPresentationSize(entries: ReadonlyMap<string, Buffer>): void {
+function setPresentationSize(
+  entries: Map<string, Buffer>,
+  canvas: AuthoredCanvasContract,
+): void {
   const presentation = entries.get("ppt/presentation.xml")?.toString("utf8");
   if (!presentation) throw new Error("PPTX presentation.xml is missing.");
-  if (
-    xmlAttribute(presentation, "p:sldSz", "cx") !== SLIDE_WIDTH_EMU ||
-    xmlAttribute(presentation, "p:sldSz", "cy") !== SLIDE_HEIGHT_EMU
-  ) {
-    throw new Error("Hybrid export requires the fixed 16:9 authored slide size.");
+  const width = xmlAttribute(presentation, "p:sldSz", "cx");
+  const height = xmlAttribute(presentation, "p:sldSz", "cy");
+  const target = authoredCanvasPhysicalSize(canvas);
+  if (!(
+    (width === SLIDE_WIDTH_EMU && height === SLIDE_HEIGHT_EMU) ||
+    (width === target.widthEmu && height === target.heightEmu)
+  )) {
+    throw new Error("Hybrid export source has an unsupported authored slide size.");
   }
+  const next = presentation.replace(
+    /<p:sldSz\b[^>]*>/i,
+    (opening) => opening
+      .replace(/\bcx=["']\d+["']/i, `cx="${target.widthEmu}"`)
+      .replace(/\bcy=["']\d+["']/i, `cy="${target.heightEmu}"`),
+  );
+  if (next === presentation &&
+      (width !== target.widthEmu || height !== target.heightEmu)) {
+    throw new Error("PPTX presentation slide size could not be updated.");
+  }
+  entries.set("ppt/presentation.xml", Buffer.from(next, "utf8"));
 }
 
-function assertBackplatePng(png: Buffer): void {
+function assertBackplatePng(
+  png: Buffer,
+  canvas: AuthoredCanvasContract,
+): void {
+  const expected = backplatePixelSize(canvas);
   if (
     png.length < 24 ||
     !png.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE) ||
-    png.readUInt32BE(16) !== backplatePixelSize().width ||
-    png.readUInt32BE(20) !== backplatePixelSize().height
+    png.readUInt32BE(16) !== expected.width ||
+    png.readUInt32BE(20) !== expected.height
   ) {
-    throw new Error(`Hybrid backplate must be a ${backplatePixelSize().width}x${backplatePixelSize().height} PNG.`);
+    throw new Error(`Hybrid backplate must be a ${expected.width}x${expected.height} PNG.`);
   }
 }
 
@@ -106,7 +129,7 @@ function assertBackplatePng(png: Buffer): void {
  * below the residual raster; otherwise it hides raster-only illustrations
  * while later text and small shapes still appear correctly.
  */
-export function isCanvasBackgroundShape(item: PreparedNativeElement): boolean {
+export function isCanvasBackgroundShape(item: PreparedNativeElement, canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS): boolean {
   if (item.kind !== "shape") return false;
   const { x, y, width, height } = item.source.bounds.px;
   const shape = item.source.shape;
@@ -124,8 +147,8 @@ export function isCanvasBackgroundShape(item: PreparedNativeElement): boolean {
     Math.abs(item.source.rotationDeg) < 0.001 &&
     x <= 0.5 &&
     y <= 0.5 &&
-    x + width >= SLIDE_WIDTH_PX - 0.5 &&
-    y + height >= SLIDE_HEIGHT_PX - 0.5
+    x + width >= canvas.widthPx - 0.5 &&
+    y + height >= canvas.heightPx - 0.5
   );
 }
 
@@ -190,6 +213,8 @@ function backplatePictureXml(
   _qids: readonly string[],
   nonVisualId = 2,
   bandIndex = 0,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS,
+  placement?: { x: number; y: number; width: number; height: number; captureWidth: number; captureHeight: number },
 ): string {
   // Semantic QIDs live only on the hidden exact-owner carriers. Repeating the
   // set on a raster picture would create a second logical owner in readback.
@@ -197,7 +222,12 @@ function backplatePictureXml(
   const name = bandIndex === 0
     ? "DevAX hybrid backplate"
     : `DevAX hybrid raster z-band ${bandIndex}`;
-  return `<p:pic><p:nvPicPr><p:cNvPr id="${nonVisualId}" name="${name}"${description}/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${SLIDE_WIDTH_EMU}" cy="${SLIDE_HEIGHT_EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
+  const size = authoredCanvasPhysicalSize(canvas);
+  const x = placement ? Math.round(placement.x / placement.captureWidth * size.widthEmu) : 0;
+  const y = placement ? Math.round(placement.y / placement.captureHeight * size.heightEmu) : 0;
+  const width = placement ? Math.round((placement.x+placement.width) / placement.captureWidth * size.widthEmu)-x : size.widthEmu;
+  const height = placement ? Math.round((placement.y+placement.height) / placement.captureHeight * size.heightEmu)-y : size.heightEmu;
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${nonVisualId}" name="${name}"${description}/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${width}" cy="${height}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
 }
 
 function semanticOwnershipShapeXml(
@@ -294,10 +324,11 @@ function escapeXmlAttribute(value: string): string {
 /** Exact geometry the assembler will expose to OOXML readback. */
 export function preparedNativeElementExpectedReadbackBounds(
   item: PreparedNativeElement,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS,
 ): { x: number; y: number; width: number; height: number } {
   const sourceBounds = item.kind === "text"
     ? item.source.text.containerShape?.bounds.px ??
-      powerPointTextBoundsForPreflight(item.source) ??
+      powerPointTextBoundsForPreflight(item.source, canvas) ??
       item.source.bounds.px
     : item.source.bounds.px;
   const toEmu = (value: number) => Math.round(value * 9_525);
@@ -348,8 +379,8 @@ export function preparedNativeElementExpectedReadbackBounds(
         : 0;
     const nextX = Math.max(0, Math.round(x - left));
     const nextY = Math.max(0, Math.round(y - top));
-    const nextRight = Math.min(SLIDE_WIDTH_EMU, Math.round(x + width + right));
-    const nextBottom = Math.min(SLIDE_HEIGHT_EMU, Math.round(y + height + bottom));
+    const nextRight = Math.min(authoredCanvasPhysicalSize(canvas).widthEmu, Math.round(x + width + right));
+    const nextBottom = Math.min(authoredCanvasPhysicalSize(canvas).heightEmu, Math.round(y + height + bottom));
     x = nextX;
     y = nextY;
     width = Math.max(1, nextRight - nextX);
@@ -360,7 +391,8 @@ export function preparedNativeElementExpectedReadbackBounds(
 
 function expandStandaloneTextBounds(
   xml: string,
-  item: Extract<PreparedNativeElement, { kind: "text" }>
+  item: Extract<PreparedNativeElement, { kind: "text" }>,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS
 ): string {
   if (item.source.text.containerShape || Math.abs(item.source.rotationDeg) >= 0.001) return xml;
   const match = xml.match(
@@ -382,8 +414,8 @@ function expandStandaloneTextBounds(
   const bottom = vertical === "top" ? verticalSlack : vertical === "middle" ? verticalSlack / 2 : 0;
   const nextX = Math.max(0, Math.round(x - left));
   const nextY = Math.max(0, Math.round(y - top));
-  const nextRight = Math.min(SLIDE_WIDTH_EMU, Math.round(x + width + right));
-  const nextBottom = Math.min(SLIDE_HEIGHT_EMU, Math.round(y + height + bottom));
+  const nextRight = Math.min(authoredCanvasPhysicalSize(canvas).widthEmu, Math.round(x + width + right));
+  const nextBottom = Math.min(authoredCanvasPhysicalSize(canvas).heightEmu, Math.round(y + height + bottom));
   return xml.replace(
     match[0],
     `<a:xfrm><a:off x="${nextX}" y="${nextY}"/><a:ext cx="${Math.max(1, nextRight - nextX)}" cy="${Math.max(1, nextBottom - nextY)}"/></a:xfrm>`
@@ -416,7 +448,7 @@ function hardenTextOverlay(
     .replace(/\bhorzOverflow="(?:overflow|clip)"/, 'horzOverflow="clip"')
     .replace(/\bvertOverflow="(?:overflow|clip)"/, 'vertOverflow="clip"')
     .replace(/<a:(?:normAutofit|noAutofit)\/>/, "<a:noAutofit/>");
-  return expandStandaloneTextBounds(hardened, item);
+  return expandStandaloneTextBounds(hardened, item, options.canvas);
 }
 function provenanceProperties(
   provenance?: AuthoredHybridPptxProvenance,
@@ -466,10 +498,11 @@ function assembleSlide(
   layer: AuthoredHybridSlideLayer,
   options: AuthoredHybridAssemblerOptions
 ): ReadonlySet<string> {
+  const canvas = options.canvas ?? LEGACY_AUTHORED_CANVAS;
   if (!Number.isInteger(layer.slideNumber) || layer.slideNumber < 1) {
     throw new Error("Hybrid slide number is invalid.");
   }
-  assertBackplatePng(layer.backplatePng);
+  assertBackplatePng(layer.backplatePng, canvas);
   const rasterBands = layer.rasterBands?.length
     ? [...layer.rasterBands].sort((left, right) => left.zBand - right.zBand)
     : [{ zBand: 0, rasterPng: layer.backplatePng, semanticOwnerQids: layer.semanticOwnerQids ?? [] }];
@@ -481,7 +514,20 @@ function assembleSlide(
   ) {
     throw new Error("Hybrid raster z-bands must be unique ascending integers.");
   }
-  rasterBands.forEach((band) => assertBackplatePng(band.rasterPng));
+  if (rasterBands.length > RASTER_FRAGMENT_LIMIT) throw new Error("Hybrid raster band count exceeds page limit.");
+  rasterBands.forEach((band) => { if ("schemaVersion" in band && !isFragmentBand(band)) throw new Error("Hybrid raster band schema version unsupported."); if (isFragmentBand(band)) assertFragmentBand(band); else assertBackplatePng(band.rasterPng, canvas); });
+  const fragments: { zBand: number; rasterPng: Buffer; semanticOwnerQids: readonly string[]; fragmentId: string;
+    placement?: { x: number; y: number; width: number; height: number; captureWidth: number; captureHeight: number } }[] = [];
+  for (const band of rasterBands) {
+    if (isFragmentBand(band)) for (const fragment of band.fragments) fragments.push({
+      zBand: band.zBand, semanticOwnerQids: band.semanticOwnerQids, rasterPng: fragment.png,
+      placement: { ...fragment.rect, captureWidth: band.captureWidthPx, captureHeight: band.captureHeightPx }, fragmentId: fragment.id,
+    });
+    else fragments.push({ ...band, fragmentId: "legacy" });
+  }
+  if (fragments.length > RASTER_FRAGMENT_LIMIT) throw new Error("Hybrid raster page fragment limit exceeded.");
+  const croppedBytes = rasterBands.flatMap(band => isFragmentBand(band) ? band.fragments.filter(f => !f.png.equals(band.rasterPng)) : []).reduce((sum,f)=>sum+f.png.length,0);
+  if (croppedBytes > RASTER_FRAGMENT_BYTES) throw new Error("Hybrid raster page crop byte limit exceeded.");
   const slidePath = `ppt/slides/slide${layer.slideNumber}.xml`;
   const relsPath = `ppt/slides/_rels/slide${layer.slideNumber}.xml.rels`;
   const slideXml = entries.get(slidePath)?.toString("utf8");
@@ -494,11 +540,11 @@ function assembleSlide(
   if (!spTree) throw new Error("PPTX slide shape tree is malformed.");
 
   let relationshipNumber = nextRelationshipNumber(relationshipsXml);
-  const rasterBandParts = rasterBands.map((band, index) => {
+  const rasterBandParts = fragments.map((band, index) => {
     const mediaName = allocateMediaName(
       entries,
       layer.slideNumber,
-      `raster-band-${band.zBand}`,
+      band.fragmentId === "legacy" ? `raster-band-${band.zBand}` : `raster-band-${band.zBand}-${band.fragmentId}`,
       band.rasterPng,
     );
     const relationshipId = `rId${relationshipNumber}`;
@@ -511,10 +557,11 @@ function assembleSlide(
     entries.set(`ppt/media/${mediaName}`, Buffer.from(band.rasterPng));
     return { ...band, relationshipId, mediaName, nonVisualId: index + 2 };
   });
-  const useSlideBackground =
-    rasterBandParts.length === 1 &&
-    rasterBandParts[0].zBand === 0 &&
-    isOpaqueRgbPng(rasterBandParts[0].rasterPng);
+  const bottom = rasterBands[0];
+  const useSlideBackground = bottom && isFragmentBand(bottom) && bottom.backgroundEligible && bottom.opaque && bottom.zBand === 0 &&
+    !layer.elements.some(item => isCanvasBackgroundShape(item, canvas)) &&
+    bottom.fragments.length === 1 && bottom.fragments[0].rect.x === 0 && bottom.fragments[0].rect.y === 0 &&
+    bottom.fragments[0].rect.width === bottom.captureWidthPx && bottom.fragments[0].rect.height === bottom.captureHeightPx;
   const ownershipQids = semanticOwnerQids(layer);
   const flatNativeElements = flattenPreparedNativeElements(layer.elements);
   const nativeOwnerQids = new Set(flatNativeElements.map((item) => item.source.id));
@@ -615,7 +662,7 @@ function assembleSlide(
       overlay = hardenTextOverlay(overlay, item, options, layer.slideNumber);
     }
     if (underlay) {
-      if (isCanvasBackgroundShape(item)) {
+      if (isCanvasBackgroundShape(item, canvas)) {
         if (insideGroup) {
           throw new Error("Hybrid canvas background cannot be nested in a native group.");
         }
@@ -623,7 +670,7 @@ function assembleSlide(
       }
     }
     nextNonVisualId += preparedNativeElementNonVisualIdCount(item);
-    return `${isCanvasBackgroundShape(item) ? "" : underlay}${overlay}`;
+    return `${isCanvasBackgroundShape(item, canvas) ? "" : underlay}${overlay}`;
   };
   ordered.forEach((item) => {
     const xml = serializeTreeItem(item);
@@ -641,7 +688,7 @@ function assembleSlide(
     ...rasterBandParts.map((band, index) => ({
       zBand: band.zBand,
       ownerOrder: 0,
-      xml: useSlideBackground
+      xml: useSlideBackground && index === 0
         ? ""
         : backplatePictureXml(
             band.relationshipId,
@@ -649,6 +696,8 @@ function assembleSlide(
             band.semanticOwnerQids,
             band.nonVisualId,
             index,
+            canvas,
+            band.placement,
           ),
     })),
     ...orderedNativeXml.map((item) => ({ ...item, ownerOrder: 1 })),
@@ -704,7 +753,7 @@ function assembleAuthoredHybridEntries(
   const entries = readPptxArchive(fidelityPptx);
   const removedMediaPaths = new Set<string>();
   if (layers.length) {
-    assertPresentationSize(entries);
+    setPresentationSize(entries, options.canvas ?? LEGACY_AUTHORED_CANVAS);
     addPngContentType(entries);
     for (const layer of layers) {
       for (const mediaPath of assembleSlide(entries, layer, options)) {
@@ -739,6 +788,7 @@ export async function assembleAuthoredHybridPptxAsync(
   layers: readonly AuthoredHybridSlideLayer[],
   options: AuthoredHybridAssemblerOptions = {}
 ): Promise<Buffer> {
+  for (const layer of layers) for (const band of layer.rasterBands ?? []) if (isFragmentBand(band)) await validateFragmentBand(band);
   const entries = assembleAuthoredHybridEntries(fidelityPptx, layers, options);
   return entries === null
     ? Buffer.from(fidelityPptx)

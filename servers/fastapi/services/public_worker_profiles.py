@@ -41,7 +41,14 @@ PUBLIC_WORKER_PROFILES = MappingProxyType(
         ),
         "generation": PublicWorkerProfile(
             role="generation",
-            operation_kinds=("presentation.generate", "quality.review"),
+            operation_kinds=(
+                "presentation.generate",
+                "quality.review",
+                "slide.regenerate.preview",
+                "slide.regenerate",
+                "template.apply",
+                "design.apply",
+            ),
             canonical_database_access=True,
             provider_network_access=True,
             artifact_access="metadata-authority",

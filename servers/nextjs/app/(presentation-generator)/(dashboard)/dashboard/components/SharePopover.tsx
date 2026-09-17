@@ -140,8 +140,8 @@ export function SharePopover({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-[520px] gap-0 overflow-hidden rounded-2xl border-0 bg-white p-0"
-        overlayClassName="bg-black/45 backdrop-blur-[2px]"
+        className="max-w-[520px] gap-0 overflow-hidden p-0"
+        overlayClassName="bg-slate-950/35 backdrop-blur-[2px]"
         onClick={(event) => event.stopPropagation()}
       >
         <DialogHeader className="border-b border-[#EDEEEF] px-6 py-5">

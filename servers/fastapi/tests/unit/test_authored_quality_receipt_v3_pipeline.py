@@ -477,7 +477,7 @@ async def test_persisted_quality_gate_projects_only_verified_internal_receipts(t
                   idempotency_key_hash="a" * 64, request_hash="b" * 64,
                   attempt_token="private-test-lease", fencing_token=1)
     async with factory() as session:
-        session.add(WorkspaceOperation(id=generation_id, kind="presentation.generate",
+        session.add(WorkspaceOperation(id=generation_id, kind="design.apply",
                                       expected_revision=1, result_revision=2, **common))
         session.add(WorkspaceOperation(id=review_id, kind="quality.review",
                                       expected_revision=2, result_revision=3, **{**common, "anchor_position": 2}))
@@ -505,6 +505,14 @@ async def test_persisted_quality_gate_projects_only_verified_internal_receipts(t
     async with factory() as session:
         generation = await load_public_quality_evidence(session, **lookup)
         assert generation and generation["operationId"] == str(generation_id)
+        # Authored design/template applications carry the same sealed generation
+        # receipt as presentation.generate; unknown operation kinds stay rejected.
+        (await session.get(WorkspaceOperation, generation_id)).kind = "presentation.replay"
+        await session.commit()
+        with pytest.raises(ValueError, match="quality_receipt_v3_evidence_digest_mismatch"):
+            await load_public_quality_evidence(session, **lookup)
+        (await session.get(WorkspaceOperation, generation_id)).kind = "design.apply"
+        await session.commit()
         assert await load_public_quality_evidence(session, **{**lookup, "owner_id": uuid.uuid4()}) is None
         assert await load_public_quality_evidence(session, **{**lookup, "owner_scope": "other"}) is None
         assert await load_public_quality_evidence(session, **{**lookup, "presentation_id": uuid.uuid4()}) is None

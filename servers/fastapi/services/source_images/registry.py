@@ -14,8 +14,8 @@ import hashlib
 import shutil
 import uuid
 from collections import defaultdict
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
@@ -74,6 +74,8 @@ class _RawImage:
     # Present only for strict source-content reflow.  Two drawing occurrences
     # may intentionally point at the same bytes and still need distinct slots.
     occurrence_id: Optional[str] = None
+    original_name: Optional[str] = None
+    ocr_text: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -94,6 +96,8 @@ async def register_source_images(
     *,
     presentation_id: uuid.UUID,
     upload_paths: Sequence[Path],
+    upload_metadata: Mapping[str, dict] | None = None,
+    registration_report: list[dict] | None = None,
 ) -> list[SourceImageCandidate]:
     """Collect, filter and persist the pictures a deck may reuse.
 
@@ -103,7 +107,38 @@ async def register_source_images(
     """
 
     collected = await _collect_raw_images(upload_paths)
+    collected = [
+        replace(
+            raw,
+            original_name=str((upload_metadata or {}).get(str(raw.source_path), {}).get("original_name") or raw.source_path.name),
+            ocr_text=str((upload_metadata or {}).get(str(raw.source_path), {}).get("ocr_text") or "")[:20000] or None,
+        ) if raw.source_path is not None else raw
+        for raw in collected
+    ]
     kept = _apply_source_image_filters(collected)
+    if registration_report is not None:
+        kept_digests = {raw.digest for raw in kept}
+        seen_digests: set[str] = set()
+        for raw in collected:
+            if raw.mime_type not in SUPPORTED_SOURCE_IMAGE_MIME_TYPES:
+                reason = "unsupported_format"
+            elif min(raw.width, raw.height) < MIN_SOURCE_IMAGE_EDGE_PX:
+                reason = "below_size_floor"
+            elif raw.digest not in kept_digests:
+                reason = "source_furniture_or_backplate"
+            elif raw.digest in seen_digests:
+                reason = "duplicate_content"
+            else:
+                reason = "registered"
+            seen_digests.add(raw.digest)
+            registration_report.append({"digest": raw.digest, "original_name": raw.original_name,
+                                        "status": reason})
+        collected_paths = {raw.source_path for raw in collected if raw.source_path is not None}
+        for upload_path in upload_paths:
+            path = Path(upload_path)
+            if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff", ".tif"} and path not in collected_paths:
+                registration_report.append({"original_name": (upload_metadata or {}).get(str(path), {}).get("original_name") or path.name,
+                                            "status": "image_read_failed"})
     if not kept:
         return []
 
@@ -374,6 +409,9 @@ async def _persist_raw_image(
         )
         session.add(asset)
 
+    if raw.occurrence_id is None:
+        asset.extras = {**(asset.extras or {}), "original_name": raw.original_name, "ocr_text": raw.ocr_text}
+
     return SourceImageCandidate(
         asset_id=str(asset_id),
         path=stored_path,
@@ -384,6 +422,8 @@ async def _persist_raw_image(
         source_slide_index=raw.source_slide_index,
         source_heading=raw.source_heading,
         source_text=raw.source_text,
+        original_name=raw.original_name,
+        ocr_text=raw.ocr_text,
     )
 
 

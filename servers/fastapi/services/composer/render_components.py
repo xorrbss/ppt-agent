@@ -8,6 +8,8 @@ the source's own separators between runs). Tables live in ``render_table``.
 
 from __future__ import annotations
 
+import json
+
 from collections.abc import Sequence
 
 from services.composer.estimate_components import process_per_row
@@ -278,13 +280,28 @@ def render_image(
     if not component.asset_id:
         raise TextRenderError(f"image component {component.component_id!r} has no asset id")
     figure_qid = ctx.qids.claim(f"{component.component_id}-figure")
-    image_qid = ctx.qids.claim(component.component_id)
+    source_policy = ctx.deck.fit_policy_revision == "composer-source-fit/v2"
+    image_qid = ctx.registry.bind(component.component_id) if source_policy else ctx.qids.claim(component.component_id)
     style = f"height:{px(height_px)}" if height_px else ""
     image_css = "cx-image-flex" if flex else "cx-image"
+    source_policy = ctx.deck.fit_policy_revision == "composer-source-fit/v2"
+    image_extra = f' data-source-block-id="{escape_attr(component.component_id)}"' if source_policy else ""
+    if source_policy and component.image_color_transforms:
+        transforms = json.dumps(component.image_color_transforms, separators=(",", ":"), ensure_ascii=True)
+        image_extra += f' data-source-image-color-transforms="{escape_attr(transforms)}"'
+    if source_policy and component.image_crop:
+        crop = ",".join(str(float(component.image_crop.get(key, 0))) for key in ("left", "top", "right", "bottom"))
+        image_extra += f' data-source-image-crop="{crop}"'
+    if source_policy and (component.source_transform.get("flipH") or component.source_transform.get("flipV")):
+        flip = f'{int(bool(component.source_transform.get("flipH")))},{int(bool(component.source_transform.get("flipV")))}'
+        image_extra += f' data-source-image-flip="{flip}"'
+    if source_policy and ctx.params.source_geometry:
+        style = "height:100%;width:100%"
+        image_extra += ' style="object-fit:fill"'
     return (
         open_tag("figure", qid=figure_qid, role="decoration", css="cx-component cx-figure", style=style)
         + f'<img class="{image_css}" data-asset-id="{escape_attr(component.asset_id)}" '
-        f'data-qid="{image_qid}" data-semantic-role="image">'
+        f'data-qid="{image_qid}" data-semantic-role="image"{image_extra}>'
         + "</figure>"
     )
 

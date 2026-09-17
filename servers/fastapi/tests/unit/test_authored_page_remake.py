@@ -417,11 +417,35 @@ async def test_publish_snapshots_cas_updates_and_invalidates_stale_pointer(
     snapshots = []
     async with AsyncSession(engine, expire_on_commit=False) as session:
         presentation = _presentation()
+        presentation.theme = {
+            **presentation.theme,
+            "authoredQualityGate": {
+                "deckHtmlDigest": "sha256:immutable-generation-evidence",
+                "localFit": {
+                    "policyRevision": "authored-local-fit/v1.5",
+                    "slides": [
+                        {
+                            "slideIndex": 0,
+                            "policyRevision": "authored-local-fit/v1.5",
+                            # A previous publisher may already have changed the
+                            # target HTML without refreshing this receipt. The
+                            # newly verified target receipt repairs that drift.
+                            "finalHtmlDigest": "sha256:stale-target-receipt",
+                        }
+                    ],
+                },
+            },
+        }
         session.add(presentation)
         await session.flush()
         slide = _slide(presentation.id)
         session.add(slide)
         await session.flush()
+        candidate_png = b"png"
+        candidate_image = (
+            "/app_data/images/authored/remake/slide_0_"
+            f"{remake.hashlib.sha256(candidate_png).hexdigest()}.png"
+        )
         task = AsyncPresentationGenerationTaskModel(
             status="completed",
             data={
@@ -431,9 +455,15 @@ async def test_publish_snapshots_cas_updates_and_invalidates_stale_pointer(
                 "slide_id": str(slide.id),
                 "slide_index": 0,
                 "source_digest": remake.authored_page_source_digest(slide),
-                "candidate_digest": "sha256:candidate",
+                "candidate_digest": remake._canonical_digest(
+                    {
+                        "html": CANDIDATE_HTML,
+                        "image": candidate_image,
+                        "semanticSource": None,
+                    }
+                ),
                 "candidate_html": CANDIDATE_HTML,
-                "candidate_image": "/app_data/images/remake.png",
+                "candidate_image": candidate_image,
             },
         )
         session.add(task)
@@ -443,19 +473,32 @@ async def test_publish_snapshots_cas_updates_and_invalidates_stale_pointer(
             snapshots.append((slides, kwargs))
 
         async def fake_context(_session, _presentation, _slides):
-            return SimpleNamespace(), None, STYLE_REFERENCE, None
+            return SimpleNamespace(), None, STYLE_REFERENCE, None, None
 
         monkeypatch.setattr(remake.version_service, "snapshot_slides", fake_snapshot)
-        monkeypatch.setattr(remake, "_render_review_html", lambda _html: None)
+        async def fake_fit(_html, *, slide_index, policy_revision, canvas):
+            assert (canvas.width_px, canvas.height_px) == (1280, 720)
+            assert slide_index == 0
+            assert policy_revision == "authored-local-fit/v1.5"
+            return SimpleNamespace(
+                html=CANDIDATE_HTML,
+                png=candidate_png,
+                metrics={"telemetry_status": "available"},
+                receipt={
+                    "slideIndex": 0,
+                    "policyRevision": policy_revision,
+                    "finalHtmlDigest": remake.html_digest(CANDIDATE_HTML),
+                },
+            )
 
-        async def fake_render(_html):
-            return b"png", {"telemetry_status": "available"}
-
-        monkeypatch.setattr(remake, "_render_review_html", fake_render)
+        monkeypatch.setattr(remake, "_fit_content_revision", fake_fit)
         monkeypatch.setattr(remake, "_authoring_context", fake_context)
-        monkeypatch.setattr(
-            remake, "inspect_authored_dom", lambda *_a, **_k: _report(issue=False)
-        )
+        def fake_inspect(*_args, **kwargs):
+            assert kwargs["viewport_width"] == 1280
+            assert kwargs["viewport_height"] == 720
+            return _report(issue=False)
+
+        monkeypatch.setattr(remake, "inspect_authored_dom", fake_inspect)
 
         result = await remake.publish_authored_page_remake(
             session=session,
@@ -470,13 +513,23 @@ async def test_publish_snapshots_cas_updates_and_invalidates_stale_pointer(
         assert result["status"] == "published"
         assert result["slide_index"] == 0
         assert slide.html_content == CANDIDATE_HTML
-        assert slide.content["image"] == "/app_data/images/remake.png"
-        assert slide.properties["image"] == "/app_data/images/remake.png"
+        assert slide.content["image"] == candidate_image
+        assert slide.properties["image"] == candidate_image
         assert "slidespec_active" not in slide.properties
         assert task.data["phase"] == "published"
         assert task.data["publish"]["rollback_available"] is True
         assert result["post_verify_status"] == "passed"
         assert task.data["publish"]["post_verify"] == result["post_verify_status"]
+        assert (
+            presentation.theme["authoredQualityGate"]["localFit"]["slides"][0][
+                "finalHtmlDigest"
+            ]
+            == remake.html_digest(CANDIDATE_HTML)
+        )
+        assert (
+            presentation.theme["authoredQualityGate"]["deckHtmlDigest"]
+            == "sha256:immutable-generation-evidence"
+        )
         assert len(snapshots) == 1
         assert snapshots[0][0][0]["html_content"] == SOURCE_HTML
     await engine.dispose()
@@ -710,9 +763,10 @@ async def test_warned_preview_publishes_after_explicit_approval(tmp_path, monkey
             return None
 
         async def fake_context(_session, _presentation, _slides):
-            return SimpleNamespace(), None, STYLE_REFERENCE, None
+            return SimpleNamespace(), None, STYLE_REFERENCE, None, None
 
-        async def fake_render(_html):
+        async def fake_render(_html, *, canvas):
+            assert (canvas.width_px, canvas.height_px) == (1280, 720)
             return b"png", {"telemetry_status": "available"}
 
         monkeypatch.setattr(remake.version_service, "snapshot_slides", fake_snapshot)
