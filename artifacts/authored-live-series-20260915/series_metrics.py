@@ -190,6 +190,17 @@ def run_metrics(run_dir: Path) -> dict[str, Any]:
         m["caveats"].append("quality_gate_receipt.admissionShadow is null (no active admission session)")
 
     t1_triggers = dig(receipt, "qualityReceiptV3", "t1Triggers")
+    # Generation reserves ordinal 2 for every VQA-eligible slide, even when
+    # the reviser makes no call for it. Keep this legacy gate-derived proxy,
+    # but do not interpret it as physical requests or observed repair work.
+    m["recoveryTriggerProxyBasis"] = "reserved_provider_budget"
+    m["recoveryPhysicalRequestCount"] = None
+    m["caveats"].append(
+        "physical recovery requests are unavailable: recoveryTriggerProxy counts "
+        "budget-based V3 slide triggers, including reserved VQA eligibility, "
+        "not observed calls or quality defects; the separate provider-usage "
+        "requestCountTotal does not attribute requests to slide recovery"
+    )
     if isinstance(t1_triggers, list):
         m["recoveryTriggerProxy"] = sum(1 for t in t1_triggers if isinstance(t, str) and _RECOVERY_TRIGGER.match(t))
     else:
