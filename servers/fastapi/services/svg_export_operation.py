@@ -29,6 +29,7 @@ from workers.public_svg_export_worker import (
 
 LOGGER = logging.getLogger(__name__)
 
+
 def _require_deadline_budget(grant):
     """Fail fast once the pinned admission deadline has no worker budget left.
 
@@ -137,7 +138,8 @@ def _source_preservation_receipts(presentation, slides, canvas):
     return receipts
 
 async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format, canvas, session_factory,
-                                 asset_bindings=None, source_preservation=None, deadline_grant=None):
+                                 asset_bindings=None, source_preservation=None, deadline_grant=None,
+                                 font_embedding=False):
     if (claim.owner_id is None or claim.kind != f"export.{export_format}"
             or not 1 <= len(svgs) <= 100 or len(notes) != len(svgs)):
         raise PublicExportOperationError("svg_export_input_invalid")
@@ -147,6 +149,8 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
         raise PublicExportOperationError("svg_source_export_receipt_count_invalid")
     if source_preservation is not None and export_format != "pptx":
         raise PublicExportOperationError("svg_source_export_format_unsupported")
+    if font_embedding and export_format != "pptx":
+        raise PublicExportOperationError("svg_font_embedding_pptx_only")
     resolved_canvas = parse_canvas_metadata(canvas)
     canvas = resolved_canvas.model_dump(mode="json", by_alias=True)
     for index, source in enumerate(svgs):
@@ -183,13 +187,14 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
             "converterDigest": converter_digest(),
             "exportFormat": export_format,
             "canvas": canvas,
+            "fontEmbedding": bool(font_embedding),
             "slides": [{"slideIndex": i, "artifactRef": _worker_ref(ref).to_wire(), "notes": notes[i]}
                        for i, ref in enumerate(refs)],
         }
         payload["canonicalExportIdentity"] = _digest({
             "revision": claim.expected_revision, "sources": [ref.sha256 for ref in refs], "notes": notes,
             "canvas": canvas, "format": export_format, "converter": payload["converterDigest"],
-            "contract": SVG_CONTRACT_VERSION,
+            "contract": SVG_CONTRACT_VERSION, "fontEmbedding": payload["fontEmbedding"],
         })
         if source_preservation is not None:
             payload.update(schemaVersion=SVG_EXPORT_SCHEMA_V3, contractVersion="svg-static/v2",
@@ -263,12 +268,16 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         raise NonRetryableWorkspaceOperationError("presentation_not_found")
     if presentation.revision != claim.expected_revision:
         raise NonRetryableWorkspaceOperationError("stale_presentation_revision")
-    if claim.request_payload.get("quality_policy") == "release-v1":
-        raise NonRetryableWorkspaceOperationError("svg_release_quality_review_not_supported")
+    quality_policy = claim.request_payload.get("quality_policy")
+    if quality_policy not in (None, "release-v1"):
+        raise NonRetryableWorkspaceOperationError("svg_quality_policy_invalid")
     command_context = claim.request_payload.get("context") or {}
-    if (command_context.get("font_embedding") is True
-            or claim.request_payload.get("font_embedding") is True):
-        raise NonRetryableWorkspaceOperationError("svg_font_embedding_not_supported")
+    font_embedding = bool(
+        command_context.get("font_embedding") is True
+        or claim.request_payload.get("font_embedding") is True
+    )
+    if font_embedding and fmt != "pptx":
+        raise NonRetryableWorkspaceOperationError("svg_font_embedding_pptx_only")
     async with session_factory() as session:
         slides = (await session.execute(
             select(SlideModel).where(SlideModel.presentation == claim.presentation_id)
@@ -337,7 +346,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         result = await render_and_export_svgs(
             claim, tenant_id=admission.tenant_id, svgs=svgs, notes=notes, export_format=fmt, canvas=canvas,
             session_factory=session_factory, asset_bindings=asset_bindings,
-            source_preservation=source_preservation, deadline_grant=grant)
+            source_preservation=source_preservation, deadline_grant=grant, font_embedding=font_embedding)
         ref = result.artifact
         receipt_args = dict(
             quality_receipt_id=f"quality:{claim.operation_id}:{ref.artifact_id}",
@@ -352,7 +361,15 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         else:
             receipt = _legacy_fidelity_public_quality_receipt(**receipt_args)
             receipt = json.loads(json.dumps(receipt).replace("legacy_", "svg_"))
+        if quality_policy == "release-v1":
+            from services.svg_export_release_gate import require_release_v1_receipt
+            require_release_v1_receipt(receipt)
         quality_digest = _digest(receipt)
+        from services.generation_core.export.svg_evidence import build_svg_export_evidence_digests
+        receipt["evidenceDigests"] = build_svg_export_evidence_digests(
+            svgs=svgs, notes=notes, source_assets=source_assets, source_preservation=source_preservation,
+            quality_receipt=receipt, converter_version=CONVERTER_VERSION, converter_digest=converter_digest(),
+        ).to_wire()
         provenance["freshness"].update({"package_sha256": ref.sha256, "package_digest_match": True})
         await context.raise_if_cancelled()
         async with session_factory() as session:

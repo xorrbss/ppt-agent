@@ -49,7 +49,10 @@ SLIDE_RENDER_STAGE_VERSION = "public-fidelity-render/v2"
 MAX_EXPORT_CHECKPOINT_BYTES = 4 * 1024 * 1024
 
 ExportFormat = Literal["pptx", "pdf"]
-ExportMode = Literal["fidelity-raster", "editable-hybrid"]
+#: ``svg-native`` covers both svg export shapes (the native-svg-to-pptx
+#: conversion and the vector PDF render) -- a single output_mode value per
+#: source_format, not per export_format. See ``docs/generation-core-architecture-20260925.md`` §2.1.
+ExportMode = Literal["fidelity-raster", "editable-hybrid", "svg-native"]
 
 
 class PublicExportIdentityError(RuntimeError):
@@ -543,7 +546,7 @@ class CanonicalExportIdentity:
             raise ValueError("export source revision must be nonnegative")
         if self.export_format not in {"pptx", "pdf"}:
             raise PublicExportIdentityBindingError("public_export_format_invalid")
-        if self.export_mode not in {"fidelity-raster", "editable-hybrid"}:
+        if self.export_mode not in {"fidelity-raster", "editable-hybrid", "svg-native"}:
             raise PublicExportIdentityBindingError("public_export_mode_invalid")
         object.__setattr__(
             self,
@@ -560,7 +563,9 @@ class CanonicalExportIdentity:
             "exporter_version",
             _normalized_text(self.exporter_version, field="exporter version", maximum=128),
         )
-        if self.export_format == "pdf" and self.export_mode != "fidelity-raster":
+        if self.export_format == "pdf" and self.export_mode not in {
+            "fidelity-raster", "svg-native",
+        }:
             raise PublicExportIdentityBindingError("public_export_pdf_mode_invalid")
         if not self.slides:
             raise PublicExportIdentityBindingError("public_export_checkpoints_required")

@@ -134,7 +134,7 @@ def _source_preservation_readback(deck, receipts, expected_image_digests):
 
 
 def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
-                 expected_image_digests=None):
+                 expected_image_digests=None, font_embedding=False):
     converter_digest()
     from services.source_content.raster_redesign_pptx import prepare_redesign_pptx_inputs
     # Raster-redesign pages only: one text frame per paragraph block and
@@ -197,6 +197,11 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
         readback["sourcePreservation"] = _source_preservation_readback(
             deck, source_preservation, expected_image_digests
         )
+    if font_embedding:
+        from services.svg_pptx_font_embedding import embed_trusted_fonts
+        from services.svg_trusted_fonts import FONT_FAMILY
+        digests = embed_trusted_fonts(target)
+        readback["fontEmbedding"] = {"embedded": True, "family": FONT_FAMILY, "faceDigests": list(digests)}
     return readback
 
 
@@ -263,7 +268,7 @@ async def execute_svg_export(job, store):
     value = json.loads(store.read(job.input_artifact))
     v2 = value.get("schemaVersion") == SVG_EXPORT_SCHEMA_V2
     v3 = value.get("schemaVersion") == SVG_EXPORT_SCHEMA_V3
-    expected_keys = {"schemaVersion", "contractVersion", "converterVersion", "converterDigest", "canonicalExportIdentity", "exportFormat", "canvas", "slides"}
+    expected_keys = {"schemaVersion", "contractVersion", "converterVersion", "converterDigest", "canonicalExportIdentity", "exportFormat", "canvas", "fontEmbedding", "slides"}
     if v2 or v3:
         expected_keys |= {"presentationId", "sourceRevision"}
         import uuid
@@ -279,6 +284,9 @@ async def execute_svg_export(job, store):
     canvas = parse_canvas_metadata(value["canvas"])
     slides = value["slides"]
     fmt = value["exportFormat"]
+    font_embedding = value["fontEmbedding"]
+    if type(font_embedding) is not bool or (font_embedding and fmt != "pptx"):
+        raise PublicWorkerExecutionError("svg_export_font_embedding_invalid")
     if fmt not in {"pptx", "pdf"} or (v3 and fmt != "pptx") or not isinstance(slides, list) or not 1 <= len(slides) <= 100:
         raise PublicWorkerExecutionError("svg_export_slide_count_invalid")
     sources, notes, digests, admitted_assets = [], [], [], []
@@ -334,7 +342,8 @@ async def execute_svg_export(job, store):
                 path=scratch/f"slide-{index+1:03d}.svg";path.write_text(source, encoding="utf-8");paths.append(path)
             readback=convert_pptx(paths,target,notes,canvas,
                 source_preservation=source_preservation if v3 else None,
-                expected_image_digests=expected_image_digests if v3 else None)
+                expected_image_digests=expected_image_digests if v3 else None,
+                font_embedding=font_embedding)
             mode="editable-svg"
         else:
             from workers.public_svg_pdf_export import export_svg_pdf

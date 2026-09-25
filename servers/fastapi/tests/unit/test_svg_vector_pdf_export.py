@@ -102,6 +102,7 @@ def _job_and_store(tmp_path, canvas, svgs):
         "converterVersion": CONVERTER_VERSION, "converterDigest": converter_digest(),
         "canonicalExportIdentity": hashlib.sha256(b"identity").hexdigest(),
         "exportFormat": "pdf", "canvas": canvas.model_dump(mode="json", by_alias=True),
+        "fontEmbedding": False,
         "slides": slides,
     }
     bundle_ref = store.put(json.dumps(bundle).encode("utf-8"), operation_id=operation_id,
