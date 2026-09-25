@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from collections.abc import Sequence
 from typing import Any
+
+from services.source_content.raster_stage_timing import record_call, stage, vision_stage
 
 MAX_CONCURRENT_CALLS = 8
 CALL_TIMEOUT_SECONDS = 240.0
@@ -58,11 +61,31 @@ class VisionJsonClient:
         return cls(snapshot, provider.value, model) if model else None
 
     def __call__(self, system: str, parts: Sequence[str | bytes], schema: dict[str, Any], name: str) -> dict | None:
+        from utils.llm_content_extraction import extract_text
+
+        with stage(None, vision_stage(name)):
+            requested = time.perf_counter()
+            with self._gate:
+                acquired = time.perf_counter()
+                try:
+                    response = self._generate(system, parts, schema, name)
+                finally:
+                    record_call(acquired - requested, time.perf_counter() - acquired, name)
+        usage = getattr(response, "usage", None)
+        with self._lock:
+            self.input_tokens += int(getattr(usage, "input_tokens", 0) or 0)
+            self.output_tokens += int(getattr(usage, "output_tokens", 0) or 0)
+        if isinstance(response.content, dict):  # structured output already parsed
+            return response.content
+        return decode_json_object(extract_text(response.content) or "")
+
+    def _generate(self, system: str, parts: Sequence[str | bytes], schema: dict[str, Any], name: str) -> Any:
+        """One provider response; called while holding the concurrency gate."""
+
         from llmai import get_client
         from llmai.shared import ImageContentPart, JSONSchemaResponse, SystemMessage, TextContentPart, UserMessage
 
         from utils.llm_config import enforce_llm_egress_policy, get_llm_config
-        from utils.llm_content_extraction import extract_text
         from utils.llm_utils import get_generate_kwargs
         from utils.provider_idempotency import provider_generate_call
         from utils.runtime_settings import runtime_settings_context
@@ -73,7 +96,7 @@ class VisionJsonClient:
             else TextContentPart(text=part)
             for part in parts
         ]
-        with self._gate, runtime_settings_context(self.settings):
+        with runtime_settings_context(self.settings):
             client = get_client(config=get_llm_config(self.settings))
             kwargs = get_generate_kwargs(
                 model=self.model,
@@ -87,7 +110,7 @@ class VisionJsonClient:
             with self._lock:
                 self.calls += 1
             try:
-                response = provider_generate_call(
+                return provider_generate_call(
                     client,
                     provider_id=self.provider,
                     kwargs=kwargs,
@@ -101,17 +124,10 @@ class VisionJsonClient:
                 kwargs.pop("temperature")
                 with self._lock:
                     self.calls += 1
-                response = provider_generate_call(
+                return provider_generate_call(
                     client,
                     provider_id=self.provider,
                     kwargs=kwargs,
                     idempotency_key=None,
                     timeout_seconds=CALL_TIMEOUT_SECONDS,
                 )()
-        usage = getattr(response, "usage", None)
-        with self._lock:
-            self.input_tokens += int(getattr(usage, "input_tokens", 0) or 0)
-            self.output_tokens += int(getattr(usage, "output_tokens", 0) or 0)
-        if isinstance(response.content, dict):  # structured output already parsed
-            return response.content
-        return decode_json_object(extract_text(response.content) or "")

@@ -123,7 +123,7 @@ def test_redesign_page_contract_rejects_invalid_payloads(mutate, code):
 
 def _legacy_digest(analysis: RasterAnalysis) -> str:
     """Digest exactly as sealed before the redesign fields existed."""
-    payload = analysis.model_dump(mode="json", exclude={"digest"})
+    payload = analysis.model_dump(mode="json", exclude={"digest", "stage_timings"})
     for page in payload["pages"]:
         for key in ("reference_region", "unpromoted_ocr_indices"):
             page.pop(key)

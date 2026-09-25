@@ -133,6 +133,39 @@ class RasterPage(RasterContract):
     unpromoted_ocr_indices: tuple[int, ...] = ()
 
 
+TimingStage = Literal[
+    "ocr", "rereads", "number_units", "structure_calls", "tables", "transcription", "vision_other", "plan", "other",
+]
+
+
+class RasterVisionCallTiming(RasterContract):
+    name: str | None = None
+    wait_seconds: float = Field(ge=0)  # waiting for the client's concurrency gate
+    latency_seconds: float = Field(ge=0)
+
+
+class RasterPageTimings(RasterContract):
+    page_number: int = Field(ge=1)
+    wall_seconds: float = Field(ge=0)
+    # Exclusive seconds per stage; "other" is the page wall time outside every stage.
+    stages: dict[TimingStage, float]
+    vision_calls: tuple[RasterVisionCallTiming, ...] = ()
+
+
+class RasterStageTimings(RasterContract):
+    """Measurement of the run that produced the analysis; never part of its digest."""
+
+    clock: Literal["monotonic"] = "monotonic"  # time.perf_counter seconds
+    wall_seconds: float = Field(ge=0)
+    pages: tuple[RasterPageTimings, ...] = ()
+    stage_totals: dict[TimingStage, float] = Field(default_factory=dict)
+    stage_page_max: dict[TimingStage, float] = Field(default_factory=dict)
+    vision_call_count: int = Field(default=0, ge=0)
+    vision_wait_seconds: float = Field(default=0, ge=0)
+    vision_latency_seconds: float = Field(default=0, ge=0)
+    unpaged_vision_calls: tuple[RasterVisionCallTiming, ...] = ()
+
+
 class RasterAnalysis(RasterContract):
     contract_version: Literal["raster-reconstruction-analysis/v1"] = "raster-reconstruction-analysis/v1"
     analysis_id: uuid.UUID = Field(default_factory=uuid.uuid4)
@@ -142,6 +175,8 @@ class RasterAnalysis(RasterContract):
     pages: tuple[RasterPage, ...]
     unresolved: tuple[str, ...] = ()
     digest: str = Field(default="", pattern=r"^(?:[0-9a-f]{64})?$")
+    # Timing receipt of the analysis run (additive; excluded from ``digest``).
+    stage_timings: RasterStageTimings | None = None
 
     @model_validator(mode="after")
     def require_complete_pages(self):
@@ -160,9 +195,14 @@ class RasterAnalysis(RasterContract):
                 raise ValueError("raster_full_page_region_required")
             if page.full_page_region is not None:
                 region = page.full_page_region
-                if region.page_number != page.page_number or region.role != "full_page_preserve" or region.text or region.ocr:
+                if (
+                    region.page_number != page.page_number
+                    or region.role != "full_page_preserve"
+                    or region.text
+                    or region.ocr
+                ):
                     raise ValueError("raster_full_page_region_invalid")
-                if region.bbox != RasterBox(x=0, y=0, width=self.source.canvas_width_emu, height=self.source.canvas_height_emu):
+                if region.bbox != _full_canvas(self.source):
                     raise ValueError("raster_full_page_geometry_invalid")
             if any(region.role == "full_page_preserve" for region in page.regions):
                 raise ValueError("raster_full_page_role_requires_page_mode")
@@ -173,9 +213,14 @@ class RasterAnalysis(RasterContract):
                     raise ValueError("raster_region_page_mismatch")
                 if any(i not in page_ids or i == region.region_id for i in (*region.overlaps, *region.occluded_by)):
                     raise ValueError("raster_overlap_reference_invalid")
-                if region.bbox.x + region.bbox.width > self.source.canvas_width_emu + 1 or region.bbox.y + region.bbox.height > self.source.canvas_height_emu + 1:
+                box, source = region.bbox, self.source
+                if box.x + box.width > source.canvas_width_emu + 1 or box.y + box.height > source.canvas_height_emu + 1:
                     raise ValueError("raster_region_outside_source")
         return self
+
+
+def _full_canvas(source: RasterSourceIdentity) -> RasterBox:
+    return RasterBox(x=0, y=0, width=source.canvas_width_emu, height=source.canvas_height_emu)
 
 
 def _validate_redesign_page(page: RasterPage, source: RasterSourceIdentity) -> None:
@@ -190,7 +235,7 @@ def _validate_redesign_page(page: RasterPage, source: RasterSourceIdentity) -> N
         carries_text = bool(reference.text or reference.ocr or reference.ocr_token_indices)
         if reference.page_number != page.page_number or reference.role != "source_reference" or carries_text:
             raise ValueError("raster_reference_region_invalid")
-        if reference.bbox != RasterBox(x=0, y=0, width=source.canvas_width_emu, height=source.canvas_height_emu):
+        if reference.bbox != _full_canvas(source):
             raise ValueError("raster_reference_geometry_invalid")
     orders = [region.reading_order for region in page.regions if region.reading_order is not None]
     if len(orders) != len(set(orders)):
@@ -218,12 +263,19 @@ class RasterApprovalPin(RasterContract):
 
 
 def raster_digest(payload: object) -> str:
-    return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")).hexdigest()
+    text = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+# Not content: measurement of how the analysis was produced. Excluding it keeps
+# approval pins and fences independent of how long a run took.
+_UNDIGESTED_ANALYSIS_FIELDS = frozenset({"digest", "stage_timings"})
 
 
 def seal_analysis(analysis: RasterAnalysis | dict) -> RasterAnalysis:
-    value = RasterAnalysis.model_validate(analysis.model_dump(mode="json") if isinstance(analysis, RasterAnalysis) else analysis)
-    digest = raster_digest(value.model_dump(mode="json", exclude={"digest"}))
+    payload = analysis.model_dump(mode="json") if isinstance(analysis, RasterAnalysis) else analysis
+    value = RasterAnalysis.model_validate(payload)
+    digest = raster_digest(value.model_dump(mode="json", exclude=set(_UNDIGESTED_ANALYSIS_FIELDS)))
     return value.model_copy(update={"digest": digest})
 
 
@@ -254,7 +306,7 @@ def require_analysis_digest(analysis: RasterAnalysis) -> None:
     if analysis.digest and analysis.digest == seal_analysis(analysis).digest:
         return
     # Records sealed before the additive redesign fields existed.
-    legacy = _strip_additive_defaults(analysis.model_dump(mode="json", exclude={"digest"}))
+    legacy = _strip_additive_defaults(analysis.model_dump(mode="json", exclude=set(_UNDIGESTED_ANALYSIS_FIELDS)))
     if legacy is None:
         raise ValueError("raster_analysis_digest_mismatch")
     if analysis.digest and analysis.digest == raster_digest(legacy):
@@ -278,7 +330,8 @@ def require_analysis_digest(analysis: RasterAnalysis) -> None:
 
 
 def seal_approval(pin: RasterApprovalPin) -> RasterApprovalPin:
-    return pin.model_copy(update={"approval_digest": raster_digest(pin.model_dump(mode="json", exclude={"approval_digest"}))})
+    digest = raster_digest(pin.model_dump(mode="json", exclude={"approval_digest"}))
+    return pin.model_copy(update={"approval_digest": digest})
 
 
 def approval_digest_matches(pin: RasterApprovalPin) -> bool:
@@ -292,5 +345,7 @@ def approval_digest_matches(pin: RasterApprovalPin) -> bool:
         return True
     if pin.full_page_preserve_pages:
         return False
-    oldest = pin.model_dump(mode="json", exclude={"approval_digest", "full_page_preserve_pages", "automatic_redesign_pages"})
+    oldest = pin.model_dump(
+        mode="json", exclude={"approval_digest", "full_page_preserve_pages", "automatic_redesign_pages"}
+    )
     return bool(pin.approval_digest) and pin.approval_digest == raster_digest(oldest)

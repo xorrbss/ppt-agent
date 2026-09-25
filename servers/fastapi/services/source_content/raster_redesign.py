@@ -31,6 +31,7 @@ from services.source_content.raster_llm_structure import VisionJson
 from services.source_content.raster_page_plan import PagePlan
 from services.source_content.raster_page_fallback import robust_plan
 from services.source_content.raster_redesign_ocr import redesign_ocr
+from services.source_content.raster_stage_timing import page_task, stage
 
 PIXEL_ROLES = frozenset({"screenshot", "logo", "decoration"})
 CROP_ROLES = frozenset({"screenshot", "logo", "table", "decoration"})
@@ -60,7 +61,8 @@ def _page_result(
         if not tesseract_path.is_file() or not tessdata_path.is_dir():
             raise RuntimeError("local_ocr_unavailable")
         words, lines = redesign_ocr(image, executable=tesseract_path, tessdata=tessdata_path)
-        plan, failures = robust_plan(image, words, lines, structurer, tesseract_path, tessdata_path)
+        with stage(None, "plan"):
+            plan, failures = robust_plan(image, words, lines, structurer, tesseract_path, tessdata_path)
         issues.extend(f"{ADVISORY_PREFIX}page_{page.page_number}:{failure}" for failure in failures)
         words = plan.words or words
         issues.extend(f"{ADVISORY_PREFIX}page_{page.page_number}:corrected:{entry}" for entry in plan.corrections)
@@ -164,12 +166,15 @@ def analyze_redesign(
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="raster-redesign") as pool:
         results = list(
             pool.map(
-                lambda page: _page_result(
-                    page,
-                    (width_emu, height_emu),
-                    tesseract_path=tesseract_path,
-                    tessdata_path=tessdata_path,
-                    structurer=structurer,
+                # A copy of this context per page task: pool threads do not inherit it.
+                page_task(
+                    lambda page: _page_result(
+                        page,
+                        (width_emu, height_emu),
+                        tesseract_path=tesseract_path,
+                        tessdata_path=tessdata_path,
+                        structurer=structurer,
+                    )
                 ),
                 embedded,
             )

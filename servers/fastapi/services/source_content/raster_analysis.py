@@ -20,7 +20,6 @@ from PIL import Image
 
 from services.source_content.raster_contracts import RasterAnalysis, seal_analysis
 from services.source_content.raster_regions import (
-    OCRWord,
     RegionCandidate,
     full_page_ocr,
     ocr_density_rectangles,
@@ -119,7 +118,7 @@ def extract_embedded_raster_pages(path: Path) -> tuple[str, int, int, tuple[Embe
                 raise ValueError("raster_picture_transform_unsupported")
             if picture.find(f"./{P}blipFill/{A}srcRect") is not None:
                 raise ValueError("raster_picture_crop_unsupported")
-            if picture.find(f"./{P}spPr/{A}effectLst") is not None or picture.find(f"./{P}spPr/{A}effectDag") is not None:
+            if any(picture.find(f"./{P}spPr/{A}{effect}") is not None for effect in ("effectLst", "effectDag")):
                 raise ValueError("raster_picture_effect_unsupported")
             offset, extent = transform.find(f"{A}off"), transform.find(f"{A}ext")
             if offset is None or extent is None:
@@ -204,7 +203,8 @@ def _page_analysis(
         words = full_page_ocr(image, executable=tesseract_path, tessdata=tessdata_path)
     except (RuntimeError, OSError, subprocess.TimeoutExpired) as error:
         words = ()
-        issues.add(f"page_{page.page_number}:{str(error) if isinstance(error, RuntimeError) else 'local_ocr_unavailable'}")
+        reason = str(error) if isinstance(error, RuntimeError) else "local_ocr_unavailable"
+        issues.add(f"page_{page.page_number}:{reason}")
     # OCR inventory is complete; implausible low-score strings never become
     # editable source text or a capture boundary without independent review.
     promoted_words = tuple(
@@ -250,7 +250,9 @@ def _page_analysis(
         output = io.BytesIO()
         crop.save(output, format="PNG")
         crop_png[region_id] = output.getvalue()
-        overlaps = tuple(ids[j] for j, other in enumerate(candidates) if j != index and _overlap(candidate.bbox, other.bbox))
+        overlaps = tuple(
+            ids[j] for j, other in enumerate(candidates) if j != index and _overlap(candidate.bbox, other.bbox)
+        )
         if overlaps:
             issues.add(f"page_{page.page_number}:overlapping_region_candidates")
         regions.append({
@@ -279,7 +281,8 @@ def _page_analysis(
         }
         for word in words
     ]
-    return {"page_number": page.page_number, "regions": regions, "ocr_inventory": inventory}, crop_png, tuple(sorted(issues))
+    result = {"page_number": page.page_number, "regions": regions, "ocr_inventory": inventory}
+    return result, crop_png, tuple(sorted(issues))
 
 
 def analyze_raster_pptx(
@@ -414,15 +417,24 @@ def analyze_redesign_pptx(
     vision-capable provider is configured), None disables it.
 
     Pages carry render_mode "redesign" / approval_method "automatic_redesign";
-    only low-confidence regions are marked review_required.
+    only low-confidence regions are marked review_required. The analysis
+    carries ``stage_timings`` of this run (outside its digest).
     """
 
+    from services.source_content.raster_contracts import RasterStageTimings
     from services.source_content.raster_llm_client import VisionJsonClient
     from services.source_content.raster_redesign import analyze_redesign
+    from services.source_content.raster_stage_timing import activate
 
     if structurer == "auto":
         structurer = VisionJsonClient.from_runtime()
-    return analyze_redesign(
-        source_path, orientation=orientation, tesseract_path=tesseract_path, tessdata_path=tessdata_path,
-        structurer=structurer,
+    with activate() as run:
+        draft = analyze_redesign(
+            source_path, orientation=orientation, tesseract_path=tesseract_path, tessdata_path=tessdata_path,
+            structurer=structurer,
+        )
+    timings = RasterStageTimings.model_validate(run.payload())
+    return RasterDraft(
+        analysis=draft.analysis.model_copy(update={"stage_timings": timings}),
+        crop_png_by_region=draft.crop_png_by_region,
     )

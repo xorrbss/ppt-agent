@@ -14,7 +14,8 @@ excludes. Every function is a no-op when no run is active.
 - ``record_call(wait, latency)`` records one vision call: time waiting for the
   client's concurrency gate and the call itself.
 
-Seconds are floats from ``time.monotonic``.
+Seconds are floats from ``time.perf_counter``: monotonic and high-resolution
+(``time.monotonic`` ticks in ~16 ms steps on Windows).
 """
 
 from __future__ import annotations
@@ -64,7 +65,7 @@ class TimingRun:
         self._lock = threading.Lock()
         self._pages: dict[int, _Page] = {}
         self._unpaged_calls: list[dict[str, Any]] = []
-        self.started = time.monotonic()
+        self.started = time.perf_counter()
         self.wall = 0.0
 
     def _page(self, number: int) -> _Page:
@@ -91,8 +92,7 @@ class TimingRun:
             for number in sorted(self._pages):
                 record = self._pages[number]
                 stages = dict(record.stages)
-                if record.wall:
-                    stages[RESIDUAL] = max(0.0, record.wall - sum(stages.values()))
+                stages[RESIDUAL] = max(0.0, record.wall - sum(stages.values()))
                 pages.append({
                     "page_number": number,
                     "wall_seconds": record.wall,
@@ -132,7 +132,7 @@ def activate() -> Iterator[TimingRun]:
     try:
         yield run
     finally:
-        run.wall = time.monotonic() - run.started
+        run.wall = time.perf_counter() - run.started
         _RUN.reset(token)
 
 
@@ -143,11 +143,11 @@ def page(page_number: int) -> Iterator[None]:
         yield
         return
     page_token, stack_token = _PAGE.set(page_number), _STACK.set([])
-    started = time.monotonic()
+    started = time.perf_counter()
     try:
         yield
     finally:
-        run.add_page_wall(page_number, time.monotonic() - started)
+        run.add_page_wall(page_number, time.perf_counter() - started)
         _STACK.reset(stack_token)
         _PAGE.reset(page_token)
 
@@ -156,6 +156,8 @@ def page(page_number: int) -> Iterator[None]:
 def stage(page_index: int | None, name: str) -> Iterator[None]:
     """Time ``name`` on ``page_index`` (None: the current page scope)."""
 
+    if name not in STAGES:
+        raise ValueError(f"raster_timing_stage_unknown:{name}")
     run = _RUN.get()
     number = page_index if page_index is not None else _PAGE.get()
     if run is None or number is None:
@@ -163,13 +165,13 @@ def stage(page_index: int | None, name: str) -> Iterator[None]:
         return
     stack = _STACK.get()
     if stack is None:  # an explicit page outside any page scope: inclusive time
-        started = time.monotonic()
+        started = time.perf_counter()
         try:
             yield
         finally:
-            run.add_stage(number, name, time.monotonic() - started)
+            run.add_stage(number, name, time.perf_counter() - started)
         return
-    now = time.monotonic()
+    now = time.perf_counter()
     if stack:
         parent = stack[-1]
         run.add_stage(parent.page, parent.name, now - parent.resumed)
@@ -178,7 +180,7 @@ def stage(page_index: int | None, name: str) -> Iterator[None]:
     try:
         yield
     finally:
-        now = time.monotonic()
+        now = time.perf_counter()
         run.add_stage(frame.page, frame.name, now - frame.resumed)
         stack.pop()
         if stack:

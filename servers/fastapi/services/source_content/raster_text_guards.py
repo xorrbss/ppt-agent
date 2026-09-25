@@ -40,6 +40,7 @@ from services.source_content.raster_number_units import (
     sequence_confirmed,
     text_numbers,
 )
+from services.source_content.raster_stage_timing import stage
 
 _HANGUL = re.compile(r"[가-힣]")
 _GLUE = re.compile(r"[\\\[\](){}|]")
@@ -210,6 +211,11 @@ def read_number_units(image: Image.Image, words, seeds, *, executable: Path | No
 
     None when the local OCR engine is unavailable (callers keep their older rules)."""
 
+    with stage(None, "number_units"):
+        return _read_number_units(image, words, seeds, executable=executable, tessdata=tessdata)
+
+
+def _read_number_units(image: Image.Image, words, seeds, *, executable: Path | None, tessdata: Path | None):
     if executable is None or tessdata is None or not Path(executable).is_file():
         return None
     gray = image.convert("L")
@@ -302,6 +308,11 @@ def targeted_hangul_reads(image: Image.Image, words, lines, *, executable: Path 
     ]
     if not targets:
         return {}
+    with stage(None, "rereads"):
+        return _hangul_reads(image, words, targets, executable=executable, tessdata=tessdata)
+
+
+def _hangul_reads(image: Image.Image, words, targets, *, executable: Path, tessdata: Path) -> dict:
     gray = image.convert("L")
     try:
         with tempfile.TemporaryDirectory(prefix="raster-hangul-") as name:

@@ -21,6 +21,8 @@ from pathlib import Path
 
 from PIL import Image, ImageChops
 
+from services.source_content.raster_stage_timing import stage
+
 OCR_SCALE = 2
 LAYOUT_ENGINE = "tesseract-kor+eng-psm3-x2"
 LAYOUT_PSM = 3
@@ -263,8 +265,9 @@ def redesign_ocr(
     """Return words (inventory order) and visual lines with agreement scores."""
 
     options = {"executable": executable, "tessdata": tessdata, "timeout_seconds": timeout_seconds}
-    layout = _words_from_pass(image, psm=LAYOUT_PSM, variant="luma", engine=LAYOUT_ENGINE, **options)
-    sparse = _words_from_pass(image, psm=11, variant="luma", engine=SPARSE_ENGINE, **options)
+    with stage(None, "ocr"):
+        layout = _words_from_pass(image, psm=LAYOUT_PSM, variant="luma", engine=LAYOUT_ENGINE, **options)
+        sparse = _words_from_pass(image, psm=11, variant="luma", engine=SPARSE_ENGINE, **options)
     words: list[RedesignWord] = []
     groups: dict[tuple[int, int, int, int], list[int]] = {}
     candidates = [(1, word, key) for word, key in layout] + [(2, word, key) for word, key in sparse]
@@ -300,8 +303,9 @@ def redesign_ocr(
         "min_height": MICRO_TEXT_RATIO * image.height,
         "timeout_seconds": timeout_seconds,
     }
-    reread_words, reread = reread_lines(image, kept_words, kept_lines, **options)
-    return verify_words(image, reread_words, reread, **options)
+    with stage(None, "rereads"):
+        reread_words, reread = reread_lines(image, kept_words, kept_lines, **options)
+        return verify_words(image, reread_words, reread, **options)
 
 
 def drop_fragment_lines(
