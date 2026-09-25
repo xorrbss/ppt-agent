@@ -1042,8 +1042,12 @@ def test_feature_lifecycle_refcount_expiry_and_gc_fail_closed(
                     ))
                     await asyncio.wait_for(stage_started.wait(), timeout=5)
                     async with maker() as contender:
-                        with pytest.raises(ArtifactKeyBusy):
-                            await service.register_ref(contender, contender_ref)
+                        # Staging holds the key shared: another same-byte holder
+                        # proceeds, while physical delete stays excluded.
+                        assert await service.register_ref(contender, contender_ref) == contender_ref
+                        assert not await try_artifact_key_guard(
+                            contender, contender_ref, for_physical_delete=True,
+                        )
                         await contender.rollback()
                     stage_release.set()
                     prepared = await asyncio.wait_for(stage_task, timeout=5)

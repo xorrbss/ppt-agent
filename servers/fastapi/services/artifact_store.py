@@ -73,12 +73,13 @@ async def try_artifact_key_guard(
     reference: ArtifactRef,
     *,
     for_physical_delete: bool = False,
+    shared: bool = False,
 ) -> bool:
     """Hold a cluster-wide CAS-key guard until the outer transaction ends.
 
-    Never wait while holding another key: one transaction can register multiple
-    objects in any order. A busy writer must unwind its entire transaction.
-    SQLite is metadata-only development support, never physical-GC authority.
+    Reference holders (write/register/verify/attach) share it: the key is content-
+    addressed, so same-byte holders are compatible; lifecycle CAS and physical
+    delete take it exclusive. Never wait; a busy caller unwinds. No SQLite GC.
     """
 
     dialect = session.get_bind().dialect.name
@@ -98,17 +99,16 @@ async def try_artifact_key_guard(
             raise ArtifactStoreError("artifact.cas_guard_requires_read_committed")
         key = int.from_bytes(
             sha256(("public-artifact-cas/v1\0" + reference.storage_key).encode()).digest()[:8],
-            byteorder="big",
-            signed=True,
+            byteorder="big", signed=True,
         )
+        lock = "pg_try_advisory_xact_lock_shared" if shared and not for_physical_delete else "pg_try_advisory_xact_lock"
         return await session.scalar(
-            text("SELECT pg_try_advisory_xact_lock(:artifact_cas_key)"),
-            {"artifact_cas_key": key},
+            text(f"SELECT {lock}(:artifact_cas_key)"), {"artifact_cas_key": key},
         ) is True
 
 
 async def require_artifact_key_guard(session: AsyncSession, reference: ArtifactRef) -> None:
-    if not await try_artifact_key_guard(session, reference):
+    if not await try_artifact_key_guard(session, reference, shared=True):
         raise ArtifactKeyBusy()
 
 
