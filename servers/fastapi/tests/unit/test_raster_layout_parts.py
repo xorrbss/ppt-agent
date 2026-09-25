@@ -69,3 +69,48 @@ def test_header_subtitle_kept_as_pixels_is_drawn_at_subtitle_scale_under_the_tit
     assert 18 <= height <= 40 and width > 170
     assert float(node.get("x")) < 100  # left, under the title, not in the top-right brand cluster
     assert float(node.get("y")) + height <= _header_rule_y(svg)
+
+
+def _ink(rid, box, group=None):
+    crop = fx.region(1, rid, "screenshot", box, group=group)
+    crop.review_reason, crop.editable_fallback = "uncovered_ink", True
+    return crop
+
+
+def test_ungrouped_crops_in_the_bottom_band_below_the_content_join_the_footer_line():
+    # The source's running footer and page number (kept as pixels) stay one
+    # footer line at the page bottom; they are neither dropped nor content.
+    label, number = _ink("foot-label", (40, 905, 290, 24)), _ink("foot-number", (1580, 905, 60, 24))
+    page = _page_with(label, number)
+    analysis = fx.analysis(page)
+    parts = page_parts(analysis, page)
+    content_ids = {item.region.region_id for item in parts.items}
+    assert not {"p1-foot-label", "p1-foot-number"} & content_ids
+    assert [member[1].region.region_id for member in parts.footer] == ["p1-foot-label", "p1-foot-number"]
+    svg = render_redesign_page_svg(analysis, 1)
+    for rid in ("p1-foot-label", "p1-foot-number"):
+        assert float(_image(svg, rid).get("y")) > 840 - 44 - 30  # on the footer line
+
+
+def test_label_kept_as_pixels_is_not_magnified_into_a_box():
+    # A 250x32 px red label: at most 1.25x its size on the source page
+    # (content width / source width), never the 1.25 units/px capture cap.
+    label = _ink("label", (1400, 700, 250, 32))
+    page = _page_with(label)
+    svg = render_redesign_page_svg(fx.analysis(page), 1)
+    page_scale = (1188 - 2 * 48) / 1672
+    assert int(_image(svg, "p1-label").get("height")) <= 1.25 * page_scale * 32 + 1
+    assert int(_image(svg, "p1-label").get("height")) >= 0.6 * 32 - 1  # still legible
+
+
+def test_pixel_labels_of_different_heights_do_not_share_an_infeasible_row():
+    # Two small ungrouped labels: one row height cannot satisfy the larger one's
+    # legibility minimum under the smaller one's cap, so they take two rows
+    # instead of failing the page into a page-content crop.
+    page = _page_with(_ink("small", (1400, 700, 116, 26)), _ink("large", (1400, 740, 252, 38)))
+    from services.source_content.raster_redesign_layout import render_redesign_page
+
+    result = render_redesign_page(fx.analysis(page), 1)
+    assert not result.advisories
+    small, large = _image(result.svg, "p1-small"), _image(result.svg, "p1-large")
+    assert int(large.get("height")) >= 0.6 * 38 - 1 and float(small.get("y")) != float(large.get("y"))

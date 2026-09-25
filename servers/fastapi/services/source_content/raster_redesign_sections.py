@@ -8,7 +8,7 @@ the redesign keeps the source's grouping and order without copying its pixels.
 
 from __future__ import annotations
 
-from services.source_content.raster_redesign_tree import ImageRow, Panel, Row, Stack
+from services.source_content.raster_redesign_tree import ImageRow, Panel, Row, Stack, scale_compatible
 
 PANEL_PAD = 8.0
 COLUMN_GAP = 12.0
@@ -94,7 +94,7 @@ def build_sections(tree, x, w, stack_items):
 def _row(children, x, w, stack_items, min_width=MIN_COLUMN_WIDTH):
     if all(_only_images(child) for child in children):
         images = [item for child in children for item in child[1]]
-        if len(images) <= 4 or all(item.is_icon for item in images):
+        if (len(images) <= 4 or all(item.is_icon for item in images)) and scale_compatible(images):
             return ImageRow(images, x, w)
         return None
     # Icon-only columns keep their natural (<=1.25x) width, like an inline

@@ -33,6 +33,9 @@ class Item:
     # text flow at a text-matched height, left-aligned, never in a gallery.
     inline: bool = False
     text_px: float | None = None  # measured glyph height of the line's text (source px)
+    # Largest scale (target units per source pixel); None means MAX_UPSCALE. Pixels
+    # standing in for text are never magnified beyond their size on the source page.
+    max_scale: float | None = None
 
     @property
     def is_icon(self) -> bool:
@@ -40,8 +43,30 @@ class Item:
         return self.kind == "image" and self.native_height is not None and self.native_height <= ICON_MAX_PX
 
     @property
+    def upscale(self) -> float:
+        return MAX_UPSCALE if self.max_scale is None else self.max_scale
+
+    @property
     def natural_width(self) -> float:
-        return (self.native_height or MIN_IMAGE_HEIGHT) * MAX_UPSCALE / self.aspect
+        return (self.native_height or MIN_IMAGE_HEIGHT) * self.upscale / self.aspect
+
+
+def scale_compatible(members) -> bool:
+    """Whether members can share one row height: every legibility minimum under every cap."""
+    required = max((m.min_scale * (m.native_height or 0.0) for m in members), default=0.0)
+    caps = [m.native_height * m.upscale for m in members if m.native_height]
+    return not caps or required <= min(caps) + 0.01
+
+
+def compatible_runs(members) -> list[list]:
+    """Consecutive runs of ``members`` that can each share one row height (reading order kept)."""
+    runs: list[list] = []
+    for member in members:
+        if runs and scale_compatible([*runs[-1], member]):
+            runs[-1].append(member)
+        else:
+            runs.append([member])
+    return runs
 
 
 @dataclass
@@ -86,7 +111,7 @@ class ImageRow:
     @property
     def cap(self) -> float:
         width_cap = (self.w - IMAGE_GAP * (len(self.items) - 1)) / self.inverse
-        natives = [item.native_height * MAX_UPSCALE for item in self.items if item.native_height]
+        natives = [item.native_height * item.upscale for item in self.items if item.native_height]
         return min([width_cap, *natives])
 
 

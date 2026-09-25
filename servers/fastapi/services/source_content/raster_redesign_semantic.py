@@ -14,7 +14,18 @@ from dataclasses import dataclass, replace
 
 from services.source_content.raster_redesign_dedupe import same_line
 from services.source_content.raster_redesign_pixel_lines import group_same_line, pixel_line
-from services.source_content.raster_redesign_tree import Fixed, ImageRow, Item, Panel, Placed, Row, Stack, height
+from services.source_content.raster_redesign_tree import (
+    Fixed,
+    ImageRow,
+    Item,
+    Panel,
+    Placed,
+    Row,
+    Stack,
+    compatible_runs,
+    height,
+    scale_compatible,
+)
 
 CARD_ACCENT = 4.0
 CARD_GAP_X, CARD_GAP_Y, BAND_GAP, INNER_GAP = 12.0, 10.0, 10.0, 5.0
@@ -388,7 +399,7 @@ def _balanced_cuts(heights, parts):
 def _similar_scale(members) -> bool:
     """A shared row height is capped by its smallest member: keep native heights within 2x."""
     natives = [m.native_height for m in members if m.native_height]
-    return not natives or max(natives) <= 2.0 * min(natives)
+    return (not natives or max(natives) <= 2.0 * min(natives)) and scale_compatible(members)
 
 
 def _row_reaches_minimum(members, w) -> bool:
@@ -423,8 +434,7 @@ def _gallery(images, x, w, dense=False):
     for members in chunks:
         slot = (w - 10.0 * (len(members) - 1)) / len(members)
         rows.append(ImageRow(members, x, w, floor=max(_capture_floor(item, slot) for item in members)))
-    if icons:
-        rows.append(ImageRow(icons, x, w))
+    rows.extend(ImageRow(run, x, w) for run in compatible_runs(icons))
     return Stack(rows, 10.0)
 
 

@@ -42,6 +42,7 @@ from services.source_content.raster_redesign_tree import (
     Stack,
     image_area,
     place,
+    scale_compatible,
     solve,
 )
 from services.source_content.raster_svg_layout import MIN_FONT_UNITS
@@ -284,7 +285,7 @@ def _image_rows(group, x, w, per_row):
         used = 0.0
         for icon in members:
             need = icon.natural_width + (6.0 if run else 0.0)
-            if run and used + need > w:
+            if run and (used + need > w or not scale_compatible([*run, icon])):
                 rows.append(ImageRow(run, x, w))
                 run, used, need = [], 0.0, icon.natural_width
             run.append(icon)
