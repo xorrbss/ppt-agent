@@ -1,7 +1,9 @@
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from services.document_conversion_service import DocumentConversionService
 from services.liteparse_service import _DEFAULT_NUM_WORKERS, LiteParseService
 
 
@@ -123,3 +125,63 @@ class TestLiteParseService:
 
         command = mock_run.call_args.args[0]
         assert command[command.index("--python-bridge") + 1] == "json"
+
+    def test_parse_pre_converts_office_input_so_liteparse_only_sees_a_pdf(
+        self, tmp_path
+    ):
+        """LiteParse's own converter spawns soffice against the shared default
+        profile for office extensions. LiteParseService must pre-convert
+        those through DocumentConversionService (isolated profile) so the
+        runner's --file argument is always a .pdf, and LiteParse itself
+        never spawns soffice.
+        """
+        pptx_path = tmp_path / "input.pptx"
+        pptx_path.write_bytes(b"fake-pptx")
+
+        def fake_convert_office_to_pdf(file_path, output_dir, timeout_seconds=180):
+            out = Path(output_dir) / f"{Path(file_path).stem}.pdf"
+            out.write_bytes(b"%PDF-1.4")
+            return str(out)
+
+        with patch.object(
+            LiteParseService,
+            "check_runtime_ready",
+            return_value=(True, "ok"),
+        ), patch.object(
+            LiteParseService,
+            "_run_plain_bridge_to_text",
+            side_effect=lambda command: _completed_process(command),
+        ) as mock_run, patch.object(
+            DocumentConversionService,
+            "convert_office_to_pdf",
+            side_effect=fake_convert_office_to_pdf,
+        ) as mock_convert:
+            service = LiteParseService(timeout_seconds=30)
+            service.parse(str(pptx_path), ocr_enabled=True, ocr_language="eng")
+
+        assert mock_convert.call_count == 1
+
+        command = mock_run.call_args.args[0]
+        file_arg = command[command.index("--file") + 1]
+        assert file_arg != str(pptx_path)
+        assert file_arg.endswith(".pdf")
+
+    def test_parse_does_not_convert_a_pdf_input(self):
+        with patch.object(
+            LiteParseService,
+            "check_runtime_ready",
+            return_value=(True, "ok"),
+        ), patch.object(
+            LiteParseService,
+            "_run_plain_bridge_to_text",
+            side_effect=lambda command: _completed_process(command),
+        ) as mock_run, patch.object(
+            DocumentConversionService,
+            "convert_office_to_pdf",
+        ) as mock_convert:
+            service = LiteParseService(timeout_seconds=30)
+            service.parse("/tmp/sample.pdf", ocr_enabled=True, ocr_language="eng")
+
+        mock_convert.assert_not_called()
+        command = mock_run.call_args.args[0]
+        assert command[command.index("--file") + 1] == "/tmp/sample.pdf"

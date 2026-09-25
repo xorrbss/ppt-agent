@@ -1,11 +1,17 @@
+import contextlib
 import json
 import logging
 import os
 import subprocess
 import tempfile
 import threading
-from typing import Any, Dict, Mapping, Tuple
+from typing import Any, Dict, Iterator, Mapping, Tuple
 
+from services.document_conversion_service import (
+    DocumentConversionError,
+    DocumentConversionService,
+)
+from services.liteparse_pdf_input import pdf_input_for_liteparse
 from utils.runtime_limits import (
     BoundedTextBuffer,
     log_memory,
@@ -78,6 +84,7 @@ class LiteParseService:
         self.runner_path = os.getenv("LITEPARSE_RUNNER_PATH", self._resolve_runner_path())
         self.runner_dir = os.path.dirname(self.runner_path)
         self._npm_project_root = self._resolve_npm_project_root()
+        self._document_conversion_service = DocumentConversionService()
 
     def _build_node_env(self) -> Dict[str, str]:
         """Build environment for Node subprocesses."""
@@ -276,6 +283,26 @@ class LiteParseService:
         """If true, expect one JSON line on stdout (legacy). Default is plain UTF-8 text (better for large PDFs)."""
         return (os.getenv("LITEPARSE_RUNNER_OUTPUT") or "").strip().lower() == "json"
 
+    @contextlib.contextmanager
+    def _pdf_input(self, file_path: str) -> Iterator[str]:
+        """Yield a PDF path for ``file_path``; see liteparse_pdf_input.py.
+
+        Translates a pre-conversion ``DocumentConversionError`` into this
+        service's own ``LiteParseError`` so ``parse()`` only ever raises one
+        exception type, as documented.
+        """
+        try:
+            with pdf_input_for_liteparse(
+                file_path,
+                document_conversion_service=self._document_conversion_service,
+                timeout_seconds=self.timeout_seconds,
+            ) as pdf_input_path:
+                yield pdf_input_path
+        except DocumentConversionError as exc:
+            raise LiteParseError(
+                f"Pre-conversion to PDF failed for {os.path.basename(file_path)}: {exc}"
+            ) from exc
+
     def parse_to_markdown(
         self,
         file_path: str,
@@ -304,115 +331,116 @@ class LiteParseService:
 
         effective_dpi = dpi if dpi is not None else self.dpi
 
-        command = [
-            self.node_binary,
-            self.runner_path,
-            "--file",
-            file_path,
-            "--ocr-enabled",
-            "true" if ocr_enabled else "false",
-            "--ocr-language",
-            ocr_language,
-            "--dpi",
-            str(effective_dpi),
-            "--num-workers",
-            str(self.num_workers),
-        ]
-        ocr_server = (os.getenv("LITEPARSE_OCR_SERVER_URL") or "").strip()
-        if ocr_server:
-            command.extend(["--ocr-server-url", ocr_server])
-        tessdata = self._resolve_tessdata_path()
-        if tessdata:
-            command.extend(["--tessdata-path", tessdata])
+        with self._pdf_input(file_path) as pdf_input_path:
+            command = [
+                self.node_binary,
+                self.runner_path,
+                "--file",
+                pdf_input_path,
+                "--ocr-enabled",
+                "true" if ocr_enabled else "false",
+                "--ocr-language",
+                ocr_language,
+                "--dpi",
+                str(effective_dpi),
+                "--num-workers",
+                str(self.num_workers),
+            ]
+            ocr_server = (os.getenv("LITEPARSE_OCR_SERVER_URL") or "").strip()
+            if ocr_server:
+                command.extend(["--ocr-server-url", ocr_server])
+            tessdata = self._resolve_tessdata_path()
+            if tessdata:
+                command.extend(["--tessdata-path", tessdata])
 
-        use_json = self._use_json_runner_output()
-        command.extend(["--python-bridge", "json" if use_json else "plain"])
+            use_json = self._use_json_runner_output()
+            command.extend(["--python-bridge", "json" if use_json else "plain"])
 
-        LOGGER.info(
-            "[LiteParse] Parsing file=%s ocr_enabled=%s ocr_language=%s dpi=%s num_workers=%s",
-            file_path,
-            ocr_enabled,
-            ocr_language,
-            effective_dpi,
-            self.num_workers,
-        )
-
-        def run_process() -> subprocess.CompletedProcess[str]:
-            log_memory(
-                LOGGER,
-                "liteparse.spawn",
-                file=file_path,
-                use_json=use_json,
+            LOGGER.info(
+                "[LiteParse] Parsing file=%s ocr_enabled=%s ocr_language=%s dpi=%s num_workers=%s",
+                file_path,
+                ocr_enabled,
+                ocr_language,
+                effective_dpi,
+                self.num_workers,
             )
-            if not use_json:
-                process = self._run_plain_bridge_to_text(command)
-            else:
-                process = subprocess.run(
-                    command,
-                    cwd=self._npm_project_root,
-                    capture_output=True,
-                    timeout=self.timeout_seconds,
-                    env=self._build_node_env(),
-                    **_subprocess_text_kwargs(),
+
+            def run_process() -> subprocess.CompletedProcess[str]:
+                log_memory(
+                    LOGGER,
+                    "liteparse.spawn",
+                    file=file_path,
+                    use_json=use_json,
                 )
-            log_memory(
-                LOGGER,
-                "liteparse.exit",
-                file=file_path,
-                returncode=process.returncode,
-                use_json=use_json,
-            )
-            return process
-
-        process = run_process()
-
-        LOGGER.info(
-            "[LiteParse] Command finished returncode=%s command=%s",
-            process.returncode,
-            _command_str(command),
-        )
-
-        if not use_json:
-            if process.returncode != 0:
-                err = (process.stderr or "").strip() or "LiteParse failed"
-                raise LiteParseError(
-                    f"{err}; returncode={process.returncode}; "
-                    f"stderr={_snippet(process.stderr)}; stdout={_snippet(process.stdout)}"
+                if not use_json:
+                    process = self._run_plain_bridge_to_text(command)
+                else:
+                    process = subprocess.run(
+                        command,
+                        cwd=self._npm_project_root,
+                        capture_output=True,
+                        timeout=self.timeout_seconds,
+                        env=self._build_node_env(),
+                        **_subprocess_text_kwargs(),
+                    )
+                log_memory(
+                    LOGGER,
+                    "liteparse.exit",
+                    file=file_path,
+                    returncode=process.returncode,
+                    use_json=use_json,
                 )
-            return {
-                "ok": True,
-                "text": (process.stdout or "").lstrip("\ufeff"),
-                "filePath": file_path,
-                "pageCount": 0,
-            }
+                return process
 
-        payload: Dict[str, Any]
-        try:
-            payload = self._decode_runner_output(process.stdout)
-        except LiteParseError as exc:
-            raise LiteParseError(
-                f"{exc}; returncode={process.returncode}; "
-                f"stderr={_snippet(process.stderr)}; stdout={_snippet(process.stdout)}"
-            ) from exc
+            process = run_process()
 
-        if process.returncode != 0:
-            message = payload.get("error") or process.stderr.strip() or "Unknown error"
-            LOGGER.error(
-                "[LiteParse] Parse failed returncode=%s stderr=%s stdout=%s",
+            LOGGER.info(
+                "[LiteParse] Command finished returncode=%s command=%s",
                 process.returncode,
-                _snippet(process.stderr),
-                _snippet(process.stdout),
+                _command_str(command),
             )
-            raise LiteParseError(message)
 
-        if not payload.get("ok"):
-            LOGGER.error(
-                "[LiteParse] Runner returned not-ok payload=%s",
-                _snippet(json.dumps(payload)),
-            )
-            raise LiteParseError(payload.get("error") or "LiteParse parse failed")
+            if not use_json:
+                if process.returncode != 0:
+                    err = (process.stderr or "").strip() or "LiteParse failed"
+                    raise LiteParseError(
+                        f"{err}; returncode={process.returncode}; "
+                        f"stderr={_snippet(process.stderr)}; stdout={_snippet(process.stdout)}"
+                    )
+                return {
+                    "ok": True,
+                    "text": (process.stdout or "").lstrip("\ufeff"),
+                    "filePath": file_path,
+                    "pageCount": 0,
+                }
 
-        return payload
+            payload: Dict[str, Any]
+            try:
+                payload = self._decode_runner_output(process.stdout)
+            except LiteParseError as exc:
+                raise LiteParseError(
+                    f"{exc}; returncode={process.returncode}; "
+                    f"stderr={_snippet(process.stderr)}; stdout={_snippet(process.stdout)}"
+                ) from exc
+
+            if process.returncode != 0:
+                message = payload.get("error") or process.stderr.strip() or "Unknown error"
+                LOGGER.error(
+                    "[LiteParse] Parse failed returncode=%s stderr=%s stdout=%s",
+                    process.returncode,
+                    _snippet(process.stderr),
+                    _snippet(process.stdout),
+                )
+                raise LiteParseError(message)
+
+            if not payload.get("ok"):
+                LOGGER.error(
+                    "[LiteParse] Runner returned not-ok payload=%s",
+                    _snippet(json.dumps(payload)),
+                )
+                raise LiteParseError(payload.get("error") or "LiteParse parse failed")
+
+            return payload
 
     @staticmethod
     def _decode_runner_output(stdout: str) -> Dict[str, Any]:
