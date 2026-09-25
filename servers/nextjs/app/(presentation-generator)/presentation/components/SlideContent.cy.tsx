@@ -15,7 +15,6 @@ function mountSlide(mutationsEnabled: boolean) {
     id: "slide-1",
     presentationId: "deck-1",
     templateId: "blank",
-    isTemplateV2: true,
   });
   const store = makeStore();
   store.dispatch(

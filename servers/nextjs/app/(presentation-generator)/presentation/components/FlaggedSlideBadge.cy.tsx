@@ -43,7 +43,6 @@ function deck(flaggedSlides: unknown[]) {
         index,
         presentationId: "p1",
         templateId: "blank",
-        isTemplateV2: true,
       }),
     ),
     // The receipt rides on the theme exactly as the backend persists it.

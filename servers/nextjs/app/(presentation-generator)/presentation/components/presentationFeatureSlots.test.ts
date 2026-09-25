@@ -31,8 +31,8 @@ function runtime(driverId: keyof typeof PRESENTATION_DRIVER_REGISTRY) {
 }
 
 test("feature slots are driven by the validated presentation capability", () => {
-  const templateV2 = buildPresentationFeatureViewModel({
-    runtime: runtime("template-v2"),
+  const svgV1 = buildPresentationFeatureViewModel({
+    runtime: runtime("svg-v1"),
     workspaceReady: true,
   });
   const authored = buildPresentationFeatureViewModel({
@@ -40,7 +40,7 @@ test("feature slots are driven by the validated presentation capability", () => 
     workspaceReady: true,
   });
 
-  assert.equal(templateV2.slots.editorSurface, true);
+  assert.equal(svgV1.slots.editorSurface, true);
   assert.equal(authored.authored, true);
   assert.equal(authored.slots.editorSurface, true);
   assert.equal(authored.slots.assistantPanel, true);
@@ -50,9 +50,9 @@ test("feature slots are driven by the validated presentation capability", () => 
     "authored-hybrid",
   ]);
   assert.deepEqual(authored.renderActions, ["preview", "pdf", "pptx"]);
-  assert.equal(templateV2.background, "#EDEEEF");
-  assert.equal(templateV2.componentAdapters.editor, "template-v2");
-  assert.equal(templateV2.componentAdapters.assistant, "canonical-workspace");
+  assert.equal(svgV1.background, "#EDEEEF");
+  assert.equal(svgV1.componentAdapters.editor, "svg-readonly");
+  assert.equal(svgV1.componentAdapters.assistant, "canonical-workspace");
   assert.equal(authored.componentAdapters.editor, "authored-readonly");
   assert.equal(authored.componentAdapters.export, "authored-hybrid");
 });
