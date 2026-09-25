@@ -22,7 +22,15 @@ import json
 from pathlib import Path
 
 from deck_scoring import score_one_deck
-from suite_paths import DEFAULT_CONFIG, add_decks_root_arg, deck_by_id, load_config, now_iso, resolve_decks_root
+from suite_paths import (
+    DEFAULT_CONFIG,
+    add_concurrent_harness_arg,
+    add_decks_root_arg,
+    deck_by_id,
+    load_config,
+    now_iso,
+    resolve_decks_root,
+)
 
 
 def cmd_baseline(args: argparse.Namespace) -> None:
@@ -33,7 +41,13 @@ def cmd_baseline(args: argparse.Namespace) -> None:
         deck_id: Path(dir_str) for deck_id, dir_str in json.loads(Path(args.map).read_text(encoding="utf-8")).items()
     }
     report_dir = Path(args.report_dir) if args.report_dir else out_path.parent / "baseline_reports"
-    summary = {"scored_at": now_iso(), "source": str(Path(args.map).resolve()), "decks": {}}
+    # No single run dir here (each deck's directory is independent, named via
+    # --map), so concurrent_harness is CLI-only -- no run_config.json lookup.
+    summary = {
+        "scored_at": now_iso(), "source": str(Path(args.map).resolve()),
+        "concurrent_harness": args.concurrent_harness,
+        "decks": {},
+    }
 
     for deck_id, out_dir in deck_dirs.items():
         deck_cfg = deck_by_id(cfg, deck_id)
@@ -58,7 +72,7 @@ def cmd_baseline(args: argparse.Namespace) -> None:
         evidence = evidence if evidence.exists() else None
         try:
             result = score_one_deck(deck_cfg, decks_root, pptx, pdf, report_dir, deck_id,
-                                     run_report if run_report.exists() else None, evidence)
+                                     run_report if run_report.exists() else None, evidence, args.crops)
             result["status"] = "scored"
             summary["decks"][deck_id] = result
             print(f"[baseline] {deck_id}: scored ok from {pptx}")
@@ -79,5 +93,9 @@ def add_baseline_subparser(sub) -> None:
     p_baseline.add_argument("--report-dir", default=None,
                              help="default: <out's parent>/baseline_reports")
     p_baseline.add_argument("--config", default=str(DEFAULT_CONFIG))
+    p_baseline.add_argument("--crops", action="store_true",
+                             help="also save source-vs-output crops for every wrong_number_candidates "
+                                  "entry (checker-kind decks only); writes <report-dir>/<deck>_wrong_number_crops/")
+    add_concurrent_harness_arg(p_baseline)
     add_decks_root_arg(p_baseline)
     p_baseline.set_defaults(func=cmd_baseline)

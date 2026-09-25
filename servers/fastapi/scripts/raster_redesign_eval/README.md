@@ -234,6 +234,8 @@ from-scratch path, not for `--from-images`.
   is the unfiltered `ground_truth_checker.py` output;
   `wrong_numbers_filtered_as_page_number` lists exactly what was excluded
   and why. Gate on `wrong_numbers`, not `_raw`.
+- `wrong_number_candidates` -- OCR-fixture decks only (see "Wrong number
+  candidates" below): human-reviewable, not a hard fail.
 - `editable_text_ratio_overall` (sum editable chars / sum source chars
   across the deck) and `editable_text_ratio_body_mean` (mean of each
   slide's own ratio). For an OCR-fixture (`"checker": "checker"`) deck,
@@ -264,11 +266,15 @@ from-scratch path, not for `--from-images`.
 - `exactly_once_pptx_text_duplicate_pages` (deck1-4, text-only duplicate
   check) or `exactly_once` (OCR-fixture decks: OCR-based
   duplicate/missing/word-cut signals, needs a successful PDF render)
-- `analysis_duration_seconds` (sum of `run_report.json` stage timings, when
-  present)
+- `total_seconds`, `analysis_wait_seconds`, `generation_seconds`,
+  `export_pptx_seconds`, `export_pdf_seconds` -- see "Timing fields" below
+  (`total_seconds` was `analysis_duration_seconds`); `analysis_stage_totals_seconds`
+  (currently always `None` -- see the same section)
 - OCR-fixture decks only: `order_mapping` (per output slide: matched source
   page, text similarity, whether it matches its own position) and
   `order_mismatch_count_best_match` / `order_mismatch_output_slides_best_match`
+- run-level (top of `summary.json`, not per-deck): `concurrent_harness` --
+  see "Concurrent harness flag" below
 
 ## Wrong-number footer false positives (2026-09-25, fixed at the summarization layer)
 
@@ -381,15 +387,93 @@ boxes, not an area-proportion estimate.
 
 **Availability.** `mockup_analysis_available: false` (and all four new
 fields `None`/empty) whenever `RUN_DIR/<deck_id>/analysis_result.json`
-doesn't exist -- true for every run captured before this change (deck1,
-deck4, and the large external reference deck used for the original
-verification all predate `save_analysis_result()`; a fresh `launch` run
-will have it). Verified with a synthetic `analysis_result.json` against
-deck1's real output PPTX: one genuine mockup region (21 OCR chars) is
-counted and excluded, a second region with `editable_fallback: true` on the
-same page is correctly left out of the mockup count, and every pre-existing
-metric (`editable_text_ratio_overall`, `_body_mean`, `wrong_numbers`, ...)
-came back byte-identical to the no-analysis-file run.
+doesn't exist. Verified (originally) with a synthetic `analysis_result.json`
+against deck1's real output PPTX: one genuine mockup region (21 OCR chars)
+is counted and excluded, a second region with `editable_fallback: true` on
+the same page is correctly left out of the mockup count, and every
+pre-existing metric (`editable_text_ratio_overall`, `_body_mean`,
+`wrong_numbers`, ...) came back byte-identical to the no-analysis-file run.
+
+**2026-09-25 bug fix -- envelope shape.** That synthetic test used the bare
+`RasterAnalysis` dict directly, which hid a real bug: every file this suite
+actually produces (and every file fetched straight from the endpoint) is
+the FULL response envelope, `{"analysis": {...pages...}, "operation_id":
+..., "status": ..., ...}` -- `mockup_regions.py`'s reader returned that
+envelope unchanged, so `analysis.get("pages", [])` was always `[]` and
+`mockup_regions_count` was silently `0` on every real run.
+`load_analysis_result()` now unwraps `data["analysis"]`, and
+`generate_raster_deck.py`'s `save_analysis_result()` now saves the whole
+envelope (not just its `"analysis"` key) so what's on disk always matches
+what a caller fetching the endpoint directly would see. Also matched
+`mockup_audit/make_crops.py`'s own extraction: only a region with
+`char_count > 0` counts, and `reason` is the region's raw `review_reason`
+(usually `None` for a genuine screenshot), not a substituted label.
+Confirmed on the real baseline: `role == "screenshot" and not
+editable_fallback` finds 69 regions on the large external reference deck's
+`analysis_result.json`, 65 of which have `char_count > 0` (13,152 chars
+total) -- matching an independent audit script's count exactly (see
+`eval-runs/baseline-2144f5034-r2/<external-deck>/mockup_audit/` in the handoff
+tree). `editable_text_ratio_body_excl_mockup` can exceed 1.0 on a page
+where most of its source OCR text was classified as mockup but the product
+still rendered substantial editable content elsewhere on that page
+(observed on this same deck, e.g. page 2: `src_len=694, mockup=622,
+denom=72, editable=382` -> ratio 5.3) -- a real property of the
+mean-of-per-page-ratios formula on a mockup-dense page, not clamped.
+
+## Wrong number candidates (OCR-fixture decks, 2026-09-25)
+
+`ground_truth_checker.py`'s `numeric_exactness` (deck1-4's `wrong_numbers`)
+is a real hard-fail because its ground truth is exact python-pptx text: any
+number in the output that isn't a real source number is unambiguously
+fabricated. An OCR-fixture deck (`"checker": "checker"`) has no such exact
+ground truth, so `wrong_number_candidates.py` flags CANDIDATES instead: any
+number token in the output's own editable text absent from BOTH the
+positional and best-match source page's OCR numbers (checking both reduces
+false positives on a reordered deck). Raw candidates are then run through
+the *same* page-number-footer filter as `wrong_numbers` (`role`==footer
+position + shape-text match; see "Wrong-number footer false positives"
+above) -- on the real large-external-deck baseline this cut 27 raw candidates to 8
+actionable ones (19 were the deck's own page-number stamp). Fields:
+`wrong_number_candidates.count`/`.candidates` (page, token, shape-text
+context, bbox), `.raw_count`, `.filtered_as_page_number` (audit of what was
+excluded and why). `score --crops` (or `baseline --crops`) additionally
+saves, per candidate, a crop of the matched source page and a crop of the
+output's own rendered page (reusing `check_pdf()`'s already-rendered PNGs)
+around the same shape bbox, to `RUN_DIR/reports/<deck>_wrong_number_crops/`
+-- for a human to eyeball source vs. output side by side.
+
+## Timing fields (2026-09-25)
+
+`analysis_duration_seconds` was misleadingly named: it was always the sum
+of *every* driver stage (upload, snapshot, presentation create, analysis
+wait, review, generate, evidence fetch, both exports), not just analysis.
+Renamed to `total_seconds` (same formula, same value) and broken out via
+`run_timing.py` into `analysis_wait_seconds` (the `raster_analysis_wait`
+stage alone), `generation_seconds` (`generate_async`), `export_pptx_seconds`
+/ `export_pdf_seconds` (each format's request/follow/download sub-stages
+summed). `compare` reads an old summary's `analysis_duration_seconds` as
+`total_seconds` so a stored pre-rename run still compares. `run_timing.py`
+also exposes `analysis_stage_totals()`, which surfaces
+`analysis["stage_timings"]` (an optional field another effort is adding to
+the analysis result -- per page/stage seconds) as `analysis_stage_totals_seconds`
+in the score dict when present; tolerant of three plausible shapes since
+the producer's exact format wasn't available to verify against as of this
+writing (every real `analysis_result.json` checked has no `stage_timings`
+key yet, so this field is `None` on every current run -- unverified against
+real data).
+
+## Concurrent harness flag
+
+`launch` now writes `RUN_DIR/run_config.json` (`{"concurrent_harness":
+bool}`, default `true`) via `--concurrent-harness`/`--no-concurrent-harness`
+-- a run-level record of whether the multi-deck `_scheduler` harness drove
+this run (vs. a one-off manual `generate_raster_deck.py` call). `score`/
+`baseline` read it from there by default, or accept the same
+`--concurrent-harness`/`--no-concurrent-harness` flag as an override/supply
+for a run this suite didn't itself launch (e.g. an older run dir). It's
+written to the top level of `summary.json` (not per-deck) and shown by
+`compare` next to every timing metric's label, since it materially affects
+wall-clock duration.
 
 ## Order-aware matching (OCR-fixture decks)
 

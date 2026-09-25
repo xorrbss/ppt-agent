@@ -3,7 +3,12 @@ runs (or a run and baseline_prev_session.json-shaped file), flagging any
 `wrong_numbers.count > 0` and any metric regression.
 
 Split out of the original run_suite.py (2026-09-25 eval suite) to keep each
-module under the repo's file-size limit; behavior is unchanged.
+module under the repo's file-size limit; behavior is unchanged except the
+timing fields (2026-09-25 follow-up: `analysis_duration_seconds` renamed to
+`total_seconds` plus four per-stage fields -- see run_timing.py -- with
+`analysis_duration_seconds` still read from an OLD summary so a stored run
+predating the rename still compares) and the `concurrent_harness` run-level
+flag noted next to every timing row.
 """
 from __future__ import annotations
 
@@ -12,9 +17,13 @@ import json
 from pathlib import Path
 from typing import Any
 
+TIMING_KEYS = {"total_seconds", "analysis_wait_seconds", "generation_seconds",
+               "export_pptx_seconds", "export_pdf_seconds"}
+
 METRICS = [
     ("page_count_ok", "A4/page_count ok", "bool_good_true"),
     ("wrong_numbers.count", "wrong numbers", "lower_better"),
+    ("wrong_number_candidates.count", "wrong number candidates (unreviewed)", "lower_better"),
     ("editable_text_ratio_overall", "editable ratio (overall)", "higher_better"),
     ("editable_text_ratio_body_mean", "editable ratio (body mean)", "higher_better"),
     ("editable_text_ratio_body_excl_mockup", "editable ratio (body, excl. mockup)", "higher_better"),
@@ -24,7 +33,11 @@ METRICS = [
     ("full_page_copies", "full-page copies", "lower_better"),
     ("page_content_crops", "page-content crops", "lower_better"),
     ("min_font_pt", "min font pt", "higher_better"),
-    ("analysis_duration_seconds", "duration (s)", "lower_better"),
+    ("total_seconds", "total duration (s)", "lower_better"),
+    ("analysis_wait_seconds", "analysis-wait duration (s)", "lower_better"),
+    ("generation_seconds", "generation duration (s)", "lower_better"),
+    ("export_pptx_seconds", "export-pptx duration (s)", "lower_better"),
+    ("export_pdf_seconds", "export-pdf duration (s)", "lower_better"),
 ]
 
 
@@ -37,11 +50,29 @@ def _get_path(d: dict, dotted: str):
     return cur
 
 
+def _get_metric(d: dict, key: str):
+    value = _get_path(d, key)
+    # A summary scored before the 2026-09-25 timing rename has
+    # analysis_duration_seconds instead of total_seconds -- same formula
+    # (sum of every driver stage), so it's a valid comparison point.
+    if value is None and key == "total_seconds":
+        return _get_path(d, "analysis_duration_seconds")
+    return value
+
+
 def _load_summary(path_str: str) -> dict:
     p = Path(path_str)
     if p.is_dir():
         p = p / "summary.json"
     return json.loads(p.read_text(encoding="utf-8"))
+
+
+def _harness_note(base: dict, new: dict) -> str:
+    """`concurrent_harness` is a run-level flag (see suite_launch.py's
+    `--concurrent-harness`), not a per-deck one; shown once, next to every
+    timing metric row, since it materially affects wall-clock duration."""
+    bh, nh = base.get("concurrent_harness"), new.get("concurrent_harness")
+    return f" [concurrent_harness: base={bh}, new={nh}]"
 
 
 def cmd_compare(args: argparse.Namespace) -> None:
@@ -50,6 +81,7 @@ def cmd_compare(args: argparse.Namespace) -> None:
     base_decks = base.get("decks", {})
     new_decks = new.get("decks", {})
     deck_ids = sorted(set(base_decks) | set(new_decks))
+    harness_note = _harness_note(base, new)
 
     lines = ["| deck | metric | base | new | delta | flag |", "|---|---|---|---|---|---|"]
     flags = []
@@ -60,8 +92,10 @@ def cmd_compare(args: argparse.Namespace) -> None:
             lines.append(f"| {deck_id} | (status) | {b.get('status')} | {n.get('status')} | - | - |")
             continue
         for key, label, direction in METRICS:
-            bv = _get_path(b, key)
-            nv = _get_path(n, key)
+            if key in TIMING_KEYS:
+                label = label + harness_note
+            bv = _get_metric(b, key)
+            nv = _get_metric(n, key)
             delta = "-"
             flag = ""
             if isinstance(bv, (int, float)) and isinstance(nv, (int, float)) and not isinstance(bv, bool):

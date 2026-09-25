@@ -37,6 +37,15 @@ def cmd_launch(args: argparse.Namespace) -> None:
     for d in deck_ids:
         deck_by_id(cfg, d)  # validate early, in this (attended) process
 
+    # Run-level provenance: this run went through the launch/_scheduler
+    # multi-deck concurrent harness (as opposed to a one-off manual
+    # generate_raster_deck.py invocation) -- recorded so `score`/`compare`
+    # can show it next to every timing metric (2026-09-25 follow-up).
+    (run_dir / "run_config.json").write_text(
+        json.dumps({"concurrent_harness": args.concurrent_harness}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
     decks_root = resolve_decks_root(args)
     python_exe = args.python or sys.executable
     scheduler_cmd = [
@@ -124,6 +133,10 @@ def add_launch_subparser(sub) -> None:
     p_launch.add_argument("--max-parallel", type=int, default=2)
     p_launch.add_argument("--config", default=str(DEFAULT_CONFIG))
     p_launch.add_argument("--python", default=None, help="python.exe to run the scheduler+driver with")
+    p_launch.add_argument("--concurrent-harness", action=argparse.BooleanOptionalAction, default=True,
+                           help="record whether this run used the launch/_scheduler multi-deck concurrent "
+                                "harness (default: true, since launch always does) -- written to "
+                                "RUN_DIR/run_config.json for score/compare to show next to timing metrics")
     add_decks_root_arg(p_launch)
     p_launch.set_defaults(func=cmd_launch)
 

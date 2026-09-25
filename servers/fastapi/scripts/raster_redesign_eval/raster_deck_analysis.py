@@ -81,17 +81,24 @@ def wait_for_analysis(base: str, operation_id: str, max_wait_seconds: int = 1800
         time.sleep(ANALYSIS_POLL_SECONDS)
 
 
-def save_analysis_result(out_dir: Path, analysis_payload: Optional[dict]) -> None:
-    """Persist the raster analysis result (each page's regions -- role,
-    editable_fallback, review_reason, bbox, ocr_token_indices -- plus its
-    ocr_inventory) to `out_dir/analysis_result.json`, so offline scoring can
-    compute region-based metrics (e.g. the mockup-exclusion editable-text
-    ratio, see mockup_regions.py) without re-querying the backend. No-op
-    when the payload isn't available."""
-    if analysis_payload is None:
+def save_analysis_result(out_dir: Path, analysis_response: Optional[dict]) -> None:
+    """Persist the raster analysis endpoint's full response envelope
+    (`{"analysis": {...pages, each with regions -- role, editable_fallback,
+    review_reason, bbox, ocr_token_indices -- plus ocr_inventory}, ...}`,
+    i.e. exactly `wait_for_analysis()`'s return value / what `GET
+    /api/v1/ppt/source-content/raster/analysis/{operation_id}` returns) to
+    `out_dir/analysis_result.json`, so offline scoring can compute
+    region-based metrics (e.g. the mockup-exclusion editable-text ratio, see
+    mockup_regions.py) without re-querying the backend. Saving the envelope
+    unchanged (not just its "analysis" key) matches every real
+    analysis_result.json fetched from this endpoint elsewhere (2026-09-25
+    fix: mockup_regions.py's reader used to assume the bare payload and
+    silently found 0 regions on real files). No-op when the payload isn't
+    available."""
+    if analysis_response is None:
         return
     (Path(out_dir) / "analysis_result.json").write_text(
-        json.dumps(analysis_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        json.dumps(analysis_response, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def ensure_approved(base: str, operation: dict) -> dict:

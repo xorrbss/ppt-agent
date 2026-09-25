@@ -31,6 +31,25 @@ exactly as before.
 Char counts for a mockup region come from the analysis's own OCR word boxes
 (`page.ocr_inventory`, indexed by `region.ocr_token_indices`) -- never an
 area-proportion guess.
+
+**2026-09-25 bug fix:** `analysis_result.json` on disk is the FULL
+`GET /api/v1/ppt/source-content/raster/analysis/{operation_id}` response
+envelope (`{"analysis": {...pages...}, "operation_id": ..., "status": ...,
+...}`), not the bare `RasterAnalysis` payload -- confirmed against real
+files fetched from the endpoint (`eval-runs/baseline-2144f5034-r2/{deck1,
+deck2, deck3, <external-deck>}/analysis_result.json`,
+`eval-runs/baseline-2144f5034/deck4/analysis_result.json`) and matching
+`generate_raster_deck.py`'s own `save_analysis_result(out_dir, ready)`
+(which now saves the whole endpoint response, not just `ready["analysis"]`
+-- see that module). The original version of this function returned the
+envelope unchanged, so every `.get("pages", [])` call below silently saw an
+empty list -- `mockup_regions_count` was always 0. `load_analysis_result()`
+now unwraps `data["analysis"]` when present (falling back to `data` itself,
+for any caller that already unwrapped it, e.g. a hand-built payload). Also
+matches `mockup_audit/make_crops.py`'s own extraction exactly: only a
+mockup region with `char_count > 0` is counted (a region whose
+`ocr_token_indices` cover nothing, or the crop's own `text` is empty, adds
+nothing to the ratio and isn't useful to audit).
 """
 from __future__ import annotations
 
@@ -44,11 +63,17 @@ def load_analysis_result(run_dir: Path) -> Optional[dict]:
     """`run_dir` is a deck's own output directory (same dir as its pptx/pdf),
     written by `generate_raster_deck.py`'s `save_analysis_result()`. Returns
     None when no analysis_result.json exists there (older runs, or
-    --skip-generate runs that never reached generation)."""
+    --skip-generate runs that never reached generation). Unwraps the
+    `GET .../analysis/{operation_id}` response envelope
+    (`{"analysis": {...}, "operation_id": ..., ...}`) to the bare
+    `RasterAnalysis` dict (`{"pages": [...], ...}`); a file that's already
+    just the bare analysis (no "analysis" key) is returned as-is."""
     path = Path(run_dir) / "analysis_result.json"
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    analysis = data.get("analysis")
+    return analysis if isinstance(analysis, dict) else data
 
 
 def _is_mockup_region(region: dict) -> bool:
@@ -66,22 +91,27 @@ def _region_char_count(region: dict, ocr_inventory: list[dict]) -> int:
 
 
 def mockup_audit(analysis: dict) -> list[dict]:
-    """Per structurally-classified mockup region: page, region id, bbox
-    (source EMU, from the analysis's own RasterBox), reason (`review_reason`
-    if the region carries one, else a fixed label), and its OCR-derived char
-    count -- enough for an auditor to crop and eyeball each one."""
+    """Per structurally-classified mockup region with actual OCR-derived
+    text (`char_count > 0` -- see module docstring): page, region id, bbox
+    (source EMU, from the analysis's own RasterBox), reason (the region's
+    own `review_reason`, usually `None` for a genuine structural screenshot
+    -- matches `mockup_audit/make_crops.py`'s own `rows.json` exactly), and
+    its char count -- enough for an auditor to crop and eyeball each one."""
     audit = []
     for page in analysis.get("pages", []):
         inventory = page.get("ocr_inventory", [])
         for region in page.get("regions", []):
             if not _is_mockup_region(region):
                 continue
+            char_count = _region_char_count(region, inventory)
+            if char_count <= 0:
+                continue
             audit.append({
                 "page": page.get("page_number"),
                 "region_id": region.get("region_id"),
                 "bbox": region.get("bbox"),
-                "reason": region.get("review_reason") or "structure_screenshot",
-                "char_count": _region_char_count(region, inventory),
+                "reason": region.get("review_reason"),
+                "char_count": char_count,
             })
     return audit
 

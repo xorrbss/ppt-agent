@@ -63,3 +63,24 @@ def deck_by_id(cfg: dict, deck_id: str) -> dict:
 
 def now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def add_concurrent_harness_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--concurrent-harness", action=argparse.BooleanOptionalAction, default=None,
+        help="override/supply the concurrent_harness flag for this run (default: read from "
+             "RUN_DIR/run_config.json if `launch` wrote one there, else omitted)",
+    )
+
+
+def resolve_concurrent_harness(args: argparse.Namespace, run_dir: Path):
+    """CLI override wins; otherwise reads `run_dir/run_config.json` (written
+    by `launch`, see suite_launch.py); None when neither is available (a
+    run this suite didn't itself launch/score with the flag known)."""
+    explicit = getattr(args, "concurrent_harness", None)
+    if explicit is not None:
+        return explicit
+    config_path = Path(run_dir) / "run_config.json"
+    if config_path.exists():
+        return json.loads(config_path.read_text(encoding="utf-8")).get("concurrent_harness")
+    return None

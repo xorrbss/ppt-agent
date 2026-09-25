@@ -19,7 +19,9 @@ from pathlib import Path
 from typing import Optional
 
 from mockup_regions import load_analysis_result, mockup_summary
+from run_timing import analysis_stage_totals, stage_durations
 from suite_paths import resolve_deck_path
+from wrong_number_candidates import find_candidates, save_candidate_crops
 from wrong_number_filter import classify_wrong_numbers
 
 
@@ -138,10 +140,8 @@ def score_deck_ground_truth(deck_cfg: dict, decks_root: Path, pptx_path: Path,
                 total += t["total_cells"]
     table_cell_accuracy = (correct / total) if total else None
 
-    duration = None
-    if run_report_path and Path(run_report_path).exists():
-        rr = json.loads(Path(run_report_path).read_text(encoding="utf-8"))
-        duration = round(sum(t["seconds"] for t in rr.get("timings", [])), 1)
+    timing = stage_durations(run_report_path)
+    stage_totals = analysis_stage_totals(load_analysis_result(pptx_path.parent))
 
     # Page numbers here are already the analysis's own source page numbers
     # (this checker assumes positional identity, same as wrong_numbers above).
@@ -174,7 +174,8 @@ def score_deck_ground_truth(deck_cfg: dict, decks_root: Path, pptx_path: Path,
         "page_content_fallback_pages_product": page_content_fallback_pages_product,
         "min_font_pt": min_font_pt,
         "exactly_once_pptx_text_duplicate_pages": report["summary"]["pages_with_duplicated_tokens"],
-        "analysis_duration_seconds": duration,
+        **timing,
+        "analysis_stage_totals_seconds": stage_totals,
         "_raw": report,
     }
 
@@ -261,8 +262,9 @@ def _one_to_one_best_match(pptx_path: Path, pptx_report: dict, gt: dict) -> dict
 
 def score_deck_checker(deck_cfg: dict, decks_root: Path, pptx_path: Path, pdf_path: Optional[Path],
                         report_dir: Path, label: str, run_report_path: Optional[Path] = None,
-                        evidence_path: Optional[Path] = None) -> dict:
+                        evidence_path: Optional[Path] = None, save_crops: bool = False) -> dict:
     import checker as ck
+    from pptx import Presentation
 
     expected_page_count = deck_cfg.get("expected_page_count", 28)
     fixtures_dir = resolve_deck_path(decks_root, deck_cfg["fixtures_dir"])
@@ -313,11 +315,35 @@ def score_deck_checker(deck_cfg: dict, decks_root: Path, pptx_path: Path, pdf_pa
         excl_mockup_input.append((sj, src_len, s["editable_text_chars"]))
     excl_mockup = _excl_mockup_metrics(pptx_path, excl_mockup_input)
 
+    # Candidate (not hard-fail: OCR ground truth is noisy) fabricated numbers --
+    # see wrong_number_candidates.py. Checked against BOTH the positional and
+    # best-match source page's numbers, since an OCR-fixture deck can reorder.
+    prs = Presentation(str(pptx_path))
+    positional_source_text = {pn: p.get("ocr_text_normalized", "") for pn, p in src_pages.items()}
+    best_match_source_text = {oi: src_pages.get(sj, {}).get("ocr_text_normalized", "")
+                               for oi, sj in slide_to_source.items()}
+    candidate_result = find_candidates(prs, positional_source_text, best_match_source_text)
+    candidates = candidate_result["candidates"]
+    wrong_number_candidates = {
+        "count": len(candidates), "candidates": candidates,
+        "raw_count": len(candidate_result["raw_candidates"]),
+        "filtered_as_page_number": candidate_result["filtered_as_page_number"],
+    }
+    if save_crops and candidates:
+        crops_dir = Path(report_dir) / f"{label}_wrong_number_crops"
+        output_pages_dir = Path(report_dir) / f"{label}_pdf_pages" if pdf_report else None
+        save_candidate_crops(
+            candidates, out_dir=crops_dir,
+            canvas_width_emu=prs.slide_width, canvas_height_emu=prs.slide_height,
+            source_pages_dir=fixtures_dir / "source_pages",
+            source_page_by_output_slide=slide_to_source,
+            output_pages_dir=output_pages_dir,
+        )
+        wrong_number_candidates["crops_dir"] = str(crops_dir)
+
     summary = pptx_report["summary"]
-    duration = None
-    if run_report_path and Path(run_report_path).exists():
-        rr = json.loads(Path(run_report_path).read_text(encoding="utf-8"))
-        duration = round(sum(t["seconds"] for t in rr.get("timings", [])), 1)
+    timing = stage_durations(run_report_path)
+    stage_totals = analysis_stage_totals(load_analysis_result(pptx_path.parent))
 
     page_content_fallback_pages_product = _load_page_content_fallback_pages(evidence_path)
 
@@ -331,8 +357,9 @@ def score_deck_checker(deck_cfg: dict, decks_root: Path, pptx_path: Path, pdf_pa
             "count": None, "pages": [],
             "note": ("not computed for this deck: ground truth here is OCR text, not exact source "
                      "text, so extra numbers in the output cannot be safely called fabrications. "
-                     "See char_recall_mean / numeric_recall_mean instead."),
+                     "See wrong_number_candidates for a human-reviewable candidate list instead."),
         },
+        "wrong_number_candidates": wrong_number_candidates,
         "editable_text_ratio_overall": best_match["editable_text_ratio_overall"],
         "editable_text_ratio_body_mean": best_match["editable_text_ratio_body_mean"],
         "editable_text_ratio_overall_positional": editable_overall_positional,
@@ -356,7 +383,8 @@ def score_deck_checker(deck_cfg: dict, decks_root: Path, pptx_path: Path, pdf_pa
         "min_font_pt": summary["deck_min_explicit_font_pt"],
         "exactly_once": None,
         "fitz_available": fitz_available,
-        "analysis_duration_seconds": duration,
+        **timing,
+        "analysis_stage_totals_seconds": stage_totals,
         "_raw": {"pptx": pptx_report, "pdf": pdf_report, "exactly_once": eo_report},
     }
     if eo_report:
@@ -371,13 +399,13 @@ def score_deck_checker(deck_cfg: dict, decks_root: Path, pptx_path: Path, pdf_pa
 
 def score_one_deck(deck_cfg: dict, decks_root: Path, pptx_path: Path, pdf_path: Optional[Path],
                     report_dir: Path, label: str, run_report_path: Optional[Path] = None,
-                    evidence_path: Optional[Path] = None) -> dict:
+                    evidence_path: Optional[Path] = None, save_crops: bool = False) -> dict:
     report_dir.mkdir(parents=True, exist_ok=True)
     if deck_cfg["checker"] == "ground_truth_checker":
         result = score_deck_ground_truth(deck_cfg, decks_root, pptx_path, run_report_path, evidence_path)
     elif deck_cfg["checker"] == "checker":
         result = score_deck_checker(deck_cfg, decks_root, pptx_path, pdf_path, report_dir, label,
-                                     run_report_path, evidence_path)
+                                     run_report_path, evidence_path, save_crops)
     else:
         raise ValueError(f"unknown checker kind: {deck_cfg['checker']}")
 

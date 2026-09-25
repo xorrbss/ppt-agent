@@ -12,7 +12,16 @@ import json
 from pathlib import Path
 
 from deck_scoring import find_run_outputs, score_one_deck
-from suite_paths import DEFAULT_CONFIG, add_decks_root_arg, deck_by_id, load_config, now_iso, resolve_decks_root
+from suite_paths import (
+    DEFAULT_CONFIG,
+    add_concurrent_harness_arg,
+    add_decks_root_arg,
+    deck_by_id,
+    load_config,
+    now_iso,
+    resolve_concurrent_harness,
+    resolve_decks_root,
+)
 
 
 def cmd_score(args: argparse.Namespace) -> None:
@@ -21,7 +30,11 @@ def cmd_score(args: argparse.Namespace) -> None:
     decks_root = resolve_decks_root(args)
     deck_ids = args.decks.split(",") if args.decks else [d["id"] for d in cfg["decks"]]
 
-    summary = {"run_dir": str(run_dir), "scored_at": now_iso(), "decks": {}}
+    summary = {
+        "run_dir": str(run_dir), "scored_at": now_iso(),
+        "concurrent_harness": resolve_concurrent_harness(args, run_dir),
+        "decks": {},
+    }
     for deck_id in deck_ids:
         deck_cfg = deck_by_id(cfg, deck_id)
         deck_out = run_dir / deck_id
@@ -39,11 +52,13 @@ def cmd_score(args: argparse.Namespace) -> None:
             continue
         try:
             result = score_one_deck(deck_cfg, decks_root, pptx, pdf, run_dir / "reports", deck_id,
-                                     run_report, evidence)
+                                     run_report, evidence, args.crops)
             result["status"] = "scored"
             summary["decks"][deck_id] = result
+            candidates = result.get("wrong_number_candidates")
+            extra = f", wrong_number_candidates={candidates['count']}" if candidates else ""
             print(f"[score] {deck_id}: scored ok, page_count={result['page_count']}, "
-                  f"wrong_numbers={result['wrong_numbers']['count']}")
+                  f"wrong_numbers={result['wrong_numbers']['count']}{extra}")
         except Exception as exc:  # noqa: BLE001
             summary["decks"][deck_id] = {"deck_id": deck_id, "status": "score_error", "error": str(exc)}
             print(f"[score] {deck_id}: SCORE ERROR: {exc}")
@@ -58,5 +73,9 @@ def add_score_subparser(sub) -> None:
     p_score.add_argument("--out", required=True)
     p_score.add_argument("--decks", default=None)
     p_score.add_argument("--config", default=str(DEFAULT_CONFIG))
+    p_score.add_argument("--crops", action="store_true",
+                          help="also save source-vs-output crops for every wrong_number_candidates "
+                               "entry (checker-kind decks only); writes RUN_DIR/reports/<deck>_wrong_number_crops/")
+    add_concurrent_harness_arg(p_score)
     add_decks_root_arg(p_score)
     p_score.set_defaults(func=cmd_score)
