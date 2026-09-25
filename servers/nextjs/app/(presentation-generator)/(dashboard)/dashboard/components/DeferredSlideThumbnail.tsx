@@ -70,7 +70,8 @@ export const DeferredSlideThumbnail = ({ slide, theme }: { slide: any; theme?: u
     : isNearViewport
       ? "rendered"
       : "deferred";
-  const canvas = slide?.content?.__authored__ === true || slide?.layout_group === "authored"
+  const canvas = slide?.content?.__authored__ === true ||
+    slide?.layout_group === "authored" || slide?.layout_group === "svg"
     ? resolveAuthoredCanvas(theme)
     : LEGACY_AUTHORED_CANVAS;
 

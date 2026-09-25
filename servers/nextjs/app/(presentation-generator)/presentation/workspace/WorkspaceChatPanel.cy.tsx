@@ -1,24 +1,60 @@
 import React from "react";
 import { mount } from "cypress/react";
 import { NextIntlClientProvider } from "next-intl";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
 import koMessages from "@/i18n/messages/ko.json";
+import { createMockRouter } from "@/cypress/support/testHelpers";
 import { WorkspaceApiError } from "../../services/api/workspace";
 import WorkspaceChatPanel, {
   parseQualityReviewSlideRange,
 } from "./WorkspaceChatPanel";
 import { WorkspaceMessage } from "./WorkspaceMessage";
 import { WorkspaceOperationCard } from "./WorkspaceOperationCard";
+import { observeWorkspaceOperations } from "./workspaceOperationObservation";
+import { createWorkspaceProjection } from "./timelineProjection";
+import type { WorkspaceOperationAnchor } from "./types";
+
+describe("workspace progress observations", () => {
+  it("confirms snapshots without treating percent heartbeats as completed work", () => {
+    const initial = "2026-09-23T00:00:00Z";
+    const later = "2026-09-23T00:02:00Z";
+    const operation: WorkspaceOperationAnchor = {
+      anchorType: "operation", id: "anchor", operationId: "work", position: 1,
+      operationType: "presentation.generate", title: "생성", status: "running",
+      stage: "authored_author", current: 1, total: 30, progress: 10, allowedActions: [],
+      events: [{ id: "event-1", operationId: "work", sequence: 1,
+        type: "operation.progress", stage: "authored_author", current: 1, total: 30,
+        createdAt: initial }],
+    };
+    const projection = { ...createWorkspaceProjection(), items: [operation] };
+    const first = observeWorkspaceOperations({}, projection, "snapshot", initial);
+    const heartbeat = { ...projection, items: [{ ...operation, progress: 20,
+      events: [...operation.events, { ...operation.events[0], id: "event-2", sequence: 2, progress: 20, createdAt: later }] }] };
+    const confirmed = observeWorkspaceOperations(first, heartbeat, "snapshot", later);
+    expect(confirmed.work.lastConfirmedAt).to.equal(later);
+    expect(confirmed.work.lastProgressAt).to.equal(initial);
+    const advanced = { ...projection, items: [{ ...operation, current: 2,
+      events: [...operation.events, { ...operation.events[0], id: "event-3", sequence: 3, current: 2, createdAt: later }] }] };
+    expect(observeWorkspaceOperations(confirmed, advanced, ["work"], later).work.lastProgressAt).to.equal(later);
+    expect(observeWorkspaceOperations(first, projection, ["other-work"], later).work.lastConfirmedAt).to.equal(initial);
+  });
+});
 
 // The panel and its children read the active UI locale via useTranslations /
 // useLocale, exactly as they do in the app under the root provider. cy.mount
 // (registered in cypress/support/component.ts) wraps nothing, so every mount
 // here goes through this local helper instead of cy.mount directly.
-function mountWithIntl(ui: React.ReactElement) {
+function mountWithIntl(
+  ui: React.ReactElement,
+  router = createMockRouter(),
+) {
   mount(
-    <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
-      {ui}
-    </NextIntlClientProvider>,
+    <AppRouterContext.Provider value={router as never}>
+      <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
+        {ui}
+      </NextIntlClientProvider>
+    </AppRouterContext.Provider>,
   );
 }
 
@@ -220,7 +256,8 @@ describe("WorkspaceChatPanel", () => {
       .should("be.visible")
       .and("contain.text", "대화 기록을 잠시 불러올 수 없습니다.")
       .and("not.contain.text", "database connection details");
-    cy.get("#workspace-command").should("be.disabled");
+    cy.get("#workspace-command").should("not.be.disabled");
+    cy.get('[aria-label="수정 요청 전송"]').should("be.disabled");
     cy.contains("기록 다시 불러오기").click();
     cy.wait("@historyTimeline");
     cy.get('[data-testid="workspace-history-error"]').should("not.exist");
@@ -295,7 +332,7 @@ describe("WorkspaceChatPanel", () => {
     );
 
     cy.get('[data-testid="attachment-ready"]')
-      .should("contain.text", "application/pdf")
+      .should("contain.text", "ready.pdf")
       .and("contain.text", "2.0 KB")
       .and("contain.text", "당시 준비됨")
       .within(() => {
@@ -765,7 +802,7 @@ describe("WorkspaceChatPanel", () => {
     cy.get('[aria-label="초기 생성 요청"]')
       .contains(firstUserMessage.content)
       .should("be.visible");
-    cy.contains("실제 생성에는 아래 설정이 적용됩니다.").should("be.visible");
+    cy.contains("summary", "생성 설정").should("be.visible");
     cy.get('[aria-label="첨부 파일"]').within(() => {
       cy.contains("현황 분석.pdf").should("be.visible");
       cy.contains("준비됨").should("be.visible");
@@ -778,6 +815,83 @@ describe("WorkspaceChatPanel", () => {
     cy.contains("10").should("be.visible");
     cy.contains("api_key").should("not.exist");
     cy.contains("must-not-be-rendered").should("not.exist");
+  });
+
+  it("edits a failed initial request inline before handing it to the existing upload flow", () => {
+    installWorkspaceApi({
+      items: [
+        firstUserMessage,
+        operation({
+          status: "failed",
+          safe_error: "요청을 수정한 뒤 새 시도를 시작할 수 있습니다.",
+        }),
+      ],
+      event_high_watermark: "cursor-failed-attempt",
+      revision: 7,
+      has_more: false,
+    });
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/presentation/${PRESENTATION_ID}/generation-info`,
+      {
+        statusCode: 200,
+        body: {
+          prompt: firstUserMessage.content,
+          attachment_file_names: ["현황 분석.pdf"],
+          settings: {
+            n_slides: 10,
+            language: "ko",
+            tone: "professional",
+            verbosity: "standard",
+            instructions: "",
+            include_table_of_contents: false,
+            include_title_slide: false,
+            web_search: false,
+            mode: "authored",
+            version: "1",
+          },
+          can_start_new_attempt: true,
+        },
+      },
+    ).as("generationInfo");
+    const createPresentation = cy.stub().as("createPresentation");
+    cy.intercept("POST", "**/api/v1/ppt/presentation/create", (request) => {
+      createPresentation(request.body);
+      request.reply({ statusCode: 500 });
+    });
+    const router = createMockRouter();
+    const handoffKey = `presenton.previous-attempt-prompt.v1:${encodeURIComponent(PRESENTATION_ID)}`;
+    cy.window().then((window) => window.sessionStorage.removeItem(handoffKey));
+
+    mountWithIntl(
+      <WorkspaceChatPanel presentationId={PRESENTATION_ID} />,
+      router,
+    );
+    cy.wait("@timeline");
+    cy.contains("button", "요청 수정").click();
+    cy.wait("@generationInfo");
+    cy.get('[data-testid="workspace-attempt-editor"]')
+      .should("contain.text", "현황 분석.pdf")
+      .find("textarea")
+      .should("have.value", firstUserMessage.content)
+      .clear()
+      .type("보안 자동화 우선순위를 반영한 10장 전략으로 수정");
+    cy.contains("button", "수정 내용으로 설정 확인").click();
+
+    cy.wrap(router.push).should(
+      "have.been.calledWith",
+      `/upload?previous=${encodeURIComponent(PRESENTATION_ID)}`,
+    );
+    cy.window().then((window) => {
+      const handoff = JSON.parse(
+        window.sessionStorage.getItem(handoffKey) ?? "null",
+      ) as { presentationId?: string; prompt?: string } | null;
+      expect(handoff).to.deep.equal({
+        presentationId: PRESENTATION_ID,
+        prompt: "보안 자동화 우선순위를 반영한 10장 전략으로 수정",
+      });
+    });
+    cy.wrap(createPresentation).should("not.have.been.called");
   });
 
   it("preserves the visible message position when older history is prepended", () => {
@@ -842,7 +956,7 @@ describe("WorkspaceChatPanel", () => {
     );
 
     mountWithIntl(
-      <div className="h-[360px]">
+      <div className="h-[600px]">
         <WorkspaceChatPanel presentationId={PRESENTATION_ID} />
       </div>,
     );
@@ -853,6 +967,9 @@ describe("WorkspaceChatPanel", () => {
         $scroll[0].style.overflowY = "auto";
       })
       .scrollTo("top");
+    // Position the history control before measuring the anchor. The shared
+    // composer and scope selector need room in this component-only viewport.
+    cy.contains("button", "이전 기록 불러오기").scrollIntoView();
 
     let anchorOffset = 0;
     cy.contains('[aria-label="사용자 메시지"]', "recent-anchor").then(
@@ -864,11 +981,7 @@ describe("WorkspaceChatPanel", () => {
         });
       },
     );
-    // Cypress scrolls an element into view before clicking it. This button is
-    // the first child of a container with `py-4`, so that scroll moves the
-    // timeline 16px after the baseline above was captured at scrollTop 0, and
-    // the panel then faithfully preserves the anchor against a position this
-    // test never measured. Click where the user already is.
+    // Do not move the viewport again after measuring the visible anchor.
     cy.contains("button", "이전 기록 불러오기").click({ scrollBehavior: false });
     cy.wait("@paginatedTimeline");
 
@@ -911,7 +1024,7 @@ describe("WorkspaceChatPanel", () => {
       message: Array.from(
         { length: 8 },
         (_, index) =>
-          `Detailed progress update ${index + 1} remains inside the existing operation card.`,
+          `첫 번째 진행 ${index + 1}: 기존 응답 안에서 슬라이드 배치 상태를 확인하고 있습니다.`,
       ).join(" "),
       progress: 60,
       cursor: "101",
@@ -925,7 +1038,7 @@ describe("WorkspaceChatPanel", () => {
       message: Array.from(
         { length: 12 },
         (_, index) =>
-          `Later progress update ${index + 1} must not move a reader who scrolled upward.`,
+          `다음 진행 ${index + 1}: 이전 기록을 읽는 동안 위치를 유지하고 상세 작업을 진행합니다.`,
       ).join(" "),
       progress: 80,
     };
@@ -999,8 +1112,8 @@ describe("WorkspaceChatPanel", () => {
       scroll.dispatchEvent(new Event("scroll"));
     });
     cy.get(
-      '[data-operation-id="operation-generate"] [role="progressbar"]',
-    ).should("have.attr", "aria-valuenow", "60");
+      '[data-operation-id="operation-generate"] [data-testid="generation-progress-response"]',
+    ).should("contain.text", "첫 번째 진행");
     cy.get('[data-testid="workspace-timeline-scroll"]').should(($scroll) => {
       const scroll = $scroll[0];
       expect(
@@ -1016,8 +1129,8 @@ describe("WorkspaceChatPanel", () => {
       scroll.scrollTop = 0;
     });
     cy.get(
-      '[data-operation-id="operation-generate"] [role="progressbar"]',
-    ).should("have.attr", "aria-valuenow", "80");
+      '[data-operation-id="operation-generate"] [data-testid="generation-progress-response"]',
+    ).should("contain.text", "다음 진행");
     cy.get('[data-testid="workspace-timeline-scroll"]').should(($scroll) => {
       expect($scroll[0].scrollTop).to.be.closeTo(0, 1);
     });
@@ -1070,9 +1183,17 @@ describe("WorkspaceChatPanel", () => {
 
     cy.get('[data-operation-id="operation-generate"]')
       .find('[role="progressbar"]')
-      .should("have.attr", "aria-valuenow", "42");
-    cy.contains("슬라이드 레이아웃을 작성하고 있습니다.").should("be.visible");
-    cy.contains("10개 슬라이드를 게시했습니다.").should("be.visible");
+      .should("not.exist");
+    cy.get('[data-operation-id="operation-generate"] [data-testid="generation-progress-response"]')
+      .should("contain.text", "슬라이드 레이아웃을 작성하고 있습니다.");
+    cy.get('[data-testid="completed-generation-history"]')
+      .should(($history) => {
+        expect($history).not.to.have.attr("open");
+        expect($history).to.contain.text("10개 슬라이드를 게시했습니다.");
+      })
+      .children("summary")
+      .first()
+      .click();
     cy.contains("리비전: 8").should("be.visible");
     cy.contains("안전하게 다시 시도할 수 있습니다.").should("be.visible");
 
@@ -1080,9 +1201,7 @@ describe("WorkspaceChatPanel", () => {
       .contains("button", "승인")
       .click();
     cy.wait("@operationAction");
-    cy.get('[data-operation-id="operation-approval"]')
-      .contains("button", "취소")
-      .click();
+    cy.contains("button", "생성 중지").click();
     cy.wait("@operationAction");
     cy.get('[data-operation-id="operation-failed"]')
       .contains("button", "다시 시도")
@@ -1123,9 +1242,10 @@ describe("WorkspaceChatPanel", () => {
     mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@timeline");
     cy.get('[data-operation-id="operation-non-retryable"]').within(() => {
-      cy.get('[data-testid="operation-retry-unavailable"]')
+      cy.get('[role="alert"]')
         .should("be.visible")
-        .and("contain.text", "이 오류는 재시도할 수 없습니다");
+        .and("contain.text", "생성 요청을 실행할 수 없습니다.");
+      cy.get('[data-testid="operation-retry-unavailable"]').should("not.exist");
       cy.contains("button", "다시 시도").should("not.exist");
       cy.contains("generation_admission_rejected").should("not.exist");
     });
@@ -1227,6 +1347,22 @@ describe("WorkspaceChatPanel", () => {
       },
     }).as("assetUpload");
     cy.intercept(
+      "GET",
+      `${ROOT}/assets/12345678-1234-1234-1234-123456789abc`,
+      {
+        statusCode: 200,
+        body: {
+          schema_version: 1,
+          asset_id: "12345678-1234-1234-1234-123456789abc",
+          file_name: "evidence.pdf",
+          media_type: "application/pdf",
+          size_bytes: 8,
+          status: "ready",
+          version: 1,
+        },
+      },
+    ).as("assetReady");
+    cy.intercept(
       "POST",
       `${ROOT}/presentations/${PRESENTATION_ID}/commands`,
       (request) => {
@@ -1254,10 +1390,11 @@ describe("WorkspaceChatPanel", () => {
         { force: true },
       );
     cy.wait("@assetUpload");
-    cy.get('[aria-label="전송할 첨부 파일"]').should(
-      "contain.text",
-      "evidence.pdf",
-    );
+    cy.wait("@assetReady");
+    cy.get('[aria-label="전송할 첨부 파일"]')
+      .should("contain.text", "evidence.pdf")
+      .and("contain.text", "준비됨");
+    cy.get('[aria-label="수정 범위 선택"]').select("presentation");
     cy.get("#workspace-command").type("이 자료를 반영해 줘{enter}");
     cy.wait("@workspaceCommandWithAsset").then(() => {
       expect(commandBodies[0].asset_ids).to.deep.equal([
@@ -1391,8 +1528,9 @@ describe("WorkspaceChatPanel", () => {
         cy.get('[data-testid="artifact-stale"]').should("be.visible");
       });
     cy.get('[data-operation-id="operation-export"] [role="progressbar"]')
-      .should("have.attr", "aria-valuenow", "100")
-      .and("have.attr", "aria-valuetext", "100%");
+      .should("not.exist");
+    cy.get('[data-operation-id="operation-export"]')
+      .contains("마지막 보고 진행률 · 100%").should("exist");
     cy.wait("@artifactDownload");
     cy.get('[data-testid="artifact-expired"]').should("be.visible");
     cy.get('[data-testid="artifact-reexport"]').click();
@@ -1488,7 +1626,8 @@ describe("WorkspaceChatPanel", () => {
     cy.wait("@timeline");
 
     cy.get('[data-testid="workspace-schema-read-only"]').should("be.visible");
-    cy.get("#workspace-command").should("be.disabled");
+    cy.get("#workspace-command").should("not.be.disabled");
+    cy.get('[aria-label="수정 요청 전송"]').should("be.disabled");
     cy.get('[data-operation-id="operation-schema-less"]')
       .should("be.visible")
       .find("button")
@@ -1568,7 +1707,7 @@ describe("WorkspaceChatPanel", () => {
     cy.wait("@reconnectEvents");
     cy.get('[data-operation-id="operation-generate"]', { timeout: 10_000 })
       .find('[role="progressbar"]')
-      .should("have.attr", "aria-valuenow", "100");
+      .should("not.exist");
     cy.contains("복구된 완료 결과").should("be.visible");
     cy.wrap(null).then(() => expect(timelineCalls).to.be.greaterThan(1));
   });
@@ -1675,8 +1814,14 @@ describe("WorkspaceChatPanel", () => {
 
     mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@timeline");
+    cy.get('[aria-label="수정 범위 선택"]').select("presentation");
     cy.get("#workspace-command").type("Make the title shorter{enter}");
     cy.wait("@workspaceCommand");
+    cy.get('[data-testid="workspace-retry-intent"]').should("be.visible");
+    cy.get('[aria-label="수정 요청 전송"]').should("be.disabled");
+    cy.get('[aria-label="파일 첨부"]').should("be.disabled");
+    cy.get("#workspace-command").clear().type("다음 수정 초안{enter}");
+    cy.then(() => expect(commandBodies).to.have.length(1));
     cy.get('[data-testid="workspace-retry-intent"]')
       .should("be.visible")
       .click();
@@ -1719,6 +1864,7 @@ describe("WorkspaceChatPanel", () => {
 
     mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@timeline");
+    cy.get('[aria-label="수정 범위 선택"]').select("presentation");
     cy.get("#workspace-command").type("Delete the deck{enter}");
     cy.wait("@deterministicCommand");
     cy.contains("이 요청은 현재 정책상 실행할 수 없습니다.").should(
@@ -1798,6 +1944,7 @@ describe("WorkspaceChatPanel", () => {
 
     mountWithIntl(<WorkspaceChatPanel presentationId={PRESENTATION_ID} />);
     cy.wait("@conflictTimeline");
+    cy.get('[aria-label="수정 범위 선택"]').select("presentation");
     cy.get("#workspace-command").type("Use the latest revenue numbers{enter}");
     cy.wait("@conflictingCommand");
     cy.wait("@conflictTimeline");
@@ -1835,8 +1982,9 @@ describe("WorkspaceChatPanel", () => {
     cy.get('[data-operation-id="operation-expired-approval"]').within(() => {
       cy.get('[data-testid="operation-approve"]').should("be.disabled");
       cy.contains("승인 기한이 만료되었습니다").should("be.visible");
-      cy.get('[data-testid="operation-cancel"]').should("not.be.disabled");
+      cy.get('[data-testid="operation-cancel"]').should("not.exist");
     });
+    cy.contains("button", "생성 중지").should("not.be.disabled");
   });
 
   it("collects high-quality review options in chat before dispatching", () => {

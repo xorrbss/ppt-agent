@@ -3,6 +3,8 @@ import { NextIntlClientProvider } from "next-intl";
 import koMessages from "@/i18n/messages/ko.json";
 
 import { WorkspaceOperationCard } from "./WorkspaceOperationCard";
+import { WorkspaceMessage } from "./WorkspaceMessage";
+import type { WorkspaceOperationAnchor } from "./types";
 
 const mountCard = (card: React.ReactElement) =>
   cy.mount(
@@ -12,6 +14,58 @@ const mountCard = (card: React.ReactElement) =>
   );
 
 describe("WorkspaceOperationCard quality review", () => {
+  const generation: WorkspaceOperationAnchor = {
+    anchorType: "operation", id: "generation-v3", operationId: "generation-v3",
+    position: 0, operationType: "presentation.generate", title: "프레젠테이션 생성",
+    status: "running", progress: 35, events: [], allowedActions: [],
+  };
+
+  it("shows one Korean failure without terminal animation, a main percentage or forbidden retry", () => {
+    mountCard(<WorkspaceOperationCard operation={{ ...generation, status: "failed", error: "Generation failed", retryable: false,
+      events: [{ id: "failure", operationId: generation.operationId, sequence: 2, type: "operation.failed", message: "Generation failed" }],
+      allowedActions: [{ id: "retry", label: "다시 시도", enabled: false, variant: "primary" }],
+    }} onAction={() => undefined} />);
+    cy.get('[role="alert"]').should("have.length", 1).and("contain.text", "생성을 완료하지 못했어요");
+    cy.contains("Generation failed").should("not.exist");
+    cy.get('[role="progressbar"], .animate-pulse, [data-testid="operation-retry"]').should("not.exist");
+    cy.get('[data-testid="operation-retry-unavailable"]').should("not.exist");
+  });
+
+  it("uses actual stage counts and keeps generation cancel in the composer while export retains cancel", () => {
+    const cancel = { id: "cancel" as const, label: "취소", enabled: true, variant: "secondary" as const };
+    mountCard(<WorkspaceOperationCard operation={{ ...generation, allowedActions: [cancel],
+      events: [{ id: "progress", operationId: generation.operationId, sequence: 1, type: "operation.progress", stage: "authored_render", current: 3, total: 30 }],
+    }} composerCancelOperationId={generation.operationId} onAction={() => undefined} />);
+    cy.get('[data-testid="generation-progress-response"]').should("contain.text", "3/30장");
+    cy.get('[data-testid="operation-cancel"], [role="progressbar"]').should("not.exist");
+    mountCard(<WorkspaceOperationCard operation={{ ...generation, operationType: "export.pptx", allowedActions: [cancel] }} onAction={() => undefined} />);
+    cy.get('[data-testid="operation-cancel"]').should("be.enabled");
+  });
+
+  it("does not treat a percent heartbeat as real progress after sixty seconds", () => {
+    const now = Date.parse("2026-09-23T10:00:00Z");
+    cy.clock(now);
+    mountCard(<WorkspaceOperationCard operation={{ ...generation,
+      events: [
+        { id: "one", operationId: generation.operationId, sequence: 1, type: "operation.progress", stage: "authored_render", current: 3, total: 30, progress: 61, createdAt: new Date(now - 70_000).toISOString() },
+        { id: "heartbeat", operationId: generation.operationId, sequence: 2, type: "operation.progress", stage: "authored_render", current: 3, total: 30, progress: 64, createdAt: new Date(now).toISOString() },
+      ],
+    }} observation={{ lastConfirmedAt: new Date(now).toISOString(), connection: "confirmed" }} onAction={() => undefined} />);
+    cy.get('[data-testid="generation-observation"]').should("contain.text", "진행 변화는 아직 없습니다").and("contain.text", "마지막 서버 확인").and("contain.text", "마지막 진행 변화");
+  });
+
+  it("keeps attachment metadata compact and settings collapsed", () => {
+    mountCard(<WorkspaceMessage message={{ anchorType: "message", id: "request", position: 0, role: "user", content: "",
+      generationSettings: { language: "한국어", api_key: "do-not-show" },
+      attachments: [{ id: "file", name: "발표.pdf", status: "ready", mimeType: "application/pdf", size: 1024, stateAtTime: "ready", currentState: "ready" }],
+    }} />);
+    cy.contains("첨부 파일로 시작한 요청입니다").should("be.visible");
+    cy.contains("발표.pdf").should("be.visible");
+    cy.contains("application/pdf").should("not.exist");
+    cy.contains("do-not-show").should("not.exist");
+    cy.get("details").should("not.have.attr", "open");
+  });
+
   it("labels PPTX completion from editability evidence and lists image fallback pages", () => {
     const exportOperation = (result: Record<string, unknown>) => ({
       anchorType: "operation" as const,

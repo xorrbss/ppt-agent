@@ -10,10 +10,10 @@ import {
   useState,
 } from "react";
 import { deriveFlaggedSlideMap, flaggedSlideKey } from "../utils/flaggedSlides";
-import { WorkspaceComposer } from "./WorkspaceComposer";
+import { WorkspaceConversationComposer } from "./WorkspaceConversationComposer";
 import { WorkspaceMessage } from "./WorkspaceMessage";
-import { WorkspaceSuggestions } from "./WorkspaceSuggestions";
-import { WorkspaceOperationCard } from "./WorkspaceOperationCard";
+import { WorkspaceTimelineOperation } from "./WorkspaceTimelineOperation";
+import { WorkspaceAttemptNavigation } from "./WorkspaceAttemptNavigation";
 import { useWorkspaceTimeline } from "./useWorkspace";
 import {
   useWorkspaceAgentFocus,
@@ -26,18 +26,14 @@ import type {
   WorkspacePageRemakeRequester,
   WorkspacePresentationChange,
   WorkspacePresentationChangedHandler,
+  WorkspaceOperationAnchor,
   WorkspaceQualityReviewRequester,
 } from "./types";
-import {
-  postWorkspaceAsset,
-  type WorkspaceUploadedAsset,
-} from "../../services/api/workspace";
 import {
   DashboardApi,
   type PresentationGenerationInfo,
 } from "../../services/api/dashboard";
 import { withGenerationContext } from "./generationContext";
-import { buildConversationContext } from "../conversation/context";
 import { WorkspaceRemakePrompts, type WorkspaceRemakeRequest } from "./WorkspaceRemakePrompts";
 import {
   PageRemakeHistory,
@@ -52,9 +48,11 @@ import {
   type QualityReviewScope,
   type SlideRangeParseResult,
 } from "./workspaceChatPanelUtils";
+import { useWorkspaceScrollContinuity } from "./useWorkspaceScrollContinuity";
+import { useWorkspaceGenerationState } from "./useWorkspaceGenerationState";
+import { TERMINAL } from "./WorkspaceOperationLabels";
 
 export { parseQualityReviewSlideRange } from "./workspaceChatPanelUtils";
-
 const SLIDESPEC_WORKSPACE_REPAIR_ENABLED =
   process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI !== "false" &&
   process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES !== "false";
@@ -62,7 +60,7 @@ const SLIDESPEC_WORKSPACE_REPAIR_ENABLED =
 interface WorkspaceChatPanelProps {
   presentationId: string;
   presentation?: Parameters<typeof deriveFlaggedSlideMap>[0];
-  currentSlide?: number;
+  currentSlide?: number; currentSlideId?: string; generationPending?: boolean;
   commandsEnabled?: boolean;
   onPresentationChanged?: WorkspacePresentationChangedHandler;
   onSlideFocus?: (slideIndex: number) => void;
@@ -80,12 +78,14 @@ interface WorkspaceChatPanelProps {
     requester: WorkspacePageRemakeRequester | null,
   ) => void;
   onExportOperationStateChange?: (operationType: ExportOperationType | null) => void;
+  onGenerationStateChange?: (state: { loading: boolean; operationId: string | null; status: string | null; resultRevision?: number }) => void;
+  onEditCurrentSlideReady?: (handler: (() => void) | null) => void;
 }
 
 export default function WorkspaceChatPanel({
   presentationId,
   presentation,
-  currentSlide,
+  currentSlide, currentSlideId, generationPending = false,
   commandsEnabled = true,
   onPresentationChanged,
   onSlideFocus,
@@ -95,6 +95,7 @@ export default function WorkspaceChatPanel({
   onQualityReviewRequesterReady,
   onPageRemakeRequesterReady,
   onExportOperationStateChange,
+  onGenerationStateChange, onEditCurrentSlideReady,
 }: WorkspaceChatPanelProps) {
   const reviewRequiredIndices = useMemo(() => {
     const flags = deriveFlaggedSlideMap(presentation);
@@ -104,12 +105,9 @@ export default function WorkspaceChatPanel({
     );
   }, [presentation]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { restore: restoreScroll, remember: rememberScroll } = useWorkspaceScrollContinuity(presentationId);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const composerRef = useRef<HTMLTextAreaElement>(null);
-  const [draft, setDraft] = useState("");
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const [qualityReviewPrompt, setQualityReviewPrompt] = useState<{
     currentSlide?: number;
   } | null>(null);
@@ -135,11 +133,9 @@ export default function WorkspaceChatPanel({
     presentationId: string;
     info: PresentationGenerationInfo | null;
   } | null>(null);
-  const [pendingAssets, setPendingAssets] = useState<WorkspaceUploadedAsset[]>(
-    [],
-  );
   const hasInitialScrollRef = useRef(false);
   const shouldFollowLatestRef = useRef(true);
+  const [followingLatest, setFollowingLatest] = useState(true);
   const previousItemCountRef = useRef(0);
   const previousEventHighWatermarkRef = useRef<string | undefined>(undefined);
   const prependRestoreRef = useRef<{
@@ -166,6 +162,7 @@ export default function WorkspaceChatPanel({
     requestError,
     retryIntent,
     connection,
+    operationObservations,
     presentationRefreshStates,
     loadOlder,
     sendCommand,
@@ -211,6 +208,28 @@ export default function WorkspaceChatPanel({
     [generationInfo, presentationId, projection.items],
   );
 
+  const { state: generationState, mutationActive } = useWorkspaceGenerationState({
+    items: projection.items,
+    loading,
+    onChange: onGenerationStateChange,
+  });
+
+  const activeMutations = projection.items.filter((item): item is WorkspaceOperationAnchor =>
+    item.anchorType === "operation" && !TERMINAL.has(item.status) &&
+    !item.operationType.startsWith("export."));
+  const activeMutation = activeMutations.sort((left, right) => right.position - left.position)[0];
+  const cancelOperation = activeMutation && writesEnabled &&
+    (activeMutation.status === "cancelling" || activeMutation.allowedActions.some((action) => action.id === "cancel" && action.enabled))
+    ? { operationId: activeMutation.operationId, pending: submitting || activeMutation.status === "cancelling",
+        onCancel: (operationId: string) => performAction(operationId, "cancel") }
+    : undefined;
+  const showFollowControl = Boolean(activeMutation?.status === "running" && activeMutation.operationType !== "presentation.generate" && !generationPending);
+  const restartBlockedReason = loading || submitting || mutationActive
+    ? "현재 작업 상태가 확정된 뒤 다시 만들 수 있습니다."
+    : retryIntent?.reason === "ambiguous"
+      ? "이전 요청의 접수 상태를 먼저 확인해 주세요."
+      : !writesEnabled ? "이 프레젠테이션을 변경할 권한이 없습니다." : null;
+
   useActiveExportOperationNotifier(timelineItems, onExportOperationStateChange);
   const agentFocus = useWorkspaceAgentFocus({
     presentationId,
@@ -253,6 +272,7 @@ export default function WorkspaceChatPanel({
         requestedSlide === undefined ? {} : { currentSlide: requestedSlide },
       );
       shouldFollowLatestRef.current = true;
+      setFollowingLatest(true);
     },
     [],
   );
@@ -268,6 +288,7 @@ export default function WorkspaceChatPanel({
       setQualityReviewPrompt(null);
       setPageRemakePrompt({ slideIndexes, batch: Array.isArray(requested) });
       shouldFollowLatestRef.current = true;
+      setFollowingLatest(true);
     },
     [],
   );
@@ -280,13 +301,11 @@ export default function WorkspaceChatPanel({
   useLayoutEffect(() => {
     hasInitialScrollRef.current = false;
     shouldFollowLatestRef.current = true;
+    setFollowingLatest(true);
     previousItemCountRef.current = 0;
     previousEventHighWatermarkRef.current = undefined;
     prependRestoreRef.current = null;
     setLoadingOlder(false);
-    setDraft("");
-    setPendingAssets([]);
-    setUploadError(null);
     setQualityReviewPrompt(null);
     setPageRemakePrompt(null);
     setQualityReviewRangeInput("");
@@ -384,31 +403,6 @@ export default function WorkspaceChatPanel({
     [generationInfo?.settings?.n_slides],
   );
 
-  const handleFilesSelected = useCallback(
-    async (files: File[]) => {
-      setUploading(true);
-      setUploadError(null);
-      try {
-        for (const file of files) {
-          const uploaded = await postWorkspaceAsset(file, presentationId);
-          setPendingAssets((current) => [
-            ...current.filter((asset) => asset.assetId !== uploaded.assetId),
-            uploaded,
-          ]);
-        }
-      } catch (error: unknown) {
-        setUploadError(
-          error instanceof Error
-            ? error.message
-            : "파일을 업로드하지 못했습니다.",
-        );
-      } finally {
-        setUploading(false);
-      }
-    },
-    [presentationId],
-  );
-
   useLayoutEffect(() => {
     if (loading) return;
 
@@ -425,6 +419,7 @@ export default function WorkspaceChatPanel({
         scrollElement.scrollTop = prependRestore.scrollTop + addedHeight;
         prependRestoreRef.current = null;
         shouldFollowLatestRef.current = false;
+        setFollowingLatest(false);
       } else if (!loadingOlder) {
         prependRestoreRef.current = null;
       }
@@ -434,9 +429,12 @@ export default function WorkspaceChatPanel({
     }
 
     if (!hasInitialScrollRef.current) {
-      scrollElement.scrollTop = scrollElement.scrollHeight;
+      const restoredScrollTop = restoreScroll(scrollElement);
+      scrollElement.scrollTop = restoredScrollTop === undefined ? scrollElement.scrollHeight
+        : Math.min(restoredScrollTop, Math.max(0, scrollElement.scrollHeight - scrollElement.clientHeight));
       hasInitialScrollRef.current = true;
-      shouldFollowLatestRef.current = true;
+      shouldFollowLatestRef.current = restoredScrollTop === undefined;
+      setFollowingLatest(shouldFollowLatestRef.current);
     } else if (
       (timelineItems.length > previousItemCountRef.current ||
         eventHighWatermarkAdvanced) &&
@@ -456,6 +454,7 @@ export default function WorkspaceChatPanel({
     // transcript, so its arrival moves the bottom out from under a reader who
     // was pinned to it.
     pageRemakeHistory.length,
+    restoreScroll,
   ]);
 
   const handleTimelineScroll = useCallback(() => {
@@ -466,13 +465,16 @@ export default function WorkspaceChatPanel({
       scrollElement.scrollTop -
       scrollElement.clientHeight;
     shouldFollowLatestRef.current = distanceFromBottom <= 48;
-  }, []);
+    rememberScroll(scrollElement);
+    setFollowingLatest(shouldFollowLatestRef.current);
+  }, [rememberScroll]);
 
   const handleTimelineManualScrollIntent = useCallback(() => {
     // A wheel/touch gesture is observable before the browser commits the new
     // scrollTop. Pause follow-latest immediately so an event arriving in that
     // small window cannot snap the reader back to the live operation card.
     shouldFollowLatestRef.current = false;
+    setFollowingLatest(false);
   }, []);
 
   const handleLoadOlder = useCallback(async () => {
@@ -496,25 +498,19 @@ export default function WorkspaceChatPanel({
 
   return (
     <section
-      className="flex h-full w-full min-h-0 min-w-0 flex-col bg-slate-50"
+      className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden bg-white"
       aria-label="프레젠테이션 작업 대화"
     >
-      <header className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-slate-900">
-            Slides Workbench
-          </h2>
-          <p className="text-xs text-slate-500">생성 및 수정 내역</p>
-        </div>
+      {(connection !== "live" || showFollowControl) && <header className="mx-auto flex w-full max-w-[800px] items-center justify-end gap-2 px-4 py-2">
         <div className="flex shrink-0 items-center gap-2">
-        <span
+        {connection !== "live" && <span
           className="text-xs text-slate-500"
           role="status"
           aria-live="polite"
         >
           {CONNECTION_LABELS[connection]}
-        </span>
-        <button
+        </span>}
+        {showFollowControl && <button
           type="button"
           onClick={agentFocus.toggleFollow}
           aria-pressed={agentFocus.followEnabled}
@@ -532,18 +528,38 @@ export default function WorkspaceChatPanel({
         >
           <LocateFixed className="h-3 w-3" aria-hidden="true" />
           {agentFocus.followEnabled ? "따라가는 중" : "AI 따라가기"}
-        </button>
+        </button>}
         </div>
-      </header>
+      </header>}
+      <div className="mx-auto w-full max-w-[800px] px-4">
+      <WorkspaceAttemptNavigation
+        presentationId={presentationId}
+        previousPresentationId={generationInfo?.previous_presentation_id}
+        nextPresentationIds={generationInfo?.next_presentation_ids}
+        generationStatus={generationState.status}
+        showRestart={false}
+        restartBlockedReason={
+          loading || submitting || mutationActive
+            ? "현재 작업 상태가 확정된 뒤 다시 만들 수 있습니다."
+            : retryIntent?.reason === "ambiguous"
+              ? "이전 요청의 접수 상태를 먼저 확인해 주세요."
+              : !writesEnabled
+                ? "이 프레젠테이션을 변경할 권한이 없습니다."
+                : null
+        }
+      />
+      </div>
 
       <div
         ref={scrollRef}
         data-testid="workspace-timeline-scroll"
-        className="min-h-0 flex-1 overflow-y-auto px-3 py-4"
+        data-follow-latest={followingLatest ? "true" : "false"}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6"
         onTouchStartCapture={handleTimelineManualScrollIntent}
         onWheelCapture={handleTimelineManualScrollIntent}
         onScroll={handleTimelineScroll}
       >
+        <div className="mx-auto w-full max-w-[800px]">
         {projection.hasMore && (
           <div className="mb-4 text-center">
             <button
@@ -571,15 +587,6 @@ export default function WorkspaceChatPanel({
               <p className="text-center text-sm text-slate-500">
                 아직 기록된 대화가 없습니다.
               </p>
-              {commandsEnabled && (
-                <WorkspaceSuggestions
-                  disabled={submitting || !writesEnabled}
-                  onSelect={(prompt) => {
-                    setDraft(prompt);
-                    composerRef.current?.focus();
-                  }}
-                />
-              )}
             </div>
           )}
         {/* Remake previews carry no conversation position, so they sit above
@@ -603,7 +610,7 @@ export default function WorkspaceChatPanel({
             setPageRemakePrompt({ slideIndexes: [slideIndex], batch: false })
           }
         />
-        <div className="space-y-3">
+        <div className="space-y-8">
           {timelineItems.map((item) => {
             if (item.anchorType === "message") {
               return (
@@ -620,9 +627,12 @@ export default function WorkspaceChatPanel({
             }
             if (item.anchorType === "operation") {
               return (
-                <WorkspaceOperationCard
-                  key={item.id}
+                <div key={item.id}>
+                <WorkspaceTimelineOperation
                   operation={item}
+                  composerCancelOperationId={cancelOperation?.operationId}
+                  observation={{ ...operationObservations[item.operationId],
+                    connection: connection === "live" || connection === "polling" ? "confirmed" : "checking" }}
                   currentRevision={projection.revision}
                   disabled={submitting || !writesEnabled}
                   onAction={(operationId, action) =>
@@ -648,11 +658,18 @@ export default function WorkspaceChatPanel({
                     presentationRefreshStates[item.operationId]
                   }
                 />
+                {item.operationId === generationState.operationId &&
+                  TERMINAL.has(item.status) && item.status !== "succeeded" &&
+                  <WorkspaceAttemptNavigation presentationId={presentationId}
+                    generationStatus={item.status} restartBlockedReason={restartBlockedReason}
+                    showHistory={false} />}
+                </div>
               );
             }
             return (
               <article
                 key={item.id}
+                data-workspace-anchor-id={item.id}
                 className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm"
                 role="alert"
               >
@@ -919,48 +936,49 @@ export default function WorkspaceChatPanel({
           </div>
         )}
       </div>
+      </div>
 
+      {!followingLatest && <div className="relative h-0 shrink-0"><button type="button"
+        onClick={() => {
+          shouldFollowLatestRef.current = true;
+          setFollowingLatest(true);
+          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }}
+        className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm shadow-sm"
+        data-testid="workspace-new-messages">새 메시지 ↓</button></div>}
       {commandsEnabled ? (
-        <WorkspaceComposer
-          disabled={
-            submitting || loading || historyError !== null || !writesEnabled
-          }
-          uploading={uploading}
-          uploadError={uploadError}
-          assets={pendingAssets}
+      <div className="mx-auto w-full max-w-[824px] shrink-0">
+        <WorkspaceConversationComposer
+          presentationId={presentationId}
+          revision={projection.revision}
+          cancelOperation={cancelOperation}
+          conversationId={generationInfo?.conversation_id}
+          presentation={presentation}
+          currentSlide={currentSlide}
+          currentSlideId={currentSlideId}
+          generationPending={generationPending}
+          mutationActive={mutationActive}
+          loading={loading || generationInfoLoading}
+          submitting={submitting}
+          historyError={historyError}
+          writesEnabled={writesEnabled && retryIntent?.reason !== "ambiguous"}
           fileInputRef={fileInputRef}
-          value={draft}
-          onValueChange={setDraft}
-          textareaRef={composerRef}
-          onFilesSelected={handleFilesSelected}
-          onRemoveAsset={(assetId) => {
-            setPendingAssets((current) =>
-              current.filter((asset) => asset.assetId !== assetId),
-            );
-          }}
-          onSend={async (command) => {
-            // Follow-latest switches off as soon as the reader scrolls up, but
-            // a turn the user just sent must always come into view - otherwise
-            // their message and its progress card land below the fold and the
-            // send looks like it did nothing.
+          commandDispatcher={commandDispatcher}
+          onWillSend={() => {
             shouldFollowLatestRef.current = true;
-            await commandDispatcher(command, {
-              // Keep the legacy adapter compatible while making context rich
-              // enough for the canonical Conversation API. The server derives
-              // mode/capabilities and admits only ready/scanned assets.
-              context: { ...buildConversationContext({
-                currentSlideIndex: currentSlide,
-                assets: pendingAssets.map((asset) => ({
-                  id: asset.assetId,
-                  name: asset.fileName,
-                  status: asset.status,
-                })),
-              }) },
-              assetIds: pendingAssets.map((asset) => asset.assetId),
-            });
-            setPendingAssets([]);
+            setFollowingLatest(true);
           }}
+          onEditCurrentSlideReady={onEditCurrentSlideReady}
+          showSuggestions={
+            !loading &&
+            !generationInfoLoading &&
+            timelineItems.length === 0 &&
+            !qualityReviewPrompt &&
+            !pageRemakePrompt &&
+            !historyError
+          }
         />
+        </div>
       ) : null}
     </section>
   );

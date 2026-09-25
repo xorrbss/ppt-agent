@@ -85,6 +85,23 @@ function DismissableWorkspacePrompt(
   );
 }
 
+function PreviewFlow({
+  presentationId,
+  currentSlide,
+  onReload,
+}: {
+  presentationId: string;
+  currentSlide: number;
+  onReload?: () => void;
+}) {
+  return <WorkspacePageRemakePrompt
+    presentationId={presentationId}
+    currentSlide={currentSlide}
+    onReload={onReload}
+    onDismiss={() => {}}
+  />;
+}
+
 function stubToasts() {
   cy.stub(notify, "error").as("notifyError");
   cy.stub(notify, "warning").as("notifyWarning");
@@ -168,13 +185,12 @@ describe("AuthoredPageRemake", () => {
   it("uses the exact label and generates only the current page preview", () => {
     preparePreview();
     cy.mount(
-      <AuthoredPageRemake presentationId="deck-1" currentSlide={4} />,
+      <PreviewFlow presentationId="deck-1" currentSlide={4} />,
     );
 
-    cy.get('[data-testid="page-remake-trigger"]')
-      .should("contain.text", "페이지 다시 만들기")
-      .click();
-    cy.contains("5페이지만 새 레이아웃으로 다시 만듭니다.").should("be.visible");
+    cy.get('[data-testid="page-remake-workspace-prompt"]')
+      .should("contain.text", "페이지 다시 만들기");
+    cy.contains("5페이지만 새 레이아웃으로 만듭니다.").should("be.visible");
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
@@ -197,9 +213,9 @@ describe("AuthoredPageRemake", () => {
       candidate_image:
         "users/d74ac154/authored/8a836947/slide_4_47af1196.png",
     });
-    cy.mount(<AuthoredPageRemake presentationId="deck-1" currentSlide={4} />);
+    cy.mount(<PreviewFlow presentationId="deck-1" currentSlide={4} />);
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
+    
     cy.get('[data-testid="page-remake-preview-create"]').click();
     cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
@@ -219,9 +235,9 @@ describe("AuthoredPageRemake", () => {
       ...previewData,
       validation: { candidate_dom: "passed", candidate_change: "unchanged" },
     });
-    cy.mount(<AuthoredPageRemake presentationId="deck-1" currentSlide={4} />);
+    cy.mount(<PreviewFlow presentationId="deck-1" currentSlide={4} />);
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
+    
     cy.get('[data-testid="page-remake-preview-create"]').click();
     cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
@@ -241,9 +257,9 @@ describe("AuthoredPageRemake", () => {
 
   it("enlarges the preview on click and restores it on a second click", () => {
     preparePreview();
-    cy.mount(<AuthoredPageRemake presentationId="deck-1" currentSlide={4} />);
+    cy.mount(<PreviewFlow presentationId="deck-1" currentSlide={4} />);
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
+    
     cy.get('[data-testid="page-remake-preview-create"]').click();
     cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
@@ -258,10 +274,10 @@ describe("AuthoredPageRemake", () => {
   it("keeps the passing preview UX free of warning affordances", () => {
     preparePreview();
     cy.mount(
-      <AuthoredPageRemake presentationId="deck-1" currentSlide={4} />,
+      <PreviewFlow presentationId="deck-1" currentSlide={4} />,
     );
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
+    
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
@@ -286,14 +302,14 @@ describe("AuthoredPageRemake", () => {
       .resolves({ status: "published" });
     const onReload = cy.stub().as("reload");
     cy.mount(
-      <AuthoredPageRemake
+      <PreviewFlow
         presentationId="deck-1"
         currentSlide={4}
         onReload={onReload}
       />,
     );
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
+    
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
@@ -323,6 +339,7 @@ describe("AuthoredPageRemake", () => {
       />,
     );
 
+    
     cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get("@workspacePrompt").should("have.been.calledOnceWith", 4);
     cy.get('[role="dialog"]').should("not.exist");
@@ -373,10 +390,10 @@ describe("AuthoredPageRemake", () => {
   it("shows a warned candidate as a normal preview with a Korean issue summary", () => {
     preparePreview(warnedPreviewData);
     cy.mount(
-      <AuthoredPageRemake presentationId="deck-1" currentSlide={4} />,
+      <PreviewFlow presentationId="deck-1" currentSlide={4} />,
     );
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
+    
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
@@ -430,14 +447,14 @@ describe("AuthoredPageRemake", () => {
       .as("publishRequest")
       .resolves({ status: "published" });
     cy.mount(
-      <AuthoredPageRemake
+      <PreviewFlow
         presentationId="deck-1"
         currentSlide={4}
         onReload={cy.stub().as("reload")}
       />,
     );
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
+    
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
@@ -458,10 +475,10 @@ describe("AuthoredPageRemake", () => {
   it("summarizes a telemetry-only warning without an empty issue list", () => {
     preparePreview(telemetryOnlyWarningData);
     cy.mount(
-      <AuthoredPageRemake presentationId="deck-1" currentSlide={4} />,
+      <PreviewFlow presentationId="deck-1" currentSlide={4} />,
     );
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
+    
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
@@ -496,10 +513,10 @@ describe("AuthoredPageRemake", () => {
       status.onCall(1).resolves({ status: "pending", message: "다시 만드는 중" });
     });
     cy.mount(
-      <AuthoredPageRemake presentationId="deck-1" currentSlide={4} />,
+      <PreviewFlow presentationId="deck-1" currentSlide={4} />,
     );
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
+    
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
@@ -559,10 +576,10 @@ describe("AuthoredPageRemake", () => {
   it("explains a genuine failure in Korean instead of the internal code", () => {
     prepareFailedPreview("authored_page_remake_generation_failed");
     cy.mount(
-      <AuthoredPageRemake presentationId="deck-1" currentSlide={4} />,
+      <PreviewFlow presentationId="deck-1" currentSlide={4} />,
     );
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
+    
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.
@@ -588,10 +605,10 @@ describe("AuthoredPageRemake", () => {
   it("falls back to a readable message for an unmapped internal code", () => {
     prepareFailedPreview("authored_page_remake_unknown_future_code");
     cy.mount(
-      <AuthoredPageRemake presentationId="deck-1" currentSlide={4} />,
+      <PreviewFlow presentationId="deck-1" currentSlide={4} />,
     );
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
+    
     cy.get('[data-testid="page-remake-preview-create"]').click();
     // The poll loop registers its timer only after the start request settles.
     // Ticking before that boundary fires nothing and the run stalls forever.

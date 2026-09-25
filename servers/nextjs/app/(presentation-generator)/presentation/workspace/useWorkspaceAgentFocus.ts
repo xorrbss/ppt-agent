@@ -116,6 +116,8 @@ export function useWorkspaceAgentFocus({
     [items],
   );
   const active = submitting || operationInFlight;
+  const activeRef = useRef(active);
+  activeRef.current = active;
 
   useEffect(() => {
     onActivityChange?.(active);
@@ -145,6 +147,7 @@ export function useWorkspaceAgentFocus({
 
   const notePresentationChange = useCallback(
     (change: WorkspacePresentationChange) => {
+      if (!activeRef.current) return;
       const fixed = slideIndexList(change.fixedSlideIndexes);
       if (fixed.length === 0) return;
       emitFocus(fixed[0]);
@@ -157,5 +160,5 @@ export function useWorkspaceAgentFocus({
     [],
   );
 
-  return { followEnabled, toggleFollow, noteDispatch, notePresentationChange };
+  return { followEnabled: followEnabled && active, toggleFollow, noteDispatch, notePresentationChange };
 }

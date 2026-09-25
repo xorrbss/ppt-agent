@@ -15,6 +15,7 @@ import { useHybridExportWarmup } from "./useHybridExportWarmup";
 
 const createDeck = () => ({
   id: "deck-1",
+  revision: 1,
   language: "en",
   layout: null,
   n_slides: 1,
@@ -158,6 +159,7 @@ describe("useHybridExportWarmup", () => {
           id: "deck-1",
           title: "Quarterly-results",
           pptxMode: "hybrid",
+          expectedPresentationRevision: 1,
         });
       });
     cy.tick(2_000);

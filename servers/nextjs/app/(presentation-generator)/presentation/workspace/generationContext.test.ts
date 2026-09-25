@@ -21,6 +21,10 @@ const generationInfo: PresentationGenerationInfo = {
     version: "v2",
   },
 };
+const linkedGenerationInfo: PresentationGenerationInfo = {
+  ...generationInfo,
+  first_user_message_id: "durable-bootstrap-message",
+};
 
 test("restores the original prompt and attachment names for a legacy empty timeline", () => {
   const items = withGenerationContext("deck-1", generationInfo, []);
@@ -48,11 +52,11 @@ test("keeps the restored generation context before later workspace activity", ()
     attachments: [],
   };
 
-  const items = withGenerationContext("deck-1", generationInfo, [laterMessage]);
+  const items = withGenerationContext("deck-1", linkedGenerationInfo, [laterMessage]);
 
   assert.deepEqual(
     items.map((item) => item.id),
-    ["generation-context-deck-1", "later-message"],
+    ["durable-bootstrap-message", "later-message"],
   );
 });
 
@@ -73,7 +77,7 @@ test("does not duplicate a durable bootstrap message", () => {
     generationSettings: { ...generationInfo.settings },
   };
 
-  const items = withGenerationContext("deck-1", generationInfo, [
+  const items = withGenerationContext("deck-1", linkedGenerationInfo, [
     durableMessage,
   ]);
 

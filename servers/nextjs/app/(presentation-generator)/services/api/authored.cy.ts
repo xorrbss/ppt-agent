@@ -35,6 +35,7 @@ describe("normalizeAuthoredStyles", () => {
       category: "technology",
       tags: ["AI 전략", "시스템 아키텍처"],
       use_cases: ["AI 플랫폼 소개", "기술 아키텍처 리뷰"],
+      supportedAspectRatios: ["16:9"],
       preview: {
         bg: "#07130F",
         accent: "#35F2C2",
@@ -63,6 +64,7 @@ describe("normalizeAuthoredStyles", () => {
       category: "general",
       tags: [],
       use_cases: [],
+      supportedAspectRatios: ["16:9"],
       preview: {
         bg: "#FFFFFF",
         accent: "#123456",

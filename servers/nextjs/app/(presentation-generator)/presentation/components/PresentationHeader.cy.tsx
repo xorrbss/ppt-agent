@@ -32,6 +32,7 @@ const mountHeader = (
   editableHybridProjection?: Record<string, unknown>,
   authoredQualityGate?: Record<string, unknown>,
   activeExportOperation?: "export.pptx" | "export.pdf" | null,
+  sourcePreservingSvg = false,
 ) => {
   store.dispatch(
     setPresentationData({
@@ -42,7 +43,7 @@ const mountHeader = (
       title: "deck",
       slides: [{ id: "slide-1", layout: "template-v2" }],
       theme:
-        editableHybridProjection || authoredQualityGate
+        sourcePreservingSvg ? { svg: { sourcePreservation: { version: 1 } } } : editableHybridProjection || authoredQualityGate
           ? {
               ...(editableHybridProjection
                 ? { authored_vnext: editableHybridProjection }
@@ -52,7 +53,7 @@ const mountHeader = (
                 : {}),
             }
           : null,
-      mode: isAuthoredDeck ? "authored" : "template",
+      mode: sourcePreservingSvg ? "svg" : isAuthoredDeck ? "authored" : "template",
       version: "v2-standard",
     } as any)
   );
@@ -314,7 +315,8 @@ describe("PresentationHeader workspace controls", () => {
     openMoreOptions();
     cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get("@pageRemake").should("have.been.calledOnceWith", 0);
-    cy.get('[role="dialog"]').should("not.exist");
+    // The More popover itself has role=dialog; only the legacy remake form is forbidden.
+    cy.get('[data-testid="page-remake-preview-create"]').should("not.exist");
 
     cy.get('[data-testid="workspace-quality-review"]').click();
     cy.wrap(null).then(() => {
@@ -429,14 +431,13 @@ describe("PresentationHeader workspace controls", () => {
     );
   });
 
-  it("names the vision-QA pass when the deck's own receipt withholds Hybrid", () => {
+  it("keeps quality advisory while preserving Hybrid capability admission", () => {
     const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
     cy.intercept("GET", "**/authored-emission/capability-projection-v3", {
       statusCode: 200,
       body: boundedReleaseV3Projection(),
     }).as("capabilityProjectionV3");
-    // A deck generated without vision-QA: the renderer admits Hybrid, but the
-    // export gate waives a pending visual review for Fidelity only.
+    // Quality is advisory for source export; immutable capability admission still applies.
     mountHeader(true, false, { enabled: true, command: workspaceCommand }, undefined, {
       qualityReceiptV3: {
         gatePassed: false,
@@ -447,10 +448,17 @@ describe("PresentationHeader workspace controls", () => {
 
     openExportOptions();
     cy.get('[data-testid="export-pptx"]').should("contain.text", "Fidelity PPTX");
-    cy.get('[data-testid="authored-export-hybrid"]').should("not.exist");
-    cy.get('[data-testid="authored-export-hybrid-unavailable"]')
-      .should("contain.text", "시각 검수")
-      .and("contain.text", "vision-QA");
+    cy.get('[data-testid="authored-export-hybrid"]').should("be.visible");
+    cy.get('[data-testid="authored-export-hybrid-unavailable"]').should("not.exist");
+  });
+
+  it("blocks unsupported source-preserving SVG PDF but keeps PPTX available", () => {
+    const command = cy.stub().as("svgCommand").resolves();
+    mountHeader(false, true, { enabled: true, command }, undefined, undefined, null, true);
+    openExportOptions();
+    cy.get('[data-testid="export-pdf"]').should("be.disabled");
+    cy.get('[data-testid="export-pptx"]').should("be.enabled");
+    cy.get("@svgCommand").should("not.have.been.called");
   });
 
   it("offers Hybrid once the deck's receipt has passed", () => {

@@ -55,18 +55,33 @@ export function generationContextMessage(
   const prompt = info.prompt?.trim() ?? "";
   const attachmentNames = normalizedNames(info.attachment_file_names ?? []);
   if (!prompt && attachmentNames.length === 0) return null;
+  const hasServerMessageLink = Object.prototype.hasOwnProperty.call(
+    info,
+    "first_user_message_id",
+  );
+  const durableMessageId = info.first_user_message_id?.trim() || undefined;
+  // A new response with an explicit null means the server could not verify an
+  // owner-scoped message link. The durable timeline remains the sole source;
+  // prompt equality must not manufacture a relationship.
+  if (hasServerMessageLink && !durableMessageId) return null;
 
-  if (
-    items.some((item) =>
-      isDurableGenerationMessage(item, prompt, attachmentNames),
-    )
-  ) {
+  const hasDurableMessage = hasServerMessageLink
+    ? items.some(
+        (item) => item.anchorType === "message" && item.id === durableMessageId,
+      )
+    : items.some((item) =>
+        isDurableGenerationMessage(item, prompt, attachmentNames),
+      );
+  if (hasDurableMessage) {
     return null;
   }
 
   return {
     anchorType: "message",
-    id: `generation-context-${presentationId}`,
+    // The server id replaces the temporary context at the same React key when
+    // the durable timeline message arrives. Legacy decks retain the synthetic
+    // key and content matching because they have no authoritative linkage.
+    id: durableMessageId ?? `generation-context-${presentationId}`,
     position: Number.MIN_SAFE_INTEGER,
     role: "user",
     content: prompt || "발표자료 생성 시 첨부한 자료입니다.",

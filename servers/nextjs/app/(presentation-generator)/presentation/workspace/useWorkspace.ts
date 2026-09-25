@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AUTH_SESSION_EXPIRED_EVENT } from "../../services/api/api-error-handler";
 import {
   getWorkspaceCapabilities,
   getWorkspaceEvents,
@@ -17,6 +18,7 @@ import {
 } from "./timelineProjection";
 import { workspacePresentationChangeFor } from "./workspaceCompletion";
 import { WorkspaceReconnectBackoff } from "./workspaceStream";
+import { observeWorkspaceOperations, type WorkspaceOperationObservation } from "./workspaceOperationObservation";
 import type {
   WorkspaceCapability,
   WorkspaceCommandOptions,
@@ -99,41 +101,136 @@ export function useWorkspaceCapability(
   capability: WorkspaceCapability;
   refresh: () => void;
 } {
-  const [state, setState] = useState<WorkspaceCapabilityState>(
-    enabled ? "checking" : "disabled",
-  );
-  const [capability, setCapability] = useState(EMPTY_CAPABILITY);
-  const [reloadToken, setReloadToken] = useState(0);
+  const [snapshot, setSnapshot] = useState<{
+    presentationId?: string;
+    state: WorkspaceCapabilityState;
+    capability: WorkspaceCapability;
+  }>({
+    presentationId,
+    state: enabled ? "checking" : "disabled",
+    capability: EMPTY_CAPABILITY,
+  });
+  const revalidateRef = useRef<(() => void) | null>(null);
+  const refresh = useCallback(() => revalidateRef.current?.(), []);
 
   useEffect(() => {
+    setSnapshot({
+      presentationId,
+      state: enabled ? "checking" : "disabled",
+      capability: EMPTY_CAPABILITY,
+    });
     if (!enabled) {
-      setState("disabled");
-      setCapability(EMPTY_CAPABILITY);
       return;
     }
-    const controller = new AbortController();
-    setState("checking");
-    getWorkspaceCapabilities(controller.signal, presentationId)
-      .then((next) => {
-        if (controller.signal.aborted) return;
-        setCapability(next);
-        setState(next.supported && next.timeline ? "supported" : "unavailable");
-      })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        console.warn(
-          "Workspace capability check failed; writes remain disabled.",
-          error,
-        );
-        setCapability(EMPTY_CAPABILITY);
-        setState("unavailable");
+    let disposed = false;
+    let controller: AbortController | null = null;
+    let channel: BroadcastChannel | null = null;
+    let lastPublishedSignature: string | undefined;
+
+    try {
+      if (typeof BroadcastChannel !== "undefined") {
+        channel = new BroadcastChannel("presenton-chat-first-capability-v1");
+      }
+    } catch {
+      // Focus and page visibility still revalidate in restricted browsers.
+    }
+
+    const revalidate = (publish: boolean) => {
+      if (disposed) return;
+      controller?.abort();
+      const request = new AbortController();
+      controller = request;
+      // Keep the existing chat mounted while checking the server again.
+      const commit = (next: WorkspaceCapability) => {
+        if (disposed || request.signal.aborted || controller !== request) return;
+        setSnapshot({
+          presentationId,
+          state: next.supported && next.timeline ? "supported" : "unavailable",
+          capability: next,
+        });
+        const signature = JSON.stringify(next);
+        const changed = lastPublishedSignature !== signature;
+        lastPublishedSignature = signature;
+        // A response to another tab's invalidation never echoes it back.
+        if (publish && changed) {
+          try {
+            channel?.postMessage({
+              kind: "capability",
+              key: presentationId,
+              snapshot: { capability: next },
+            });
+          } catch {
+            // Local authoritative results do not depend on channel delivery.
+          }
+        }
+      };
+      void getWorkspaceCapabilities(request.signal, presentationId).then(
+        commit,
+        () => commit(EMPTY_CAPABILITY),
+      );
+    };
+    const refreshLocal = () => revalidate(true);
+    const onAuthEnded = () => {
+      controller?.abort();
+      controller = null;
+      setSnapshot({
+        presentationId,
+        state: "unavailable",
+        capability: EMPTY_CAPABILITY,
       });
-    return () => controller.abort();
-  }, [enabled, presentationId, reloadToken]);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refreshLocal();
+    };
+    if (channel) {
+      channel.onmessage = (event: MessageEvent) => {
+        const message = event.data;
+        if (
+          !message ||
+          message.kind !== "capability" ||
+          message.key !== presentationId
+        ) return;
+        const next = message.snapshot?.capability;
+        // Cross-tab snapshots are signals, never authority to grant access.
+        // A restrictive signal also fences any older in-flight grant.
+        if (
+          next?.commands === false ||
+          next?.supported === false ||
+          next?.timeline === false
+        ) {
+          setSnapshot((current) => ({
+            ...current,
+            capability: { ...current.capability, commands: false },
+          }));
+        }
+        revalidate(false);
+      };
+    }
+    revalidateRef.current = refreshLocal;
+    window.addEventListener("focus", refreshLocal);
+    window.addEventListener("pageshow", refreshLocal);
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, onAuthEnded);
+    window.addEventListener("presenton:auth-logout", onAuthEnded);
+    document.addEventListener("visibilitychange", onVisibility);
+    refreshLocal();
+    return () => {
+      disposed = true;
+      controller?.abort();
+      revalidateRef.current = null;
+      window.removeEventListener("focus", refreshLocal);
+      window.removeEventListener("pageshow", refreshLocal);
+      window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, onAuthEnded);
+      window.removeEventListener("presenton:auth-logout", onAuthEnded);
+      document.removeEventListener("visibilitychange", onVisibility);
+      channel?.close();
+    };
+  }, [enabled, presentationId]);
 
-  const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
-
-  return { state, capability, refresh };
+  if (!enabled) return { state: "disabled", capability: EMPTY_CAPABILITY, refresh };
+  if (snapshot.presentationId !== presentationId || snapshot.state === "disabled") {
+    return { state: "checking", capability: EMPTY_CAPABILITY, refresh };
+  }
+  return { state: snapshot.state, capability: snapshot.capability, refresh };
 }
 
 function idempotencyKey(): string {
@@ -191,6 +288,8 @@ export function useWorkspaceTimeline({
   const [projection, setProjection] = useState<WorkspaceProjection>(
     createWorkspaceProjection,
   );
+  const [operationObservations, setOperationObservations] = useState<Record<string, WorkspaceOperationObservation>>({});
+  useEffect(() => setOperationObservations({}), [presentationId]);
   const [loading, setLoading] = useState(enabled);
   const [submitting, setSubmitting] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -214,11 +313,14 @@ export function useWorkspaceTimeline({
   const commitProjection = useCallback(
     (
       update: (current: WorkspaceProjection) => WorkspaceProjection,
+      confirmed?: "snapshot" | string[],
     ): WorkspaceProjection => {
       const next = update(projectionRef.current);
       projectionRef.current = next;
       cursorRef.current = next.eventHighWatermark;
       setProjection(next);
+      if (confirmed) setOperationObservations((current) =>
+        observeWorkspaceOperations(current, next, confirmed, new Date().toISOString()));
       return next;
     },
     [],
@@ -230,6 +332,7 @@ export function useWorkspaceTimeline({
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
       commitProjection(() =>
         mergeTimelinePage(createWorkspaceProjection(), page),
+        "snapshot",
       );
       return page;
     },
@@ -291,6 +394,7 @@ export function useWorkspaceTimeline({
             throw new DOMException("Aborted", "AbortError");
           const refreshed = commitProjection((current) =>
             mergeTimelinePage(current, timeline, { preservePagination: true }),
+            timeline.items.flatMap((item) => item.anchorType === "operation" ? [item.operationId] : []),
           );
           if (!refreshed.rebaseRequired) {
             const backfill = await getWorkspaceEvents(presentationId, {
@@ -329,8 +433,22 @@ export function useWorkspaceTimeline({
           true,
         );
       }
+      const acceptedOperationIds = page.events.filter((event) => {
+        const operation = projectionRef.current.items.find((item) =>
+          item.anchorType === "operation" && item.operationId === event.operationId);
+        if (operation?.anchorType !== "operation" ||
+          projectionRef.current.seenEventKeys[`${event.operationId}:${event.sequence}`] ||
+          (event.id && projectionRef.current.seenEventKeys[event.id]) ||
+          operation.events.some((existing) => existing.id === event.id || existing.sequence === event.sequence)) return false;
+        if (event.operationVersion !== undefined && operation.version !== undefined) {
+          if (event.operationVersion < operation.version) return false;
+          if (event.operationVersion > operation.version) return true;
+        }
+        return event.sequence > operation.events.reduce((latest, existing) => Math.max(latest, existing.sequence), -1);
+      }).map((event) => event.operationId);
       const next = commitProjection((current) =>
         applyOperationEvents(current, page),
+        acceptedOperationIds,
       );
       if (next.rebaseRequired) return recoverProjection();
       // A terminal event reports the outcome but deliberately carries no result
@@ -735,6 +853,7 @@ export function useWorkspaceTimeline({
 
   return {
     projection,
+    operationObservations,
     loading,
     submitting,
     historyError,

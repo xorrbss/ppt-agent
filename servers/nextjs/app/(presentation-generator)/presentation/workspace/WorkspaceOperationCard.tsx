@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import { ConversationMessageFrame } from "../conversation/ConversationPrimitives";
+import { WorkspaceGenerationProgress } from "./WorkspaceGenerationProgress";
+import { operationFailureMessage, operationProgressEvidence, type WorkspaceOperationObservation } from "./WorkspaceOperationPresentation";
 import { useLocale, useTranslations } from "next-intl";
 import {
   downloadWorkspaceArtifact,
@@ -49,8 +52,9 @@ import {
   templateApplicationEvidenceComplete,
 } from "./WorkspaceOperationTemplateEvidence";
 
-
 interface WorkspaceOperationCardProps {
+  composerCancelOperationId?: string;
+  observation?: WorkspaceOperationObservation;
   operation: WorkspaceOperationAnchor;
   currentRevision?: number;
   disabled?: boolean;
@@ -109,6 +113,8 @@ export function WorkspaceOperationCard({
   onFocusSlide,
   onRemakePage,
   presentationRefreshState,
+  observation,
+  composerCancelOperationId,
 }: WorkspaceOperationCardProps) {
   const t = useTranslations("qualityReview.workspace");
   const locale = useLocale();
@@ -143,13 +149,10 @@ export function WorkspaceOperationCard({
   const latestMessage = [...operation.events]
     .reverse()
     .find((event) => event.message)?.message;
-  const latestProgressEvent = [...operation.events]
-    .reverse()
-    .find((event) => event.type === "operation.progress");
-  const progressAt = latestProgressEvent?.createdAt ?? operation.updatedAt;
-  const latestProgressAt = formatTimestamp(progressAt, locale);
   const isPresentationGeneration =
     operation.operationType === "presentation.generate";
+  const progressEvidence = operationProgressEvidence(operation);
+  const failed = ["failed", "dead_letter", "deadline_exceeded"].includes(operation.status);
   const actor = actorSummary(operation);
   const createdAt = formatTimestamp(operation.createdAt, locale);
   const updatedAt = formatTimestamp(operation.updatedAt, locale);
@@ -161,6 +164,8 @@ export function WorkspaceOperationCard({
       ? `${operation.expectedRevision ?? "-"} → ${operation.resultRevision ?? "-"}`
       : undefined;
   const operationMetadata = [
+    ["요청 ID", operation.operationId],
+    observation?.lastConfirmedAt ? ["마지막 서버 확인", formatTimestamp(observation.lastConfirmedAt, locale) ?? "확인 정보 없음"] : undefined,
     actor ? ["실행 주체", actor] : undefined,
     createdAt ? ["시작", createdAt] : undefined,
     updatedAt ? ["업데이트", updatedAt] : undefined,
@@ -632,11 +637,13 @@ export function WorkspaceOperationCard({
 
   return (
     <article
-      className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+      className="w-full text-[15px] leading-[1.6]"
       aria-label={`${operation.title} 작업`}
+      data-workspace-anchor-id={operation.id}
       data-operation-id={operation.operationId}
       data-operation-status={operation.status}
     >
+      <ConversationMessageFrame appearance="assistant">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold text-slate-900">
@@ -659,7 +666,7 @@ export function WorkspaceOperationCard({
               `지원되지 않는 상태 · ${operation.status}`}
           </p>
         </div>
-        {!TERMINAL.has(operation.status) &&
+        {!isPresentationGeneration && !TERMINAL.has(operation.status) &&
           !APPROVABLE.has(operation.status) && (
             <span
               aria-hidden="true"
@@ -688,19 +695,24 @@ export function WorkspaceOperationCard({
         </p>
       )}
       {operationMetadata.length > 0 && (
-        <dl
-          className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 rounded-lg bg-slate-50 px-2.5 py-2 text-xs"
-          data-testid="operation-metadata"
-        >
-          {operationMetadata.map(([label, value]) => (
-            <div key={label} className="contents">
-              <dt className="font-medium text-slate-500">{label}</dt>
-              <dd className="min-w-0 break-words text-slate-700">{value}</dd>
-            </div>
-          ))}
-        </dl>
+        <details className="mt-2 text-xs text-slate-600">
+          <summary className="cursor-pointer select-none font-medium">작업 내역 보기</summary>
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 rounded-lg bg-slate-50 px-2.5 py-2" data-testid="operation-metadata">
+            {operationMetadata.map(([label, value]) => (
+              <div key={label} className="contents">
+                <dt className="font-medium text-slate-500">{label}</dt>
+                <dd className="min-w-0 break-words text-slate-700">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          {progressEvidence.messages.length > 0 && <ol className="mt-2 space-y-1 text-slate-600">
+            {progressEvidence.messages.map((message, index) => <li key={`${index}-${message}`}>{message}</li>)}
+          </ol>}
+          {TERMINAL.has(operation.status) && progress !== undefined && <p className="mt-2">마지막 보고 진행률 · {Math.round(progress)}%</p>}
+        </details>
       )}
-      {displayedProgress !== undefined && (
+      {isPresentationGeneration && !TERMINAL.has(operation.status) && <WorkspaceGenerationProgress operation={operation} observation={observation} locale={locale} />}
+      {!isPresentationGeneration && !TERMINAL.has(operation.status) && displayedProgress !== undefined && (
         <div className="mt-3">
           <div
             className="h-1.5 overflow-hidden rounded-full bg-slate-100"
@@ -725,14 +737,6 @@ export function WorkspaceOperationCard({
               ? "결과 저장 중"
               : `${Math.round(displayedProgress)}%`}
           </p>
-          {isPresentationGeneration && latestProgressAt && (
-            <p
-              className="mt-1 text-xs text-slate-500"
-              data-testid="generation-last-progress-at"
-            >
-              {t("lastProgress", { time: latestProgressAt })}
-            </p>
-          )}
         </div>
       )}
       {qualityResultSaving && (
@@ -754,7 +758,7 @@ export function WorkspaceOperationCard({
           {capacityWaitMessage}
         </p>
       )}
-      {latestMessage && operation.status !== "succeeded" && !capacityWaiting && (
+      {latestMessage && !isPresentationGeneration && !TERMINAL.has(operation.status) && !operation.error && !capacityWaiting && (
         <p className="mt-2 text-xs text-slate-600">{latestMessage}</p>
       )}
       {isTemplateApply && !TERMINAL.has(operation.status) && (
@@ -1197,12 +1201,13 @@ export function WorkspaceOperationCard({
           감사 이력은 유지됩니다. 후속 성공 작업 {operation.supersededByOperationId}이(가) 같은 revision과 형식의 현재 결과입니다.
         </p>
       )}
-      {operation.error && operation.status !== "succeeded" && !resolvedByLaterSuccess && (
+      {(failed || operation.error) && operation.status !== "succeeded" && !resolvedByLaterSuccess && (
         <p
-          className="mt-2 rounded-lg bg-red-50 px-2.5 py-2 text-xs text-red-700"
+          className="mt-3 flex items-start gap-2 text-sm text-slate-800"
           role="alert"
         >
-          {operation.error}
+          <span aria-hidden="true" className="font-semibold text-red-700">!</span>
+          {operationFailureMessage(operation)}
         </p>
       )}
       {actionError && (
@@ -1222,7 +1227,7 @@ export function WorkspaceOperationCard({
           승인 기한이 만료되었습니다. 작업을 다시 시도해 주세요.
         </p>
       )}
-      {retryUnavailable && !resolvedByLaterSuccess && (
+      {retryUnavailable && !isPresentationGeneration && !failed && !operation.error && !resolvedByLaterSuccess && (
         <p
           className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs text-amber-800"
           role="status"
@@ -1237,7 +1242,9 @@ export function WorkspaceOperationCard({
           .filter((action) =>
             ["retry", "approve", "reject", "cancel", "undo"].includes(
               action.id,
-            ) && !(resolvedByLaterSuccess && action.id === "retry"),
+            ) && !(resolvedByLaterSuccess && action.id === "retry") &&
+              !( !isExport && action.id === "cancel" && operation.operationId === composerCancelOperationId) &&
+              !(action.id === "retry" && (!action.enabled || operation.retryable === false)),
           )
           .map((action) => {
             const unavailable =
@@ -1293,6 +1300,7 @@ export function WorkspaceOperationCard({
             );
           })}
       </div>
+      </ConversationMessageFrame>
     </article>
   );
 }

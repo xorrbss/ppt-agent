@@ -18,7 +18,7 @@ import NewSlideButton from "./header/NewSlideButton";
 import { cn } from "@/lib/utils";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 import AuthoredHeaderActions from "./header/AuthoredHeaderActions";
-import ExportMenu from "./header/ExportMenu";
+import ExportMenu, { sourcePreservingSvgPdfUnavailable } from "./header/ExportMenu";
 import ExportQualityDialog from "./header/ExportQualityDialog";
 import HybridCoverageDialog, {
   type HybridCoverageManifest,
@@ -263,7 +263,7 @@ const PresentationHeader = ({
   };
 
   const handleExportPdf = async () => {
-    if (isStreaming || !workspaceCommandsEnabled || !onWorkspaceCommand) return;
+    if (isStreaming || !workspaceCommandsEnabled || !onWorkspaceCommand || sourcePreservingSvgPdfUnavailable(presentationData)) return;
     try {
       await onWorkspaceCommand("PDF로 내보내기", {
         commandType: "export.pdf",

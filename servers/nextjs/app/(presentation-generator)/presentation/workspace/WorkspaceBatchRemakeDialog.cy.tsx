@@ -125,6 +125,7 @@ describe("WorkspaceBatchRemakeDialog", () => {
     cy.wait("@startBatch")
       .its("request.body")
       .should("deep.equal", { slide_indexes: [4, 7, 9], instruction: null });
+    cy.get('[data-testid="batch-remake-progress"]').should("have.attr", "data-task-id", "batch-task-1");
     cy.tick(2_000);
     cy.wait("@batchStatus");
 
@@ -166,6 +167,7 @@ describe("WorkspaceBatchRemakeDialog", () => {
     mountDialog({ slideIndexes: [4, 7] });
 
     cy.wait("@startBatch");
+    cy.get('[data-testid="batch-remake-progress"]').should("have.attr", "data-task-id", "batch-task-1");
     cy.tick(2_000);
     cy.wait("@batchStatus");
 
@@ -193,6 +195,7 @@ describe("WorkspaceBatchRemakeDialog", () => {
     mountDialog({ slideIndexes: [4, 7] });
 
     cy.wait("@startBatch");
+    cy.get('[data-testid="batch-remake-progress"]').should("have.attr", "data-task-id", "batch-task-1");
     cy.tick(2_000);
     cy.wait("@batchStatus");
 
@@ -221,6 +224,7 @@ describe("WorkspaceBatchRemakeDialog", () => {
 
     cy.mount(<UnmountableHost />);
     cy.wait("@startBatch");
+    cy.get('[data-testid="batch-remake-progress"]').should("have.attr", "data-task-id", "batch-task-1");
     cy.tick(2_000);
     cy.wait("@batchStatus");
     cy.get('[data-testid="batch-remake-dialog"]').should("exist");
@@ -249,6 +253,7 @@ describe("WorkspaceBatchRemakeDialog", () => {
     mountDialog({ slideIndexes: [4] }, true);
 
     cy.wait("@startBatch");
+    cy.get('[data-testid="batch-remake-progress"]').should("have.attr", "data-task-id", "batch-task-1");
     cy.tick(2_000);
     cy.wait("@batchStatus");
 

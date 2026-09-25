@@ -94,6 +94,9 @@ export interface WorkspaceOperationEvent {
   status?: string;
   message?: string;
   progress?: number;
+  stage?: string;
+  current?: number;
+  total?: number;
   error?: string;
   retryable?: boolean;
   /** Durable scheduler wait; capacity is not a generation error. */
@@ -133,6 +136,9 @@ export interface WorkspaceOperationAnchor {
   approvalExpiresAt?: string;
   version?: number;
   progress?: number;
+  stage?: string;
+  current?: number;
+  total?: number;
   error?: string;
   retryable?: boolean;
   capacityWaiting?: boolean;

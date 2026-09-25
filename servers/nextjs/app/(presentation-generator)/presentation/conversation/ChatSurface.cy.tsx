@@ -30,8 +30,18 @@ describe("ChatSurface", () => {
                 }],
               },
             },
-            { kind: "tool", position: 2, tool: { id: "tool", runId: "run", name: "edit_slide", status: "started", summary: "Updating title" } },
-            { kind: "run", position: 3, run: { id: "run", status: "approval_required", actions: ["approve", "cancel", "undo"] } },
+            {
+              kind: "message",
+              position: 2,
+              message: {
+                id: "assistant",
+                role: "assistant",
+                content: "Updating **layout** <script>alert('unsafe')</script>",
+                attachments: [],
+              },
+            },
+            { kind: "tool", position: 3, tool: { id: "tool", runId: "run", name: "edit_slide", status: "started", summary: "Updating title" } },
+            { kind: "run", position: 4, run: { id: "run", status: "approval_required", actions: ["approve", "cancel", "undo"] } },
           ],
         }}
         loading={false}
@@ -46,6 +56,21 @@ describe("ChatSurface", () => {
       </NextIntlClientProvider>,
     );
     cy.get('[data-testid="conversation-surface"]').should("have.class", "font-inter");
+    cy.get('[data-testid="conversation-timeline"]').should("have.class", "bg-white");
+    cy.get('[data-testid="conversation-connection"]').should("not.exist");
+    cy.get('[data-testid="conversation-message-frame-user"]')
+      .should("have.class", "bg-slate-100")
+      .and("have.class", "rounded-[20px]")
+      .and("not.have.class", "bg-blue-600");
+    cy.get('[data-testid="conversation-message-frame-assistant"]')
+      .should("not.have.class", "border")
+      .find("strong")
+      .should("contain", "layout");
+    cy.get('[data-testid="conversation-message-frame-assistant"] script').should(
+      "not.exist",
+    );
+    cy.get('[data-testid="conversation-composer-frame"]')
+      .should("have.class", "rounded-[24px]");
     cy.get('[data-testid="conversation-attachment-source"]')
       .should("contain", "original brief.pdf")
       .and("contain", "2.0 KB");

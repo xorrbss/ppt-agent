@@ -1,14 +1,22 @@
 "use client";
 
 import { ClipboardEvent, DragEvent, FormEvent, useState } from "react";
-import { Download, FileText, Loader2, Paperclip, X } from "lucide-react";
+import { ArrowUp, Download, FileText, Loader2, Paperclip, X } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { renderMarkdown } from "@/lib/safe-markdown";
 import type {
   ConversationAsset,
   ConversationContext,
   ConversationRunAction,
   ConversationTimeline,
 } from "./types";
+import {
+  ConversationComposerFrame,
+  ConversationMessageFrame,
+  conversationAssistantMarkdownClassName,
+  conversationAttachmentClassName,
+  conversationTimelineClassName,
+} from "./ConversationPrimitives";
 
 const actionMessageKey: Record<
   ConversationRunAction,
@@ -226,11 +234,7 @@ export function ChatSurface(props: {
         return (
           <li
             key={asset.id}
-            className={`flex min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 ${
-              appearance === "user"
-                ? "border-white/20 bg-white/10"
-                : "border-slate-200 bg-white"
-            }`}
+            className={conversationAttachmentClassName(appearance)}
             data-testid={`conversation-attachment-${asset.id}`}
           >
             <FileText className="h-4 w-4 shrink-0 opacity-80" aria-hidden="true" />
@@ -240,9 +244,7 @@ export function ChatSurface(props: {
               </p>
               {(asset.mimeType || size) && (
                 <p
-                  className={`mt-0.5 truncate text-[10px] ${
-                    appearance === "user" ? "text-blue-100" : "text-slate-500"
-                  }`}
+                  className="mt-0.5 truncate text-[10px] text-slate-500"
                 >
                   {[asset.mimeType, size].filter(Boolean).join(" · ")}
                 </p>
@@ -252,11 +254,7 @@ export function ChatSurface(props: {
               <a
                 href={downloadUrl}
                 download={asset.name}
-                className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors ${
-                  appearance === "user"
-                    ? "bg-white/15 text-white hover:bg-white/25"
-                    : "bg-blue-50 text-blue-700 hover:bg-blue-100"
-                }`}
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-blue-700 transition-colors hover:bg-blue-50"
                 aria-label={t("downloadAttachment", { name: asset.name })}
                 title={t("download")}
                 data-testid="conversation-attachment-download"
@@ -293,29 +291,27 @@ export function ChatSurface(props: {
           </span>
         </div>
       )}
-      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5 text-xs text-slate-500">
-        <span
-          className="inline-flex items-center gap-1.5"
-          data-testid="conversation-connection"
-          role="status"
-          aria-live="polite"
-        >
+      {connection !== "live" && (
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5 text-xs text-slate-500">
           <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              connection === "live" ? "bg-emerald-500" : "bg-amber-400"
-            }`}
-            aria-hidden="true"
-          />
-          {connection === "live"
-            ? t("connection.live")
-            : connection === "connecting"
+            className="inline-flex items-center gap-1.5"
+            data-testid="conversation-connection"
+            role="status"
+            aria-live="polite"
+          >
+            <span
+              className="h-1.5 w-1.5 rounded-full bg-amber-400"
+              aria-hidden="true"
+            />
+            {connection === "connecting"
               ? t("connection.connecting")
               : t("connection.reconnecting")}
-        </span>
-      </div>
+          </span>
+        </div>
+      )}
 
       <ol
-        className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/60 p-4"
+        className={conversationTimelineClassName}
         data-testid="conversation-timeline"
       >
         {loading && (
@@ -330,28 +326,39 @@ export function ChatSurface(props: {
         {timeline.items.map((item) => {
           if (item.kind === "message") {
             const isUser = item.message.role === "user";
+            const assistantHtml = isUser
+              ? ""
+              : renderMarkdown(item.message.content);
             return (
               <li
                 key={`message-${item.message.id}`}
-                className={`rounded-2xl px-3.5 py-3 text-sm leading-6 shadow-sm ${
-                  isUser
-                    ? "ml-8 bg-blue-600 text-white"
-                    : "mr-8 border border-slate-200 bg-white text-slate-800"
-                }`}
+                data-testid={`conversation-message-${item.message.id}`}
               >
-                <p className="whitespace-pre-wrap break-words">
-                  {item.message.content}
-                </p>
-                {item.message.streaming && (
-                  <p className="mt-1 text-xs opacity-70" role="status">
-                    {t("streaming")}
-                  </p>
-                )}
-                {item.message.attachments.length > 0 &&
-                  renderAttachments(
-                    item.message.attachments,
-                    isUser ? "user" : "assistant",
+                <ConversationMessageFrame
+                  appearance={isUser ? "user" : "assistant"}
+                  data-testid={`conversation-message-frame-${item.message.id}`}
+                >
+                  {isUser ? (
+                    <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.6]">
+                      {item.message.content}
+                    </p>
+                  ) : (
+                    <div
+                      className={conversationAssistantMarkdownClassName}
+                      dangerouslySetInnerHTML={{ __html: assistantHtml }}
+                    />
                   )}
+                  {item.message.streaming && (
+                    <p className="mt-1 text-xs text-slate-500" role="status">
+                      {t("streaming")}
+                    </p>
+                  )}
+                  {item.message.attachments.length > 0 &&
+                    renderAttachments(
+                      item.message.attachments,
+                      isUser ? "user" : "assistant",
+                    )}
+                </ConversationMessageFrame>
               </li>
             );
           }
@@ -360,7 +367,7 @@ export function ChatSurface(props: {
             return (
               <li
                 key={`tool-${item.tool.id}`}
-                className="rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-xs text-slate-600 shadow-sm"
+                className="border-l-2 border-slate-200 py-1 pl-3 text-xs text-slate-600"
                 data-testid="tool-activity"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -381,7 +388,7 @@ export function ChatSurface(props: {
           return (
             <li
               key={`run-${item.run.id}`}
-              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+              className="border-l-2 border-slate-200 py-1 pl-3"
               data-testid="agent-run"
             >
               <div className="flex items-center justify-between gap-3">
@@ -445,9 +452,10 @@ export function ChatSurface(props: {
       )}
 
       <form
-        className="border-t border-slate-200 bg-white p-3"
+        className="shrink-0 bg-white px-3 pb-3 pt-2"
         onSubmit={(event) => void submit(event)}
       >
+        <ConversationComposerFrame data-testid="conversation-composer-frame">
         {pendingAssets.length > 0 && (
           <ul
             className="mb-2 flex flex-wrap gap-2"
@@ -456,7 +464,7 @@ export function ChatSurface(props: {
             {pendingAssets.map((asset) => (
               <li
                 key={asset.id}
-                className="inline-flex min-w-0 items-center gap-1.5 rounded-lg bg-blue-50 px-2 py-1.5 text-xs text-blue-800"
+                className="inline-flex min-w-0 items-center gap-1.5 rounded-lg bg-slate-100 px-2 py-1.5 text-xs text-slate-700"
               >
                 <Paperclip className="h-3 w-3 shrink-0" aria-hidden="true" />
                 <span className="max-w-48 truncate" title={asset.name}>
@@ -466,7 +474,7 @@ export function ChatSurface(props: {
                   type="button"
                   onClick={() => onRemoveAsset(asset.id)}
                   aria-label={t("removeAttachment", { name: asset.name })}
-                  className="rounded p-0.5 hover:bg-blue-100"
+                  className="rounded p-0.5 hover:bg-slate-200"
                 >
                   <X className="h-3 w-3" aria-hidden="true" />
                 </button>
@@ -488,13 +496,13 @@ export function ChatSurface(props: {
             }
           }}
           placeholder={t("placeholder")}
-          rows={3}
+          rows={1}
           disabled={submitting}
-          className="w-full resize-none rounded-xl border border-slate-300 p-3 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
+          className="max-h-[180px] min-h-12 w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-2 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:text-slate-400"
           data-testid="conversation-composer"
         />
         <div className="mt-2 flex items-center justify-between">
-          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50">
+          <label className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-slate-100">
             <input
               className="sr-only"
               type="file"
@@ -511,7 +519,7 @@ export function ChatSurface(props: {
             ) : (
               <Paperclip className="h-3.5 w-3.5" aria-hidden="true" />
             )}
-            {uploading ? t("uploading") : t("attach")}
+            <span className="sr-only">{uploading ? t("uploading") : t("attach")}</span>
           </label>
           <span className="mx-2 hidden flex-1 text-center text-[10px] text-slate-400 sm:block">
             {t("pasteImages")}
@@ -519,11 +527,14 @@ export function ChatSurface(props: {
           <button
             type="submit"
             disabled={submitting || !draft.trim()}
-            className="rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45"
+            aria-label={t("send")}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
           >
-            {t("send")}
+            <ArrowUp className="h-4 w-4" aria-hidden="true" />
+            <span className="sr-only">{t("send")}</span>
           </button>
         </div>
+        </ConversationComposerFrame>
       </form>
     </section>
   );

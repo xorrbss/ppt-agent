@@ -23,6 +23,12 @@ const headerUrl = dataModule(`
 `);
 const paramsUrl = dataModule("export {};\n");
 const errorHandlerUrl = dataModule(`
+  export class ApiError extends Error {
+    constructor(message, status = 0) {
+      super(message);
+      this.status = status;
+    }
+  }
   export const apiErrorFromPayload = (payload, fallback, _status, requestId) => {
     const error = new Error(payload?.message || fallback);
     error.code = payload?.code;
@@ -31,7 +37,7 @@ const errorHandlerUrl = dataModule(`
   };
   export const ApiResponseHandler = {
     async handleResponse(response, fallback) {
-      if (!response.ok) throw new Error(fallback);
+      if (!response.ok) throw new ApiError(fallback, response.status);
       return response.json();
     },
   };

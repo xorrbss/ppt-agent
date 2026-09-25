@@ -99,6 +99,7 @@ describe("PresentationGenerationApi.createPresentation", () => {
         file_paths: [],
         language: "Korean",
         theme,
+        strategy: "authored",
       });
     });
   });
@@ -165,6 +166,7 @@ describe("PresentationGenerationApi.generateAuthoredAsync", () => {
         qualityProfile: "release",
         vision_qa: true,
         authored_style: "strategic-navy",
+        aspect_ratio: "16:9",
       });
     });
   });

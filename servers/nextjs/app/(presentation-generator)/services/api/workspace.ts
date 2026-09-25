@@ -437,10 +437,12 @@ export async function postWorkspaceAsset(
   file: File,
   presentationId: string,
   signal?: AbortSignal,
+  conversationId?: string | null,
 ): Promise<WorkspaceUploadedAsset> {
   const form = new FormData();
   form.append("file", file, file.name);
   form.append("presentation_id", presentationId);
+  if (conversationId) form.append("conversation_id", conversationId);
   const response = await fetch(getApiUrl(`${ROOT}/assets`), {
     method: "POST",
     headers: getHeaderForFormData(),
@@ -470,6 +472,52 @@ export async function postWorkspaceAsset(
         : file.type || undefined,
     sizeBytes:
       typeof data.size_bytes === "number" ? data.size_bytes : file.size,
+    status: typeof data.status === "string" ? data.status : "uploaded",
+  };
+}
+
+export async function getWorkspaceAsset(
+  assetId: string,
+  conversationId?: string | null,
+  signal?: AbortSignal,
+): Promise<WorkspaceUploadedAsset> {
+  const conversationQuery = conversationId
+    ? `?conversation_id=${encodeURIComponent(conversationId)}`
+    : "";
+  const response = await fetch(
+    getApiUrl(`${ROOT}/assets/${encodeURIComponent(assetId)}${conversationQuery}`),
+    {
+      method: "GET",
+      headers: getHeader(),
+      signal,
+      cache: "no-store",
+    },
+  );
+  const payload = (await parseResponse(response)) as Record<string, unknown>;
+  const data =
+    payload.data && typeof payload.data === "object"
+      ? (payload.data as Record<string, unknown>)
+      : payload;
+  const resolvedId =
+    typeof data.asset_id === "string" ? data.asset_id : data.id;
+  if (
+    typeof resolvedId !== "string" ||
+    resolvedId.length === 0 ||
+    resolvedId !== assetId
+  ) {
+    throw new WorkspaceApiError(
+      "첨부 파일 상태를 확인하지 못했습니다.",
+      502,
+      "invalid_asset_response",
+      false,
+    );
+  }
+  return {
+    assetId: resolvedId,
+    fileName: typeof data.file_name === "string" ? data.file_name : "첨부 파일",
+    mediaType:
+      typeof data.media_type === "string" ? data.media_type : undefined,
+    sizeBytes: typeof data.size_bytes === "number" ? data.size_bytes : 0,
     status: typeof data.status === "string" ? data.status : "uploaded",
   };
 }

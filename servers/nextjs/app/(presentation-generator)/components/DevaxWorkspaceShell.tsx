@@ -13,6 +13,7 @@ import { getPresentationDisplayTitle, getPresentationDisplayStatus } from "@/lib
 import { tryResolveServerIssuedPresentationProfile } from "@/lib/presentation-profile";
 import type { RootState } from "@/store/store";
 import { DashboardApi, type PresentationResponse } from "../services/api/dashboard";
+import { useGenerationWorkspace } from "../generation-workspace/GenerationWorkspaceProvider";
 
 const DEVAX_SHELL_PATHS = [
   "/dashboard",
@@ -43,6 +44,10 @@ function DevaxSidebar() {
   const locale = useLocale();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const workspace = useGenerationWorkspace();
+  useEffect(() => {
+    if (workspace?.preparationVisible) setCollapsed(true);
+  }, [workspace?.preparationVisible]);
   const [presentations, setPresentations] = useState<PresentationResponse[]>([]);
   const [listStatus, setListStatus] = useState<"loading" | "ready" | "error">("loading");
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -231,12 +236,13 @@ function DevaxSidebar() {
 
 export default function DevaxWorkspaceShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const workspace = useGenerationWorkspace();
   const enabled = DEVAX_SHELL_PATHS.some((base) => isPathActive(pathname, base));
   if (!enabled) return children;
 
   return (
     <div
-      className={cn("devax-workspace", isPathActive(pathname, "/presentation") && "devax-workspace--editor")}
+      className={cn("devax-workspace", (isPathActive(pathname, "/presentation") || workspace?.preparationVisible) && "devax-workspace--editor")}
       data-testid="devax-workspace-shell"
     >
       <DevaxSidebar />

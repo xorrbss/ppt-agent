@@ -377,6 +377,9 @@ export function normalizeOperationEvent(
       payload.progress,
       payload.percent,
     ),
+    stage: stringValue(raw.stage, payload.stage),
+    current: safeIntegerValue(raw.current ?? payload.current, 0),
+    total: safeIntegerValue(raw.total ?? payload.total, 1),
     error: safeFailureMessage,
     retryable: booleanValue(
       raw.retryable,
@@ -600,6 +603,9 @@ function normalizeOperation(
       raw.optimistic_version,
     ),
     progress: numberValue(raw.progress, raw.progress_percent),
+    stage: stringValue(raw.stage, asRecord(raw.progress).stage),
+    current: safeIntegerValue(raw.current ?? asRecord(raw.progress).current, 0),
+    total: safeIntegerValue(raw.total ?? asRecord(raw.progress).total, 1),
     error: explicitSafeError(
       raw.safeError,
       raw.safe_error,
@@ -1110,6 +1116,9 @@ function patchOperation(
     // The event version is the operation row's post-transition CAS version.
     version: event.operationVersion ?? operation.version,
     progress: event.progress ?? operation.progress,
+    stage: event.stage ?? operation.stage,
+    current: event.stage && event.stage !== operation.stage ? event.current : event.current ?? operation.current,
+    total: event.stage && event.stage !== operation.stage ? event.total : event.total ?? operation.total,
     // A retryable error is historical once a newer event proves that the
     // operation resumed. Keeping it here makes an active progress card look
     // terminal even though the authoritative snapshot has no current error.

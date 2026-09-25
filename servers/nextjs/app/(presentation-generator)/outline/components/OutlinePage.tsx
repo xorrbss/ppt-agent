@@ -4,19 +4,20 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation";
 import { RootState } from "@/store/store";
 import { useDispatch, useSelector } from "react-redux";
-import { setPresentationData, setPresentationId } from "@/store/slices/presentationGeneration";
+import { setPresentationData, setPresentationId, setOutlines } from "@/store/slices/presentationGeneration";
 import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
-import { OverlayLoader } from "@/components/ui/overlay-loader";
-import Wrapper from "@/components/Wrapper";
+import { Button } from "@/components/ui/button";
+import { GenerationPreparation } from "../../generation-workspace/GenerationPreparation";
+import { useGenerationWorkspace } from "../../generation-workspace/GenerationWorkspaceProvider";
 import OutlineContent from "./OutlineContent";
 import EmptyStateView from "./EmptyStateView";
-import GenerateButton from "./GenerateButton";
 
 import { useOutlineStreaming } from "../hooks/useOutlineStreaming";
 import { useOutlineManagement } from "../hooks/useOutlineManagement";
 import { usePresentationGeneration } from "../hooks/usePresentationGeneration";
 import {
   clearDurableGenerationTask,
+  type DurableGenerationTask,
   findDurableGenerationTask,
   findResumableGenerationTask,
 } from "../hooks/durableGenerationTask";
@@ -68,6 +69,13 @@ const OutlinePage: React.FC<{
     (state: RootState) => state.presentationGeneration
   );
   const resolvedPresentationId = presentation_id || initialPresentationId || null;
+  const workspace = useGenerationWorkspace();
+  const [editingOutline, setEditingOutline] = useState(false);
+  const [resumableTask, setResumableTask] = useState<DurableGenerationTask | null>(null);
+  const outlineSnapshotRef = useRef<{ content: string }[]>([]);
+  useEffect(() => {
+    if (resolvedPresentationId && workspace?.session?.presentationId === resolvedPresentationId) workspace.bindPresentation(resolvedPresentationId);
+  }, [resolvedPresentationId, workspace?.bindPresentation, workspace?.session?.presentationId]);
   const companyStandard = useSelector(
     (state: RootState) => state.pptGenUpload.companyStandard
   );
@@ -97,12 +105,19 @@ const OutlinePage: React.FC<{
   }, [auto, openMasterDesigner, resolvedPresentationId, router]);
   const streamState = useOutlineStreaming(resolvedPresentationId);
   const { handleDragEnd, handleAddSlide } = useOutlineManagement(outlines);
-  const { loadingState, handleSubmit, cancelGeneration } =
+  const { loadingState, handleSubmit, startRecovery } =
     usePresentationGeneration(
       resolvedPresentationId,
       outlines,
       handleMasterRequired,
     );
+
+  useEffect(() => {
+    const task = resolvedPresentationId
+      ? findDurableGenerationTask(resolvedPresentationId)
+      : null;
+    setResumableTask(task?.status === "retryable-error" ? task : null);
+  }, [resolvedPresentationId]);
 
   useEffect(() => {
     if (!auto || !resolvedPresentationId) {
@@ -311,11 +326,20 @@ const OutlinePage: React.FC<{
   useEffect(() => {
     if (!auto || autoSubmittedRef.current) return;
     if (autoIntentState === "checking") return;
-    if (outlinesPreexistingRef.current && autoIntentState !== "pending") return;
-    if (!resolvedPresentationId || streamState.isStreaming) return;
-    if (!streamState.hasCompleted && autoIntentState !== "pending") return;
-    if (!outlines || outlines.length === 0) return;
-    if (masterEnabled && !masterDefaultResolved) return;
+    if (!resolvedPresentationId) return;
+    const staged = findDurableGenerationTask(resolvedPresentationId);
+    const approvedRasterAuto = autoIntentState === "pending" &&
+      staged?.status === "starting" && !staged.taskId &&
+      staged.authoredRequest?.sourceMode === "raster_reconstruction" &&
+      Boolean(staged.authoredRequest.rasterApprovalPin) &&
+      staged.authoredRequest.referenceSnapshotIds?.length === 1;
+    if (!approvedRasterAuto) {
+      if (outlinesPreexistingRef.current && autoIntentState !== "pending") return;
+      if (streamState.isStreaming) return;
+      if (!streamState.hasCompleted && autoIntentState !== "pending") return;
+      if (!outlines || outlines.length === 0) return;
+      if (masterEnabled && !masterDefaultResolved) return;
+    }
     autoSubmittedRef.current = true;
     handleSubmit();
   }, [
@@ -389,118 +413,84 @@ const OutlinePage: React.FC<{
     return <EmptyStateView />;
   }
 
-  // Auto compose never exposes settings/editor controls. A deliberate review
-  // uses the same route without auto=1 (including after cancelling generation).
-  const autoWorking = auto;
-  if (autoWorking) {
-    const generating = loadingState.isLoading;
-    const streamedOutlineCount = outlines?.length ?? 0;
-    return (
-      <div className="font-syne pb-9">
-        <OverlayLoader
-          show={true}
-          // Use the real generation message + ETA (authored decks can take many
-          // minutes) instead of a fixed 60s bar that parks at 95%.
-          text={
-            streamState.isStreaming
-              ? streamedOutlineCount > 0
-                ? `개요를 생성하는 중… ${streamedOutlineCount}장 작성됨`
-                : "자료를 분석하고 개요를 구성하는 중…"
-              : generating
-                ? loadingState.message
-                : "발표자료를 준비하는 중…"
-          }
-          // Outline generation has no deterministic completion percentage.
-          // A timed bar used to park at 95% for large decks and looked hung.
-          showProgress={generating}
-          duration={generating ? loadingState.duration : 60}
-          progress={generating ? slideProgress?.value : undefined}
-          progressLabel={generating ? slideProgress?.label : undefined}
-          // While generating: invalidate the run and fall back to the outline UI
-          // so the user can review/edit and regenerate. While the outline is still
-          // streaming: go back to compose (unmount closes the SSE stream).
-          onCancel={
-            generating
-              ? () => {
-                  cancelGeneration();
-                  router.replace(
-                    `/outline?id=${encodeURIComponent(resolvedPresentationId)}`
-                  );
-                }
-              : streamedOutlineCount > 0
-                ? () => router.replace(
-                    `/outline?id=${encodeURIComponent(resolvedPresentationId)}`
-                  )
-                : () => router.back()
-          }
-          cancelText={generating ? "생성 취소" : "취소하고 돌아가기"}
-        />
-      </div>
-    );
-  }
+  const preparing = streamState.isStreaming || streamState.isLoading || loadingState.isLoading;
+  const streamFailed = !streamState.isStreaming && !streamState.isLoading && !outlines?.length;
+  const awaitingAuto = auto && !loadingState.message;
+  const status = loadingState.message || (streamState.isStreaming
+    ? "자료를 분석하고 구성을 작성하고 있습니다."
+    : streamFailed
+      ? "구성을 불러오지 못했습니다. 다시 확인해 주세요."
+      : awaitingAuto
+        ? "슬라이드 제작을 준비하고 있습니다."
+        : "아래 구성으로 발표자료를 만들까요?");
+  const startOutlineEdit = () => {
+    outlineSnapshotRef.current = outlines.map((item) => ({ ...item }));
+    setEditingOutline(true);
+  };
+  const cancelOutlineEdit = () => {
+    dispatch(setOutlines(outlineSnapshotRef.current));
+    setEditingOutline(false);
+  };
 
   return (
-    <div className=" font-syne  pb-9">
-
-      <OverlayLoader
-        show={loadingState.isLoading}
-        text={loadingState.message}
-        showProgress={loadingState.showProgress}
-        duration={loadingState.duration}
-        progress={slideProgress?.value}
-        progressLabel={slideProgress?.label}
-        onCancel={cancelGeneration}
-        cancelText="생성 취소"
-      />
-
-      <Wrapper className="flex flex-col w-full relative px-5 sm:px-10 lg:px-20 ">
-        <div className="w-full mx-auto">
-          <div className="flex w-full flex-col pt-6">
-            {!auto && masterEnabled && (
-              <div className="mb-5 mt-2">
-                <MasterSelectionSummary
-                  templateName="AI 저작 스타일"
-                  selection={companyStandard}
-                  onOpen={openMasterDesigner}
-                />
-              </div>
-            )}
-
-            <div className="w-full mx-auto">
-              <OutlineContent
-                outlines={outlines}
-                isLoading={streamState.isLoading}
-                isStreaming={streamState.isStreaming}
-                activeSlideIndex={streamState.activeSlideIndex}
-                highestActiveIndex={streamState.highestActiveIndex}
-                onDragEnd={handleDragEnd}
-                onAddSlide={handleAddSlide}
-                onRetry={streamState.retry}
-              />
-            </div>
-          </div>
-
-          <div className="fixed bottom-[26px] right-[26px] z-50">
-            <GenerateButton
-              loadingState={loadingState}
-              streamState={streamState}
-              onSubmit={handleSubmit}
-            />
-          </div>
-        </div>
-
-
-
-      </Wrapper>
-      {!auto && masterEnabled && (
-        <MasterDesignerDialog
-          open={masterDesignerOpen}
-          onOpenChange={setMasterDesignerOpen}
-          onApplied={applyPublishedMaster}
-          selectedMasterId={companyStandard?.masterId ?? null}
-        />
-      )}
-    </div>
+    <>
+      <GenerationPreparation
+        presentationId={resolvedPresentationId}
+        status={status}
+        busy={preparing || awaitingAuto}
+        progressLabel={slideProgress?.label ?? (streamState.isStreaming && outlines.length > 0 ? `구성 ${outlines.length}장 작성됨` : undefined)}
+        actions={!preparing && <>
+          {streamFailed ? <Button variant="outline" onClick={streamState.retry}>구성 다시 불러오기</Button> : null}
+          {!auto && outlines.length > 0 && !editingOutline && !startRecovery && <>
+            <Button variant="outline" onClick={startOutlineEdit}>구성 수정</Button>
+            <Button onClick={() => void handleSubmit()}>이대로 만들기</Button>
+          </>}
+          {loadingState.message && startRecovery && !auto && <Button onClick={() => void handleSubmit()}>{startRecovery === "receipt" ? "같은 요청으로 접수 확인" : "같은 요청 재시도"}</Button>}
+          {auto && loadingState.message && (startRecovery
+            ? <Button onClick={() => void handleSubmit()}>{startRecovery === "receipt" ? "같은 요청으로 접수 확인" : "같은 요청 재시도"}</Button>
+            : <Button variant="outline" onClick={() => router.replace(`/outline?id=${encodeURIComponent(resolvedPresentationId)}`)}>요청 검토</Button>)}
+          {editingOutline && <>
+            <Button variant="outline" onClick={cancelOutlineEdit}>변경 취소</Button>
+            <Button onClick={() => setEditingOutline(false)}>수정 적용</Button>
+          </>}
+        </>}
+      >
+        {resumableTask && <div data-cy="resume-generation-banner" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p>{resumableTask.lastProgress?.completed_slides != null && resumableTask.lastProgress?.total_slides != null
+            ? `이전 생성이 슬라이드 ${resumableTask.lastProgress.completed_slides}/${resumableTask.lastProgress.total_slides}에서 중단되었습니다. 이어서 생성할 수 있습니다.`
+            : "이전 생성이 중단되었습니다. 이어서 생성할 수 있습니다."}</p>
+          <Button className="mt-3" onClick={() => { setResumableTask(null); void handleSubmit(); }}>이어서 생성</Button>
+        </div>}
+        {!auto && masterEnabled && !preparing && !startRecovery && <MasterSelectionSummary
+          templateName="AI 저작 스타일"
+          selection={companyStandard}
+          onOpen={openMasterDesigner}
+        />}
+        {editingOutline ? <div className="max-h-[48dvh] overflow-y-auto rounded-2xl border border-slate-200">
+          <OutlineContent
+            outlines={outlines}
+            isLoading={streamState.isLoading}
+            isStreaming={streamState.isStreaming}
+            activeSlideIndex={streamState.activeSlideIndex}
+            highestActiveIndex={streamState.highestActiveIndex}
+            onDragEnd={handleDragEnd}
+            onAddSlide={handleAddSlide}
+            onRetry={streamState.retry}
+          />
+        </div> : outlines.length > 0 && <details open={!auto} className="rounded-2xl border border-slate-200 px-4 py-3">
+          <summary className="cursor-pointer text-sm font-medium">{streamState.isStreaming ? "작성 중인 구성" : "구성 보기"} · {outlines.length}장</summary>
+          <ol className="mt-3 max-h-[40dvh] list-decimal space-y-3 overflow-y-auto pl-5">
+            {outlines.map((item, index) => <li key={index} className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-600">{item.content}</li>)}
+          </ol>
+        </details>}
+      </GenerationPreparation>
+      {!auto && masterEnabled && <MasterDesignerDialog
+        open={masterDesignerOpen}
+        onOpenChange={setMasterDesignerOpen}
+        onApplied={applyPublishedMaster}
+        selectedMasterId={companyStandard?.masterId ?? null}
+      />}
+    </>
   );
 };
 

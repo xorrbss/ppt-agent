@@ -34,6 +34,7 @@ export default function LogoutButton({
         credentials: "include",
       });
       if (response.ok) {
+        window.dispatchEvent(new Event("presenton:auth-logout"));
         await trackEventImmediately(MixpanelEvent.Auth_Signed_Out, {
           source: "logout_button",
         });

@@ -402,12 +402,14 @@ export function WorkspacePageRemakePrompt({
   currentSlide,
   disabled = false,
   onWorkspaceCommand,
+  onReload,
   onDismiss,
 }: {
   presentationId: string;
   currentSlide: number;
   disabled?: boolean;
-  onWorkspaceCommand: WorkspaceCommandDispatcher;
+  onWorkspaceCommand?: WorkspaceCommandDispatcher;
+  onReload?: () => void;
   onDismiss: () => void;
 }) {
   return (
@@ -439,6 +441,7 @@ export function WorkspacePageRemakePrompt({
         currentSlide={currentSlide}
         disabled={disabled}
         onWorkspaceCommand={onWorkspaceCommand}
+        onReload={onReload}
         onDismiss={onDismiss}
       />
     </article>

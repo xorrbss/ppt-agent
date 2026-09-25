@@ -1,11 +1,9 @@
 import {
   createRenderPresentationSnapshot,
   RenderService,
-  createProductionRenderArtifact,
-  type RenderArtifact,
-  type RenderRequest,
-  type RenderTarget,
-} from "../../../../lib/render-service/index.ts";
+} from "../../../../lib/render-service/render-service.ts";
+import type { RenderArtifact, RenderRequest, RenderTarget } from "../../../../lib/render-service/contracts.ts";
+import { createBrowserProductionRenderArtifact } from "../../../../lib/render-service/browser-production.ts";
 
 export type PresentationRenderAction = "preview" | "pdf" | "pptx";
 
@@ -40,12 +38,13 @@ export function createPresentationRenderActionFactory(
         "expected_artifact_version" | "template_render_plans"
       > = {},
     ): Promise<RenderArtifact> {
-      const encoded = new TextEncoder().encode(JSON.stringify(presentation));
+      const source = structuredClone(presentation);
+      const encoded = new TextEncoder().encode(JSON.stringify(source));
       const digest = await globalThis.crypto.subtle.digest("SHA-256", encoded);
       const sourceSha256 = Array.from(new Uint8Array(digest), (value) =>
         value.toString(16).padStart(2, "0"),
       ).join("");
-      return createProductionRenderArtifact(presentation, {
+      return createBrowserProductionRenderArtifact(source, {
         target: action,
         source_sha256: sourceSha256,
         service,

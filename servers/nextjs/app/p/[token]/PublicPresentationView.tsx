@@ -24,7 +24,11 @@ const PublicPresentationView = ({ token }: { token: string }) => {
       try {
         const res = await fetch(
           getApiUrl(`/api/v1/ppt/presentation/public/${token}`),
-          { method: "GET", cache: "no-store" }
+          {
+            method: "GET",
+            headers: { "X-Document-Canvas-Contracts": "document-canvas/v1" },
+            cache: "no-store",
+          }
         );
         if (res.status === 404) {
           if (!cancelled) setStatus("notfound");

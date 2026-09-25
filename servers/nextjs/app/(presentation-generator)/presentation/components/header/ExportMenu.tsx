@@ -11,6 +11,18 @@ import type { PptxExportMode } from "./types";
 import { presentationExportQualityAdvisory } from "../../utils/masterPresentation";
 import { resolveAuthoredCanvas } from "@/lib/authored-canvas";
 
+export function sourcePreservingSvgPdfUnavailable(presentation: unknown): boolean {
+  const deck = presentation as {
+    mode?: string;
+    profile?: { driver_id?: string };
+    theme?: { svg?: { sourcePreservation?: unknown } };
+    slides?: Array<{ content?: { svgReceipt?: { source_preservation?: unknown } } }>;
+  } | null | undefined;
+  if (deck?.mode !== "svg" && deck?.profile?.driver_id !== "svg-v1") return false;
+  return deck.theme?.svg?.sourcePreservation != null ||
+    Boolean(deck.slides?.some((slide) => slide.content?.svgReceipt?.source_preservation != null));
+}
+
 interface ExportMenuProps {
   isAuthoredDeck: boolean;
   hasMasterPin?: boolean;
@@ -57,6 +69,7 @@ const ExportMenu = ({
     ? resolveAuthoredCanvas((presentation as { theme?: unknown } | undefined)?.theme)
     : undefined;
   const blocked = exportDisabled;
+  const pdfUnavailable = sourcePreservingSvgPdfUnavailable(presentation);
   const triggerReason = exportOperationInFlight
     ? t("triggerDisabledExportInFlightAria")
     : workspaceCommandsEnabled
@@ -87,9 +100,10 @@ const ExportMenu = ({
             Hybrid 내보내기 이력 및 증거 <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           </Button>}
         </>}
-        <Button onClick={() => { closeExportOptions(); void onExportPdf(); }} disabled={blocked} data-testid="export-pdf" variant="ghost" className={`h-auto min-h-10 w-full justify-between gap-3 whitespace-normal rounded-lg px-3 py-2.5 text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] ${mobile ? "border-none bg-white" : ""}`}>
+        <Button onClick={() => { if (pdfUnavailable) return; closeExportOptions(); void onExportPdf(); }} disabled={blocked || pdfUnavailable} aria-describedby={pdfUnavailable ? "svg-pdf-unavailable" : undefined} data-testid="export-pdf" variant="ghost" className={`h-auto min-h-10 w-full justify-between gap-3 whitespace-normal rounded-lg px-3 py-2.5 text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] ${mobile ? "border-none bg-white" : ""}`}>
           PDF <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         </Button>
+        {pdfUnavailable && <p id="svg-pdf-unavailable" className="px-3 text-xs text-slate-500">원본 보존 SVG는 현재 PPTX로 내보낼 수 있습니다.</p>}
         {!isAuthoredDeck && <Button onClick={() => { closeExportOptions(); void onExportPptx(); }} disabled={blocked} data-testid="export-pptx" variant="ghost" className={`h-auto min-h-10 w-full justify-between gap-3 whitespace-normal rounded-lg px-3 py-2.5 text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] ${mobile ? "bg-white" : ""}`}>
           PPTX <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         </Button>}

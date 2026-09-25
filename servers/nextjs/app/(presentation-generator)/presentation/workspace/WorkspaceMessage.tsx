@@ -1,4 +1,9 @@
 import type { WorkspaceMessageAnchor } from "./types";
+import { renderMarkdown } from "@/lib/safe-markdown";
+import { memo } from "react";
+import { FileText } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { ConversationMessageFrame, conversationAssistantMarkdownClassName, conversationAttachmentClassName } from "../conversation/ConversationPrimitives";
 
 const SECRET_SETTING = /(?:secret|token|password|api[_-]?key|access[_-]?key)/i;
 const SETTING_LABELS: Record<string, string> = {
@@ -9,6 +14,8 @@ const SETTING_LABELS: Record<string, string> = {
   style: "스타일",
   audience: "대상 독자",
   aspect_ratio: "화면 비율",
+  mode: "생성 방식",
+  version: "버전",
 };
 
 function humanizeKey(key: string): string {
@@ -25,6 +32,8 @@ function humanizeKey(key: string): string {
 
 function visibleSettings(
   settings?: Record<string, unknown>,
+  labels: Record<string, string> = {},
+  valueLabels: Record<string, Record<string, string>> = {},
 ): Array<[string, string]> {
   if (!settings) return [];
   return Object.entries(settings).flatMap(([key, value]) => {
@@ -34,7 +43,10 @@ function visibleSettings(
       typeof value === "number" ||
       typeof value === "boolean"
     ) {
-      return [[humanizeKey(key), String(value)]];
+      const displayValue = typeof value === "boolean"
+        ? value ? "예" : "아니요"
+        : valueLabels[key]?.[String(value)] ?? String(value);
+      return [[labels[key] ?? humanizeKey(key), displayValue]];
     }
     if (
       Array.isArray(value) &&
@@ -42,7 +54,7 @@ function visibleSettings(
         (item) => typeof item === "string" || typeof item === "number",
       )
     ) {
-      return [[humanizeKey(key), value.join(", ")]];
+      return [[labels[key] ?? humanizeKey(key), value.join(", ")]];
     }
     return [];
   });
@@ -99,20 +111,38 @@ interface WorkspaceMessageProps {
   onReattach?: (attachmentId: string) => void;
 }
 
-export function WorkspaceMessage({
+export const WorkspaceMessage = memo(function WorkspaceMessage({
   message,
   onReattach,
 }: WorkspaceMessageProps) {
-  const settings = visibleSettings(message.generationSettings);
+  const t = useTranslations("upload.advancedSettings");
+  const settings = visibleSettings(message.generationSettings, {
+    tone: t("toneLabel"),
+    verbosity: t("verbosityLabel"),
+    instructions: t("instructionsLabel"),
+    include_table_of_contents: t("includeTableOfContents"),
+    include_title_slide: t("includeTitleSlide"),
+    web_search: t("webSearch"),
+  }, {
+    tone: {
+      default: t("tone.default"), casual: t("tone.casual"),
+      professional: t("tone.professional"), funny: t("tone.funny"),
+      educational: t("tone.educational"), sales_pitch: t("tone.salesPitch"),
+      salesPitch: t("tone.salesPitch"),
+    },
+    verbosity: {
+      concise: t("verbosity.concise"), standard: t("verbosity.standard"),
+      text_heavy: t("verbosity.textHeavy"), textHeavy: t("verbosity.textHeavy"),
+    },
+    mode: { authored: "AI 저작", adaptive: "자동 구성", template: "템플릿" },
+  });
   const isUser = message.role === "user";
   const isInitialGenerationRequest = settings.length > 0;
+  const assistantHtml = !isUser ? renderMarkdown(message.content) : "";
   return (
     <article
-      className={`max-w-[92%] rounded-2xl border px-4 py-3 text-sm shadow-sm ${
-        isUser
-          ? "ml-auto border-blue-200 bg-blue-50"
-          : "mr-auto border-slate-200 bg-white"
-      }`}
+      data-workspace-anchor-id={message.id}
+      className="w-full"
       aria-label={
         isInitialGenerationRequest
           ? "초기 생성 요청"
@@ -121,14 +151,15 @@ export function WorkspaceMessage({
             : "도우미 메시지"
       }
     >
-      {isInitialGenerationRequest && (
-        <p className="mb-1 text-xs font-semibold text-blue-700">
-          초기 생성 요청 · 실제 생성에는 아래 설정이 적용됩니다.
-        </p>
+      <ConversationMessageFrame appearance={isUser ? "user" : "assistant"}>
+      {isUser ? (
+        <p className="whitespace-pre-wrap break-words">{message.content || (message.attachments.length > 0 ? "첨부 파일로 시작한 요청입니다" : "")}</p>
+      ) : (
+        <div
+          className={conversationAssistantMarkdownClassName}
+          dangerouslySetInnerHTML={{ __html: assistantHtml }}
+        />
       )}
-      <p className="whitespace-pre-wrap break-words text-slate-900">
-        {message.content}
-      </p>
       {message.attachments.length > 0 && (
         <ul className="mt-3 space-y-2" aria-label="첨부 파일">
           {message.attachments.map((attachment) => {
@@ -145,19 +176,18 @@ export function WorkspaceMessage({
             return (
               <li
                 key={attachment.id}
-                className="rounded-lg bg-white/80 px-2.5 py-2"
+                className={`${conversationAttachmentClassName(isUser ? "user" : "assistant")} !block`}
                 data-testid={`attachment-${attachment.id}`}
               >
                 <div className="flex items-start justify-between gap-3">
+                  <FileText className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
                   <div className="min-w-0">
                     <p className="truncate font-medium text-slate-700">
                       {attachment.name}
                     </p>
-                    {(attachment.mimeType || size) && (
+                    {size && (
                       <p className="mt-0.5 truncate text-xs text-slate-500">
-                        {[attachment.mimeType, size]
-                          .filter(Boolean)
-                          .join(" · ")}
+                        {size}
                       </p>
                     )}
                   </div>
@@ -217,9 +247,9 @@ export function WorkspaceMessage({
         </ul>
       )}
       {settings.length > 0 && (
-        <details className="mt-3 rounded-lg bg-white/70 px-2.5 py-2 text-xs text-slate-600">
+        <details className="mt-3 rounded-lg bg-slate-50 px-2.5 py-2 text-xs text-slate-600">
           <summary className="cursor-pointer font-medium text-slate-700">
-            생성 설정
+            생성 설정 · {settings.slice(0, 3).map(([key, value]) => `${key} ${value}`).join(" · ")}
           </summary>
           <dl className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1">
             {settings.map(([key, value]) => (
@@ -233,6 +263,7 @@ export function WorkspaceMessage({
           </dl>
         </details>
       )}
+      </ConversationMessageFrame>
     </article>
   );
-}
+});

@@ -65,7 +65,7 @@ describe("SlideContent mutation gate", () => {
     mountSlide(true);
 
     cy.get("#slide-0").should("have.attr", "data-mutations-enabled", "true");
-    cy.get('[data-testid="slide-add-control"]').should("exist");
+    cy.get('[data-testid="slide-add-control"]').should("not.exist");
     cy.get('[data-testid="slide-mutation-controls"]').should("exist");
   });
 });

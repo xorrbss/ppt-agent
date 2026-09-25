@@ -64,6 +64,11 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
   const authoredStyle = useSelector(
     (state: RootState) => state.pptGenUpload.authoredStyle
   );
+  const preserveSourceTemplateSelection = useSelector(
+    (state: RootState) =>
+      state.pptGenUpload.sourceContentMode &&
+      state.pptGenUpload.generationStrategy === "svg",
+  );
   const [styles, setStyles] = useState<AuthoredStyleSummary[]>([
     DEFAULT_AUTHORED_STYLE,
   ]);
@@ -82,9 +87,11 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
       })
       .catch(() => {
         if (cancelled) return;
-        dispatch(
-          setPptGenUploadState({ authoredStyle: DEFAULT_AUTHORED_STYLE.id })
-        );
+        if (!preserveSourceTemplateSelection) {
+          dispatch(
+            setPptGenUploadState({ authoredStyle: DEFAULT_AUTHORED_STYLE.id })
+          );
+        }
         setStyles([DEFAULT_AUTHORED_STYLE]);
         setLoadStatus("fallback");
       });
@@ -92,10 +99,11 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
     return () => {
       cancelled = true;
     };
-  }, [dispatch]);
+  }, [dispatch, preserveSourceTemplateSelection]);
 
   useEffect(() => {
     if (loadStatus === "loading") return;
+    if (loadStatus === "fallback" && preserveSourceTemplateSelection) return;
     const canonicalId = canonicalAuthoredStyleId(styles, authoredStyle);
     const nextId = styles.some((style) => style.id === canonicalId)
       ? canonicalId
@@ -103,7 +111,7 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
     if (nextId !== authoredStyle) {
       dispatch(setPptGenUploadState({ authoredStyle: nextId }));
     }
-  }, [authoredStyle, dispatch, loadStatus, styles]);
+  }, [authoredStyle, dispatch, loadStatus, preserveSourceTemplateSelection, styles]);
 
   const categoryCounts = useMemo(() => {
     const counts = Object.fromEntries(
