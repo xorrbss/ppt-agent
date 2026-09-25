@@ -1,25 +1,96 @@
 # C4 handoff (2026-09-26)
 
-Session `c4-runtime-export`. Commits merged into `integrate/generation-core`
-at `50896bcf9` (0 conflicts). Source commits, in order:
+Session `c4-runtime-export`. First 4 commits merged into
+`integrate/generation-core` at `50896bcf9` (0 conflicts); 6 more commits
+landed afterward while running the live check on raster-quality's V stack
+(8100) — **not yet merged, ppt-agent-fe still needs to merge
+`900b58edf..33bec3912`**. Source commits, in order:
 
 1. `305f29802` — fix(batch-remake): dispatch batch remake targets by source_format
 2. `62d737ce3` — feat(generation-core): resolve svg concurrency from a runtime profile
 3. `4d3d36ce8` — feat(svg-export): print SVG decks to a vector PDF with a real text layer
 4. `b4d74330f` — feat(svg-export): font embedding, real release-v1 gate, evidence digests
+5. `6a1b5bc43` — docs(c4): this handoff memo (first version)
+6. `9e82bf6f9` — fix(svg-export): read quality_policy from the command context too
+7. `900b58edf` — fix(lifespan): register the durable preview + raster analysis handlers (embedded worker mode)
+8. `8e5f843df` — fix(workspace-worker): route batch remake preview/publish to the generation controller (external worker mode, what V runs)
+9. `aae0c2314` — fix(export): svg font_embedding no longer requires authored's hybrid mode
+10. `33bec3912` — fix(release-v1): read the receipt's actual camelCase wire keys
 
 Full detail (numbers, measured comparisons, field contracts) is in project
 memory `c4-runtime-export-state-20260926.md`. This file is the actionable
 punch list for whoever picks up the remaining pieces.
 
-## Outstanding: live check
+## Live check: DONE, all four passed (2026-09-26, on V @ 33bec3912)
 
-Queued on raster-quality's V slot (8100), 3rd in line as of 2026-09-26. When
-it runs: svg deck export with `font_embedding=true` should contain embedded
-CJK (Pretendard) font parts in the pptx, pdf should have extractable text
-matching slide text, batch remake of 2 svg slides should succeed. If it
-surfaces a defect, fix and commit on `core/c4-20260926`, then send the hash
-back to ppt-agent-fe for re-merge — do not push directly.
+Every check was verified against a real request/response on a running
+stack, with artifacts downloaded and independently inspected (not just
+"the API said success"):
+
+- **Batch remake, 2 svg slides**: `completed: 2, total: 2`. Was stuck
+  "queued" for ~30 minutes before commits 900b58edf/8e5f843df (see below);
+  after the fix, claimed immediately on restart and finished in 75s.
+- **PDF vector text**: downloaded the artifact, extracted text with
+  `pypdfium2` independently of the worker's own evidence — real Korean and
+  English text came back from both pages.
+- **Font embedding**: downloaded the pptx, independently unzipped it and
+  confirmed `ppt/fonts/*.fntdata` parts exist with sha256 digests matching
+  the receipt, `embedTrueTypeFonts="1"` and `embeddedFontLst` are present in
+  `ppt/presentation.xml`, and `python-pptx` opens the file cleanly.
+- **release-v1**: rejected with the specific `svg_release_quality_visual_review_not_passed`
+  (not the old blanket "unsupported", and not a shape error) — correct,
+  expected behavior until c1-quality lands real advisory evidence.
+
+### Four bugs found and fixed only by running the live check (not from reading code)
+
+None of these were in the original brief; all four were found because the
+live check actually exercised the real client-facing paths instead of
+stopping at "the function I wrote has a unit test":
+
+1. **`quality_policy` unreachable from any real client** (`9e82bf6f9`) — only
+   read from `request_payload`'s top level, but the only live path for an
+   svg export (`create_workspace_command`) places request fields under
+   `request_payload["context"]`. Now reads both.
+2. **Batch preview/publish operations admitted, never dispatched** (`900b58edf`,
+   `8e5f843df`) — `api/lifespan.py` (embedded worker mode) and
+   `services/workspace_operation_worker.py`'s `external_workspace_operation_kinds`
+   + `run_external_worker` (external worker mode, what V and presumably
+   every real deployment runs) each hand-maintain their own copy of "every
+   operation kind's handler registration / routing table", and all of them
+   had independently drifted to omit `slide.regenerate.batch.preview` /
+   `slide.regenerate.batch`. `register_raster_analysis_operation_handler`
+   was also missing from the embedded list (raster-quality confirmed this
+   was unintentional and wanted it fixed too). **This is a systemic pattern,
+   not a one-off**: three separate hand-copied lists of "every handler",
+   found by diffing two of them programmatically
+   (`tests/unit/test_lifespan_handler_registration_parity.py`). If another
+   operation kind is added in the future without touching all three lists,
+   it will silently sit "queued" forever exactly like this one did. A real
+   structural fix (making `api/lifespan.py` and `run_external_worker` call
+   the one complete list function instead of hand-copying it) is out of
+   scope for this session but worth flagging to ppt-agent-fe as a
+   follow-up.
+3. **svg font_embedding blocked by an authored-only precondition** (`aae0c2314`) —
+   `WorkspaceExportOperationHandler` (the one handler for every
+   `export.pptx`/`export.pdf`, both authored and svg) validated
+   `font_embedding` against `pptx_mode == "hybrid"` *before* branching on
+   `presentation.mode`. svg has no `pptx_mode` concept at all, so this made
+   every real svg font_embedding request fail in under a second, never
+   reaching the svg-side validation this session built in `b4d74330f`.
+4. **release-v1 gate read the wrong case** (`33bec3912`) — checked
+   `visual_review`/`release_readiness` (the Pydantic model's Python field
+   names) instead of `visualReview`/`releaseReadiness` (the actual
+   `by_alias=True` wire keys both receipt builders emit). The unit tests
+   didn't catch this because the fixture was hand-typed in the same wrong
+   case as the bug. Fixed, and added a regression test that exercises the
+   real receipt builder function instead of a hand-typed dict.
+
+**Takeaway for future sessions**: a function passing its own unit tests is
+not evidence it is reachable or correct end-to-end when its inputs (a
+receipt dict, a request payload) are shaped by a different module's
+serialization choices. Where possible, build test fixtures from the real
+producer function, not a hand-typed literal that can encode the same wrong
+assumption the code under test made.
 
 ## N1 (native-objects, Phase 2): join wiring this session deliberately left out
 
