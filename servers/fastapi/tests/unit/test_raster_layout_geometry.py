@@ -74,3 +74,22 @@ def test_geometry_crops_follow_the_source_positions():
     # 270 source px apart -> 270 * scale target units apart; no frame, no gap policy.
     assert abs(float(second.get("x")) - float(first.get("x")) - 270 * scale) < 1.5
     assert first.get("y") == second.get("y")
+
+
+def test_decoration_keeps_its_place_and_every_used_crop_is_offered_once():
+    # An arrow between two columns: the page-content crop showed it, so the
+    # source arrangement shows it too (cut from the reference image).
+    arrow = fx.region(1, "arrow", "decoration", (286, 600, 16, 40))
+    icon = fx.region(1, "icon", "screenshot", (60, 520, 40, 40))  # inside group g0's box: carried by its crop
+    analysis = fx.analysis(_dense_page(arrow, icon))
+    result = render_redesign_page(analysis, 1)
+    groups = [a["groupId"] for a in result.advisories]
+    assert "region-p1-arrow" in groups
+    assert raster_page_render_advisories(analysis, 1, result.svg) == result.advisories
+    hrefs = _hrefs(result.svg)
+    assert len(hrefs) == len(set(hrefs)) and raster_slot_id(1, "p1-icon") not in hrefs
+    page = analysis.pages[0]
+    pin = SimpleNamespace(approved_region_ids=tuple(r.region_id for r in page.regions), full_page_preserve_pages=(),
+                          automatic_preserve_pages=(), automatic_redesign_pages=(1,))
+    slots = {raster_slot_id(1, r.region_id) for r in _approved_crop_regions(analysis, pin, 1, result.svg)}
+    assert slots == set(hrefs)

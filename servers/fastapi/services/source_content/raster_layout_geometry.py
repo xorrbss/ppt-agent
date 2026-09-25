@@ -163,6 +163,27 @@ def _clash(blocks, bottom) -> _Block | None:
     return None
 
 
+def _decorations(page, union, rect, texts) -> list:
+    """(fallback, placement) for decoration inside the content area, as the source shows it.
+
+    Optional pixels: a decoration that would touch editable text is left out.
+    """
+    ux, uy, uw, uh = union
+    fallbacks = region_fallbacks(page)
+    result = []
+    for region in page.regions:
+        fallback = fallbacks.get(region.region_id)
+        if region.role != "decoration" or fallback is None:
+            continue
+        b = region.bbox
+        if not (ux <= b.x + b.width / 2 <= ux + uw and uy <= b.y + b.height / 2 <= uy + uh):
+            continue
+        placed = Placed("crop", *rect(fallback.region.bbox), Item("image", fallback.region))
+        if not any(_overlap(box, text) for box in _boxes(placed) for text in texts):
+            result.append((fallback, placed))
+    return result
+
+
 def geometry_plan(page, items, box) -> GeometryPlan | None:
     """Place ``items`` in their source arrangement inside ``box`` (x, y, w, h); None if not legible.
 
@@ -202,6 +223,12 @@ def geometry_plan(page, items, box) -> GeometryPlan | None:
                            key=lambda placed: -placed.w * placed.h)
             rest = [p for block in live for p in block.placements if p.kind != "crop"]
             chosen = [block.fallback for block in live if block.pixels and block.fallback is not None]
-            return GeometryPlan([*crops, *rest], chosen, scale)
+            texts = [box for placed in rest for box in _boxes(placed)]
+            decorations = _decorations(page, (ux, uy, uw, uh), rect, texts)
+            chosen += [fallback for fallback, _ in decorations]
+            # A region a used crop carries is drawn by that crop only (its own slot is not offered).
+            carried = {member for fallback in chosen for member in fallback.member_ids}
+            crops = [placed for placed in crops if placed.item.region.region_id not in carried]
+            return GeometryPlan([*crops, *(placed for _, placed in decorations), *rest], chosen, scale)
         clash.pixels = True
     return None
