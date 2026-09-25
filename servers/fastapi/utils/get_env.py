@@ -15,6 +15,12 @@ from utils.get_env_concurrency import (
     get_authored_cluster_job_concurrency_env,
     get_authored_job_concurrency_env,
     get_public_export_scheduler_global_cap_env,
+    get_svg_author_concurrency_env,
+    get_svg_author_concurrency_source_reflow_env,
+    get_svg_illustration_budget_env,
+    get_svg_illustration_timeout_seconds_env,
+    get_svg_render_concurrency_env,
+    get_svg_render_concurrency_source_reflow_env,
     get_workspace_operation_max_concurrency_env,
 )
 

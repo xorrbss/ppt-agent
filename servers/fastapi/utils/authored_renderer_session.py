@@ -72,6 +72,23 @@ def render_admitted_htmls_over_pipe(
     )
 
 
+def print_admitted_htmls_to_pdf_over_pipe(
+    admitted_htmls: Sequence[AdmittedHtml], timeout: int, *,
+    width_px: int, height_px: int, paper_width_in: float, paper_height_in: float,
+) -> list[bytes]:
+    """Worker-only vector PDF batch: same pipe and isolation, printToPDF capture."""
+
+    from utils.slide_capture_pipe_pdf import print_admitted_htmls_to_pdf_over_pipe as print_many
+
+    bindings = _pipe_bindings()
+    bindings.pop("runtime_value")
+    return print_many(
+        admitted_htmls, timeout, width_px=width_px, height_px=height_px,
+        paper_width_in=paper_width_in, paper_height_in=paper_height_in,
+        **bindings,
+    )
+
+
 class _RetainedTransport:
     """Adapter that hides ``close()`` from a single-batch render helper.
 
@@ -147,6 +164,7 @@ class RendererChromiumSession:
 
 __all__ = [
     "RendererChromiumSession",
+    "print_admitted_htmls_to_pdf_over_pipe",
     "render_admitted_html_over_pipe",
     "render_admitted_htmls_over_pipe",
 ]

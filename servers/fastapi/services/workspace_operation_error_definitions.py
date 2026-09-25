@@ -14,8 +14,8 @@ _GROUPS = (
         "batch_remake_preview_request_invalid",
         "page_remake_preview_request_invalid",
         "svg_export_source_required",
-        "svg_font_embedding_not_supported",
-        "svg_release_quality_review_not_supported",
+        "svg_font_embedding_pptx_only",
+        "svg_quality_policy_invalid",
     )),
     (409, False, "The presentation changed. Review it and try again.", (
         "authored_vnext_export_master_changed",
@@ -50,6 +50,10 @@ _GROUPS = (
         "release_quality_review_required",
         "svg_export_active_admission_required",
         "svg_export_incomplete_presentation",
+        "svg_release_quality_receipt_invalid",
+        "svg_release_quality_visual_review_not_passed",
+        "svg_release_quality_advisory_evidence_missing",
+        "svg_release_quality_not_release_ready",
     )),
     (503, False, "The operation could not finish. Try again later.", (
         "artifact_store_failed",

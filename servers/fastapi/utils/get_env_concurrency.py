@@ -61,3 +61,61 @@ def get_public_export_scheduler_global_cap_env(
         _optional_positive_int_setting("PUBLIC_EXPORT_SCHEDULER_GLOBAL_CAP", settings)
         or 4
     )
+
+
+def get_svg_author_concurrency_env(settings: RuntimeSettings | None = None) -> int | None:
+    """Explicit SVG author-call concurrency, or ``None`` for the profile default."""
+    from utils.get_env import _optional_positive_int_setting
+
+    return _optional_positive_int_setting("SVG_AUTHOR_CONCURRENCY", settings)
+
+
+def get_svg_author_concurrency_source_reflow_env(
+    settings: RuntimeSettings | None = None,
+) -> int | None:
+    """Explicit SVG author-call concurrency for source-reflow decks."""
+    from utils.get_env import _optional_positive_int_setting
+
+    return _optional_positive_int_setting(
+        "SVG_AUTHOR_CONCURRENCY_SOURCE_REFLOW", settings
+    )
+
+
+def get_svg_render_concurrency_env(settings: RuntimeSettings | None = None) -> int | None:
+    """Explicit SVG page-render concurrency, or ``None`` for the profile default."""
+    from utils.get_env import _optional_positive_int_setting
+
+    return _optional_positive_int_setting("SVG_RENDER_CONCURRENCY", settings)
+
+
+def get_svg_render_concurrency_source_reflow_env(
+    settings: RuntimeSettings | None = None,
+) -> int | None:
+    """Explicit SVG page-render concurrency for source-reflow decks."""
+    from utils.get_env import _optional_positive_int_setting
+
+    return _optional_positive_int_setting(
+        "SVG_RENDER_CONCURRENCY_SOURCE_REFLOW", settings
+    )
+
+
+def get_svg_illustration_budget_env(settings: RuntimeSettings | None = None) -> int | None:
+    """Explicit per-deck illustration budget shared by the SVG driver's asset
+    stage, or ``None`` for the profile default. Name agreed with c3-assets so
+    the illustration stage can read the same field once it moves into
+    ``generation_core/assets/``.
+    """
+    from utils.get_env import _optional_positive_int_setting
+
+    return _optional_positive_int_setting("SVG_ILLUSTRATION_BUDGET", settings)
+
+
+def get_svg_illustration_timeout_seconds_env(
+    settings: RuntimeSettings | None = None,
+) -> int | None:
+    """Explicit per-illustration timeout in seconds, or ``None`` for the default."""
+    from utils.get_env import _optional_positive_int_setting
+
+    return _optional_positive_int_setting(
+        "SVG_ILLUSTRATION_TIMEOUT_SECONDS", settings
+    )

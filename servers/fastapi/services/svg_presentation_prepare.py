@@ -186,8 +186,10 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
                       for slot in source_manifest.slots if slot.slot_id in offered} for offered in planned]
     # Provider/render workers share the job-level gate with HTML; each page owns
     # separate transactions so concurrent calls never share an AsyncSession.
-    semaphore = asyncio.Semaphore(2 if source_reflow else 3)
-    render_semaphore = asyncio.Semaphore(1 if source_reflow else 3)
+    from services.generation_core.runtime.profile import resolve_svg_runtime_profile
+    runtime_profile = resolve_svg_runtime_profile(source_reflow=source_reflow)
+    semaphore = asyncio.Semaphore(runtime_profile.author_concurrency)
+    render_semaphore = asyncio.Semaphore(runtime_profile.render_concurrency)
     return GenerationContext(
         source_reflow=source_reflow, raster_reconstruction=raster_reconstruction,
         raster_analysis=raster_analysis, raster_pin=raster_pin, source_document=source_document,
