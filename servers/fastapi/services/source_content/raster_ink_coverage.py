@@ -30,6 +30,8 @@ MIN_INK = 40
 BAND = 0.035
 LINE_ART_SPAN = 25  # half-scale cells: a stroke at least this long ...
 LINE_ART_THICKNESS = 3  # ... holding at most this many cells per unit of (width + height)
+TEXT_LINE_ASPECT = 2.5  # a cluster this many times wider than tall is a line of text, not a pictogram ...
+MAX_TEXT_DENSITY = 0.6  # ... unless its ink fills its box like a solid bar
 
 
 def _components(mask: np.ndarray) -> list[tuple[int, int, int, int, int]]:
@@ -96,8 +98,10 @@ def uncovered_ink(
         has_words = any(_hits(box, word) for word in word_boxes)
         # Few blobs is a pictogram (OCR often misreads icons as words); a short,
         # text-height mark with an OCR word on it is a character (e.g. "약"),
-        # and so is a short run of glyph-shaped blobs on one line (e.g. "82").
-        icon_like = len(blobs) < 3 and not (has_words and box[3] <= 32) and not _glyph_run(blobs)
+        # and so is a short run of glyph-shaped blobs on one line (e.g. "82")
+        # or a wide, short cluster (small text whose glyphs touch, e.g. "09 / 15").
+        line_shaped = box[2] >= TEXT_LINE_ASPECT * box[3] and _ink_density(cluster_ink) <= MAX_TEXT_DENSITY
+        icon_like = len(blobs) < 3 and not (has_words and box[3] <= 32) and not _glyph_run(blobs) and not line_shaped
         if icon_like and not has_words and (box[1] + box[3] <= top or box[1] >= bottom):
             continue  # template header/footer decoration without text
         if icon_like and (cluster_ink & (covered | covered_by_decoration)[y0:y1, x0:x1]).sum() >= 0.5 * pixels:
@@ -155,6 +159,14 @@ def _without_line_art(mask: np.ndarray) -> tuple[np.ndarray, list[tuple[int, int
         elif len(points) >= 6:
             blobs.append((int(x0), int(y0), int(x1), int(y1), len(points)))
     return kept, blobs
+
+
+def _ink_density(mask: np.ndarray) -> float:
+    """Ink share of the mask's tight bounding box."""
+    rows, columns = np.nonzero(mask.any(axis=1))[0], np.nonzero(mask.any(axis=0))[0]
+    if not len(rows):
+        return 0.0
+    return float(mask.sum()) / ((rows[-1] - rows[0] + 1) * (columns[-1] - columns[0] + 1))
 
 
 def _glyph_run(blobs) -> bool:

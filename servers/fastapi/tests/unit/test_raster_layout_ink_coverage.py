@@ -59,3 +59,16 @@ def test_faint_card_outline_around_covered_text_is_not_ink():
     draw.rounded_rectangle((100, 200, 700, 520), radius=14, outline=(150, 190, 235), width=2)
     _text(image, (140, 260), "covered card text", 28, (20, 40, 80))
     assert uncovered_ink(image, [(130, 250, 320, 50)], [], []) == []
+
+
+def test_solid_colour_bar_is_not_a_text_line():
+    image = _dark_page()
+    ImageDraw.Draw(image).rectangle((86, 300, 664, 308), fill=(230, 57, 70))  # a card's accent bar
+    assert uncovered_ink(image, [], [], []) == []
+
+
+def test_small_text_with_touching_glyphs_in_the_footer_band_is_kept():
+    image = _dark_page()
+    _text(image, (1784, 1062), "09 / 15", 12, FAINT)
+    found = uncovered_ink(image, [], [], [])
+    assert len(found) == 1 and found[0][1] >= 1050
