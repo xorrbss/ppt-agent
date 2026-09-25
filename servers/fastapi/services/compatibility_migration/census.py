@@ -15,7 +15,7 @@ from services.presentation_profiles import (
     PresentationProfileError,
     resolve_presentation_profile,
 )
-from templates.v2.persistence import canonicalize_slide_ui
+from templates.native_ui.persistence import canonicalize_slide_ui
 
 #: What a censused deck can be. A deck in one of the retired React-template
 #: formats is ``invalid``: its profile cannot resolve, which is exactly the

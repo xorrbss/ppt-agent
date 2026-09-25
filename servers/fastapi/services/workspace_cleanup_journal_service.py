@@ -33,9 +33,6 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
-from models.sql.template_v2 import TemplateV2
-from models.sql.template_v2_local_state import TemplateV2LocalState
-from models.sql.template_v2_revision import TemplateV2Revision
 from models.sql.workspace import (
     WorkspaceArtifact,
     WorkspaceAsset,
@@ -45,7 +42,6 @@ from models.sql.workspace import (
 )
 from services.authored_checkpoint_service import checkpoint_root
 from services.database import async_session_maker
-from services.template_v2_native_storage import native_source_root
 from services.workspace_artifact_publication_service import (
     _app_data_root,
 )
@@ -58,7 +54,6 @@ from services.workspace_cleanup_storage import (
     _CHAT_IMAGE_SUFFIXES,
     _LEGACY_GALLERY_IMAGE_ROOT_KIND,
     _SHA256_PATTERN,
-    _TEMPLATE_V2_NATIVE_ROOT_KIND,
     _WORKSPACE_ARTIFACT_ROOT_KIND,
     _WORKSPACE_ASSET_ROOT_KIND,
     _WORKSPACE_ASSET_SUFFIXES,
@@ -477,37 +472,6 @@ def authored_checkpoint_cleanup_target(
     )
 
 
-def template_v2_native_cleanup_target(
-    *,
-    template_id: str,
-    revision: int,
-    storage_key: str,
-    sha256_value: str | None,
-    size_bytes: int | None,
-    owner_id: uuid.UUID | None,
-    presentation_id: uuid.UUID | None,
-) -> WorkspaceCleanupTarget:
-    root = _canonical_storage_root(native_source_root())
-    return WorkspaceCleanupTarget(
-        identity=f"template_v2_native:{template_id}:{revision}",
-        owner_id=owner_id,
-        presentation_id=presentation_id,
-        operation_id=None,
-        storage_namespace="template_v2_native",
-        resource_kind="template_v2.native_source",
-        storage_key=storage_key,
-        sha256=sha256_value,
-        size_bytes=size_bytes,
-        source_revision=revision,
-        metadata={
-            **_storage_root_metadata(
-                root_kind=_TEMPLATE_V2_NATIVE_ROOT_KIND,
-                root=root,
-            ),
-            "template_id": template_id,
-            "revision": revision,
-        },
-    )
 
 
 def authored_image_tree_cleanup_target(
@@ -845,77 +809,6 @@ async def snapshot_account_workspace_cleanup_targets(
         for job in jobs
     )
 
-    sidecar_template_ids: set[str] = set()
-    if presentation_ids:
-        sidecar_template_ids = set(
-            (
-                await session.scalars(
-                    select(TemplateV2LocalState.template_id)
-                    .where(TemplateV2LocalState.presentation_id.in_(presentation_ids))
-                    .execution_options(skip_owner_scope=True)
-                )
-            ).all()
-        )
-    template_predicates = [TemplateV2.owner_id == owner_id]
-    if presentation_ids:
-        template_predicates.append(TemplateV2.presentation_id.in_(presentation_ids))
-    if sidecar_template_ids:
-        template_predicates.append(TemplateV2.id.in_(sidecar_template_ids))
-    templates = list(
-        (
-            await session.scalars(
-                select(TemplateV2)
-                .where(or_(*template_predicates))
-                .execution_options(skip_owner_scope=True)
-            )
-        ).all()
-    )
-    template_ids = {row.id for row in templates}
-    revisions = (
-        list(
-            (
-                await session.scalars(
-                    select(TemplateV2Revision)
-                    .where(TemplateV2Revision.template_id.in_(template_ids))
-                    .execution_options(skip_owner_scope=True)
-                )
-            ).all()
-        )
-        if template_ids
-        else []
-    )
-    presentation_by_template = {
-        row.id: row.presentation_id for row in templates
-    }
-    targets.extend(
-        target
-        for template in templates
-        if (
-            target := _template_native_target_from_assets(
-                template_id=template.id,
-                revision=template.revision,
-                assets=template.assets,
-                owner_id=owner_id,
-                presentation_id=template.presentation_id,
-            )
-        )
-        is not None
-    )
-    targets.extend(
-        target
-        for revision in revisions
-        if (
-            target := _template_native_target_from_assets(
-                template_id=revision.template_id,
-                revision=revision.revision,
-                assets=revision.assets,
-                owner_id=owner_id,
-                presentation_id=presentation_by_template.get(revision.template_id),
-            )
-        )
-        is not None
-    )
-
     for presentation in presentations:
         if not isinstance(presentation.file_paths, list):
             continue
@@ -1051,64 +944,6 @@ async def snapshot_presentation_workspace_cleanup_targets(
         for job in jobs
     )
 
-    canonical_templates = list(
-        (
-            await session.scalars(
-                select(TemplateV2)
-                .where(TemplateV2.presentation_id == presentation_id)
-                .with_for_update()
-                .execution_options(skip_owner_scope=True)
-            )
-        ).all()
-    )
-    template_ids = {template.id for template in canonical_templates}
-    revisions = (
-        list(
-            (
-                await session.scalars(
-                    select(TemplateV2Revision)
-                    .where(TemplateV2Revision.template_id.in_(template_ids))
-                    .execution_options(skip_owner_scope=True)
-                )
-            ).all()
-        )
-        if template_ids
-        else []
-    )
-    targets.extend(
-        target
-        for template in canonical_templates
-        if (
-            target := _template_native_target_from_assets(
-                template_id=template.id,
-                revision=template.revision,
-                assets=template.assets,
-                owner_id=template.owner_id,
-                presentation_id=presentation_id,
-            )
-        )
-        is not None
-    )
-    template_by_id = {template.id: template for template in canonical_templates}
-    targets.extend(
-        target
-        for revision in revisions
-        if (
-            template := template_by_id.get(revision.template_id)
-        )
-        is not None
-        if (
-            target := _template_native_target_from_assets(
-                template_id=revision.template_id,
-                revision=revision.revision,
-                assets=revision.assets,
-                owner_id=template.owner_id,
-                presentation_id=presentation_id,
-            )
-        )
-        is not None
-    )
-
     if isinstance(presentation.file_paths, list):
         for file_path in presentation.file_paths:
             normalized = _normalized_absolute_path(file_path)
@@ -1128,45 +963,6 @@ def _normalized_absolute_path(value: Any) -> str | None:
     if not isinstance(value, str) or not value or not Path(value).is_absolute():
         return None
     return os.path.normcase(os.path.normpath(os.path.abspath(value)))
-
-
-def _template_native_target_from_assets(
-    *,
-    template_id: str,
-    revision: int,
-    assets: Any,
-    owner_id: uuid.UUID | None,
-    presentation_id: uuid.UUID | None,
-) -> WorkspaceCleanupTarget | None:
-    if not isinstance(assets, dict):
-        return None
-    native = assets.get("native_pptx")
-    if not isinstance(native, dict):
-        return None
-    storage_key = native.get("storage_key")
-    if not isinstance(storage_key, str) or not storage_key:
-        return None
-    digest = native.get("source_sha256")
-    size_bytes = native.get("source_size_bytes")
-    return template_v2_native_cleanup_target(
-        template_id=template_id,
-        revision=revision,
-        storage_key=storage_key,
-        sha256_value=(
-            digest
-            if isinstance(digest, str) and _SHA256_PATTERN.fullmatch(digest)
-            else None
-        ),
-        size_bytes=(
-            size_bytes
-            if isinstance(size_bytes, int)
-            and not isinstance(size_bytes, bool)
-            and size_bytes >= 0
-            else None
-        ),
-        owner_id=owner_id,
-        presentation_id=presentation_id,
-    )
 
 
 def _eligible_cleanup(now: datetime):
@@ -1598,7 +1394,6 @@ __all__ = [
     "start_workspace_cleanup_maintenance",
     "stop_workspace_cleanup_maintenance",
     "sweep_workspace_cleanup_journal",
-    "template_v2_native_cleanup_target",
     "workspace_artifact_cleanup_target",
     "workspace_asset_cleanup_target",
     "workspace_asset_file_cleanup_target",

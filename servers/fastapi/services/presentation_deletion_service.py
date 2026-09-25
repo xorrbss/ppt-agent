@@ -17,8 +17,6 @@ from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sql.presentation_version import PresentationVersionModel
 from models.sql.slide import SlideModel
 from models.sql.template import TemplateModel
-from models.sql.template_v2 import TemplateV2
-from models.sql.template_v2_local_state import TemplateV2LocalState
 from models.sql.workspace import (
     WorkspaceArtifact,
     WorkspaceAsset,
@@ -75,40 +73,10 @@ def is_retryable_sqlite_lock(
 
 
 class PresentationDeletionService:
-    """Delete presentation-owned resources explicitly in one transaction.
-
-    The local-state sidecar is the authoritative ownership graph. During the
-    transitional period, the duplicate ``template_v2.presentation_id`` value
-    must agree exactly with that graph. A mismatch fails closed so corruption
-    cannot be hidden by a broad cascade.
-    """
+    """Delete presentation-owned resources explicitly in one transaction."""
 
     def __init__(self, sql_session: AsyncSession):
         self._sql_session = sql_session
-
-    async def _locked_template_ids(
-        self,
-        presentation_id: uuid.UUID,
-    ) -> set[str]:
-        canonical_ids = set(
-            await self._sql_session.scalars(
-                select(TemplateV2.id)
-                .where(TemplateV2.presentation_id == presentation_id)
-                .with_for_update()
-                .execution_options(skip_owner_scope=True)
-            )
-        )
-        sidecar_ids = set(
-            await self._sql_session.scalars(
-                select(TemplateV2LocalState.template_id)
-                .where(TemplateV2LocalState.presentation_id == presentation_id)
-                .with_for_update()
-                .execution_options(skip_owner_scope=True)
-            )
-        )
-        if canonical_ids != sidecar_ids:
-            raise PresentationDeleteConflictError(presentation_id)
-        return canonical_ids
 
     async def tombstone(
         self,
@@ -129,7 +97,6 @@ class PresentationDeletionService:
                 return 0
             raise PresentationDeleteConflictError(presentation_id)
 
-        template_ids = await self._locked_template_ids(presentation_id)
         cleanup_targets = await snapshot_presentation_workspace_cleanup_targets(
             self._sql_session,
             presentation=presentation,
@@ -206,12 +173,6 @@ class PresentationDeletionService:
             .where(TemplateModel.id == presentation_id)
             .execution_options(skip_owner_scope=True)
         )
-        if template_ids:
-            await self._sql_session.execute(
-                delete(TemplateV2)
-                .where(TemplateV2.id.in_(template_ids))
-                .execution_options(skip_owner_scope=True)
-            )
 
         deleted_at = get_current_utc_datetime()
         presentation.content = ""
@@ -242,13 +203,6 @@ class PresentationDeletionService:
     async def delete(self, presentation: PresentationModel) -> None:
         presentation_id = presentation.id
         try:
-            canonical_ids = await self._locked_template_ids(presentation_id)
-
-            if canonical_ids:
-                await self._sql_session.execute(
-                    delete(TemplateV2).where(TemplateV2.id.in_(canonical_ids))
-                )
-                await self._sql_session.flush()
             await self._sql_session.delete(presentation)
             await self._sql_session.commit()
         except IntegrityError as error:

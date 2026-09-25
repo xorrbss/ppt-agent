@@ -49,15 +49,6 @@ from api.v1.ppt.endpoints.authored_vnext.semantic import (
 )
 from api.v1.ppt.endpoints.workspace import WORKSPACE_ROUTER
 from api.v1.ppt.endpoints.conversations import CONVERSATION_ROUTER
-from api.v1.ppt.endpoints.structured_templates import (
-    STRUCTURED_TEMPLATES_ROUTER,
-)
-from api.v1.ppt.endpoints.structured_template_imports import (
-    STRUCTURED_TEMPLATE_IMPORTS_ROUTER,
-)
-from api.v1.ppt.endpoints.template_v2_compat import (
-    TEMPLATE_V2_COMPAT_ROUTER,
-)
 from api.v1.ppt.endpoints.compatibility_migration import (
     COMPATIBILITY_MIGRATION_ROUTER,
 )
@@ -133,15 +124,6 @@ PPT_FEATURE_MODULES = (
     ),
     FeatureModule("workspace", WORKSPACE_ROUTER, frozenset({"ppt-api", "workspace"})),
     FeatureModule("conversations", CONVERSATION_ROUTER, frozenset({"ppt-api", "workspace"})),
-    FeatureModule(
-        "structured-template-imports",
-        STRUCTURED_TEMPLATE_IMPORTS_ROUTER,
-        frozenset({"ppt-api", "templates"}),
-    ),
-    FeatureModule("structured-templates", STRUCTURED_TEMPLATES_ROUTER, frozenset({"ppt-api", "templates"})),
-    FeatureModule(
-        "template-v2-compat", TEMPLATE_V2_COMPAT_ROUTER, frozenset({"ppt-api", "templates"})
-    ),
     FeatureModule(
         "compatibility-migration",
         COMPATIBILITY_MIGRATION_ROUTER,

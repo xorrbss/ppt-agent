@@ -9,7 +9,6 @@ presentation without changing the existing tool names or storage contracts.
 from __future__ import annotations
 
 import copy
-import json
 import logging
 import os
 import re
@@ -26,17 +25,11 @@ from constants.presentation import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
-from models.sql.template_v2 import TemplateV2
-from models.sql.template_v2_local_state import TemplateV2LocalState
 from services.chat.pending_slides import reconcile_pending_slides
 from services.documents_loader import DocumentsLoader
 from services.mem0_presentation_memory_service import MEM0_PRESENTATION_MEMORY_SERVICE
 from services.references import ReferenceProviderError, admit_reference_snapshots
 from services.temp_file_service import TEMP_FILE_SERVICE
-from templates.v2.catalog import (
-    get_template_v2_catalog_entry,
-    is_template_v2_default_release,
-)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -44,7 +37,6 @@ BLANK_SLIDE_LAYOUT_ID = "__blank_slide__"
 DEFAULT_SOURCE_DOCUMENT_CHARS = 12_000
 MIN_SOURCE_DOCUMENT_CHARS = 1_000
 MAX_SOURCE_DOCUMENT_CHARS = 30_000
-MAX_BLOCK_CONTENT_CHARS = 75_000
 
 
 class PresentationContextStore(Protocol):
@@ -259,7 +251,6 @@ class OutlineTemplateContext:
             return self._not_found()
         outline = self._outline_slides(presentation.outlines)
         layouts = await self._memory.get_available_layouts()
-        templates = await self._template_records(presentation)
         return {
             "found": True,
             "presentation_id": str(presentation.id),
@@ -268,87 +259,7 @@ class OutlineTemplateContext:
             "version": presentation.version,
             "outline": self._outline_response(outline),
             "layouts": layouts,
-            "template_v2": [
-                {
-                    "id": record.id,
-                    "name": record.name,
-                    "description": record.description,
-                    "revision": record.revision,
-                }
-                for record in templates
-            ],
         }
-
-    async def get_available_blocks(
-        self,
-        *,
-        query: str | None = None,
-        layout_id: str | None = None,
-        element_type: str | None = None,
-        block_id: str | None = None,
-        include_full_content: bool = False,
-        max_results: int = 30,
-    ) -> dict[str, Any]:
-        """Return components only from templates associated with this presentation."""
-        presentation = await self._presentation()
-        if presentation is None:
-            return self._not_found()
-        query_lower = (query or "").strip().lower()
-        block_filter = (block_id or "").strip()
-        layout_filter = (layout_id or "").strip()
-        type_filter = (element_type or "").strip().lower()
-        try:
-            limit = max(1, min(int(max_results), 100))
-        except (TypeError, ValueError):
-            limit = 30
-        blocks: list[dict[str, Any]] = []
-        for template in await self._template_records(presentation):
-            for candidate in self._template_components(template):
-                component = candidate["component"]
-                component_id = str(component.get("id") or "")
-                candidate_layout_id = str(candidate.get("layout_id") or "")
-                types = self._element_types(component)
-                haystack = " ".join(
-                    (
-                        component_id,
-                        str(component.get("name") or ""),
-                        str(component.get("description") or ""),
-                        " ".join(types),
-                    )
-                ).lower()
-                if block_filter and component_id != block_filter:
-                    continue
-                if layout_filter and candidate_layout_id != layout_filter:
-                    continue
-                if type_filter and type_filter not in types:
-                    continue
-                if query_lower and query_lower not in haystack:
-                    continue
-                item: dict[str, Any] = {
-                    "id": component_id,
-                    "name": component.get("name"),
-                    "description": component.get("description"),
-                    "template_id": template.id,
-                    "layout_id": candidate_layout_id or None,
-                    "element_types": types,
-                }
-                if include_full_content:
-                    full_component = copy.deepcopy(component)
-                    try:
-                        is_too_large = (
-                            len(json.dumps(full_component, ensure_ascii=False, default=str))
-                            > MAX_BLOCK_CONTENT_CHARS
-                        )
-                    except (TypeError, ValueError):
-                        is_too_large = True
-                    if is_too_large:
-                        item["content_omitted"] = True
-                    else:
-                        item["component"] = full_component
-                blocks.append(item)
-                if len(blocks) >= limit:
-                    return {"found": True, "blocks": blocks, "truncated": True}
-        return {"found": True, "blocks": blocks, "truncated": False}
 
     async def read_source_documents(
         self, *, query: str | None = None, max_chars: int = DEFAULT_SOURCE_DOCUMENT_CHARS
@@ -524,65 +435,6 @@ class OutlineTemplateContext:
                 exc_info=True,
             )
 
-    async def _template_records(self, presentation: PresentationModel) -> list[TemplateV2]:
-        result = await self._sql_session.scalars(
-            select(TemplateV2)
-            .join(
-                TemplateV2LocalState,
-                TemplateV2LocalState.template_id == TemplateV2.id,
-            )
-            .where(TemplateV2LocalState.presentation_id == presentation.id)
-            .order_by(TemplateV2.updated_at.desc())
-        )
-        records = list(result)
-        records = [record for record in records if self._is_template_scoped(record)]
-        if records:
-            return records
-
-        # Transitional rows can still carry presentation_id until their sidecar is
-        # backfilled.  Do not list arbitrary default templates as a fallback.
-        legacy = await self._sql_session.scalars(
-            select(TemplateV2)
-            .where(TemplateV2.presentation_id == presentation.id)
-            .order_by(TemplateV2.updated_at.desc())
-        )
-        return [record for record in legacy if self._is_template_scoped(record)]
-
-    @staticmethod
-    def _template_components(template: TemplateV2) -> list[dict[str, Any]]:
-        candidates: list[dict[str, Any]] = []
-        payloads = (template.components, template.merged_components, template.layouts, template.raw_layouts)
-        seen: set[tuple[str, str]] = set()
-        for payload in payloads:
-            for component, layout_id in _walk_components(payload):
-                component_id = str(component.get("id") or "")
-                if not component_id:
-                    continue
-                key = (component_id, layout_id or "")
-                if key in seen:
-                    continue
-                seen.add(key)
-                candidates.append({"component": component, "layout_id": layout_id})
-        return candidates
-
-    @staticmethod
-    def _element_types(component: dict[str, Any]) -> list[str]:
-        types: set[str] = set()
-
-        def visit(value: Any) -> None:
-            if isinstance(value, dict):
-                element_type = value.get("type")
-                if isinstance(element_type, str):
-                    types.add(element_type.lower())
-                for child_key in ("elements", "children", "child"):
-                    visit(value.get(child_key))
-            elif isinstance(value, list):
-                for child in value:
-                    visit(child)
-
-        visit(component.get("elements"))
-        return sorted(types)
-
     @staticmethod
     def _outline_slides(value: Any) -> list[str]:
         if not isinstance(value, dict) or not isinstance(value.get("slides"), list):
@@ -659,38 +511,5 @@ class OutlineTemplateContext:
         return getattr(value, "owner_id", None) == get_current_owner_id()
 
     @staticmethod
-    def _is_template_scoped(template: TemplateV2) -> bool:
-        if (
-            get_template_v2_catalog_entry(template.id) is not None
-            or (template.owner_id is None and template.is_default)
-        ):
-            return is_template_v2_default_release(template.id, template.assets)
-        if get_current_owner_is_admin():
-            return True
-        return template.owner_id == get_current_owner_id()
-
-    @staticmethod
     def _not_found() -> dict[str, Any]:
         return {"found": False, "error": "presentation_not_found"}
-
-
-def _walk_components(payload: Any, layout_id: str | None = None):
-    """Yield component dictionaries from known Template V2 JSON shapes only."""
-    if isinstance(payload, list):
-        for item in payload:
-            yield from _walk_components(item, layout_id)
-        return
-    if not isinstance(payload, dict):
-        return
-    current_layout_id = payload.get("id") if isinstance(payload.get("id"), str) and isinstance(payload.get("components"), list) else layout_id
-    components = payload.get("components")
-    if isinstance(components, list):
-        for component in components:
-            if isinstance(component, dict):
-                yield component, current_layout_id
-    # These wrappers are the schema's reusable-container fields.  Deliberately do
-    # not recurse through arbitrary element ``children``: a child is not a block.
-    for key in ("layouts", "raw_layouts", "merged_components"):
-        nested = payload.get(key)
-        if nested is not None:
-            yield from _walk_components(nested, current_layout_id)

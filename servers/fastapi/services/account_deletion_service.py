@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from sqlalchemy import delete, func, inspect, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.sql.presentation import PresentationModel
 from models.sql.account_deletion_request import AccountDeletionRequest
 from models.sql.authored_vnext_repository import AuthoredVNextExportJob
 from models.sql.public_artifact import (
@@ -16,8 +15,6 @@ from models.sql.public_artifact import (
     PublicExportIdentity,
     PublicSlideCheckpoint,
 )
-from models.sql.template_v2 import TemplateV2
-from models.sql.template_v2_local_state import TemplateV2LocalState
 from models.sql.user import User
 from utils.datetime_utils import get_current_utc_datetime
 
@@ -195,78 +192,6 @@ async def lock_account_deletion_marker(
             "account deletion generation changed during finalization"
         )
     return user
-
-
-async def delete_account_restricted_dependents(
-    session: AsyncSession,
-    *,
-    owner_id: uuid.UUID,
-) -> int:
-    """Delete presentation children that intentionally block parent cascades.
-
-    Template V2 canonical and local-state rows use ``ON DELETE RESTRICT`` for
-    presentation ownership, so deleting the account cannot rely only on the
-    user's FK cascades.  Locking the presentation rows also serializes a
-    concurrent template insert on PostgreSQL; SQLite already holds its writer
-    reservation after the cleanup-journal snapshot.  A divergent canonical /
-    sidecar graph fails closed instead of deleting an ambiguously owned row.
-
-    The caller must snapshot external cleanup targets before invoking this
-    helper and owns the surrounding transaction and commit.
-    """
-
-    presentation_ids = set(
-        (
-            await session.scalars(
-                select(PresentationModel.id)
-                .where(PresentationModel.owner_id == owner_id)
-                .with_for_update()
-                .execution_options(skip_owner_scope=True)
-            )
-        ).all()
-    )
-    if not presentation_ids:
-        return 0
-
-    canonical_graph = set(
-        (
-            await session.execute(
-                select(TemplateV2.id, TemplateV2.presentation_id)
-                .where(TemplateV2.presentation_id.in_(presentation_ids))
-                .with_for_update()
-                .execution_options(skip_owner_scope=True)
-            )
-        ).all()
-    )
-    sidecar_graph = set(
-        (
-            await session.execute(
-                select(
-                    TemplateV2LocalState.template_id,
-                    TemplateV2LocalState.presentation_id,
-                )
-                .where(
-                    TemplateV2LocalState.presentation_id.in_(presentation_ids)
-                )
-                .with_for_update()
-                .execution_options(skip_owner_scope=True)
-            )
-        ).all()
-    )
-    if canonical_graph != sidecar_graph:
-        raise AccountDeletionFenceConflict(
-            "account deletion found a divergent Template V2 ownership graph"
-        )
-
-    template_ids = {template_id for template_id, _ in canonical_graph}
-    if template_ids:
-        await session.execute(
-            delete(TemplateV2)
-            .where(TemplateV2.id.in_(template_ids))
-            .execution_options(skip_owner_scope=True)
-        )
-        await session.flush()
-    return len(template_ids)
 
 
 async def cancel_authored_vnext_exports_for_account(
@@ -456,7 +381,6 @@ __all__ = [
     "AccountDeletionMarker",
     "AccountNotFoundError",
     "ProtectedAccountError",
-    "delete_account_restricted_dependents",
     "cancel_authored_vnext_exports_for_account",
     "lock_account_deletion_marker",
     "mark_account_deleting",

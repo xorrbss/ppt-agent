@@ -33,8 +33,6 @@ from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.presentation_version import PresentationVersionModel
 from models.sql.slide import SlideModel
-from models.sql.template_v2 import TemplateV2
-from models.sql.template_v2_local_state import TemplateV2LocalState
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceActionReceipt,
@@ -58,8 +56,7 @@ from services.workspace_operation_handler_registry import (
     WorkspaceOperationClaim,
     WorkspaceOperationCancelled,
 )
-from templates.v2.constants import TEMPLATE_V2_VERSION
-from templates.v2.models.layouts import SlideLayout
+from templates.native_ui.models.layouts import SlideLayout
 
 
 TABLES = [
@@ -68,8 +65,6 @@ TABLES = [
     PresentationModel.__table__,
     SlideModel.__table__,
     PresentationVersionModel.__table__,
-    TemplateV2.__table__,
-    TemplateV2LocalState.__table__,
     ChatHistoryMessageModel.__table__,
     WorkspaceConversation.__table__,
     WorkspaceMessage.__table__,
@@ -214,24 +209,11 @@ async def _seed(
             language="en",
             title="Turn replay fixture",
             layout={"name": "native-v2", "slides": []},
-            version=TEMPLATE_V2_VERSION,
+            version="v2-standard",
             revision=presentation_revision,
         )
         session.add(presentation)
         await session.flush()
-        session.add(
-            TemplateV2(
-                id=TEMPLATE_ID,
-                presentation_id=presentation.id,
-                name="Turn replay fixture",
-                layouts={"layouts": [layout]},
-            )
-        )
-        session.add(
-            TemplateV2LocalState(
-                template_id=TEMPLATE_ID, presentation_id=presentation.id
-            )
-        )
         for index, title in enumerate(slide_titles):
             slide_ui = copy.deepcopy(layout)
             slide_ui["components"][0]["elements"][0]["runs"][0]["text"] = title

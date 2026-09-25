@@ -64,7 +64,7 @@ from services.authored_vnext.integration.sql_repository import (
 )
 from services.authored_vnext.master.service import AuthoredVNextMasterService
 from services.authored_vnext.master.catalog_seed import catalog_seed_contracts
-from templates.v2.pptx.package_reader import PptxPackageReader, UnsafePptxPackage
+from templates.pptx_safety.package_reader import PptxPackageReader, UnsafePptxPackage
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
 
@@ -96,7 +96,7 @@ SECURITY_SOURCE_FILES = (
     "servers/fastapi/services/artifact_store.py",
     "servers/fastapi/workers/public_worker_runtime.py",
     "servers/fastapi/workers/public_render_worker.py",
-    "servers/fastapi/templates/v2/pptx/package_reader.py",
+    "servers/fastapi/templates/pptx_safety/package_reader.py",
     "servers/fastapi/api/v1/ppt/endpoints/authored_vnext/export/router.py",
     "scripts/public-service-release-gate.mjs",
     *RENDERER_SECURITY_PRODUCER_FILES,

@@ -18,9 +18,7 @@ from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sql.slide import SlideModel
 from models.sql.template import TemplateModel
 from models.sql.template_create_info import TemplateCreateInfoModel
-from models.sql.template_v2 import TemplateV2
 from models.sql.webhook_subscription import WebhookSubscription
-from templates.v2.catalog import list_template_v2_catalog_entries
 from services.database import async_session_maker
 from api.v1.auth.config import (
     get_legacy_admin_credentials,
@@ -163,21 +161,6 @@ async def _backfill_legacy_ownership(session, admin: User) -> None:
             .where(model.owner_id.is_(None))
             .values(owner_id=admin.id)
         )
-    # Built-in templates intentionally remain shared; only custom templates
-    # migrate into the bootstrap admin's private workspace.
-    catalog_template_ids = tuple(
-        entry.id
-        for entry in list_template_v2_catalog_entries(include_unpublished=True)
-    )
-    await session.execute(
-        update(TemplateV2)
-        .where(
-            TemplateV2.owner_id.is_(None),
-            TemplateV2.is_default.is_(False),
-            TemplateV2.id.not_in(catalog_template_ids),
-        )
-        .values(owner_id=admin.id)
-    )
     await session.execute(
         update(KeyValueSqlModel)
         .where(KeyValueSqlModel.key == "presentation_custom_themes")

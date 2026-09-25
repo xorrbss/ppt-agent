@@ -12,7 +12,7 @@ import uuid
 
 import sqlalchemy as sa
 
-from templates.v2.models.elements import ChartType, DataLabelPosition
+from templates.native_ui.models.elements import ChartType, DataLabelPosition
 
 
 SLIDE_UI_CHECK_CONSTRAINT = "ck_slides_native_ui_or_authored_html"
