@@ -530,6 +530,41 @@ WORKSPACE_ERROR_REGISTRY: dict[str, WorkspaceErrorDefinition] = {
             retryable=True,
             status_code=503,
         ),
+        definition(
+            "raster_authenticated_scope_required",
+            "This analysis could not be authenticated. Sign in and try again.",
+            status_code=422,
+        ),
+        definition(
+            "raster_analysis_mode_invalid",
+            "Choose a supported analysis mode.",
+            status_code=422,
+        ),
+        definition(
+            "raster_source_binding_invalid",
+            "The uploaded file no longer matches this request. Upload it again.",
+            status_code=409,
+        ),
+        definition(
+            "raster_review_scope_mismatch",
+            "This analysis belongs to a different workspace. Start a new analysis.",
+            status_code=409,
+        ),
+        definition(
+            "raster_auto_review_binding_invalid",
+            "The analysis mode changed since this review started. Start a new analysis.",
+            status_code=409,
+        ),
+        definition(
+            "raster_auto_review_modified",
+            "The analysis changed since it was last reviewed. Start a new analysis.",
+            status_code=409,
+        ),
+        definition(
+            "raster_source_digest_mismatch",
+            "The uploaded file changed during analysis. Upload it again.",
+            status_code=422,
+        ),
     )
 }
 WORKSPACE_ERROR_REGISTRY.update(OPERATION_ERROR_DEFINITIONS)
