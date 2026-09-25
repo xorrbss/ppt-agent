@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "svg.template-layout-admission",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "선택 템플릿부터 영역·변형 규칙을 정의한다. 모델 전환 조건과 서버 탐색 상한을 명시하고 실패 1·2페이지 검증 후 30페이지로 확장한다.",
+  "scope": [
+    "svg",
+    "templates",
+    "generation",
+    "verification"
+  ],
+  "invariants": [
+    "Support the selected template first with content slots, layout constraints, design tokens and allowed variations.",
+    "Use explicit unresolved-layout reasons and finite server search budgets to admit model calls.",
+    "Check template rules on every page and visually review representative dense pages and layout types.",
+    "Validate original pages 1 and 2 first, then the same A4 template path across all 30 pages."
+  ],
+  "forbidden": [
+    "Treat color and font copying alone as complete template support.",
+    "Use models to bypass invalid assets, permissions, missing fonts or unsupported templates.",
+    "Treat partial-page checks as full-document acceptance or a speed guarantee."
+  ],
+  "evidence": [
+    "docs/svg-source-preserving-landscape-design-20260922.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-22T14:01:08.0739412+00:00"
+}

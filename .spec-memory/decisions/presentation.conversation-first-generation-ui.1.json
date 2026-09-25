@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "presentation.conversation-first-generation-ui",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Keep upload setup; show generation in full-screen chat, then open PPT on the left with the same chat on the right; unify both chat layouts.",
+  "scope": [
+    "presentation",
+    "upload",
+    "workspace",
+    "ui"
+  ],
+  "invariants": [
+    "Preserve the existing upload setup before generation.",
+    "Display generation progress within a full-screen conversation.",
+    "After generation, open the PPT on the left and retain the same conversation on the right.",
+    "Use a shared conversation-oriented visual design for full-screen and right-panel chat."
+  ],
+  "forbidden": [
+    "Resetting the conversation when switching from generation to the completed PPT workspace."
+  ],
+  "evidence": [
+    "docs/conversation-first-generation-workspace-design-20260922.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-22T06:31:08.3548337+00:00"
+}

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "raster-pptx.full-page-preserve-approval",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "재구성이 맞지 않는 A4 페이지는 원본 전체 이미지를 보존할 수 있으며 페이지 선택과 가독성 확인 뒤 승인 pin으로만 출력한다.",
+  "scope": [
+    "raster-pptx",
+    "review",
+    "svg-export"
+  ],
+  "invariants": [
+    "보존 페이지의 감사 OCR 기록은 유지하되 비활성 재구성 차단 조건으로 취급한다.",
+    "출력은 승인된 원본 전체 픽셀과 singleton 이미지 표시 구조를 검증한다."
+  ],
+  "forbidden": [
+    "자동 추천만으로 전체 보존을 승인하지 않는다.",
+    "숨김이나 덮개로 원본 이미지가 보이지 않는 SVG를 수락하지 않는다."
+  ],
+  "evidence": [
+    "servers/fastapi/services/raster_source_assets.py",
+    "servers/fastapi/services/svg_export_assets.py",
+    "servers/fastapi/workers/public_svg_export_worker.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-24T04:16:54.3588785+00:00"
+}

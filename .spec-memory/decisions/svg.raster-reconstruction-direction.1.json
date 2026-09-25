@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "svg.raster-reconstruction-direction",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "이미지형 PPTX는 화면 캡처를 보존하고 바깥 제목·설명·표를 인식해 선택 템플릿의 A4 SVG로 재구성한다. 대표 3장 검증 후 전체로 확대한다.",
+  "scope": [
+    "svg-generation",
+    "raster-reconstruction",
+    "screenshot-blue"
+  ],
+  "invariants": [
+    "캡처 내부 UI와 글자는 원본 이미지로 보존하고 주변 텍스트와 디자인을 재구성한다.",
+    "인식이 불확실한 내용은 추정하여 채우지 않고 검토 대상으로 남긴다.",
+    "선택한 A4 출력 크기와 원본 페이지 크기를 분리한다.",
+    "원본 페이지 수와 순서를 유지하고 통이미지 축소 배치를 재구성 성공으로 처리하지 않는다.",
+    "대표 단일 화면·단계 흐름·효과 표를 검증한 뒤 전체 페이지에 적용한다."
+  ],
+  "forbidden": [
+    "OCR 결과를 원본에서 직접 추출한 텍스트와 동일한 증거로 취급하지 않는다."
+  ],
+  "evidence": [
+    "docs/screenshot-preserving-a4-svg-reconstruction-design-20260924.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-23T21:18:52.2532046+00:00"
+}

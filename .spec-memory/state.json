@@ -175,10 +175,26 @@
     "export.current-worker-source-identity": "decisions/export.current-worker-source-identity.1.json",
     "authored.local-fit-nested-card-containment": "decisions/authored.local-fit-nested-card-containment.1.json",
     "generation.svg-mode-shared-authored-styles": "decisions/generation.svg-mode-shared-authored-styles.2.json",
-    "generation.svg-image-asset-derivatives": "decisions/generation.svg-image-asset-derivatives.1.json"
+    "generation.svg-image-asset-derivatives": "decisions/generation.svg-image-asset-derivatives.1.json",
+    "dashboard.list-detail-payload-separation": "decisions/dashboard.list-detail-payload-separation.2.json",
+    "presentation.conversation-first-generation-ui": "decisions/presentation.conversation-first-generation-ui.2.json",
+    "presentation.conversation-workspace-contracts": "decisions/presentation.conversation-workspace-contracts.1.json",
+    "presentation.workspace-capability-refresh": "decisions/presentation.workspace-capability-refresh.1.json",
+    "svg.source-preserving-layout-contract": "decisions/svg.source-preserving-layout-contract.2.json",
+    "svg.source-preserving-publication": "decisions/svg.source-preserving-publication.1.json",
+    "svg.template-layout-admission": "decisions/svg.template-layout-admission.1.json",
+    "svg.source-layout-v2-runtime": "decisions/svg.source-layout-v2-runtime.1.json",
+    "presentation.conversation-ui-action-contracts": "decisions/presentation.conversation-ui-action-contracts.1.json",
+    "authored.screenshot-blue-purpose": "decisions/authored.screenshot-blue-purpose.1.json",
+    "authored.screenshot-blue-svg": "decisions/authored.screenshot-blue-svg.1.json",
+    "document-canvas.upload-default-a4": "decisions/document-canvas.upload-default-a4.1.json",
+    "svg.raster-reconstruction-direction": "decisions/svg.raster-reconstruction-direction.1.json",
+    "svg.raster-reconstruction-validation-order": "decisions/svg.raster-reconstruction-validation-order.1.json",
+    "raster-pptx.generic-a4-svg-template": "decisions/raster-pptx.generic-a4-svg-template.1.json",
+    "raster-pptx.full-page-preserve-approval": "decisions/raster-pptx.full-page-preserve-approval.3.json"
   },
   "readFirst": [
     "docs/composer-source-preservation-and-7px-fit-design-20260913.md"
   ],
-  "updatedAt": "2026-09-16T14:16:02.2717803+00:00"
+  "updatedAt": "2026-09-24T12:50:19.3357514+00:00"
 }

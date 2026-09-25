@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "svg.source-preserving-publication",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Source-preserving SVG publication requires exact source bindings and passed Chromium checks; export reuses verified SVG with per-page receipts.",
+  "scope": [
+    "svg",
+    "source-content",
+    "export"
+  ],
+  "invariants": [
+    "Keep source text, table cells, image occurrences and page correspondence; models propose layout only.",
+    "Bind bundled Pretendard font digests into generation checkpoints and render identity.",
+    "Source-preserving publication does not add page numbers or mutate verified SVG; reject page deletion or reorder.",
+    "PPTX export validates text and image readback; native table editability is not guaranteed."
+  ],
+  "forbidden": [
+    "Publish an unverified source-preserving page.",
+    "Silently summarize, drop source content or substitute another generation engine."
+  ],
+  "evidence": [
+    "servers/fastapi/services/svg_source_layout.py",
+    "servers/fastapi/services/svg_presentation_service.py",
+    "servers/fastapi/tests/unit/test_svg_source_layout.py",
+    "servers/fastapi/tests/unit/test_svg_source_generation_flow.py",
+    "servers/fastapi/tests/unit/test_svg_source_publication.py",
+    "servers/fastapi/tests/unit/test_svg_source_preserving_export.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-22T11:23:05.7148089+00:00"
+}

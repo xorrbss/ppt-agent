@@ -373,6 +373,11 @@ function Invoke-RestartComponents {
         $recorded = [int]$state[$component]
         if ($recorded -le 0) { throw "local stack: invalid component owner" }
         $process = Get-CimInstance Win32_Process -Filter "ProcessId=$recorded" -ErrorAction Stop
+        if ($component -eq "api" -and $null -eq $process -and $null -eq (Get-PortOwner $ApiPort)) {
+            $owned[$component] = 0
+            $creationTimes[$component] = $null
+            continue
+        }
         if ($null -eq $process -or -not [string]::Equals($process.ExecutablePath, $python, [StringComparison]::OrdinalIgnoreCase)) { throw "local stack: executable ownership mismatch" }
         $expected = if ($component -eq "api") { 'server\.py\s+--port\s+' + $ApiPort + '(?:\s|$)' } else { '-m\s+services\.workspace_operation_worker(?:\s|$)' }
         if ($process.CommandLine -notmatch $expected) { throw "local stack: command ownership mismatch" }
@@ -389,9 +394,11 @@ function Invoke-RestartComponents {
     }
     $stamp = Get-Date -Format "yyyyMMdd-HHmmss-fff"
     foreach ($component in $targets) {
-        $process = Get-CimInstance Win32_Process -Filter "ProcessId=$($owned[$component])" -ErrorAction Stop
-        if ($null -eq $process -or $process.CreationDate -ne $creationTimes[$component]) { throw "local stack: component ownership changed before restart" }
-        Stop-ProcessTree @([int]$owned[$component])
+        if ([int]$owned[$component] -gt 0) {
+            $process = Get-CimInstance Win32_Process -Filter "ProcessId=$($owned[$component])" -ErrorAction Stop
+            if ($null -eq $process -or $process.CreationDate -ne $creationTimes[$component]) { throw "local stack: component ownership changed before restart" }
+            Stop-ProcessTree @([int]$owned[$component])
+        }
         $arguments = if ($component -eq "api") { @("server.py", "--port", "$ApiPort", "--reload", "false") } else { @("-m", "services.workspace_operation_worker") }
         $restarted = Start-LoggedProcess -FilePath $python -ArgumentList $arguments -WorkingDirectory $fastApi -Environment $environments[$component] -StdoutPath (Join-Path $logs "$component-$stamp.stdout.log") -StderrPath (Join-Path $logs "$component-$stamp.stderr.log")
         $state[$component] = $restarted.Id

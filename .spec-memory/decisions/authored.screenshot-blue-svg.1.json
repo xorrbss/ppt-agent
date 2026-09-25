@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.screenshot-blue-svg",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "화면 캡처 블루는 SVG 스타일 매핑과 원본 보존 템플릿 규칙을 제공한다. A4 방향별 크기를 유지하고 원본 캡처는 이미지로 보존한다.",
+  "scope": [
+    "authored-styles",
+    "screenshot-blue",
+    "svg-generation"
+  ],
+  "invariants": [
+    "일반 SVG 스타일은 A4 가로와 세로의 고정 캔버스 크기를 따른다.",
+    "원본 보존 SVG의 기존 입력 크기와 방향 허용 조건을 유지한다.",
+    "소스 캡처 슬롯과 비율을 유지하고 화면 중심의 이미지 영역을 배정한다.",
+    "A4 최종 제품 검증 상태를 임의로 승격하지 않는다."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "servers/fastapi/authored_styles/screenshot-blue.yaml",
+    "servers/fastapi/utils/svg_template_rules.py",
+    "servers/fastapi/tests/unit/test_svg_template_rules.py",
+    "servers/fastapi/tests/unit/test_svg_source_layout.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-23T20:28:34.8071335+00:00"
+}

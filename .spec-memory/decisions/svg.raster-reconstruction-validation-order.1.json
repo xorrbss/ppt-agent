@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "key": "svg.raster-reconstruction-validation-order",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "이미지 PPTX의 A4 SVG 재구성은 전체 위험 분류, 대표 실제 출력, 보존·가독성 기준, 데이터 계약·검토 UI, 전체 적용 순으로 진행한다.",
+  "scope": [
+    "svg",
+    "source-content",
+    "raster-reconstruction"
+  ],
+  "invariants": [
+    "대표 출력 검증을 저장 구조와 검토 UI 완성보다 먼저 진행한다.",
+    "부분 파일럿 결과를 전체 페이지 제품 완료로 보고하지 않는다."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "docs/screenshot-preserving-a4-svg-reconstruction-design-20260924.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-23T21:34:58.0755712+00:00"
+}

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "raster-pptx.full-page-preserve-approval",
+  "revision": 3,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "화면 캡처 중심 이미지형 PPTX는 원본 전체 화면을 A4에 자동 보존해 생성하고 수동 페이지 검토는 고급 재구성에서만 사용한다.",
+  "scope": [
+    "raster-pptx",
+    "review",
+    "svg-export"
+  ],
+  "invariants": [
+    "자동 보존은 사람의 이미지 전용·가독성 확인을 허위로 기록하지 않는다.",
+    "원본 페이지 순서·픽셀 해시·소유자·테넌트·승인 pin을 검증한다.",
+    "기존 사용자의 수동 검토 수정은 새 자동 작업이 덮어쓰지 않는다."
+  ],
+  "forbidden": [
+    "기본 생성에서 28페이지별 확인이나 208개 내부 차단 표시를 요구하지 않는다."
+  ],
+  "evidence": [
+    "servers/fastapi/services/source_content/raster_reconstruction_store.py",
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/useUploadPageState.ts"
+  ],
+  "supersedes": "raster-pptx.full-page-preserve-approval@2",
+  "recordedAt": "2026-09-24T12:50:19.2790290+00:00"
+}

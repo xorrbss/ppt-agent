@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "presentation.workspace-capability-refresh",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Workspace capability is revalidated across browsing contexts without losing the conversation draft; only server responses grant command access.",
+  "scope": [
+    "presentation",
+    "workspace",
+    "ui"
+  ],
+  "invariants": [
+    "Focus, pageshow and visible-page return revalidate server capability.",
+    "Cross-tab capability messages invalidate local state but never directly grant command access.",
+    "Superseded or unmounted requests cannot commit capability; auth expiry and logout abort pending requests and clear authority.",
+    "Command revocation and recovery preserve the mounted conversation draft."
+  ],
+  "forbidden": [
+    "Granting command access directly from a broadcast snapshot."
+  ],
+  "evidence": [
+    "servers/nextjs/app/(presentation-generator)/presentation/workspace/useWorkspace.ts",
+    "servers/nextjs/cypress/e2e/workspaceChatFirstRoute.cy.ts"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-22T09:09:47.6765617+00:00"
+}
