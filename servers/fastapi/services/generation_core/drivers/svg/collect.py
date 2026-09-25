@@ -1,12 +1,17 @@
 """The per-deck SVG generation loop: fan out one durable page-attempt task per
 slide, drive each page's attempt ``while`` loop (author -> render, at most one
-model correction), then hand the verified pages to publication.
+model correction), then classify every page, run the deck's vision advisory and
+hand the pages to publication.
+
+A page that runs out of attempts no longer cancels the deck by itself: the
+deck's ``TerminalPolicy`` (``terminal.py``) may replace it with a fallback page
+or keep its last rendered page, flagged; only ``fail`` keeps the old outcome.
 
 ``_generate`` is the entry point moved out of
 ``services/svg_presentation_generate.py`` (P0 split, see
 ``docs/generation-core-architecture-20260925.md``). It shadows the facade's
 mutable hooks (``async_session_maker``, ``_checkpoint``, ``_read_png``,
-``_write_png``, ``_publish``) onto locals read from
+``_write_png``, ``_publish``, ``run_vision_advisory``) onto locals read from
 ``services.svg_presentation_service`` at call time and passes them down to
 ``_page``/``tracked_page``/``author.attempt_author``/``render.attempt_render``
 as plain arguments, so a test that monkeypatches an attribute on that facade
@@ -20,6 +25,8 @@ from dataclasses import dataclass
 
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.generation_core.drivers.svg import author, render
+from services.generation_core.drivers.svg import quality as deck_quality
+from services.generation_core.drivers.svg.terminal import rescue_terminal_page
 from services.svg_presentation_checkpoint import _collect_pages_or_fail, _digest, _provider_attempt_count
 from services.svg_presentation_prepare import _prepare_generation
 
@@ -71,8 +78,11 @@ async def _generate(request, presentation_id, outline, language, session, job):
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         raise
+    summary = await deck_quality.classify_pages(pages, job=job, checkpoint=checkpoint)
+    advisory = await deck_quality.deck_advisory(ctx, pages, job=job, read_png=read_png,
+                                                run_advisory=_facade.run_vision_advisory)
     return await publish(request, presentation_id, outline, language, session, job,
-                         ctx.snapshot, ctx.roles, pages)
+                         ctx.snapshot, ctx.roles, pages, quality_summary=summary, advisory=advisory)
 
 
 @dataclass
@@ -111,6 +121,8 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
             if ctx.source_reflow:
                 verify_source_receipt(saved["svg_content"], saved.get("source_preservation"),
                                      ctx.source_document, index)
+                if saved.get("terminal"):
+                    return saved, None  # a flag-only page: verbatim, flagged, not verified
                 if saved["quality"].get("passed") is not True:
                     raise ValueError("svg_source_quality_failed")
                 if saved["source_preservation"].get("rendering_verified") is not True:
@@ -143,28 +155,44 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
         if svg is None and payload.get("inflight"):
             raise AuthoredStageError(slide_index=index, stage="author",
                                     code="svg_provider_attempt_uncertain", retryable=False)
-        role = ctx.roles[index]
-        while payload.get("svg_content") is not None or _provider_attempt_count(payload) < 2:
-            if state.fatal_error is not None:
-                raise state.fatal_error
-            provider_count = _provider_attempt_count(payload)
-            svg = payload.get("svg_content")
-            ordinal = provider_count if svg is None else max(0, provider_count - 1)
-            if svg is None:
-                provider_ordinal = ordinal + len(payload.get("provider_failures", [])) + 1
-                author_result = await author.attempt_author(
-                    ctx=ctx, request=request, index=index, content=content, role=role, count=ctx.count,
-                    payload=payload, ordinal=ordinal, provider_ordinal=provider_ordinal, job=job,
-                    state=state, checkpoint=hooks.checkpoint, async_session_maker=hooks.async_session_maker)
-                if author_result.retry:
-                    continue
-                svg = author_result.svg
-            render_result = await render.attempt_render(
-                ctx=ctx, request=request, presentation_id=presentation_id, index=index, content=content,
-                payload=payload, svg=svg, ordinal=ordinal, job=job, checkpoint=hooks.checkpoint,
-                async_session_maker=hooks.async_session_maker, write_png=hooks.write_png)
-            if render_result is render.RETRY:
+        try:
+            return await _attempt_loop(ctx, request, presentation_id, index, content, payload, job,
+                                       state, hooks)
+        except AuthoredStageError as error:
+            if error is state.fatal_error:
+                raise
+            rescued = await rescue_terminal_page(ctx=ctx, request=request, index=index, content=content,
+                payload=payload, error=error, job=job, checkpoint=hooks.checkpoint,
+                write_png=hooks.write_png)
+            if rescued is None:
+                raise
+            return rescued
+
+
+async def _attempt_loop(ctx, request, presentation_id, index, content, payload, job, state, hooks):
+    """Author -> render until the page verifies, with at most one model correction."""
+    role = ctx.roles[index]
+    while payload.get("svg_content") is not None or _provider_attempt_count(payload) < 2:
+        if state.fatal_error is not None:
+            raise state.fatal_error
+        provider_count = _provider_attempt_count(payload)
+        svg = payload.get("svg_content")
+        ordinal = provider_count if svg is None else max(0, provider_count - 1)
+        if svg is None:
+            provider_ordinal = ordinal + len(payload.get("provider_failures", [])) + 1
+            author_result = await author.attempt_author(
+                ctx=ctx, request=request, index=index, content=content, role=role, count=ctx.count,
+                payload=payload, ordinal=ordinal, provider_ordinal=provider_ordinal, job=job,
+                state=state, checkpoint=hooks.checkpoint, async_session_maker=hooks.async_session_maker)
+            if author_result.retry:
                 continue
-            return render_result
-        raise AuthoredStageError(slide_index=index, stage="author",
-                                code="svg_repair_budget_exhausted", retryable=False)
+            svg = author_result.svg
+        render_result = await render.attempt_render(
+            ctx=ctx, request=request, presentation_id=presentation_id, index=index, content=content,
+            payload=payload, svg=svg, ordinal=ordinal, job=job, checkpoint=hooks.checkpoint,
+            async_session_maker=hooks.async_session_maker, write_png=hooks.write_png)
+        if render_result is render.RETRY:
+            continue
+        return render_result
+    raise AuthoredStageError(slide_index=index, stage="author",
+                            code="svg_repair_budget_exhausted", retryable=False)

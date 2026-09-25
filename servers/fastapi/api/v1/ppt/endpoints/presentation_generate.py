@@ -1141,17 +1141,16 @@ async def generate_presentation_handler(
             # requested" is decided, for the synchronous and the durable path
             # alike: this is the one successful completion of the handler.
             if request.strategy == "svg" and async_status is not None:
-                # Source SVG publication returns only after every preservation
-                # receipt and rendered page passed its enforced quality gate.
-                source_verified = bool(request._source_content_svg_reflow)
+                # The per-page verdict publication recorded, not the deck mode.
+                from services.generation_core.drivers.svg.publish import svg_completion_status
+
+                message, gate_status, pages = await svg_completion_status(sql_session, presentation_id)
                 async_status.status = "completed"
-                async_status.message = (
-                    "SVG source presentation generation completed; preservation verified"
-                    if source_verified else "SVG presentation generation completed; review required"
-                )
+                async_status.message = message
                 async_status.data = {
                     **response.model_dump(mode="json"),
-                    "quality_gate_status": "passed" if source_verified else "review_required",
+                    "quality_gate_status": gate_status,
+                    "quality_pages": pages,
                 }
                 async_status.error = None
                 sql_session.add(async_status)

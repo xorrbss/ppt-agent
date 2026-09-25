@@ -12,11 +12,23 @@ overrides set is behaviour-identical to before this module existed.
 ``illustration_budget`` / ``illustration_timeout_seconds`` are named for
 c3-assets: once the illustration stage moves into ``generation_core/assets/``
 it reads the same fields instead of its own constants.
+
+``terminal_policy`` and ``vision_advisory`` are the page-quality decisions a
+deck attempt pins (c1-quality): what the collector does with a page that ran
+out of attempts (``generation_core/quality/terminal_policy.py``), and whether
+the deck gets one contact-sheet vision advisory before publication. Raster
+reconstruction is the exact-reconstruction class for both: fail closed, and no
+advisory (its pages are pinned to an approved analysis, not composed).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from services.generation_core.quality.terminal_policy import (
+    TerminalPolicy,
+    resolve_terminal_policy,
+)
 
 from utils.get_env import (
     get_svg_author_concurrency_env,
@@ -43,9 +55,13 @@ class GenerationRuntimeProfile:
     render_concurrency: int
     illustration_budget: int
     illustration_timeout_seconds: int
+    terminal_policy: TerminalPolicy = TerminalPolicy.FAIL
+    vision_advisory: bool = False
 
 
-def resolve_svg_runtime_profile(*, source_reflow: bool) -> GenerationRuntimeProfile:
+def resolve_svg_runtime_profile(
+    *, source_reflow: bool, raster_reconstruction: bool = False
+) -> GenerationRuntimeProfile:
     """Resolve the profile ``svg_presentation_prepare`` pins per deck job."""
 
     explicit_author = (
@@ -78,6 +94,10 @@ def resolve_svg_runtime_profile(*, source_reflow: bool) -> GenerationRuntimeProf
             get_svg_illustration_timeout_seconds_env()
             or DEFAULT_ILLUSTRATION_TIMEOUT_SECONDS
         ),
+        terminal_policy=resolve_terminal_policy(
+            source_reflow=source_reflow, exact_reconstruction=raster_reconstruction
+        ),
+        vision_advisory=not raster_reconstruction,
     )
 
 

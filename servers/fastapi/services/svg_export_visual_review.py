@@ -1,0 +1,83 @@
+"""The export receipt's ``visual_review`` domain for an SVG deck.
+
+Filled from what publication recorded: the deck's contact-sheet vision
+advisory (``theme.svg.advisory``, see
+``services/generation_core/quality/advisory_record.py``) and each page's
+classification in ``svgReceipt.quality``. The public contract
+(``api.v2.contracts.VisualReviewQualityV3``) has no ``flagged`` status and
+forbids extra evidence keys, so the agreed field shape maps onto it as:
+
+* ``passed``      -- the advisory ran on exactly the pages being exported, named
+  no issue, and no page is classified for review; evidence carries
+  ``measurements.advisoryDigest``;
+* ``failed`` + ``svg_visual_review_flagged`` -- same evidence, but the advisory
+  named an issue or a page needs review (the "flagged" outcome);
+* ``failed`` + ``svg_visual_advisory_stale`` -- the advisory reviewed other
+  page bytes (a page changed after publication) or its record is corrupt;
+* ``failed`` + ``svg_visual_advisory_unavailable`` -- the advisory did not run
+  (or was skipped) for this deck.
+
+Visual review is required for an SVG release whatever happened upstream, so
+a missing advisory is ``failed``, not the contract's ``unavailable``: that
+status must be ``required: false``, and ``release_readiness`` would then read
+a deck nobody looked at as releasable.
+"""
+from __future__ import annotations
+
+from collections.abc import Iterable, Mapping
+from hashlib import sha256
+
+from services.generation_core.quality.advisory_record import (
+    ADVISORY_RECORD_SCHEMA,
+    advisory_flagged_pages,
+    advisory_ran,
+    content_digest,
+    record_matches,
+)
+
+
+def slide_page_digests(slides) -> list[str]:
+    """What the advisory record binds to: the digest of each exported SVG."""
+
+    return [sha256((slide.svg_content or "").encode()).hexdigest() for slide in slides]
+
+
+def _review_pages(slides) -> list[int]:
+    pages = []
+    for index, slide in enumerate(slides):
+        quality = ((slide.content or {}).get("svgReceipt") or {}).get("quality") or {}
+        if quality.get("verified") is not True or quality.get("passed") is not True:
+            pages.append(index)
+    return pages
+
+
+def svg_visual_review(*, slides, advisory: Mapping | None) -> dict:
+    if not advisory_ran(advisory):
+        return dict(required=True, status="failed", reasonCode="svg_visual_advisory_unavailable")
+    digests = slide_page_digests(slides)
+    if not record_matches(advisory, digests):
+        return dict(required=True, status="failed", reasonCode="svg_visual_advisory_stale")
+    vision = advisory["vision"]
+    flagged, review = advisory_flagged_pages(advisory), _review_pages(slides)
+    evidence = dict(
+        checkerVersion=str(vision.get("promptVersion") or ADVISORY_RECORD_SCHEMA),
+        inputDigest=content_digest(digests), outputDigest=content_digest(vision),
+        measurements={"advisoryDigest": advisory["digest"], "pageCount": len(digests),
+                      "advisoryFlaggedPages": len(flagged), "reviewPages": len(review),
+                      "model": str(vision.get("model") or "")},
+        thresholds={"maxAdvisoryFlaggedPages": 0, "maxReviewPages": 0})
+    if flagged or review:
+        return dict(required=True, status="failed", reasonCode="svg_visual_review_flagged",
+                    evidence=evidence)
+    return dict(required=True, status="passed", evidence=evidence)
+
+
+def release_readiness(domains: Iterable[Mapping]) -> str:
+    """``ready`` exactly when every required domain passed."""
+
+    return "ready" if all(
+        domain.get("required") is not True or domain.get("status") == "passed" for domain in domains
+    ) else "blocked"
+
+
+__all__ = ["release_readiness", "slide_page_digests", "svg_visual_review"]

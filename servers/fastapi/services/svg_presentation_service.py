@@ -11,7 +11,7 @@ Every name below stays importable from here for existing callers and tests.
 Several of them (``require_svg_creation_admission``, ``pin_svg_style``,
 ``request_canvas_contract``, ``async_session_maker``, ``owned_job``,
 ``initialize_checkpoints``, ``_checkpoint``, ``_read_png``, ``_write_png``,
-``_publish``) are also the mutable hooks that ``svg_presentation_prepare`` and
+``_publish``, ``run_vision_advisory``) are also the mutable hooks that ``svg_presentation_prepare`` and
 ``svg_presentation_generate`` read back off *this* module at call time (instead of
 importing them directly), so tests that monkeypatch an attribute here still reach
 those split-out modules -- exactly as they did before the split.
@@ -22,6 +22,7 @@ from services.authored_canvas import request_canvas_contract
 from services.authored_checkpoint_fence import owned_job
 from services.authored_checkpoint_service import initialize_checkpoints
 from services.database import async_session_maker
+from services.generation_core.quality.vision_advisory import run_vision_advisory
 from services.svg_generation_admission import require_svg_creation_admission, pin_svg_style
 from services.svg_presentation_checkpoint import (
     _checkpoint, _collect_pages_or_fail, _digest, _NUMERIC_CLAIM, _provider_attempt_count,
@@ -34,7 +35,7 @@ from services.svg_presentation_publish import _publish
 __all__ = [
     "generate_svg_presentation",
     "require_svg_creation_admission", "pin_svg_style", "request_canvas_contract",
-    "async_session_maker", "owned_job", "initialize_checkpoints",
+    "async_session_maker", "owned_job", "initialize_checkpoints", "run_vision_advisory",
     "_digest", "_NUMERIC_CLAIM", "_required_numeric_claims", "_provider_attempt_count",
     "_collect_pages_or_fail", "_checkpoint", "_write_png", "_read_png",
     "_save_source_page_pngs", "_legacy_source_image_manifest", "_generate", "_publish",

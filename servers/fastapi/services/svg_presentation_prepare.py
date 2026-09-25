@@ -49,6 +49,7 @@ class GenerationContext:
     service: object
     semaphore: "asyncio.Semaphore"
     render_semaphore: "asyncio.Semaphore"
+    runtime_profile: object = None
 
 
 async def _prepare_generation(request, presentation_id, outline, session, job) -> GenerationContext:
@@ -187,7 +188,8 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
     # Provider/render workers share the job-level gate with HTML; each page owns
     # separate transactions so concurrent calls never share an AsyncSession.
     from services.generation_core.runtime.profile import resolve_svg_runtime_profile
-    runtime_profile = resolve_svg_runtime_profile(source_reflow=source_reflow)
+    runtime_profile = resolve_svg_runtime_profile(source_reflow=source_reflow,
+                                                  raster_reconstruction=raster_reconstruction)
     semaphore = asyncio.Semaphore(runtime_profile.author_concurrency)
     render_semaphore = asyncio.Semaphore(runtime_profile.render_concurrency)
     return GenerationContext(
@@ -198,4 +200,5 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         count=count, roles=roles, manifests=manifests, planned=planned, source_manifest=source_manifest,
         source_pointer=source_pointer, asset_context=asset_context, asset_revision=asset_revision,
         service=service, semaphore=semaphore, render_semaphore=render_semaphore,
+        runtime_profile=runtime_profile,
     )

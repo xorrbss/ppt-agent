@@ -259,7 +259,6 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         prepare_workspace_export_artifact_ref,
         publish_workspace_export_artifact,
     )
-    from services.workspace_export_quality_evidence import _legacy_fidelity_public_quality_receipt
     claim = context.claim
     fmt = claim.kind.removeprefix("export.")
     if admission is None or admission.state != "active" or admission.owner_id != claim.owner_id:
@@ -353,14 +352,10 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
             operation_id=str(claim.operation_id), presentation_id=str(claim.presentation_id),
             artifact_digest=f"sha256:{ref.sha256}", source_revision=claim.expected_revision,
             scene_digest=f"sha256:{source_digest}", evaluated_at=datetime.now(timezone.utc))
-        if source_preservation and all(
-                r.get("layout_schema_version") == "svg-source-layout/v2" for r in source_preservation):
-            from services.svg_export_quality import source_svg_public_quality_receipt
-            receipt = source_svg_public_quality_receipt(slides=slides, source_preservation=source_preservation,
-                worker_metrics=result.resource_metrics, exporter_version=CONVERTER_VERSION, **receipt_args)
-        else:
-            receipt = _legacy_fidelity_public_quality_receipt(**receipt_args)
-            receipt = json.loads(json.dumps(receipt).replace("legacy_", "svg_"))
+        from services.svg_export_quality import svg_public_quality_receipt
+        receipt = svg_public_quality_receipt(slides=slides, advisory=((presentation.theme or {}).get("svg")
+            or {}).get("advisory"), source_preservation=source_preservation,
+            worker_metrics=result.resource_metrics, exporter_version=CONVERTER_VERSION, **receipt_args)
         if quality_policy == "release-v1":
             from services.svg_export_release_gate import require_release_v1_receipt
             require_release_v1_receipt(receipt)

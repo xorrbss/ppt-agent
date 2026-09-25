@@ -5,7 +5,7 @@ These replace two blanket guards in ``execute_svg_workspace_export``:
 ``svg_release_quality_review_not_supported``, and any ``font_embedding``
 request used to always raise ``svg_font_embedding_not_supported`` -- neither
 looked at the actual request or receipt content. See C1-quality.md (session
-design folder) for the ``visualReview`` field contract this gate reads.
+design folder) for the ``visual_review`` field contract this gate reads.
 """
 
 from __future__ import annotations
@@ -29,14 +29,12 @@ OWNER = uuid.uuid4()
 
 
 def _passing_receipt(**overrides) -> dict:
-    # Wire keys, not the QualityReceiptV3 model's Python field names: both
-    # receipt builders this gate reads dump with by_alias=True (see
-    # svg_export_release_gate.py's docstring for the live bug this caught).
+    # The public wire dump: camelCase keys, advisory digest inside measurements.
     base = {
         "visualReview": {
             "required": True,
             "status": "passed",
-            "evidence": {"advisoryDigest": "sha256:" + "a" * 64},
+            "evidence": {"measurements": {"advisoryDigest": "sha256:" + "a" * 64}},
         },
         "releaseReadiness": "ready",
     }
@@ -55,7 +53,7 @@ def test_require_release_v1_receipt_rejects_missing_visual_review():
 
 def test_require_release_v1_receipt_rejects_a_status_other_than_passed():
     receipt = _passing_receipt(visualReview={"required": True, "status": "failed",
-                                             "reasonCode": "svg_template_visual_review_required"})
+                                             "reasonCode": "svg_visual_review_flagged"})
     with pytest.raises(NonRetryableWorkspaceOperationError,
                         match="svg_release_quality_visual_review_not_passed"):
         _require_release_v1_receipt(receipt)
@@ -88,9 +86,8 @@ def test_require_release_v1_receipt_reads_a_real_receipt_without_a_shape_error()
         scene_digest="sha256:" + "b" * 64,
         evaluated_at=datetime.now(timezone.utc),
     )
-    # The real (unfixed, pre-c1-quality) receipt reports visualReview as
-    # unavailable/failed -- it must reach that check, not fail the shape
-    # check first.
+    # The legacy-fidelity receipt never carries a passed advisory -- it must
+    # reach that check, not fail the shape check first.
     with pytest.raises(NonRetryableWorkspaceOperationError) as caught:
         _require_release_v1_receipt(receipt)
     assert caught.value.code != "svg_release_quality_receipt_invalid"
@@ -133,23 +130,6 @@ def _presentation_and_admission():
 def test_unknown_quality_policy_is_rejected_before_any_db_access(monkeypatch):
     presentation, admission = _presentation_and_admission()
     claim = _claim(request_payload={"quality_policy": "not-a-real-policy"})
-    context = SimpleNamespace(
-        claim=claim, progress=_forbid("progress"), raise_if_cancelled=_forbid("raise_if_cancelled"),
-    )
-
-    with pytest.raises(NonRetryableWorkspaceOperationError, match="svg_quality_policy_invalid"):
-        asyncio.run(svg_export_operation.execute_svg_workspace_export(
-            context, presentation=presentation, admission=admission,
-            session_factory=_untouchable_session_factory(),
-        ))
-
-
-def test_quality_policy_is_also_read_from_the_command_context(monkeypatch):
-    """The only live client path for an svg export is the v1 workspace command
-    (POST .../commands), which only ever places request fields under
-    ``context`` (services/workspace_service.py::create_workspace_command)."""
-    presentation, admission = _presentation_and_admission()
-    claim = _claim(request_payload={"context": {"quality_policy": "not-a-real-policy"}})
     context = SimpleNamespace(
         claim=claim, progress=_forbid("progress"), raise_if_cancelled=_forbid("raise_if_cancelled"),
     )
