@@ -420,8 +420,9 @@ class DocumentsLoader:
             filename = os.path.basename(file_path)
             LOGGER.warning(
                 "[DocumentsLoader] LibreOffice conversion failed; trying native "
-                "office text extraction file=%s",
+                "office text extraction file=%s error=%s",
                 filename,
+                conversion_error,
             )
             try:
                 document = self.document_service.parse_to_markdown(file_path)
