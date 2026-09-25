@@ -15,7 +15,9 @@ from utils.llm_calls.author_slide_svg import author_slide_svg
 
 
 async def preview_svg(presentation, slides, index, request, task, session):
-    from services.authored_page_remake_service import PREVIEW_KIND, _set_task, _canonical_digest, authored_page_source_digest
+    from services.authored_page_remake_service import (
+        PREVIEW_KIND, _set_task, _canonical_digest, authored_page_source_digest,
+    )
     target = slides[index]
     from services.svg_document_mutations import read_svg_slide_assets, rebound_placement, materialize_rebound_svg
     assets = await read_svg_slide_assets(session, presentation, target)
@@ -58,10 +60,12 @@ async def preview_svg(presentation, slides, index, request, task, session):
     if assets is not None:
         placement = rebound_placement(final, assets[0], assets[1], revision=presentation.revision + 1)
         render_source = await materialize_rebound_svg(session, presentation, final, assets[0], placement, source_index)
-    render = await render_svg_with_metrics(render_source, width=canvas.width_px, height=canvas.height_px, instructions=instruction, **physical_kwargs)
+    render = await render_svg_with_metrics(render_source, width=canvas.width_px, height=canvas.height_px,
+                                           instructions=instruction, **physical_kwargs)
     image = _save_slide_pngs(presentation.id, [render.png], str(task.id))[0]
     digest = _canonical_digest({"svg": final, "image": image})
-    await _set_task(session, task, status="completed", message=f"{index + 1}페이지 SVG 미리보기가 준비되었습니다.", data={
+    ready_message = f"{index + 1}페이지 SVG 미리보기가 준비되었습니다."
+    await _set_task(session, task, status="completed", message=ready_message, data={
         "kind": PREVIEW_KIND, "phase": "preview_ready", "source_format": "svg",
         "presentation_id": str(presentation.id), "slide_id": str(target.id), "slide_index": index,
         "source_digest": baseline_digest, "candidate_digest": digest,
@@ -93,7 +97,8 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
             or data.get("source_digest") != authored_page_source_digest(target)):
         raise AuthoredPageRemakeError("svg_page_remake_source_changed", stage="publish_validation")
     svg, image = data.get("candidate_svg"), data.get("candidate_image")
-    if not isinstance(svg, str) or not isinstance(image, str) or data.get("candidate_digest") != _canonical_digest({"svg": svg, "image": image}):
+    if not isinstance(svg, str) or not isinstance(image, str) or (
+            data.get("candidate_digest") != _canonical_digest({"svg": svg, "image": image})):
         raise AuthoredPageRemakeError("svg_page_remake_candidate_invalid", stage="publish_validation")
     canvas = presentation_canvas_contract(presentation.theme)
     envelope = None
@@ -105,7 +110,8 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     from services.document_canvas import DocumentCanvasMetadata, parse_canvas_metadata
     metadata = parse_canvas_metadata(presentation_canvas_metadata(presentation.theme))
     physical_kwargs = {"physical_canvas": metadata} if isinstance(metadata, DocumentCanvasMetadata) else {}
-    rendered = await render_svg_with_metrics(render_source, width=canvas.width_px, height=canvas.height_px, instructions=data.get("instruction"), **physical_kwargs)
+    rendered = await render_svg_with_metrics(render_source, width=canvas.width_px, height=canvas.height_px,
+                                             instructions=data.get("instruction"), **physical_kwargs)
     if not image.endswith(f"-{sha256(rendered.png).hexdigest()}.png"):
         raise AuthoredPageRemakeError("svg_page_remake_capture_changed", stage="publish_validation")
     if snapshot:
@@ -131,10 +137,13 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     qualities = list(svg_meta.get("quality", []))
     if index < len(qualities):
         qualities[index] = rendered.quality
-    svg_meta.update(quality=qualities, qualityStatus="review_required")
+    from services.generation_core.quality.page_outcome import review_page_indices
+    review = review_page_indices(qualities)
+    quality_status = "review_required" if review else "passed"
+    svg_meta.update(quality=qualities, reviewPages=review, qualityStatus=quality_status)
     theme["svg"] = svg_meta
     presentation.theme = theme
     task.data = {**data, "phase": "published", "publish": {"status": "published", "rollback_available": True}}
     session.add_all([presentation, task])
     return {"status": "published", "slide_index": index, "preview_task_id": str(task.id),
-            "source_format": "svg", "quality_status": "review_required"}
+            "source_format": "svg", "quality_status": quality_status}

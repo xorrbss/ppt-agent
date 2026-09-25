@@ -34,6 +34,7 @@ from services.generation_core.quality.advisory_record import (
     content_digest,
     record_matches,
 )
+from services.generation_core.quality.page_outcome import review_page_indices
 
 
 def slide_page_digests(slides) -> list[str]:
@@ -43,12 +44,8 @@ def slide_page_digests(slides) -> list[str]:
 
 
 def _review_pages(slides) -> list[int]:
-    pages = []
-    for index, slide in enumerate(slides):
-        quality = ((slide.content or {}).get("svgReceipt") or {}).get("quality") or {}
-        if quality.get("verified") is not True or quality.get("passed") is not True:
-            pages.append(index)
-    return pages
+    return review_page_indices([((slide.content or {}).get("svgReceipt") or {}).get("quality") or {}
+                                for slide in slides])
 
 
 def svg_visual_review(*, slides, advisory: Mapping | None) -> dict:

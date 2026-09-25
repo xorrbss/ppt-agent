@@ -211,12 +211,12 @@ async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, 
             slide.content = content
         session.add(slide)
     presentation.n_slides = len(slides)
+    from services.generation_core.quality.page_outcome import review_page_indices
     metadata = dict(presentation.theme.get("svg", {}))
-    metadata.update(
-        quality=[(slide.content.get("svgReceipt") or {}).get("quality", {}) for slide in slides],
-        reviewPages=list(range(len(slides))),
-        qualityStatus="review_required",
-    )
+    qualities = [(slide.content.get("svgReceipt") or {}).get("quality", {}) for slide in slides]
+    review = review_page_indices(qualities)
+    metadata.update(quality=qualities, reviewPages=review,
+                    qualityStatus="review_required" if review else "passed")
     presentation.theme = {**presentation.theme, "svg": metadata}
     session.add(presentation)
 
