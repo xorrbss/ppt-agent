@@ -337,25 +337,13 @@ async def execute_svg_export(job, store):
                 expected_image_digests=expected_image_digests if v3 else None)
             mode="editable-svg"
         else:
-            from services.svg_renderer import svg_preview_html
-            from workers.public_render_worker import _admit_html
-            from utils.slide_capture import _render_admitted_htmls_over_pipe
-            from workers.public_export_worker import _build_pdf
-            # Asset SVGs already passed canonical admission and an authenticated
-            # manifest/decoder check. Never feed expanded base64 through the
-            # legacy canonical-source size limit a second time.
-            wrappers=[]
-            for source, admitted in zip(sources, admitted_assets):
-                if admitted is not None:
-                    wrappers.append(admitted)
-                else:
-                    wrapper = svg_preview_html(source, width=canvas.width_px, height=canvas.height_px)
-                    wrappers.append(_admit_html(wrapper))
-            rendered=_render_admitted_htmls_over_pipe(wrappers, timeout=max(1,min(120,int(job.deadline_epoch_seconds-time.time()))),width_px=canvas.width_px,height_px=canvas.height_px)
-            if len(rendered) != len(sources):
-                raise PublicWorkerExecutionError("svg_export_render_slide_count_mismatch")
-            refs=[store.put(png,source=job.input_artifact,operation_id=job.operation_id,kind="slide-png",media_type="image/png") for png,_ in rendered]
-            _build_pdf(refs,store,target,canvas)
-            mode="fidelity-raster";readback={"slideCount":len(refs),"rasterized":True}
+            from workers.public_svg_pdf_export import export_svg_pdf
+            export_svg_pdf(sources, admitted_assets, canvas, target,
+                timeout=max(1,min(120,int(job.deadline_epoch_seconds-time.time()))))
+            mode = "svg-vector-pdf"
+            readback = {"slideCount": len(sources), "rasterized": False, "vectorText": True}
         artifact=store.put_path(target,source=job.input_artifact,operation_id=job.operation_id,kind=f"presentation-{fmt}",media_type="application/pdf" if fmt=="pdf" else "application/vnd.openxmlformats-officedocument.presentationml.presentation")
-        return WorkerOutput(artifact=artifact,evidence={"sourceFormat":"svg","requestedExportMode":mode,"deliveredExportMode":mode,"contractVersion":value["contractVersion"],"converterVersion":CONVERTER_VERSION,"converterDigest":value["converterDigest"],"sourceDigests":digests,"assetManifestDigests":[{"source":entry["assets"]["sourceManifestDigest"],"placement":entry["assets"]["placementManifestDigest"]} if entry.get("assets") else None for entry in slides],"canvas":value["canvas"],"structuralReadback":readback,"visualQualityVerified":False,"fallbackReason":None})
+        evidence={"sourceFormat":"svg","requestedExportMode":mode,"deliveredExportMode":mode,"contractVersion":value["contractVersion"],"converterVersion":CONVERTER_VERSION,"converterDigest":value["converterDigest"],"sourceDigests":digests,"assetManifestDigests":[{"source":entry["assets"]["sourceManifestDigest"],"placement":entry["assets"]["placementManifestDigest"]} if entry.get("assets") else None for entry in slides],"canvas":value["canvas"],"structuralReadback":readback,"visualQualityVerified":False,"fallbackReason":None}
+        if fmt == "pdf":
+            evidence["pdfTextLayer"] = "vector"
+        return WorkerOutput(artifact=artifact,evidence=evidence)
