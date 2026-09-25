@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "image-generation.codex-oauth-requested-model",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Use Codex OAuth for images, request GPT Image 2.5 Sunburst, and report the effective model as unverified unless the server identifies it.",
+  "scope": [
+    "image-generation"
+  ],
+  "invariants": [
+    "Consume completed images without showing intermediate generation.",
+    "Keep requested and effective model identities separate."
+  ],
+  "forbidden": [
+    "Silently fall back to separately billed OpenAI API-key generation.",
+    "Report a successful Codex request as proof of GPT Image 2.5 execution."
+  ],
+  "evidence": [
+    "docs/codex-image-generation-handoff-20260912.md",
+    "servers/fastapi/services/image_generation_codex_adapter.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T05:36:33.1828091+00:00"
+}

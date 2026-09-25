@@ -1,0 +1,56 @@
+{
+  "id": "growth-13-branching-tree",
+  "category": "growth",
+  "tags": {
+    "ko": [
+      "성장",
+      "사업확장"
+    ],
+    "en": [
+      "growth",
+      "branching",
+      "tree"
+    ]
+  },
+  "alt": {
+    "ko": "사업확장 단색 벡터 인포그래픽",
+    "en": "branching tree monochrome vector infographic"
+  },
+  "path": "originals/growth-13-branching-tree.svg",
+  "thumbnail": "thumbnails/growth-13-branching-tree.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 645,
+  "sha256": "68330d017c0424b33659da0c30e9bc8a9bdd7911e41e92a18ba2e80bcafc3cb8",
+  "geometry_sha256": "678f793c3f6ce31d9208d3e033afc4775b899b48476bcdc1c0dd51621fef504a",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57801,
+    "preview_opaque_pixels": 6077,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "GitFork",
+      "Leaf"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

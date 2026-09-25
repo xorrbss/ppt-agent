@@ -1,0 +1,34 @@
+{
+  "schema": "authored-rollout-knob-snapshot-20260912/v1",
+  "probe": {
+    "pattern": "servers/fastapi/scripts/run_authored_checkpoint_repair_probe.ps1",
+    "method": "A copy of that wrapper: Read-StackEnvironment decrypts the api environment into process memory only, the child python runs from servers/fastapi, and every touched variable is restored in the finally block. No setting value other than the five named keys was read out or printed, and the DPAPI store and userConfig.json were never opened for reading by hand.",
+    "resolution": "Mirrors services.runtime_settings_coordinator._settings: the database-backed ProviderSettingsRecord is the persisted authority, combined with the process environment through utils.user_config.load_runtime_settings, then read through the five utils.get_env_programme accessors.",
+    "readOnly": true,
+    "observedAt": "2026-09-12T03:21:00+09:00"
+  },
+  "settingsRevision": 14,
+  "persistedOverridesAmongTheFiveKeys": [],
+  "resolved": {
+    "AUTHORED_ADMISSION_GATE_MODE": "shadow",
+    "AUTHORED_HTML_NORMALIZATION": "legacy",
+    "AUTHORED_VERBATIM_PLACEHOLDER_AUTHORING": false,
+    "AUTHORED_VERBATIM_SINGLE_REPAIR_LOOP": false,
+    "AUTHORED_VERBATIM_REPAIR_LOOP_MODEL_CALLS": 1
+  },
+  "expectedDefaults": {
+    "AUTHORED_ADMISSION_GATE_MODE": "shadow",
+    "AUTHORED_HTML_NORMALIZATION": "legacy",
+    "AUTHORED_VERBATIM_PLACEHOLDER_AUTHORING": false,
+    "AUTHORED_VERBATIM_SINGLE_REPAIR_LOOP": false,
+    "AUTHORED_VERBATIM_REPAIR_LOOP_MODEL_CALLS": 1
+  },
+  "registryDefaults": {
+    "AUTHORED_ADMISSION_GATE_MODE": {"type": "string", "default": "shadow", "targets": ["fastapi.runtime"]},
+    "AUTHORED_HTML_NORMALIZATION": {"type": "enum", "default": "legacy", "targets": ["fastapi.runtime"]},
+    "AUTHORED_VERBATIM_PLACEHOLDER_AUTHORING": {"type": "boolean", "default": false, "targets": ["fastapi.runtime"]},
+    "AUTHORED_VERBATIM_SINGLE_REPAIR_LOOP": {"type": "boolean", "default": false, "targets": ["fastapi.runtime"]},
+    "AUTHORED_VERBATIM_REPAIR_LOOP_MODEL_CALLS": {"type": "integer", "default": 1, "targets": ["fastapi.runtime"]}
+  },
+  "allAtDefault": true
+}

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.editable-preservation",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Ordinary Hybrid export preserves produced editable objects independently of optional owner and font policy QA.",
+  "scope": [
+    "public-export",
+    "authored-hybrid"
+  ],
+  "invariants": [
+    "Missing owner metadata and font policy QA do not rasterize ordinary editable output.",
+    "Keep package integrity, page count and original canvas checks.",
+    "Preserve successful capture results while completing bounded observable Chrome cleanup.",
+    "Use actual editable output rather than download success for acceptance."
+  ],
+  "forbidden": [
+    "Discarding editable shapes solely because optional QA evidence is unavailable."
+  ],
+  "evidence": [],
+  "supersedes": null,
+  "recordedAt": "2026-09-14T06:38:38.7617255+00:00"
+}

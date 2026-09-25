@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:28px;width:980px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:6px;font-size:28px;line-height:35px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:3px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:126px;width:1280px;padding:0 64px}
+.claim{height:42px;display:flex;align-items:center}
+.claim-text{font-size:26px;line-height:34px;font-weight:700;letter-spacing:-.02em}
+.claim-text strong{color:#08916E}
+.project-line{height:24px;margin-top:7px;font-size:18px;line-height:24px;color:#59636B}
+.content-grid{display:grid;grid-template-columns:430px 738px;gap:24px;margin-top:15px;height:386px}
+.panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.left-panel{padding:26px 28px}
+.panel-label{display:flex;align-items:center;gap:12px;font-size:20px;line-height:28px;font-weight:700;color:#002060}
+.label-bar{width:7px;height:25px;border-radius:12px;background:#08916E;flex:none}
+.bullet-list{display:flex;flex-direction:column;gap:16px;margin-top:26px}
+.bullet-row{display:grid;grid-template-columns:12px 1fr;column-gap:12px;align-items:start}
+.square{width:8px;height:8px;margin-top:9px;background:#219F88;border-radius:2px}
+.bullet-text{font-size:18px;line-height:27px;color:#1D1D1B}
+.right-panel{padding:26px 28px;display:flex;flex-direction:column}
+.right-head{display:flex;align-items:center;gap:14px}
+.right-title{font-size:20px;line-height:28px;font-weight:700;color:#002060}
+.right-rule{height:1px;background:#E2E8F0;margin-top:22px}
+.position-zone{margin-top:24px;padding:24px 26px;background:#E0F3FF;border-radius:12px;min-height:126px}
+.position-quote{font-size:25px;line-height:36px;font-weight:700;color:#002060}
+.position-quote strong{color:#08916E}
+.partner-strip{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:24px}
+.partner-item{padding:14px 14px;background:#EAEDF2;border-radius:12px;text-align:center;font-size:17px;line-height:25px;font-weight:700;color:#1B469C}
+.takeaway{display:flex;align-items:center;gap:12px;margin-top:18px;padding:12px 16px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.take-mark{width:7px;height:25px;border-radius:12px;background:#E5A93D;flex:none}
+.take-text{font-size:18px;line-height:27px;font-weight:700;color:#1D1D1B}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" class="header-band" style="height:104px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-7ac91c67ab49908e" data-source-block-id="source-slide:16:text:3:run:1">자영업자 꽁트</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-8a04c78f5b523a6a" data-source-block-id="source-slide:16:text:3:run:0">2주차 PART 4</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:126px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+    <div class="claim-text" data-semantic-role="body" data-qid="source-block-819d68ef86ea0559" data-source-block-id="source-slide:16:text:6">요즘 자영업자 숏폼의 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">기회</strong></div>
+  </div>
+
+  <div class="project-line" data-semantic-role="supporting" data-qid="source-block-37399f8f319f4882" data-source-block-id="source-slide:16:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="panel left-panel" data-semantic-role="decoration" data-qid="q-card-owner-15">
+      <div class="panel-label" data-semantic-role="supporting" data-qid="q-label-owner-15">
+        <span class="label-bar" data-qid="q-span-99183b9f64c0" data-semantic-role="supporting"></span>
+        <span data-semantic-role="body" data-qid="source-block-11276ae48abc015b" data-source-block-id="source-slide:16:text:7">사장님 + 직원</span>
+      </div>
+      <div class="bullet-list" data-qid="source-block-4d2f3e1db75989ec" data-semantic-role="decoration" data-source-block-id="source-slide:16:text:8">
+        <div class="bullet-row" data-qid="q-div-76fd0de5fdec" data-semantic-role="decoration">
+          <span class="square" data-qid="q-span-e7950ef778e0" data-semantic-role="decoration"></span>
+          <div class="bullet-text" data-semantic-role="body" data-qid="q-bullet-151">사장님은 아이디어가 부족하다</div>
+        </div>
+        <div class="bullet-row" data-qid="q-div-1b7d07b1451d" data-semantic-role="decoration">
+          <span class="square" data-qid="q-span-eb9ec12474dc" data-semantic-role="decoration"></span>
+          <div class="bullet-text" data-semantic-role="body" data-qid="q-bullet-152">직원에게 무엇을 시킬지 모른다</div>
+        </div>
+        <div class="bullet-row" data-qid="q-div-8581dcc6daa2" data-semantic-role="decoration">
+          <span class="square" data-qid="q-span-2dd25e0a824d" data-semantic-role="decoration"></span>
+          <div class="bullet-text" data-semantic-role="body" data-qid="q-bullet-153">촬영할 장면과 대사를 정하기 어렵다</div>
+        </div>
+        <div class="bullet-row" data-qid="q-div-f2a4a2f675bb" data-semantic-role="decoration">
+          <span class="square" data-qid="q-span-4910911762c7" data-semantic-role="decoration"></span>
+          <div class="bullet-text" data-semantic-role="body" data-qid="q-bullet-154">대행사는 ‘촬영 가이드’까지 제공할 수 있다</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel right-panel" data-semantic-role="decoration" data-qid="q-card-position-15">
+      <div class="right-head" data-qid="q-div-f2bca9bf446d" data-semantic-role="decoration">
+        <span class="label-bar" data-qid="q-span-87c4f955ddcb" data-semantic-role="supporting"></span>
+        <div class="right-title" data-semantic-role="supporting" data-qid="source-block-d4506884aaf33c49" data-source-block-id="source-slide:16:text:11">핵심 포지션</div>
+      </div>
+      <div class="right-rule" data-qid="q-div-90ef913fe5f9" data-semantic-role="decoration"></div>
+      <div class="position-zone" data-qid="q-div-9471d972ac3f" data-semantic-role="decoration">
+        <div class="position-quote" data-semantic-role="body" data-qid="source-block-3ee08a8d487c2e74" data-source-block-id="source-slide:16:text:12">‘편집자’가 아니라 <strong data-qid="q-strong-f213b54d7db8" data-semantic-role="body">기획 + 촬영가이드 + 제작 파트너</strong></div>
+      </div>
+      <div class="partner-strip" data-qid="q-div-ae747ae98176" data-semantic-role="decoration">
+        <div class="partner-item" data-semantic-role="supporting" data-qid="q-partner-151">기획</div>
+        <div class="partner-item" data-semantic-role="supporting" data-qid="q-partner-152">촬영가이드</div>
+        <div class="partner-item" data-semantic-role="supporting" data-qid="q-partner-153">제작 파트너</div>
+      </div>
+      <div class="takeaway" data-qid="q-div-45499f8e6b25" data-semantic-role="decoration">
+        <span class="take-mark" data-qid="q-span-5636e8e48d8c" data-semantic-role="decoration"></span>
+        <div class="take-text" data-semantic-role="body" data-qid="q-takeaway-15">아이디어부터 촬영 실행까지 함께 설계합니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-7240bc536b1ffb64" data-source-block-id="source-slide:16:text:4">16</div>
+</body>
+</html>

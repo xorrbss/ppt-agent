@@ -136,8 +136,12 @@ def find_footer_zone_intrusions(
     page_number = next(
         (i for i in items if _looks_like_page_number(i, viewport_width=vw, viewport_height=vh)), None
     )
-    content_bottom = (
-        NUMBERED_CONTENT_BOTTOM_PX if page_number is not None else UNNUMBERED_CONTENT_BOTTOM_PX
+    content_bottom = vh - (
+        720.0 - (
+            NUMBERED_CONTENT_BOTTOM_PX
+            if page_number is not None
+            else UNNUMBERED_CONTENT_BOTTOM_PX
+        )
     )
     page_number_qid = str(page_number.get("qid") or "") if page_number is not None else ""
     page_number_box = page_number.get("bbox") if page_number is not None else None

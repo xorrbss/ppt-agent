@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:105px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:56px;top:24px;width:900px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:984px;top:24px;width:240px;text-align:right}
+.header-right-text{font-size:15px;line-height:20px;color:#666666}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:129px;height:519px}
+.content-inner{margin-left:56px;width:1168px}
+.context-row{height:58px;display:flex;align-items:flex-start;justify-content:space-between}
+.context-left{display:flex;align-items:center;gap:14px}
+.week-mark{height:34px;padding:4px 12px;background:#08916E;border-radius:12px;color:#FFFFFF;font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:26px;font-weight:700}
+.context-label{font-size:20px;line-height:30px;font-weight:700;color:#1D1D1B}
+.duration{padding-top:5px;font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:26px;font-weight:700;color:#08795E}
+.architecture{position:relative;height:395px}
+.architecture-rail{position:absolute;left:292px;right:292px;top:150px;height:2px;background:#08916E;z-index:0}
+.architecture-node{position:absolute;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.goal-node{left:0;top:72px;width:272px;height:160px;padding:28px}
+.goal-copy{font-size:21px;line-height:1.6;font-weight:700;color:#1D1D1B}
+.module-grid{position:absolute;left:316px;top:0;width:512px;height:314px;display:grid;grid-template-columns:244px 244px;grid-template-rows:145px 145px;gap:24px}
+.module-node{position:relative;padding:20px 20px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.module-index{display:block;width:30px;height:30px;border-radius:12px;background:#08916E;color:#FFFFFF;text-align:center;font-family:"IBM Plex Mono","Consolas",monospace;font-size:16px;line-height:30px;font-weight:700}
+.module-copy{margin-top:12px;font-size:18px;line-height:1.55;font-weight:700;color:#1D1D1B}
+.result-node{right:0;top:72px;width:272px;height:160px;padding:28px;background:#EAEDF2;border-left:6px solid #08916E}
+.result-kicker{font-size:15px;line-height:22px;font-weight:700;color:#08916E}
+.result-copy{margin-top:12px;font-size:20px;line-height:1.55;font-weight:700;color:#1D1D1B}
+.takeaway{height:58px;margin-top:8px;display:flex;align-items:center;padding:0 20px;border-left:6px solid #08916E;background:#EAEDF2;border-radius:12px;font-size:18px;line-height:28px;color:#1D1D1B}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+  <div data-header-part="band" data-header-band="105" class="header-band" style="height:105px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+    <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+      <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-5a01">사업 시작 설계</div>
+      <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-07e96953a5114377" data-source-block-id="source-slide:6:text:3">1주차 | 숏폼 대행사업 시작하기</div>
+    </div>
+    <div data-header-part="right" class="header-right" data-qid="q-right-5a03" data-semantic-role="supporting">
+      <div class="header-right-text" data-qid="q-right-text-5a03" data-semantic-role="body">오늘의 목표</div>
+    </div>
+    <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+  </div>
+
+  <div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:129px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+    <div class="content-inner" data-qid="q-div-a985ffc51e86" data-semantic-role="decoration">
+      <div class="context-row" data-qid="q-div-3b66c5a2ae7b" data-semantic-role="decoration">
+        <div class="context-left" data-qid="q-div-68f6dc6a0944" data-semantic-role="decoration">
+          <div class="week-mark" data-semantic-role="supporting" data-qid="source-block-c7af960e0b3ca87d" data-source-block-id="source-slide:6:text:5">06</div>
+          <div class="context-label" data-semantic-role="supporting" data-qid="source-block-3665c00af2a3ff55" data-source-block-id="source-slide:6:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+        </div>
+        <div class="duration" data-semantic-role="supporting" data-qid="source-block-3249496b5d212ba2" data-source-block-id="source-slide:6:text:7">120분</div>
+      </div>
+
+      <div class="architecture" data-qid="q-div-9eabd7e66260" data-semantic-role="decoration">
+        <div class="architecture-rail" data-qid="q-div-fb9863de7644" data-semantic-role="decoration"></div>
+
+        <div class="architecture-node goal-node" data-qid="q-div-ac27cd5e7778" data-semantic-role="decoration">
+          <div class="goal-copy" data-semantic-role="body" data-qid="source-block-159a6af902a66574" data-source-block-id="source-slide:6:text:4">목표: 내가 무엇을 누구에게 얼마에 팔지 결정</div>
+        </div>
+
+        <div class="module-grid" data-qid="q-div-590e86ad5b72" data-semantic-role="decoration">
+          <div class="module-node" data-qid="q-div-4ff939457695" data-semantic-role="decoration">
+            <span class="module-index" data-semantic-role="supporting" data-qid="q-module-index-5a09">01</span>
+            <div class="module-copy" data-semantic-role="body" data-qid="source-block-d31e95c95ec45d04" data-source-block-id="source-slide:6:text:8:run:0">숏폼 대행사업의 구조 이해</div>
+          </div>
+          <div class="module-node" data-qid="q-div-2798c2cbbf0e6" data-semantic-role="decoration">
+            <span class="module-index" data-semantic-role="supporting" data-qid="q-module-index-5a11">02</span>
+            <div class="module-copy" data-semantic-role="body" data-qid="source-block-2c4e88cecd913260" data-source-block-id="source-slide:6:text:8:run:1">타깃 업종과 상품 정하기</div>
+          </div>
+          <div class="module-node" data-qid="q-div-3f163015d363" data-semantic-role="decoration">
+            <span class="module-index" data-semantic-role="supporting" data-qid="q-module-index-5a13">03</span>
+            <div class="module-copy" data-semantic-role="body" data-qid="source-block-755be68b1c616066" data-source-block-id="source-slide:6:text:8:run:2">가격과 작업 범위 정하기</div>
+          </div>
+          <div class="module-node" data-qid="q-div-4b8060103927" data-semantic-role="decoration">
+            <span class="module-index" data-semantic-role="supporting" data-qid="q-module-index-5a15">04</span>
+            <div class="module-copy" data-semantic-role="body" data-qid="source-block-0fe56ca467d038bf" data-source-block-id="source-slide:6:text:8:run:3">인스타·블로그 기본 세팅</div>
+          </div>
+        </div>
+
+        <div class="architecture-node result-node" data-qid="q-div-b4b0280db355" data-semantic-role="decoration">
+          <div class="result-kicker" data-semantic-role="supporting" data-qid="source-block-361d54eef27a5102" data-source-block-id="source-slide:6:text:11">오늘의 결과물</div>
+          <div class="result-copy" data-semantic-role="body" data-qid="source-block-0ee117f64c0eeb67" data-source-block-id="source-slide:6:text:12">내 서비스 한 줄 소개 + 기본 상품 1개</div>
+        </div>
+      </div>
+
+      <div class="takeaway" data-semantic-role="body" data-qid="q-takeaway-5a19">결정해야 할 네 가지를 순서대로 정리해, 바로 설명할 수 있는 서비스 구조를 만듭니다.</div>
+    </div>
+  </div>
+
+  <div class="page-number" data-semantic-role="supporting" data-qid="q-page-5a20">06</div>
+</body>
+</html>

@@ -4,6 +4,16 @@ from services import authored_quality_review_service as _service
 
 
 async def review_style_candidates(ctx):
+    canvas = getattr(ctx, "canvas", None)
+    canvas_dimensions = (
+        int(getattr(canvas, "width_px", 1280)),
+        int(getattr(canvas, "height_px", 720)),
+    )
+    render_kwargs = (
+        {}
+        if canvas_dimensions == (1280, 720)
+        else {"width_px": canvas_dimensions[0], "height_px": canvas_dimensions[1]}
+    )
     ctx.accepted_local_indices = []
     ctx.chosen_critiques = list(ctx.initial_critiques)
     ctx.comparison_metadata = _service._style_comparison_observation_metadata()
@@ -124,6 +134,7 @@ async def review_style_candidates(ctx):
             initial_critiques=ctx.fallback_initial_critiques,
             return_details=True,
             force_full_reauthor_indices=ctx.fallback_local_indices,
+            canvas=canvas,
             **getattr(ctx, "illustration_reauthor_kwargs", {}),
             **(
                 {
@@ -185,7 +196,10 @@ async def review_style_candidates(ctx):
             if isinstance(detail, _service.Mapping) and isinstance(detail.get("local_index"), int)
         }
         ctx.fallback_browser_metrics = {
-            index: _service.get_cached_browser_metrics(ctx.fallback_htmls[index])
+            index: _service.get_cached_browser_metrics(
+                ctx.fallback_htmls[index],
+                **render_kwargs,
+            )
             for index in ctx.fallback_candidate_indices
         }
         ctx.fallback_local_reports = {

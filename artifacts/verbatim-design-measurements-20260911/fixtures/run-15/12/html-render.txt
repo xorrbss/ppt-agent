@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:105px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:56px;top:24px;width:900px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:984px;top:24px;width:240px;text-align:right;font-size:15px;line-height:20px;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:129px;height:519px}
+.content-inner{margin-left:56px;width:1168px}
+.claim{height:68px;display:flex;align-items:flex-start;padding-top:4px;justify-content:space-between}
+.claim-text{font-size:26px;line-height:38px;font-weight:700;letter-spacing:-.02em}
+.claim-text strong{color:#08916E}
+.claim-tag{display:flex;align-items:center;gap:14px;padding-top:8px;font-size:18px;line-height:28px;font-weight:700;color:#08795E}
+.claim-mark{width:10px;height:10px;border-radius:12px;background:#08916E;flex:none}
+.content-grid{height:368px;display:grid;grid-template-columns:470px 674px;gap:24px}
+.node{position:relative;height:368px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.node-header{display:flex;align-items:center;gap:14px}
+.node-number{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:#08916E;color:#FFFFFF;font-size:21px;line-height:28px;font-weight:700}
+.node-label{font-size:25px;line-height:34px;font-weight:700;color:#1D1D1B}
+.node-rule{height:2px;margin-top:24px;background:#E2E8F0}
+.rule-list{margin-top:20px;display:flex;flex-direction:column;gap:10px}
+.rule-item{min-height:39px;padding:6px 12px 6px 14px;border-left:4px solid #219F88;background:#EAEDF2;border-radius:12px;font-size:18px;line-height:27px;color:#1D1D1B}
+.formula-card{position:relative;height:368px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.formula-label{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.formula-title{margin-top:7px;font-size:25px;line-height:34px;font-weight:700;color:#1D1D1B}
+.formula-flow{height:214px;margin-top:20px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.formula-step{width:390px;height:48px;display:flex;align-items:center;justify-content:center;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px;font-size:20px;line-height:30px;font-weight:700;color:#002060}
+.formula-arrow{height:18px;font-size:22px;line-height:18px;font-weight:700;color:#00828E}
+.formula-note{position:absolute;left:28px;right:28px;bottom:28px;height:50px;padding:11px 14px;background:#EAF7F4;border-radius:12px;color:#08795E;font-size:17px;line-height:27px;font-weight:700}
+.takeaway{height:58px;margin-top:14px;display:flex;align-items:center;padding:0 20px;border-left:6px solid #08916E;background:#EAEDF2;border-radius:12px;font-size:18px;line-height:28px;color:#1D1D1B}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="105" class="header-band" style="height:105px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-12" style="color: rgb(0, 121, 94)">릴스 기획</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-48ed582637691060" data-source-block-id="source-slide:13:text:3">2주차 PART 1 | 릴스 기획</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-a1581def94dc75ee" data-source-block-id="source-slide:13:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:129px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-inner" data-qid="q-div-a985ffc51e86" data-semantic-role="decoration">
+    <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+      <div class="claim-text" data-semantic-role="body" data-qid="source-block-9992ecb1bc1f6711" data-source-block-id="source-slide:13:text:7"><strong data-semantic-role="body" data-qid="source-block-fe8f22469e5a4536" data-source-block-id="source-slide:13:text:6">3초</strong> 사람을 멈추게 하는 첫 장면</div>
+      <div class="claim-tag" data-semantic-role="supporting" data-qid="q-claim-tag-12"><span class="claim-mark" data-qid="q-span-05fa3191c699" data-semantic-role="decoration"></span>첫 장면 설계</div>
+    </div>
+
+    <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+      <div class="node" data-semantic-role="decoration" data-qid="q-card-hooks-12">
+        <div class="node-header" data-qid="q-div-059550c6dbc8" data-semantic-role="decoration">
+          <div class="node-number" data-semantic-role="supporting" data-qid="q-number-12" style="background-color: rgb(0, 121, 94)">1</div>
+          <div class="node-label" data-semantic-role="supporting" data-qid="q-label-hooks-12">후킹부터 설계</div>
+        </div>
+        <div class="node-rule" data-qid="q-div-025723065887" data-semantic-role="decoration"></div>
+        <div class="rule-list" data-qid="source-block-424c834f87ab1716" data-semantic-role="decoration" data-source-block-id="source-slide:13:text:8">
+          <div class="rule-item" data-semantic-role="body" data-qid="q-rule-hook-12">• 후킹: 궁금증 · 문제 · 반전</div>
+          <div class="rule-item" data-semantic-role="body" data-qid="q-rule-body-12">• 본문: 한 가지 메시지만</div>
+          <div class="rule-item" data-semantic-role="body" data-qid="q-rule-close-12">• 마무리: 댓글 · 문의 · 방문 등 유도</div>
+          <div class="rule-item" data-semantic-role="body" data-qid="q-rule-type-12">• 정보형 / 홍보형 / 공감형 / 코믹형</div>
+        </div>
+      </div>
+
+      <div class="formula-card" data-semantic-role="decoration" data-qid="q-card-formula-12" style="height: 378px">
+        <div class="formula-label" data-semantic-role="supporting" data-qid="q-formula-label-12" style="color: rgb(0, 121, 94)">콘텐츠 흐름</div>
+        <div class="formula-title" data-semantic-role="body" data-qid="source-block-68a66258f75a76f1" data-source-block-id="source-slide:13:text:11">기획 공식</div>
+        <div class="formula-flow" data-qid="q-div-daf51947bfd1" data-semantic-role="decoration">
+          <div class="formula-step" data-semantic-role="body" data-qid="source-block-3e82c6dbce688fa8" data-source-block-id="source-slide:13:text:12:run:0">문제 제시</div>
+          <div class="formula-arrow" data-semantic-role="supporting" data-qid="q-arrow-one-12">↓</div>
+          <div class="formula-step" data-semantic-role="body" data-qid="source-block-7e15cb6f8358ca13" data-source-block-id="source-slide:13:text:12:run:1">해결/정보</div>
+          <div class="formula-arrow" data-semantic-role="supporting" data-qid="q-arrow-two-12">↓</div>
+          <div class="formula-step" data-semantic-role="body" data-qid="source-block-89c22b8655163bf6" data-source-block-id="source-slide:13:text:12:run:2">행동 유도</div>
+        </div>
+        <div class="formula-note" data-semantic-role="body" data-qid="q-formula-note-12" style="top: 327px">한 편에 한 가지 메시지만 남깁니다.</div>
+      </div>
+    </div>
+
+    <div class="takeaway" data-semantic-role="body" data-qid="q-takeaway-12">첫 3초에 후킹하고, 문제에서 행동 유도까지 한 흐름으로 연결합니다.</div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-927a431dd72ca024" data-source-block-id="source-slide:13:text:4" style="color: rgb(90, 98, 110); top: 672px">13</div>
+</body>
+</html>

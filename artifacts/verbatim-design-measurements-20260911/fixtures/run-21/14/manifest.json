@@ -1,0 +1,452 @@
+{
+ "sourceUnitId": "source-slide:15",
+ "sourceIndex": 14,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:15:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:15:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "2주차 PART 3 | 스마트폰 촬영",
+    "paragraphs": [
+     {
+      "runs": [
+       "2주차 PART 3 | 스마트폰 촬영"
+      ],
+      "text": "2주차 PART 3 | 스마트폰 촬영"
+     }
+    ],
+    "runs": [
+     "2주차 PART 3 | 스마트폰 촬영"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:fbf9638506c742295383ca6355d4bb2735aca1ac6b5fe6c9887584fbb3030b72",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:15:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "15",
+    "paragraphs": [
+     {
+      "runs": [
+       "15"
+      ],
+      "text": "15"
+     }
+    ],
+    "runs": [
+     "15"
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:f39e759fbfe08690845bb4d71aecc778b9dbe426024919cc5e49a51296683f52",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:15:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:74f52ea3fedff52018a6c922ae9f9a5650ace6385c0dd96cc4f477c74504ce90",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:15:shape:6",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 4,
+   "payload": {
+    "shapeName": "Rounded Rectangle 5",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 731520,
+     "y": 1463040,
+     "cx": 3383280,
+     "cy": 3566160
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:b84206e32b21cbbacef715c0546835d4174ebea56d8ce29182ad24a0a5859340",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:15:shape:7",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 5,
+   "payload": {
+    "shapeName": "Rectangle 6",
+    "preset": "rect",
+    "geometry": {
+     "x": 731520,
+     "y": 1463040,
+     "cx": 73152,
+     "cy": 3566160
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:4ce37156add776163d2fc134d044b66c4fe5e1a91c9266895a266a86db3cb2f9",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:15:text:8",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 6,
+   "payload": {
+    "text": "제품",
+    "paragraphs": [
+     {
+      "runs": [
+       "제품"
+      ],
+      "text": "제품"
+     }
+    ],
+    "runs": [
+     "제품"
+    ],
+    "shapeName": "TextBox 7",
+    "geometry": {
+     "x": 932688,
+     "y": 1600200,
+     "cx": 3017520,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:c43e5afdeb9ea29047b741de119367fcd333a3b72bf43d16ad61ac49a26d298a",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:15:text:9",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 7,
+   "payload": {
+    "text": "전체샷 → 디테일 → 사용 장면\n손을 활용해 자연스럽게",
+    "paragraphs": [
+     {
+      "runs": [
+       "전체샷 → 디테일 → 사용 장면\n손을 활용해 자연스럽게"
+      ],
+      "text": "전체샷 → 디테일 → 사용 장면\n손을 활용해 자연스럽게"
+     }
+    ],
+    "runs": [
+     "전체샷 → 디테일 → 사용 장면\n손을 활용해 자연스럽게"
+    ],
+    "shapeName": "TextBox 8",
+    "geometry": {
+     "x": 932688,
+     "y": 2029968,
+     "cx": 3017520,
+     "cy": 2880360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:7c09e7c949b3daba00cb1ea8860a2abfa08c42b1de2e8dcc25300b4e9103d2a6",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:15:shape:10",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 8,
+   "payload": {
+    "shapeName": "Rounded Rectangle 9",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 4389120,
+     "y": 1463040,
+     "cx": 3383280,
+     "cy": 3566160
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:e4bdd302d3cc8d8fa94ee1d82227b8d263b4dfa7e49c8eb3c548920279c61b1c",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:15:shape:11",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 9,
+   "payload": {
+    "shapeName": "Rectangle 10",
+    "preset": "rect",
+    "geometry": {
+     "x": 4389120,
+     "y": 1463040,
+     "cx": 73152,
+     "cy": 3566160
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:c8d6466ffe8f8f88354acf6e19eb6d59e53428e6fd935e5c2590e2e8eed5a223",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:15:text:12",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 10,
+   "payload": {
+    "text": "사람",
+    "paragraphs": [
+     {
+      "runs": [
+       "사람"
+      ],
+      "text": "사람"
+     }
+    ],
+    "runs": [
+     "사람"
+    ],
+    "shapeName": "TextBox 11",
+    "geometry": {
+     "x": 4590288,
+     "y": 1600200,
+     "cx": 3017520,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:1d55be36e56c336bedc5618cfaccc5303e8c4394834e28a5c103757565198deb",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:15:text:13",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 11,
+   "payload": {
+    "text": "전신 → 상반신 → 행동 장면\n자연스러운 대화와 리액션",
+    "paragraphs": [
+     {
+      "runs": [
+       "전신 → 상반신 → 행동 장면\n자연스러운 대화와 리액션"
+      ],
+      "text": "전신 → 상반신 → 행동 장면\n자연스러운 대화와 리액션"
+     }
+    ],
+    "runs": [
+     "전신 → 상반신 → 행동 장면\n자연스러운 대화와 리액션"
+    ],
+    "shapeName": "TextBox 12",
+    "geometry": {
+     "x": 4590288,
+     "y": 2029968,
+     "cx": 3017520,
+     "cy": 2880360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:8341e37f5ef123eeee2d8ce1126ada41a0c6aa22129ec96e9b34aaaf6378e9b7",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:15:shape:14",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 12,
+   "payload": {
+    "shapeName": "Rounded Rectangle 13",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 8046720,
+     "y": 1463040,
+     "cx": 3383280,
+     "cy": 3566160
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:d948975b8f9e6d734a584f18d8d264b55f5bed4a9ec37baf24920cf1eb9f4645",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:15:shape:15",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 13,
+   "payload": {
+    "shapeName": "Rectangle 14",
+    "preset": "rect",
+    "geometry": {
+     "x": 8046720,
+     "y": 1463040,
+     "cx": 73152,
+     "cy": 3566160
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:ac9b03ad88ab7f044ee02d95dd10364621d79e8b8cc09be04396eae4d09974c7",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:15:text:16",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 14,
+   "payload": {
+    "text": "이동",
+    "paragraphs": [
+     {
+      "runs": [
+       "이동"
+      ],
+      "text": "이동"
+     }
+    ],
+    "runs": [
+     "이동"
+    ],
+    "shapeName": "TextBox 15",
+    "geometry": {
+     "x": 8247888,
+     "y": 1600200,
+     "cx": 3017520,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:055861c35aa57bf2f1646d0a409d141556b43e85075c2a577382c5fba1ca2ba3",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:15:text:17",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 15,
+   "payload": {
+    "text": "좌→우 / 우→좌\n상→하 / 하→상\n천천히, 흔들림 최소화",
+    "paragraphs": [
+     {
+      "runs": [
+       "좌→우 / 우→좌\n상→하 / 하→상\n천천히, 흔들림 최소화"
+      ],
+      "text": "좌→우 / 우→좌\n상→하 / 하→상\n천천히, 흔들림 최소화"
+     }
+    ],
+    "runs": [
+     "좌→우 / 우→좌\n상→하 / 하→상\n천천히, 흔들림 최소화"
+    ],
+    "shapeName": "TextBox 16",
+    "geometry": {
+     "x": 8247888,
+     "y": 2029968,
+     "cx": 3017520,
+     "cy": 2880360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:65a7dd499fa2d7a76ed633f4d4f6519261573fa300669ba45c585caa4e612167",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

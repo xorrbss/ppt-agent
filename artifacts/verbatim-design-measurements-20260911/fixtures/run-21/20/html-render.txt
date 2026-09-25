@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;height:105px;background:#08916E;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:880px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#FFFFFF}
+.header-right{position:absolute;left:956px;top:24px;width:260px;text-align:right;font-size:15px;line-height:20px;color:#FFFFFF}
+.header-tag{position:absolute;right:0;top:0;width:318px;height:10px;background:#00140E}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#00140E}
+.body-wrap{position:absolute;left:0;right:0;top:129px;height:519px}
+.claim{margin-left:64px;width:1152px;height:48px;display:flex;align-items:center;justify-content:space-between}
+.claim-text{font-size:24px;line-height:34px;font-weight:700;color:#00140E}
+.claim-text strong{color:#08916E}
+.claim-rule{width:190px;height:4px;background:#219F88;border-radius:12px}
+.architecture-grid{display:grid;grid-template-columns:820px 308px;gap:24px;margin-left:64px;width:1152px;height:430px}
+.map-panel{height:430px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.map-label{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.map-title{margin-top:8px;font-size:23px;line-height:32px;font-weight:700;color:#002060}
+.flow{display:grid;grid-template-columns:176px 24px 176px 24px 176px 24px 176px;align-items:center;margin-top:56px}
+.step{height:150px;border:1px solid #1B469C;border-radius:12px;background:#E0F3FF;display:flex;flex-direction:column;justify-content:space-between;padding:20px 18px}
+.step-tab{align-self:flex-start;padding:5px 9px;border-radius:12px;background:#002060;color:#FFFFFF;font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:20px;font-weight:700}
+.step-text{font-size:20px;line-height:29px;font-weight:700;color:#002060}
+.connector{height:2px;background:#00828E;position:relative}
+.connector-node{position:absolute;left:8px;top:-5px;width:12px;height:12px;background:#00828E;border-radius:12px}
+.connector-arrow{position:absolute;right:-1px;top:-5px;width:12px;height:12px;border-top:2px solid #00828E;border-right:2px solid #00828E;transform:rotate(45deg)}
+.flow-note{margin-top:48px;padding:16px 18px;border-radius:12px;background:#CCECFF;color:#002060;font-size:18px;line-height:29px;font-weight:700}
+.practice-panel{height:430px;padding:28px;background:#00140E;border-radius:12px;color:#FFFFFF}
+.practice-label{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#219F88}
+.practice-title{margin-top:20px;font-size:26px;line-height:36px;font-weight:700;color:#FFFFFF}
+.practice-line{margin-top:24px;width:54px;height:4px;background:#08916E;border-radius:12px}
+.practice-body{margin-top:28px;font-size:19px;line-height:32px;font-weight:500;color:#FFFFFF}
+.practice-keyword{margin-top:34px;font-size:38px;line-height:48px;font-weight:700;color:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+  <div data-header-part="band" data-header-band="105" class="header-band" style="height:105px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+    <div class="header-tag" data-semantic-role="decoration" data-qid="q-div-787f321246ec"></div>
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-20">3주차</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-efaeb0d4e849116a" data-source-block-id="source-slide:21:text:3">3주차 PART 3 | 전화영업 기본 구조</div>
+    <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-eb0997a27bd21e60" data-source-block-id="source-slide:21:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    <div data-header-part="divider" class="divider" data-semantic-role="decoration" data-qid="q-div-59f86380b966"></div>
+  </div>
+
+  <div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:129px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+    <div class="claim" data-qid="q-claim-wrap-20" data-semantic-role="decoration">
+      <div class="claim-text" data-semantic-role="body" data-qid="q-claim-20">전화영업은 <strong data-semantic-role="body" data-qid="q-claim-keyword-20">4단계</strong>로 짧고 명확하게 연결합니다.</div>
+      <div class="claim-rule" data-semantic-role="decoration" data-qid="q-div-607b3cc7f4a8"></div>
+    </div>
+
+    <div class="architecture-grid" data-qid="q-architecture-20" data-semantic-role="decoration">
+      <div class="map-panel" data-qid="q-map-panel-20" data-semantic-role="decoration">
+        <div class="map-label" data-semantic-role="supporting" data-qid="q-map-label-20">전화영업 기본 구조</div>
+        <div class="map-title" data-semantic-role="body" data-qid="q-map-title-20">상대의 부담은 낮추고, 다음 행동까지 연결</div>
+
+        <div class="flow" data-qid="q-flow-20" data-semantic-role="decoration">
+          <div class="step" data-qid="q-step-1-20" data-semantic-role="decoration">
+            <div class="step-tab" data-semantic-role="supporting" data-qid="q-step-tab-1-20">01</div>
+            <div class="step-text" data-semantic-role="body" data-qid="source-block-21bbb38a7f23f126" data-source-block-id="source-slide:21:text:6">① 인사</div>
+          </div>
+          <div class="connector" data-semantic-role="decoration" data-qid="q-div-1bfec761b021">
+            <div class="connector-node" data-semantic-role="decoration" data-qid="q-div-8b813e36675c"></div>
+            <div class="connector-arrow" data-semantic-role="decoration" data-qid="q-div-6f3b29657ac6"></div>
+          </div>
+          <div class="step" data-qid="q-step-2-20" data-semantic-role="decoration">
+            <div class="step-tab" data-semantic-role="supporting" data-qid="q-step-tab-2-20">02</div>
+            <div class="step-text" data-semantic-role="body" data-qid="source-block-726cd0a9a2d2805e" data-source-block-id="source-slide:21:text:7">② 왜 연락했는지</div>
+          </div>
+          <div class="connector" data-semantic-role="decoration" data-qid="q-div-f954d062b2c8">
+            <div class="connector-node" data-semantic-role="decoration" data-qid="q-div-8a31b39488c8"></div>
+            <div class="connector-arrow" data-semantic-role="decoration" data-qid="q-div-60b25d3b70c1"></div>
+          </div>
+          <div class="step" data-qid="q-step-3-20" data-semantic-role="decoration">
+            <div class="step-tab" data-semantic-role="supporting" data-qid="q-step-tab-3-20">03</div>
+            <div class="step-text" data-semantic-role="body" data-qid="source-block-7b397eaba27cf3c2" data-source-block-id="source-slide:21:text:8">③ 어떤 도움을 줄 수 있는지</div>
+          </div>
+          <div class="connector" data-semantic-role="decoration" data-qid="q-div-d70e41e2467e">
+            <div class="connector-node" data-semantic-role="decoration" data-qid="q-div-9a2b4e6f98a1"></div>
+            <div class="connector-arrow" data-semantic-role="decoration" data-qid="q-div-13088338c7b4"></div>
+          </div>
+          <div class="step" data-qid="q-step-4-20" data-semantic-role="decoration">
+            <div class="step-tab" data-semantic-role="supporting" data-qid="q-step-tab-4-20">04</div>
+            <div class="step-text" data-semantic-role="body" data-qid="source-block-c6c2008b956970ee" data-source-block-id="source-slide:21:text:9">④ 다음 행동 제안</div>
+          </div>
+        </div>
+
+        <div class="flow-note" data-semantic-role="body" data-qid="source-block-2989314964721e2f" data-source-block-id="source-slide:21:text:13">길게 설명하지 않는다. ‘관심 있으면 자료/샘플을 보내드리겠다’는 다음 단계까지 연결하는 것이 목표.</div>
+      </div>
+
+      <div class="practice-panel" data-qid="q-practice-panel-20" data-semantic-role="decoration">
+        <div class="practice-label" data-semantic-role="supporting" data-qid="source-block-2b8a18819565a17b" data-source-block-id="source-slide:21:text:12">연습 포인트</div>
+        <div class="practice-title" data-semantic-role="body" data-qid="q-practice-title-20">연습 포인트</div>
+        <div class="practice-line" data-semantic-role="decoration" data-qid="q-div-d98d6d7dee60"></div>
+        <div class="practice-body" data-semantic-role="body" data-qid="q-practice-body-20">길게 설명하지 않는다. ‘관심 있으면 자료/샘플을 보내드리겠다’는 다음 단계까지 연결하는 것이 목표..</div>
+        <div class="practice-keyword" data-semantic-role="supporting" data-qid="q-practice-keyword-20">다음 단계</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-number" data-semantic-role="supporting" data-qid="source-block-58ae0a9cf5981154" data-source-block-id="source-slide:21:text:4">21</div>
+</body>
+</html>

@@ -216,6 +216,7 @@ def test_offline_10_slide_generate_regenerate_conflict_and_rollback(monkeypatch)
         "layoutRegistryDigest": request.master.layout_registry_digest,
         "fontManifestDigest": request.master.font_manifest_digest,
         "sourceDigest": request.outline.source_digest,
+        "sceneDigest": generated.deck.scene.scene_digest,
     }
 
     target = generated.deck.slides[6]
@@ -298,6 +299,71 @@ def test_offline_10_slide_generate_regenerate_conflict_and_rollback(monkeypatch)
     assert repository.get_deck(generated.deck.deck_id, revision=1).digest == generated.deck.digest
     assert repository.get_deck(generated.deck.deck_id, revision=2).digest == regenerated.deck.digest
     assert repository.get_deck(generated.deck.deck_id).digest == rolled_back.deck.digest
+
+    # Reuse the exact fixture as an admitted A4 revision. This exercises stored
+    # canvas lifecycle; it is not evidence of A4 model generation or file export.
+    from models.authored_vnext.deck.scene import seal_deck_scene
+    from services.authored_vnext.generation.pipeline import _seal_deck
+    from services.document_canvas import document_canvas_for_orientation
+
+    for orientation in ("landscape", "portrait"):
+        a4_pipeline, a4_repository, a4_bridge = _pipeline(master)
+        source_scene = generated.deck.scene
+        canvas = document_canvas_for_orientation(orientation).model_dump(mode="json", by_alias=True)
+        scene = seal_deck_scene(
+            deck_id=source_scene.deck_id, revision=1,
+            composition_digest=source_scene.composition_digest,
+            source_digest=source_scene.source_digest,
+            slides=list(source_scene.slides), document_canvas=canvas,
+            asset_manifest=list(source_scene.asset_manifest),
+            data_manifest=list(source_scene.data_manifest),
+            capabilities=list(source_scene.capabilities),
+            hybrid_profile_id=source_scene.hybrid_profile_id,
+        )
+        imported = _seal_deck(
+            deck_id=generated.deck.deck_id, revision=1, parent=None,
+            pin=generated.deck.master, composition=generated.deck.composition,
+            source_digest=generated.deck.source_digest,
+            slides=list(generated.deck.slides), canonical_scene=scene,
+        )
+        a4_repository.append_imported_deck(imported)
+        command = regenerate.model_copy(update={
+            "operation_id": f"operation:a4-regenerate-{orientation}",
+            "publication_fence": regenerate.publication_fence.model_copy(update={
+                "expected_active_revision_digest": imported.digest,
+            }),
+        })
+        result = a4_pipeline.regenerate_body(command)
+        assert result.deck.scene.document_canvas == canvas
+        assert result.deck.scene.asset_manifest == imported.scene.asset_manifest
+        assert result.deck.scene.data_manifest == imported.scene.data_manifest
+        assert result.deck.master == imported.master
+        assert result.deck.slides[6].slide.body == command.body
+        assert len(a4_bridge.calls) == 1
+        assert all(
+            before == after for index, (before, after) in enumerate(
+                zip(imported.slides, result.deck.slides, strict=True)
+            ) if index != 6
+        )
+        with pytest.raises(GenerationConflictError):
+            a4_pipeline.regenerate_body(command)
+        assert len(a4_bridge.calls) == 1
+        restored = a4_pipeline.rollback(RollbackDeckRequest(
+            operation_id=f"operation:a4-rollback-{orientation}",
+            deck_id=imported.deck_id, target_revision=1,
+            target_revision_digest=imported.digest,
+            master_digest=imported.master.master_digest,
+            publication_fence={
+                "expectedDeckRevision": result.deck.revision,
+                "expectedActiveRevisionDigest": result.deck.digest,
+            },
+            reason="A4 fixture rollback",
+        ))
+        assert restored.deck.scene.document_canvas == canvas
+        assert restored.deck.scene.slides == imported.scene.slides
+        assert restored.deck.scene.asset_manifest == imported.scene.asset_manifest
+        assert restored.deck.scene.data_manifest == imported.scene.data_manifest
+        assert a4_repository.get_deck(imported.deck_id).digest == restored.deck.digest
 
 
 def test_resume_keeps_master_digest_and_stale_master_fails_closed(monkeypatch) -> None:

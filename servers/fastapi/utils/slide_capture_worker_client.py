@@ -32,11 +32,21 @@ from utils.slide_capture_worker_lease import acquire_lease
 from utils.slide_capture_worker_session import RendererWorkerSession
 
 async def _render_html_in_isolated_worker(  # noqa: ASYNC109
-    html: str, timeout: int
+    html: str, timeout: int, *, width_px: int = 1280, height_px: int = 720,
+    preserved_raster_svg: str | None = None,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
-    admitted = _admit_render_source(html)
+    if preserved_raster_svg is not None:
+        from services.svg_renderer import admit_preserved_raster_preview
+        admitted, measured_html = admit_preserved_raster_preview(
+            html, preserved_raster_svg, width=width_px, height=height_px)
+    else:
+        admitted = _admit_render_source(html)
+        measured_html = html
     command = worker_command()
-    request = encode_request(html, timeout)
+    request = encode_request(
+        html, timeout, width_px=width_px, height_px=height_px,
+        **({"preserved_raster_svg": preserved_raster_svg} if preserved_raster_svg is not None else {}),
+    )
     environment = build_worker_environment()
     kwargs: dict[str, Any] = {
         "stdin": asyncio.subprocess.PIPE,
@@ -103,7 +113,7 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     if len(stdout) > MAX_RESPONSE_BYTES:
         raise RendererIsolationError("authored renderer response limit exceeded")
     png, metrics = _decode_worker_response(stdout)
-    expected_digest = source_digest_for(html)
+    expected_digest = source_digest_for(measured_html)
     # Admission is intentionally repeated in the worker.  The parent digest check
     # binds the returned artifact to the exact request across an external launcher.
     response = json.loads(stdout)
@@ -112,7 +122,9 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     if process.returncode != 0:
         raise RendererIsolationError("authored renderer worker failed")
     if metrics is not None:
-        _cache_browser_metrics(html, metrics)
+        _cache_browser_metrics(
+            measured_html, metrics, width_px=width_px, height_px=height_px
+        )
     return png, metrics
 
 
@@ -122,6 +134,8 @@ async def render_with_lease(  # noqa: ASYNC109
     timeout: int = 60,
     *,
     render_fn: Any = None,
+    width_px: int = 1280,
+    height_px: int = 720,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     """Render one authored slide, batching same-deck renders behind a lease.
 
@@ -154,17 +168,26 @@ async def render_with_lease(  # noqa: ASYNC109
     """
 
     exchange = _render_html_in_isolated_worker if render_fn is None else render_fn
+
+    async def dimensioned_exchange(value: str, value_timeout: int):
+        if (width_px, height_px) == (1280, 720):
+            return await exchange(value, value_timeout)
+        return await exchange(
+            value, value_timeout, width_px=width_px, height_px=height_px
+        )
     if not (is_authored_renderer_lease_enabled() and renderer_requires_external_worker()):
-        return await exchange(html, timeout)
+        return await dimensioned_exchange(html, timeout)
     if is_authored_renderer_framed_protocol_enabled():
         lease = await acquire_lease(
             deck_scope,
-            exchange,
+            dimensioned_exchange,
             session_factory=lambda: RendererWorkerSession(
-                max_requests=get_authored_renderer_lease_max_renders()
+                max_requests=get_authored_renderer_lease_max_renders(),
+                width_px=width_px,
+                height_px=height_px,
             ),
             pool_size=get_authored_renderer_lease_pool_size(),
         )
     else:
-        lease = await acquire_lease(deck_scope, exchange)
+        lease = await acquire_lease(deck_scope, dimensioned_exchange)
     return await lease.render(html, timeout)

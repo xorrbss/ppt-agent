@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "item_id": "item-5a8e3056758faaff",
+  "method": "Direct render inspection against this packet sourceContent and requiredImages only",
+  "hash_verification": {
+    "html_sha256": "7818d5b1a58e740ef97c0739134fe5f8a39a1f6a70fce8945ace7b9d86a45466",
+    "png_sha256": "3a15d4c7a11e1e37b70a2e93acb57c692f12a1609226673c79b8af25ad9675dd",
+    "matches_packet_after_sha256_prefix_normalization": true
+  },
+  "verdict": "visual_pass",
+  "geometry": {
+    "pass": true,
+    "findings": [
+      "No visible overlap, clipping, or card escape. Screenshot and its caption are contained; the trace diagram remains separate."
+    ]
+  },
+  "readability": {
+    "pass": true,
+    "findings": [
+      "Slide-authored labels and paragraphs are readable. Dense screenshot microtext is small, but is not an independently specified full-pass gate in this packet."
+    ],
+    "score": 1
+  },
+  "required_images": {
+    "candidate_count": 1,
+    "require_all": false,
+    "verdict": "visible_complete",
+    "visible_raster_images": true,
+    "observation": "Large landscape screenshot visibly contains spreadsheet ribbon, inventory rows, AI sidebar, and bottom workbook controls without overlay or obvious cropping. Exact pixel identity not separately established."
+  },
+  "style": {
+    "verdict": "coherent",
+    "observation": "Consistent teal/mint palette and clean two-column hierarchy.",
+    "score": 2
+  },
+  "content_visibility": {
+    "observation": "Caption identifies a work-interface example and explicitly separates trace-matrix validation."
+  },
+  "criteria_basis": {
+    "location": "packet.json requiredImages.placementPlan.assignments[0].purpose and critical_regions[0..3]",
+    "summary": "Requires preserving the complete spreadsheet and AI panel in a large landscape panel without overlap. No explicit requirement that every screenshot microtext character be readable at slide scale; no new microtext gate added."
+  },
+  "readability_score": 1,
+  "style_score": 2
+}

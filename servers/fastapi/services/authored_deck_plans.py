@@ -31,7 +31,11 @@ from services.authored_deck_infographic_plan import (
     derive_illustration_plan as derive_illustration_plan_from_figures,
     resolve_infographic_plan,
 )
-from utils.get_env import is_authored_infographic_plan_enabled
+from services.authored_composition_envelope_profile import (
+    CompositionEnvelopeProfile,
+    ordinary_infographic_plan_enabled,
+    resolve_envelope_profile,
+)
 from utils.get_env_programme import get_authored_illustration_share
 from utils.llm_calls.author_deck import plan_deck_roles
 from utils.llm_calls.author_slide import (
@@ -59,7 +63,11 @@ def _chapter_plan_applies(request: GeneratePresentationRequest, style) -> bool:
     return _reference_mode(style) != EXACT_RECONSTRUCTION
 
 
-def _infographic_plan_applies(request: GeneratePresentationRequest, style) -> bool:
+def _infographic_plan_applies(
+    request: GeneratePresentationRequest,
+    style,
+    envelope: Optional[CompositionEnvelopeProfile] = None,
+) -> bool:
     """Whether this generation decides its own figures.
 
     Exact reconstruction must reproduce a source, not redraw it, and a source
@@ -76,8 +84,13 @@ def _infographic_plan_applies(request: GeneratePresentationRequest, style) -> bo
     and each slide decides its own picture. This is the single seam for that
     decision; a half-on state (brief emitted, CSS absent) would fail the
     figure checker on every planned slide.
+
+    The ``august`` envelope profile forces the plan off whatever that knob
+    says, because "the deck as August authored it" cannot include a figure
+    contract that did not exist until 2026-09-03.
     """
-    if not is_authored_infographic_plan_enabled():
+    resolved_envelope = envelope or resolve_envelope_profile()
+    if not ordinary_infographic_plan_enabled(resolved_envelope):
         return False
     if getattr(request, "_source_content_authored_reflow", False):
         return False

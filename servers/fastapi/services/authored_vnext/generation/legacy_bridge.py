@@ -85,6 +85,7 @@ from .legacy_pin import (
     canonical_legacy_master_pin_identity,
     generation_repository_for_owner,
 )
+from .repository import async_generation_repository
 
 
 _HEADING = re.compile(r"^\s{0,3}#{1,6}\s+")
@@ -412,7 +413,7 @@ async def generate_legacy_master_owned_deck(
         ai_text_context=context,
         source_semantic_snapshot=source_semantic_snapshot,
     )
-    repository = generation_repository_for_owner(owner_id)
+    repository = async_generation_repository(generation_repository_for_owner(owner_id))
     effective_contract = materialize_authored_composition(
         master.contract,
         composition_pin,
@@ -917,8 +918,8 @@ async def export_persisted_legacy_master_deck(
 
 
 def _prepare_remaster(
-    *,
     repository,
+    *,
     presentation_id: uuid.UUID,
     expected_presentation_revision: int,
     expected_deck_revision: int,
@@ -1088,10 +1089,11 @@ async def apply_master_to_legacy_presentation(
     idempotency_key: str,
     resolved: ResolvedLegacyMasterPin,
 ) -> LegacyMasterApplyResult:
-    repository = generation_repository_for_owner(resolved.owner_id)
-    result, master, already_published = await asyncio.to_thread(
+    repository = async_generation_repository(
+        generation_repository_for_owner(resolved.owner_id)
+    )
+    result, master, already_published = await repository.run(
         _prepare_remaster,
-        repository=repository,
         presentation_id=presentation_id,
         expected_presentation_revision=expected_presentation_revision,
         expected_deck_revision=expected_deck_revision,
@@ -1164,8 +1166,7 @@ async def apply_master_to_legacy_presentation(
                 "properties": {"image": image_refs[index]},
             }
     try:
-        await asyncio.to_thread(
-            repository.publish_legacy_master_apply,
+        await repository.publish_legacy_master_apply(
             result.deck,
             result,
             presentation_id=presentation_id,
@@ -1176,7 +1177,7 @@ async def apply_master_to_legacy_presentation(
             slide_updates=slide_updates,
         )
     except Exception as error:
-        repository.fail_operation(result.operation_id, error)
+        await repository.fail_operation(result.operation_id, error)
         raise
     return LegacyMasterApplyResult(
         deck=result.deck,
@@ -1185,8 +1186,8 @@ async def apply_master_to_legacy_presentation(
 
 
 def _prepare_body_regeneration(
-    *,
     repository,
+    *,
     operation_id: str,
     idempotency_key: str,
     deck_id: str,
@@ -1333,7 +1334,7 @@ async def regenerate_legacy_master_body(
     body: str,
     operation_uuid: uuid.UUID,
 ) -> LegacyBodyRegenerationResult:
-    repository = generation_repository_for_owner(owner_id)
+    repository = async_generation_repository(generation_repository_for_owner(owner_id))
     deck_id = projection.get("deckId")
     deck_revision = projection.get("deckRevision")
     deck_digest = projection.get("deckDigest")
@@ -1348,9 +1349,8 @@ async def regenerate_legacy_master_body(
     ):
         raise RuntimeError("authored_vnext_export_projection_incomplete")
     operation_id = f"operation:workspace-{operation_uuid.hex}"
-    result, master, already_published = await asyncio.to_thread(
+    result, master, already_published = await repository.run(
         _prepare_body_regeneration,
-        repository=repository,
         operation_id=operation_id,
         idempotency_key=f"workspace-regenerate:{operation_uuid}",
         deck_id=deck_id,
@@ -1367,18 +1367,12 @@ async def regenerate_legacy_master_body(
             presentation_revision=expected_presentation_revision + 1,
         )
     item = result.deck.slides[slide_index]
-    preview_contract = (
-        materialize_authored_composition(master.contract, result.deck.composition)
-        if result.deck.composition is not None
-        else master.contract
+    from services.document_canvas_scene_layout import scene_revision_preview
+
+    html, png = await scene_revision_preview(
+        master=master, deck=result.deck, slide_index=slide_index,
+        preview_builder=build_preview, capture=render_html_to_png,
     )
-    html = build_preview(
-        preview_contract,
-        master.revision,
-        item.slide,
-        page_number=slide_index + 1,
-    ).html
-    png = await render_html_to_png(html)
     image_ref = (
         await asyncio.to_thread(
             _save_slide_pngs,
@@ -1427,8 +1421,7 @@ async def regenerate_legacy_master_body(
         }
     }
     try:
-        await asyncio.to_thread(
-            repository.publish_legacy_master_apply,
+        await repository.publish_legacy_master_apply(
             result.deck,
             result,
             presentation_id=presentation_id,
@@ -1439,7 +1432,7 @@ async def regenerate_legacy_master_body(
             slide_updates=slide_update,
         )
     except Exception as error:
-        repository.fail_operation(result.operation_id, error)
+        await repository.fail_operation(result.operation_id, error)
         raise
     return LegacyBodyRegenerationResult(
         result=result,

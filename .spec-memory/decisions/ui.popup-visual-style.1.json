@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "key": "ui.popup-visual-style",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Use the approved generation loading card design across app popups: white surfaces, 16px corners, subtle borders and shadows, compact type and violet accents.",
+  "scope": [
+    "frontend",
+    "popup-design"
+  ],
+  "invariants": [
+    "Use the approved LoadingState as the visual reference for other popups."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "servers/nextjs/app/(presentation-generator)/presentation/components/LoadingState.tsx",
+    "servers/nextjs/components/ui/dialog.tsx",
+    "servers/nextjs/components/ui/overlay-loader.tsx"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-13T14:11:49.4332730+00:00"
+}

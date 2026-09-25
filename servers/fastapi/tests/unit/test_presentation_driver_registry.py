@@ -55,11 +55,11 @@ def test_supported_profiles_and_drivers(
 
 
 def test_registry_is_complete_immutable_and_exposes_supported_adapters():
-    assert tuple(PRESENTATION_DRIVER_REGISTRY) == ("template-v2", "authored")
+    assert tuple(PRESENTATION_DRIVER_REGISTRY) == ("template-v2", "authored", "svg-v1")
     assert {
         driver.capabilities.renderer_adapter_id
         for driver in PRESENTATION_DRIVER_REGISTRY.values()
-    } == {"template-v2", "authored"}
+    } == {"template-v2", "authored", "svg"}
     with pytest.raises(TypeError):
         PRESENTATION_DRIVER_REGISTRY["future"] = PRESENTATION_DRIVER_REGISTRY[  # type: ignore[index]
             "authored"

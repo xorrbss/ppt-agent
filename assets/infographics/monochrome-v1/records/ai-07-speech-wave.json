@@ -1,0 +1,55 @@
+{
+  "id": "ai-07-speech-wave",
+  "category": "ai",
+  "tags": {
+    "ko": [
+      "인공지능",
+      "음성인식"
+    ],
+    "en": [
+      "ai",
+      "speech",
+      "wave"
+    ]
+  },
+  "alt": {
+    "ko": "음성인식 단색 벡터 인포그래픽",
+    "en": "speech wave monochrome vector infographic"
+  },
+  "path": "originals/ai-07-speech-wave.svg",
+  "thumbnail": "thumbnails/ai-07-speech-wave.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 394,
+  "sha256": "411448fca2621a51a95039960d7eed60f09cbf816b0b87e31c174426e949a4a2",
+  "geometry_sha256": "b558f11e6465fbb0d5c2cf9bee009f13e1069c478c5f778e8e9a3ed63e34a940",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56653,
+    "preview_opaque_pixels": 7588,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "AudioLines"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -22,6 +22,7 @@ import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { addToHistory } from "@/store/slices/undoRedoSlice";
 import SlideScale, { ViewportCulledSlide } from "../../components/PresentationRender";
+import { LEGACY_AUTHORED_CANVAS, resolveAuthoredCanvas } from "@/lib/authored-canvas";
 import { FlaggedSlideBadge } from "./FlaggedSlideBadge";
 import { flaggedSlideKey } from "../utils/flaggedSlides";
 
@@ -34,6 +35,7 @@ interface SlideContentProps {
   mutationsEnabled?: boolean;
   deferRender?: boolean;
   renderPriority?: boolean;
+  resolveSvgAssets?: boolean;
 }
 
 const SlideContent = ({
@@ -45,6 +47,7 @@ const SlideContent = ({
   mutationsEnabled = true,
   deferRender = false,
   renderPriority = false,
+  resolveSvgAssets = false,
 }: SlideContentProps) => {
   const dispatch = useDispatch();
   const [isUpdating, setIsUpdating] = useState(false);
@@ -55,6 +58,9 @@ const SlideContent = ({
     (state: RootState) => state.presentationGeneration
   );
   const flag = flaggedSlides[flaggedSlideKey(slide, index)] ?? null;
+  const canvas = slide?.content?.__authored__ === true || slide?.layout_group === "authored" || slide?.layout_group === "svg"
+    ? resolveAuthoredCanvas(presentationData?.theme)
+    : LEGACY_AUTHORED_CANVAS;
 
   // Use the centralized group layouts hook
 
@@ -153,7 +159,7 @@ const SlideContent = ({
                 : "relative"
             }
           >
-            <ViewportCulledSlide enabled={deferRender} priority={renderPriority}>
+            <ViewportCulledSlide enabled={deferRender} priority={renderPriority} canvas={canvas}>
               <div
                 data-testid="slide-page-boundary"
                 className="h-full overflow-hidden rounded-[2px] bg-white shadow-[0_3px_12px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-300"
@@ -164,6 +170,7 @@ const SlideContent = ({
                   isEditMode={mutationsEnabled}
                   showEditScan={isChatEditing}
                   preferAuthoredHtml
+                  resolveSvgAssets={resolveSvgAssets}
                 />
               </div>
             </ViewportCulledSlide>

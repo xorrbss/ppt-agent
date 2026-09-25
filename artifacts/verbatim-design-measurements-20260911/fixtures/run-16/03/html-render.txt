@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;height:104px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:24px;width:1000px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.04em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:132px;height:480px}
+.content{width:1152px;margin-left:64px}
+.claim{height:62px;display:flex;align-items:center;padding:0 4px;border-bottom:1px solid #E2E8F0}
+.claim-text{font-size:23px;line-height:34px;font-weight:700;color:#1D1D1B}
+.claim-text strong{color:#08916E}
+.main-grid{display:grid;grid-template-columns:350px 1fr;gap:24px;margin-top:24px;height:370px}
+.intro-panel{height:370px;padding:28px;background:#00140E;border-radius:12px;color:#FFFFFF;display:flex;flex-direction:column;justify-content:space-between}
+.intro-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:50px;line-height:58px;font-weight:700;color:#08916E}
+.intro-rule{width:48px;height:3px;background:#219F88;margin-top:18px}
+.intro-label{font-size:20px;line-height:30px;font-weight:700;color:#FFFFFF}
+.intro-caption{font-size:17px;line-height:27px;color:#D6EAE4}
+.pillars{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:16px}
+.pillar-card{position:relative;padding:27px 24px 22px 74px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.pillar-index{position:absolute;left:24px;top:25px;width:32px;height:32px;border-radius:12px;background:#08916E;color:#FFFFFF;font-family:"IBM Plex Mono","Consolas",monospace;font-size:16px;line-height:32px;text-align:center;font-weight:700}
+.pillar-card p{margin:0;font-size:18px;line-height:29px;font-weight:700;color:#1D1D1B}
+.pillar-card p strong{color:#08916E}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;height:16px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" class="header-band" style="height:104px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-8h-rule">수업 원칙</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-51d6a43c463aba5a" data-source-block-id="source-slide:4:text:3">8시간의 원칙</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:132px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <main class="content" data-qid="q-main-26687018ddf0" data-semantic-role="decoration">
+    <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+      <div class="claim-text" data-semantic-role="body" data-qid="source-block-9ea436f3c989a513" data-source-block-id="source-slide:4:text:4">본 수업은 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">‘필수’</strong>만. 나머지는 템플릿과 보너스 자료로 제공합니다.</div>
+    </div>
+
+    <div class="main-grid" data-qid="q-div-948c49f110fb" data-semantic-role="decoration">
+      <section class="intro-panel" data-semantic-role="decoration" data-qid="q-intro-panel">
+        <div data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+          <div class="intro-number" data-semantic-role="supporting" data-qid="source-block-b37b36733c3c1adb" data-source-block-id="source-slide:4:text:5">04</div>
+          <div class="intro-rule" data-qid="q-div-112400f4dbb4" data-semantic-role="decoration"></div>
+        </div>
+        <div class="intro-label" data-semantic-role="supporting" data-qid="source-block-4cfe6d7e66337a56" data-source-block-id="source-slide:4:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+        <div class="intro-caption" data-semantic-role="supporting" data-qid="q-intro-caption">짧은 시간 안에 배우고, 완성하고, 바로 실행합니다.</div>
+      </section>
+
+      <section class="pillars" data-qid="q-section-9c713bcd7373" data-semantic-role="decoration">
+        <article class="pillar-card" data-semantic-role="decoration" data-qid="q-pillar-01">
+          <div class="pillar-index" data-semantic-role="supporting" data-qid="q-pillar-index-01">01</div>
+          <p data-qid="source-block-b1717ef4283139ee" data-semantic-role="body" data-source-block-id="source-slide:4:text:7:run:0">기능을 많이 배우는 것보다 <strong data-qid="q-strong-f213b54d7db8" data-semantic-role="body">실제 영상 1개를 완성한다.</strong></p>
+        </article>
+        <article class="pillar-card" data-semantic-role="decoration" data-qid="q-pillar-02">
+          <div class="pillar-index" data-semantic-role="supporting" data-qid="q-pillar-index-02">02</div>
+          <p data-qid="source-block-607b039387270d5f" data-semantic-role="body" data-source-block-id="source-slide:4:text:7:run:1">영업 방법을 전부 외우기보다 <strong data-qid="q-strong-f2342e01f838" data-semantic-role="body">핵심 3개를 실제로 해본다.</strong></p>
+        </article>
+        <article class="pillar-card" data-semantic-role="decoration" data-qid="q-pillar-03">
+          <div class="pillar-index" data-semantic-role="supporting" data-qid="q-pillar-index-03">03</div>
+          <p data-qid="source-block-24d2db609f913159" data-semantic-role="body" data-source-block-id="source-slide:4:text:7:run:2">강의가 끝날 때 <strong data-qid="q-strong-20e9cb03b149" data-semantic-role="body">‘무엇을 누구에게 팔지’가 명확해야 한다.</strong></p>
+        </article>
+        <article class="pillar-card" data-semantic-role="decoration" data-qid="q-pillar-04">
+          <div class="pillar-index" data-semantic-role="supporting" data-qid="q-pillar-index-04">04</div>
+          <p data-qid="source-block-f1f67204522209cf" data-semantic-role="body" data-source-block-id="source-slide:4:text:7:run:3">수강생이 집에 가서 <strong data-qid="q-strong-f2092292903b" data-semantic-role="body">바로 실행할 수 있는 자료를 남긴다.</strong></p>
+        </article>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="q-page-04">04</div>
+</body>
+</html>

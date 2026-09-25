@@ -1,0 +1,58 @@
+{
+  "schema": "sol-neutral-content-audit/v1",
+  "packetId": "item-8fe457a49e8d0495",
+  "reviewer": "independent-content",
+  "hashVerification": {
+    "html": true,
+    "png": true
+  },
+  "contentVerdict": "fail",
+  "passed": false,
+  "evidenceBasis": [
+    "this packet sourceContent and requiredImages",
+    "HTML text cross-check",
+    "direct render.png visual inspection"
+  ],
+  "requiredImageCount": 0,
+  "requiredImagesVerdict": "not-applicable",
+  "propositions": [
+    {
+      "index": 1,
+      "verdict": "pass",
+      "evidence": "Header +1 accepted by frozen rubric; company webform/save/staged documents/correction/status and result notification flow visible."
+    },
+    {
+      "index": 2,
+      "verdict": "fail",
+      "evidence": "Assigned-company/period access, document/evaluation form, score validation/sign/submit and post-completion edit restriction visible; explicit fairness and auditability objectives absent."
+    },
+    {
+      "index": 3,
+      "verdict": "fail",
+      "evidence": "Assigned-company reporting/status controls visible, but administrator and staff are merged into one row; administrator-specific authorization for bulk assignment/status change is not visibly preserved as a distinct permission rule."
+    },
+    {
+      "index": 4,
+      "verdict": "fail",
+      "evidence": "접수/서류/평가/알림/정산 visible but 성과정보 omitted from integrated inquiry enumeration. Pending work/deadline dashboard and reducing manual reconciliation/omissions remain visible."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "type": "missing-enumerated-information",
+      "detail": "성과정보 missing from integrated inquiry."
+    },
+    {
+      "severity": "major",
+      "type": "role-permission-conflation",
+      "detail": "관리자·업무담당자 shared row collapses distinct permissions, without administrator-specific authorized bulk-action condition."
+    },
+    {
+      "severity": "moderate",
+      "type": "missing-purpose-qualification",
+      "detail": "Fairness and auditability not stated for evaluation controls."
+    }
+  ],
+  "uncertainties": []
+}

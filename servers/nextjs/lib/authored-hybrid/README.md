@@ -105,7 +105,28 @@ when that family was actually embedded in the package; otherwise it uses the
 deterministic Office/Windows substitute from `font-policy.ts`, and CSS
 collector fallback must use `cssFontStack` from the same module.
 
-### Bundled Pretendard
+### Bundled fonts (local-first manifest)
+
+`bundled-fonts-manifest.ts` is the single source of truth for fonts shipped in
+`public/fonts/<directory>/`: family, weight/style, browser WOFF2, OOXML TTF,
+licence file, and whether the family covers Hangul. It is pure data plus name
+normalization and weight resolution (`resolveBundledFontFace`), so isomorphic
+modules such as `font-policy.ts` import it directly; `bundled-fonts.ts` reads
+the bytes. A lookup for a family that is not in the manifest is a miss, never a
+substitute. Adding a family is "drop the files + one manifest entry"; a test
+asserts the files, licence, `app/globals.css` URLs and the OOXML allowlist all
+agree with the manifest.
+
+Local-first at the Google Fonts boundary (`google-fonts-local-first.ts`): a
+manifest family is stripped from every `<link>`/`@import` Google Fonts URL and
+inline gstatic `@font-face` before any fetch (the whole request is dropped when
+nothing remote remains), and reported as `localFamilies` on the collector
+result. Families outside the manifest keep the exact URL the document wrote.
+The bundled collector then injects the same family name as `data:`
+`@font-face` rules — Chrome runs network-isolated, so a same-origin URL cannot
+be used there; `/fonts/...` same-origin URLs serve the editor via
+`app/globals.css`. With `DISABLE_GOOGLE_FONTS_COLLECTION=true` a Pretendard deck
+therefore renders byte-identically to a networked host.
 
 Pretendard (OFL-1.1, `public/fonts/pretendard/`, licence file beside the
 fonts) is delivered and embedded without any network access:
@@ -118,8 +139,10 @@ fonts) is delivered and embedded without any network access:
   self-contained preflight bounds that document by `maxTrustedHtmlBytes`;
   structural limits still apply to the authored markup without font faces.
 - `font-embedding-policy.ts` lists the static TrueType regular/bold faces under
-  the `bundled-open-font` source. `nativeEmbeddingFamilies` requests
-  `Pretendard` whenever the stored slide HTML names it.
+  the `bundled-open-font` source and reads the package copy before any
+  allowlist or system directory, so PowerPoint receives the bytes the browser
+  measured with. `nativeEmbeddingFamilies` requests every manifest family the
+  stored slide HTML names (`bundledFamiliesReferencedByHtml`).
 - `resolveScriptAwareTypeface` keeps Hangul runs on `Pretendard` only when the
   authored stack names it **and** the exact Pretendard face was packaged;
   otherwise Hangul still resolves to Noto Sans KR / Malgun Gothic.

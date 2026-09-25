@@ -1,0 +1,310 @@
+{
+  "schemaVersion": "sol-common-repair-paid-final-gate/v1",
+  "status": "failed",
+  "reviewed": 24,
+  "planned": 24,
+  "improvedPromptAdopted": false,
+  "additionalRepeatsAuthorized": false,
+  "unseenDocumentStageAuthorized": false,
+  "pptxExportStageAuthorized": false,
+  "reason": "정상 대조군 astra-p19에서 기존 프롬프트의 내용·이미지·시각 통과가 개선 프롬프트 off/on 모두 실패로 퇴행하여 동결 gate를 위반했다.",
+  "normalRegressions": [
+    {
+      "sampleId": "astra-p19",
+      "branches": [
+        "off",
+        "on"
+      ],
+      "before": "타깃 동심원 전부 표시, 내용/시각 통과, 가독성2/스타일2",
+      "after": "지정 타깃 비가시성 및 카드 탈출, 내용/시각 실패, 가독성1/스타일1"
+    },
+    {
+      "sampleId": "sol-p06",
+      "branches": [
+        "off",
+        "on"
+      ],
+      "binaryContentBefore": false,
+      "binaryContentAfter": false,
+      "distinctDefectBefore": "업무담당자 통합 조회의 성과정보 누락",
+      "distinctDefectAfter": "업무담당자 통합 조회의 서류정보 누락",
+      "note": "동일한 실패 boolean이어도 새 누락 종류를 숨기지 않는다."
+    }
+  ],
+  "commonFixConclusion": "제품 공통 경계 수정은 기존 대표10에서 1개 완전 해결·1개 부분 개선·정상2개 원본 유지로 별도 확인됐다. 프롬프트 시험에서는 개선 프롬프트의 sol-p28에서 off→on 통합 통과 1개 증가했으며 기존 프롬프트에서는 추가 통합 통과가 없었다.",
+  "comparisons": [
+    {
+      "comparison": "initialPromptEffect",
+      "jointGains": 1,
+      "jointLosses": 1,
+      "netJointGain": 0,
+      "pairs": [
+        {
+          "sampleId": "sol-p02",
+          "leftItemId": "item-d00701e9b59f3856",
+          "rightItemId": "item-148ee64e4f396b1f",
+          "jointGain": true,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "sol-p28",
+          "leftItemId": "item-175ac57e206d89d7",
+          "rightItemId": "item-825a6941de14452e",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "astra-p17",
+          "leftItemId": "item-591e72c73855feb6",
+          "rightItemId": "item-c9576f15589c5dc8",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "astra-p25",
+          "leftItemId": "item-5a8e3056758faaff",
+          "rightItemId": "item-f8038519deae7011",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "sol-p06",
+          "leftItemId": "item-8fe457a49e8d0495",
+          "rightItemId": "item-feb71834829d14e4",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "astra-p19",
+          "leftItemId": "item-9442f27d8f02a394",
+          "rightItemId": "item-478e476951d46117",
+          "jointGain": false,
+          "jointLoss": true,
+          "contentRegression": true,
+          "visualRegression": true,
+          "geometryRegression": true
+        }
+      ]
+    },
+    {
+      "comparison": "finalPromptEffect",
+      "jointGains": 2,
+      "jointLosses": 1,
+      "netJointGain": 1,
+      "pairs": [
+        {
+          "sampleId": "sol-p02",
+          "leftItemId": "item-a4323a1ae8f2c7a7",
+          "rightItemId": "item-66db4c95086c862d",
+          "jointGain": true,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "sol-p28",
+          "leftItemId": "item-92b14042c47f574a",
+          "rightItemId": "item-7db973b111215619",
+          "jointGain": true,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "astra-p17",
+          "leftItemId": "item-e6cd0a057eb523e9",
+          "rightItemId": "item-81537176ef073791",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "astra-p25",
+          "leftItemId": "item-cab45fbfb95eda1a",
+          "rightItemId": "item-3ede756b0e86115e",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "sol-p06",
+          "leftItemId": "item-f2ce48f0f2bb5432",
+          "rightItemId": "item-6c19853836071365",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "astra-p19",
+          "leftItemId": "item-a55827947aa35926",
+          "rightItemId": "item-62523bbb604d974a",
+          "jointGain": false,
+          "jointLoss": true,
+          "contentRegression": true,
+          "visualRegression": true,
+          "geometryRegression": true
+        }
+      ]
+    },
+    {
+      "comparison": "baselineCorrectionEffect",
+      "jointGains": 0,
+      "jointLosses": 0,
+      "netJointGain": 0,
+      "pairs": [
+        {
+          "sampleId": "sol-p02",
+          "leftItemId": "item-d00701e9b59f3856",
+          "rightItemId": "item-a4323a1ae8f2c7a7",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "sol-p28",
+          "leftItemId": "item-175ac57e206d89d7",
+          "rightItemId": "item-92b14042c47f574a",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "astra-p17",
+          "leftItemId": "item-591e72c73855feb6",
+          "rightItemId": "item-e6cd0a057eb523e9",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "astra-p25",
+          "leftItemId": "item-5a8e3056758faaff",
+          "rightItemId": "item-cab45fbfb95eda1a",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "sol-p06",
+          "leftItemId": "item-8fe457a49e8d0495",
+          "rightItemId": "item-f2ce48f0f2bb5432",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "astra-p19",
+          "leftItemId": "item-9442f27d8f02a394",
+          "rightItemId": "item-a55827947aa35926",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        }
+      ]
+    },
+    {
+      "comparison": "improvedCorrectionEffect",
+      "jointGains": 1,
+      "jointLosses": 0,
+      "netJointGain": 1,
+      "pairs": [
+        {
+          "sampleId": "sol-p02",
+          "leftItemId": "item-148ee64e4f396b1f",
+          "rightItemId": "item-66db4c95086c862d",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "sol-p28",
+          "leftItemId": "item-825a6941de14452e",
+          "rightItemId": "item-7db973b111215619",
+          "jointGain": true,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "astra-p17",
+          "leftItemId": "item-c9576f15589c5dc8",
+          "rightItemId": "item-81537176ef073791",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "astra-p25",
+          "leftItemId": "item-f8038519deae7011",
+          "rightItemId": "item-3ede756b0e86115e",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "sol-p06",
+          "leftItemId": "item-feb71834829d14e4",
+          "rightItemId": "item-6c19853836071365",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        },
+        {
+          "sampleId": "astra-p19",
+          "leftItemId": "item-478e476951d46117",
+          "rightItemId": "item-62523bbb604d974a",
+          "jointGain": false,
+          "jointLoss": false,
+          "contentRegression": false,
+          "visualRegression": false,
+          "geometryRegression": false
+        }
+      ]
+    }
+  ],
+  "qualityAndTimingSeparate": true
+}

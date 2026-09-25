@@ -21,6 +21,7 @@ from pydantic import (
     Field,
     field_validator,
     model_validator,
+    model_serializer,
 )
 from pydantic.alias_generators import to_camel
 
@@ -28,6 +29,7 @@ from models.generate_presentation_request import (
     AuthoredMasterPinInput,
     SourceContentManifestPinInput,
     SourceContentPolicy,
+    RasterApprovalPinInput,
 )
 from services.authored_vnext.narrative_ir.contracts import (
     ContentIntegrityReceiptV2,
@@ -79,7 +81,7 @@ class GenerationRouteReceiptV1(PublicWireModel):
         "generation-route-receipt/v1"
     )
     requested_mode: GenerationMode
-    selected_route: Literal["source-native", "authored-fallback"]
+    selected_route: Literal["source-native", "authored-fallback", "svg-native"]
     design_pack_pin: DesignPackPinV1 | None = None
     narrative_ir_digest: str | None = Field(default=None, pattern=DIGEST_PATTERN)
     fallback_reason: str | None = Field(default=None, min_length=1, max_length=160)
@@ -115,6 +117,7 @@ class PresentationGenerationRequestV2(PublicWireModel):
         "presentation-generation-request/v2"
     )
     engine: Literal["authored"] = "authored"
+    strategy: Literal["authored", "svg"] = "authored"
     generation_mode: GenerationMode = "auto"
     design_pack_pin: DesignPackPinV1 | None = None
     generation_engine: Literal["authored", "deck-ir"] | None = "authored"
@@ -124,10 +127,34 @@ class PresentationGenerationRequestV2(PublicWireModel):
     slide_count: int | None = Field(default=None, ge=1, le=100)
     language: str | None = Field(default=None, min_length=1, max_length=64)
     authored_style: str | None = Field(default=None, min_length=1, max_length=160)
+    aspect_ratio: Literal["16:9", "9:16"] = "16:9"
+    page_size: Literal["A4"] | None = None
+    orientation: Literal["landscape", "portrait"] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_canvas_selectors(cls, value: Any) -> Any:
+        from models.generate_presentation_request import GeneratePresentationRequest
+
+        if isinstance(value, dict):
+            selectors = dict(value)
+            for alias, name in (("pageSize", "page_size"), ("aspectRatio", "aspect_ratio")):
+                if alias in selectors:
+                    selectors[name] = selectors[alias]
+            GeneratePresentationRequest.validate_canvas_selectors(selectors)
+        return value
+
+    @model_serializer(mode="wrap")
+    def serialize_canvas_selectors(self, handler):
+        payload = handler(self)
+        for key in (("aspectRatio", "aspect_ratio") if self.page_size is not None else ("pageSize", "page_size", "orientation")):
+            payload.pop(key, None)
+        return payload
     master_pin: AuthoredMasterPinInput | None = None
     reference_snapshot_ids: list[str] = Field(default_factory=list, max_length=16)
-    source_mode: Literal["source_content_restyle"] | None = None
+    source_mode: Literal["source_content_restyle", "raster_reconstruction"] | None = None
     source_content_manifest_pin: SourceContentManifestPinInput | None = None
+    raster_approval_pin: RasterApprovalPinInput | None = None
     content_policy: SourceContentPolicy | None = None
     quality_policy: QualityPolicy = "interactive-v1"
 
@@ -150,9 +177,22 @@ class PresentationGenerationRequestV2(PublicWireModel):
             if (
                 self.source_content_manifest_pin is not None
                 or self.content_policy is not None
+                or self.raster_approval_pin is not None
             ):
                 raise ValueError("source_content_mode_required")
             return self
+        if self.source_mode == "raster_reconstruction":
+            if self.raster_approval_pin is None:
+                raise ValueError("raster_approval_pin_required")
+            if self.source_content_manifest_pin is not None or len(self.reference_snapshot_ids) != 1:
+                raise ValueError("raster_single_source_snapshot_required")
+            if self.strategy != "svg" or self.page_size != "A4" or self.orientation is None:
+                raise ValueError("raster_a4_svg_required")
+            if not self.authored_style or self.slides_markdown is not None or self.quality_policy == "release-v1":
+                raise ValueError("source_content_generation_option_conflict")
+            return self
+        if self.raster_approval_pin is not None:
+            raise ValueError("raster_source_mode_required")
         if self.source_content_manifest_pin is None:
             raise ValueError("source_content_manifest_pin_required")
         if self.content_policy is None:
@@ -209,6 +249,18 @@ class PresentationExportOutputV2(PublicWireModel):
         if any(not item for item in normalized) or len(set(normalized)) != len(normalized):
             raise ValueError("requiredCapabilities must be unique non-blank values")
         return normalized
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_editable_font_embedding(cls, value: Any) -> Any:
+        if (
+            isinstance(value, dict)
+            and value.get("mode") == "editable-hybrid"
+            and "fontEmbedding" not in value
+            and "font_embedding" not in value
+        ):
+            return {**value, "fontEmbedding": "subset"}
+        return value
 
     @model_validator(mode="after")
     def validate_mode(self) -> "PresentationExportOutputV2":

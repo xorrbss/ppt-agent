@@ -979,10 +979,10 @@ const ThemePanel: React.FC = () => {
 
 
   return (
-    <div className="space-y-6 px-6 font-syne">
-      <div className='py-[28px] flex justify-between'>
+    <div className="space-y-6 bg-[#FAFAFA] px-4 pb-8 font-syne sm:px-8">
+      <div className='flex flex-wrap items-center justify-between gap-4 border-b border-zinc-200/70 py-6 sm:py-8'>
 
-        <h3 className=" text-[28px]  tracking-[-0.84px] font-unbounded font-normal text-[#101828] flex items-center gap-2">
+        <h3 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
           테마
         </h3>
         <Link
@@ -1000,8 +1000,8 @@ const ThemePanel: React.FC = () => {
         </Link>
       </div>
       {/* Tabs */}
-      <div className='p-1 rounded-[40px] bg-[#F7F6F9] w-fit border border-[#F4F4F4] flex items-center justify-center '>
-        <button className={`inline-flex items-center gap-2 rounded-full border bg-white px-5 py-2 text-xs font-medium text-[#101323] ${tab === 'custom' ? 'border-[#CFC9E8] shadow-sm' : 'border-transparent'}`}
+      <div className='flex w-fit items-center justify-center rounded-xl border border-zinc-200 bg-zinc-100/70 p-1'>
+        <button className={`inline-flex min-h-10 items-center gap-2 rounded-lg border bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${tab === 'custom' ? 'border-zinc-200 shadow-sm' : 'border-transparent'}`}
           aria-pressed={tab === 'custom'}
           onClick={() => {
             trackEvent(MixpanelEvent.Theme_Tab_Switched, { pathname, tab: 'custom' })
@@ -1011,7 +1011,7 @@ const ThemePanel: React.FC = () => {
         <svg xmlns="http://www.w3.org/2000/svg" className='mx-1' width="2" height="17" viewBox="0 0 2 17" fill="none">
           <path d="M1 0V16.5" stroke="#EDECEC" strokeWidth="2" />
         </svg>
-        <button className={`inline-flex items-center gap-2 rounded-full border bg-white px-5 py-2 text-xs font-medium text-[#101323] ${tab === 'default' ? 'border-[#CFC9E8] shadow-sm' : 'border-transparent'}`}
+        <button className={`inline-flex min-h-10 items-center gap-2 rounded-lg border bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${tab === 'default' ? 'border-zinc-200 shadow-sm' : 'border-transparent'}`}
           aria-pressed={tab === 'default'}
           onClick={() => {
             trackEvent(MixpanelEvent.Theme_Tab_Switched, { pathname, tab: 'default' })
@@ -1021,7 +1021,7 @@ const ThemePanel: React.FC = () => {
       </div>
       {/* Built-in Themes */}
 
-      {tab === 'default' && <div className="flex flex-wrap gap-6">
+      {tab === 'default' && <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {
           defaultThemes.map((theme) => (
             <ThemeCard
@@ -1039,7 +1039,7 @@ const ThemePanel: React.FC = () => {
       {/* Custom Themes Section */}
       {tab === 'custom' && customThemes.length > 0 && (
 
-        <div className="flex flex-wrap gap-6">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {customThemes.map((theme) => (
             <ThemeCard
               key={theme.id}
@@ -1060,13 +1060,13 @@ const ThemePanel: React.FC = () => {
       <Sheet open={isSheetOpen} onOpenChange={handleCloseSheet} >
 
 
-        <SheetContent side="bottom" className="h-[90vh] font-syne w-full p-0 [&>button]:hidden focus:outline-none" >
-          <div className="flex h-full">
+        <SheetContent side="bottom" className="h-[92dvh] w-full overflow-y-auto rounded-t-2xl border-zinc-200 bg-white p-0 font-syne [&>button]:hidden focus:outline-none" >
+          <div className="flex min-h-full flex-col lg:h-full lg:flex-row">
             {/* Left side - Editor */}
             <div
               onClick={handleClickOutside}
-              className="min-w-[530px]   border-r border-[#EDEEEF]">
-              <div className="flex items-center justify-between px-5 rounded-md py-3 mx-2.5 my-2.5 bg-[#F6F6F9]  ">
+              className="w-full shrink-0 border-zinc-200 lg:w-[530px] lg:border-r">
+              <div className="mx-3 my-3 flex items-center justify-between rounded-xl bg-zinc-50 px-4 py-3">
                 <input id="theme-name" name="theme-name" className="text-lg font-semibold text-[#4C4D50] bg-transparent w-full outline-none border-none px-2  rounded" autoFocus={false} defaultValue={selectedTheme.name} onBlur={(e) => setSelectedTheme({ ...selectedTheme, name: e.target.value })}>
 
                 </input>
@@ -1074,7 +1074,7 @@ const ThemePanel: React.FC = () => {
                   document.getElementById('theme-name')?.focus()
                 }} />
               </div>
-              <div className='flex h-full   border-t border-[#EDEEEF] '>
+              <div className='flex min-h-full flex-col lg:h-full lg:flex-row   border-t border-[#EDEEEF] '>
                 <StepIndicator currentStep={currentStep} />
                 <div className='pt-7  w-full  h-[calc(90vh-120px)] flex flex-col justify-between  '>
                   {currentStep === 1 && renderColorStep(currentStep)}
@@ -1087,7 +1087,7 @@ const ThemePanel: React.FC = () => {
                     <div className='flex justify-end px-5 gap-2'>
                       {currentStep > 1 && <button
 
-                        className='px-3.5 py-2.5 bg-[#F7F6F9] rounded-[48px] text-xs font-semibold text-[#101323]'
+                        className='rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400'
                         onClick={() => setCurrentStep(currentStep - 1)}
                       >뒤로</button>}
 
@@ -1146,12 +1146,12 @@ const ThemePanel: React.FC = () => {
                 }
               }}
               // ref={previewContainerRef}
-              className=" w-full p-3 bg-gray-50">
+              className="min-w-0 w-full bg-zinc-50 p-3">
               <div className="space-y-4">
                 <div
                   ref={slideContainerRef}
                   style={{ backgroundColor: 'var(--page-background-color)' }}
-                  className="overflow-y-auto overflow-x-hidden custom_scrollbar space-y-4 h-[90vh] rounded-lg shadow-lg border bg-white"
+                  className="custom_scrollbar h-[50vh] space-y-4 overflow-x-hidden overflow-y-auto rounded-xl border border-zinc-200 bg-white shadow-sm lg:h-[90vh]"
                 >
                   <div
                     className="relative w-full"

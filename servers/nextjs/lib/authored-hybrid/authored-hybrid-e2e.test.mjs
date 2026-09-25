@@ -146,6 +146,14 @@ function slideXml(entries, slideNumber) {
   return entries.get(`ppt/slides/slide${slideNumber}.xml`).toString("utf8");
 }
 
+function editableSlideText(xml) {
+  return [...xml.matchAll(/<p:sp\b[^>]*>[\s\S]*?<\/p:sp>/g)].map(([shape]) =>
+    [...shape.matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g)]
+      .map(([, value]) => value.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">"))
+      .join("")
+  );
+}
+
 // x/y are CSS px (matching the fixtures' own coordinates); the backplate PNG
 // is captured at BACKPLATE_SCALE device pixels per CSS px (capture-scale.ts).
 async function rgbAt(png, cssX, cssY) {
@@ -231,7 +239,7 @@ test("v0.4.8 authored-hybrid representative fixtures preserve editable structure
     "이 문장은 완전하게 보존되어야 합니다.",
     "가로선과 세로선",
   ]) {
-    assert.ok(xml2.includes(text), `slide 2 lost editable CJK text: ${text}`);
+    assert.ok(editableSlideText(xml2).some((shapeText) => shapeText.includes(text)), `slide 2 lost editable CJK text: ${text}`);
   }
   assert.match(xml2, /\bsz="900"/, "authored sub-9pt text must clamp to 9pt");
   const filledRuleElements = results[1].layer.elements.filter((element) => {
@@ -290,7 +298,7 @@ test("v0.4.8 authored-hybrid representative fixtures preserve editable structure
     3
   );
   assert.ok(
-    [...entries.keys()].filter((name) => /^ppt\/media\/hybrid-s\d+-backplate-/.test(name)).length >= 3,
+    [...entries.keys()].filter((name) => /^ppt\/media\/hybrid-s\d+-raster-band-0-/.test(name)).length >= 3,
     "each representative slide must receive a hybrid backplate"
   );
 });
@@ -351,7 +359,7 @@ test("isolated authored CSS keeps each slide's right-edge sentinel through PPTX 
       `slide ${slideNumber} has neither a slide background nor a full-slide backplate`
     );
     const mediaPath = [...entries.keys()].find((name) =>
-      new RegExp(`^ppt/media/hybrid-s${slideNumber}-backplate-[0-9a-f]+\\.png$`).test(name)
+      new RegExp(`^ppt/media/hybrid-s${slideNumber}-raster-band-0-[0-9a-f]+\\.png$`).test(name)
     );
     assert.ok(mediaPath, `slide ${slideNumber} has no assembled backplate media`);
     const relationships = entries

@@ -1,0 +1,55 @@
+{
+  "id": "data-05-bar-chart",
+  "category": "data",
+  "tags": {
+    "ko": [
+      "데이터",
+      "막대차트"
+    ],
+    "en": [
+      "data",
+      "bar",
+      "chart"
+    ]
+  },
+  "alt": {
+    "ko": "막대차트 단색 벡터 인포그래픽",
+    "en": "bar chart monochrome vector infographic"
+  },
+  "path": "originals/data-05-bar-chart.svg",
+  "thumbnail": "thumbnails/data-05-bar-chart.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 358,
+  "sha256": "484ea7da56c7977a1ee85fc96a2a5fe3a4e99ac40a79e143a911ce8cc62775de",
+  "geometry_sha256": "fdeb51a4876d76addf31544809f59027934517aef594577085ca8da91abe9b08",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56629,
+    "preview_opaque_pixels": 7661,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ChartBar"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:96px;background:#08916E}
+.header-left{position:absolute;left:64px;top:20px;width:820px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:6px;font-size:32px;line-height:39px;font-weight:800;color:#FFFFFF}
+.header-right{position:absolute;left:956px;top:0;width:260px;height:96px;background:#00140E;color:#FFFFFF;padding:20px 24px;font-size:15px;line-height:22px;font-weight:700}
+.body-wrap{position:absolute;left:0;right:0;top:120px;margin:0 64px;width:1152px}
+.project-line{height:28px;display:flex;align-items:center;margin-bottom:16px;font-size:18px;line-height:28px;font-weight:700;color:#002060}
+.project-mark{width:8px;height:8px;margin-right:10px;background:#E5A93D;border-radius:12px;flex:none}
+.content-grid{display:grid;grid-template-columns:564px 564px;gap:24px;height:462px}
+.pillar-card{height:462px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;position:relative}
+.pillar-card.instagram{border-top:6px solid #08916E}
+.pillar-card.blog{border-top:6px solid #219F88}
+.card-label{font-size:26px;line-height:36px;font-weight:800;color:#002060;margin-bottom:22px}
+.card-rule{height:1px;background:#E2E8F0;margin-bottom:4px}
+.item{display:flex;align-items:center;min-height:56px;border-bottom:1px solid #E2E8F0;font-size:18px;line-height:27px;font-weight:500;color:#1D1D1B}
+.item:last-child{border-bottom:0}
+.item-marker{width:8px;height:8px;margin-right:16px;background:#08916E;flex:none}
+.blog .item-marker{background:#219F88}
+.item-text{padding:12px 0}
+.footer-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="96" class="header-band" style="height:96px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div data-header-part="eyebrow" class="header-left eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-8" style="top: 4px; color: rgb(29, 29, 27)">1주차 PART 3</div>
+  <div data-header-part="title" class="header-left title" data-semantic-role="title" data-qid="source-block-549f280aef7b6446" data-source-block-id="source-slide:9:text:3">1주차 PART 3 | 인스타·블로그 세팅</div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-15201f2eb3dc9ead" data-source-block-id="source-slide:9:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:120px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="project-line" data-semantic-role="supporting" data-qid="q-line-8">
+    <span class="project-mark" data-qid="q-span-770e053630e9" data-semantic-role="decoration"></span>
+    <span data-qid="q-span-f32986c526a1" data-semantic-role="body">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</span>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="pillar-card instagram" data-semantic-role="decoration" data-qid="q-card-instagram-8">
+      <div class="card-label" data-semantic-role="supporting" data-qid="source-block-aa4b2d03edba2cb9" data-source-block-id="source-slide:9:text:8">인스타</div>
+      <div class="card-rule" data-qid="q-div-e24a51b44c9c" data-semantic-role="decoration"></div>
+      <div class="item" data-semantic-role="decoration" data-qid="q-insta-1-8"><span class="item-marker" data-qid="q-span-deec5164867c" data-semantic-role="decoration"></span><span class="item-text" data-qid="source-block-50386881ed159cef" data-semantic-role="body" data-source-block-id="source-slide:9:text:9:run:0">프로필 사진</span></div>
+      <div class="item" data-semantic-role="decoration" data-qid="q-insta-2-8"><span class="item-marker" data-qid="q-span-a5a2349569db" data-semantic-role="decoration"></span><span class="item-text" data-qid="source-block-f57092559512d070" data-semantic-role="body" data-source-block-id="source-slide:9:text:9:run:1">한 줄 소개</span></div>
+      <div class="item" data-semantic-role="decoration" data-qid="q-insta-3-8"><span class="item-marker" data-qid="q-span-47bb608224ea" data-semantic-role="decoration"></span><span class="item-text" data-qid="source-block-2ced3776702b44eb" data-semantic-role="body" data-source-block-id="source-slide:9:text:9:run:2">어떤 업체를 돕는지</span></div>
+      <div class="item" data-semantic-role="decoration" data-qid="q-insta-4-8"><span class="item-marker" data-qid="q-span-5ce2ca1a42c3" data-semantic-role="decoration"></span><span class="item-text" data-qid="source-block-d16e13c55295c6ac" data-semantic-role="body" data-source-block-id="source-slide:9:text:9:run:3">문의 동선</span></div>
+      <div class="item" data-semantic-role="decoration" data-qid="q-insta-5-8"><span class="item-marker" data-qid="q-span-ceb8271a01a1" data-semantic-role="decoration"></span><span class="item-text" data-qid="source-block-1abed510862ff0c6" data-semantic-role="body" data-source-block-id="source-slide:9:text:9:run:4">포트폴리오 게시 방향</span></div>
+    </div>
+
+    <div class="pillar-card blog" data-semantic-role="decoration" data-qid="q-card-blog-8">
+      <div class="card-label" data-semantic-role="supporting" data-qid="source-block-ca2994d25b217aa1" data-source-block-id="source-slide:9:text:12">블로그</div>
+      <div class="card-rule" data-qid="q-div-0b8bad9e5967" data-semantic-role="decoration"></div>
+      <div class="item" data-semantic-role="decoration" data-qid="q-blog-1-8"><span class="item-marker" data-qid="q-span-9701e289601f" data-semantic-role="decoration"></span><span class="item-text" data-qid="source-block-29155d88e63ab74a" data-semantic-role="body" data-source-block-id="source-slide:9:text:13:run:0">기본 프로필</span></div>
+      <div class="item" data-semantic-role="decoration" data-qid="q-blog-2-8"><span class="item-marker" data-qid="q-span-ab2dee2d5dbf" data-semantic-role="decoration"></span><span class="item-text" data-qid="source-block-daab01f702e3baec" data-semantic-role="body" data-source-block-id="source-slide:9:text:13:run:1">지역 + 업종 키워드</span></div>
+      <div class="item" data-semantic-role="decoration" data-qid="q-blog-3-8"><span class="item-marker" data-qid="q-span-6c5624b0b807" data-semantic-role="decoration"></span><span class="item-text" data-qid="source-block-50442c168bdc4851" data-semantic-role="body" data-source-block-id="source-slide:9:text:13:run:2">검색형 제목</span></div>
+      <div class="item" data-semantic-role="decoration" data-qid="q-blog-4-8"><span class="item-marker" data-qid="q-span-0301a637e943" data-semantic-role="decoration"></span><span class="item-text" data-qid="source-block-c2e28d8f81be3ce1" data-semantic-role="body" data-source-block-id="source-slide:9:text:13:run:3">포트폴리오 글</span></div>
+      <div class="item" data-semantic-role="decoration" data-qid="q-blog-5-8"><span class="item-marker" data-qid="q-span-d8eb3840a15c" data-semantic-role="decoration"></span><span class="item-text" data-qid="source-block-cf8aae681b598b29" data-semantic-role="body" data-source-block-id="source-slide:9:text:13:run:4">장기 영업자산으로 운영</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-number" data-semantic-role="supporting" data-qid="source-block-2161fd2854b648a9" data-source-block-id="source-slide:9:text:4" style="top: 672px; color: rgb(100, 100, 100)">09</div>
+</body>
+</html>

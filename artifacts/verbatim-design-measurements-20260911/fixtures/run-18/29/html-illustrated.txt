@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:111px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:24px;width:820px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:956px;top:24px;width:260px;text-align:right;font-size:15px;line-height:21px;color:#5B6570}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:1px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px;margin-top:24px}
+.content-grid{display:grid;grid-template-columns:560px 568px;gap:24px;height:489px}
+.panel{height:489px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.panel-head{height:58px;display:flex;align-items:flex-start;justify-content:space-between;border-bottom:1px solid #E2E8F0}
+.panel-title{font-size:24px;line-height:34px;font-weight:700;color:#002060}
+.panel-index{font-family:"IBM Plex Mono","Consolas",monospace;font-size:30px;line-height:38px;font-weight:700;color:#08916E}
+.pillar-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-top:20px}
+.card{position:relative;height:94px;padding:22px 18px 16px;background:#F9F9F9;border:1px solid #E2E8F0;border-radius:12px}
+.card-tab{position:absolute;left:18px;top:-12px;height:27px;padding:4px 13px;background:#002060;color:#FFFFFF;border-radius:12px;font-size:15px;line-height:19px;font-weight:700}
+.card-copy{font-size:18px;line-height:28px;font-weight:600;color:#1D1D1B}
+.card-copy .blank{color:#08916E;letter-spacing:.03em}
+.card-rule{position:absolute;left:18px;right:18px;bottom:12px;height:4px;background:#E2E8F0;border-radius:12px}
+.card-rule-fill{height:4px;background:#219F88;border-radius:12px}
+.execution-panel{height:489px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.execution-head{height:58px;display:flex;align-items:flex-start;border-bottom:1px solid #E2E8F0}
+.execution-title{font-size:24px;line-height:34px;font-weight:700;color:#002060}
+.timeline{position:relative;margin-top:22px}
+.timeline-rail{position:absolute;left:64px;top:18px;width:4px;height:326px;background:#00828E;border-radius:12px}
+.day-row{position:relative;height:47px;display:grid;grid-template-columns:64px 92px 1fr;align-items:center;column-gap:16px}
+.day-mark{position:relative;z-index:2;width:14px;height:14px;margin-left:59px;background:#08916E;border:3px solid #FFFFFF;border-radius:12px;box-shadow:0 0 0 1px #08916E}
+.day-label{font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:26px;font-weight:700;color:#002060}
+.day-copy{font-size:18px;line-height:27px;font-weight:500;color:#1D1D1B}
+.day-row:last-child .day-mark{background:#E5A93D;box-shadow:0 0 0 1px #E5A93D}
+.takeaway{margin-top:20px;height:58px;display:flex;align-items:center;padding:0 24px 0 28px;background:#EAF7F4;border-radius:12px;color:#002060}
+.takeaway-label{font-size:17px;line-height:26px;font-weight:700}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="111" class="header-band" style="height:111px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-bfbe2b8fb77b939d" data-source-block-id="source-slide:30:text:3:run:0">최종 실습</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-9e76d3e52d55f503" data-source-block-id="source-slide:30:text:3:run:1">나의 숏폼 대행사업 설계</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-fe2f3ef23cb0df8b" data-source-block-id="source-slide:30:text:5">꿀벌쌤 | 숏폼대행 1인사업자<br>홀로서기</div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <section class="panel" aria-label="사업 설계" data-qid="q-section-b06f5790c492" data-semantic-role="decoration">
+      <div class="panel-head" data-qid="q-div-e25ca81e908c" data-semantic-role="decoration">
+        <div class="panel-title" data-semantic-role="body" data-qid="q-panel-title-29">나의 숏폼 대행사업 설계</div>
+        <div class="panel-index" data-semantic-role="supporting" data-qid="source-block-1eff9208123cbcb2" data-source-block-id="source-slide:30:text:4">30</div>
+      </div>
+      <div class="pillar-grid" data-qid="source-block-359c1df618d2f538" data-semantic-role="decoration" data-source-block-id="source-slide:30:text:6">
+        <div class="card" data-qid="q-div-e6ae2f1476a2" data-semantic-role="decoration">
+          <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-29-1">①</div>
+          <div class="card-copy" data-semantic-role="body" data-qid="q-card-29-1">타깃: <span class="blank" data-qid="q-span-af3885d3ad3f" data-semantic-role="body">__________________</span></div>
+          <div class="card-rule" data-qid="q-div-e24a51b44c9c" data-semantic-role="decoration"><div class="card-rule-fill" style="width:32%" data-qid="q-div-820999e5dc47" data-semantic-role="decoration"></div></div>
+        </div>
+        <div class="card" data-qid="q-div-a0ac3e5176d1" data-semantic-role="decoration">
+          <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-29-2">②</div>
+          <div class="card-copy" data-semantic-role="body" data-qid="q-card-29-2">상품: <span class="blank" data-qid="q-span-b13fefca2343" data-semantic-role="body">__________________</span></div>
+          <div class="card-rule" data-qid="q-div-0b8bad9e5967" data-semantic-role="decoration"><div class="card-rule-fill" style="width:46%" data-qid="q-div-cb1499f569a1" data-semantic-role="decoration"></div></div>
+        </div>
+        <div class="card" data-qid="q-div-9f4d4a352bf8" data-semantic-role="decoration">
+          <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-29-3">③</div>
+          <div class="card-copy" data-semantic-role="body" data-qid="q-card-29-3">가격: <span class="blank" data-qid="q-span-a5782554728b" data-semantic-role="body">__________________</span></div>
+          <div class="card-rule" data-qid="q-div-7a9c3ff3b470" data-semantic-role="decoration"><div class="card-rule-fill" style="width:58%" data-qid="q-div-7656da0bf479" data-semantic-role="decoration"></div></div>
+        </div>
+        <div class="card" data-qid="q-div-871b98f1a902" data-semantic-role="decoration">
+          <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-29-4">④</div>
+          <div class="card-copy" data-semantic-role="body" data-qid="q-card-29-4">포트폴리오: <span class="blank" data-qid="q-span-4b05e2a1a2f9" data-semantic-role="body">_____________</span></div>
+          <div class="card-rule" data-qid="q-div-7f25fb171299" data-semantic-role="decoration"><div class="card-rule-fill" style="width:68%" data-qid="q-div-d7238ed88388" data-semantic-role="decoration"></div></div>
+        </div>
+        <div class="card" data-qid="q-div-754fc0d531e3" data-semantic-role="decoration">
+          <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-29-5">⑤</div>
+          <div class="card-copy" data-semantic-role="body" data-qid="q-card-29-5">영업 채널: <span class="blank" data-qid="q-span-a061f0846378" data-semantic-role="body">______________</span></div>
+          <div class="card-rule" data-qid="q-div-38e0525d10f2" data-semantic-role="decoration"><div class="card-rule-fill" style="width:80%" data-qid="q-div-e7e033202431" data-semantic-role="decoration"></div></div>
+        </div>
+        <div class="card" data-qid="q-div-f871dd59fc13" data-semantic-role="decoration">
+          <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-29-6">⑥</div>
+          <div class="card-copy" data-semantic-role="body" data-qid="q-card-29-6">첫 고객 목표: <span class="blank" data-qid="q-span-7852f90cb954" data-semantic-role="body">____________</span></div>
+          <div class="card-rule" data-qid="q-div-28881a1685ad" data-semantic-role="decoration"><div class="card-rule-fill" style="width:94%" data-qid="q-div-b613e88af1cb" data-semantic-role="decoration"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="execution-panel" aria-label="첫 7일 실행" data-qid="q-section-10fcdb7facd8" data-semantic-role="decoration">
+      <div class="execution-head" data-qid="q-div-4e661b244f82" data-semantic-role="decoration">
+        <div class="execution-title" data-semantic-role="body" data-qid="source-block-ff244c782a5f7ca6" data-source-block-id="source-slide:30:text:9">첫 7일 실행</div>
+      </div>
+      <div class="timeline" data-qid="source-block-21002ae86553d656" data-semantic-role="decoration" data-source-block-id="source-slide:30:text:10">
+        <div class="timeline-rail" data-qid="q-div-9dc6ee825083" data-semantic-role="decoration"></div>
+        <div class="day-row" data-qid="q-div-8385c2167e73" data-semantic-role="decoration">
+          <div class="day-mark" data-qid="q-div-b1ff423fa489" data-semantic-role="decoration"></div>
+          <div class="day-label" data-semantic-role="supporting" data-qid="q-day-29-1">Day 1</div>
+          <div class="day-copy" data-semantic-role="body" data-qid="q-task-29-1">업체 10곳 찾기</div>
+        </div>
+        <div class="day-row" data-qid="q-div-84626c278cc7" data-semantic-role="decoration">
+          <div class="day-mark" data-qid="q-div-9ef3ddfb4715" data-semantic-role="decoration"></div>
+          <div class="day-label" data-semantic-role="supporting" data-qid="q-day-29-2">Day 2</div>
+          <div class="day-copy" data-semantic-role="body" data-qid="q-task-29-2">샘플 1개 기획</div>
+        </div>
+        <div class="day-row" data-qid="q-div-3483a9cc0c69" data-semantic-role="decoration">
+          <div class="day-mark" data-qid="q-div-0067ae724aa1" data-semantic-role="decoration"></div>
+          <div class="day-label" data-semantic-role="supporting" data-qid="q-day-29-3">Day 3</div>
+          <div class="day-copy" data-semantic-role="body" data-qid="q-task-29-3">영상 제작</div>
+        </div>
+        <div class="day-row" data-qid="q-div-53ac0a69e658" data-semantic-role="decoration">
+          <div class="day-mark" data-qid="q-div-1e58daf40caa" data-semantic-role="decoration"></div>
+          <div class="day-label" data-semantic-role="supporting" data-qid="q-day-29-4">Day 4</div>
+          <div class="day-copy" data-semantic-role="body" data-qid="q-task-29-4">전화/DM</div>
+        </div>
+        <div class="day-row" data-qid="q-div-2be9dee9a48d" data-semantic-role="decoration">
+          <div class="day-mark" data-qid="q-div-acf7606cbb1f" data-semantic-role="decoration"></div>
+          <div class="day-label" data-semantic-role="supporting" data-qid="q-day-29-5">Day 5</div>
+          <div class="day-copy" data-semantic-role="body" data-qid="q-task-29-5">추가 영업</div>
+        </div>
+        <div class="day-row" data-qid="q-div-9a40ef8d24a1" data-semantic-role="decoration">
+          <div class="day-mark" data-qid="q-div-98d0ce1f9ff4" data-semantic-role="decoration"></div>
+          <div class="day-label" data-semantic-role="supporting" data-qid="q-day-29-6">Day 6</div>
+          <div class="day-copy" data-semantic-role="body" data-qid="q-task-29-6">상담/제안</div>
+        </div>
+        <div class="day-row" data-qid="q-div-291d346cc694" data-semantic-role="decoration">
+          <div class="day-mark" data-qid="q-div-b2454bb4401a" data-semantic-role="decoration"></div>
+          <div class="day-label" data-semantic-role="supporting" data-qid="q-day-29-7">Day 7</div>
+          <div class="day-copy" data-semantic-role="body" data-qid="q-task-29-7">복기</div>
+        </div>
+      </div>
+      <div class="takeaway" data-qid="q-div-45499f8e6b25" data-semantic-role="decoration">
+        <div class="takeaway-label" data-semantic-role="supporting" data-qid="q-takeaway-29">첫 7일 실행</div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="q-page-29">30</div>
+</body>
+</html>

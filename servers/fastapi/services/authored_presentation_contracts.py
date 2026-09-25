@@ -14,7 +14,7 @@ AUTHORED_TEMPLATE = "authored"
 #: positionally by ``_author_illustrate_render_pipeline``: index, HTML of
 #: record, PNG, author/illustration/render/quality seconds, DOM quality report,
 #: quality failure, scene envelope, author provider attempts, per-slide quality
-#: receipt, fired normalization rules, in-render fit report.
+#: receipt, fired normalization rules, local-fit receipt, in-render fit report.
 SlideStageResult = tuple[
     int,
     str,
@@ -29,6 +29,7 @@ SlideStageResult = tuple[
     int,
     Mapping[str, Any] | None,
     Any,
+    Mapping[str, Any] | None,
     Mapping[str, Any] | None,
 ]
 
@@ -73,15 +74,20 @@ class AuthoredGenerationPipelineResult:
     # resumed checkpoint is conservatively treated as budget-exhausted because
     # its historical call count is not encoded in the checkpoint row.
     author_provider_attempt_counts: tuple[int, ...] = ()
-    # D7 at the author stage: slides that spent every author attempt and are
-    # published with a deterministic placeholder instead of failing the deck.
-    # Index-ordered, and merged into the deck's one ``flaggedSlides`` list next
-    # to the gate-stage flags so every consumer sees one kind of flagged page.
+    # Slide-scoped soft publication flags. These include D7 author-attempt
+    # exhaustion and post-acceptance whole-page visual findings for an exact
+    # local-fit html/png/metrics tuple. Index-ordered, and merged into the
+    # deck's one ``flaggedSlides`` list next to the gate-stage flags so every
+    # consumer sees one kind of flagged page.
     author_flagged_slides: tuple[dict[str, Any], ...] = ()
     # F3: seconds this attempt spent sleeping out a provider cooldown before an
     # authoring admission. Zero on a run that never met an overload. The attempt
     # timing receipt records it as ``cooldownWaitSeconds``.
     cooldown_wait_seconds: float = 0.0
+    # One policy/baseline/render-bound receipt per slide.  These are produced
+    # before the render checkpoint advances and are safe for the final deck
+    # gate and export readback to consume without launching Chrome again.
+    local_fit_receipts: tuple[Mapping[str, Any], ...] = ()
 
     def __post_init__(self) -> None:
         # The result is a public boundary consumed by API/publication code.

@@ -11,7 +11,6 @@ import { assembleAuthoredHybridPptx } from "./pptx-assembler.ts";
 import { inspectPptxEditability, inspectPptxNativeElementReadback } from "./pptx-quality-inspection.ts";
 import { createAuthoredHybridCoverageManifest } from "./export-metadata.ts";
 import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
-import { parseActiveNativeTablePayload } from "./active-emission.ts";
 
 const { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT } = backplatePixelSize();
 
@@ -111,11 +110,14 @@ test("table v1 accepts server-normalized null optionals without weakening invali
   assert.equal(parseAuthoredNativeTablePayload({ ...payload, fontSizePt: "18" }), null);
 });
 
-test("active emission joins durable rows to the exact advanced Scene table receipt", () => {
-  const parsed = parseActiveNativeTablePayload(
-    { schemaVersion: "authored-native-table/v1", rows: [[{ text: "A" }, { text: "" }], [{ text: "C" }, { text: "D" }]], columnWidths: [120, 120], headerRows: 0 },
-    { schemaVersion: "authored-native-scene-declaration/v1", capabilityId: "editable.table.advanced.v1", payload: { cells: [["A", ""], ["C", "D"]], columnWidthsPt: [160, 320], rowHeightsPt: [45, 105], mergedCells: [{ row: 0, column: 0, rowSpan: 1, columnSpan: 2 }], cellStyles: [[{ fill: "#1463FF", borders: { bottom: { color: "#0B1830", widthPt: 1 } }, horizontalAlign: "center", verticalAlign: "middle" }, {}], [{}, {}]] } },
-  );
+test("the Scene-authoritative table payload retains advanced geometry and paint", () => {
+  const parsed = parseAuthoredNativeTablePayload({
+    schemaVersion: "authored-native-table/v1",
+    rows: [[{ text: "A" }, { text: "" }], [{ text: "C" }, { text: "D" }]],
+    columnWidths: [160, 320], rowHeightsPt: [45, 105],
+    mergedCells: [{ row: 0, column: 0, rowSpan: 1, columnSpan: 2 }],
+    cellStyles: [[{ fill: "#1463FF", borders: { bottom: { color: "#0B1830", widthPt: 1 } }, horizontalAlign: "center", verticalAlign: "middle" }, {}], [{}, {}]],
+  });
   assert.ok(parsed);
   assert.deepEqual(parsed.columnWidths, [160, 320]);
   assert.deepEqual(parsed.rowHeightsPt, [45, 105]);
@@ -176,7 +178,7 @@ test("assembler preserves Scene-authoritative advanced text autofit and empty-ru
   const textElement = {
     kind: "text",
     source: {
-      id: "s05-shrink",
+      id: "s01-shrink",
       domPath: "body > p:nth-of-type(1)",
       tagName: "p",
       sourceIndex: 0,
@@ -196,7 +198,7 @@ test("assembler preserves Scene-authoritative advanced text autofit and empty-ru
     nativeOwnership: {
       slideId: "slide:advanced-stage2",
       owners: [{
-        elementId: "s05-shrink",
+        elementId: "s01-shrink",
         kind: "text",
         capabilityId: "editable.text.advanced.v1",
         advancedText,
@@ -210,6 +212,13 @@ test("assembler preserves Scene-authoritative advanced text autofit and empty-ru
   assert.match(slideXml, /runId="run:stage2\.empty"/);
   assert.match(slideXml, /runId="run:stage2\.empty"[\s\S]*?<a:t xml:space="preserve"><\/a:t>/);
   assert.match(slideXml, /<pt:advancedText\b[^>]*digest="sha256:[0-9a-f]{64}"/);
+  const readback = inspectPptxNativeElementReadback(pptx).find((entry) => entry.elementId === "s01-shrink");
+  assert.equal(readback?.autoFit, "shrink");
+  assert.deepEqual(readback?.textRunMap?.map((run) => run.runId), advancedText.runs.map((run) => run.runId));
+  assert.equal(readback?.textRunStyles?.[2].color, "#1463FF");
+  const altered = readPptxArchive(pptx);
+  altered.set("ppt/slides/slide1.xml", Buffer.from(slideXml.replace('<a:t xml:space="preserve">text</a:t>', '<a:t xml:space="preserve">tost</a:t>')));
+  assert.throws(() => inspectPptxNativeElementReadback(writePptxArchive(altered)), /OOXML run identity disagrees/);
 });
 
 test("stage2 eligible table and crop survive assembler, OOXML readback, and coverage metadata", async () => {

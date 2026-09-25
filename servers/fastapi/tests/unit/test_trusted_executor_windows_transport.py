@@ -9,6 +9,7 @@ from pathlib import Path
 import sys
 import time
 import uuid
+from types import SimpleNamespace
 
 import pytest
 
@@ -110,9 +111,11 @@ def test_windows_local_composition_rejects_production_even_with_local_policy(
         )
 
 
+@pytest.mark.parametrize("output_case", ["exact", "over", "bundle_over", "invalid"])
 def test_windows_local_transport_runs_bounded_stdio_and_publishes_exact_output(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    output_case: str,
 ) -> None:
     owner_id = uuid.uuid4()
     operation_id = uuid.uuid4()
@@ -148,6 +151,33 @@ def test_windows_local_transport_runs_bounded_stdio_and_publishes_exact_output(
         created_by_operation_id=operation_id,
         retention_class="ephemeral",
     )
+    output_limit = len(output_payload)
+    extra_outputs = {}
+    if output_case == "over":
+        output_limit -= 1
+    elif output_case == "invalid":
+        output_limit = 0
+    elif output_case == "bundle_over":
+        from dataclasses import replace
+
+        output_limit = 4096
+        png = b"x" * (output_limit + 1)
+        png_digest = hashlib.sha256(png).hexdigest()
+        png_ref = replace(output_reference, sha256=png_digest, size_bytes=len(png),
+                          storage_key=_storage_key(owner_id, tenant_id, png_digest))
+        output_payload = json.dumps({
+            "schemaVersion": "public-render-result-bundle/v1",
+            "slides": [{"slideIndex": 0, "artifactRef": png_ref.to_wire()}],
+            "runtime": {"chromiumProcessLaunchCount": 1, "browserReuseCount": 0, "pageSessionCount": 1},
+        }).encode()
+        output_digest = hashlib.sha256(output_payload).hexdigest()
+        output_reference = replace(
+            output_reference, kind="export-bundle",
+            media_type="application/vnd.presenton.export-bundle+json",
+            sha256=output_digest, size_bytes=len(output_payload),
+            storage_key=_storage_key(owner_id, tenant_id, output_digest),
+        )
+        extra_outputs[png_ref.storage_key] = png.hex()
     attempt_token = "windows-local-wire-attempt"
     job = IsolatedWorkerJob(
         role="render",
@@ -184,12 +214,22 @@ output = bytes.fromhex(sys.argv[2])
 output_path = pathlib.Path(os.environ["PUBLIC_WORKER_OUTPUT_STORE_ROOT"], *sys.argv[3].split("/"))
 output_path.parent.mkdir(parents=True, exist_ok=True)
 output_path.write_bytes(output)
+for key, value in json.loads(sys.argv[5]).items():
+    extra_path = pathlib.Path(os.environ["PUBLIC_WORKER_OUTPUT_STORE_ROOT"], *key.split("/"))
+    extra_path.parent.mkdir(parents=True, exist_ok=True)
+    extra_path.write_bytes(bytes.fromhex(value))
 sys.stderr.buffer.write(b"x" * (1024 * 1024 + 4096))
 sys.stdout.write(sys.argv[4])
 """
     capability_key = tmp_path / "capability.key"
     capability_key.write_bytes(b"k" * 32)
     published = tmp_path / "published" / "output.png"
+    # Model time spent staging without sleeping or changing the scheduler clock.
+    from services.trusted_executor import wire_transport
+    monkeypatch.setattr(wire_transport, "time", SimpleNamespace(
+        time=lambda: job.deadline_epoch_seconds - 10,
+        perf_counter_ns=time.perf_counter_ns,
+    ))
     runtime = create_trusted_worker_executor_runtime(
         staging_root=tmp_path / "staging",
         node_id="node-windows-local",
@@ -204,7 +244,7 @@ sys.stdout.write(sys.argv[4])
     async def run() -> None:
         try:
             invocation_lower_bound = datetime.now(timezone.utc)
-            decoded = await execute_isolated_worker_job(
+            execution = execute_isolated_worker_job(
                 job,
                 presentation_id=presentation_id,
                 dispatcher=runtime.dispatcher,
@@ -216,16 +256,27 @@ sys.stdout.write(sys.argv[4])
                     output_payload.hex(),
                     output_reference.storage_key,
                     json.dumps(result, separators=(",", ":")),
+                    json.dumps(extra_outputs),
                 ),
                 source_environment={
                     "PATH": os.environ.get("PATH", ""),
                     "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
                     "PUBLIC_TRUSTED_WORKER_LOCAL_POLICY": "development",
                     "PUBLIC_WORKER_CAPABILITY_KEY_FILE": str(capability_key),
+                    "PPT_WORKER_OUTPUT_LIMIT_BYTES": str(output_limit),
                 },
             )
+            if output_case != "exact":
+                code = ("trusted_worker_output_limit_invalid" if output_case == "invalid"
+                        else "trusted_worker_output_limit_exceeded")
+                with pytest.raises(IsolatedWorkerProcessError, match=code):
+                    await execution
+                assert not published.exists()
+                return
+            decoded = await execution
             assert decoded.output_artifact == output_reference.to_wire()
             assert decoded.resource_metrics is not None
+            assert decoded.resource_metrics["limits"]["wallClockSeconds"] == 10
             isolation_attestation = decoded.resource_metrics["isolationAttestation"]
             assert isolation_attestation["productionEligible"] is False
             assert (
@@ -284,4 +335,7 @@ sys.stdout.write(sys.argv[4])
             await runtime.close()
 
     asyncio.run(run())
-    assert published.read_bytes() == output_payload
+    if output_case == "exact":
+        assert published.read_bytes() == output_payload
+    else:
+        assert not published.exists()

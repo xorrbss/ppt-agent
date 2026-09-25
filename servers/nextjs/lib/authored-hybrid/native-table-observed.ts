@@ -75,6 +75,7 @@ function cellStyleFromEvidence(
   }
   return {
     ...(Object.keys(borders).length ? { borders } : {}),
+    ...(style.paddingPx ? { marginsPt: Object.fromEntries(Object.entries(style.paddingPx).map(([edge, px]) => [edge, px * PX_TO_PT])) } : {}),
     horizontalAlign: style.horizontalAlign,
     verticalAlign: style.verticalAlign,
   };
@@ -112,6 +113,7 @@ export function tablePayloadFromEvidence(
       const fill = cell.fill ?? evidence.rootFill;
       return {
         text: cell.text,
+        ...(evidence.sourceFitPolicy && cell.paragraphs ? { paragraphs: cell.paragraphs.map((p) => ({ ...p, runs: p.runs.map((run) => ({ ...run, fontFamily: typefaceForCell(run.fontFamily, embedded) })) })) } : {}),
         ...(fill ? { fill } : {}),
         textColor: cell.textColor,
         bold: cell.bold,
@@ -130,7 +132,8 @@ export function tablePayloadFromEvidence(
     }
   }
   return parseAuthoredNativeTablePayload({
-    schemaVersion: "authored-native-table/v1",
+    schemaVersion: evidence.sourceFitPolicy ? "authored-native-table/v2" : "authored-native-table/v1",
+    ...(evidence.sourceFitPolicy ? { sourceFitPolicy: evidence.sourceFitPolicy, mergedCells: evidence.mergedCells ?? [] } : {}),
     rows,
     ...(evidence.columnWidthsPx ? { columnWidths: evidence.columnWidthsPx } : {}),
     ...(evidence.rowHeightsPx

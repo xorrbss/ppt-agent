@@ -1,0 +1,219 @@
+{
+ "source-slide:28:text:3": {
+  "text": "4주차 PART 4 | 장기고객 만들기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "4주차 PART 4",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "장기고객 만들기",
+    "begin": 13,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:28:text:4": {
+  "text": "28",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "28",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:28:text:5": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:28:text:6": {
+  "text": "한 번의 계약을 ‘월 관리’로",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "한 번의 계약을 ‘월 관리’로",
+    "begin": 0,
+    "end": 16,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:28:text:7": {
+  "text": "• 다음 달 콘텐츠를 먼저 제안 • 월간 콘텐츠 캘린더 제공 • 고객 업종에 맞는 소재를 지속 발굴 • 성과와 개선점을 간단히 공유 • 소개받을 수 있는 만족 경험 만들기",
+  "run_count": 5,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    4,
+    4
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "• ",
+    "body": "다음 달 콘텐츠를 먼저 제안",
+    "begin": 0,
+    "end": 17,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "• ",
+    "body": "월간 콘텐츠 캘린더 제공",
+    "begin": 18,
+    "end": 33,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "• ",
+    "body": "고객 업종에 맞는 소재를 지속 발굴",
+    "begin": 34,
+    "end": 55,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "• ",
+    "body": "성과와 개선점을 간단히 공유",
+    "begin": 56,
+    "end": 73,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 4,
+    "marker": "• ",
+    "body": "소개받을 수 있는 만족 경험 만들기",
+    "begin": 74,
+    "end": 95,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:28:text:10": {
+  "text": "핵심",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "핵심",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:28:text:11": {
+  "text": "고객이 ‘내가 계속 아이디어를 내야 하나?’라고 느끼지 않게 한다.",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "고객이 ‘내가 계속 아이디어를 내야 하나?’라고 느끼지 않게 한다.",
+    "begin": 0,
+    "end": 37,
+    "order_free_before": false
+   }
+  ]
+ }
+}

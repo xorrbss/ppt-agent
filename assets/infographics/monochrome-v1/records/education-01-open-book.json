@@ -1,0 +1,55 @@
+{
+  "id": "education-01-open-book",
+  "category": "education",
+  "tags": {
+    "ko": [
+      "교육",
+      "펼친책"
+    ],
+    "en": [
+      "education",
+      "open",
+      "book"
+    ]
+  },
+  "alt": {
+    "ko": "펼친책 단색 벡터 인포그래픽",
+    "en": "open book monochrome vector infographic"
+  },
+  "path": "originals/education-01-open-book.svg",
+  "thumbnail": "thumbnails/education-01-open-book.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 415,
+  "sha256": "ee4af127a4f62fb0321a52e0605c9a193f3dc87128f412416ef96ae961380893",
+  "geometry_sha256": "4b073d298b7aa3195e2a0dd294212ad3403ce7a979ef02cc35170512936ae8d4",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 53780,
+    "preview_opaque_pixels": 10278,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "BookOpen"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

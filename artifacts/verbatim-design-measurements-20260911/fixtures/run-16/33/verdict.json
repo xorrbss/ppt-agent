@@ -1,0 +1,345 @@
+{
+ "run": "run-16",
+ "slide_index": 33,
+ "fixture_role": "published_slide",
+ "is_failing_slide": false,
+ "authoring_passed": false,
+ "job_id": "9bc815e1-9d2d-4e71-bc06-1a7b2cf96f23",
+ "job_id_basis": "05-admission.json operation_id -> presentation_generation_jobs.workspace_operation_id (authoritative join; agrees with the created_at ordering it replaces for all 11 runs)",
+ "job_id_basis_note": "created_at order, between run-15 and run-17",
+ "workspace_operation_id": "38cc3aa5",
+ "job_state": "published",
+ "presentation_id": "896c7bca-a12b-42ee-bb20-8a00b42bf287",
+ "completed_slides": 35,
+ "created_at": "2026-09-11 14:38:09.851299+09:00",
+ "checkpoint": {
+  "render_sha256": "0dd142c4213aefb59e267ba6cf99110e73e54c07b97c9c5315b3d24fc8f03bbd",
+  "failed_stage": null,
+  "error": {
+   "provider_attempt_count": 1,
+   "provider_attempt_epoch": 1,
+   "provider_attempt_total": 0
+  },
+  "author_status": "completed",
+  "render_status": "completed"
+ },
+ "run_artifacts": {
+  "files": [
+   "01-upload.json",
+   "02-snapshot.json",
+   "03-analysis.json",
+   "04-generate-request.json",
+   "05-admission.json",
+   "06-final-status.json",
+   "07-download-evidence.json",
+   "20467317-9f68-4551-834d-0251b3ba55fe.pptx"
+  ],
+  "06-final-status.json": {
+   "detail": "Large empty painted media container: remove the placeholder and its reserved layout space; recompose existing source content without inventing an image.",
+   "visibilityFailures": [
+    "source-slide:10:text:16",
+    "source-slide:20:text:9",
+    "source-slide:20:text:13",
+    "source-slide:20:text:17",
+    "source-slide:27:text:9",
+    "source-slide:27:text:13"
+   ],
+   "missingBlockIds": [],
+   "integrityFailures": [],
+   "orderViolations": 0,
+   "flaggedSlides": [
+    {
+     "index": 4,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "8299636f-05cf-4884-bcbe-76bfab8722d0"
+    },
+    {
+     "index": 6,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "b58d42eb-eb2f-4d5e-8a92-3a435138a160"
+    },
+    {
+     "index": 8,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "e32169a9-6863-4096-b7e5-9cf143dd6d2d"
+    },
+    {
+     "index": 9,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "5b0caff3-e918-4f91-a4db-58b1b0459ec8",
+     "sourceVisibilityBlockIds": [
+      "source-slide:10:text:16"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 10,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "79ca54eb-a729-42d1-9e47-4552130eb5cf"
+    },
+    {
+     "index": 14,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "6dbe54ec-fefe-40a1-a99f-1367ec3ca8e9"
+    },
+    {
+     "index": 18,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "1bb86524-f54d-4be7-a265-c7a739ca1cef"
+    },
+    {
+     "index": 19,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "a5343f7f-3885-4dd9-b483-78f47d944d40",
+     "sourceVisibilityBlockIds": [
+      "source-slide:20:text:9",
+      "source-slide:20:text:13",
+      "source-slide:20:text:17"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 25,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "7e7d0566-0ff6-4d25-bb16-c3ba32047886"
+    },
+    {
+     "index": 26,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "c2393311-1347-4fb0-bbe6-3d8ec274dc34",
+     "sourceVisibilityBlockIds": [
+      "source-slide:27:text:9",
+      "source-slide:27:text:13"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 30,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "a14482d9-3ea7-4f0b-8cbb-50d12885b957"
+    }
+   ],
+   "reviewPages": [
+    {
+     "index": 4,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 6,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 8,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 9,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 10,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 14,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 18,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 19,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 25,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 26,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 30,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    }
+   ],
+   "residualIssues": [
+    {
+     "slide_index": 6,
+     "issues": [
+      {
+       "category": "empty_media_panel",
+       "severity": "medium",
+       "detail": "Large empty painted media container: remove the placeholder and its reserved layout space; recompose existing source content without inventing an image.",
+       "qids": [
+        "q-image-6a23"
+       ],
+       "policy": "style_reference"
+      },
+      {
+       "category": "text_escapes_card",
+       "severity": "medium",
+       "detail": "text of q-map-foot-6a16 prints 30px below the bottom of its card q-map-card-6a04",
+       "qids": [
+        "q-map-foot-6a16"
+       ],
+       "policy": "style_reference",
+       "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.0628,
+        "excess_px_x": 0.0,
+        "excess_px_y": 30.0,
+        "card_qid": "q-map-card-6a04",
+        "element_kind": "text"
+       }
+      }
+     ]
+    },
+    {
+     "slide_index": 9,
+     "issues": [
+      {
+       "category": "overlap",
+       "severity": "high",
+       "detail": "browser pixel-area probe reports a continuous occluding layer",
+       "qids": [
+        "source-block-d0e09424ddc39590"
+       ],
+       "policy": "style_reference"
+      }
+     ]
+    },
+    {
+     "slide_index": 18,
+     "issues": [
+      {
+       "category": "empty_media_panel",
+       "severity": "medium",
+       "detail": "Large empty painted media container: remove the placeholder and its reserved layout space; recompose existing source content without inventing an image.",
+       "qids": [
+        "q-image-frame-18"
+       ],
+       "policy": "style_reference"
+      }
+     ]
+    },
+    {
+     "slide_index": 25,
+     "issues": [
+      {
+       "category": "overlap",
+       "severity": "medium",
+       "detail": "browser pixel-area probe reports a continuous occluding layer",
+       "qids": [
+        "q-25-takeaway"
+       ],
+       "policy": "style_reference"
+      }
+     ]
+    },
+    {
+     "slide_index": 26,
+     "issues": [
+      {
+       "category": "empty_media_panel",
+       "severity": "medium",
+       "detail": "Large empty painted media container: remove the placeholder and its reserved layout space; recompose existing source content without inventing an image.",
+       "qids": [
+        "q26-image-panel"
+       ],
+       "policy": "style_reference"
+      },
+      {
+       "category": "overlap",
+       "severity": "medium",
+       "detail": "visible element boxes substantially overlap",
+       "qids": [
+        "q-div-63e3d960f805",
+        "q26-takeaway"
+       ],
+       "policy": "style_reference"
+      },
+      {
+       "category": "overlap",
+       "severity": "medium",
+       "detail": "browser pixel-area probe reports a continuous occluding layer",
+       "qids": [
+        "q26-contract-05"
+       ],
+       "policy": "style_reference"
+      },
+      {
+       "category": "overlap",
+       "severity": "medium",
+       "detail": "browser pixel-area probe reports a continuous occluding layer",
+       "qids": [
+        "q26-production-05"
+       ],
+       "policy": "style_reference"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "absent": [
+  "html-author.txt: checkpoint author_html is null (cleared after publication on published decks)",
+  "html-illustrated.txt: checkpoint illustrated_html is null",
+  "metrics.json: browser metrics are not persisted anywhere (authored_slide_checkpoints has no metrics column, artifact_refs is null, authored_evidence_*_v3 are empty)"
+ ]
+}

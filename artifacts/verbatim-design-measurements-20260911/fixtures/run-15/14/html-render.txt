@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:105px;background:#FFFFFF}
+.header-left{position:absolute;left:56px;top:24px;width:900px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:984px;top:24px;width:240px;text-align:right;font-size:15px;line-height:20px;color:#666666}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:129px;height:519px}
+.content-inner{margin-left:56px;width:1168px}
+.claim{height:62px;display:flex;align-items:flex-start;padding-top:4px}
+.claim-text{font-size:26px;line-height:38px;font-weight:700;letter-spacing:-.02em}
+.claim-text strong{color:#08916E}
+.content-grid{display:grid;grid-template-columns:744px 400px;gap:24px;height:430px}
+.pillar-stack{display:flex;flex-direction:column;gap:14px}
+.pillar{height:134px;padding:20px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;display:grid;grid-template-columns:118px 1fr;gap:24px;align-items:center}
+.pillar-label{font-size:25px;line-height:34px;font-weight:700;color:#08916E}
+.pillar-copy{font-size:20px;line-height:1.6;font-weight:500;color:#1D1D1B}
+.pillar-copy .line{display:block}
+.pillar-copy .line + .line{margin-top:2px}
+.image-panel{height:430px;padding:10px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.image-panel img{display:block;width:378px;height:408px;border-radius:12px;object-fit:cover;background:#E0F3FF}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="105" class="header-band" style="height:105px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-5eaf7587f3dc16a6" data-source-block-id="source-slide:15:text:3:run:0">2주차 PART 3</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-7983553b5db0bf53" data-source-block-id="source-slide:15:text:3:run:1">스마트폰 촬영</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-qid="q-div-73774be43d12" data-semantic-role="decoration"></div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:129px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-inner" data-qid="q-div-a985ffc51e86" data-semantic-role="decoration">
+    <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+      <div class="claim-text" data-semantic-role="body" data-qid="source-block-392a7709af5deaf6" data-source-block-id="source-slide:15:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    </div>
+
+    <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+      <div class="pillar-stack" data-qid="q-div-b1b1b3a249a9" data-semantic-role="decoration">
+        <div class="pillar" data-semantic-role="decoration" data-qid="q-card-product-14">
+          <div class="pillar-label" data-semantic-role="supporting" data-qid="source-block-7f41015711774905" data-source-block-id="source-slide:15:text:8">제품</div>
+          <div class="pillar-copy" data-semantic-role="decoration" data-qid="source-block-80c5338ab07c9d84" data-source-block-id="source-slide:15:text:9">
+            <span class="line" data-qid="q-span-9bccdc981363" data-semantic-role="body">전체샷 → 디테일 → 사용 장면</span>
+            <span class="line" data-qid="q-span-7dcd3a8e1f7a" data-semantic-role="body">손을 활용해 자연스럽게</span>
+          </div>
+        </div>
+
+        <div class="pillar" data-semantic-role="decoration" data-qid="q-card-person-14">
+          <div class="pillar-label" data-semantic-role="supporting" data-qid="source-block-d99a431195b181f6" data-source-block-id="source-slide:15:text:12">사람</div>
+          <div class="pillar-copy" data-semantic-role="decoration" data-qid="source-block-c977a700f4d255d9" data-source-block-id="source-slide:15:text:13">
+            <span class="line" data-qid="q-span-08ee5cda1a86" data-semantic-role="body">전신 → 상반신 → 행동 장면</span>
+            <span class="line" data-qid="q-span-e458199000ec" data-semantic-role="body">자연스러운 대화와 리액션</span>
+          </div>
+        </div>
+
+        <div class="pillar" data-semantic-role="decoration" data-qid="q-card-movement-14">
+          <div class="pillar-label" data-semantic-role="supporting" data-qid="source-block-fe3fdc72d22ae54d" data-source-block-id="source-slide:15:text:16">이동</div>
+          <div class="pillar-copy" data-semantic-role="decoration" data-qid="source-block-83c714019179b004" data-source-block-id="source-slide:15:text:17">
+            <span class="line" data-qid="q-span-c8df2ecc2531" data-semantic-role="body">좌→우 / 우→좌</span>
+            <span class="line" data-qid="q-span-512fe092e5e6" data-semantic-role="body">상→하 / 하→상</span>
+            <span class="line" data-qid="q-span-b6aaf8a5b5a2" data-semantic-role="body">천천히, 흔들림 최소화</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="image-panel" data-qid="q-div-5e0d969fd99d" data-semantic-role="decoration">
+        
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-82ae953b023eea4f" data-source-block-id="source-slide:15:text:4">15</div>
+</body>
+</html>

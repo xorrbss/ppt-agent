@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "svg.source-preserving-layout-contract",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Preserve source content with model-authored layout plans and deterministic SVG assembly; export the same verified SVG with bounded page repair.",
+  "scope": [
+    "svg",
+    "source-content",
+    "generation",
+    "export"
+  ],
+  "invariants": [
+    "Preserve source text, table values, image occurrences, page count and page order; do not overwrite the original.",
+    "The model designs layout; deterministic assembly inserts authoritative source content.",
+    "Content-preserving landscape reflow is distinct from exact source layout reproduction.",
+    "Preview and export bind the same finalized SVG and source asset revision.",
+    "Reuse existing owner-scoped analysis, durable jobs and isolated export; bound concurrency and repair and measure actual performance."
+  ],
+  "forbidden": [
+    "Enabling only the UI toggle without source preservation and export validation.",
+    "Claiming performance or full native editability without evidence."
+  ],
+  "evidence": [
+    "docs/svg-source-preserving-landscape-design-20260922.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-22T10:41:23.7233164+00:00"
+}

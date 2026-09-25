@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 import uuid
 
@@ -14,6 +16,7 @@ from services.workspace_runtime_profile import (
     WorkspaceRuntimeProfile,
 )
 from services.workspace_artifact_publication_service import (
+    ResolvedWorkspaceExportArtifact,
     WorkspaceArtifactPublicationError,
 )
 from services.workspace_service import WorkspaceServiceError
@@ -156,15 +159,25 @@ def test_export_download_streams_per_request_without_exposing_storage_path(
     artifact_id = uuid.uuid4()
     calls = []
     private_file = tmp_path / f"{artifact_id}.{suffix}"
-    private_file.write_bytes(b"pptx")
+    file_bytes = b"pptx"
+    private_file.write_bytes(file_bytes)
 
     async def resolve(_session, *, artifact_id):
         calls.append(artifact_id)
-        return SimpleNamespace(
-            absolute_path=private_file,
-            kind=kind,
+        # Use the real production shape (not a SimpleNamespace stand-in) so a
+        # field this endpoint reads, such as public_artifact_id, cannot drift
+        # out of the fixture unnoticed again.
+        return ResolvedWorkspaceExportArtifact(
+            artifact_id=artifact_id,
+            operation_id=uuid.uuid4(),
             presentation_id=uuid.uuid4(),
+            kind=kind,
             source_revision=4,
+            sha256=hashlib.sha256(file_bytes).hexdigest(),
+            size_bytes=len(file_bytes),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            absolute_path=private_file,
+            public_artifact_id=None,
         )
 
     monkeypatch.setattr(workspace_endpoint, "_require_supported_runtime", lambda: None)

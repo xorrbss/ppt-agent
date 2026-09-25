@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden}
+body{
+  background:linear-gradient(135deg,#00140E 0%,#00281F 58%,#00140E 100%);
+  color:#F9F9F9;
+  font-family:"Noto Sans KR","Malgun Gothic",sans-serif;
+  word-break:keep-all;
+  overflow-wrap:break-word;
+}
+.stage{
+  position:relative;
+  width:1280px;
+  height:720px;
+  overflow:hidden;
+}
+.glow{
+  position:absolute;
+  width:520px;
+  height:520px;
+  right:-120px;
+  top:-170px;
+  border:1px solid rgba(8,145,110,.28);
+  border-radius:12px;
+  transform:rotate(28deg);
+}
+.glow-inner{
+  position:absolute;
+  width:350px;
+  height:350px;
+  right:24px;
+  top:-78px;
+  border:1px solid rgba(33,159,136,.22);
+  border-radius:12px;
+  transform:rotate(28deg);
+}
+.marker{
+  position:absolute;
+  left:88px;
+  top:82px;
+  width:10px;
+  height:10px;
+  border-radius:12px;
+  background:#08916E;
+}
+.eyebrow{
+  position:absolute;
+  left:116px;
+  top:76px;
+  font-size:16px;
+  line-height:24px;
+  font-weight:700;
+  letter-spacing:.02em;
+  color:#8AD9C4;
+}
+.title{
+  position:absolute;
+  left:116px;
+  top:205px;
+  width:700px;
+  font-size:44px;
+  line-height:1.28;
+  font-weight:700;
+  letter-spacing:-.04em;
+  color:#FFFFFF;
+}
+.title-line{
+  display:block;
+}
+.title-line:last-child{
+  color:#08916E;
+}
+.subline{
+  position:absolute;
+  left:120px;
+  top:363px;
+  font-size:18px;
+  line-height:30px;
+  font-weight:500;
+  color:#D5E9E3;
+}
+.rule{
+  position:absolute;
+  left:120px;
+  top:420px;
+  width:72px;
+  height:3px;
+  background:#08916E;
+}
+.author{
+  position:absolute;
+  left:120px;
+  bottom:82px;
+  font-size:18px;
+  line-height:28px;
+  font-weight:700;
+  color:#FFFFFF;
+}
+.flow{
+  position:absolute;
+  right:112px;
+  top:274px;
+  width:390px;
+  height:150px;
+  padding:24px 26px;
+  border:1px solid rgba(138,217,196,.35);
+  border-radius:12px;
+  background:rgba(0,20,14,.34);
+}
+.flow-label{
+  margin-bottom:18px;
+  font-size:15px;
+  line-height:22px;
+  font-weight:700;
+  letter-spacing:.08em;
+  color:#8AD9C4;
+}
+.flow-track{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  width:100%;
+}
+.flow-item{
+  font-size:18px;
+  line-height:26px;
+  font-weight:700;
+  color:#FFFFFF;
+  white-space:nowrap;
+}
+.flow-arrow{
+  width:24px;
+  height:1px;
+  background:#08916E;
+  flex:none;
+}
+.flow-node{
+  width:7px;
+  height:7px;
+  margin-left:-16px;
+  border-radius:12px;
+  background:#08916E;
+  flex:none;
+}
+.footer-page{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:14px;
+  text-align:center;
+  font-size:12px;
+  line-height:16px;
+  font-weight:500;
+  color:#A7ACB3;
+}
+</style>
+</head>
+<body>
+<div class="stage" data-qid="q-div-877f7cb2b245" data-semantic-role="decoration">
+  <div class="glow" data-semantic-role="decoration" data-qid="q-div-5f9be5222e1c"></div>
+  <div class="glow-inner" data-semantic-role="decoration" data-qid="q-div-4f25fe803b40"></div>
+  <div class="marker" data-semantic-role="decoration" data-qid="q-div-493a8921fa80"></div>
+  <div class="eyebrow" data-semantic-role="title" data-qid="source-block-5137d489be601f9d" data-source-block-id="source-slide:35:text:3">🐝 꿀벌쌤</div>
+  <div class="title" data-semantic-role="decoration" data-qid="source-block-396ed15ac83e4af0" data-source-block-id="source-slide:35:text:4">
+    <span class="title-line" data-qid="q-span-3fa79da04575" data-semantic-role="body">이제,</span>
+    <span class="title-line" data-qid="q-span-3b692f16ec0b" data-semantic-role="body">홀로서기 시작입니다.</span>
+  </div>
+  <div class="subline" data-semantic-role="body" data-qid="source-block-776ff9a28e9acf4f" data-source-block-id="source-slide:35:text:5">숏폼대행 1인사업자 홀로서기 · 4주 8시간</div>
+  <div class="rule" data-semantic-role="decoration" data-qid="q-div-cbd8ff350888"></div>
+  <div class="flow" data-semantic-role="decoration" data-qid="q-flow-34">
+    <div class="flow-label" data-semantic-role="supporting" data-qid="q-flow-label-34">실행의 순환</div>
+    <div class="flow-track" data-qid="q-div-3f69e9fc0dba" data-semantic-role="decoration">
+      <div class="flow-item" data-semantic-role="body" data-qid="source-block-c13f14acad4dde72" data-source-block-id="source-slide:35:text:6:run:0">실행</div>
+      <div class="flow-arrow" data-semantic-role="decoration" data-qid="q-div-502df5a3ff33"></div>
+      <div class="flow-node" data-semantic-role="decoration" data-qid="q-div-0acb3cfd836f"></div>
+      <div class="flow-item" data-semantic-role="body" data-qid="source-block-73d0b44bcd0f588f" data-source-block-id="source-slide:35:text:6:run:1">경험</div>
+      <div class="flow-arrow" data-semantic-role="decoration" data-qid="q-div-17a2a1bad702"></div>
+      <div class="flow-node" data-semantic-role="decoration" data-qid="q-div-0e7c17348663"></div>
+      <div class="flow-item" data-semantic-role="body" data-qid="source-block-44d6f33ea1bf68d7" data-source-block-id="source-slide:35:text:6:run:2">고객</div>
+      <div class="flow-arrow" data-semantic-role="decoration" data-qid="q-div-75a8fef0eb0c"></div>
+      <div class="flow-node" data-semantic-role="decoration" data-qid="q-div-9055ace06ba5"></div>
+      <div class="flow-item" data-semantic-role="body" data-qid="source-block-a23adb9942fc9fba" data-source-block-id="source-slide:35:text:6:run:3">성장</div>
+    </div>
+  </div>
+  <div class="author" data-semantic-role="supporting" data-qid="source-block-c8d33f4e1c121d7a" data-source-block-id="source-slide:35:text:7">꿀벌쌤 강의용 마스터 PPT</div>
+  <div class="footer-page" data-semantic-role="supporting" data-qid="q-page-34">35</div>
+</div>
+</body>
+</html>

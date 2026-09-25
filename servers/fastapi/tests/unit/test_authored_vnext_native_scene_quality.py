@@ -72,6 +72,55 @@ def _capabilities() -> list[SceneCapability]:
     ]
 
 
+def test_document_canvas_is_sealed_and_scene_output_uses_physical_units() -> None:
+    from services.document_canvas import document_canvas_for_orientation
+
+    slide = seal_slide_scene(
+        slide_id="slide:document-canvas", revision=1,
+        elements=[SceneShapeElement(
+            kind="shape", element_id="element:canvas-shape", z_order=1,
+            bounds=Rect(x=60, y=60, width=100, height=100), semantic_role="metricMarker",
+            editability=SceneEditability(geometry=True), shape="rect", fill="#1463FF",
+        ), SceneTextElement(
+            kind="text", element_id="element:canvas-text", z_order=2,
+            bounds=Rect(x=60, y=200, width=300, height=80), semantic_role="body",
+            editability=SceneEditability(text=True), text="A4 native text",
+            style=SceneTextStyle(font_family="Arial", font_size=10.054166666666667),
+        )],
+    )
+    arguments = dict(deck_id="deck:document-canvas", revision=1,
+                     composition_digest=f"sha256:{'1' * 64}", source_digest=f"sha256:{'2' * 64}",
+                     slides=[slide], capabilities=_capabilities())
+    legacy = seal_deck_scene(**arguments)
+    assert "documentCanvas" not in legacy.model_dump(mode="json", by_alias=True)
+    for orientation in ("landscape", "portrait"):
+        metadata = document_canvas_for_orientation(orientation).model_dump(mode="json", by_alias=True)
+        scene = seal_deck_scene(**arguments, document_canvas=metadata)
+        wire = scene.model_dump(mode="json", by_alias=True)
+        assert wire["documentCanvas"] == metadata
+        assert scene.scene_digest != legacy.scene_digest
+        content, receipt = materialize_scene_pptx(wire, [], {
+            "slideSizePx": {"width": 1280, "height": 720},
+            "tokens": {"color.background": "#FFFFFF"}, "furniture": [],
+        })
+        deck = Presentation(BytesIO(content))
+        expected_size = (10692000, 7560000) if orientation == "landscape" else (7560000, 10692000)
+        assert (deck.slide_width, deck.slide_height) == expected_size
+        marker = next(shape for shape in deck.slides[0].shapes if shape.name == "DevAX hybrid shape element:canvas-shape")
+        assert (marker.left, marker.top, marker.width, marker.height) == (540000, 540000, 900000, 900000)
+        text_shape = next(shape for shape in deck.slides[0].shapes if shape.has_text_frame and shape.text == "A4 native text")
+        assert text_shape.text_frame.paragraphs[0].runs[0].font.size.pt == 9.5
+        assert receipt["scene"]["documentCanvas"] == metadata
+        assert readback_scene_pptx(content) == receipt  # independent call restores its context
+        assert wire == scene.model_dump(mode="json", by_alias=True)
+        conflicting = {**wire, "canvas": {"width": 1280, "height": 720}}
+        conflicting["sceneDigest"] = scene_digest({key: value for key, value in conflicting.items() if key != "sceneDigest"})
+        with pytest.raises(NativeSceneError, match="document_canvas_geometry_mismatch"):
+            materialize_scene_pptx(conflicting, [], {"slideSizePx": {"width": 1280, "height": 720}})
+    from services.authored_vnext.ooxml.scene_canvas import scene_px
+    assert scene_px(100) == 952500  # no A4 conversion leaks to later legacy exports
+
+
 def test_browser_text_metrics_are_projected_once_into_native_ooxml() -> None:
     style = _reviewed_text_style(
         SimpleNamespace(
@@ -304,6 +353,14 @@ def test_scene_materializes_digest_verified_image_table_and_chart_as_native_obje
     assert receipt["capabilities"] == {
         "supported": ["chart", "image", "shape", "table", "text"],
         "unsupported": ["connector", "group"],
+        "registrySchemaVersion": "authored-capability-registry/v1",
+        "registryDigest": "sha256:3ca9579f0b88f17ecbbb957ad11a203fc5aaf6347f76bf8236c782eb6c30981b",
+        "registryConsumer": "ooxml",
+        "readbackRegistry": {
+            "registrySchemaVersion": "authored-capability-registry/v1",
+            "registryDigest": "sha256:3ca9579f0b88f17ecbbb957ad11a203fc5aaf6347f76bf8236c782eb6c30981b",
+            "registryConsumer": "readback",
+        },
     }
     native_shapes = Presentation(BytesIO(content)).slides[0].shapes
     native_slide = Presentation(BytesIO(content)).slides[0]

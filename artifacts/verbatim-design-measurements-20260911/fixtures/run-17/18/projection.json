@@ -1,0 +1,250 @@
+{
+ "source-slide:19:text:3": {
+  "text": "3주차 PART 1 | 무료 샘플 전략",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "3주차 PART 1",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "무료 샘플 전략",
+    "begin": 13,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:19:text:4": {
+  "text": "19",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "19",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:19:text:5": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:19:text:6": {
+  "text": "• 첫 고객에게 무작정 가격부터 말하지 않는다 • 가능하면 가게 특성에 맞는 샘플을 준비 • 한 가게에 4개 소재를 기획해보기 • 무료 제공 범위와 기간을 명확히 • 목표는 ‘공짜 노동’이 아니라 유료 전환",
+  "run_count": 5,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    4,
+    4
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "• ",
+    "body": "첫 고객에게 무작정 가격부터 말하지 않는다",
+    "begin": 0,
+    "end": 25,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "• ",
+    "body": "가능하면 가게 특성에 맞는 샘플을 준비",
+    "begin": 26,
+    "end": 49,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "• ",
+    "body": "한 가게에 4개 소재를 기획해보기",
+    "begin": 50,
+    "end": 70,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "• ",
+    "body": "무료 제공 범위와 기간을 명확히",
+    "begin": 71,
+    "end": 90,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 4,
+    "marker": "• ",
+    "body": "목표는 ‘공짜 노동’이 아니라 유료 전환",
+    "begin": 91,
+    "end": 115,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:19:text:9": {
+  "text": "샘플 구조",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "샘플 구조",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:19:text:10": {
+  "text": "가게 분석 → 4개 기획 → 1~4개 제작 → 반응 확인 → 유료 제안",
+  "run_count": 5,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    4,
+    4
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "가게 분석",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "→ ",
+    "body": "4개 기획",
+    "begin": 6,
+    "end": 13,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "→ ",
+    "body": "1~4개 제작",
+    "begin": 14,
+    "end": 23,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "→ ",
+    "body": "반응 확인",
+    "begin": 24,
+    "end": 31,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 4,
+    "marker": "→ ",
+    "body": "유료 제안",
+    "begin": 32,
+    "end": 39,
+    "order_free_before": false
+   }
+  ]
+ }
+}

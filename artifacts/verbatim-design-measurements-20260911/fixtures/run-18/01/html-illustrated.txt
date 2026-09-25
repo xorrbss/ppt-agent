@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:111px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:820px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:956px;top:24px;width:260px;text-align:right;font-size:15px;line-height:21px;color:#5B6570}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:1px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px;margin-top:24px}
+.claim{height:64px;display:flex;align-items:center;border-left:6px solid #08916E;padding-left:22px;margin-bottom:24px;background:#FFFFFF;border:1px solid #E2E8F0;border-left-width:6px;border-radius:12px}
+.claim-text{font-size:25px;line-height:36px;font-weight:700;letter-spacing:-.02em}
+.claim-text strong{color:#08916E}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;height:350px}
+.card{position:relative;height:350px;padding:30px 28px 26px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-tab{position:absolute;left:28px;top:-14px;height:30px;padding:4px 13px;background:#002060;color:#FFFFFF;border-radius:12px;font-size:15px;line-height:22px;font-weight:700}
+.card-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:42px;line-height:50px;font-weight:700;color:#08916E;margin-bottom:12px}
+.card-title{font-size:24px;line-height:34px;font-weight:700;color:#002060;margin-bottom:20px}
+.card-copy{font-size:20px;line-height:32px;font-weight:500;color:#1D1D1B}
+.card-copy .last{font-weight:700;color:#08916E}
+.card-rule{position:absolute;left:28px;right:28px;bottom:26px;height:4px;background:#E2E8F0;border-radius:12px}
+.card-rule-fill{height:4px;background:#219F88;border-radius:12px}
+.takeaway{margin-top:24px;height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 24px 0 28px;background:#EAF7F4;border-radius:12px;color:#002060}
+.takeaway-label{font-size:17px;line-height:26px;font-weight:700}
+.takeaway-mark{font-size:22px;line-height:30px;font-weight:700;color:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="111" class="header-band" style="height:111px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-a99fd406b3cf3f99" data-source-block-id="source-slide:2:text:3">이 강의는 무엇을 만드는가</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-ee5f25f990986195" data-source-block-id="source-slide:2:text:4">기술보다 ‘사업이 굴러가는 구조’를 먼저 만듭니다.</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-f787baca4e55bd5e" data-source-block-id="source-slide:2:text:6">꿀벌쌤 | 숏폼대행<br>1인사업자 홀로서기</div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-semantic-role="body" data-qid="q-claim-01">기술보다 <strong data-semantic-role="body" data-qid="q-claim-key-01">‘사업이 굴러가는 구조’</strong>를 먼저 만듭니다.</div>
+
+  <div class="cards" data-qid="q-div-beb8611456c7" data-semantic-role="decoration">
+    <div class="card" data-semantic-role="decoration" data-qid="q-card-setup-01">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="source-block-5c1f7a5876140413" data-source-block-id="source-slide:2:text:9">① 세팅</div>
+      <div class="card-number" data-semantic-role="supporting" data-qid="q-number-setup-01">01</div>
+      <div class="card-title" data-semantic-role="supporting" data-qid="q-title-setup-01">세팅</div>
+      <div class="card-copy" data-semantic-role="body" data-qid="source-block-f12723bf6027239a" data-source-block-id="source-slide:2:text:10">인스타 · 블로그 · 영업기지<br><span class="last" data-semantic-role="body" data-qid="q-last-setup-01">내가 누구인지 보여주는 공간</span></div>
+      <div class="card-rule" data-qid="q-div-e24a51b44c9c" data-semantic-role="decoration"><div class="card-rule-fill" style="width:34%" data-qid="q-div-820999e5dc47" data-semantic-role="decoration"></div></div>
+    </div>
+
+    <div class="card" data-semantic-role="decoration" data-qid="q-card-production-01">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="source-block-bae0376122a5d678" data-source-block-id="source-slide:2:text:13">② 제작</div>
+      <div class="card-number" data-semantic-role="supporting" data-qid="source-block-b35bf22c1531c396" data-source-block-id="source-slide:2:text:5">02</div>
+      <div class="card-title" data-semantic-role="supporting" data-qid="q-title-production-01">제작</div>
+      <div class="card-copy" data-semantic-role="body" data-qid="source-block-39a3b24f5c92daa8" data-source-block-id="source-slide:2:text:14">기획 · 촬영 · AI · 캡컷<br><span class="last" data-semantic-role="body" data-qid="q-last-production-01">팔 수 있는 숏폼을 만든다</span></div>
+      <div class="card-rule" data-qid="q-div-0b8bad9e5967" data-semantic-role="decoration"><div class="card-rule-fill" style="width:66%" data-qid="q-div-cb1499f569a1" data-semantic-role="decoration"></div></div>
+    </div>
+
+    <div class="card" data-semantic-role="decoration" data-qid="q-card-sales-01">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="source-block-7c12033348e2d8e7" data-source-block-id="source-slide:2:text:17">③ 영업</div>
+      <div class="card-number" data-semantic-role="supporting" data-qid="q-number-sales-01">03</div>
+      <div class="card-title" data-semantic-role="supporting" data-qid="q-title-sales-01">영업</div>
+      <div class="card-copy" data-semantic-role="body" data-qid="source-block-57d63ab1feb3b3d1" data-source-block-id="source-slide:2:text:18">무료 샘플 · 전화 · DM<br><span class="last" data-semantic-role="body" data-qid="q-last-sales-01">첫 고객을 만난다</span></div>
+      <div class="card-rule" data-qid="q-div-7a9c3ff3b470" data-semantic-role="decoration"><div class="card-rule-fill" style="width:100%" data-qid="q-div-7656da0bf479" data-semantic-role="decoration"></div></div>
+    </div>
+  </div>
+
+  <div class="takeaway" data-semantic-role="decoration" data-qid="q-takeaway-01">
+    <div class="takeaway-label" data-semantic-role="supporting" data-qid="q-takeaway-label-01">① 세팅&nbsp;&nbsp;→&nbsp;&nbsp;② 제작&nbsp;&nbsp;→&nbsp;&nbsp;③ 영업</div>
+    <div class="takeaway-mark" data-semantic-role="supporting" data-qid="q-takeaway-mark-01">사업이 굴러가는 구조</div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="q-page-01">02</div>
+</body>
+</html>

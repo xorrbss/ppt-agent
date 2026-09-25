@@ -18,16 +18,20 @@ from utils.authored_styles import (
     load_authored_styles,
     resolve_authored_style,
 )
+from utils.authored_style_catalogue import AUTHORED_STYLE_ALIASES
 
 
 EXPECTED_AUTHORED_STYLE_IDS = {
     "academic-edge",
     "architectural-portfolio",
+    "atelier-monograph",
     "botanical-journal",
     "broadside",
+    "chroma-fold",
     "clinical-precision",
     "cobalt-editorial",
     "cyber-ai",
+    "decision-atlas",
     "default",
     "devax-si-proposal",
     "editorial-tritone",
@@ -46,9 +50,11 @@ EXPECTED_AUTHORED_STYLE_IDS = {
     "prestige-gold",
     "prime-noir",
     "prismatic-tech",
+    "product-lab",
     "project-launch",
     "scholars-journal",
     "science-sketch",
+    "screenshot-blue",
     "signal",
     "silicon-refined",
     "sketch-note",
@@ -65,7 +71,9 @@ TECHNOLOGY_STYLE_IDS = {
     "iso-blueprint",
     "neon-venture",
     "prismatic-tech",
+    "product-lab",
     "project-launch",
+    "screenshot-blue",
     "startup-aura",
     "tech-blueprint",
     "visual-discovery",
@@ -88,8 +96,20 @@ PLACEHOLDER_PATTERN = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 BRIEF_SECTION_PATTERN = re.compile(
-    r"(?m)^[ \t]*([A-Z][A-Z ]*?[A-Z])[ \t]*(?::(?:[ \t]|$)|$)"
+    r"(?m)^[ \t]*(" + "|".join(map(re.escape, REQUIRED_BRIEF_SECTIONS))
+    + r")[ \t]*(?::(?:[ \t]|$)|$)"
 )
+REQUIRED_SLIDE_ARCHETYPES = (
+    "cover",
+    "section",
+    "agenda",
+    "content",
+    "architecture",
+    "data",
+    "timeline",
+    "closing",
+)
+OPTIONAL_SLIDE_ARCHETYPES = {"image", "comparison"}
 
 
 def _write(path: Path, content: str) -> None:
@@ -107,8 +127,9 @@ def _tracked_authored_style_sources() -> list[Path]:
     developer can preview a local style.  The catalogue contract, however,
     describes the versioned product surface.  Resolving that surface via Git
     keeps this test hermetic when a developer has an ignored draft next to the
-    38 shipped styles, while still failing if a tracked file is added, removed,
-    or renamed without updating the contract.
+    shipped styles, while still failing if a tracked file is added, removed,
+    or renamed without updating the contract. Explicit catalogue members are
+    also included before their first Git add, without admitting unrelated drafts.
     """
 
     repository_root = AUTHORED_STYLES_DIRECTORY.parents[2]
@@ -132,6 +153,13 @@ def _tracked_authored_style_sources() -> list[Path]:
         if relative_path
     ]
     assert sources, "Git did not report any tracked authored styles"
+    sources = list(
+        set(sources)
+        | {
+            AUTHORED_STYLES_DIRECTORY / f"{style_id}.yaml"
+            for style_id in EXPECTED_AUTHORED_STYLE_IDS
+        }
+    )
     assert all(source.parent == AUTHORED_STYLES_DIRECTORY for source in sources)
     assert all(source.is_file() for source in sources)
     return sorted(sources)
@@ -501,7 +529,7 @@ def test_authored_catalogue_has_complete_contracts(tmp_path, caplog):
     with caplog.at_level(logging.WARNING, logger="utils.authored_styles"):
         styles = load_authored_styles(tracked_catalogue)
 
-    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 38
+    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 43
     assert {source.stem for source in sources} == EXPECTED_AUTHORED_STYLE_IDS
     assert {style.id for style in styles} == EXPECTED_AUTHORED_STYLE_IDS
     assert not [
@@ -533,13 +561,7 @@ def test_authored_catalogue_has_complete_contracts(tmp_path, caplog):
 
         preview = data["preview"]
         expected_preview_fields = {"bg", "accent", "palette", "variant"}
-        if style_id in {
-            "cyber-ai",
-            "devax-si-proposal",
-            "hyundai-culture-center",
-            "osb-smart-banking",
-            "tech-blueprint",
-        }:
+        if style_id not in AUTHORED_STYLE_ALIASES:
             expected_preview_fields.add("image")
         assert set(preview) == expected_preview_fields
         assert len(preview["palette"]) >= 3
@@ -565,7 +587,18 @@ def test_authored_catalogue_has_complete_contracts(tmp_path, caplog):
             r"([a-z][a-z0-9 -]*?)[ \t]*:",
             archetypes.group(1),
         )
-        assert len(set(archetype_labels)) >= 5, f"{style_id}: slide archetypes"
+        archetype_names = {label.strip().lower() for label in archetype_labels}
+        assert set(REQUIRED_SLIDE_ARCHETYPES) <= archetype_names, (
+            f"{style_id}: missing required slide archetypes: "
+            f"{set(REQUIRED_SLIDE_ARCHETYPES) - archetype_names}"
+        )
+        assert len(archetype_labels) == len(archetype_names), (
+            f"{style_id}: duplicate slide archetypes: {archetype_labels}"
+        )
+        assert archetype_names <= set(REQUIRED_SLIDE_ARCHETYPES) | OPTIONAL_SLIDE_ARCHETYPES, (
+            f"{style_id}: unknown slide archetypes: "
+            f"{archetype_names - set(REQUIRED_SLIDE_ARCHETYPES) - OPTIONAL_SLIDE_ARCHETYPES}"
+        )
         assert not PLACEHOLDER_PATTERN.search(source.read_text(encoding="utf-8"))
 
 
@@ -586,7 +619,9 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
     body = response.json()
     assert len(body) == 38
     assert [style["id"] for style in body] == sorted(style["id"] for style in body)
-    assert {style["id"] for style in body} == EXPECTED_AUTHORED_STYLE_IDS
+    assert {style["id"] for style in body} == (
+        EXPECTED_AUTHORED_STYLE_IDS - set(AUTHORED_STYLE_ALIASES)
+    )
     assert all(
         set(style)
         == {
@@ -597,13 +632,16 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
             "tags",
             "use_cases",
             "preview",
-        }
+        } | ({"aliases"} if style["id"] in AUTHORED_STYLE_ALIASES.values() else set())
         for style in body
     )
     assert all("brief" not in style for style in body)
     assert all({"bg", "accent"} <= set(style["preview"]) for style in body)
 
     by_id = {style["id"]: style for style in body}
+    for alias, canonical in AUTHORED_STYLE_ALIASES.items():
+        assert alias in by_id[canonical]["aliases"]
+        assert resolve_authored_style(alias).id == canonical
     assert by_id["cyber-ai"]["preview"]["image"] == (
         "/api/v1/ppt/authored/styles/cyber-ai/preview"
     )
@@ -645,6 +683,7 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
         "accent": "#00A3E0",
         "palette": ["#051C2C", "#FFFFFF", "#2E3338", "#00A3E0", "#A7B0B7"],
         "variant": "executive-ledger",
+        "image": "/api/v1/ppt/authored/styles/exec-report/preview",
     }
 
     for style_id in ("cyber-ai", "osb-smart-banking", "tech-blueprint"):

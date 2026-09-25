@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.portrait-canvas-end-to-end",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Default Authored preserves 16:9 or 9:16 through durable storage, previews, remake and Fidelity/PDF.",
+  "scope": [
+    "authored",
+    "generation",
+    "persistence",
+    "page-remake",
+    "export"
+  ],
+  "invariants": [
+    "Persist aspect ratio and authored-canvas/v1; project absent legacy canvas as landscape on reads.",
+    "Use 1280x720 or 720x1280 consistently, including cache identity and export page geometry.",
+    "Portrait supports ordinary default Authored and verified Fidelity/PDF only.",
+    "Preserve snapshots and V2/V3; CAS publish genuine local-fit receipts with approved HTML/PNG binding.",
+    "Preserve font/content gates and footer insets; use canvas-derived PDF MediaBox and placement."
+  ],
+  "forbidden": [
+    "Silently substitute unsupported style/master/mode.",
+    "Mutate accepted snapshots or bypass digest validation.",
+    "Create a separate portrait generator or parallel storage.",
+    "Relabel historical generation evidence after page remake."
+  ],
+  "evidence": [
+    "docs/authored-portrait-generation-design-20260912.md",
+    "docs/authored-portrait-implementation-20260913.md",
+    "servers/fastapi/services/authored_canvas.py",
+    "servers/fastapi/services/authored_page_remake_service.py",
+    "artifacts/authored-portrait-acceptance-20260913/final-artifact-acceptance-witness.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T22:43:03.0972932+00:00"
+}

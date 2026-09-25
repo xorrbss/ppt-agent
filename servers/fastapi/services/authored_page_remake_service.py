@@ -14,6 +14,7 @@ import asyncio
 import logging
 import time
 import uuid
+from collections.abc import Mapping
 from typing import Any
 
 from fastapi import BackgroundTasks, HTTPException
@@ -53,6 +54,9 @@ from services.authored_header_contract_service import (
     load_header_contract,
     page_number_mode_for,
 )
+from services.authored_presentation_generation import _fit_content_revision
+from services.authored_local_fit_policy import html_digest
+from services.authored_canvas import presentation_canvas_contract
 from services.authored_review_asset_store import publish_reviewed_png
 from services.authored_semantic_candidate import (
     compile_authored_semantic_source,
@@ -65,7 +69,7 @@ from services.authored_vnext.semantic.remake import (
 from services.image_generation_service import ImageGenerationService
 from services.database import async_session_maker
 from services.workspace_authored_async_admission import admit_workspace_authored_task
-from services.slidespec_artifact_store import ACTIVE_POINTER_KEY
+from services.slidespec_artifact_store import ACTIVE_POINTER_KEY, _json_cas_predicate
 from utils.authored_dom_quality import inspect_authored_dom
 from utils.asset_directory_utils import get_images_directory
 from utils.authored_styles import (
@@ -116,6 +120,7 @@ def authored_page_source_digest(slide: SlideModel) -> str:
             "slide_id": str(slide.id),
             "index": slide.index,
             "html": slide.html_content,
+            **({"svg": slide.svg_content, "source_format": "svg"} if slide.is_svg() else {}),
             "content": slide.content,
             "properties": slide.properties,
         }
@@ -172,9 +177,9 @@ async def _load_deck(
     unsupported_target = (
         slide_index is not None
         and 0 <= slide_index < len(slides)
-        and not slides[slide_index].is_authored()
+        and not (slides[slide_index].is_authored() or slides[slide_index].is_svg())
     )
-    if not slides or not presentation.is_authored() or unsupported_target:
+    if not slides or not (presentation.is_authored() or presentation.is_svg()) or unsupported_target:
         raise AuthoredPageRemakeError(
             "authored_page_remake_unsupported_presentation",
             stage="source_validation",
@@ -186,7 +191,7 @@ async def _authoring_context(
     session: AsyncSession,
     presentation: PresentationModel,
     slides: list[SlideModel],
-) -> tuple[Any, Any, str, tuple[bytes, ...] | None]:
+) -> tuple[Any, Any, str, tuple[bytes, ...] | None, Any]:
     outline = presentation.get_presentation_outline()
     if outline is None or not outline.slides or len(outline.slides) != len(slides):
         raise AuthoredPageRemakeError(
@@ -194,6 +199,7 @@ async def _authoring_context(
         )
 
     theme = presentation.theme if isinstance(presentation.theme, dict) else {}
+    canvas = presentation_canvas_contract(theme)
     style_id = str(theme.get("style") or "default")
     provenance = await session.get(AuthoredExactProvenance, presentation.id)
     exact_source_images: tuple[bytes, ...] | None = None
@@ -263,6 +269,7 @@ async def _authoring_context(
         chapter_plan=load_chapter_plan(presentation.theme),
         illustration_plan=load_illustration_plan(presentation.theme),
         infographic_plan=load_infographic_plan(presentation.theme),
+        canvas=canvas,
     )
     plan_mode = normalize_reference_mode(getattr(plan, "reference_mode", saved_mode))
     if plan_mode != saved_mode:
@@ -270,11 +277,84 @@ async def _authoring_context(
             "authored_page_remake_reference_mode_mismatch",
             stage="source_validation",
         )
-    return plan, style, plan_mode, exact_source_images
+    return plan, style, plan_mode, exact_source_images, canvas
 
 
 def _issue_summary(report: Any) -> list[dict[str, Any]]:
     return [issue.to_dict() for issue in report.issues]
+
+
+def _local_fit_policy_revision(theme: object) -> str | None:
+    if not isinstance(theme, Mapping):
+        return None
+    quality = theme.get("authoredQualityGate")
+    local_fit = quality.get("localFit") if isinstance(quality, Mapping) else None
+    revision = local_fit.get("policyRevision") if isinstance(local_fit, Mapping) else None
+    return revision if isinstance(revision, str) and revision else None
+
+
+def _theme_with_remake_local_fit_receipt(
+    *,
+    theme: object,
+    slides: list[SlideModel],
+    slide_index: int,
+    candidate_html: str,
+    receipt: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Replace one renewable local-fit receipt without relabeling generation evidence."""
+
+    if not isinstance(theme, Mapping):
+        raise AuthoredPageRemakeError(
+            "authored_page_remake_local_fit_evidence_missing", stage="post_verify"
+        )
+    quality = theme.get("authoredQualityGate")
+    local_fit = quality.get("localFit") if isinstance(quality, Mapping) else None
+    raw_receipts = local_fit.get("slides") if isinstance(local_fit, Mapping) else None
+    policy_revision = (
+        local_fit.get("policyRevision") if isinstance(local_fit, Mapping) else None
+    )
+    ordered = sorted(slides, key=lambda item: (item.index, item.id))
+    if (
+        not isinstance(quality, Mapping)
+        or not isinstance(local_fit, Mapping)
+        or not isinstance(raw_receipts, list)
+        or len(raw_receipts) != len(ordered)
+        or receipt.get("slideIndex") != slide_index
+        or receipt.get("policyRevision") != policy_revision
+        or receipt.get("finalHtmlDigest") != html_digest(candidate_html)
+    ):
+        raise AuthoredPageRemakeError(
+            "authored_page_remake_local_fit_evidence_invalid", stage="post_verify"
+        )
+
+    next_receipts: list[dict[str, Any]] = []
+    for index, (current, slide) in enumerate(zip(raw_receipts, ordered, strict=True)):
+        if (
+            not isinstance(current, Mapping)
+            or current.get("slideIndex") != index
+        ):
+            raise AuthoredPageRemakeError(
+                "authored_page_remake_local_fit_evidence_invalid",
+                stage="post_verify",
+            )
+        if index != slide_index and (
+            not isinstance(slide.html_content, str)
+            or current.get("finalHtmlDigest") != html_digest(slide.html_content)
+        ):
+            raise AuthoredPageRemakeError(
+                "authored_page_remake_local_fit_evidence_stale",
+                stage="post_verify",
+            )
+        next_receipts.append(dict(receipt if index == slide_index else current))
+
+    next_local_fit = {**dict(local_fit), "slides": next_receipts}
+    next_quality = {**dict(quality), "localFit": next_local_fit}
+    return {**dict(theme), "authoredQualityGate": next_quality}
+
+
+def _png_matches_content_addressed_reference(reference: str, png: bytes) -> bool:
+    filename = reference.replace("\\", "/").rsplit("/", 1)[-1]
+    return filename.endswith(f"_{hashlib.sha256(png).hexdigest()}.png")
 
 
 async def run_authored_page_remake_preview(
@@ -297,6 +377,10 @@ async def run_authored_page_remake_preview(
             "authored_page_remake_slide_out_of_range", stage="source_validation"
         )
     target = slides[slide_index]
+    if target.is_svg():
+        from services.svg_page_remake import preview_svg
+
+        return await preview_svg(presentation, slides, slide_index, request, task, session)
     if not target.html_content:
         raise AuthoredPageRemakeError(
             "authored_page_remake_source_html_missing", stage="source_validation"
@@ -306,7 +390,7 @@ async def run_authored_page_remake_preview(
         raise AuthoredPageRemakeError(
             "authored_page_remake_outline_missing", stage="source_validation"
         )
-    plan, style, reference_mode, exact_sources = await _authoring_context(
+    plan, style, reference_mode, exact_sources, canvas = await _authoring_context(
         session, presentation, slides
     )
 
@@ -319,7 +403,9 @@ async def run_authored_page_remake_preview(
     source_html = str(target.html_content)
     source_digest = authored_page_source_digest(target)
     try:
-        baseline_png, baseline_metrics = await _render_review_html(source_html)
+        baseline_png, baseline_metrics = await _render_review_html(
+            source_html, canvas=canvas
+        )
     except Exception as error:
         raise AuthoredPageRemakeError(
             "authored_page_remake_source_render_failed",
@@ -330,6 +416,8 @@ async def run_authored_page_remake_preview(
         source_html,
         baseline_metrics,
         reference_mode=reference_mode,
+        viewport_width=canvas.width_px,
+        viewport_height=canvas.height_px,
     )
     issue_details = "; ".join(issue.detail for issue in baseline_report.issues[:4])
     instruction = (request.instruction or "").strip()
@@ -461,6 +549,23 @@ async def run_authored_page_remake_preview(
         )
     candidate_html = str(htmls[0])
     candidate_png = bytes(pngs[0])
+    policy_revision = _local_fit_policy_revision(presentation.theme)
+    if policy_revision is not None:
+        try:
+            fitted = await _fit_content_revision(
+                candidate_html,
+                slide_index=slide_index,
+                policy_revision=policy_revision,
+                canvas=canvas,
+            )
+        except Exception as error:
+            raise AuthoredPageRemakeError(
+                "authored_page_remake_candidate_local_fit_failed",
+                stage="candidate_render",
+                retryable=True,
+            ) from error
+        candidate_html = fitted.html
+        candidate_png = fitted.png
     semantic_source = None
     if authored_semantic_dual_output_mode() == "declared":
         try:
@@ -480,18 +585,25 @@ async def run_authored_page_remake_preview(
     candidate_change = (
         "unchanged" if candidate_html == source_html else "changed"
     )
-    try:
-        verified_png, candidate_metrics = await _render_review_html(candidate_html)
-    except Exception as error:
-        raise AuthoredPageRemakeError(
-            "authored_page_remake_candidate_render_failed",
-            stage="candidate_render",
-            retryable=True,
-        ) from error
+    if policy_revision is not None:
+        verified_png, candidate_metrics = candidate_png, fitted.metrics
+    else:
+        try:
+            verified_png, candidate_metrics = await _render_review_html(
+                candidate_html, canvas=canvas
+            )
+        except Exception as error:
+            raise AuthoredPageRemakeError(
+                "authored_page_remake_candidate_render_failed",
+                stage="candidate_render",
+                retryable=True,
+            ) from error
     candidate_report = inspect_authored_dom(
         candidate_html,
         candidate_metrics,
         reference_mode=reference_mode,
+        viewport_width=canvas.width_px,
+        viewport_height=canvas.height_px,
     )
     # A candidate that generated and rendered is always offered to the user.
     # Deterministic DOM findings are advisory evidence for that human decision;
@@ -632,7 +744,7 @@ async def queue_authored_page_remake_preview(
         raise HTTPException(
             status_code=400, detail="Slide index is outside the presentation"
         )
-    if not slides[slide_index].html_content:
+    if not slides[slide_index].html_content and not slides[slide_index].is_svg():
         raise HTTPException(status_code=400, detail="Slide has no authored HTML")
     # The stored workspace request is the restart-safe source of truth.  The
     # legacy task remains the polling/read model consumed by the current UI.
@@ -686,6 +798,18 @@ def _validated_preview_data(
     ):
         raise AuthoredPageRemakeError(
             "authored_page_remake_candidate_invalid", stage="publish_validation"
+        )
+    expected_candidate_digest = _canonical_digest(
+        {
+            "html": data["candidate_html"],
+            "image": data["candidate_image"],
+            "semanticSource": data.get("semantic_source"),
+        }
+    )
+    if data.get("candidate_digest") != expected_candidate_digest:
+        raise AuthoredPageRemakeError(
+            "authored_page_remake_candidate_digest_mismatch",
+            stage="publish_validation",
         )
     if authored_semantic_dual_output_mode() == "declared":
         semantic_source = data.get("semantic_source")
@@ -786,6 +910,9 @@ async def publish_authored_page_remake(
     slide_index: int,
     preview_task_id: str,
     snapshot: bool = True,
+    operation_id: uuid.UUID | None = None,
+    attempt_token: str | None = None,
+    expected_revision: int | None = None,
 ) -> dict[str, Any]:
     """Stage one preview publication in the caller-owned transaction."""
 
@@ -800,6 +927,11 @@ async def publish_authored_page_remake(
         raise AuthoredPageRemakeError(
             "authored_page_remake_preview_not_found", stage="publish_validation"
         )
+    if slide.is_svg():
+        from services.svg_page_remake import publish_svg_candidate
+
+        return await publish_svg_candidate(session, presentation, slides, slide_index, task, snapshot=snapshot,
+            operation_id=operation_id, attempt_token=attempt_token, expected_revision=expected_revision)
     data = _validated_preview_data(
         task,
         presentation=presentation,
@@ -809,23 +941,68 @@ async def publish_authored_page_remake(
     candidate_html = str(data["candidate_html"])
     candidate_image = str(data["candidate_image"])
 
+    expected_theme = presentation.theme
+    policy_revision = _local_fit_policy_revision(expected_theme)
+    next_theme: dict[str, Any] | None = None
     # Re-render immediately before mutation. A candidate that can no longer be
     # rendered is never published; deterministic DOM findings stay advisory so an
-    # explicitly approved preview remains applicable.
+    # explicitly approved preview remains applicable. Policy-backed decks pass
+    # through the same bounded local-fit evidence producer used by generation.
     try:
-        _png, metrics = await _render_review_html(candidate_html)
+        canvas = presentation_canvas_contract(
+            expected_theme if isinstance(expected_theme, dict) else {}
+        )
+        if policy_revision is not None:
+            fitted = await _fit_content_revision(
+                candidate_html,
+                slide_index=slide_index,
+                policy_revision=policy_revision,
+                canvas=canvas,
+            )
+            if fitted.html != candidate_html:
+                raise AuthoredPageRemakeError(
+                    "authored_page_remake_candidate_changed_after_preview",
+                    stage="post_verify",
+                    retryable=True,
+                )
+            if not _png_matches_content_addressed_reference(
+                candidate_image, fitted.png
+            ):
+                raise AuthoredPageRemakeError(
+                    "authored_page_remake_candidate_capture_changed",
+                    stage="post_verify",
+                    retryable=True,
+                )
+            _png, metrics = fitted.png, fitted.metrics
+            next_theme = _theme_with_remake_local_fit_receipt(
+                theme=expected_theme,
+                slides=slides,
+                slide_index=slide_index,
+                candidate_html=candidate_html,
+                receipt=fitted.receipt,
+            )
+        else:
+            _png, metrics = await _render_review_html(
+                candidate_html, canvas=canvas
+            )
+    except AuthoredPageRemakeError:
+        raise
     except Exception as error:
         raise AuthoredPageRemakeError(
             "authored_page_remake_post_verify_failed",
             stage="post_verify",
             retryable=True,
         ) from error
-    plan, _style, reference_mode, _exact_sources = await _authoring_context(
+    plan, _style, reference_mode, _exact_sources, _canvas = await _authoring_context(
         session, presentation, slides
     )
     del plan
     post_report = inspect_authored_dom(
-        candidate_html, metrics, reference_mode=reference_mode
+        candidate_html,
+        metrics,
+        reference_mode=reference_mode,
+        viewport_width=canvas.width_px,
+        viewport_height=canvas.height_px,
     )
     post_verify_status = "warning" if post_report.needs_attention else "passed"
     if post_verify_status == "warning":
@@ -868,8 +1045,8 @@ async def publish_authored_page_remake(
         .where(
             SlideModel.id == slide.id,
             SlideModel.html_content == expected_html,
-            SlideModel.content == expected_content,
-            SlideModel.properties == expected_properties,
+            _json_cas_predicate(session, SlideModel.content, expected_content),
+            _json_cas_predicate(session, SlideModel.properties, expected_properties),
         )
         .values(
             html_content=candidate_html,
@@ -882,6 +1059,20 @@ async def publish_authored_page_remake(
         raise AuthoredPageRemakeError(
             "authored_page_remake_publish_cas_conflict", stage="publish"
         )
+    if next_theme is not None:
+        theme_result = await session.execute(
+            update(PresentationModel)
+            .where(
+                PresentationModel.id == presentation.id,
+                _json_cas_predicate(session, PresentationModel.theme, expected_theme),
+            )
+            .values(theme=next_theme)
+            .execution_options(synchronize_session=False)
+        )
+        if theme_result.rowcount != 1:
+            raise AuthoredPageRemakeError(
+                "authored_page_remake_publish_cas_conflict", stage="publish"
+            )
     await session.flush()
     readback = await session.execute(
         select(
@@ -898,6 +1089,17 @@ async def publish_authored_page_remake(
         raise AuthoredPageRemakeError(
             "authored_page_remake_publish_readback_mismatch", stage="publish"
         )
+    if next_theme is not None:
+        theme_readback = await session.execute(
+            select(PresentationModel.theme).where(
+                PresentationModel.id == presentation.id
+            )
+        )
+        if theme_readback.scalar_one_or_none() != next_theme:
+            raise AuthoredPageRemakeError(
+                "authored_page_remake_publish_readback_mismatch", stage="publish"
+            )
+        await session.refresh(presentation, attribute_names=["theme"])
 
     next_data = dict(data)
     next_data["phase"] = "published"

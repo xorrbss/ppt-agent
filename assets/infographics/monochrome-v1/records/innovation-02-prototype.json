@@ -1,0 +1,55 @@
+{
+  "id": "innovation-02-prototype",
+  "category": "innovation",
+  "tags": {
+    "ko": [
+      "혁신",
+      "시제품"
+    ],
+    "en": [
+      "innovation",
+      "prototype"
+    ]
+  },
+  "alt": {
+    "ko": "시제품 단색 벡터 인포그래픽",
+    "en": "prototype monochrome vector infographic"
+  },
+  "path": "originals/innovation-02-prototype.svg",
+  "thumbnail": "thumbnails/innovation-02-prototype.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 828,
+  "sha256": "71dff8fdd8a91be2c1f89161f5d9a441d89d3918e6b5ac20edf2d3a2cdc0991e",
+  "geometry_sha256": "cbdfe0a409f3d438c01f34820cc288debf8d960a58cbe8f831c5e84c76b5c6a5",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56165,
+    "preview_opaque_pixels": 7361,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Box",
+      "PenTool"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

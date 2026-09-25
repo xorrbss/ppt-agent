@@ -38,7 +38,9 @@ const FinalStep = () => {
                 const data = await fetch('/api/telemetry-status').then((res) => res.json());
                 setTrackingEnabled(data.telemetryEnabled);
             } catch {
-                setTrackingEnabled(true);
+                // Fail closed: an unreachable status probe must not display
+                // tracking as enabled.
+                setTrackingEnabled(false);
             }
         }
         fetchStatus();
@@ -49,15 +51,17 @@ const FinalStep = () => {
         setTrackingEnabled(enabled);
         setTelemetryEnabled(enabled);
         try {
+            // Telemetry defaults to disabled: persist an explicit "false" so
+            // opting in is distinguishable from never having configured it.
             await fetch('/api/user-config', {
                 method: 'POST',
                 body: JSON.stringify({
-                    DISABLE_ANONYMOUS_TRACKING: enabled ? undefined : 'true',
+                    DISABLE_ANONYMOUS_TRACKING: enabled ? 'false' : 'true',
                 }),
             });
         } catch {
             setTrackingEnabled(prev);
-            setTelemetryEnabled(prev ?? true);
+            setTelemetryEnabled(prev ?? false);
         }
     }, [trackingEnabled]);
 

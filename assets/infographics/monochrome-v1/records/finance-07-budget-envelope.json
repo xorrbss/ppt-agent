@@ -1,0 +1,56 @@
+{
+  "id": "finance-07-budget-envelope",
+  "category": "finance",
+  "tags": {
+    "ko": [
+      "금융",
+      "예산"
+    ],
+    "en": [
+      "finance",
+      "budget",
+      "envelope"
+    ]
+  },
+  "alt": {
+    "ko": "예산 단색 벡터 인포그래픽",
+    "en": "budget envelope monochrome vector infographic"
+  },
+  "path": "originals/finance-07-budget-envelope.svg",
+  "thumbnail": "thumbnails/finance-07-budget-envelope.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 554,
+  "sha256": "38b44d85ebfaeb640008bdb9896770f9cc966352ed0a7cd9414cef02e0f9508b",
+  "geometry_sha256": "0e9712b5611e7d7600bfd8636b25c1370e13b48ac469318d6b7b4728eef0b751",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56452,
+    "preview_opaque_pixels": 7170,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Mail",
+      "Coins"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

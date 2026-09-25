@@ -29,6 +29,9 @@ Whitelist (nothing more):
   allowed tag surface (the tags that would make it load-bearing -- ``form``,
   ``input``, ``iframe`` -- are already in ``DROP_TAGS``) (rule in
   ``utils/authored_html_normalize_rules_name.py``).
+* Closing tags for HTML void elements (for example ``</img>`` and ``</br>``)
+  are deleted. Browsers ignore these parse-error tokens, so this preserves the
+  rendered DOM while avoiding a needless provider retry.
 * Any other CSS property not in ``renderer_css_policy.ALLOWED_CSS_PROPERTIES``,
   and any ``@media``/``@supports``/other at-rule, is handled by
   ``utils.authored_css_strip`` (H1,
@@ -77,31 +80,13 @@ from html.parser import HTMLParser
 from utils.authored_html_normalize_edits import apply_edits
 from utils.authored_html_normalize_rules_name import apply_name_attribute_rule
 from utils.authored_html_normalize_rules_title import apply_title_line_break_rule
-from utils.authored_css_strip import strip_disallowed_css
+from utils.authored_css_strip import (
+    strip_break_control_declarations,
+    strip_disallowed_css,
+)
+from utils.authored_html_tree import NormalizationProfile, normalize_authored_html_tree
+from utils.authored_void_end_tag_normalize import drop_void_element_end_tags
 from utils.renderer_markup_policy import VOID_TAGS
-
-#: Declarations normalised out of both inline ``style=""`` values and
-#: ``<style>`` block rule bodies. Matches the A2 spec table exactly.
-_FORBIDDEN_CSS_PROPERTIES: tuple[str, ...] = (
-    "break-inside",
-    "break-before",
-    "break-after",
-    "page-break-inside",
-    "page-break-before",
-    "page-break-after",
-    "orphans",
-    "widows",
-)
-
-#: A declaration for one of the forbidden properties, anchored to a real
-#: declaration boundary (start of the text being scanned, right after a
-#: ``;`` separator, or right after a rule's opening ``{``) so a value that
-#: merely contains one of these words as a substring is never matched.
-_FORBIDDEN_DECLARATION = re.compile(
-    r"(?i)(?:^|(?<=[;{]))\s*(?:"
-    + "|".join(re.escape(prop) for prop in _FORBIDDEN_CSS_PROPERTIES)
-    + r")\s*:\s*[^;}]*"
-)
 
 #: A real ``style="..."``/``style='...'`` attribute -- required leading
 #: whitespace excludes the ``<style`` tag name itself (never preceded by a
@@ -140,7 +125,7 @@ class NormalizedHtml:
     normalizations: list[dict] = field(default_factory=list)
 
 
-def normalize_authored_html(html: str) -> NormalizedHtml:
+def normalize_authored_html_legacy(html: str) -> NormalizedHtml:
     """Strip the whitelisted harmless findings from authored HTML.
 
     Returns the (possibly rewritten) document plus one entry per rule that
@@ -153,6 +138,9 @@ def normalize_authored_html(html: str) -> NormalizedHtml:
 
     result = html
     normalizations: list[dict] = []
+
+    result, void_end_tag_records = drop_void_element_end_tags(result)
+    normalizations.extend(void_end_tag_records)
 
     result, css_count, css_properties = _strip_forbidden_css(result)
     if css_count:
@@ -212,19 +200,7 @@ def normalize_authored_html(html: str) -> NormalizedHtml:
 def _strip_declarations(text: str) -> tuple[str, int, set[str]]:
     """Remove every forbidden declaration from one flat declaration list."""
 
-    count = 0
-    properties: set[str] = set()
-
-    def _replace(match: re.Match[str]) -> str:
-        nonlocal count
-        count += 1
-        # The matched text is `<property>: <value>`; recover just the name.
-        name = match.group(0).split(":", 1)[0].strip().lower()
-        properties.add(name)
-        return ""
-
-    new_text = _FORBIDDEN_DECLARATION.sub(_replace, text)
-    return new_text, count, properties
+    return strip_break_control_declarations(text)
 
 
 def _strip_style_attributes(html: str) -> tuple[str, int, set[str]]:
@@ -441,4 +417,30 @@ def _normalize_hidden_elements(html: str) -> tuple[str, list[_HiddenFinding]]:
     return apply_edits(html, edits), findings
 
 
-__all__ = ["NormalizedHtml", "normalize_authored_html"]
+def normalize_authored_html(
+    html: str,
+    *,
+    profile: NormalizationProfile = "document",
+    mode: str | None = None,
+) -> NormalizedHtml:
+    """Normalize through the selected ``legacy`` or HTML5 ``tree`` path."""
+
+    # Lazy: ``services`` sits above ``utils``, and the attempt's frozen rollout
+    # profile is the only reader of the normalization switch there is.
+    from services.authored_rollout_profile import current_rollout_profile
+
+    selected = (mode or current_rollout_profile().html_normalization).strip().lower()
+    if selected == "legacy":
+        return normalize_authored_html_legacy(html)
+    if selected == "tree":
+        normalized, receipts = normalize_authored_html_tree(html, profile=profile)
+        return NormalizedHtml(html=normalized, normalizations=receipts)
+    raise ValueError(f"unknown authored HTML normalization mode: {selected!r}")
+
+
+__all__ = [
+    "NormalizedHtml",
+    "normalize_authored_html",
+    "normalize_authored_html_legacy",
+    "normalize_authored_html_tree",
+]

@@ -62,7 +62,7 @@ def test_weighted_resource_plan_is_deterministic_and_mode_weighted() -> None:
     with pytest.raises(ValueError, match="public_fidelity_mode_invalid"):
         _ = WeightedResourcePlan(**base, fidelity_mode="unknown").resource_units
 
-    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v4"
+    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v5"
     assert PUBLIC_DEFAULT_MAX_SLIDES == 100
 
 
@@ -97,7 +97,14 @@ async def _database(path: Path):
 
 def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
+    # The global scope is now consulted on this path too, and its active limit
+    # is min(policy row, cluster job knob).  Widen the knob so this test keeps
+    # exercising the owner/tenant axes rather than the global ceiling, which
+    # ``test_public_runtime_quota_clamp`` owns.
+    monkeypatch.setenv("AUTHORED_CLUSTER_JOB_CONCURRENCY", "4")
+
     async def scenario() -> None:
         engine, maker = await _database(tmp_path / "public-admission.db")
         owner_a = uuid.uuid4()
@@ -110,7 +117,7 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                         User(id=owner_a, username="owner-a", hashed_password="test"),
                         User(id=owner_b, username="owner-b", hashed_password="test"),
                         PublicPolicyProfile(
-                            version="public-default/v4",
+                            version="public-default/v5",
                             max_slides=100,
                             global_active_generation=4,
                             global_queued_generation=8,
@@ -216,7 +223,7 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                 )
                 assert first.planned_request_limit == 9
                 assert first.retry_request_limit == 4
-                assert first.policy_version == "public-default/v4"
+                assert first.policy_version == "public-default/v5"
                 with pytest.raises(PublicAdmissionRejected) as rejected:
                     await admit_public_operation(
                         session,
@@ -297,6 +304,22 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                 )
                 await session.refresh(accounting)
                 assert accounting.actual_cost_unavailable_count == 0
+                resumed_first_call = await reserve_public_provider_call(
+                    session,
+                    admission_id=first.id,
+                    stage="author",
+                    slide_index=1,
+                    logical_call_ordinal=1,
+                    retry_class="resume",
+                    estimated_cost_microunits=0,
+                )
+                await reconcile_public_provider_call(
+                    session,
+                    logical_call_id=resumed_first_call.id,
+                    outcome="succeeded",
+                    latency_ms=10,
+                    actual_cost_microunits=0,
+                )
                 conservative = await reserve_public_provider_call(
                     session,
                     admission_id=first.id,
@@ -330,7 +353,8 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                     principal=principal_a,
                     operation_kind="generation",
                 )
-                assert operation_metrics["initial_request_count"] == 2
+                assert operation_metrics["initial_request_count"] == 3
+                assert operation_metrics["retry_request_count"] == 0
                 assert operation_metrics["actual_consumed_microunits"] == 12
                 assert operation_metrics["actual_cost_unavailable_count"] == 1
                 assert all(isinstance(value, int) for value in operation_metrics.values())
@@ -380,7 +404,7 @@ def test_phase2_sqlite_lifecycle_is_contract_only(monkeypatch, tmp_path: Path) -
                 session.add(User(id=owner_id, username="phase2-owner", hashed_password="test"))
                 session.add(
                     PublicPolicyProfile(
-                        version="public-default/v4",
+                        version="public-default/v5",
                         max_slides=100,
                         global_active_generation=2,
                         global_queued_generation=4,

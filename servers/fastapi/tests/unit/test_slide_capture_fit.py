@@ -19,10 +19,10 @@ from utils.slide_capture_fit import (
     FIT_POLL_INTERVAL_MS,
     fit_capture_fields,
     fit_marker_poll_js,
-    fit_probe_prelude,
     fit_report_of,
     fit_request_html,
     html_digest,
+    in_render_fit_probe_prelude,
     require_qid_complete,
 )
 
@@ -170,19 +170,26 @@ def test_html_digest_matches_the_capture_digest_format():
 
 
 def test_the_probe_template_still_renders_and_fits_before_it_measures():
-    instrumented, _key = _instrument_authored_html(QID_COMPLETE, issue_capability=False)
+    # Only the class-bearing request copy selects the in-render fitter.
+    instrumented, _key = _instrument_authored_html(fit_request_html(QID_COMPLETE), issue_capability=False)
     assert "__codexFit" in instrumented
     apply_at = instrumented.index("__codexFit.apply(")
     payload_at = instrumented.index("const payload = {")
     assert apply_at < payload_at, "the fit pass must run before the measurement pass"
     # The payload carries the report on every render, and both passes are named.
     assert "metrics_cache_key: '" in instrumented and ", fit, elements" in instrumented
-    assert "done('final')" in instrumented
-    assert "'final' : 'provisional'" in instrumented
+    # The shared observation script names both passes (``utils/slide_capture_local_fit.py``).
+    assert "done(ready ? 'final' : 'provisional')" in instrumented
+
+
+def test_the_unmarked_probe_injects_no_fitter():
+    instrumented, _key = _instrument_authored_html(QID_COMPLETE, issue_capability=False)
+    assert "const __codexFitPass = () => null;" in instrumented
+    assert "__codexFit.apply(" not in instrumented
 
 
 def test_the_probe_survives_a_fitter_that_throws():
-    prelude = fit_probe_prelude()
+    prelude = in_render_fit_probe_prelude()
     assert "try {" in prelude and "catch (error)" in prelude
     assert "requested: false" in prelude
 
@@ -203,6 +210,7 @@ def test_both_render_modules_poll_the_marker_for_a_final_fit():
     assert "fit.requested === false" in poll
     assert "!fit ||" in poll
     assert "getElementById('__marker__')" in poll
+    assert "window.__codexObserveFinal()" in poll
     assert poll.rstrip().endswith("return content;")
 
 

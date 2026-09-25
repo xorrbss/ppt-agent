@@ -243,6 +243,7 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
                 store=LocalContentAddressedStore(
                     pathlib.Path(input_root_value),
                     pathlib.Path(output_root_value),
+                    active_deadline_epoch_seconds=job.deadline_epoch_seconds,
                 ),
             )
         )

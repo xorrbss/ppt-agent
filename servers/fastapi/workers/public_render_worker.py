@@ -5,6 +5,12 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 
+from services.authored_canvas import (
+    AuthoredCanvasMetadata,
+    LANDSCAPE_ASPECT_RATIO,
+    canvas_metadata_for_aspect_ratio,
+)
+
 from services.isolated_worker_contracts import (
     ArtifactRef,
     IsolatedWorkerContractError,
@@ -16,7 +22,8 @@ from workers.public_worker_runtime import (
     main,
 )
 
-RENDER_BUNDLE_SCHEMA = "public-render-bundle/v1"
+LEGACY_RENDER_BUNDLE_SCHEMA = "public-render-bundle/v1"
+RENDER_BUNDLE_SCHEMA = "public-render-bundle/v2"
 RENDER_RESULT_BUNDLE_SCHEMA = "public-render-result-bundle/v1"
 RENDER_BUNDLE_MEDIA_TYPE = "application/vnd.presenton.export-bundle+json"
 MAX_RENDER_BATCH_SLIDES = 100
@@ -25,7 +32,7 @@ MAX_RENDER_BATCH_SLIDES = 100
 def _read_render_bundle(
     job: IsolatedWorkerJob,
     store: LocalContentAddressedStore,
-) -> list[tuple[ArtifactRef, str]]:
+) -> tuple[list[tuple[ArtifactRef, str]], AuthoredCanvasMetadata]:
     if (
         job.input_artifact.kind != "export-bundle"
         or job.input_artifact.media_type != RENDER_BUNDLE_MEDIA_TYPE
@@ -35,10 +42,25 @@ def _read_render_bundle(
         value = json.loads(store.read(job.input_artifact))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise PublicWorkerExecutionError("public_render_bundle_invalid_json") from error
+    if not isinstance(value, Mapping):
+        raise PublicWorkerExecutionError("public_render_bundle_invalid_shape")
+    schema_version = value.get("schemaVersion")
+    if schema_version == LEGACY_RENDER_BUNDLE_SCHEMA:
+        expected_keys = {"schemaVersion", "slides"}
+        canvas = canvas_metadata_for_aspect_ratio(LANDSCAPE_ASPECT_RATIO)
+    elif schema_version == RENDER_BUNDLE_SCHEMA:
+        expected_keys = {"schemaVersion", "canvas", "slides"}
+        try:
+            from services.document_canvas import parse_canvas_metadata
+            canvas = parse_canvas_metadata(value.get("canvas"))
+        except (TypeError, ValueError) as error:
+            raise PublicWorkerExecutionError(
+                "public_render_canvas_contract_invalid"
+            ) from error
+    else:
+        raise PublicWorkerExecutionError("public_render_bundle_schema_unsupported")
     if (
-        not isinstance(value, Mapping)
-        or set(value) != {"schemaVersion", "slides"}
-        or value.get("schemaVersion") != RENDER_BUNDLE_SCHEMA
+        set(value) != expected_keys
         or not isinstance(value.get("slides"), list)
         or not 1 <= len(value["slides"]) <= MAX_RENDER_BATCH_SLIDES
     ):
@@ -73,7 +95,7 @@ def _read_render_bundle(
         except UnicodeDecodeError as error:
             raise PublicWorkerExecutionError("public_render_input_not_utf8") from error
         result.append((reference, html))
-    return result
+    return result, canvas
 
 
 def _admit_html(html: str):
@@ -84,14 +106,19 @@ def _admit_html(html: str):
     )
 
     try:
-        return admit_authored_html(html)
+        admitted = admit_authored_html(html)
     except RendererPolicyError:
         try:
-            return admit_static_output_html(html)
+            admitted = admit_static_output_html(html)
         except RendererPolicyError as static_error:
             raise PublicWorkerExecutionError(
                 "public_render_policy_rejected"
             ) from static_error
+    try:
+        from services.svg_renderer import materialize_trusted_svg_fonts
+        return materialize_trusted_svg_fonts(html, admitted)
+    except ValueError as error:
+        raise PublicWorkerExecutionError("public_render_trusted_font_invalid") from error
 
 
 async def execute_render(
@@ -107,9 +134,11 @@ async def execute_render(
         admitted_htmls = [_admit_html(html)]
         bundle_inputs: list[ArtifactRef] | None = None
     else:
-        bundle = _read_render_bundle(job, store)
+        bundle, canvas = _read_render_bundle(job, store)
         admitted_htmls = [_admit_html(html) for _, html in bundle]
         bundle_inputs = [reference for reference, _ in bundle]
+    if bundle_inputs is None:
+        canvas = canvas_metadata_for_aspect_ratio(LANDSCAPE_ASPECT_RATIO)
 
     # The worker is already inside the network-none supervised boundary. One
     # Chrome pipe serves the exact operation batch; every slide still uses a
@@ -123,19 +152,31 @@ async def execute_render(
         if bundle_inputs is None:
             rendered = [
                 await _render_admitted_html_in_worker(
-                    admitted_htmls[0], timeout=120
+                    admitted_htmls[0], timeout=120,
+                    width_px=canvas.width_px,
+                    height_px=canvas.height_px,
                 )
             ]
         else:
-            rendered = _render_admitted_htmls_over_pipe(admitted_htmls, timeout=120)
+            rendered = _render_admitted_htmls_over_pipe(
+                admitted_htmls,
+                timeout=120,
+                width_px=canvas.width_px,
+                height_px=canvas.height_px,
+            )
     except PublicWorkerExecutionError:
         raise
     except Exception as error:
         raise PublicWorkerExecutionError("public_render_failed") from error
     outputs: list[ArtifactRef] = []
     for png, _metrics in rendered:
-        if not png.startswith(b"\x89PNG\r\n\x1a\n"):
+        if not png.startswith(b"\x89PNG\r\n\x1a\n") or len(png) < 24:
             raise PublicWorkerExecutionError("public_render_output_not_png")
+        if (
+            int.from_bytes(png[16:20], "big") != canvas.width_px
+            or int.from_bytes(png[20:24], "big") != canvas.height_px
+        ):
+            raise PublicWorkerExecutionError("public_render_output_canvas_mismatch")
         outputs.append(
             store.put(
                 png,

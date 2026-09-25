@@ -1,9 +1,13 @@
-export type QualityReviewScope = "all" | "current" | "subset";
+export type QualityReviewScope = "all" | "current" | "subset" | "review_required";
 
+import { useEffect, useMemo } from "react";
 import type {
   WorkspaceOperationAnchor,
   WorkspaceTimelineAnchor,
 } from "./types";
+import { TERMINAL } from "./WorkspaceOperationLabels";
+
+export type ExportOperationType = "export.pptx" | "export.pdf";
 
 export interface SlideRangeParseResult { indices: number[]; normalized: string }
 
@@ -73,4 +77,38 @@ export function resolveHistoricalExportOperations(
   }
 
   return items.map((item) => resolved.get(item.id) ?? item);
+}
+
+/**
+ * Find an export operation this presentation's timeline shows as not yet
+ * terminal, so the header can refuse to submit a second one (the backend
+ * itself hard-fails a duplicate with `public_export_singleflight_in_flight`).
+ * Reuses the same TERMINAL set WorkspaceOperationCard uses to decide whether
+ * an operation is still active, so this stays correct if that set changes.
+ */
+export function activeExportOperationType(
+  items: readonly WorkspaceTimelineAnchor[],
+): ExportOperationType | null {
+  for (const item of items) {
+    if (item.anchorType !== "operation") continue;
+    if (item.operationType !== "export.pptx" && item.operationType !== "export.pdf") {
+      continue;
+    }
+    if (!TERMINAL.has(item.status)) {
+      return item.operationType;
+    }
+  }
+  return null;
+}
+
+/** Notifies `onChange` of the active export type, and clears it on unmount. */
+export function useActiveExportOperationNotifier(
+  items: readonly WorkspaceTimelineAnchor[],
+  onChange?: (operationType: ExportOperationType | null) => void,
+): void {
+  const active = useMemo(() => activeExportOperationType(items), [items]);
+  useEffect(() => {
+    onChange?.(active);
+    return () => onChange?.(null);
+  }, [active, onChange]);
 }

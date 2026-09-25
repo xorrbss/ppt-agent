@@ -7,11 +7,9 @@ provider-response fields.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from inspect import isawaitable
-import re
 import uuid
 
 from sqlalchemy import and_, case, exists, func, or_, text, update
@@ -27,16 +25,11 @@ from models.sql.public_admission import (
     PublicProviderLogicalCall,
     PublicQuotaCounter,
 )
-from migration_revision_contract import (
+from services.migration_revision_contract import (
     PUBLIC_CONTROL_PLANE_AUTHORITY_PROBE_SQL,
     REVISION_PUBLIC_CONTROL_PLANE,
 )
 from utils.datetime_utils import get_current_utc_datetime
-from utils.owner_context import (
-    get_current_owner_id,
-    get_current_tenant_id,
-    get_current_trace_id,
-)
 
 
 from models.sql.workspace import WorkspaceOperation
@@ -45,257 +38,50 @@ from services.provider_pricing import (
     ProviderUsageCost,
     calculate_actual_usage_cost,
 )
-from services.public_generation_deadline_policy import public_generation_deadline_seconds
+from services.public_operation_deadline import (
+    _absolute_deadline,
+    _planned_slide_count,
+    _policy_deadline_seconds,
+    _utc,
+)
 from services.public_operation_correlation import log_public_operation_correlation
 from services.public_policy_versions import PUBLIC_DEFAULT_POLICY_VERSION, resolve_public_policy_row
 from services.public_workstation_runtime_profile import (
     PublicWorkstationProfileError,
     resolve_enabled_workstation_runtime_profile,
 )
+from utils.get_env_concurrency import (
+    get_authored_cluster_job_concurrency_env,
+    get_public_export_scheduler_global_cap_env,
+)
+
+
+from services.public_operation_admission_models import (
+    PUBLIC_PHASE2_DEFAULT_POLICY_VERSION,
+    PUBLIC_PROVIDER_STAGES,
+    PrincipalContext,
+    ProviderRequestPlan,
+    PublicAdmissionRejected,
+    PublicProviderCallLease,
+    WeightedResourcePlan,
+    _SAFE_ID_RE,
+    _TERMINAL_STATES,
+    _HASH_RE,
+    _PHASE2_COUNTER_FIELDS,
+    _PHASE2_ADMISSION_FIELDS,
+    _PHASE2_COMMIT_RESERVE_SECONDS,
+    _PUBLIC_OPERATION_CONTRACT_VERSION,
+    _PUBLIC_OPERATION_EXECUTION_PROFILE_VERSION,
+    _logical_call_ordinal,
+    _nonnegative,
+    _principal,
+    current_principal_context,
+    plan_provider_requests,
+    plan_weighted_resources,
+)
 
 
 PUBLIC_DEFAULT_MAX_SLIDES = 100
-CONTENT_BRIEF_RETRY_REQUESTS = 1  # the brief's one reduced-input retry (content_brief_policy), retry_class "retry"
-PUBLIC_PHASE2_DEFAULT_POLICY_VERSION = PUBLIC_DEFAULT_POLICY_VERSION
-PUBLIC_PROVIDER_STAGES = frozenset(
-    {
-        "outline",
-        "content_brief",
-        "deck_plan",
-        "header",
-        "author",
-        "illustration",
-        "repair",
-        "vqa",
-    }
-)
-_TERMINAL_STATES = frozenset(
-    {"succeeded", "failed", "cancelled", "budget_exhausted", "deadline_exceeded"}
-)
-_HASH_RE = re.compile(r"^[a-f0-9]{64}$")
-_SAFE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
-_PHASE2_COUNTER_FIELDS = frozenset({"queued_resource_units", "active_resource_units"})
-_PHASE2_ADMISSION_FIELDS = frozenset(
-    {"resource_units", "deadline_at", "policy_digest", "fence"}
-)
-_PHASE2_COMMIT_RESERVE_SECONDS = 10
-_PUBLIC_OPERATION_CONTRACT_VERSION = "public-operation/v2"
-_PUBLIC_OPERATION_EXECUTION_PROFILE_VERSION = "public-generation-export/v2"
-
-
-@dataclass(frozen=True, slots=True)
-class PrincipalContext:
-    """Identity already verified by the external session trust boundary."""
-
-    owner_id: uuid.UUID
-    tenant_id: str
-    trace_id: str
-
-
-@dataclass(frozen=True, slots=True)
-class ProviderRequestPlan:
-    slide_count: int
-    image_budget: int
-    repair_budget: int
-    vqa_budget: int
-
-    @property
-    def initial_request_limit(self) -> int:
-        return (
-            4  # first content brief attempt + outline + chapter/deck plan + header contract, one call each
-            + self.slide_count
-            + min(self.image_budget, self.slide_count)
-            + self.repair_budget
-            + self.vqa_budget
-        )
-
-    @property
-    def retry_request_limit(self) -> int:
-        """One bounded validation retry per authored slide, plus the content brief's own retry."""
-        return self.slide_count + CONTENT_BRIEF_RETRY_REQUESTS
-
-
-@dataclass(frozen=True, slots=True)
-class WeightedResourcePlan:
-    """Content-free scheduler estimate persisted as resource units.
-
-    The fixed weights deliberately make a high-DPR, SVG-heavy Hybrid deck cost
-    more than a small text deck.  The value is an admission reservation, not a
-    runtime measurement, so it is stable across retries and cluster nodes.
-    """
-
-    pixel_count: int
-    device_pixel_ratio_milli: int
-    dom_node_count: int
-    font_count: int
-    svg_complexity: int
-    estimated_memory_mib: int
-    fidelity_mode: str
-
-    @property
-    def resource_units(self) -> int:
-        mode_weight = {"standard": 0, "fidelity": 2, "hybrid": 4}.get(
-            self.fidelity_mode
-        )
-        if mode_weight is None:
-            raise ValueError("public_fidelity_mode_invalid")
-        # Integer arithmetic keeps the reservation deterministic and avoids a
-        # float/rounding difference becoming a distributed quota bypass.
-        dpr_squared_milli = self.device_pixel_ratio_milli**2
-        pixel_units = (self.pixel_count * dpr_squared_milli + 999_999_999_999) // 1_000_000_000_000
-        return max(
-            1,
-            pixel_units
-            + ((self.dom_node_count + 999) // 1_000)
-            + ((self.font_count + 7) // 8)
-            + ((self.svg_complexity + 249) // 250)
-            + ((self.estimated_memory_mib + 127) // 128)
-            + mode_weight,
-        )
-
-
-class PublicAdmissionRejected(RuntimeError):
-    def __init__(self, code: str, *, retry_after_seconds: int | None = None) -> None:
-        super().__init__(code)
-        self.code = code
-        self.retry_after_seconds = retry_after_seconds
-        self.retryable = code not in {
-            "public_provider_request_limit_exceeded",
-            "public_provider_retry_limit_exceeded",
-            "public_provider_estimated_cost_limit_exceeded",
-            "public_provider_actual_cost_limit_exceeded",
-            "public_provider_inflight_replay_unsupported",
-            "public_provider_terminal_replay_unsupported",
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class PublicProviderCallLease:
-    logical_call_id: uuid.UUID
-    admission_id: uuid.UUID
-    provider_idempotency_key: str
-    state: str
-    reused: bool = False
-
-    @property
-    def is_terminal_reuse(self) -> bool:
-        return self.reused and self.state != "reserved"
-
-    @property
-    def is_inflight_reuse(self) -> bool:
-        return self.reused and self.state == "reserved"
-
-
-def _logical_call_ordinal(
-    *,
-    operation_id: uuid.UUID,
-    stage: str,
-    slide_index: int,
-    logical_call_ordinal: int | None,
-    logical_call_key: str | None,
-) -> int:
-    if logical_call_key is None:
-        if logical_call_ordinal is None or logical_call_ordinal < 1:
-            raise ValueError("logical_call_ordinal_must_be_positive")
-        return logical_call_ordinal
-    if not _SAFE_ID_RE.fullmatch(logical_call_key):
-        raise ValueError("public_provider_logical_call_key_invalid")
-    digest = sha256(
-        f"public-provider-slot/v1:{operation_id}:{stage}:{slide_index}:"
-        f"{logical_call_key}".encode("utf-8")
-    ).digest()
-    # Positive PostgreSQL INTEGER; zero is invalid by the DB contract. The full
-    # semantic identity still feeds the separately persisted SHA-256 key hash.
-    return max(1, int.from_bytes(digest[:4], "big") & 0x7FFF_FFFF)
-
-
-def current_principal_context() -> PrincipalContext:
-    """Return only the server-established request principal context.
-
-    The local self-hosted auth adapter derives ``default`` from server config;
-    no owner or tenant value is accepted from a command body or query string.
-    """
-
-    owner_id = get_current_owner_id()
-    if owner_id is None:
-        raise PublicAdmissionRejected("verified_principal_required")
-    tenant_id = get_current_tenant_id() or "default"
-    trace_id = get_current_trace_id() or f"operation-{uuid.uuid4()}"
-    return _principal(
-        PrincipalContext(
-            owner_id=owner_id,
-            tenant_id=tenant_id,
-            trace_id=trace_id,
-        )
-    )
-
-
-def _nonnegative(value: int, field: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError(f"{field}_must_be_nonnegative")
-    return value
-
-
-def _principal(principal: PrincipalContext) -> PrincipalContext:
-    if not isinstance(principal.owner_id, uuid.UUID):
-        raise ValueError("principal_owner_id_required")
-    if not _SAFE_ID_RE.fullmatch(principal.tenant_id):
-        raise ValueError("principal_tenant_id_invalid")
-    if not _SAFE_ID_RE.fullmatch(principal.trace_id):
-        raise ValueError("principal_trace_id_invalid")
-    return principal
-
-
-def plan_provider_requests(
-    *,
-    slide_count: int,
-    image_budget: int,
-    repair_budget: int,
-    vqa_budget: int,
-) -> ProviderRequestPlan:
-    plan = ProviderRequestPlan(
-        slide_count=_nonnegative(slide_count, "slide_count"),
-        image_budget=_nonnegative(image_budget, "image_budget"),
-        repair_budget=_nonnegative(repair_budget, "repair_budget"),
-        vqa_budget=_nonnegative(vqa_budget, "vqa_budget"),
-    )
-    if plan.slide_count < 1:
-        raise ValueError("slide_count_must_be_positive")
-    return plan
-
-
-def plan_weighted_resources(
-    *,
-    pixel_count: int,
-    device_pixel_ratio_milli: int,
-    dom_node_count: int,
-    font_count: int,
-    svg_complexity: int,
-    estimated_memory_mib: int,
-    fidelity_mode: str,
-) -> WeightedResourcePlan:
-    """Normalize a scheduler estimate before it becomes a durable reservation."""
-
-    plan = WeightedResourcePlan(
-        pixel_count=_nonnegative(pixel_count, "pixel_count"),
-        device_pixel_ratio_milli=_nonnegative(
-            device_pixel_ratio_milli, "device_pixel_ratio_milli"
-        ),
-        dom_node_count=_nonnegative(dom_node_count, "dom_node_count"),
-        font_count=_nonnegative(font_count, "font_count"),
-        svg_complexity=_nonnegative(svg_complexity, "svg_complexity"),
-        estimated_memory_mib=_nonnegative(
-            estimated_memory_mib, "estimated_memory_mib"
-        ),
-        fidelity_mode=fidelity_mode,
-    )
-    if plan.device_pixel_ratio_milli < 1:
-        raise ValueError("device_pixel_ratio_milli_must_be_positive")
-    # Resolve the property here so an invalid fidelity mode never reaches DB.
-    _ = plan.resource_units
-    return plan
-
-
 def _model_columns(model: type[object]) -> set[str]:
     table = getattr(model, "__table__", None)
     return set(table.columns.keys()) if table is not None else set()
@@ -381,65 +167,6 @@ async def _resolved_phase2_authority(
     return authority
 
 
-def _utc(value: datetime, field: str) -> datetime:
-    if not isinstance(value, datetime):
-        raise ValueError(f"{field}_required")
-    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
-
-
-def _policy_deadline_seconds(
-    *,
-    policy: PublicPolicyProfile,
-    operation_kind: str,
-    planned_slide_count: int,
-) -> int:
-    """Return the policy budget, scaled by slide count for generation only.
-
-    The policy column is the immutable per-version ceiling.  Generation scales
-    the slide-count formula underneath it, so a version that keeps the legacy
-    fixed budget (``public-default/v1`` and ``/v2`` at 900s) is unchanged while
-    ``public-default/v3`` raises the ceiling and lets the formula decide.
-    Export keeps its flat policy budget.
-    """
-
-    ceiling = _nonnegative(
-        int(getattr(policy, f"{operation_kind}_deadline_seconds")),
-        "policy_deadline_seconds",
-    )
-    if operation_kind != "generation":
-        return ceiling
-    return min(ceiling, public_generation_deadline_seconds(planned_slide_count))
-
-
-def _absolute_deadline(
-    *,
-    now: datetime,
-    policy: PublicPolicyProfile,
-    operation_kind: str,
-    planned_slide_count: int,
-    auth_expires_at: datetime | None,
-    server_hard_deadline_at: datetime | None,
-) -> datetime:
-    seconds = _policy_deadline_seconds(
-        policy=policy,
-        operation_kind=operation_kind,
-        planned_slide_count=planned_slide_count,
-    )
-    if seconds < _PHASE2_COMMIT_RESERVE_SECONDS:
-        raise PublicAdmissionRejected("public_policy_deadline_invalid")
-    candidates = [_utc(now, "admission_now") + timedelta(seconds=seconds)]
-    if auth_expires_at is not None:
-        candidates.append(_utc(auth_expires_at, "auth_expires_at"))
-    if server_hard_deadline_at is not None:
-        candidates.append(_utc(server_hard_deadline_at, "server_hard_deadline_at"))
-    deadline = min(candidates)
-    if deadline <= _utc(now, "admission_now") + timedelta(
-        seconds=_PHASE2_COMMIT_RESERVE_SECONDS
-    ):
-        raise PublicAdmissionRejected("public_deadline_insufficient")
-    return deadline
-
-
 def _policy_digest(policy: PublicPolicyProfile) -> str:
     """Pin quota/deadline policy content rather than trusting a mutable version label."""
 
@@ -473,12 +200,18 @@ def _require_phase2_workspace_model() -> type[object]:
     return model
 
 
-def _resource_lease_scope_key(scope_type: str, principal: PrincipalContext) -> str:
+def _scope_key(scope_type: str, *, owner_id: uuid.UUID, tenant_id: str) -> str:
     return {
         "global": "global",
-        "tenant": principal.tenant_id,
-        "owner": str(principal.owner_id),
+        "tenant": tenant_id,
+        "owner": str(owner_id),
     }[scope_type]
+
+
+def _resource_lease_scope_key(scope_type: str, principal: PrincipalContext) -> str:
+    return _scope_key(
+        scope_type, owner_id=principal.owner_id, tenant_id=principal.tenant_id
+    )
 
 
 def _assert_deadline_remaining(deadline_at: datetime, *, now: datetime) -> None:
@@ -563,9 +296,10 @@ async def _require_phase2_provider_contract(
 async def load_public_policy(
     session: AsyncSession, version: str = PUBLIC_DEFAULT_POLICY_VERSION
 ) -> PublicPolicyProfile:
-    # The resolver may answer the current default with the previous default's
-    # row while a deployment is ahead of its migration.  The check below then
-    # applies to whatever row was actually resolved, and still fails closed.
+    # The resolver no longer substitutes the previous default's row for a
+    # missing current default: startup refuses a database behind the code, so
+    # that substitution would only hide a bypassed schema contract.  It raises
+    # instead, and the check below applies to the row that was actually found.
     row = await resolve_public_policy_row(session, version)
     if row is None:
         raise PublicAdmissionRejected("public_policy_unavailable")
@@ -624,6 +358,16 @@ def _effective_runtime_quota_limits(
     except PublicWorkstationProfileError as error:
         raise PublicAdmissionRejected(str(error), retry_after_seconds=15) from error
     if profile is None:
+        # No profile: the row is still bounded by the knobs that run the work
+        # (cluster authored job cap, executor scheduler cap).  Admitting more
+        # than they can run only grows the queue behind them.
+        if scope_type == "global":
+            knob = (
+                get_authored_cluster_job_concurrency_env()
+                if operation_kind == "generation"
+                else get_public_export_scheduler_global_cap_env()
+            )
+            active = min(active, knob)
         return active, queued
     capacity = profile.admission_capacity(operation_kind)
     if scope_type == "owner":
@@ -700,42 +444,10 @@ async def _ensure_counter(
         return
 
 
-async def _locked_counters(
-    session: AsyncSession,
-    *,
-    policy_version: str,
-    owner_id: uuid.UUID,
-    tenant_id: str,
-    operation_kind: str,
-) -> tuple[PublicQuotaCounter, PublicQuotaCounter]:
-    # Every transition follows the global/tenant/owner hierarchy.  Phase 1
-    # does not have a global counter, so its compatible subset is tenant/owner.
-    identities = (("tenant", tenant_id), ("owner", str(owner_id)))
-    for scope_type, scope_key in identities:
-        await _ensure_counter(
-            session,
-            policy_version=policy_version,
-            scope_type=scope_type,
-            scope_key=scope_key,
-            operation_kind=operation_kind,
-        )
-    by_type: dict[str, PublicQuotaCounter] = {}
-    for scope_type, scope_key in identities:
-        row = await session.scalar(
-            select(PublicQuotaCounter)
-            .where(
-                PublicQuotaCounter.policy_version == policy_version,
-                PublicQuotaCounter.scope_type == scope_type,
-                PublicQuotaCounter.scope_key == scope_key,
-                PublicQuotaCounter.operation_kind == operation_kind,
-            )
-            .with_for_update()
-        )
-        if row is not None:
-            by_type[scope_type] = row
-    if set(by_type) != {"owner", "tenant"}:
-        raise RuntimeError("public_quota_counter_missing")
-    return by_type["owner"], by_type["tenant"]
+#: The only quota hierarchy either admission entry point may account.  Both
+#: paths walk it in this order so the global scope is locked first and no two
+#: transactions can acquire the counters in an order that deadlocks.
+_QUOTA_SCOPES: tuple[str, ...] = ("global", "tenant", "owner")
 
 
 async def _locked_phase2_counters(
@@ -747,12 +459,17 @@ async def _locked_phase2_counters(
     operation_kind: str,
     create_missing: bool = True,
 ) -> dict[str, PublicQuotaCounter]:
-    """Create and lock all scheduler axes in the only permitted order."""
+    """Create and lock all scheduler axes in the only permitted order.
 
-    identities = (
-        ("global", "global"),
-        ("tenant", tenant_id),
-        ("owner", str(owner_id)),
+    This is the single counter-locking helper.  The compatibility (Phase-1)
+    entry point uses it too, so ``global_active_*``/``global_queued_*`` are
+    authoritative for every operation kind on every product path rather than
+    only for the kinds that happen to reach the strict v2 admission.
+    """
+
+    identities = tuple(
+        (scope_type, _scope_key(scope_type, owner_id=owner_id, tenant_id=tenant_id))
+        for scope_type in _QUOTA_SCOPES
     )
     if create_missing:
         for scope_type, scope_key in identities:
@@ -788,11 +505,16 @@ async def admit_public_operation(
     operation_id: uuid.UUID,
     operation_kind: str,
     request_plan: ProviderRequestPlan | None,
+    planned_slide_count: int | None = None,
     policy_version: str = PUBLIC_DEFAULT_POLICY_VERSION,
     estimated_cost_limit_microunits: int | None = None,
     actual_cost_limit_microunits: int | None = None,
 ) -> PublicOperationAdmission:
-    """Atomically bind principal/policy and consume one queued quota slot."""
+    """Atomically bind principal/policy and consume one queued quota slot.
+
+    ``planned_slide_count`` is the export deck size (generation carries its own
+    in ``request_plan``); it scales the export deadline and is persisted.
+    """
 
     principal = _principal(principal)
     if operation_kind not in {"generation", "export"}:
@@ -833,11 +555,13 @@ async def admit_public_operation(
         )
         if estimated_limit <= 0 or actual_limit <= 0:
             raise PublicAdmissionRejected("provider_cost_cap_required")
-        slide_count = request_plan.slide_count
     else:
         if request_plan is not None:
             raise ValueError("export_provider_request_plan_forbidden")
-        request_limit = retry_limit = estimated_limit = actual_limit = slide_count = 0
+        request_limit = retry_limit = estimated_limit = actual_limit = 0
+    slide_count = _planned_slide_count(
+        operation_kind, request_plan, planned_slide_count
+    )
 
     existing = await session.scalar(
         select(PublicOperationAdmission).where(
@@ -854,27 +578,23 @@ async def admit_public_operation(
             raise PublicAdmissionRejected("public_operation_identity_conflict")
         return existing
 
-    owner_counter, tenant_counter = await _locked_counters(
+    counters = await _locked_phase2_counters(
         session,
         policy_version=policy_version,
         owner_id=principal.owner_id,
         tenant_id=principal.tenant_id,
         operation_kind=operation_kind,
     )
-    owner_limits = _quota_limits(
-        policy, scope_type="owner", operation_kind=operation_kind
-    )
-    tenant_limits = _quota_limits(
-        policy, scope_type="tenant", operation_kind=operation_kind
-    )
-    if owner_counter.queued_count >= owner_limits[1]:
-        raise PublicAdmissionRejected(
-            "public_owner_queue_limit_exceeded", retry_after_seconds=15
+    # Reject before the first mutation so a refused admission stays
+    # observationally read-only and leaks no slot in any scope.
+    for scope_type in _QUOTA_SCOPES:
+        _, queued_limit = _effective_runtime_quota_limits(
+            policy, scope_type=scope_type, operation_kind=operation_kind
         )
-    if tenant_counter.queued_count >= tenant_limits[1]:
-        raise PublicAdmissionRejected(
-            "public_tenant_queue_limit_exceeded", retry_after_seconds=15
-        )
+        if counters[scope_type].queued_count >= queued_limit:
+            raise PublicAdmissionRejected(
+                f"public_{scope_type}_queue_limit_exceeded", retry_after_seconds=15
+            )
 
     now = get_current_utc_datetime()
     legacy_deadline_seconds = max(
@@ -907,11 +627,13 @@ async def admit_public_operation(
         queued_at=now,
         updated_at=now,
     )
-    owner_counter.queued_count += 1
-    tenant_counter.queued_count += 1
-    owner_counter.version += 1
-    tenant_counter.version += 1
-    owner_counter.updated_at = tenant_counter.updated_at = now
+    # Exactly one queued slot per scope, and only on the branch that inserts
+    # the admission row; the idempotent early return above never re-counts.
+    for scope_type in _QUOTA_SCOPES:
+        counter = counters[scope_type]
+        counter.queued_count += 1
+        counter.version += 1
+        counter.updated_at = now
     session.add(row)
     await session.flush()
     return row
@@ -930,6 +652,7 @@ async def _admit_public_operation_v2(
     policy_version: str = PUBLIC_PHASE2_DEFAULT_POLICY_VERSION,
     estimated_cost_limit_microunits: int | None = None,
     actual_cost_limit_microunits: int | None = None,
+    planned_slide_count: int | None = None,
     _allow_sqlite_compat: bool = False,
 ) -> PublicOperationAdmission:
     """Shared v2 admission core selected only by the two explicit wrappers.
@@ -995,10 +718,8 @@ async def _admit_public_operation_v2(
         # The full request plan is validated below.  Reading only the slide
         # count here keeps every existing rejection ordering intact while the
         # deadline is still derived from the requested deck size.
-        planned_slide_count=(
-            request_plan.slide_count
-            if operation_kind == "generation" and request_plan is not None
-            else 0
+        planned_slide_count=_planned_slide_count(
+            operation_kind, request_plan, planned_slide_count
         ),
         auth_expires_at=auth_expires_at,
         server_hard_deadline_at=server_hard_deadline_at,
@@ -1047,11 +768,13 @@ async def _admit_public_operation_v2(
         )
         if estimated_limit <= 0 or actual_limit <= 0:
             raise PublicAdmissionRejected("provider_cost_cap_required")
-        slide_count = request_plan.slide_count
     else:
         if request_plan is not None:
             raise ValueError("export_provider_request_plan_forbidden")
-        request_limit = retry_limit = estimated_limit = actual_limit = slide_count = 0
+        request_limit = retry_limit = estimated_limit = actual_limit = 0
+    slide_count = _planned_slide_count(
+        operation_kind, request_plan, planned_slide_count
+    )
 
     counters = await _locked_phase2_counters(
         session,
@@ -1060,7 +783,7 @@ async def _admit_public_operation_v2(
         tenant_id=principal.tenant_id,
         operation_kind=operation_kind,
     )
-    for scope_type in ("global", "tenant", "owner"):
+    for scope_type in _QUOTA_SCOPES:
         counter = counters[scope_type]
         _, queued_count_limit = _effective_runtime_quota_limits(
             policy, scope_type=scope_type, operation_kind=operation_kind
@@ -1104,7 +827,7 @@ async def _admit_public_operation_v2(
     operation.fencing_token = fence
     session.add(row)
     await session.flush()
-    for scope_type in ("global", "tenant", "owner"):
+    for scope_type in _QUOTA_SCOPES:
         counter = counters[scope_type]
         counter.queued_count += 1
         counter.queued_resource_units += resource_units
@@ -1145,6 +868,7 @@ async def admit_public_operation_v2(
     policy_version: str = PUBLIC_PHASE2_DEFAULT_POLICY_VERSION,
     estimated_cost_limit_microunits: int | None = None,
     actual_cost_limit_microunits: int | None = None,
+    planned_slide_count: int | None = None,
 ) -> PublicOperationAdmission:
     """Admit only against the strict PostgreSQL public control plane."""
 
@@ -1160,6 +884,7 @@ async def admit_public_operation_v2(
         policy_version=policy_version,
         estimated_cost_limit_microunits=estimated_cost_limit_microunits,
         actual_cost_limit_microunits=actual_cost_limit_microunits,
+        planned_slide_count=planned_slide_count,
         _allow_sqlite_compat=False,
     )
 
@@ -1177,6 +902,7 @@ async def admit_public_operation_compatible_v2(
     policy_version: str = PUBLIC_PHASE2_DEFAULT_POLICY_VERSION,
     estimated_cost_limit_microunits: int | None = None,
     actual_cost_limit_microunits: int | None = None,
+    planned_slide_count: int | None = None,
 ) -> PublicOperationAdmission:
     """Admit the deprecated v1 browser request under the complete v2 contract.
 
@@ -1200,10 +926,8 @@ async def admit_public_operation_compatible_v2(
         .with_for_update()
     )
     if existing is not None:
-        expected_slide_count = (
-            request_plan.slide_count
-            if operation_kind == "generation" and request_plan is not None
-            else 0
+        expected_slide_count = _planned_slide_count(
+            operation_kind, request_plan, planned_slide_count
         )
         allowed_phases = (
             {"admitted", "queued"}
@@ -1259,6 +983,7 @@ async def admit_public_operation_compatible_v2(
         policy_version=policy_version,
         estimated_cost_limit_microunits=estimated_cost_limit_microunits,
         actual_cost_limit_microunits=actual_cost_limit_microunits,
+        planned_slide_count=planned_slide_count,
         _allow_sqlite_compat=sqlite_compat,
     )
 
@@ -1282,8 +1007,10 @@ async def _locked_phase2_leases(
             )
         ).scalars()
     )
-    expected = {"global", "tenant", "owner"}
-    if len(leases) != 3 or {lease.scope_type for lease in leases} != expected:
+    expected = set(_QUOTA_SCOPES)
+    if len(leases) != len(expected) or {
+        lease.scope_type for lease in leases
+    } != expected:
         raise PublicAdmissionRejected("public_resource_lease_authority_unavailable")
     if any(
         lease.operation_id != admission.operation_id
@@ -1444,7 +1171,7 @@ async def activate_public_operation_v2(
     # three counters and all three leases before changing the first row; a
     # later-scope capacity failure must not autoflush partial activation when
     # the caller inspects another queued candidate in the same transaction.
-    for scope_type in ("global", "tenant", "owner"):
+    for scope_type in _QUOTA_SCOPES:
         counter = counters[scope_type]
         active_count_limit, _ = _effective_runtime_quota_limits(
             policy, scope_type=scope_type, operation_kind=admission.operation_kind
@@ -1467,7 +1194,7 @@ async def activate_public_operation_v2(
         next_attempt = requested_attempt if requested_attempt is not None else lease.attempt + 1
         if next_attempt < 1:
             raise PublicAdmissionRejected("public_resource_lease_attempt_invalid")
-    for scope_type in ("global", "tenant", "owner"):
+    for scope_type in _QUOTA_SCOPES:
         counter = counters[scope_type]
         counter.queued_count -= 1
         counter.queued_resource_units -= admission.resource_units
@@ -1540,7 +1267,7 @@ async def requeue_public_operation_v2(
     )
     leases = await _locked_phase2_leases(session, lease_model=lease_model, admission=admission)
     next_fence = admission.fence + 1
-    for scope_type in ("global", "tenant", "owner"):
+    for scope_type in _QUOTA_SCOPES:
         counter = counters[scope_type]
         if (
             counter.active_count < 1
@@ -1646,7 +1373,7 @@ async def finish_public_operation_v2(
         create_missing=False,
     )
     leases = await _locked_phase2_leases(session, lease_model=lease_model, admission=admission)
-    for scope_type in ("global", "tenant", "owner"):
+    for scope_type in _QUOTA_SCOPES:
         counter = counters[scope_type]
         if (
             getattr(counter, source_count) < 1
@@ -1700,27 +1427,28 @@ async def activate_public_operation(
     if row.state != "queued":
         raise PublicAdmissionRejected("public_operation_not_queued")
     policy = await load_public_policy(session, row.policy_version)
-    owner_counter, tenant_counter = await _locked_counters(
+    counters = await _locked_phase2_counters(
         session,
         policy_version=row.policy_version,
         owner_id=row.owner_id,
         tenant_id=row.tenant_id,
         operation_kind=row.operation_kind,
     )
-    owner_active, _ = _quota_limits(
-        policy, scope_type="owner", operation_kind=row.operation_kind
-    )
-    tenant_active, _ = _quota_limits(
-        policy, scope_type="tenant", operation_kind=row.operation_kind
-    )
-    if owner_counter.active_count >= owner_active:
-        raise PublicAdmissionRejected("public_owner_active_limit_exceeded")
-    if tenant_counter.active_count >= tenant_active:
-        raise PublicAdmissionRejected("public_tenant_active_limit_exceeded")
-    if owner_counter.queued_count < 1 or tenant_counter.queued_count < 1:
-        raise RuntimeError("public_quota_counter_underflow")
+    # Validate every scope before mutating the first one: a later-scope
+    # capacity refusal must leave the transaction clean for the next
+    # candidate the caller inspects.
+    for scope_type in _QUOTA_SCOPES:
+        counter = counters[scope_type]
+        active_limit, _ = _effective_runtime_quota_limits(
+            policy, scope_type=scope_type, operation_kind=row.operation_kind
+        )
+        if counter.active_count >= active_limit:
+            raise PublicAdmissionRejected(f"public_{scope_type}_active_limit_exceeded")
+        if counter.queued_count < 1:
+            raise RuntimeError("public_quota_counter_underflow")
     now = get_current_utc_datetime()
-    for counter in (owner_counter, tenant_counter):
+    for scope_type in _QUOTA_SCOPES:
+        counter = counters[scope_type]
         counter.queued_count -= 1
         counter.active_count += 1
         counter.last_activated_at = now
@@ -1784,15 +1512,18 @@ async def finish_public_operation(
         if row.state != state:
             raise PublicAdmissionRejected("public_operation_terminal_conflict")
         return row
-    owner_counter, tenant_counter = await _locked_counters(
+    counters = await _locked_phase2_counters(
         session,
         policy_version=row.policy_version,
         owner_id=row.owner_id,
         tenant_id=row.tenant_id,
         operation_kind=row.operation_kind,
     )
+    # One release per scope for every terminal state -- success, failure,
+    # cancellation and deadline alike -- so no scope can leak a slot.
     source = "active_count" if row.state == "active" else "queued_count"
-    for counter in (owner_counter, tenant_counter):
+    for scope_type in _QUOTA_SCOPES:
+        counter = counters[scope_type]
         current = int(getattr(counter, source))
         if current < 1:
             raise RuntimeError("public_quota_counter_underflow")
@@ -1869,8 +1600,8 @@ async def claim_next_public_operation(
             return await activate_public_operation(session, candidate.id)
         except PublicAdmissionRejected as error:
             if error.code not in {
-                "public_owner_active_limit_exceeded",
-                "public_tenant_active_limit_exceeded",
+                f"public_{scope_type}_active_limit_exceeded"
+                for scope_type in _QUOTA_SCOPES
             }:
                 raise
     return None
@@ -1970,7 +1701,12 @@ async def reserve_public_provider_call(
             outcome="replayed",
         )
         return (existing, True) if _return_reuse else existing
-    is_retry = retry_class != "initial"
+    # A resumed worker can reach a logical provider call for the first time.
+    # Keep the ``resume`` label for auditability, but charge that new call to
+    # the deck's planned-request pool. Only an explicit provider recovery call
+    # consumes the retry pool. Replays of an already-reserved logical key return
+    # above without incrementing either counter.
+    is_retry = retry_class == "retry"
     row = PublicProviderLogicalCall(
         admission_id=admission_id,
         stage=stage,

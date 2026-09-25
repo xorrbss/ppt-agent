@@ -25,6 +25,18 @@
 
 export type FlaggedSlideStage = "author" | "gate";
 
+/**
+ * Which of the two things a flag says.
+ *
+ * ``review_required``: the final gate measured a defect on the bytes that
+ * shipped, or the browser source readback could not see a source text block.
+ * ``repair_not_admitted``: one bounded repair was attempted and its candidate
+ * was rejected; the slide that shipped carries no measured defect. The backend
+ * (``services/authored_flag_classification.py``) decides this once the flag
+ * list is final. A receipt persisted before that existed has no value here.
+ */
+export type FlaggedSlideClassification = "review_required" | "repair_not_admitted";
+
 export interface AuthoredFlaggedSlideEntry {
   index: number;
   /** Id of the slide this entry was generated for. Absent on legacy receipts. */
@@ -40,6 +52,8 @@ export interface AuthoredFlaggedSlideEntry {
   remakeOutcome?: string;
   remakeCount?: number;
   repeated?: boolean;
+  /** Absent on a receipt persisted before the classification existed. */
+  classification?: FlaggedSlideClassification;
 }
 
 export interface FlaggedSlideBadge {
@@ -54,6 +68,8 @@ export interface FlaggedSlideBadge {
   categories: string[];
   remakeAttempted: boolean;
   remakeOutcome: string | null;
+  /** ``null`` on a legacy receipt, which is shown rather than hidden. */
+  classification: FlaggedSlideClassification | null;
 }
 
 export type FlaggedSlideMap = Record<string, FlaggedSlideBadge>;
@@ -121,6 +137,10 @@ export function readFlaggedSlideEntries(theme: unknown): AuthoredFlaggedSlideEnt
       remakeOutcome: typeof raw.remakeOutcome === "string" ? raw.remakeOutcome : undefined,
       remakeCount: typeof raw.remakeCount === "number" ? raw.remakeCount : undefined,
       repeated: typeof raw.repeated === "boolean" ? raw.repeated : undefined,
+      classification:
+        raw.classification === "review_required" || raw.classification === "repair_not_admitted"
+          ? raw.classification
+          : undefined,
     });
   }
   return entries;
@@ -149,6 +169,7 @@ function toBadge(entry: AuthoredFlaggedSlideEntry, slide: SlideLike | undefined)
     categories: flaggedSlideCategories(entry.reason),
     remakeAttempted: entry.remakeAttempted === true,
     remakeOutcome: entry.remakeOutcome ?? null,
+    classification: entry.classification ?? null,
   };
 }
 
@@ -173,6 +194,11 @@ export function deriveFlaggedSlideMap(presentation: {
     ? presentation.slides.filter(isRecord)
     : [];
   for (const entry of entries) {
+    // A flag the backend classified as history badges nothing: the slide that
+    // shipped carries no measured defect, and a badge on it sends a reviewer to
+    // look for something that is not there. A legacy entry has no
+    // classification and is still shown, exactly as it was before.
+    if (entry.classification === "repair_not_admitted") continue;
     const byId = entry.slideId
       ? slides.findIndex((slide) => slide.id === entry.slideId)
       : -1;

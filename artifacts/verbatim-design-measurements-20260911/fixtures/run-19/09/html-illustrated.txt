@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+[data-header-part="band"]{position:absolute;left:0;top:0;width:1280px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:960px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:38px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:134px;height:514px;padding:0 64px}
+.identity-card{position:absolute;left:64px;top:0;width:330px;height:456px;padding:28px;background:#00140E;border-radius:12px;color:#FFFFFF}
+.identity-mark{width:44px;height:6px;margin-bottom:34px;background:#08916E;border-radius:12px}
+.identity-label{font-size:15px;line-height:24px;font-weight:700;letter-spacing:.15em;color:#71CDB5}
+.identity-name{margin-top:18px;font-size:27px;line-height:1.55;font-weight:700;color:#FFFFFF}
+.identity-rule{width:100%;height:1px;margin-top:32px;background:#219F88}
+.identity-note{margin-top:24px;font-size:18px;line-height:1.65;color:#CCECFF}
+.worksheet{position:absolute;left:418px;top:0;width:798px;height:456px;padding:28px 32px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.worksheet-head{display:flex;align-items:center;justify-content:space-between;height:34px;margin-bottom:22px}
+.worksheet-title{font-size:22px;line-height:30px;font-weight:700;color:#002060}
+.worksheet-count{font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:22px;color:#08916E;font-weight:700}
+.field-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:28px;row-gap:22px}
+.field{height:92px;padding:0 4px}
+.field-label{font-size:19px;line-height:29px;font-weight:700;color:#002060}
+.field-line{height:1px;margin-top:28px;background:#08916E}
+.field-blank{margin-top:8px;font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:24px;letter-spacing:1px;color:#6B7280;white-space:nowrap}
+.check-band{position:absolute;left:64px;top:474px;width:1152px;height:60px;display:flex;align-items:center;padding:0 24px;background:#E0F3FF;border-radius:12px}
+.check-label{width:100px;font-size:19px;line-height:28px;font-weight:700;color:#002060}
+.check-items{font-size:18px;line-height:28px;color:#1D1D1B;letter-spacing:.01em}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="106" style="height:106px" data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-9">사업 정리 실습</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-f510e59bd30d1f24" data-source-block-id="source-slide:10:text:3">1주차 실습 | 내 사업 한 장으로 정리</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-semantic-role="decoration" data-qid="q-div-59f86380b966"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:134px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="identity-card" data-semantic-role="decoration" data-qid="q-card-identity-9">
+    <div class="identity-mark" data-semantic-role="decoration" data-qid="q-div-2b03b32d3663"></div>
+    <div class="identity-label" data-semantic-role="supporting" data-qid="source-block-5d1d31da2869c1c1" data-source-block-id="source-slide:10:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    <div class="identity-rule" data-semantic-role="decoration" data-qid="q-div-8e3d1713842e"></div>
+    <div class="identity-note" data-semantic-role="body" data-qid="q-identity-note-9">내 사업의 핵심을 한 장에 담아<br>고객에게 설명할 준비를 합니다.</div>
+  </div>
+
+  <div class="worksheet" data-semantic-role="decoration" data-qid="q-card-worksheet-9">
+    <div class="worksheet-head" data-qid="q-div-6e45daf6e85b" data-semantic-role="decoration">
+      <div class="worksheet-title" data-semantic-role="supporting" data-qid="q-worksheet-title-9">사업 한 장 정리</div>
+      <div class="worksheet-count" data-semantic-role="supporting" data-qid="q-worksheet-count-9">01 / 04</div>
+    </div>
+    <div class="field-grid" data-qid="q-div-6d2061aa5461" data-semantic-role="decoration">
+      <div class="field" data-semantic-role="decoration" data-qid="q-field-target-9">
+        <div class="field-label" data-semantic-role="supporting" data-qid="source-block-3f00417bd48c7668" data-source-block-id="source-slide:10:text:6">타깃 업종</div>
+        <div class="field-line" data-semantic-role="decoration" data-qid="q-div-09ae621a534a"></div>
+        <div class="field-blank" data-semantic-role="body" data-qid="source-block-5a9628e2fa6cc085" data-source-block-id="source-slide:10:text:7">______________________________</div>
+      </div>
+      <div class="field" data-semantic-role="decoration" data-qid="q-field-service-9">
+        <div class="field-label" data-semantic-role="supporting" data-qid="source-block-c3370afa72895052" data-source-block-id="source-slide:10:text:8">서비스</div>
+        <div class="field-line" data-semantic-role="decoration" data-qid="q-div-a6826d9af00c"></div>
+        <div class="field-blank" data-semantic-role="body" data-qid="source-block-669369122b4aa2a8" data-source-block-id="source-slide:10:text:9">______________________________</div>
+      </div>
+      <div class="field" data-semantic-role="decoration" data-qid="q-field-price-9">
+        <div class="field-label" data-semantic-role="supporting" data-qid="source-block-fd509e8d70477383" data-source-block-id="source-slide:10:text:10">가격</div>
+        <div class="field-line" data-semantic-role="decoration" data-qid="q-div-f9e4b88e0600"></div>
+        <div class="field-blank" data-semantic-role="body" data-qid="source-block-9f269f39aad030f5" data-source-block-id="source-slide:10:text:11">______________________________</div>
+      </div>
+      <div class="field" data-semantic-role="decoration" data-qid="q-field-intro-9">
+        <div class="field-label" data-semantic-role="supporting" data-qid="source-block-13a718856d44bca1" data-source-block-id="source-slide:10:text:12">한 줄 소개</div>
+        <div class="field-line" data-semantic-role="decoration" data-qid="q-div-1f686b373902"></div>
+        <div class="field-blank" data-semantic-role="body" data-qid="source-block-625ae8ac20dd9be1" data-source-block-id="source-slide:10:text:13">______________________________</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="check-band" data-semantic-role="decoration" data-qid="q-card-check-9">
+    <div class="check-label" data-semantic-role="supporting" data-qid="source-block-d0e09424ddc39590" data-source-block-id="source-slide:10:text:16">체크</div>
+    <div class="check-items" data-semantic-role="body" data-qid="source-block-3e464ca90148cc93" data-source-block-id="source-slide:10:text:17">□ 인스타 프로필  □ 블로그 방향  □ 상품  □ 가격  □ 타깃</div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-c8160e59d0d88d5b" data-source-block-id="source-slide:10:text:4">10</div>
+</body>
+</html>

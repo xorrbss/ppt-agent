@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#FFFFFF;background:#00140E;word-break:keep-all;overflow-wrap:break-word}
+.stage{position:relative;width:1280px;height:720px;background:linear-gradient(135deg,#00140E 0%,#00291F 58%,#00140E 100%)}
+.field-line{position:absolute;left:64px;right:64px;top:92px;height:1px;background:#08916E;opacity:.42}
+.brand{position:absolute;left:64px;top:56px;display:flex;align-items:center;gap:12px;font-size:20px;line-height:28px;font-weight:700;color:#FFFFFF}
+.brand-mark{width:10px;height:10px;background:#219F88;border-radius:12px}
+.centerpiece{position:absolute;left:180px;top:170px;width:920px;text-align:center}
+.title{margin:0;font-size:52px;line-height:1.28;font-weight:700;letter-spacing:-.045em;color:#FFFFFF}
+.title-line{display:block}
+.subline{margin-top:38px;font-size:21px;line-height:32px;font-weight:500;color:#B9E5D9}
+.process{display:flex;align-items:center;justify-content:center;gap:18px;margin-top:62px}
+.step{min-width:132px;padding:15px 20px;border:1px solid #219F88;border-radius:12px;color:#FFFFFF;font-size:19px;line-height:28px;font-weight:700;background:rgba(8,145,110,.16)}
+.arrow{font-size:22px;line-height:28px;color:#08916E}
+.signature{position:absolute;left:0;right:0;bottom:70px;text-align:center;font-size:16px;line-height:24px;color:#8CCFC0;letter-spacing:.04em}
+.page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+.corner-rule{position:absolute;right:64px;bottom:70px;width:116px;height:1px;background:#08916E;opacity:.6}
+</style>
+</head>
+<body>
+<div class="stage" data-qid="q-div-877f7cb2b245" data-semantic-role="decoration">
+  <div class="field-line" data-qid="q-div-09ae621a534a" data-semantic-role="decoration"></div>
+  <div class="brand" data-semantic-role="supporting" data-qid="q-brand-34">
+    <span class="brand-mark" data-qid="q-span-62e5a043e16d" data-semantic-role="decoration"></span>
+    <span data-qid="source-block-5137d489be601f9d" data-semantic-role="title" data-source-block-id="source-slide:35:text:3">🐝 꿀벌쌤</span>
+  </div>
+
+  <main class="centerpiece" data-qid="q-main-d8960f35d081" data-semantic-role="decoration">
+    <h1 class="title" data-semantic-role="decoration" data-qid="source-block-396ed15ac83e4af0" data-source-block-id="source-slide:35:text:4">
+      <span class="title-line" data-qid="q-span-3fa79da04575" data-semantic-role="body">이제,</span>
+      <span class="title-line" data-qid="q-span-3b692f16ec0b" data-semantic-role="body">홀로서기 시작입니다.</span>
+    </h1>
+
+    <div class="subline" data-semantic-role="body" data-qid="source-block-776ff9a28e9acf4f" data-source-block-id="source-slide:35:text:5">숏폼대행 1인사업자 홀로서기 · 4주 8시간</div>
+
+    <div class="process" data-qid="source-block-82c049ab0dbb1bbe" data-semantic-role="decoration" data-source-block-id="source-slide:35:text:6">
+      <div class="step" data-semantic-role="body" data-qid="q-step-1-34">실행</div>
+      <div class="arrow" data-semantic-role="supporting" data-qid="q-arrow-1-34">→</div>
+      <div class="step" data-semantic-role="body" data-qid="q-step-2-34">경험</div>
+      <div class="arrow" data-semantic-role="supporting" data-qid="q-arrow-2-34">→</div>
+      <div class="step" data-semantic-role="body" data-qid="q-step-3-34">고객</div>
+      <div class="arrow" data-semantic-role="supporting" data-qid="q-arrow-3-34">→</div>
+      <div class="step" data-semantic-role="body" data-qid="q-step-4-34">성장</div>
+    </div>
+  </main>
+
+  <div class="signature" data-semantic-role="supporting" data-qid="source-block-c8d33f4e1c121d7a" data-source-block-id="source-slide:35:text:7">꿀벌쌤 강의용 마스터 PPT</div>
+  <div class="corner-rule" data-qid="q-div-4dd8ed6598d5" data-semantic-role="decoration"></div>
+  <div class="page" data-semantic-role="supporting" data-qid="q-page-34">35</div>
+</div>
+</body>
+</html>

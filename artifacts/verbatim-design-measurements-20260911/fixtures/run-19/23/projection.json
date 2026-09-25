@@ -1,0 +1,353 @@
+{
+ "source-slide:24:text:3": {
+  "text": "4주차 | 계약하고 장기고객 만들기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "4주차",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "계약하고 장기고객 만들기",
+    "begin": 6,
+    "end": 19,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:24:text:4": {
+  "text": "목표: 상담 → 계약 → 납품 → 재계약 구조 완성",
+  "run_count": 4,
+  "lines": [
+   [
+    0,
+    3
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "목표: 상담",
+    "begin": 0,
+    "end": 6,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "계약",
+    "begin": 9,
+    "end": 11,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 0,
+    "marker": "",
+    "body": "납품",
+    "begin": 14,
+    "end": 16,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 0,
+    "marker": "",
+    "body": "재계약 구조 완성",
+    "begin": 19,
+    "end": 28,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:24:text:5": {
+  "text": "24",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "24",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:24:text:6": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:24:text:7": {
+  "text": "고객 흐름",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "고객 흐름",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:24:text:8": {
+  "text": "영업 → 상담 → 제안 → 계약 → 제작 → 납품 → 재계약",
+  "run_count": 7,
+  "lines": [
+   [
+    0,
+    6
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "영업",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "상담",
+    "begin": 5,
+    "end": 7,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 0,
+    "marker": "",
+    "body": "제안",
+    "begin": 10,
+    "end": 12,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 0,
+    "marker": "",
+    "body": "계약",
+    "begin": 15,
+    "end": 17,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 0,
+    "marker": "",
+    "body": "제작",
+    "begin": 20,
+    "end": 22,
+    "order_free_before": false
+   },
+   {
+    "index": 5,
+    "line": 0,
+    "marker": "",
+    "body": "납품",
+    "begin": 25,
+    "end": 27,
+    "order_free_before": false
+   },
+   {
+    "index": 6,
+    "line": 0,
+    "marker": "",
+    "body": "재계약",
+    "begin": 30,
+    "end": 33,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:24:text:11": {
+  "text": "제안",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "제안",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:24:text:12": {
+  "text": "고객 문제에 맞춘다",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "고객 문제에 맞춘다",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:24:text:15": {
+  "text": "운영",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "운영",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:24:text:16": {
+  "text": "범위와 수정 기준을 정한다",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "범위와 수정 기준을 정한다",
+    "begin": 0,
+    "end": 14,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:24:text:19": {
+  "text": "재계약",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "재계약",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:24:text:20": {
+  "text": "다음 콘텐츠를 먼저 제안",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "다음 콘텐츠를 먼저 제안",
+    "begin": 0,
+    "end": 13,
+    "order_free_before": false
+   }
+  ]
+ }
+}

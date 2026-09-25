@@ -1,0 +1,55 @@
+{
+  "id": "people-05-teacher",
+  "category": "people",
+  "tags": {
+    "ko": [
+      "사람",
+      "교사"
+    ],
+    "en": [
+      "people",
+      "teacher"
+    ]
+  },
+  "alt": {
+    "ko": "교사 단색 벡터 인포그래픽",
+    "en": "teacher monochrome vector infographic"
+  },
+  "path": "originals/people-05-teacher.svg",
+  "thumbnail": "thumbnails/people-05-teacher.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 686,
+  "sha256": "9201efa8d3bdf7d76118822da19e435f00cdf92b9346062450876559009d3a8a",
+  "geometry_sha256": "80253705e8ee4781eb652c2d985ac1bcd333004fcddf2559ebbae180a9bf9c4f",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 53803,
+    "preview_opaque_pixels": 9485,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "School",
+      "BookOpen"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

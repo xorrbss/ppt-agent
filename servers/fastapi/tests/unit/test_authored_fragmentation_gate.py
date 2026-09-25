@@ -30,8 +30,8 @@ from utils.get_env_programme import (
     get_authored_type_floor_px,
     is_authored_fragmentation_gate_enabled,
 )
-from utils.slide_capture_fit import fit_probe_prelude
-from utils.slide_capture_fit_script import fit_constants, fit_script_fragment
+from utils.slide_capture_fit import in_render_fit_probe_prelude
+from utils.slide_capture_fit_in_render_script import fit_constants, fit_script_fragment
 
 GATE_KNOB = "AUTHORED_FRAGMENTATION_GATE_ENABLED"
 OWNERS_KNOB = "AUTHORED_FRAGMENTATION_MAX_TEXT_OWNERS"
@@ -338,38 +338,39 @@ def test_fitter_floor_follows_the_gate(monkeypatch):
     assert fit_font_floor_px() == 12.0
     assert fit_constants()["font_floor_px"] == 12.0
     assert '"font_floor_px": 12.0' in fit_script_fragment()
-    assert '"font_floor_px": 12.0' in fit_probe_prelude()
+    assert '"font_floor_px": 12.0' in in_render_fit_probe_prelude()
 
     _gate_on(monkeypatch)
     assert fit_font_floor_px() == 15.0
     assert fit_constants(font_floor_px=fit_font_floor_px())["font_floor_px"] == 15.0
-    assert '"font_floor_px": 15.0' in fit_probe_prelude()
+    assert '"font_floor_px": 15.0' in in_render_fit_probe_prelude()
     # An explicit floor wins over the knob, and the default argument stays 12.
-    assert '"font_floor_px": 12.0' in fit_probe_prelude(font_floor_px=12)
+    assert '"font_floor_px": 12.0' in in_render_fit_probe_prelude(font_floor_px=12)
     assert fit_constants()["font_floor_px"] == 12.0
 
     _gate_on(monkeypatch, floor="20")
     assert fit_font_floor_px() == 20.0
-    assert '"font_floor_px": 20.0' in fit_probe_prelude()
+    assert '"font_floor_px": 20.0' in in_render_fit_probe_prelude()
 
 
 def test_the_probe_carries_the_resolved_floor(monkeypatch):
     """``utils.slide_capture`` threads the resolved floor into the probe it
     injects, so a renderer worker fits to the API's floor, not its own."""
 
-    from utils import slide_capture
+    from utils import slide_capture, slide_capture_fit
 
     seen: list[float | None] = []
-    original = slide_capture.fit_probe_prelude
+    original = slide_capture_fit.in_render_fit_probe_prelude
 
     def spy(*, font_floor_px=None):
         seen.append(font_floor_px)
         return original(font_floor_px=font_floor_px)
 
-    monkeypatch.setattr(slide_capture, "fit_probe_prelude", spy)
+    monkeypatch.setattr(slide_capture_fit, "in_render_fit_probe_prelude", spy)
     _gate_on(monkeypatch)
     enriched, _key = slide_capture._instrument_authored_html(
-        "<html><body><p>hello</p></body></html>", issue_capability=False
+        slide_capture_fit.fit_request_html("<html><body><p>hello</p></body></html>"),
+        issue_capability=False,
     )
     assert seen == [15.0]
     assert '"font_floor_px": 15.0' in enriched

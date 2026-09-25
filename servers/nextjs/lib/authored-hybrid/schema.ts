@@ -1,3 +1,5 @@
+import type { LocalFitObservation } from "./local-fit-browser.ts";
+
 export const AUTHORED_HYBRID_SCHEMA_VERSION =
   "presenton.authored-hybrid/v1" as const;
 
@@ -127,6 +129,7 @@ export interface AuthoredHybridLineHeight {
 }
 
 export interface AuthoredHybridTextStyle {
+  sourceFitPolicy?: "composer-source-fit/v2";
   fontFamily: string;
   fontFamilies: string[];
   cjkFallbackFamilies: string[];
@@ -309,7 +312,12 @@ export interface AuthoredHybridShapePayload {
   preserveContents?: boolean;
 }
 
+export interface AuthoredHybridTableRunEvidence {
+  text: string; fontFamily: string; fontSizePt: number; weight: number; italic?: boolean; underline?: boolean; color: string;
+}
+
 export interface AuthoredHybridTableCellEvidence {
+  paragraphs?: { runs: AuthoredHybridTableRunEvidence[]; alignment?: "left" | "center" | "right" | "justify"; lineHeightPt?: number; spaceBeforePt?: number; spaceAfterPt?: number }[];
   text: string;
   fill?: string;
   textColor: string;
@@ -324,6 +332,7 @@ export interface AuthoredHybridTableBorderEvidence {
 }
 
 export interface AuthoredHybridTableCellStyleEvidence {
+  paddingPx?: Record<"top" | "right" | "bottom" | "left", number>;
   horizontalAlign: "left" | "center" | "right" | "justify";
   verticalAlign: "top" | "middle" | "bottom";
   borders: Partial<Record<"top" | "right" | "bottom" | "left", AuthoredHybridTableBorderEvidence>>;
@@ -336,6 +345,8 @@ export interface AuthoredHybridTableCellStyleEvidence {
  * top-level keys never change that comparison.
  */
 export interface AuthoredHybridTableEvidence {
+  sourceFitPolicy?: "composer-source-fit/v2";
+  mergedCells?: { row: number; column: number; rowSpan: number; columnSpan: number }[];
   rows: AuthoredHybridTableCellEvidence[][];
   columnWidthsPx?: number[];
   rowHeightsPx?: number[];
@@ -426,8 +437,8 @@ export type AuthoredHybridElement =
 export interface AuthoredHybridBackplatePlan {
   strategy: "hide-native-leaves";
   mediaType: "image/png";
-  widthPx: typeof AUTHORED_SLIDE_WIDTH_PX;
-  heightPx: typeof AUTHORED_SLIDE_HEIGHT_PX;
+  widthPx: number;
+  heightPx: number;
   /** Chrome captures with omitBackground so transparent CSS remains RGBA. */
   transparentBackground: true;
   /** H2 may promote native items and extracted editable raster text/shapes. */
@@ -451,8 +462,8 @@ export interface AuthoredHybridSlideV1 {
     /** Asset resolution context; null means the temporary file URL is the base. */
     baseUrl: string | null;
     viewport: {
-      widthPx: typeof AUTHORED_SLIDE_WIDTH_PX;
-      heightPx: typeof AUTHORED_SLIDE_HEIGHT_PX;
+      widthPx: number;
+      heightPx: number;
       cssDpi: typeof AUTHORED_CSS_DPI;
       widthIn: number;
       heightIn: number;
@@ -464,6 +475,7 @@ export interface AuthoredHybridSlideV1 {
 }
 
 export interface AuthoredHybridBackplateRenderResult {
+  localFitObservation?: LocalFitObservation;
   /** RGBA PNG with only identity-verified native elements suppressed. */
   backplatePng: Buffer;
   /** Requested elements whose current DOM identity still matched extraction. */

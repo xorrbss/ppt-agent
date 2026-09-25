@@ -2,28 +2,23 @@
   "schemaVersion": 1,
   "key": "public-export.fidelity-visual-review-pending",
   "revision": 1,
-  "status": "accepted",
-  "authority": "code",
-  "summary": "Fidelity export may create review artifacts when the sole sealed blocker is pending human visual review; release and deployment readiness remain blocked.",
+  "status": "rejected",
+  "authority": "user",
+  "summary": "Superseded by public-export.quality-advisory: ordinary exports allow quality warnings while integrity and release certification remain strict.",
   "scope": [
     "public-export",
     "quality",
     "release"
   ],
   "invariants": [
-    "fidelity only",
-    "sealed V3 receipt",
-    "release readiness blocked"
+    "Use public-export.quality-advisory for ordinary source-preserving exports."
   ],
   "forbidden": [
-    "Hybrid bypass",
-    "other quality blocker bypass",
-    "promotion or deployment authorization"
+    "Treating this retired narrow compatibility policy as an ordinary export quality blocker."
   ],
   "evidence": [
-    "servers/fastapi/services/workspace_quality_export_operation_handlers.py",
-    "output/source-native-devax-20260901/product-path-evidence.json"
+    "User explicitly replaced quality-based export blocking with advisory-only behavior."
   ],
   "supersedes": null,
-  "recordedAt": "2026-09-01T12:11:06.8420946+00:00"
+  "recordedAt": "2026-09-14T03:08:02.1276266+00:00"
 }

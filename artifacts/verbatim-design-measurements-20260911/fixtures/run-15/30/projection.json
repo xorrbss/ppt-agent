@@ -1,0 +1,233 @@
+{
+ "source-slide:31:text:3": {
+  "text": "꿀벌쌤 보너스 자료",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤 보너스 자료",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:31:text:4": {
+  "text": "수업 시간을 줄이고 실행력을 높이기 위해 자료로 제공합니다.",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "수업 시간을 줄이고 실행력을 높이기 위해 자료로 제공합니다.",
+    "begin": 0,
+    "end": 33,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:31:text:5": {
+  "text": "31",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "31",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:31:text:6": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:31:text:7": {
+  "text": "• 캡컷 기능 가이드 • 스냅챗 활용법 / 얼굴 노출 최소화 • 후킹 문구 모음 • 업종별 콘텐츠 아이디어 • 전화영업 대본 • DM / 문자 / 카카오톡 문구 • 당근마켓 활용 가이드 • 제안서 · 견적서 템플릿 • 촬영 가이드 • 콘텐츠 기획표",
+  "run_count": 10,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    4,
+    4
+   ],
+   [
+    5,
+    5
+   ],
+   [
+    6,
+    6
+   ],
+   [
+    7,
+    7
+   ],
+   [
+    8,
+    8
+   ],
+   [
+    9,
+    9
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "• ",
+    "body": "캡컷 기능 가이드",
+    "begin": 0,
+    "end": 11,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "• ",
+    "body": "스냅챗 활용법 / 얼굴 노출 최소화",
+    "begin": 12,
+    "end": 33,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "• ",
+    "body": "후킹 문구 모음",
+    "begin": 34,
+    "end": 44,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "• ",
+    "body": "업종별 콘텐츠 아이디어",
+    "begin": 45,
+    "end": 59,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 4,
+    "marker": "• ",
+    "body": "전화영업 대본",
+    "begin": 60,
+    "end": 69,
+    "order_free_before": false
+   },
+   {
+    "index": 5,
+    "line": 5,
+    "marker": "• ",
+    "body": "DM / 문자 / 카카오톡 문구",
+    "begin": 70,
+    "end": 89,
+    "order_free_before": false
+   },
+   {
+    "index": 6,
+    "line": 6,
+    "marker": "• ",
+    "body": "당근마켓 활용 가이드",
+    "begin": 90,
+    "end": 103,
+    "order_free_before": false
+   },
+   {
+    "index": 7,
+    "line": 7,
+    "marker": "• ",
+    "body": "제안서 · 견적서 템플릿",
+    "begin": 104,
+    "end": 119,
+    "order_free_before": false
+   },
+   {
+    "index": 8,
+    "line": 8,
+    "marker": "• ",
+    "body": "촬영 가이드",
+    "begin": 120,
+    "end": 128,
+    "order_free_before": false
+   },
+   {
+    "index": 9,
+    "line": 9,
+    "marker": "• ",
+    "body": "콘텐츠 기획표",
+    "begin": 129,
+    "end": 138,
+    "order_free_before": false
+   }
+  ]
+ }
+}

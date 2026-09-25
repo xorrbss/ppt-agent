@@ -27,6 +27,12 @@ const expected = {
     style_source: "authored",
     generation_mode: "standard",
   },
+  "svg-v1": {
+    content_model: "svg",
+    generation_strategy: "svg",
+    style_source: "authored",
+    generation_mode: "standard",
+  },
 } as const;
 
 function serverResponse(driverId: PresentationDriverId) {
@@ -49,10 +55,11 @@ function serverResponse(driverId: PresentationDriverId) {
   return { profile, capabilities };
 }
 
-test("compile-time registry resolves the two supported server-issued profiles", () => {
+test("compile-time registry resolves the supported server-issued profiles", () => {
   assert.deepEqual(Object.keys(PRESENTATION_DRIVER_REGISTRY), [
     "template-v2",
     "authored",
+    "svg-v1",
   ]);
 
   for (const driverId of Object.keys(

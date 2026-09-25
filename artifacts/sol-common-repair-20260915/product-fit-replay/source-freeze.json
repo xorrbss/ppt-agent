@@ -1,0 +1,14 @@
+{
+  "servers\\fastapi\\utils\\slide_capture_fit.py": "775cf9e93b2fb688b0e66e44d8f08a5e5d90bdf2bf06d1c7ddc936bc720ea0ca",
+  "servers\\fastapi\\utils\\slide_capture_fit_boundary.py": "15be00a818140eebcc595172ddd3117288d95ec545c5ead83648fea4fc658399",
+  "servers\\fastapi\\utils\\slide_capture_fit_compare.py": "d847d0990d4e02e38a0680934ea0e00f494f7a2743fa4b3b595a4caffb13692f",
+  "servers\\fastapi\\utils\\slide_capture_fit_geometry.py": "f1c8630cb77b70ec020cf1cfc8cf4d29badeb09d1023ec741705af6652e968ec",
+  "servers\\fastapi\\utils\\slide_capture_fit_morph.py": "492975cfff076a17bc178455ba4595356be534800f7f715b2efc22658b45ff48",
+  "servers\\fastapi\\utils\\slide_capture_fit_observe.py": "da483835927a780757b9256e5f330297410782c3620f4fb420a6436ef9e8dbe7",
+  "servers\\fastapi\\utils\\slide_capture_fit_parent.py": "c0ff354d9b4d3905e43224a33b3d822ce62bc7dcf5eb2673f1b7e463f017e186",
+  "servers\\fastapi\\utils\\slide_capture_fit_runner.py": "532a21722688b153713e2c9392470edaaa834e9d7a853458c56120c63b66eabf",
+  "servers\\fastapi\\utils\\slide_capture_fit_script.py": "302f362a9d0f1a6f586b66bee3cffb4172551f6bd2eda2a6a39a8b3ced4ad1e1",
+  "servers\\fastapi\\utils\\slide_capture_fit_search.py": "7e4a25e4dfaa5187c17d4705e9b307156b9a19bed1c1f57b0efae8d6bb6f73c6",
+  "servers\\fastapi\\utils\\slide_capture_fit_spacing.py": "e49a7f85cce0776b2ff49d0ef0b8bcd1160a54cb761ee9efd8d3001b26d730f9",
+  "servers/fastapi/utils/authored_dom_text_escape.py": "ee3cb10183b5905dbf265183f0b94e77168cc8ff6f1e48c32b9a9072c75b6c6d"
+}

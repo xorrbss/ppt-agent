@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "w24-author-failure/v1",
+  "run": 18,
+  "operationId": "2123782f-8b01-486f-b540-8a1815ee2976",
+  "jobId": "fca17341-05ad-45ce-ab5a-0ea24917863f",
+  "slideIndex": 30,
+  "slideNumber": 31,
+  "stage": "author",
+  "providerAttemptCount": 2,
+  "exceptionType": "RendererPolicyError",
+  "cause": "HTML closing tag is unbalanced: img",
+  "offendingEndTags": [
+    "img"
+  ],
+  "offendingTagOccurrenceCount": null,
+  "rawModelOutput": {
+    "persisted": false,
+    "foundAt": null,
+    "reason": "The failed checkpoint has null author_html and illustrated_html and no artifact_refs. Provider usage receipts are scalar-only and the operation/job identifiers occur in app_data only in the worker log, which records the bounded cause but not response HTML.",
+    "searchedEvidence": [
+      "PostgreSQL authored_slide_checkpoints row for job fca17341-05ad-45ce-ab5a-0ea24917863f and slide_index 30, read in a read-only transaction through Read-StackEnvironment",
+      "PostgreSQL provider_usage_receipts for the job, read in the same read-only transaction pattern",
+      "app_data files containing the operation or job identifier, excluding encrypted environment/config and binary artifacts",
+      "app_data/logs/worker-generation-20260911-145547.stderr.log"
+    ]
+  },
+  "persistedCheckpoint": {
+    "authorStatus": "failed",
+    "authorHtmlPresent": false,
+    "authorHtmlLength": 0,
+    "illustratedHtmlPresent": false,
+    "artifactRefKeys": [],
+    "failedStage": "author",
+    "providerAttemptCount": 2
+  },
+  "providerUsageReceiptSummary": {
+    "authorInitialSucceeded": 35,
+    "authorRecoverySucceeded": 5,
+    "containsRequestOrResponsePayload": false,
+    "note": "The table deliberately stores accounting scalars, not prompts or model responses; slide 31's two-call count is established by the failed checkpoint."
+  },
+  "minimalReproduction": {
+    "html": "<html><head></head><body><img data-qid=\"hero\"></img></body></html>",
+    "preFixAdmissionResult": "RendererPolicyError: HTML closing tag is unbalanced: img",
+    "postFixIntakeResult": "The </img> token is dropped before admission and html_void_end_tag_dropped(detail=img,count=1) is recorded."
+  },
+  "rootCause": "Authored intake forwarded browser-ignored HTML void-element end tags unchanged into renderer_isolation._PolicyParser, whose intentionally strict balance check rejects every void end tag. The generic RendererPolicyError retry correction also omitted this exact cause, so the recovery prompt was blind.",
+  "fix": {
+    "layer": "authored HTML normalization before renderer isolation",
+    "normalizationRule": "html_void_end_tag_dropped",
+    "scope": "Only end-tag tokens for the HTML-spec void-element set are deleted; non-void end tags remain unchanged and fail closed when unbalanced.",
+    "rendererIsolationChanged": false,
+    "retryFeedback": "Every RendererPolicyError correction now includes the exact whitespace-collapsed, 240-character-bounded rejection as diagnostic data."
+  }
+}

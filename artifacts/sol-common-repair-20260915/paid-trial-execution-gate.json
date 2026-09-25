@@ -1,0 +1,27 @@
+{
+  "status": "authorized",
+  "representative10CommonCorrectionPassed": true,
+  "rootExplicitExecutionInstruction": true,
+  "authorizedAuthorCalls": 12,
+  "requestedModel": "gpt-5.6-sol",
+  "requestedReasoningEffort": "medium",
+  "gateDefinition": "At least one actual visual improvement with preserved required content, no new visual regression, and both normal controls unchanged; this does not mean all ten slides passed quality review.",
+  "observed": {
+    "fullyResolvedFailures": 1,
+    "partiallyImprovedFailures": 1,
+    "normalControlsUnchanged": 2,
+    "newVisualRegressionsObserved": 0,
+    "newProviderCallsBeforeTrial": 0
+  },
+  "evidence": [
+    "product-fit-replay/summary.json",
+    "evaluation/product-fit-case01-visual.json",
+    "evaluation/product-fit-case06-controls-visual.json"
+  ],
+  "limitations": [
+    "DOM text equality is not proof of text visibility or semantic preservation.",
+    "Case 06 remains a whole-page quality failure despite partial improvement.",
+    "Normal control 10 is visually unchanged but existing fit policy reports font_unverifiable.",
+    "This gate authorizes only the initial twelve-call prompt experiment; further repeats require its quality gate."
+  ]
+}

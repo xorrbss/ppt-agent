@@ -91,7 +91,9 @@ class WorkspacePageRemakeOperationHandler:
                 )
             theme = presentation.theme if isinstance(presentation.theme, dict) else {}
             projection = theme.get("authored_vnext")
-            pinned_body_only = projection is not None
+            pinned_body_only = isinstance(projection, Mapping) and isinstance(
+                projection.get("masterPin"), Mapping
+            )
             if pinned_body_only or master_pin is not None:
                 projected_pin = (
                     projection.get("masterPin")
@@ -172,13 +174,16 @@ class WorkspacePageRemakeOperationHandler:
                     presentation_id=claim.presentation_id,
                     slide_index=slide_index,
                     preview_task_id=preview_task_id,
+                    operation_id=claim.operation_id,
+                    attempt_token=claim.attempt_token,
+                    expected_revision=claim.expected_revision,
                 )
-                active_semantic = await get_active_authored_emission(
+                active_semantic = None if presentation.is_svg() else await get_active_authored_emission(
                     session,
                     presentation_id=claim.presentation_id,
                     owner_id=claim.owner_id,
                 )
-                if active_semantic.canonical_mode == "bundleGraph":
+                if active_semantic is not None and active_semantic.canonical_mode == "bundleGraph":
                     slide_rows = await session.execute(
                         select(SlideModel)
                         .where(SlideModel.presentation == claim.presentation_id)
@@ -192,7 +197,7 @@ class WorkspacePageRemakeOperationHandler:
                         presentation_id=claim.presentation_id,
                         owner_id=claim.owner_id,
                         expected_presentation_revision=int(revision),
-                        operation_id=claim.operation_id,
+                    operation_id=claim.operation_id,
                         generation_attempt_id=None,
                         ordered_slides=ordered_slides,
                         htmls=htmls,

@@ -22,6 +22,25 @@ function runMatrix(args = []) {
   return result;
 }
 
+// These scripts call Get-FileHash (Microsoft.PowerShell.Utility). On some
+// Windows PowerShell 5.1 installs that module manifest fails to load (a
+// machine-local module-cache/installation problem, not something the repo
+// controls) and every cmdlet it exports -- Get-FileHash included -- is
+// unavailable, independent of the repo's own .ps1 scripts. Detect that
+// precisely rather than skipping every win32 run.
+let windowsPowerShellUtilityAvailable;
+function windowsPowerShellUtilityIsAvailable() {
+  if (windowsPowerShellUtilityAvailable === undefined) {
+    const probe = spawnSync(
+      "powershell.exe",
+      ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "Get-Command Get-FileHash"],
+      { encoding: "utf8", windowsHide: true },
+    );
+    windowsPowerShellUtilityAvailable = probe.status === 0;
+  }
+  return windowsPowerShellUtilityAvailable;
+}
+
 test("availability matrix keeps validation lanes and claims separate", (t) => {
   if (process.platform !== "win32") {
     t.skip("Windows Office availability probe");
@@ -68,6 +87,10 @@ test("manual repair-dialog witness creates but never launches a disposable copy"
     t.skip("Windows manual witness helper");
     return;
   }
+  if (!windowsPowerShellUtilityIsAvailable()) {
+    t.skip("this host's Windows PowerShell 5.1 cannot load Microsoft.PowerShell.Utility (Get-FileHash unavailable)");
+    return;
+  }
   const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "ooxml-office-tools-test-"));
   t.after(() => rm(temporaryDirectory, { recursive: true, force: true }));
   const input = path.join(temporaryDirectory, "source.pptx");
@@ -97,6 +120,10 @@ test("manual repair-dialog witness creates but never launches a disposable copy"
 test("visible witness derives source isolation from a locked handle and a distinct launch target", async (t) => {
   if (process.platform !== "win32") {
     t.skip("Windows manual witness helper");
+    return;
+  }
+  if (!windowsPowerShellUtilityIsAvailable()) {
+    t.skip("this host's Windows PowerShell 5.1 cannot load Microsoft.PowerShell.Utility (Get-FileHash unavailable)");
     return;
   }
   const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "ooxml-visible-lock-test-"));

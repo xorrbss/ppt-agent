@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#08916E}
+.header-left{position:absolute;left:64px;top:24px;width:760px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:8px;font-size:32px;line-height:38px;font-weight:700;color:#FFFFFF}
+.header-tag{position:absolute;left:916px;top:18px;width:300px;height:72px;padding:14px 16px;border-radius:12px;background:#00140E}
+.header-right{font-size:15px;line-height:20px;font-weight:600;color:#FFFFFF;text-align:right}
+.body-wrap{width:1152px;margin-left:64px}
+.claim{height:64px;display:flex;align-items:center;justify-content:space-between}
+.claim-text{font-size:26px;line-height:38px;font-weight:700;letter-spacing:-.02em}
+.claim-text strong{color:#08916E}
+.claim-status{display:flex;align-items:center;gap:8px;font-size:15px;line-height:22px;font-weight:700;color:#00140E}
+.claim-mark{display:block;width:10px;height:10px;border-radius:12px;background:#E5A93D}
+.content-grid{display:grid;grid-template-columns:674px 454px;gap:24px;height:400px}
+.resource-panel{height:400px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.resource-list{display:grid;grid-template-columns:1fr 1fr;column-gap:28px}
+.resource-item{min-height:68px;padding:18px 0 16px 30px;border-bottom:1px solid #E2E8F0;font-size:18px;line-height:28px;font-weight:600;position:relative}
+.resource-item:nth-child(9),.resource-item:nth-child(10){border-bottom:0}
+.item-mark{position:absolute;left:0;top:27px;width:8px;height:8px;border-radius:12px;background:#219F88}
+.illust-panel{height:400px;padding:20px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.illust-heading{height:28px;font-size:18px;line-height:28px;font-weight:700;color:#00140E}
+.illust-panel img{display:block;width:414px;height:220px;margin-top:12px;border-radius:12px;object-fit:cover;background:#E0F3FF}
+.illust-note{margin-top:18px;padding:14px 20px;border-radius:12px;background:#E0F3FF;color:#00140E;font-size:18px;line-height:28px;font-weight:600}
+.note-rule{display:inline-block;width:7px;height:28px;margin-right:10px;vertical-align:-7px;border-radius:12px;background:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="108" class="header-band" style="height:108px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div data-header-part="eyebrow" class="eyebrow" data-qid="q-eyebrow-30" data-semantic-role="supporting">보너스 자료</div>
+  <div data-header-part="title" class="title" data-qid="source-block-710a8a51d9d348e4" data-semantic-role="title" data-source-block-id="source-slide:31:text:3">꿀벌쌤 보너스 자료</div>
+  <div class="header-tag" data-qid="q-div-787f321246ec" data-semantic-role="decoration">
+    <div data-header-part="right" class="header-right" data-qid="source-block-0c7c9fd2a1601fb1" data-semantic-role="supporting" data-source-block-id="source-slide:31:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  </div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+    <div class="claim-text" data-qid="source-block-ea971747b7377c6d" data-semantic-role="body" data-source-block-id="source-slide:31:text:4">수업 시간을 줄이고 실행력을 높이기 위해 자료로 제공합니다.</div>
+    <div class="claim-status" data-qid="q-status-30" data-semantic-role="supporting">
+      <span class="claim-mark" data-qid="q-span-05fa3191c699" data-semantic-role="decoration"></span>
+      <span data-qid="q-status-text-30" data-semantic-role="supporting">실행 자료 모음</span>
+    </div>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="resource-panel" data-qid="q-card-resources-30" data-semantic-role="decoration">
+      <div class="resource-list" data-qid="source-block-e0c2f103e3a0af3b" data-semantic-role="decoration" data-source-block-id="source-slide:31:text:7">
+        <div class="resource-item" data-qid="q-resource-01" data-semantic-role="body"><span class="item-mark" data-qid="q-span-463fd3af2234" data-semantic-role="decoration"></span>캡컷 기능 가이드</div>
+        <div class="resource-item" data-qid="q-resource-02" data-semantic-role="body"><span class="item-mark" data-qid="q-span-2b72862b3382" data-semantic-role="decoration"></span>스냅챗 활용법 / 얼굴 노출 최소화</div>
+        <div class="resource-item" data-qid="q-resource-03" data-semantic-role="body"><span class="item-mark" data-qid="q-span-405d725bd974" data-semantic-role="decoration"></span>후킹 문구 모음</div>
+        <div class="resource-item" data-qid="q-resource-04" data-semantic-role="body"><span class="item-mark" data-qid="q-span-87defe4c88c0" data-semantic-role="decoration"></span>업종별 콘텐츠 아이디어</div>
+        <div class="resource-item" data-qid="q-resource-05" data-semantic-role="body"><span class="item-mark" data-qid="q-span-f19d82d554f2" data-semantic-role="decoration"></span>전화영업 대본</div>
+        <div class="resource-item" data-qid="q-resource-06" data-semantic-role="body"><span class="item-mark" data-qid="q-span-9881fad6040f" data-semantic-role="decoration"></span>DM / 문자 / 카카오톡 문구</div>
+        <div class="resource-item" data-qid="q-resource-07" data-semantic-role="body"><span class="item-mark" data-qid="q-span-4ed014bcbff8" data-semantic-role="decoration"></span>당근마켓 활용 가이드</div>
+        <div class="resource-item" data-qid="q-resource-08" data-semantic-role="body"><span class="item-mark" data-qid="q-span-06d8c3688699" data-semantic-role="decoration"></span>제안서 · 견적서 템플릿</div>
+        <div class="resource-item" data-qid="q-resource-09" data-semantic-role="body"><span class="item-mark" data-qid="q-span-b220d4ac5e57" data-semantic-role="decoration"></span>촬영 가이드</div>
+        <div class="resource-item" data-qid="q-resource-10" data-semantic-role="body"><span class="item-mark" data-qid="q-span-20f1fa7c8e3c" data-semantic-role="decoration"></span>콘텐츠 기획표</div>
+      </div>
+    </div>
+
+    <div class="illust-panel" data-qid="q-card-illustration-30" data-semantic-role="decoration">
+      <div class="illust-heading" data-qid="q-illust-heading-30" data-semantic-role="supporting">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      
+      <div class="illust-note" data-qid="q-illustration-note-30" data-semantic-role="body"><span class="note-rule" data-qid="q-span-90bfcc362480" data-semantic-role="decoration"></span>바로 꺼내 쓰는 실행형 자료 구성</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-qid="source-block-c00adf51311ddb71" data-semantic-role="supporting" data-source-block-id="source-slide:31:text:5">31</div>
+</body>
+</html>

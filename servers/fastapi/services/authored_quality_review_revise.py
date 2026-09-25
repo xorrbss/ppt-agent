@@ -2,13 +2,25 @@ from services import authored_quality_review_service as _service
 
 
 async def revise_legacy_review(ctx):
+    canvas = getattr(ctx, "canvas", None)
+    width_px = int(getattr(canvas, "width_px", 1280))
+    height_px = int(getattr(canvas, "height_px", 720))
+    render_kwargs = (
+        {}
+        if (width_px, height_px) == (1280, 720)
+        else {"width_px": width_px, "height_px": height_px}
+    )
     await _service._set_status(
         ctx.session,
         ctx.task,
         status="processing",
         message=f"문제가 발견된 {len(ctx.initial_issues)}개 슬라이드를 자동 수정하고 있습니다.",
     )
-    ctx.revise_kwargs = {"initial_critiques": ctx.initial_critiques, "return_details": True}
+    ctx.revise_kwargs = {
+        "initial_critiques": ctx.initial_critiques,
+        "return_details": True,
+        "canvas": canvas,
+    }
     # Test doubles substitute a lightweight plan object, and the deck-plan
     # dataclass only carries prefixes for a chaptered deck, so both absences
     # mean the same thing: this review re-authors without a breadcrumb.
@@ -45,7 +57,10 @@ async def revise_legacy_review(ctx):
         raise RuntimeError("Authored quality review returned an invalid candidate index")
     ctx.revision_ms = (_service.time.perf_counter() - ctx.revision_started_at) * 1000
     ctx.candidate_browser_metrics = {
-        index: _service.get_cached_browser_metrics(ctx.revised_htmls[index]) for index in ctx.candidate_local_indices
+        index: _service.get_cached_browser_metrics(
+            ctx.revised_htmls[index],
+            **render_kwargs,
+        ) for index in ctx.candidate_local_indices
     }
     ctx.candidate_local_reports = {
         index: _service.inspect_authored_dom(

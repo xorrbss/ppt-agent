@@ -154,7 +154,10 @@ class TrustedWorkerDispatcher:
         input_root = operation_root / "input"
         temporary_root = operation_root / "tmp"
         staged_input = input_root.joinpath(*job.input_artifact.storage_key.split("/"))
-        deadline_seconds = max(1, job.deadline_epoch_seconds - int(time.time()))
+        remaining_seconds = job.deadline_epoch_seconds - time.time()
+        if remaining_seconds <= 0:
+            raise TrustedWorkerWireError("deadline_exceeded")
+        deadline_seconds = max(1, int(remaining_seconds))
         executable = Path(command[0])
         arguments = tuple(command[1:])
         launch_spec = SandboxLaunchSpec(
@@ -202,8 +205,14 @@ class TrustedWorkerDispatcher:
             if len(queue) == 1:
                 self._submit_locked(dispatch)
         try:
-            await asyncio.shield(self._pump())
-            return await asyncio.shield(dispatch.result)
+            # Queue time belongs to the immutable job deadline too.  A blocked
+            # reservation must expire without waiting for another job to finish.
+            async with asyncio.timeout(remaining_seconds):
+                await asyncio.shield(self._pump())
+                return await asyncio.shield(dispatch.result)
+        except TimeoutError as error:
+            await self._cancel(scheduling_key, dispatch)
+            raise TrustedWorkerWireError("deadline_exceeded") from error
         except asyncio.CancelledError:
             await self._cancel(scheduling_key, dispatch)
             raise
@@ -237,6 +246,13 @@ class TrustedWorkerDispatcher:
             selected.set_result(selected_dispatch)
             await transport_gate.wait()
             try:
+                # Stop this clock before staging, execution, teardown and upload.
+                # Measuring after transport mislabeled all worker time as queueing.
+                queue_wait_ms = round(
+                    max(0.0, time.monotonic() - selected_dispatch.enqueued_monotonic)
+                    * 1000,
+                    3,
+                )
                 wire_result = await self._transport.execute(
                     work_item=work_item,
                     job=selected_dispatch.job,
@@ -249,15 +265,7 @@ class TrustedWorkerDispatcher:
                     resource_metrics={
                         **wire_result.resource_metrics,
                         "trustedDispatchId": work_item.scheduling.scheduling_key,
-                        "trustedSchedulerQueueWaitMs": round(
-                            max(
-                                0.0,
-                                time.monotonic()
-                                - selected_dispatch.enqueued_monotonic,
-                            )
-                            * 1000,
-                            3,
-                        ),
+                        "trustedSchedulerQueueWaitMs": queue_wait_ms,
                     },
                 )
                 return ProductExecutionResult(

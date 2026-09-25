@@ -1,0 +1,27 @@
+{
+  "a4": [
+    {
+      "orientation": "landscape",
+      "canvas": {"contractVersion": "document-canvas/v1", "logicalSize": {"width": 1188, "height": 840}, "physicalSize": {"widthEmu": 10692000, "heightEmu": 7560000}, "safeArea": {"x": 60, "y": 60, "width": 1068, "height": 720}},
+      "canonicalBytes": "[\"document-canvas/v1\",\"1188\",\"840\",\"10692000\",\"7560000\",\"60000000\",\"60000000\",\"1068000000\",\"720000000\"]",
+      "digest": "sha256:604923534fd99d8e019f8f54bfac6c60362ddeab20319450687fa30afdc22621",
+      "pdfPoints": [841.8897637795, 595.2755905512],
+      "lowerRightSafePointEmu": [10152000, 7020000]
+    },
+    {
+      "orientation": "portrait",
+      "canvas": {"contractVersion": "document-canvas/v1", "logicalSize": {"width": 840, "height": 1188}, "physicalSize": {"widthEmu": 7560000, "heightEmu": 10692000}, "safeArea": {"x": 60, "y": 60, "width": 720, "height": 1068}},
+      "canonicalBytes": "[\"document-canvas/v1\",\"840\",\"1188\",\"7560000\",\"10692000\",\"60000000\",\"60000000\",\"720000000\",\"1068000000\"]",
+      "digest": "sha256:9d0eccc90cafa64b59fff75db1368cb22e04b5c81cb14e39b39f414ae89baaa9",
+      "pdfPoints": [595.2755905512, 841.8897637795],
+      "lowerRightSafePointEmu": [7020000, 10152000]
+    }
+  ],
+  "physicalExpectations": {"width100UnitsEmu": 900000, "position60UnitsEmu": 540000, "font9_5PtHundredths": 950, "stroke1PtEmu": 12700},
+  "legacy": [
+    {"logicalSize": [1280, 720], "physicalSizeEmu": [12192000, 6858000]},
+    {"logicalSize": [720, 1280], "physicalSizeEmu": [6858000, 12192000]},
+    {"logicalSize": [720, 1040], "physicalSizeEmu": [6858000, 9906000]}
+  ],
+  "safeAreaNumberCases": {"equivalent": [[60, 60.0], [0, -0.0]], "accepted": [0.000001], "rejected": [0.0000001, "60", true, null]}
+}

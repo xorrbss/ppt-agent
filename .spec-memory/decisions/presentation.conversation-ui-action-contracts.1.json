@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "presentation.conversation-ui-action-contracts",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "채팅 전송은 텍스트·준비된 첨부와 명령 권한으로 판단하고, 수정 대상 해제는 미선택으로 돌리며 기존 제어 경로 위에 공통 UI를 적용한다.",
+  "scope": [
+    "presentation",
+    "workspace",
+    "ui"
+  ],
+  "invariants": [
+    "Send requires text or ready attachments, command support, valid permissions and an explicit target for edits.",
+    "Initial edit scope and cleared or invalid targets are unselected; preserve drafts and require explicit reselection.",
+    "Generation cancellation uses the composer action bound to its operation; server state confirms cancellation.",
+    "Separate server confirmation from actual progress; 60 seconds without progress only triggers information, never automatic retry.",
+    "Share presentation components and adapters while preserving existing controllers, transports, provider and page lifetimes.",
+    "Use representative visual, boundary-width and long-history acceptance cases; design and old test results do not prove implementation."
+  ],
+  "forbidden": [
+    "Automatically widen a cleared slide target to the whole deck.",
+    "Silently omit an included failed attachment.",
+    "Create a replacement monolithic host or duplicate generation and polling loops."
+  ],
+  "evidence": [
+    "docs/conversation-first-generation-workspace-design-20260922.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-22T15:18:47.9172869+00:00"
+}

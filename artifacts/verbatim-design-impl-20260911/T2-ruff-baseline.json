@@ -1,0 +1,110 @@
+[
+  {
+    "file": "services/authored_presentation_generation.py",
+    "baseline": 37,
+    "current": 37,
+    "introduced": []
+  },
+  {
+    "file": "services/authored_presentation_pipeline.py",
+    "baseline": 239,
+    "current": 237,
+    "introduced": []
+  },
+  {
+    "file": "services/authored_generation_quality_gate.py",
+    "baseline": 17,
+    "current": 15,
+    "introduced": []
+  },
+  {
+    "file": "services/authored_checkpoint_state.py",
+    "baseline": 0,
+    "current": 0,
+    "introduced": []
+  },
+  {
+    "file": "services/authored_checkpoint_stage_batch.py",
+    "baseline": 0,
+    "current": 0,
+    "introduced": []
+  },
+  {
+    "file": "services/authored_checkpoint_service.py",
+    "baseline": 0,
+    "current": 0,
+    "introduced": []
+  },
+  {
+    "file": "services/authored_checkpoint_html.py",
+    "baseline": 0,
+    "current": 0,
+    "introduced": []
+  },
+  {
+    "file": "services/authored_presentation_artifacts.py",
+    "baseline": 0,
+    "current": 0,
+    "introduced": []
+  },
+  {
+    "file": "services/authored_presentation_author_batch.py",
+    "baseline": 0,
+    "current": 0,
+    "introduced": []
+  },
+  {
+    "file": "services/authored_illustration_stage.py",
+    "baseline": 0,
+    "current": 0,
+    "introduced": []
+  },
+  {
+    "file": "services/authored_author_stage_rescue.py",
+    "baseline": 0,
+    "current": 0,
+    "introduced": []
+  },
+  {
+    "file": "services/authored_vqa_source_integrity.py",
+    "baseline": 0,
+    "current": 0,
+    "introduced": []
+  },
+  {
+    "file": "services/authored_generation_observability.py",
+    "baseline": 0,
+    "current": 0,
+    "introduced": []
+  },
+  {
+    "file": "utils/get_env_programme.py",
+    "baseline": 0,
+    "current": 0,
+    "introduced": []
+  },
+  {
+    "file": "utils/renderer_markup_policy.py",
+    "baseline": 0,
+    "current": 0,
+    "introduced": []
+  },
+  {
+    "file": "utils/llm_calls/author_vision_qa.py",
+    "baseline": 19,
+    "current": 19,
+    "introduced": []
+  },
+  {
+    "file": "utils/llm_calls/author_slide.py",
+    "baseline": 0,
+    "current": 0,
+    "introduced": []
+  },
+  {
+    "file": "utils/llm_calls/author_batch.py",
+    "baseline": 0,
+    "current": 0,
+    "introduced": []
+  }
+]

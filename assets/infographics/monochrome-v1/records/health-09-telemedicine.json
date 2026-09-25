@@ -1,0 +1,55 @@
+{
+  "id": "health-09-telemedicine",
+  "category": "health",
+  "tags": {
+    "ko": [
+      "건강",
+      "원격진료"
+    ],
+    "en": [
+      "health",
+      "telemedicine"
+    ]
+  },
+  "alt": {
+    "ko": "원격진료 단색 벡터 인포그래픽",
+    "en": "telemedicine monochrome vector infographic"
+  },
+  "path": "originals/health-09-telemedicine.svg",
+  "thumbnail": "thumbnails/health-09-telemedicine.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 630,
+  "sha256": "216c11c0c93c9ffbf5c449a259b1a10d4a7d509a55c3cd8ea0cf4dd0743cb193",
+  "geometry_sha256": "667044fb764aca58a050c3bf550e8018b7eb837fa89b8f26693b344162844d81",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57406,
+    "preview_opaque_pixels": 6517,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Monitor",
+      "Stethoscope"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

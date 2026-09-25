@@ -196,6 +196,7 @@ export function WorkspaceBatchRemakeDialog({
       <p
         className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600"
         data-testid="batch-remake-progress"
+        data-task-id={batchTaskId ?? undefined}
       >
         {!complete && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
         {complete

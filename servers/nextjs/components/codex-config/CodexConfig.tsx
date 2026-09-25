@@ -8,6 +8,7 @@ export type CodexConfigVariant = "onboarding" | "settings";
 
 export interface CodexConfigProps {
   codexModel: string;
+  codexReasoningEffort: string;
   onInputChange: (value: string | boolean, field: string) => void;
   /**
    * "onboarding" is the wide first-run card: it adopts ChatGPT as the active
@@ -19,6 +20,7 @@ export interface CodexConfigProps {
 
 export default function CodexConfig({
   codexModel,
+  codexReasoningEffort,
   onInputChange,
   variant = "onboarding",
 }: CodexConfigProps) {
@@ -201,7 +203,11 @@ export default function CodexConfig({
         {dense && (
           <CodexModelSelect
             codexModel={codexModel}
-            onSelect={(modelId) => onInputChange(modelId, "codex_model")}
+            codexReasoningEffort={codexReasoningEffort}
+            onSelect={(modelId, effort) => {
+              onInputChange(modelId, "codex_model");
+              onInputChange(effort, "codex_reasoning_effort");
+            }}
           />
         )}
       </div>

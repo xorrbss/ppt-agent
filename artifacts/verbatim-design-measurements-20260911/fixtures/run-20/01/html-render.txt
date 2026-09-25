@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF;border-top:10px solid #08916E}
+.header-left{position:absolute;left:64px;top:22px;width:760px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:32px;line-height:38px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:916px;top:22px;width:300px;text-align:right;font-size:15px;line-height:20px;color:#FFFFFF}
+.body-wrap{width:1152px;margin-left:64px;margin-top:24px}
+.claim-row{height:58px;display:flex;align-items:flex-start;justify-content:space-between}
+.claim{font-size:26px;line-height:38px;font-weight:700;letter-spacing:-.03em;color:#1D1D1B}
+.claim strong{color:#08916E}
+.chapter-mark{width:72px;height:48px;padding-top:4px;border-left:5px solid #08916E;text-align:right;font-family:"IBM Plex Mono","Consolas",monospace;font-size:30px;line-height:40px;font-weight:700;color:#08916E}
+.identity{height:34px;margin:0 0 18px 0;font-size:18px;line-height:28px;font-weight:700;color:#002060}
+.flow{position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:24px;height:350px}
+.connector{position:absolute;top:174px;width:24px;height:2px;background:#08916E;z-index:2}
+.connector.one{left:368px}
+.connector.two{left:760px}
+.step-card{position:relative;height:350px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.step-card.primary{border-top:6px solid #08916E;padding-top:22px}
+.step-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:25px;line-height:30px;font-weight:700;color:#08916E}
+.step-title{margin-top:18px;font-size:26px;line-height:36px;font-weight:700;color:#00140E}
+.step-rule{width:48px;height:4px;margin-top:18px;background:#08916E;border-radius:12px}
+.step-copy{margin-top:24px;font-size:20px;line-height:1.62;font-weight:500;color:#1D1D1B}
+.step-copy span{display:block}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="108" class="header-band" style="height:108px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-qid="q-eyebrow-001" data-semantic-role="supporting">강의 구조</div>
+    <div data-header-part="title" class="title" data-qid="source-block-a99fd406b3cf3f99" data-semantic-role="title" data-source-block-id="source-slide:2:text:3">이 강의는 무엇을 만드는가</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-qid="q-div-73774be43d12" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim-row" data-qid="q-div-75b3498fbbe1" data-semantic-role="decoration">
+    <div class="claim" data-qid="source-block-ee5f25f990986195" data-semantic-role="body" data-source-block-id="source-slide:2:text:4">기술보다 ‘<strong data-qid="q-keyword-001" data-semantic-role="body">사업이 굴러가는 구조</strong>’를 먼저 만듭니다.</div>
+    <div class="chapter-mark" data-qid="source-block-b35bf22c1531c396" data-semantic-role="supporting" data-source-block-id="source-slide:2:text:5">02</div>
+  </div>
+
+  <div class="identity" data-qid="source-block-f787baca4e55bd5e" data-semantic-role="body" data-source-block-id="source-slide:2:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+
+  <div class="flow" data-qid="q-div-7fd902b74613" data-semantic-role="decoration">
+    <div class="connector one" data-qid="q-div-4ef5a01146fb" data-semantic-role="decoration"></div>
+    <div class="connector two" data-qid="q-div-d63f3e8c8f23" data-semantic-role="decoration"></div>
+
+    <div class="step-card primary" data-qid="q-card-001" data-semantic-role="decoration">
+      <div class="step-number" data-qid="q-number-001" data-semantic-role="supporting">①</div>
+      <div class="step-title" data-qid="source-block-5c1f7a5876140413" data-semantic-role="body" data-source-block-id="source-slide:2:text:9">세팅</div>
+      <div class="step-rule" data-qid="q-div-a558ee13dd92" data-semantic-role="decoration"></div>
+      <div class="step-copy" data-qid="source-block-f12723bf6027239a" data-semantic-role="decoration" data-source-block-id="source-slide:2:text:10">
+        <span data-qid="q-step-line-001" data-semantic-role="body">인스타 · 블로그 · 영업기지</span>
+        <span data-qid="q-step-line-002" data-semantic-role="body">내가 누구인지 보여주는 공간</span>
+      </div>
+    </div>
+
+    <div class="step-card" data-qid="q-card-002" data-semantic-role="decoration">
+      <div class="step-number" data-qid="q-number-002" data-semantic-role="supporting">②</div>
+      <div class="step-title" data-qid="source-block-bae0376122a5d678" data-semantic-role="body" data-source-block-id="source-slide:2:text:13">제작</div>
+      <div class="step-rule" data-qid="q-div-30afaa71a4a8" data-semantic-role="decoration"></div>
+      <div class="step-copy" data-qid="source-block-39a3b24f5c92daa8" data-semantic-role="decoration" data-source-block-id="source-slide:2:text:14">
+        <span data-qid="q-step-line-003" data-semantic-role="body">기획 · 촬영 · AI · 캡컷</span>
+        <span data-qid="q-step-line-004" data-semantic-role="body">팔 수 있는 숏폼을 만든다</span>
+      </div>
+    </div>
+
+    <div class="step-card" data-qid="q-card-003" data-semantic-role="decoration">
+      <div class="step-number" data-qid="q-number-003" data-semantic-role="supporting">③</div>
+      <div class="step-title" data-qid="source-block-7c12033348e2d8e7" data-semantic-role="body" data-source-block-id="source-slide:2:text:17">영업</div>
+      <div class="step-rule" data-qid="q-div-96ee4ac23805" data-semantic-role="decoration"></div>
+      <div class="step-copy" data-qid="source-block-57d63ab1feb3b3d1" data-semantic-role="decoration" data-source-block-id="source-slide:2:text:18">
+        <span data-qid="q-step-line-005" data-semantic-role="body">무료 샘플 · 전화 · DM</span>
+        <span data-qid="q-step-line-006" data-semantic-role="body">첫 고객을 만난다</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-page" data-qid="q-page-001" data-semantic-role="supporting">02</div>
+</body>
+</html>

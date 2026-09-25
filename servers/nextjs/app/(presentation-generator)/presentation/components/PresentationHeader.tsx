@@ -18,18 +18,19 @@ import NewSlideButton from "./header/NewSlideButton";
 import { cn } from "@/lib/utils";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 import AuthoredHeaderActions from "./header/AuthoredHeaderActions";
-import ExportMenu from "./header/ExportMenu";
+import ExportMenu, { sourcePreservingSvgPdfUnavailable } from "./header/ExportMenu";
 import ExportQualityDialog from "./header/ExportQualityDialog";
 import HybridCoverageDialog, {
   type HybridCoverageManifest,
 } from "./header/HybridCoverageDialog";
 import HybridExportHistoryDialog from "./header/HybridExportHistoryDialog";
 import HeaderToolbar from "./header/HeaderToolbar";
+import HeaderMoreMenu from "./header/HeaderMoreMenu";
 import DashboardNavigationButton from "./header/DashboardNavigationButton";
 import PresentationTitleEditor from "./header/PresentationTitleEditor";
 import RegenerateConfirmDialog from "./header/RegenerateConfirmDialog";
 import type { PptxExportMode } from "./header/types";
-import AuthoredEmissionCapabilityStatusView, {
+import {
   authoredHybridUnavailableReason,
   type AuthoredEmissionCapabilityStatus,
 } from "./header/AuthoredEmissionCapabilityStatus";
@@ -40,6 +41,7 @@ import {
   presentationMasterPin,
 } from "../utils/masterPresentation";
 import type {
+  ExportOperationType,
   WorkspaceCommandDispatcher,
   WorkspacePageRemakeRequester,
   WorkspaceQualityReviewRequester,
@@ -69,6 +71,7 @@ const PresentationHeader = ({
   onWorkspaceCommand,
   onWorkspaceQualityReviewRequest,
   onWorkspacePageRemakeRequest,
+  activeExportOperation = null,
   onCanonicalSaved,
   headerFeatures,
 }: {
@@ -82,6 +85,7 @@ const PresentationHeader = ({
   onWorkspaceCommand?: WorkspaceCommandDispatcher;
   onWorkspaceQualityReviewRequest?: WorkspaceQualityReviewRequester;
   onWorkspacePageRemakeRequest?: WorkspacePageRemakeRequester;
+  activeExportOperation?: ExportOperationType | null;
   onCanonicalSaved?: () => void | Promise<void>;
   headerFeatures?: PresentationHeaderFeatureSlots;
 }) => {
@@ -144,7 +148,7 @@ const PresentationHeader = ({
   }, [expectedRevision, isAuthoredDeck, presentation_id]);
 
   const hybridDisabledReason = isAuthoredDeck
-    ? authoredHybridUnavailableReason(authoredCapabilityStatus, expectedRevision)
+    ? authoredHybridUnavailableReason(authoredCapabilityStatus, expectedRevision, presentationData)
     : undefined;
   // Compatibility facade for isolated header consumers. The presentation page
   // always supplies the server-derived projection; this fallback is removable
@@ -157,7 +161,6 @@ const PresentationHeader = ({
 
   const workspaceHistoryEnabled =
     workspaceCommandsEnabled && Boolean(onWorkspaceCommand);
-  const historyEnabled = workspaceHistoryEnabled;
   const { onUndo, onRedo, canUndo, canRedo } = usePresentationUndoRedo(
     false,
     workspaceHistoryEnabled ? onWorkspaceCommand : undefined,
@@ -260,7 +263,7 @@ const PresentationHeader = ({
   };
 
   const handleExportPdf = async () => {
-    if (isStreaming || !workspaceCommandsEnabled || !onWorkspaceCommand) return;
+    if (isStreaming || !workspaceCommandsEnabled || !onWorkspaceCommand || sourcePreservingSvgPdfUnavailable(presentationData)) return;
     try {
       await onWorkspaceCommand("PDF로 내보내기", {
         commandType: "export.pdf",
@@ -326,11 +329,13 @@ const PresentationHeader = ({
     router.push(to);
   };
 
+  const exportOperationInFlight = activeExportOperation !== null;
   const exportDisabled =
     !resolvedHeaderFeatures.exportActions ||
     isStreaming === true ||
     !workspaceCommandsEnabled ||
-    !onWorkspaceCommand;
+    !onWorkspaceCommand ||
+    exportOperationInFlight;
 
   const titleBlock = (
     <div
@@ -401,32 +406,23 @@ const PresentationHeader = ({
               presentation_id={presentation_id}
               theme={presentationData.theme}
               currentMasterPin={appliedMasterPin}
-              currentSlide={currentSlide}
               isStreaming={isStreaming}
               isPresentationSaving={isPresentationSaving}
               workspaceCommandsEnabled={workspaceCommandsEnabled}
               onWorkspaceCommand={onWorkspaceCommand}
-              onWorkspaceQualityReviewRequest={onWorkspaceQualityReviewRequest}
-              onWorkspacePageRemakeRequest={onWorkspacePageRemakeRequest}
               onCanonicalSaved={onCanonicalSaved}
-              handleQualityReview={handleQualityReview}
             />
           )}
 
           <HeaderToolbar
-            presentation_id={presentation_id}
             presentationData={presentationData}
             isStreaming={isStreaming}
-            mutationsEnabled={mutationsEnabled}
-            historyEnabled={historyEnabled}
+            historyEnabled={workspaceHistoryEnabled}
             canUndo={canUndo}
             canRedo={canRedo}
             onUndo={onUndo}
             onRedo={onRedo}
-            setIsRegenerateConfirmOpen={setIsRegenerateConfirmOpen}
             handleStartPresentation={handleStartPresentation}
-            workspaceCommandsEnabled={workspaceCommandsEnabled}
-            onWorkspaceCommand={onWorkspaceCommand}
           />
 
           {presentationData && (
@@ -444,6 +440,8 @@ const PresentationHeader = ({
               onOpenHybridExportHistory={openHybridExportHistory}
               historyDisabled={isStreaming === true}
               hybridDisabledReason={hybridDisabledReason}
+              exportOperationInFlight={exportOperationInFlight}
+              presentation={presentationData}
               manifestBindingLabel={
                 authoredCapabilityStatus.state === "ready" && authoredCapabilityStatus.readiness.version === "v1-fallback"
                   ? `동일 manifest · revision ${authoredCapabilityStatus.readiness.projection.presentationRevision} · ${authoredCapabilityStatus.readiness.projection.manifestDigest ?? "미기록"}`
@@ -453,23 +451,30 @@ const PresentationHeader = ({
               }
             />
           )}
+
+          {presentationData && (
+            <HeaderMoreMenu
+              presentationId={presentation_id}
+              isAuthoredDeck={isAuthoredDeck}
+              canRemakePage={presentationData?.capabilities?.editor?.slide_image_regenerate === true}
+              currentSlide={currentSlide}
+              isStreaming={isStreaming}
+              isPresentationSaving={isPresentationSaving}
+              mutationsEnabled={mutationsEnabled}
+              historyEnabled={workspaceHistoryEnabled}
+              workspaceCommandsEnabled={workspaceCommandsEnabled}
+              onWorkspaceCommand={onWorkspaceCommand}
+              onWorkspaceQualityReviewRequest={onWorkspaceQualityReviewRequest}
+              onWorkspacePageRemakeRequest={onWorkspacePageRemakeRequest}
+              onQualityReview={handleQualityReview}
+              onRegenerate={() => setIsRegenerateConfirmOpen(true)}
+              editableHybridWorkbench={editableHybridWorkbench}
+              authoredCapabilityStatus={authoredCapabilityStatus}
+              expectedRevision={expectedRevision}
+            />
+          )}
         </div>
       </div>
-      {isAuthoredDeck ? (
-        <div className="border-t border-slate-100 px-4 py-2 sm:px-6">
-          {editableHybridWorkbench && (
-            <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-950" data-testid="editable-hybrid-workbench-bridge">
-              <span className="font-semibold">편집 가능한 Hybrid MVP</span>
-              <span>{editableHybridWorkbench.status === "ready" ? "준비됨" : editableHybridWorkbench.status === "shadow" ? "Shadow" : "차단됨"}</span>
-              {editableHybridWorkbench.status === "blocked" ? <span>{editableHybridWorkbench.reasonCode ?? "editable_hybrid_mvp_blocked"}</span> : <a className="font-semibold underline underline-offset-2" data-testid="editable-hybrid-workbench-link" href={`/authored-vnext/workbench?authoredDeckId=${encodeURIComponent(editableHybridWorkbench.deckId)}`}>Workbench에서 편집</a>}
-            </div>
-          )}
-          <AuthoredEmissionCapabilityStatusView
-            status={authoredCapabilityStatus}
-            expectedRevision={expectedRevision}
-          />
-        </div>
-      ) : null}
       <ExportQualityDialog
         exportQuality={exportQuality}
         setExportQuality={setExportQuality}

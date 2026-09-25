@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.verbatim-flagged-publish",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Publish a verbatim source-content restyle with geometry-defective slides flagged when strict source readback is complete, without re-authoring those slides.",
+  "scope": [
+    "authored",
+    "source-content",
+    "source-reflow",
+    "publication"
+  ],
+  "invariants": [
+    "Per-slide source and repair admission remains strict.",
+    "A verbatim deck with complete browser source readback may publish geometry-defective slides flagged instead of failing the whole deck.",
+    "Flag-only publication does not re-author terminal source-reflow slides."
+  ],
+  "forbidden": [
+    "Publish when source text is missing, changed, or reordered.",
+    "Use flagged publication to bypass strict whole-deck source readback."
+  ],
+  "evidence": [
+    "User decision recorded 2026-09-10",
+    "servers/fastapi/services/authored_terminal_slide_policy.py",
+    "servers/fastapi/services/authored_terminal_slide_fallback.py",
+    "servers/fastapi/tests/unit/test_authored_terminal_slide_fallback.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-10T00:00:00+09:00"
+}

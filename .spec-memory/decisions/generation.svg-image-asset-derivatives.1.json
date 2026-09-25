@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "generation.svg-image-asset-derivatives",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "SVG 이미지는 원본과 목적별 파생본을 분리하고 정규 SVG에는 자산 slot만 저장한다. 모든 이미지 preflight는 provider 예약 전에 완료한다.",
+  "scope": [
+    "generation",
+    "svg",
+    "image-assets",
+    "provider-retry"
+  ],
+  "invariants": [
+    "정상적인 대형 원본 이미지를 고정 1.5MB 입력 제한으로 문서 전체 실패시키지 않는다.",
+    "원본은 보존하고 model, screen, export 목적별 파생본을 content-addressed 방식으로 재사용한다.",
+    "정규 SVG와 체크포인트에 base64 이미지 본문을 저장하지 않는다.",
+    "로컬 이미지 preflight 실패는 provider 호출 불확실 상태로 기록하지 않는다."
+  ],
+  "forbidden": [
+    "1.5MB 제한값만 올려 문제를 해결",
+    "provider 호출 전에 이미지 검증 없이 inflight 상태 기록"
+  ],
+  "evidence": [
+    "docs/svg-image-asset-pipeline-design-20260916.md",
+    "docs/svg-generation-mode-design-20260916.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-16T14:16:02.2220092+00:00"
+}

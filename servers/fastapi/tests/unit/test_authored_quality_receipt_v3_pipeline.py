@@ -18,7 +18,10 @@ from services.authored_visual_review_evidence import (
     visual_review_not_assessed,
     visual_review_outcome,
 )
-from services.authored_vnext.capability_registry import capability_metadata
+from services.authored_vnext.capability_registry import (
+    capability_metadata,
+    prompt_capability_clause,
+)
 from models.authored_vnext.deck import (
     SceneEditability,
     SceneOwnerDecision,
@@ -120,6 +123,47 @@ async def test_live_generation_binds_v2_to_evidence_bound_v3() -> None:
     # QUAL-04: the V3 visual review is the actual VQA outcome.
     assert "visual_review_passed=bool(request.vision_qa)" not in source
     assert "visual_review=visual_review_evidence" in source
+
+
+@pytest.mark.anyio
+async def test_generation_records_third_author_call_as_distinct_rescue() -> None:
+    appended: list[dict] = []
+
+    class Port:
+        async def append_quality_receipt_v3(self, *, receipt, evidence) -> None:
+            appended.append(evidence)
+
+    receipt_v3 = await create_generation_quality_receipt_v3(
+        receipt_v2=_receipt_v2(),
+        job_id=None,
+        slide_roles=("cover",),
+        provider_attempt_counts=(3,),
+        repaired_slide_indices=(),
+        capacity_evidence={
+            "browserObserved": True,
+            "checks": {"font": True},
+            "violations": [],
+        },
+        safety_evidence={"status": "passed", "residuals": []},
+        browser_metrics=(
+            {"capabilityRegistry": capability_metadata(consumer="chromium")},
+        ),
+        visual_review=visual_review_outcome(
+            slide_count=1,
+            fixed=[0],
+            accepted_fixed=[0],
+        ),
+        source_manifest=None,
+        source_readback=None,
+        persistence_port=Port(),
+        durability_profile="public",
+    )
+
+    assert appended[0]["providerCalls"]["slides"] == [
+        {"slideIndex": 0, "initial": 1, "recovery": 1, "rescue": 1, "total": 3}
+    ]
+    assert "providerCalls.slide_budget_invalid:0" not in receipt_v3.blockers
+    assert "providerCalls.slide_total_mismatch:0" not in receipt_v3.blockers
 
 
 async def _sealed_visual_review(visual_review, *, roles=("cover",)) -> tuple[object, dict]:
@@ -298,10 +342,10 @@ async def test_generation_seals_observed_prompt_scene_and_capacity_evidence_to_p
         visual_review=None,
         source_manifest=None,
         source_readback=None,
-        design_system_prompt=(
-            "Capability contract: "
-            + capability_metadata(consumer="prompt")["registryDigest"]
-        ),
+        # The real clause the author receives, not a digest string synthesised
+        # for the checker: a fabricated prompt here is what let the consumer
+        # contract drift away from `prompt_capability_clause` unnoticed.
+        design_system_prompt="Brand brief." + prompt_capability_clause(),
         scene_envelope={
             "schemaVersion": "authored-deck-scene-envelope/v1",
             "sceneDigest": "sha256:" + "1" * 64,
@@ -433,7 +477,7 @@ async def test_persisted_quality_gate_projects_only_verified_internal_receipts(t
                   idempotency_key_hash="a" * 64, request_hash="b" * 64,
                   attempt_token="private-test-lease", fencing_token=1)
     async with factory() as session:
-        session.add(WorkspaceOperation(id=generation_id, kind="presentation.generate",
+        session.add(WorkspaceOperation(id=generation_id, kind="design.apply",
                                       expected_revision=1, result_revision=2, **common))
         session.add(WorkspaceOperation(id=review_id, kind="quality.review",
                                       expected_revision=2, result_revision=3, **{**common, "anchor_position": 2}))
@@ -448,7 +492,7 @@ async def test_persisted_quality_gate_projects_only_verified_internal_receipts(t
             safety_evidence={"status": "passed", "residuals": []},
             browser_metrics=({"capabilityRegistry": capability_metadata(consumer="chromium")},),
             visual_review=None, source_manifest=None, source_readback=None,
-            design_system_prompt=capability_metadata(consumer="prompt")["registryDigest"],
+            design_system_prompt="Brand brief." + prompt_capability_clause(),
             scene_envelope={"schemaVersion": "authored-deck-scene-envelope/v1",
                 "sceneDigest": "sha256:" + "1" * 64, "sourceDigest": "sha256:" + "2" * 64,
                 "qidDigest": "sha256:" + "3" * 64},
@@ -461,6 +505,14 @@ async def test_persisted_quality_gate_projects_only_verified_internal_receipts(t
     async with factory() as session:
         generation = await load_public_quality_evidence(session, **lookup)
         assert generation and generation["operationId"] == str(generation_id)
+        # Authored design/template applications carry the same sealed generation
+        # receipt as presentation.generate; unknown operation kinds stay rejected.
+        (await session.get(WorkspaceOperation, generation_id)).kind = "presentation.replay"
+        await session.commit()
+        with pytest.raises(ValueError, match="quality_receipt_v3_evidence_digest_mismatch"):
+            await load_public_quality_evidence(session, **lookup)
+        (await session.get(WorkspaceOperation, generation_id)).kind = "design.apply"
+        await session.commit()
         assert await load_public_quality_evidence(session, **{**lookup, "owner_id": uuid.uuid4()}) is None
         assert await load_public_quality_evidence(session, **{**lookup, "owner_scope": "other"}) is None
         assert await load_public_quality_evidence(session, **{**lookup, "presentation_id": uuid.uuid4()}) is None
@@ -726,3 +778,73 @@ def test_export_adapter_accepts_registry_bound_hybrid_readback() -> None:
         receipt,
         {"master": master_payload, "slides": [{}], "scene": scene_payload},
     )
+
+
+def test_prompt_consumer_accepts_the_clause_the_author_actually_receives() -> None:
+    """The prompt consumer must not require text the prompt no longer carries.
+
+    `prompt_capability_clause` deliberately stopped embedding the registry
+    digest on 2026-09-05, but this consumer kept searching for it, so it was
+    permanently `unavailable`. That single blocker failed the V3 gate, which
+    both `export.pptx` and `quality.review` require, so no release-profile deck
+    could be exported in any format.
+    """
+
+    from services.authored_quality_receipt_v3_pipeline import _prompt_consumer
+    from services.authored_vnext.capability_registry import (
+        CAPABILITY_REGISTRY_DIGEST,
+        prompt_capability_clause,
+    )
+
+    clause = prompt_capability_clause()
+    assert CAPABILITY_REGISTRY_DIGEST not in clause, (
+        "the digest is intentionally absent; see prompt_capability_clause"
+    )
+
+    authored_prompt = f"Brand brief and layout rules.{clause}\nType scale: 9pt floor."
+    assert _prompt_consumer(authored_prompt)["status"] == "passed"
+
+    for absent in (None, "", 17):
+        assert _prompt_consumer(absent)["status"] == "unavailable"
+
+    without_clause = _prompt_consumer("Brand brief with no capability contract.")
+    assert without_clause["status"] == "unavailable"
+    assert without_clause["reasonCode"] == "prompt_capability_clause_missing"
+
+
+def test_post_vqa_admission_measures_the_candidate_instead_of_only_reading_cache() -> None:
+    """A cache miss must not be read as "unmeasurable" and discard the fix.
+
+    The post-VQA capacity gate looked the candidate up with
+    `get_cached_browser_metrics`, which is keyed on the exact HTML string. The
+    candidate is canonicalized after the reviser rendered it, so the lookup
+    missed, every correction was rejected as `browser_metrics_unavailable`, and
+    `vision_qa=True` produced `vqa_fixed=0` on every deck -- which failed the
+    visual review and blocked the deck from exporting in any format.
+    `ensure_browser_metrics` re-renders on a miss and still returns None when
+    the slide genuinely cannot be measured, so the gate stays fail-closed.
+    """
+
+    generation_path = (
+        Path(__file__).parents[2] / "services" / "authored_presentation_generation.py"
+    )
+    source = generation_path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    assignments = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "candidate_metrics"
+            for target in node.targets
+        )
+    ]
+    assert assignments, "the post-VQA candidate measurement disappeared"
+    for node in assignments:
+        assert isinstance(node.value, ast.Await), (
+            "candidate metrics must be measured, not read from a cache that the "
+            "canonicalized candidate can never hit"
+        )
+        call = node.value.value
+        assert isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+        assert call.func.id == "ensure_browser_metrics"

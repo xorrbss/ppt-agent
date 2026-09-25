@@ -1,0 +1,196 @@
+{
+ "sourceUnitId": "source-slide:35",
+ "sourceIndex": 34,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:35:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:35:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "🐝 꿀벌쌤",
+    "paragraphs": [
+     {
+      "runs": [
+       "🐝 꿀벌쌤"
+      ],
+      "text": "🐝 꿀벌쌤"
+     }
+    ],
+    "runs": [
+     "🐝 꿀벌쌤"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 822960,
+     "y": 914400,
+     "cx": 4572000,
+     "cy": 548640
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:939b0c0aa73abbfd72116150ba87933ac78a8e729f953ce79f109f3b084df7dd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:35:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "이제,\n홀로서기 시작입니다.",
+    "paragraphs": [
+     {
+      "runs": [
+       "이제,\n홀로서기 시작입니다."
+      ],
+      "text": "이제,\n홀로서기 시작입니다."
+     }
+    ],
+    "runs": [
+     "이제,\n홀로서기 시작입니다."
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 822960,
+     "y": 1828800,
+     "cx": 8686800,
+     "cy": 1371600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:433e47aec8d29e4d49eb7324b3b1b3e67d23070851cfca71cc8a9f35efd826e6",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:35:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "숏폼대행 1인사업자 홀로서기 · 4주 8시간",
+    "paragraphs": [
+     {
+      "runs": [
+       "숏폼대행 1인사업자 홀로서기 · 4주 8시간"
+      ],
+      "text": "숏폼대행 1인사업자 홀로서기 · 4주 8시간"
+     }
+    ],
+    "runs": [
+     "숏폼대행 1인사업자 홀로서기 · 4주 8시간"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 868680,
+     "y": 3657600,
+     "cx": 7772400,
+     "cy": 457200
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:da8e84e05d4c08087fe3b63c45105fcb134800f11e3c21f7c163981f9b2f16c6",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:35:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "실행 → 경험 → 고객 → 성장",
+    "paragraphs": [
+     {
+      "runs": [
+       "실행 → 경험 → 고객 → 성장"
+      ],
+      "text": "실행 → 경험 → 고객 → 성장"
+     }
+    ],
+    "runs": [
+     "실행 → 경험 → 고객 → 성장"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 868680,
+     "y": 4389120,
+     "cx": 6858000,
+     "cy": 457200
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:317f2d392005ad460cc3cc52c9d21eae5f92f0f130caf5893c72a4ba9d84358b",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:35:text:7",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 5,
+   "payload": {
+    "text": "꿀벌쌤 강의용 마스터 PPT",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 강의용 마스터 PPT"
+      ],
+      "text": "꿀벌쌤 강의용 마스터 PPT"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 강의용 마스터 PPT"
+    ],
+    "shapeName": "TextBox 6",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:ac58e319215b2cf8ee30bb1e0e9af23fb7092bb96ec09ad2f4c64c4e1d3aebe8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

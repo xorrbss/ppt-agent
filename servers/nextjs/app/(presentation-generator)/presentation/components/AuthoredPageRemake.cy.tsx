@@ -113,6 +113,27 @@ function mountFlow(
   );
 }
 
+/**
+ * The workspace-command path above is the primary one, but
+ * `WorkspacePageRemakePrompt.publishPreview` still falls back to a direct
+ * `publishAuthoredPageRemake` call + `onReload()` when no `onWorkspaceCommand`
+ * is supplied (legacy write path, still reachable from non-workspace hosts).
+ */
+function mountLegacyFlow(
+  overrides: { onReload?: () => void; onDismiss?: () => void } = {},
+) {
+  const onReload = overrides.onReload ?? (cy.stub().as("reload") as never);
+  const onDismiss = overrides.onDismiss ?? (cy.stub().as("dismiss") as never);
+  cy.mount(
+    <WorkspacePageRemakePrompt
+      presentationId="deck-1"
+      currentSlide={4}
+      onReload={onReload}
+      onDismiss={onDismiss}
+    />,
+  );
+}
+
 function stubToasts() {
   cy.stub(notify, "error").as("notifyError");
   cy.stub(notify, "warning").as("notifyWarning");
@@ -332,13 +353,45 @@ describe("AuthoredPageRemake", () => {
     cy.get("@dismiss").should("have.been.calledOnce");
   });
 
-  it("routes chat-first mode into the workspace without opening a legacy dialog", () => {
+  it("publishes only after explicit approval in the legacy write path", () => {
+    // With no `onWorkspaceCommand` supplied, publishPreview falls back to the
+    // direct API call + onReload() branch instead of dispatching a workspace
+    // command.
+    preparePreview();
+    const publish = cy
+      .stub(PresentationGenerationApi, "publishAuthoredPageRemake")
+      .as("publishRequest")
+      .resolves({ status: "published" });
+    mountLegacyFlow();
+
+    cy.get('[data-testid="page-remake-preview-create"]').click();
+    // The poll loop registers its timer only after the start request settles.
+    // Ticking before that boundary fires nothing and the run stalls forever.
+    cy.get("@previewRequest").should("have.been.called");
+    cy.tick(2_000);
+    // A ready preview is not an approval: nothing may be written yet.
+    cy.then(() => expect(publish).not.to.have.been.called);
+    cy.get('[data-testid="page-remake-publish"]').click();
+
+    cy.get("@publishRequest").should(
+      "have.been.calledOnceWith",
+      "deck-1",
+      4,
+      "task-remake-preview",
+    );
+    cy.get("@reload").should("have.been.calledOnce");
+    cy.get("@dismiss").should("have.been.calledOnce");
+    cy.get("@notifyError").should("not.have.been.called");
+  });
+
+  it("routes the toolbar trigger into the workspace without opening a legacy dialog", () => {
+    // AuthoredPageRemake (the toolbar trigger) no longer takes `presentationId`
+    // or `chatFirstEnabled` — it only ever asks the host to open the workspace
+    // prompt via `onWorkspacePageRemakeRequest`; it renders no dialog itself.
     const requestWorkspacePrompt = cy.stub().as("workspacePrompt");
     cy.mount(
       <AuthoredPageRemake
-        presentationId="deck-1"
         currentSlide={4}
-        chatFirstEnabled
         workspaceCommandsEnabled
         onWorkspacePageRemakeRequest={requestWorkspacePrompt}
       />,

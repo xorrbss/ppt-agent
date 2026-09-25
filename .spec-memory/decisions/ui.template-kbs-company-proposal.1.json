@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "ui.template-kbs-company-proposal",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Register KBS 제안사 일반 as a reusable style based on the supplied 12-slide proposal, with original visual references and explicit canvas limitations.",
+  "scope": [
+    "authored",
+    "styles",
+    "catalogue"
+  ],
+  "invariants": [
+    "Use the navy, blue, cyan and white proposal visual system.",
+    "Reference content and logos are not default factual content or branding for unrelated presentations.",
+    "The source is portrait 9:13; current selectable generation support for this style is 16:9."
+  ],
+  "forbidden": [
+    "Claiming source-size fidelity from style catalogue registration alone."
+  ],
+  "evidence": [
+    "servers/fastapi/authored_styles/kbs-company-proposal.yaml",
+    "servers/fastapi/authored_style_assets/kbs-company-proposal",
+    "artifacts/kbs-company-template/analysis.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-14T00:53:23.5996705+00:00"
+}

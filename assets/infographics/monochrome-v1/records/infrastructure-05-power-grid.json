@@ -1,0 +1,55 @@
+{
+  "id": "infrastructure-05-power-grid",
+  "category": "infrastructure",
+  "tags": {
+    "ko": [
+      "인프라",
+      "전력망"
+    ],
+    "en": [
+      "infrastructure",
+      "power",
+      "grid"
+    ]
+  },
+  "alt": {
+    "ko": "전력망 단색 벡터 인포그래픽",
+    "en": "power grid monochrome vector infographic"
+  },
+  "path": "originals/infrastructure-05-power-grid.svg",
+  "thumbnail": "thumbnails/infrastructure-05-power-grid.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 421,
+  "sha256": "21e7349a596033fa0558fd93cb0bdfb17e01b08bdd3ee1bee3b9eb919583327c",
+  "geometry_sha256": "1f983f74c469c6645547c9b0c7bf395be5749e53223cf790e3f43a34200190cd",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56756,
+    "preview_opaque_pixels": 7616,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "UtilityPole"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

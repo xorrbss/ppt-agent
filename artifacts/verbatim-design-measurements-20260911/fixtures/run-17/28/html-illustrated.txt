@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#08916E}
+.header-left{position:absolute;left:64px;top:20px;width:820px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:6px;font-size:32px;line-height:39px;font-weight:800;color:#FFFFFF}
+.header-tag{position:absolute;right:64px;top:0;width:168px;height:96px;background:#00140E;border-radius:0 0 12px 12px;padding:20px 20px}
+.header-note{font-size:15px;line-height:18px;font-weight:700;color:#FFFFFF;text-align:right}
+.header-tag-line{position:absolute;left:28px;bottom:22px;width:48px;height:4px;background:#219F88;border-radius:12px}
+.body-wrap{position:absolute;left:0;right:0;top:120px;margin:0 64px;height:528px}
+.claim-row{height:68px;display:flex;align-items:flex-start;justify-content:space-between}
+.claim{width:760px;margin:0;font-size:25px;line-height:36px;font-weight:800;color:#1D1D1B}
+.claim-mark{width:270px;height:48px;padding:12px 16px;background:#E0F3FF;border-radius:12px;text-align:left;font-size:15px;line-height:24px;font-weight:700;color:#002060}
+.claim-mark span{display:inline-block;width:8px;height:8px;margin-right:8px;background:#E5A93D;border-radius:12px}
+.content-grid{display:grid;grid-template-columns:400px 1fr;gap:24px;height:390px}
+.principle-card{height:390px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-tab{display:inline-block;margin:-42px 0 22px 0;padding:8px 16px;background:#002060;color:#FFFFFF;border-radius:12px;font-size:16px;line-height:24px;font-weight:800}
+.principle-rule{width:64px;height:4px;margin:18px 0 22px;background:#08916E;border-radius:12px}
+.principle-copy{font-size:20px;line-height:33px;font-weight:700;color:#1D1D1B}
+.principle-foot{margin-top:28px;padding-top:18px;border-top:1px solid #E2E8F0;font-size:17px;line-height:28px;color:#4B5563}
+.evidence-panel{height:390px;padding:24px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.evidence-head{display:flex;align-items:center;justify-content:flex-end;margin-bottom:18px}
+.evidence-note{padding:6px 12px;background:#219F88;color:#FFFFFF;border-radius:12px;font-size:15px;line-height:22px;font-weight:700}
+.evidence-list{display:grid;grid-template-columns:1fr 1fr;column-gap:18px;row-gap:14px}
+.evidence-item{min-height:76px;padding:16px 16px 14px 54px;position:relative;background:#E0F3FF;border-radius:12px;font-size:18px;line-height:28px;font-weight:700;color:#1D1D1B}
+.evidence-number{position:absolute;left:16px;top:17px;width:24px;height:24px;background:#002060;color:#FFFFFF;border-radius:12px;text-align:center;font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:24px;font-weight:700}
+.evidence-item.priority{background:#FFF8E8;border:1px solid #E5A93D}
+.takeaway{height:66px;margin-top:18px;padding:16px 20px;background:#EAF7F4;border-left:6px solid #08916E;border-radius:12px;font-size:19px;line-height:32px;font-weight:700;color:#164F43}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="96" class="header-band" style="height:96px" data-qid="q28-band" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q28-header-left" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q28-eyebrow">4주차 PART 5</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-679f559813b2b8f3" data-source-block-id="source-slide:29:text:3">4주차 PART 5 | 수정 지옥을 피하는 법</div>
+  </div>
+  <div class="header-tag" data-header-part="right" data-qid="q28-header-tag" data-semantic-role="decoration">
+    <div class="header-note" data-semantic-role="supporting" data-qid="source-block-29b191e8a9767bfb" data-source-block-id="source-slide:29:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    <div class="header-tag-line" data-qid="q28-header-line" data-semantic-role="decoration"></div>
+  </div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:120px" data-qid="q28-body" data-semantic-role="decoration">
+  <div class="claim-row" data-qid="q28-claim-row" data-semantic-role="decoration">
+    <div class="claim" data-semantic-role="body" data-qid="source-block-150e3d875b2eac47" data-source-block-id="source-slide:29:text:10:run:0">친절함과 무제한 노동은 다릅니다.</div>
+    <div class="claim-mark" data-semantic-role="supporting" data-qid="source-block-69c01e277b9ea86d" data-source-block-id="source-slide:29:text:9"><span data-qid="q28-status-mark" data-semantic-role="decoration"></span>원칙</div>
+  </div>
+
+  <div class="content-grid" data-qid="q28-content-grid" data-semantic-role="decoration">
+    <div class="principle-card" data-semantic-role="decoration" data-qid="q28-principle-card">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="q28-card-tab">원칙</div>
+      <div class="principle-rule" data-qid="q28-principle-rule" data-semantic-role="decoration"></div>
+      <div class="principle-copy" data-semantic-role="body" data-qid="source-block-830f050baacf0f86" data-source-block-id="source-slide:29:text:10:run:1">기준을 정해두는 것이 오히려 장기 고객을 만드는 방법.</div>
+      <div class="principle-foot" data-semantic-role="body" data-qid="q28-principle-foot">친절함과 무제한 노동은 다릅니다.</div>
+    </div>
+
+    <div class="evidence-panel" data-semantic-role="decoration" data-qid="q28-evidence-panel">
+      <div class="evidence-head" data-qid="q28-evidence-head" data-semantic-role="decoration">
+        <div class="evidence-note" data-semantic-role="supporting" data-qid="q28-evidence-note">원칙</div>
+      </div>
+      <div class="evidence-list" data-qid="source-block-f26a4ba34aa77190" data-semantic-role="decoration" data-source-block-id="source-slide:29:text:6">
+        <div class="evidence-item" data-semantic-role="body" data-qid="q28-item-1"><span class="evidence-number" data-semantic-role="supporting" data-qid="q28-num-1">01</span>처음부터 작업 범위를 문서화</div>
+        <div class="evidence-item" data-semantic-role="body" data-qid="q28-item-2"><span class="evidence-number" data-semantic-role="supporting" data-qid="q28-num-2">02</span>수정 횟수 기준 설정</div>
+        <div class="evidence-item" data-semantic-role="body" data-qid="q28-item-3"><span class="evidence-number" data-semantic-role="supporting" data-qid="q28-num-3">03</span>촬영 전 레퍼런스와 가이드 공유</div>
+        <div class="evidence-item" data-semantic-role="body" data-qid="q28-item-4"><span class="evidence-number" data-semantic-role="supporting" data-qid="q28-num-4">04</span>수정 요청을 한 번에 모아서 받기</div>
+        <div class="evidence-item priority" data-semantic-role="body" data-qid="q28-item-5"><span class="evidence-number" data-semantic-role="supporting" data-qid="q28-num-5">05</span>‘무제한 수정’은 피하기</div>
+      </div>
+      <div class="takeaway" data-semantic-role="body" data-qid="q28-takeaway">기준을 정해두는 것이 오히려 장기 고객을 만드는 방법..</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-12a28da466c08064" data-source-block-id="source-slide:29:text:4">29</div>
+</body>
+</html>

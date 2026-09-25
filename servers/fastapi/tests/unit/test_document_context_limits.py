@@ -285,6 +285,15 @@ def test_direct_generation_loader_keeps_document_within_new_default_limit():
 
 
 def test_async_queue_rejects_oversized_context_before_creating_job():
+    """Oversized documents are refused before anything durable is created.
+
+    The seam this protects used to be the removed ``force_legacy_dispatch``
+    parameter. It is now the ordering inside ``queue_presentation_generation``:
+    a request that carries no ``presentation_id`` is preflighted before the
+    workspace bootstrap, so an oversized upload is never copied into immutable
+    workspace storage and never mints a deck, a job row or a background task.
+    """
+
     request = GeneratePresentationRequest(
         content="Create a deck.",
         files=["C:/server-temp/oversized.md"],
@@ -312,10 +321,6 @@ def test_async_queue_rejects_oversized_context_before_creating_job():
                 request,
                 background_tasks,
                 session,
-                # The nested-generation dispatch used by workspace
-                # orchestration; it reaches the same document preflight
-                # without needing a second bootstrap operation.
-                force_legacy_dispatch=True,
             )
         )
 

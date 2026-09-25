@@ -1,0 +1,54 @@
+{
+  "id": "process-18-stopwatch",
+  "category": "process",
+  "tags": {
+    "ko": [
+      "프로세스",
+      "초시계"
+    ],
+    "en": [
+      "process",
+      "stopwatch"
+    ]
+  },
+  "alt": {
+    "ko": "초시계 단색 벡터 인포그래픽",
+    "en": "stopwatch monochrome vector infographic"
+  },
+  "path": "originals/process-18-stopwatch.svg",
+  "thumbnail": "thumbnails/process-18-stopwatch.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 368,
+  "sha256": "9b09a7b59854b77f62f11eee2c9f28ebfefbeaa2282d7ef74ec14e10956a7491",
+  "geometry_sha256": "5f5ae3530db9c7ceac108b3438e7e7580e08c9233efc067147a68c4717a3b898",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56837,
+    "preview_opaque_pixels": 7403,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Timer"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

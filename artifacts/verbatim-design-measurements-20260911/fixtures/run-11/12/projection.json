@@ -1,0 +1,253 @@
+{
+ "source-slide:13:text:3": {
+  "text": "2주차 PART 1 | 릴스 기획",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "2주차 PART 1",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "릴스 기획",
+    "begin": 13,
+    "end": 18,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:13:text:4": {
+  "text": "13",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "13",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:13:text:5": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:13:text:6": {
+  "text": "3초",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "3초",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:13:text:7": {
+  "text": "사람을 멈추게 하는 첫 장면",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "사람을 멈추게 하는 첫 장면",
+    "begin": 0,
+    "end": 15,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:13:text:8": {
+  "text": "• 후킹: 궁금증 · 문제 · 반전 • 본문: 한 가지 메시지만 • 마무리: 댓글 · 문의 · 방문 등 유도 • 정보형 / 홍보형 / 공감형 / 코믹형",
+  "run_count": 4,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "• ",
+    "body": "후킹: 궁금증 · 문제 · 반전",
+    "begin": 0,
+    "end": 19,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "• ",
+    "body": "본문: 한 가지 메시지만",
+    "begin": 20,
+    "end": 35,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "• ",
+    "body": "마무리: 댓글 · 문의 · 방문 등 유도",
+    "begin": 36,
+    "end": 60,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "• ",
+    "body": "정보형 / 홍보형 / 공감형 / 코믹형",
+    "begin": 61,
+    "end": 84,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:13:text:11": {
+  "text": "기획 공식",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "기획 공식",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:13:text:12": {
+  "text": "문제 제시 해결/정보 행동 유도",
+  "run_count": 3,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "문제 제시",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "해결/정보",
+    "begin": 6,
+    "end": 11,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "",
+    "body": "행동 유도",
+    "begin": 12,
+    "end": 17,
+    "order_free_before": false
+   }
+  ]
+ }
+}

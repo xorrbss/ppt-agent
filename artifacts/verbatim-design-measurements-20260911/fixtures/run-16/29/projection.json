@@ -1,0 +1,406 @@
+{
+ "source-slide:30:text:3": {
+  "text": "최종 실습 | 나의 숏폼 대행사업 설계",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "최종 실습",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "나의 숏폼 대행사업 설계",
+    "begin": 8,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:30:text:4": {
+  "text": "30",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "30",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:30:text:5": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:30:text:6": {
+  "text": "• ① 타깃: __________________ • ② 상품: __________________ • ③ 가격: __________________ • ④ 포트폴리오: _____________ • ⑤ 영업 채널: ______________ • ⑥ 첫 고객 목표: ____________",
+  "run_count": 12,
+  "lines": [
+   [
+    0,
+    1
+   ],
+   [
+    2,
+    3
+   ],
+   [
+    4,
+    5
+   ],
+   [
+    6,
+    7
+   ],
+   [
+    8,
+    9
+   ],
+   [
+    10,
+    11
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "• ① ",
+    "body": "타깃:",
+    "begin": 0,
+    "end": 7,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "__________________",
+    "begin": 8,
+    "end": 26,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 1,
+    "marker": "• ② ",
+    "body": "상품:",
+    "begin": 27,
+    "end": 34,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 1,
+    "marker": "",
+    "body": "__________________",
+    "begin": 35,
+    "end": 53,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 2,
+    "marker": "• ③ ",
+    "body": "가격:",
+    "begin": 54,
+    "end": 61,
+    "order_free_before": false
+   },
+   {
+    "index": 5,
+    "line": 2,
+    "marker": "",
+    "body": "__________________",
+    "begin": 62,
+    "end": 80,
+    "order_free_before": false
+   },
+   {
+    "index": 6,
+    "line": 3,
+    "marker": "• ④ ",
+    "body": "포트폴리오:",
+    "begin": 81,
+    "end": 91,
+    "order_free_before": false
+   },
+   {
+    "index": 7,
+    "line": 3,
+    "marker": "",
+    "body": "_____________",
+    "begin": 92,
+    "end": 105,
+    "order_free_before": false
+   },
+   {
+    "index": 8,
+    "line": 4,
+    "marker": "• ⑤ ",
+    "body": "영업 채널:",
+    "begin": 106,
+    "end": 116,
+    "order_free_before": false
+   },
+   {
+    "index": 9,
+    "line": 4,
+    "marker": "",
+    "body": "______________",
+    "begin": 117,
+    "end": 131,
+    "order_free_before": false
+   },
+   {
+    "index": 10,
+    "line": 5,
+    "marker": "• ⑥ ",
+    "body": "첫 고객 목표:",
+    "begin": 132,
+    "end": 144,
+    "order_free_before": false
+   },
+   {
+    "index": 11,
+    "line": 5,
+    "marker": "",
+    "body": "____________",
+    "begin": 145,
+    "end": 157,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:30:text:9": {
+  "text": "첫 7일 실행",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "첫 7일 실행",
+    "begin": 0,
+    "end": 7,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:30:text:10": {
+  "text": "Day 1 업체 10곳 찾기 Day 2 샘플 1개 기획 Day 3 영상 제작 Day 4 전화/DM Day 5 추가 영업 Day 6 상담/제안 Day 7 복기",
+  "run_count": 14,
+  "lines": [
+   [
+    0,
+    1
+   ],
+   [
+    2,
+    3
+   ],
+   [
+    4,
+    5
+   ],
+   [
+    6,
+    7
+   ],
+   [
+    8,
+    9
+   ],
+   [
+    10,
+    11
+   ],
+   [
+    12,
+    13
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "Day 1",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "업체 10곳 찾기",
+    "begin": 6,
+    "end": 15,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 1,
+    "marker": "",
+    "body": "Day 2",
+    "begin": 16,
+    "end": 21,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 1,
+    "marker": "",
+    "body": "샘플 1개 기획",
+    "begin": 22,
+    "end": 30,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 2,
+    "marker": "",
+    "body": "Day 3",
+    "begin": 31,
+    "end": 36,
+    "order_free_before": false
+   },
+   {
+    "index": 5,
+    "line": 2,
+    "marker": "",
+    "body": "영상 제작",
+    "begin": 37,
+    "end": 42,
+    "order_free_before": false
+   },
+   {
+    "index": 6,
+    "line": 3,
+    "marker": "",
+    "body": "Day 4",
+    "begin": 43,
+    "end": 48,
+    "order_free_before": false
+   },
+   {
+    "index": 7,
+    "line": 3,
+    "marker": "",
+    "body": "전화/DM",
+    "begin": 49,
+    "end": 54,
+    "order_free_before": false
+   },
+   {
+    "index": 8,
+    "line": 4,
+    "marker": "",
+    "body": "Day 5",
+    "begin": 55,
+    "end": 60,
+    "order_free_before": false
+   },
+   {
+    "index": 9,
+    "line": 4,
+    "marker": "",
+    "body": "추가 영업",
+    "begin": 61,
+    "end": 66,
+    "order_free_before": false
+   },
+   {
+    "index": 10,
+    "line": 5,
+    "marker": "",
+    "body": "Day 6",
+    "begin": 67,
+    "end": 72,
+    "order_free_before": false
+   },
+   {
+    "index": 11,
+    "line": 5,
+    "marker": "",
+    "body": "상담/제안",
+    "begin": 73,
+    "end": 78,
+    "order_free_before": false
+   },
+   {
+    "index": 12,
+    "line": 6,
+    "marker": "",
+    "body": "Day 7",
+    "begin": 79,
+    "end": 84,
+    "order_free_before": false
+   },
+   {
+    "index": 13,
+    "line": 6,
+    "marker": "",
+    "body": "복기",
+    "begin": 85,
+    "end": 87,
+    "order_free_before": false
+   }
+  ]
+ }
+}

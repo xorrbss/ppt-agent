@@ -1,0 +1,56 @@
+{
+  "id": "technology-17-edge-device",
+  "category": "technology",
+  "tags": {
+    "ko": [
+      "기술",
+      "엣지장치"
+    ],
+    "en": [
+      "technology",
+      "edge",
+      "device"
+    ]
+  },
+  "alt": {
+    "ko": "엣지장치 단색 벡터 인포그래픽",
+    "en": "edge device monochrome vector infographic"
+  },
+  "path": "originals/technology-17-edge-device.svg",
+  "thumbnail": "thumbnails/technology-17-edge-device.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 732,
+  "sha256": "d2c9445aa25afbcdab0a80684a187b1767ab6ec62cbb1befd0d0f7aa5f3749b1",
+  "geometry_sha256": "25510ea822f41313971216d616c8446ecc4570b14b6a8d1ab57585f6e52a494b",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55244,
+    "preview_opaque_pixels": 8160,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Server",
+      "Radio"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

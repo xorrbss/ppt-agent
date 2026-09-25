@@ -701,11 +701,11 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
           }
         }}
       >
-        <DialogContent className="w-[calc(100vw-32px)] max-w-[440px] gap-0 rounded-[24px] border-0 bg-white p-0 font-syne shadow-[0_24px_80px_rgba(15,23,42,0.18)] [&>button]:hidden">
+        <DialogContent className="max-w-[440px] gap-0 p-0 font-syne [&>button]:hidden">
           {dialog?.kind === "reset-password" && (
             <form onSubmit={resetPassword}>
               <DialogHeader className="px-7 pb-5 pt-7 text-left">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#F4F3FF]">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F4F3FF]">
                   <LockKeyhole className="h-5 w-5 text-[#5146E5]" />
                 </div>
                 <DialogTitle className="text-xl font-semibold leading-7 text-[#101323]">
@@ -732,10 +732,10 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                   required
                 />
               </DialogHeader>
-              <DialogFooter className="flex-row border-t border-[#EAECF0] p-4 sm:justify-end sm:space-x-0">
+              <DialogFooter className="flex-row px-7 pb-6 pt-0 sm:justify-end">
                 <button
                   type="button"
-                  className="h-10 rounded-full border border-[#E1E1E5] px-5 text-xs font-semibold text-[#344054] transition hover:bg-[#F9FAFB]"
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none disabled:opacity-50"
                   onClick={() => setDialog(null)}
                   disabled={dialogBusy}
                 >
@@ -752,7 +752,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
           {dialog?.kind === "delete-user" && (
             <>
               <DialogHeader className="px-7 pb-6 pt-7 text-left">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#FEF3F2]">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FEF3F2]">
                   <AlertTriangle className="h-5 w-5 text-[#D92D20]" />
                 </div>
                 <DialogTitle className="text-xl font-semibold leading-7 text-[#101323]">
@@ -762,10 +762,10 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                   {t("deleteDialogDescription")}
                 </DialogDescription>
               </DialogHeader>
-              <DialogFooter className="flex-row border-t border-[#EAECF0] p-4 sm:justify-end sm:space-x-0">
+              <DialogFooter className="flex-row px-7 pb-6 pt-0 sm:justify-end">
                 <button
                   type="button"
-                  className="h-10 rounded-full border border-[#E1E1E5] px-5 text-xs font-semibold text-[#344054] transition hover:bg-[#F9FAFB]"
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none disabled:opacity-50"
                   onClick={() => setDialog(null)}
                   disabled={dialogBusy}
                 >
@@ -773,7 +773,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                 </button>
                 <button
                   type="button"
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#D92D20] px-5 text-xs font-semibold text-white transition hover:bg-[#B42318] disabled:opacity-60"
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:pointer-events-none disabled:opacity-50"
                   onClick={() => void deleteUser()}
                   disabled={dialogBusy}
                 >
@@ -787,7 +787,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
           {dialog?.kind === "revoke-key" && (
             <>
               <DialogHeader className="px-7 pb-6 pt-7 text-left">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#FEF3F2]">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FEF3F2]">
                   <AlertTriangle className="h-5 w-5 text-[#D92D20]" />
                 </div>
                 <DialogTitle className="text-xl font-semibold leading-7 text-[#101323]">
@@ -797,10 +797,10 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                   {t("revokeDialogDescription")}
                 </DialogDescription>
               </DialogHeader>
-              <DialogFooter className="flex-row border-t border-[#EAECF0] p-4 sm:justify-end sm:space-x-0">
+              <DialogFooter className="flex-row px-7 pb-6 pt-0 sm:justify-end">
                 <button
                   type="button"
-                  className="h-10 rounded-full border border-[#E1E1E5] px-5 text-xs font-semibold text-[#344054] transition hover:bg-[#F9FAFB]"
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none disabled:opacity-50"
                   onClick={() => setDialog(null)}
                   disabled={dialogBusy}
                 >
@@ -808,7 +808,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                 </button>
                 <button
                   type="button"
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#D92D20] px-5 text-xs font-semibold text-white transition hover:bg-[#B42318] disabled:opacity-60"
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:pointer-events-none disabled:opacity-50"
                   onClick={() => void revokeKey()}
                   disabled={dialogBusy}
                 >

@@ -1,0 +1,55 @@
+{
+  "id": "people-10-entrepreneur",
+  "category": "people",
+  "tags": {
+    "ko": [
+      "사람",
+      "창업가"
+    ],
+    "en": [
+      "people",
+      "entrepreneur"
+    ]
+  },
+  "alt": {
+    "ko": "창업가 단색 벡터 인포그래픽",
+    "en": "entrepreneur monochrome vector infographic"
+  },
+  "path": "originals/people-10-entrepreneur.svg",
+  "thumbnail": "thumbnails/people-10-entrepreneur.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 640,
+  "sha256": "72bc26b5d9c9995748e7c3bdcfd91fd08ba52f006e3184dfb9b4796253580d51",
+  "geometry_sha256": "f3c506faa8c034d437a2cca8a11b817155571cb500f497ae52346d68985e9196",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56583,
+    "preview_opaque_pixels": 7223,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "BriefcaseBusiness",
+      "Lightbulb"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

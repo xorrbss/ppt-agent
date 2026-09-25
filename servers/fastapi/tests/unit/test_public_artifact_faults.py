@@ -16,6 +16,7 @@ from models.sql.public_artifact import (
     ArtifactRef,
     PublicArtifact,
     PublicArtifactPublication,
+    PublicSlideCheckpoint,
     artifact_storage_key,
 )
 from models.sql.presentation import PresentationModel
@@ -33,7 +34,93 @@ from services.artifact_store import (
     ProvisionalArtifactRef,
     DurableArtifactService,
     promote_artifact_publication_if_current,
+    put_slide_checkpoint_if_current,
 )
+
+
+@pytest.mark.parametrize("operation_kind", ["generation", "export"])
+def test_checkpoint_operation_kind_preserves_authority(tmp_path, monkeypatch, operation_kind):
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    async def scenario():
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        try:
+            async with engine.begin() as connection:
+                await connection.run_sync(lambda conn: SQLModel.metadata.create_all(
+                    conn, tables=[User.__table__, PresentationModel.__table__,
+                    WorkspaceConversation.__table__, WorkspaceOperation.__table__,
+                    PublicPolicyProfile.__table__, PublicOperationAdmission.__table__,
+                    PublicArtifact.__table__, PublicSlideCheckpoint.__table__],
+                ))
+            sessions = async_sessionmaker(engine, expire_on_commit=False)
+            owner, op_id = uuid.uuid4(), uuid.uuid4()
+            async with sessions() as session:
+                operation = WorkspaceOperation(
+                    id=op_id, owner_id=owner, owner_scope=str(owner),
+                    conversation_id=uuid.uuid4(), presentation_id=uuid.uuid4(),
+                    anchor_position=1, kind="presentation.generate" if operation_kind == "generation" else "export.pptx",
+                    state="running", idempotency_key_hash="a" * 64,
+                    request_hash="b" * 64, request_payload={},
+                    attempt_number=1, attempt_token="current", fencing_token=3,
+                    contract_version="public-operation/v2",
+                    execution_profile_version="public-generation-export/v2",
+                    phase="running", deadline_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                )
+                admission = PublicOperationAdmission(
+                    operation_id=op_id, owner_id=owner, tenant_id="tenant-a",
+                    policy_version="test", trace_id_hash="c" * 64,
+                    operation_kind=operation_kind, resource_units=1,
+                    policy_digest="d" * 64, deadline_at=operation.deadline_at,
+                    fence=3, state="active", planned_request_limit=0,
+                    retry_request_limit=0, estimated_cost_limit_microunits=0,
+                    actual_cost_limit_microunits=0,
+                )
+                session.add_all([operation, admission])
+                service = DurableArtifactService(LocalDevelopmentArtifactObjectStore(tmp_path / operation_kind))
+                artifact = await service.persist_bytes(
+                    session, owner_id=owner, tenant_id="tenant-a", kind="checkpoint",
+                    payload=b"original", media_type="application/json",
+                    created_by_operation_id=op_id, retention_class="checkpoint",
+                )
+                await session.commit()
+                args = dict(operation_id=op_id, owner_id=owner, tenant_id="tenant-a",
+                    attempt_number=1, attempt_token="current", fencing_token=3,
+                    revision=0, slide_index=0, input_digest="e" * 64,
+                    stage_version="original/v1", artifact_id=artifact.artifact_id)
+                # Existing export callers omit the kind; generation must opt in.
+                kind_args = {"operation_kind": "generation"} if operation_kind == "generation" else {}
+                for override in (
+                    {"operation_kind": "export" if operation_kind == "generation" else "generation"},
+                    {"attempt_token": "stale"}, {"fencing_token": 2},
+                    {"attempt_number": 2}, {"owner_id": uuid.uuid4()},
+                    {"tenant_id": "other"},
+                ):
+                    assert await put_slide_checkpoint_if_current(session, **(args | kind_args | override)) is None
+                with pytest.raises(ValueError, match="operation kind"):
+                    await put_slide_checkpoint_if_current(session, **(args | {"operation_kind": "invalid"}))
+                for state, fence in (("failed", 3), ("active", 2)):
+                    admission.state, admission.fence = state, fence
+                    await session.flush()
+                    assert await put_slide_checkpoint_if_current(session, **(args | kind_args)) is None
+                admission.state, admission.fence = "active", 3
+                operation.state = "cancelled"
+                await session.flush()
+                assert await put_slide_checkpoint_if_current(session, **(args | kind_args)) is None
+                operation.state = "running"
+                await session.flush()
+                pointer = await put_slide_checkpoint_if_current(session, **(args | kind_args))
+                assert pointer is not None
+                await session.commit()
+                await session.refresh(pointer)
+                row = await session.get(PublicArtifact, artifact.artifact_id, populate_existing=True)
+                assert pointer.artifact_id == artifact.artifact_id and pointer.fencing_token == 3
+                assert row.refcount == 1
+                assert await put_slide_checkpoint_if_current(session, **(args | kind_args)) is not None
+                await session.commit()
+                await session.refresh(row)
+                assert row.refcount == 1
+        finally:
+            await engine.dispose()
+    asyncio.run(scenario())
 
 
 def _artifact(payload: bytes, *, kind: str = "checkpoint") -> ArtifactRef:
@@ -207,6 +294,10 @@ def test_publication_pointer_rejects_stale_fence_and_moves_refcount_atomically(
                     idempotency_key_hash=sha256(b"idempotency").hexdigest(),
                     request_hash=sha256(b"request").hexdigest(),
                     request_payload={},
+                    contract_version="public-operation/v2",
+                    execution_profile_version="public-generation-export/v2",
+                    phase="running",
+                    deadline_at=datetime.now(timezone.utc) + timedelta(minutes=5),
                     attempt_number=1,
                     attempt_token="attempt-one",
                     fencing_token=11,

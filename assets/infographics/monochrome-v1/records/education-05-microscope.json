@@ -1,0 +1,54 @@
+{
+  "id": "education-05-microscope",
+  "category": "education",
+  "tags": {
+    "ko": [
+      "교육",
+      "현미경"
+    ],
+    "en": [
+      "education",
+      "microscope"
+    ]
+  },
+  "alt": {
+    "ko": "현미경 단색 벡터 인포그래픽",
+    "en": "microscope monochrome vector infographic"
+  },
+  "path": "originals/education-05-microscope.svg",
+  "thumbnail": "thumbnails/education-05-microscope.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 474,
+  "sha256": "fc77568dd60eaad31ea0ea574bfcbb0c289198d6829d759f650a767b03e61e69",
+  "geometry_sha256": "781f20eb081e540757c6720e70d25ee8c6ce511aeed3f2049ff1a778bd65864a",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54006,
+    "preview_opaque_pixels": 9987,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Microscope"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

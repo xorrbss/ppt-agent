@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:135px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:32px;width:780px}
+.eyebrow{font-size:13px;line-height:18px;font-weight:700;letter-spacing:.06em;color:#08916E}
+.title{margin-top:12px;font-size:34px;line-height:45px;font-weight:800;color:#0F172A}
+.divider{position:absolute;left:64px;right:64px;bottom:0;height:1px;background:#E2E8F0}
+.body-wrap{position:absolute;left:0;right:0;top:155px;height:493px}
+.inner{margin-left:64px;width:1152px}
+.objective{height:70px;padding:17px 24px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px;color:#002060;font-size:21px;line-height:34px;font-weight:700}
+.main-grid{display:grid;grid-template-columns:316px 1fr;gap:24px;margin-top:24px;height:253px}
+.goal-panel{position:relative;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.panel-tab{display:inline-block;padding:7px 14px;background:#002060;color:#FFFFFF;border-radius:12px;font-size:15px;line-height:22px;font-weight:700}
+.brand-line{margin-top:28px;color:#08916E;font-size:21px;line-height:32px;font-weight:800}
+.brand-rule{width:72px;height:4px;margin-top:22px;background:#08916E;border-radius:12px}
+.goal-mark{position:absolute;right:28px;bottom:28px;width:44px;height:44px;border:2px solid #08916E;border-radius:12px}
+.goal-mark span{display:block;width:16px;height:16px;margin:12px;background:#08916E;border-radius:4px}
+.formula-panel{padding:24px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.formula-row{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;margin-top:28px}
+.formula-step{position:relative;height:88px;padding:22px 16px;background:#F9F9F9;border:1px solid #E2E8F0;border-radius:12px;text-align:center;color:#002060;font-size:20px;line-height:30px;font-weight:800}
+.formula-step:not(:last-child) span{position:absolute;right:-19px;top:39px;width:14px;height:10px;border-top:2px solid #00828E}
+.formula-step:not(:last-child) span i{position:absolute;right:-1px;top:-5px;width:9px;height:9px;border-top:2px solid #00828E;border-right:2px solid #00828E;transform:rotate(45deg)}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:24px;height:122px}
+.step-card{position:relative;padding:22px 24px 18px 78px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.step-no{position:absolute;left:24px;top:23px;width:34px;height:34px;border-radius:12px;background:#219F88;color:#FFFFFF;text-align:center;font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:34px;font-weight:700}
+.step-text{color:#1D1D1B;font-size:20px;line-height:30px;font-weight:800}
+.footer-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+  <div data-header-part="band" data-header-band="135" class="header-band" style="height:135px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+    <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+      <div data-header-part="eyebrow" class="eyebrow" data-qid="q-div-16db2223612a" data-semantic-role="supporting">고객 확보</div>
+      <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-33a3b1889548cf0f" data-source-block-id="source-slide:18:text:3">3주차 | 첫 고객 만들기</div>
+    </div>
+    <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+  </div>
+
+  <div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:155px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+    <div class="inner" data-qid="q-div-c9c4d24a38ca" data-semantic-role="decoration">
+      <div class="objective" data-qid="source-block-5e6d01541e5f27c9" data-semantic-role="body" data-source-block-id="source-slide:18:text:4">목표: 실제 영업할 대상과 접근 방법을 만든다.</div>
+
+      <div class="main-grid" data-qid="q-div-948c49f110fb" data-semantic-role="decoration">
+        <div class="goal-panel" data-qid="q-goal-panel-17" data-semantic-role="decoration">
+          <div class="panel-tab" data-qid="source-block-36f232f6ed4b8365" data-semantic-role="body" data-source-block-id="source-slide:18:text:7">첫 고객의 공식</div>
+          <div class="brand-line" data-qid="source-block-285b277e4b806eb3" data-semantic-role="body" data-source-block-id="source-slide:18:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+          <div class="brand-rule" data-qid="q-brand-rule-17" data-semantic-role="decoration"></div>
+          <div class="goal-mark" data-semantic-role="decoration" data-qid="q-div-28715032f7b1"><span data-semantic-role="decoration" data-qid="q-span-f32986c526a1"></span></div>
+        </div>
+
+        <div class="formula-panel" data-qid="q-formula-panel-17" data-semantic-role="decoration">
+          <div class="formula-row" data-qid="q-div-94866f11c060" data-semantic-role="decoration">
+            <div class="formula-step" data-qid="source-block-980e1ae983e2b346" data-semantic-role="body" data-source-block-id="source-slide:18:text:8:run:0">포트폴리오<span data-semantic-role="decoration" data-qid="q-span-c83eac29f2ad"><i data-semantic-role="decoration" data-qid="q-i-26d67e8834a8"></i></span></div>
+            <div class="formula-step" data-qid="source-block-840f7bb97b86d673" data-semantic-role="body" data-source-block-id="source-slide:18:text:8:run:1">무료 샘플<span data-semantic-role="decoration" data-qid="q-span-eedec0ea8962"><i data-semantic-role="decoration" data-qid="q-i-3d641a6d9f64"></i></span></div>
+            <div class="formula-step" data-qid="source-block-0c084315a632e847" data-semantic-role="body" data-source-block-id="source-slide:18:text:8:run:2">영업<span data-semantic-role="decoration" data-qid="q-span-2af01d53a93e"><i data-semantic-role="decoration" data-qid="q-i-3d3ba99c1876"></i></span></div>
+            <div class="formula-step" data-qid="source-block-b8d2b1747e429894" data-semantic-role="body" data-source-block-id="source-slide:18:text:8:run:3">상담</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="steps" data-qid="q-div-17e8625ebe5f" data-semantic-role="decoration">
+        <div class="step-card" data-qid="q-step-1-17" data-semantic-role="decoration">
+          <div class="step-no" data-qid="source-block-45b2aa014283bf2e" data-semantic-role="supporting" data-source-block-id="source-slide:18:text:11">1</div>
+          <div class="step-text" data-qid="source-block-c2f1224d2b6ae403" data-semantic-role="body" data-source-block-id="source-slide:18:text:12">보여줄 영상 준비</div>
+        </div>
+        <div class="step-card" data-qid="q-step-2-17" data-semantic-role="decoration">
+          <div class="step-no" data-qid="source-block-668dddc946364571" data-semantic-role="supporting" data-source-block-id="source-slide:18:text:15">2</div>
+          <div class="step-text" data-qid="source-block-2a04996e31460b1f" data-semantic-role="body" data-source-block-id="source-slide:18:text:16">가게 하나 선정</div>
+        </div>
+        <div class="step-card" data-qid="q-step-3-17" data-semantic-role="decoration">
+          <div class="step-no" data-qid="source-block-a174ff1d95299915" data-semantic-role="supporting" data-source-block-id="source-slide:18:text:19">3</div>
+          <div class="step-text" data-qid="source-block-cc8a8d02d5c9ef57" data-semantic-role="body" data-source-block-id="source-slide:18:text:20">직접 제안</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-number" data-qid="source-block-e1533f01db2c7974" data-semantic-role="supporting" data-source-block-id="source-slide:18:text:5">18</div>
+</body>
+</html>

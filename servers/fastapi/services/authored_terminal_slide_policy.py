@@ -16,7 +16,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from services.authored_generation_preflight import over_budget_violations
-from utils.get_env import is_authored_publish_flagged_slides_enabled
+from utils.get_env import (
+    is_authored_publish_flagged_slides_enabled,
+    is_authored_publish_flagged_slides_source_reflow_enabled,
+)
 from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION
 
 LOGGER = logging.getLogger(__name__)
@@ -30,6 +33,25 @@ REPAIR_BUDGET_EXHAUSTED_REASON = "composition_safety:repair_budget_exhausted"
 GATE_REPAIR_NOT_ADMITTED_REASON = "composition_safety:gate_repair_not_admitted"
 
 
+def _composition_switch(profile: Any, name: str) -> bool:
+    """Read one composition-profile switch, refusing a profile that lacks it.
+
+    ``None`` is the absent profile every entry point already reads as "no
+    deck-level policy", and stays inactive. Any other object must be a
+    :class:`~services.authored_composition_policy.CompositionProfile`: reading
+    the switch through ``getattr(..., False)`` silently answered "off" when the
+    caller passed the wrong object entirely -- the rollout profile, which
+    carries none of these switches -- and that inversion disabled the terminal
+    fallback on every deck for a whole validation stage (regression 4afa7a141,
+    artifacts/authored-live-series-20260915). A missing switch is a wiring
+    defect, so it raises here instead of quietly changing the deck's policy.
+    """
+
+    if profile is None:
+        return False
+    return bool(getattr(profile, name))
+
+
 def terminal_fallback_active(
     *, profile: Any, reference_mode: str, source_reflow: bool
 ) -> bool:
@@ -40,16 +62,22 @@ def terminal_fallback_active(
     from the bounded round on one rule and then refusing to rescue it on
     another would publish a deck with an unrepaired, unflagged slide.
 
-    A verbatim/exact deck may not lose a word, and a profile whose strict DOM
-    gate is off has no terminal slide to rescue.
+    Exact reconstruction remains fail-closed, and a profile whose strict DOM
+    gate is off has no terminal slide to rescue. Source reflow has a separate,
+    default-off flag-only path because its verbatim text may not be re-authored.
     """
 
+    if source_reflow:
+        return (
+            is_authored_publish_flagged_slides_source_reflow_enabled()
+            and reference_mode != EXACT_RECONSTRUCTION
+            and _composition_switch(profile, "strict_dom_gate")
+        )
     return (
         is_authored_publish_flagged_slides_enabled()
-        and not source_reflow
         and reference_mode != EXACT_RECONSTRUCTION
-        and bool(getattr(profile, "strict_dom_gate", False))
-        and bool(getattr(profile, "allow_summarization", False))
+        and _composition_switch(profile, "strict_dom_gate")
+        and _composition_switch(profile, "allow_summarization")
     )
 
 
@@ -218,9 +246,9 @@ def recover_residual_repair_round(
     length invariant can still be checked.
 
     ``enabled`` is ``terminal_fallback_active`` for this deck, resolved by the
-    caller. Source reflow is fail-closed inside it: a verbatim deck may not
-    publish with a flagged slide, and its partial repairs already have their own
-    checkpoint path (``_checkpoint_source_reflow_vqa_repairs``).
+    caller. Source reflow remains fail-closed by default; its separate flag-only
+    knob may recover this bound state, but strict candidate admission and the
+    whole-deck browser source readback still run before publication.
     """
 
     if not enabled:

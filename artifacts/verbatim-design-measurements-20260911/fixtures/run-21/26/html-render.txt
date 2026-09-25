@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:880px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B;max-width:880px}
+.header-right{position:absolute;left:956px;top:24px;width:260px;text-align:right;font-size:15px;line-height:20px;color:#FFFFFF}
+.header-right span{display:inline-block;background:#00140E;padding:7px 12px;border-radius:12px}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:129px;height:519px}
+.claim{width:1152px;margin-left:64px;height:45px;display:flex;align-items:flex-start;justify-content:space-between}
+.claim-text{font-size:24px;line-height:34px;font-weight:700;color:#1D1D1B}
+.claim-text strong{color:#08916E}
+.claim-note{font-size:16px;line-height:24px;font-weight:700;color:#00828E;padding-top:4px}
+.architecture{position:relative;width:1152px;height:428px;margin-left:64px;display:grid;grid-template-columns:812px 316px;gap:24px}
+.map-panel{height:428px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:24px 28px}
+.map-head{height:36px;display:flex;align-items:flex-start;justify-content:space-between}
+.map-title{font-size:20px;line-height:28px;font-weight:700;color:#002060}
+.map-label{font-size:15px;line-height:22px;color:#219F88;font-weight:700}
+.stage-row{height:108px;margin-top:18px;display:grid;grid-template-columns:180px 1fr;gap:24px;position:relative}
+.stage-label{border-radius:12px;background:#002060;color:#FFFFFF;padding:20px 18px}
+.stage-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:20px;color:#CCECFF}
+.stage-name{margin-top:7px;font-size:23px;line-height:30px;font-weight:700}
+.module-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-content:center}
+.module{height:62px;border:1px solid #8CCFC0;border-radius:12px;background:#EAF7F4;padding:10px 12px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:17px;line-height:24px;font-weight:700;color:#002060}
+.module.wide{grid-column:span 2}
+.connector{position:absolute;left:180px;top:108px;width:24px;height:18px;border-left:2px solid #00828E;border-bottom:2px solid #00828E}
+.connector.two{top:234px}
+.stage-row:last-child{margin-top:18px}
+.side-column{height:428px;display:flex;flex-direction:column;gap:16px}
+.image-panel{height:192px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:10px}
+.image-panel img{display:block;width:294px;height:170px;border-radius:12px;object-fit:cover;background:linear-gradient(135deg,#E0F3FF,#EAEDF2)}
+.callout{background:#E0F3FF;border-radius:12px;padding:20px 22px;border-left:6px solid #219F88}
+.callout.first{height:105px}
+.callout.second{height:115px;background:#EAEDF2;border-left-color:#08916E}
+.callout-label{font-size:15px;line-height:22px;font-weight:700;color:#219F88}
+.callout-body{margin-top:6px;font-size:17px;line-height:27px;font-weight:700;color:#002060}
+.callout.second .callout-label{color:#08916E}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="105" style="height:105px" data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-26">4주차 PART 3</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-c3a5d91c0d1da123" data-source-block-id="source-slide:27:text:3">4주차 PART 3 | 계약·납품 시스템</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="q-right-26"><span data-qid="source-block-12aec5551ea300d2" data-semantic-role="body" data-source-block-id="source-slide:27:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</span></div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:129px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+    <div class="claim-text" data-semantic-role="body" data-qid="q-claim-26">계약에서 납품까지, 반복 가능한 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">운영 흐름</strong>으로 관리합니다.</div>
+    <div class="claim-note" data-semantic-role="supporting" data-qid="q-note-26">3단계 업무 시스템</div>
+  </div>
+
+  <div class="architecture" data-qid="q-div-9eabd7e66260" data-semantic-role="decoration">
+    <div class="map-panel" data-semantic-role="decoration" data-qid="q-map-panel-26">
+      <div class="map-head" data-qid="q-div-9336527ef6f7" data-semantic-role="decoration">
+        <div class="map-title" data-semantic-role="supporting" data-qid="q-map-title-26">계약·제작·납품 업무 구조</div>
+        <div class="map-label" data-semantic-role="supporting" data-qid="q-map-label-26">입력 → 실행 → 축적</div>
+      </div>
+
+      <div class="stage-row" data-qid="q-div-77ef708ad0e2" data-semantic-role="decoration">
+        <div class="stage-label" data-semantic-role="supporting" data-qid="q-stage-contract-26">
+          <div class="stage-number" data-semantic-role="supporting" data-qid="q-stage-contract-number-26">01</div>
+          <div class="stage-name" data-semantic-role="body" data-qid="source-block-2b87e1e065191a4e" data-source-block-id="source-slide:27:text:8">계약</div>
+        </div>
+        <div class="module-grid" data-qid="source-block-434d7737bc553024" data-semantic-role="decoration" data-source-block-id="source-slide:27:text:9">
+          <div class="module" data-semantic-role="body" data-qid="q-module-count-26">제작 개수</div>
+          <div class="module" data-semantic-role="body" data-qid="q-module-revision-26">수정 횟수</div>
+          <div class="module" data-semantic-role="supporting" data-qid="q-module-date-26">납품일</div>
+          <div class="module" data-semantic-role="body" data-qid="q-module-scope-26">촬영 범위</div>
+          <div class="module wide" data-semantic-role="body" data-qid="q-module-payment-26">선금/잔금</div>
+        </div>
+        <div class="connector" data-qid="q-div-1bfec761b021" data-semantic-role="decoration"></div>
+      </div>
+
+      <div class="stage-row" data-qid="q-div-bc1af46f6a7d" data-semantic-role="decoration">
+        <div class="stage-label" data-semantic-role="supporting" data-qid="q-stage-production-26">
+          <div class="stage-number" data-semantic-role="supporting" data-qid="q-stage-production-number-26">02</div>
+          <div class="stage-name" data-semantic-role="body" data-qid="source-block-d7a5b08f6e8eb6de" data-source-block-id="source-slide:27:text:12">제작</div>
+        </div>
+        <div class="module-grid" data-qid="source-block-d2b063dcb0151e9b" data-semantic-role="decoration" data-source-block-id="source-slide:27:text:13">
+          <div class="module" data-semantic-role="body" data-qid="q-module-guide-26">촬영 가이드</div>
+          <div class="module" data-semantic-role="body" data-qid="q-module-planning-26">콘텐츠 기획</div>
+          <div class="module" data-semantic-role="body" data-qid="q-module-edit-26">편집</div>
+          <div class="module" data-semantic-role="body" data-qid="q-module-review-26">검수</div>
+          <div class="module" data-semantic-role="body" data-qid="q-module-revision-2-26">수정</div>
+        </div>
+        <div class="connector two" data-qid="q-div-d63f3e8c8f23" data-semantic-role="decoration"></div>
+      </div>
+
+      <div class="stage-row" data-qid="q-div-86867524ad66" data-semantic-role="decoration">
+        <div class="stage-label" data-semantic-role="supporting" data-qid="q-stage-delivery-26">
+          <div class="stage-number" data-semantic-role="supporting" data-qid="q-stage-delivery-number-26">03</div>
+          <div class="stage-name" data-semantic-role="body" data-qid="source-block-62f8c8ebaa593861" data-source-block-id="source-slide:27:text:16">납품</div>
+        </div>
+        <div class="module-grid" data-qid="source-block-5b3d3d40f2f34061" data-semantic-role="decoration" data-source-block-id="source-slide:27:text:17">
+          <div class="module" data-semantic-role="body" data-qid="q-module-transfer-26">파일 전달</div>
+          <div class="module" data-semantic-role="body" data-qid="q-module-final-26">최종 확인</div>
+          <div class="module" data-semantic-role="body" data-qid="q-module-record-26">성과 기록</div>
+          <div class="module wide" data-semantic-role="body" data-qid="q-module-next-26">다음 콘텐츠 제안</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-column" data-qid="q-div-e7ead5e2e45c" data-semantic-role="decoration">
+      <div class="image-panel" data-qid="q-div-5e0d969fd99d" data-semantic-role="decoration">
+        
+      </div>
+      <div class="callout first" data-semantic-role="decoration" data-qid="q-callout-1-26">
+        <div class="callout-label" data-semantic-role="supporting" data-qid="q-callout-label-1-26">계약 단계</div>
+        <div class="callout-body" data-semantic-role="body" data-qid="q-callout-body-1-26">범위·일정·대금 조건을 먼저 고정</div>
+      </div>
+      <div class="callout second" data-semantic-role="decoration" data-qid="q-callout-2-26">
+        <div class="callout-label" data-semantic-role="supporting" data-qid="q-callout-label-2-26">납품 이후</div>
+        <div class="callout-body" data-semantic-role="body" data-qid="q-callout-body-2-26">성과 기록이 다음 콘텐츠 제안으로 연결</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="source-block-995e8a59ce32dab2" data-source-block-id="source-slide:27:text:4">27</div>
+</body>
+</html>

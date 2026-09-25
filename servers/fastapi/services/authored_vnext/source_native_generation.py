@@ -27,6 +27,9 @@ from services.authored_vnext.deck_ir.product_adapter import (
 )
 from services.authored_vnext import source_render_geometry as geometry
 from services.authored_vnext.source_render_geometry import RenderGeometryError
+from services.authored_vnext.source_native_canvas import (
+    SourceNativeCanvasSession,
+)
 from services.authored_vnext.design_pack import RegisteredDesignPack
 from services.authored_vnext.composition import (
     CompositionError,
@@ -608,109 +611,18 @@ def _protected_dom_digest(document: object, editable_qids: set[str]) -> str:
     return canonical_digest(protected)
 
 
-def _unit_render_text(unit: SealedContentUnit) -> str:
-    if unit.text.strip():
-        return " ".join(unit.text.split())
-    if unit.data not in (None, [], {}):
-        return json.dumps(unit.data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return ""
+from . import source_native_flow_styles as _flow_styles
+from .source_native_flow_styles import (_unit_render_text, _flow_mapping, _flow_number,
+                                       _flow_role, _flow_font_px, _semantic_weight_override)
 
 
-def _flow_mapping(slot: Mapping[str, object], key: str) -> Mapping[str, object]:
-    value = slot.get(key)
-    if isinstance(value, Mapping):
-        return value
-    raw = slot.get("raw")
-    if isinstance(raw, Mapping):
-        value = raw.get(key)
-        if isinstance(value, Mapping):
-            return value
-    return {}
+def _flow_text_css(slot, *, role, adaptive_scale):
+    return _flow_styles._flow_text_css(slot, role=role, adaptive_scale=adaptive_scale,
+        _flow_mapping=_flow_mapping, _flow_number=_flow_number, _flow_font_px=_flow_font_px)
 
 
-def _flow_number(value: object, default: float = 0.0) -> float:
-    if isinstance(value, bool):
-        return default
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _flow_role(slot: Mapping[str, object]) -> str:
-    return str(
-        slot.get("sourceFlowRole")
-        or slot.get("semanticRole")
-        or "body"
-    ).strip().lower()
-
-
-def _flow_font_px(
-    slot: Mapping[str, object], *, role: str, adaptive_scale: float
-) -> float:
-    return geometry.flow_font_px(
-        geometry.slot_declared_font_px(slot),
-        role=role,
-        adaptive_scale=adaptive_scale,
-    )
-
-
-def _flow_text_css(
-    slot: Mapping[str, object], *, role: str, adaptive_scale: float
-) -> str:
-    style = _flow_mapping(slot, "textStyle")
-    font_px = _flow_font_px(slot, role=role, adaptive_scale=adaptive_scale)
-    family = str(
-        style.get("eastAsianFont")
-        or style.get("latinFont")
-        or "Arial, sans-serif"
-    ).replace("'", "")
-    weight = max(100, min(1000, int(_flow_number(style.get("fontWeight"), 700 if role == "title" else 500))))
-    alignment = str(style.get("alignment") or "left")
-    if alignment not in {"left", "center", "right", "justify"}:
-        alignment = "left"
-    declared_color = str(style.get("color") or "").strip()
-    # Authored Design Packs can intentionally leave a slot color unspecified
-    # so that it inherits the local panel/container foreground.  Supplying a
-    # dark fallback here breaks that contract on retained dark chrome.  Only a
-    # sealed canonical color may override the container's computed color.
-    color = declared_color if declared_color.startswith("#") else "inherit"
-    return (
-        f"font-family:'{family}';font-size:{font_px:.2f}px;"
-        f"font-weight:{weight};"
-        f"line-height:"
-        f"{geometry.TITLE_LINE_HEIGHT if role == 'title' else geometry.BODY_LINE_HEIGHT};"
-        f"text-align:{alignment};color:{color};letter-spacing:-0.01em"
-    )
-
-
-def _flow_overlay_css(slot: Mapping[str, object]) -> str:
-    bounds = _flow_mapping(slot, "bounds")
-    spacing = _flow_mapping(slot, "spacing")
-    x = _flow_number(bounds.get("x"))
-    y = _flow_number(bounds.get("y"))
-    width = _flow_number(bounds.get("width"))
-    height = _flow_number(bounds.get("height"))
-    if width <= 0 or height <= 0:
-        raise SourceNativeGenerationError("source_native_flow_geometry_invalid")
-    inset_left = max(0.0, _flow_number(spacing.get("insetLeft")))
-    inset_top = max(0.0, _flow_number(spacing.get("insetTop")))
-    inset_right = max(0.0, _flow_number(spacing.get("insetRight")))
-    inset_bottom = max(0.0, _flow_number(spacing.get("insetBottom")))
-    surface = str(slot.get("sourceFlowSurface") or "")
-    background = (
-        "background:inherit!important;color:inherit!important;"
-        if surface == "container-inherited"
-        else "background:transparent!important;"
-    )
-    return (
-        "position:absolute!important;box-sizing:border-box!important;"
-        f"left:{x:.3f}px!important;top:{y:.3f}px!important;"
-        f"width:{width:.3f}px!important;height:{height:.3f}px!important;"
-        f"padding:{inset_top:.3f}px {inset_right:.3f}px {inset_bottom:.3f}px {inset_left:.3f}px!important;"
-        f"margin:0!important;{background}"
-        "min-width:0!important;min-height:0!important;overflow:hidden!important"
-    )
+def _flow_overlay_css(slot):
+    return _flow_styles._flow_overlay_css(slot, _flow_mapping=_flow_mapping, _flow_number=_flow_number)
 
 
 def _unit_boundary_kind(unit: SealedContentUnit) -> str:
@@ -871,28 +783,6 @@ def _semantic_text_metrics(
     )
 
 
-def _semantic_weight_override(
-    *, semantic_role: str, process_header: bool
-) -> tuple[int, bool] | None:
-    """Font weight the emitter appends, and whether it restates the size.
-
-    The sizes themselves come from `geometry.semantic_text_metrics`, so this
-    only decides the purely presentational part of the declaration.
-    """
-
-    if process_header:
-        return 700, True
-    if semantic_role == "title":
-        return 750, False
-    if semantic_role in {"heading", "section-heading"}:
-        return 700, True
-    if semantic_role in geometry.EMPHASIS_NUMBER_ROLES:
-        return 800, True
-    if semantic_role in geometry.FLOOR_FONT_ROLES:
-        return 650, True
-    if semantic_role == "lede":
-        return 500, True
-    return None
 
 
 def _semantic_text_css(
@@ -1169,6 +1059,7 @@ def _append_semantic_block(
         child = lxml_html.Element(element)
         child.text = _unit_render_text(unit)
         child.set("data-qid", f"source-flow:{unit.content_unit_id}")
+        child.set("data-semantic-role", semantic_role)
         child.set("data-source-flow-unit-id", unit.content_unit_id)
         child.set("data-source-boundary-kind", _unit_boundary_kind(unit))
         child.set("data-quality-unintentional", "true")
@@ -3026,6 +2917,9 @@ def _build_slide_quality_observation(
     frame_role: str,
     expected_protected_digest: str,
     observed_protected_digest: str,
+    canvas_session: SourceNativeCanvasSession | None = None,
+    font_point_scale: float = 0.75,
+    minimum_body_font_pt: float = SOURCE_NATIVE_MIN_BODY_FONT_PT,
 ) -> dict[str, object]:
     raw_elements = normalized_metrics.get("elements")
     elements = [item for item in raw_elements if isinstance(item, Mapping)] if isinstance(raw_elements, list) else []
@@ -3068,6 +2962,8 @@ def _build_slide_quality_observation(
         handle = handle if isinstance(handle, Mapping) else {}
         qid = str(handle.get("elementId") or "")
         expected = _quality_bbox(slot.get("bounds"))
+        if canvas_session is not None:
+            expected = canvas_session.map_bounds(expected)
         expected_boxes.append(expected)
         metric = by_qid.get(qid)
         if metric is None:
@@ -3089,19 +2985,29 @@ def _build_slide_quality_observation(
         if ":title-candidate-" in str(item.get("qid") or "")
         or str(item.get("qid") or "").endswith(":key-message")
     ]
-    body_elements = [item for item in unit_elements if item not in title_elements]
+    from .source_native_target_fit import SOURCE_ROLE_FONT_EXCEPTIONS
+    body_elements = [item for item in unit_elements if item not in title_elements
+                     and (canvas_session is None or item.get("semantic_role") not in SOURCE_ROLE_FONT_EXCEPTIONS)]
+    def physical_font(item):
+        if canvas_session and isinstance(item.get("effective_font_size"), (int, float)):
+            return _flow_number(item["effective_font_size"]) * canvas_session.placement.plan.point_per_unit
+        return _flow_number(item.get("font_size")) * font_point_scale
     body_fonts_pt = [
-        _flow_number(item.get("font_size")) * 0.75
+        physical_font(item)
         for item in body_elements
         if _flow_number(item.get("font_size")) > 0
     ]
     title_fonts_pt = [
-        _flow_number(item.get("font_size")) * 0.75
+        physical_font(item)
         for item in title_elements
         if _flow_number(item.get("font_size")) > 0
     ]
-    minimum_body_font_pt = min(body_fonts_pt) if body_fonts_pt else SOURCE_NATIVE_MIN_BODY_FONT_PT
-    font_score = min(1.0, minimum_body_font_pt / SOURCE_NATIVE_MIN_BODY_FONT_PT)
+    observed_minimum_body_font_pt = (
+        min(body_fonts_pt) if body_fonts_pt else minimum_body_font_pt
+    )
+    font_score = min(
+        1.0, observed_minimum_body_font_pt / minimum_body_font_pt
+    )
     contrast_scores = [
         min(1.0, _flow_number(item.get("contrast_ratio"), 4.5) / 4.5)
         for item in unit_elements
@@ -3123,7 +3029,11 @@ def _build_slide_quality_observation(
     ) else 1.0
     readability = max(0.0, min(1.0, (font_score + contrast_score + occlusion_score) / 3.0))
     title_font = max(title_fonts_pt) if title_fonts_pt else 0.0
-    body_font = sum(body_fonts_pt) / len(body_fonts_pt) if body_fonts_pt else SOURCE_NATIVE_MIN_BODY_FONT_PT
+    body_font = (
+        sum(body_fonts_pt) / len(body_fonts_pt)
+        if body_fonts_pt
+        else minimum_body_font_pt
+    )
     hierarchy = min(1.0, title_font / max(1.0, body_font * 1.35)) if title_elements else 0.0
     clipped_count = sum(
         1
@@ -3273,8 +3183,8 @@ def _build_slide_quality_observation(
         "readabilityScore": round(readability, 6),
         "titleBodyHierarchyScore": round(hierarchy, 6),
         "bodyTextElementCount": len(body_elements),
-        "minimumBodyFontPt": round(minimum_body_font_pt, 4),
-        "templateMinimumBodyFontPt": SOURCE_NATIVE_MIN_BODY_FONT_PT,
+        "minimumBodyFontPt": round(observed_minimum_body_font_pt, 4),
+        "templateMinimumBodyFontPt": round(minimum_body_font_pt, 4),
         "wrappingViolationCount": wrapping_count,
         "clippedElementCount": clipped_count,
         "prohibitedOverlapCount": overlap_count,
@@ -3417,6 +3327,7 @@ class _SourceNativeExecutor:
         context: object,
         public_route_receipt: Mapping[str, object],
         capacity_admission_receipt: Mapping[str, object] | None = None,
+        canvas_session: SourceNativeCanvasSession | None = None,
     ) -> None:
         self._package = package
         self._request = request
@@ -3424,6 +3335,7 @@ class _SourceNativeExecutor:
         self._context = context
         self._public_route_receipt = public_route_receipt
         self._capacity_admission_receipt = dict(capacity_admission_receipt or {})
+        self._canvas_session = canvas_session
 
     async def execute(self, *, narrative: object, selection: object, route: object, checkpoint: object) -> Mapping[str, object]:
         source = _source_json(self._package)
@@ -3439,6 +3351,7 @@ class _SourceNativeExecutor:
         compiled: list[dict[str, object]] = []
         page_evidence: list[dict[str, object]] = []
         composition_plans: list[dict[str, object]] = []
+        contain_receipts: list[dict[str, object]] = []
         integrity_pages: list[dict[str, object]] = []
         quality_observations: list[dict[str, object]] = []
         source_text_occurrences: list[dict[str, str]] = []
@@ -3476,6 +3389,7 @@ class _SourceNativeExecutor:
             operation_id, uuid.UUID
         ):
             raise SourceNativeGenerationError("source_native_generation_lane_invalid")
+        canvas_policy = self._canvas_session.policy if self._canvas_session else None
         capacity_pages = tuple(
             item
             for item in self._capacity_admission_receipt.get("pages", ())
@@ -3498,6 +3412,8 @@ class _SourceNativeExecutor:
                     narrative=narrative,
                     slide=narrative_slide,
                     frame=frame_contract,
+                    target_typography=(self._canvas_session.typography_kwargs
+                                       if self._canvas_session else None),
                 )
                 assert_composition_plan(plan)
             except CompositionError as error:
@@ -3546,12 +3462,37 @@ class _SourceNativeExecutor:
                 image_assets=image_assets,
                 renderer_geometry_scale=renderer_geometry_scale,
             )
+            contain_receipt: dict[str, object] | None = None
+            if self._canvas_session is not None:
+                if canvas_policy is None:
+                    raise SourceNativeGenerationError(
+                        "source_native_canvas_font_policy_missing"
+                    )
+                try:
+                    html, contain_receipt = await self._canvas_session.prepare(html)
+                except ValueError as error:
+                    raise SourceNativeGenerationError(str(error)) from error
             author_elapsed_ms += round((time.monotonic() - author_started_at) * 1000)
             render_started_at = time.monotonic()
-            capture = await render_html_to_png_with_metrics(html)
+            capture_kwargs = self._canvas_session.capture_kwargs if self._canvas_session else {}
+            capture = await render_html_to_png_with_metrics(html, **capture_kwargs)
             render_elapsed_ms += round((time.monotonic() - render_started_at) * 1000)
             quality_started_at = time.monotonic()
             normalized = normalize_browser_metrics(dict(capture.browser_metrics or {}))
+            if contain_receipt is not None:
+                try:
+                    contain_receipt = self._canvas_session.validate_capture(
+                        html=html,
+                        capture_html_digest=capture.html_digest,
+                        normalized_metrics=normalized,
+                        receipt=contain_receipt,
+                        text_expected=any(
+                            unit.kind != "image" and _unit_render_text(unit).strip()
+                            for unit in units
+                        ),
+                    )
+                except ValueError as error:
+                    raise SourceNativeGenerationError(str(error)) from error
             _assert_source_image_readback(
                 rendered_html=html,
                 units=units,
@@ -3601,7 +3542,13 @@ class _SourceNativeExecutor:
             ]
             if (
                 not capture.png
-                or normalized["viewport"] != {"width": 1280, "height": 720}
+                or normalized["viewport"] != (
+                    {
+                        **self._canvas_session.expected_viewport,
+                    }
+                    if self._canvas_session is not None
+                    else {"width": 1280, "height": 720}
+                )
                 or not normalized["fonts_ready"]
                 or report.telemetry_status != "available"
                 or blocking
@@ -3670,6 +3617,17 @@ class _SourceNativeExecutor:
                     frame_role=str(getattr(frame_contract, "role", "content") or "content"),
                     expected_protected_digest=protected_before,
                     observed_protected_digest=protected_after,
+                    canvas_session=self._canvas_session,
+                    font_point_scale=(
+                        self._canvas_session.font_point_scale
+                        if self._canvas_session is not None
+                        else 0.75
+                    ),
+                    minimum_body_font_pt=(
+                        canvas_policy.minimum_physical_pt
+                        if canvas_policy is not None
+                        else SOURCE_NATIVE_MIN_BODY_FONT_PT
+                    ),
                 )
             )
             semantic = _complete_semantic_elements(
@@ -3677,6 +3635,8 @@ class _SourceNativeExecutor:
             )
             captures[narrative_slide.slide_key] = capture
             composition_plans.append(plan)
+            if contain_receipt is not None:
+                contain_receipts.append(contain_receipt)
             integrity_pages.append(integrity_page)
             compiled.append(
                 {
@@ -3685,6 +3645,11 @@ class _SourceNativeExecutor:
                     "semantic": {"elements": semantic},
                     "sourceFrameDigest": selected.selected_frame_digest,
                     "compositionPlanDigest": plan["planDigest"],
+                    **(
+                        {"documentCanvasContainReceipt": contain_receipt}
+                        if contain_receipt is not None
+                        else {}
+                    ),
                 }
             )
             page_evidence.append(
@@ -3694,6 +3659,11 @@ class _SourceNativeExecutor:
                     "htmlDigest": capture.html_digest,
                     "pngDigest": capture.png_digest,
                     "metricsDigest": capture.metrics_digest,
+                    **(
+                        {"documentCanvasContainReceipt": contain_receipt}
+                        if contain_receipt is not None
+                        else {}
+                    ),
                     "blockingIssueCount": 0,
                 }
             )
@@ -3758,7 +3728,11 @@ class _SourceNativeExecutor:
             browser_observations=quality_observations,
             expected_slide_count=len(narrative_slides),
             slide_score_threshold=90.0,
-            minimum_body_font_pt=SOURCE_NATIVE_MIN_BODY_FONT_PT,
+            minimum_body_font_pt=(
+                canvas_policy.minimum_physical_pt
+                if canvas_policy is not None
+                else SOURCE_NATIVE_MIN_BODY_FONT_PT
+            ),
         )
         if (
             not quality_model.document_quality_passed
@@ -3877,6 +3851,11 @@ class _SourceNativeExecutor:
             "contentIntegrityReceipt": integrity,
             "sourceContentQualityEvidence": source_content_quality_evidence,
             "compositionPlans": composition_plans,
+            **(
+                {"documentCanvasContainReceipts": contain_receipts}
+                if self._canvas_session is not None
+                else {}
+            ),
             "sourceVerbatimCapacityAdmission": self._capacity_admission_receipt,
             "strategyReceipt": dict(self._public_route_receipt),
             "styleProfileDigest": self._package.structure.structure_digest,
@@ -3895,6 +3874,15 @@ class _SourceNativeExecutor:
                     "capacityAdmissionDigest"
                 ),
                 "providerCallBudget": model_payload(route.provider_call_budget),
+                **(
+                    {
+                        "documentCanvasContainReceiptDigest": _digest(
+                            contain_receipts
+                        )
+                    }
+                    if self._canvas_session is not None
+                    else {}
+                ),
             },
             "publicationRoute": "source-native",
         }
@@ -3988,6 +3976,12 @@ async def run_source_native_generation(
     brief = str(getattr(request, "content", "") or "")
     source_mode = getattr(request, "source_mode", None)
     try:
+        canvas_session = SourceNativeCanvasSession.from_request(
+            request=request, design_canvas=package.structure.canvas
+        )
+    except ValueError as error:
+        raise SourceNativeGenerationError(str(error)) from error
+    try:
         if source_mode == "source_content_restyle":
             manifest = getattr(request, "_source_content_manifest", None)
             outline = getattr(request, "_source_document_outline", None)
@@ -4011,11 +4005,15 @@ async def run_source_native_generation(
     capacity_receipt: Mapping[str, object] | None = None
     admission_frame_ids: tuple[str, ...] = ()
     if admitted_content_graph is not None:
+        target_capacity_kwargs: dict[str, object] = {}
+        if canvas_session is not None:
+            target_capacity_kwargs = canvas_session.capacity_kwargs
         capacity_receipt = build_source_verbatim_capacity_admission(
             content_graph=admitted_content_graph,
             frames=package.structure.frames,
             frame_structure_digest=package.structure.structure_digest,
             expected_slide_count=slide_count,
+            **target_capacity_kwargs,
         )
         try:
             assert_source_verbatim_capacity_admission(capacity_receipt)
@@ -4062,6 +4060,7 @@ async def run_source_native_generation(
         context=context,
         public_route_receipt=route_receipt,
         capacity_admission_receipt=capacity_receipt,
+        canvas_session=canvas_session,
     )
     if source_mode == "source_content_restyle":
         if admitted_content_graph is None or capacity_receipt is None:

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "presentation.conversation-first-generation-ui",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "기존 업로드에서 시작해 전체 채팅으로 생성 과정을 보여주고, 완료 후 왼쪽 PPT·오른쪽 같은 대화를 유지하는 ChatGPT형 UI를 적용한다.",
+  "scope": [
+    "presentation",
+    "upload",
+    "workspace",
+    "ui"
+  ],
+  "invariants": [
+    "Preserve upload setup; show generation in full-screen chat, then open PPT left and the same conversation right.",
+    "Use right-aligned user bubbles, unboxed assistant replies, compact attachments and collapsed request settings.",
+    "Use one message-list scroll region and a fixed composer; retain drafts and reading position across layout changes.",
+    "Show actual progress and inline errors once; terminal states stop animations and follow indicators.",
+    "Use an 800px conversation and an initial approximate 65:35 PPT/chat split subject to usable panel widths.",
+    "Expose retry, stop and download actions only when supported by current server state and artifact availability."
+  ],
+  "forbidden": [
+    "Reset the conversation on the generation-to-PPT transition.",
+    "Treat the v3 design or historical v2 tests as completed v3 implementation."
+  ],
+  "evidence": [
+    "docs/conversation-first-generation-workspace-design-20260922.md"
+  ],
+  "supersedes": "presentation.conversation-first-generation-ui@1",
+  "recordedAt": "2026-09-22T15:05:07.2555642+00:00"
+}

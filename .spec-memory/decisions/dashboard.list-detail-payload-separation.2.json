@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "dashboard.list-detail-payload-separation",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Exclude large SVG/Authored diagnostics and scenes from list SQL; preserve stored/detail payloads, owner scope and rendering identity.",
+  "scope": [
+    "dashboard",
+    "presentation-list"
+  ],
+  "invariants": [
+    "List SQL omits theme.svg quality, initialQuality and styleSnapshot before database transfer.",
+    "List SQL omits authoredQualityGate, authored_vnext.scene and cover content.svgReceipt.",
+    "Keep ORM owner filtering and transient projections; preserve presentation detail and stored source.",
+    "Preserve profile, capabilities, theme styling, canvas and cover rendering; handle JSON null themes."
+  ],
+  "forbidden": [
+    "Mutating persistent presentation or slide JSON to shrink list responses."
+  ],
+  "evidence": [
+    "servers/fastapi/api/v1/ppt/endpoints/presentation_list_projection.py",
+    "servers/fastapi/api/v1/ppt/endpoints/presentation_crud.py",
+    "servers/fastapi/tests/unit/test_presentation_list_payload.py"
+  ],
+  "supersedes": "dashboard.list-detail-payload-separation@1",
+  "recordedAt": "2026-09-22T06:09:23.8781270+00:00"
+}

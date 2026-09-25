@@ -1,0 +1,640 @@
+{
+  "schemaVersion": "sol-common-repair-paid-runtime/v1",
+  "status": "runtime_accounting_complete_quality_gate_separate",
+  "providerCallsAddedByAggregation": 0,
+  "hashes": {
+    "before": {
+      "samples": "64fca4ffb0aaaf39f23d1c57bfb8f1adbde1e28c1c4da6c639a36ce42ff27c5c",
+      "baselinePrompt": "ea4eaec034eff017e389a42f87f162f7574a108d758a686496aa0eb81bca7ec7",
+      "supplement": "e59f38f3b2bb75b6420feb340d7a10250e5481714c756789c7568685c33741fb",
+      "driver": "24ef147f43bcfcf29497296ec5b208bc63cf3a66f6640d047c9b446220728d7c",
+      "productFitHelper": "3ea4f5108896b0926db08398537b461bba6dd0b157fa377cd88279ffb0e4bea9"
+    },
+    "after": {
+      "samples": "64fca4ffb0aaaf39f23d1c57bfb8f1adbde1e28c1c4da6c639a36ce42ff27c5c",
+      "baselinePrompt": "ea4eaec034eff017e389a42f87f162f7574a108d758a686496aa0eb81bca7ec7",
+      "supplement": "e59f38f3b2bb75b6420feb340d7a10250e5481714c756789c7568685c33741fb",
+      "driver": "24ef147f43bcfcf29497296ec5b208bc63cf3a66f6640d047c9b446220728d7c",
+      "productFitHelper": "3ea4f5108896b0926db08398537b461bba6dd0b157fa377cd88279ffb0e4bea9"
+    },
+    "allEqual": true
+  },
+  "ledger": {
+    "count": 12,
+    "succeeded": 12,
+    "active": 0,
+    "cap": 12
+  },
+  "receipts": {
+    "count": 12,
+    "requestedModelCounts": {
+      "gpt-5.6-sol": 12
+    },
+    "requestedEffortCounts": {
+      "medium": 12
+    },
+    "returnedModelCounts": {
+      "unreported": 12
+    },
+    "usagePresent": 12,
+    "transportReceiptPresent": 12
+  },
+  "outputs": {
+    "paid": 24,
+    "providerZeroDryRunExcluded": 2,
+    "neutralReviewed": 24
+  },
+  "captures": {
+    "offFitFalse": 12,
+    "onFitTrue": 12,
+    "onFitChangedHtml": 2,
+    "onFitFalseVerificationRecaptures": 2,
+    "fitStatusCounts": {
+      "spacing_adjusted": 2,
+      "unchanged": 2,
+      "unresolved": 8
+    },
+    "actualTotal": 26,
+    "htmlPngBindingsPassed": 12
+  },
+  "timingMs": {
+    "authorProviderMs": {
+      "median": 93131.496,
+      "values": [
+        106425.216,
+        100599.985,
+        97321.93,
+        107618.332,
+        73768.44,
+        114724.405,
+        80299.761,
+        85994.263,
+        88941.063,
+        116681.494,
+        82805.351,
+        84684.264
+      ]
+    },
+    "offCaptureMs": {
+      "median": 2929.026,
+      "values": [
+        2984.92,
+        2928.117,
+        2649.105,
+        3693.327,
+        6736.69,
+        2929.936,
+        1629.981,
+        4079.12,
+        3468.517,
+        2520.422,
+        2465.441,
+        2647.034
+      ]
+    },
+    "offInspectionMs": {
+      "median": 75.399,
+      "values": [
+        64.436,
+        93.539,
+        75.014,
+        77.542,
+        65.762,
+        99.37,
+        43.264,
+        75.784,
+        99.262,
+        109.238,
+        33.011,
+        63.95
+      ]
+    },
+    "onAdditionalMs": {
+      "median": 4294.028,
+      "values": [
+        3133.503,
+        4002.968,
+        3644.49,
+        7334.001,
+        5925.01,
+        4388.807,
+        2181.229,
+        4343.173,
+        4244.882,
+        6401.72,
+        2829.957,
+        5876.735
+      ]
+    },
+    "onFitCaptureMs": {
+      "median": 3748.8,
+      "values": [
+        3051.6473,
+        3909.4655,
+        3558.8607,
+        7209.4934,
+        5821.5598,
+        4279.7178,
+        2135.5476,
+        4264.3353,
+        4129.6224,
+        3588.1348,
+        2776.957,
+        2995.1598
+      ]
+    },
+    "onVerifyCaptureMs": {
+      "median": 0.0,
+      "values": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2683.555,
+        0.0,
+        2779.2036
+      ]
+    },
+    "actualTrialTotalMs": {
+      "median": 100815.957,
+      "values": [
+        113285.629,
+        108173.578,
+        104327.239,
+        123839.049,
+        87126.788,
+        122711.702,
+        84666.865,
+        95049.103,
+        97304.674,
+        126256.671,
+        88702.868,
+        93908.633
+      ]
+    },
+    "onVerifyCaptureChangedOnlyMs": {
+      "median": 2731.379,
+      "values": [
+        2683.555,
+        2779.2036
+      ]
+    }
+  },
+  "timingInterpretation": "Author, off capture/inspection, and on additional times remain separate. actualTrialTotalMs is the uninterrupted wall time of this sequential off-then-on experiment, not standalone product latency.",
+  "quality": "See independent join and the separate root/lead quality gate; this runtime report does not promote quality.",
+  "rows": [
+    {
+      "arm": "baseline",
+      "sampleId": "astra-p17",
+      "requestedModel": "gpt-5.6-sol",
+      "requestedEffort": "medium",
+      "returnedModel": null,
+      "usagePresent": true,
+      "transportReceiptPresent": true,
+      "callOrdinal": 5,
+      "authorProviderMs": 106425.216,
+      "offCaptureMs": 2984.92,
+      "offInspectionMs": 64.436,
+      "onAdditionalMs": 3133.503,
+      "onFitCaptureMs": 3051.6473,
+      "onVerifyCaptureMs": 0.0,
+      "fitStatus": "unresolved",
+      "actualTrialTotalMs": 113285.629,
+      "sharedAuthorThroughOffInspectionMs": 110086.092,
+      "fitChangedHtml": false,
+      "offHtmlPngBound": true,
+      "onHtmlPngBound": true
+    },
+    {
+      "arm": "baseline",
+      "sampleId": "astra-p19",
+      "requestedModel": "gpt-5.6-sol",
+      "requestedEffort": "medium",
+      "returnedModel": null,
+      "usagePresent": true,
+      "transportReceiptPresent": true,
+      "callOrdinal": 12,
+      "authorProviderMs": 100599.985,
+      "offCaptureMs": 2928.117,
+      "offInspectionMs": 93.539,
+      "onAdditionalMs": 4002.968,
+      "onFitCaptureMs": 3909.4655,
+      "onVerifyCaptureMs": 0.0,
+      "fitStatus": "unresolved",
+      "actualTrialTotalMs": 108173.578,
+      "sharedAuthorThroughOffInspectionMs": 104083.232,
+      "fitChangedHtml": false,
+      "offHtmlPngBound": true,
+      "onHtmlPngBound": true
+    },
+    {
+      "arm": "baseline",
+      "sampleId": "astra-p25",
+      "requestedModel": "gpt-5.6-sol",
+      "requestedEffort": "medium",
+      "returnedModel": null,
+      "usagePresent": true,
+      "transportReceiptPresent": true,
+      "callOrdinal": 8,
+      "authorProviderMs": 97321.93,
+      "offCaptureMs": 2649.105,
+      "offInspectionMs": 75.014,
+      "onAdditionalMs": 3644.49,
+      "onFitCaptureMs": 3558.8607,
+      "onVerifyCaptureMs": 0.0,
+      "fitStatus": "unresolved",
+      "actualTrialTotalMs": 104327.239,
+      "sharedAuthorThroughOffInspectionMs": 100616.092,
+      "fitChangedHtml": false,
+      "offHtmlPngBound": true,
+      "onHtmlPngBound": true
+    },
+    {
+      "arm": "baseline",
+      "sampleId": "sol-p02",
+      "requestedModel": "gpt-5.6-sol",
+      "requestedEffort": "medium",
+      "returnedModel": null,
+      "usagePresent": true,
+      "transportReceiptPresent": true,
+      "callOrdinal": 1,
+      "authorProviderMs": 107618.332,
+      "offCaptureMs": 3693.327,
+      "offInspectionMs": 77.542,
+      "onAdditionalMs": 7334.001,
+      "onFitCaptureMs": 7209.4934,
+      "onVerifyCaptureMs": 0.0,
+      "fitStatus": "unresolved",
+      "actualTrialTotalMs": 123839.049,
+      "sharedAuthorThroughOffInspectionMs": 116398.843,
+      "fitChangedHtml": false,
+      "offHtmlPngBound": true,
+      "onHtmlPngBound": true
+    },
+    {
+      "arm": "baseline",
+      "sampleId": "sol-p06",
+      "requestedModel": "gpt-5.6-sol",
+      "requestedEffort": "medium",
+      "returnedModel": null,
+      "usagePresent": true,
+      "transportReceiptPresent": true,
+      "callOrdinal": 9,
+      "authorProviderMs": 73768.44,
+      "offCaptureMs": 6736.69,
+      "offInspectionMs": 65.762,
+      "onAdditionalMs": 5925.01,
+      "onFitCaptureMs": 5821.5598,
+      "onVerifyCaptureMs": 0.0,
+      "fitStatus": "unchanged",
+      "actualTrialTotalMs": 87126.788,
+      "sharedAuthorThroughOffInspectionMs": 81100.457,
+      "fitChangedHtml": false,
+      "offHtmlPngBound": true,
+      "onHtmlPngBound": true
+    },
+    {
+      "arm": "baseline",
+      "sampleId": "sol-p28",
+      "requestedModel": "gpt-5.6-sol",
+      "requestedEffort": "medium",
+      "returnedModel": null,
+      "usagePresent": true,
+      "transportReceiptPresent": true,
+      "callOrdinal": 4,
+      "authorProviderMs": 114724.405,
+      "offCaptureMs": 2929.936,
+      "offInspectionMs": 99.37,
+      "onAdditionalMs": 4388.807,
+      "onFitCaptureMs": 4279.7178,
+      "onVerifyCaptureMs": 0.0,
+      "fitStatus": "unresolved",
+      "actualTrialTotalMs": 122711.702,
+      "sharedAuthorThroughOffInspectionMs": 118219.93,
+      "fitChangedHtml": false,
+      "offHtmlPngBound": true,
+      "onHtmlPngBound": true
+    },
+    {
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "astra-p17",
+      "requestedModel": "gpt-5.6-sol",
+      "requestedEffort": "medium",
+      "returnedModel": null,
+      "usagePresent": true,
+      "transportReceiptPresent": true,
+      "callOrdinal": 6,
+      "authorProviderMs": 80299.761,
+      "offCaptureMs": 1629.981,
+      "offInspectionMs": 43.264,
+      "onAdditionalMs": 2181.229,
+      "onFitCaptureMs": 2135.5476,
+      "onVerifyCaptureMs": 0.0,
+      "fitStatus": "unresolved",
+      "actualTrialTotalMs": 84666.865,
+      "sharedAuthorThroughOffInspectionMs": 82451.123,
+      "fitChangedHtml": false,
+      "offHtmlPngBound": true,
+      "onHtmlPngBound": true
+    },
+    {
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "astra-p19",
+      "requestedModel": "gpt-5.6-sol",
+      "requestedEffort": "medium",
+      "returnedModel": null,
+      "usagePresent": true,
+      "transportReceiptPresent": true,
+      "callOrdinal": 11,
+      "authorProviderMs": 85994.263,
+      "offCaptureMs": 4079.12,
+      "offInspectionMs": 75.784,
+      "onAdditionalMs": 4343.173,
+      "onFitCaptureMs": 4264.3353,
+      "onVerifyCaptureMs": 0.0,
+      "fitStatus": "unresolved",
+      "actualTrialTotalMs": 95049.103,
+      "sharedAuthorThroughOffInspectionMs": 90631.558,
+      "fitChangedHtml": false,
+      "offHtmlPngBound": true,
+      "onHtmlPngBound": true
+    },
+    {
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "astra-p25",
+      "requestedModel": "gpt-5.6-sol",
+      "requestedEffort": "medium",
+      "returnedModel": null,
+      "usagePresent": true,
+      "transportReceiptPresent": true,
+      "callOrdinal": 7,
+      "authorProviderMs": 88941.063,
+      "offCaptureMs": 3468.517,
+      "offInspectionMs": 99.262,
+      "onAdditionalMs": 4244.882,
+      "onFitCaptureMs": 4129.6224,
+      "onVerifyCaptureMs": 0.0,
+      "fitStatus": "unresolved",
+      "actualTrialTotalMs": 97304.674,
+      "sharedAuthorThroughOffInspectionMs": 92990.187,
+      "fitChangedHtml": false,
+      "offHtmlPngBound": true,
+      "onHtmlPngBound": true
+    },
+    {
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "sol-p02",
+      "requestedModel": "gpt-5.6-sol",
+      "requestedEffort": "medium",
+      "returnedModel": null,
+      "usagePresent": true,
+      "transportReceiptPresent": true,
+      "callOrdinal": 2,
+      "authorProviderMs": 116681.494,
+      "offCaptureMs": 2520.422,
+      "offInspectionMs": 109.238,
+      "onAdditionalMs": 6401.72,
+      "onFitCaptureMs": 3588.1348,
+      "onVerifyCaptureMs": 2683.555,
+      "fitStatus": "spacing_adjusted",
+      "actualTrialTotalMs": 126256.671,
+      "sharedAuthorThroughOffInspectionMs": 119746.654,
+      "fitChangedHtml": true,
+      "offHtmlPngBound": true,
+      "onHtmlPngBound": true
+    },
+    {
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "sol-p06",
+      "requestedModel": "gpt-5.6-sol",
+      "requestedEffort": "medium",
+      "returnedModel": null,
+      "usagePresent": true,
+      "transportReceiptPresent": true,
+      "callOrdinal": 10,
+      "authorProviderMs": 82805.351,
+      "offCaptureMs": 2465.441,
+      "offInspectionMs": 33.011,
+      "onAdditionalMs": 2829.957,
+      "onFitCaptureMs": 2776.957,
+      "onVerifyCaptureMs": 0.0,
+      "fitStatus": "unchanged",
+      "actualTrialTotalMs": 88702.868,
+      "sharedAuthorThroughOffInspectionMs": 85805.677,
+      "fitChangedHtml": false,
+      "offHtmlPngBound": true,
+      "onHtmlPngBound": true
+    },
+    {
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "sol-p28",
+      "requestedModel": "gpt-5.6-sol",
+      "requestedEffort": "medium",
+      "returnedModel": null,
+      "usagePresent": true,
+      "transportReceiptPresent": true,
+      "callOrdinal": 3,
+      "authorProviderMs": 84684.264,
+      "offCaptureMs": 2647.034,
+      "offInspectionMs": 63.95,
+      "onAdditionalMs": 5876.735,
+      "onFitCaptureMs": 2995.1598,
+      "onVerifyCaptureMs": 2779.2036,
+      "fitStatus": "spacing_adjusted",
+      "actualTrialTotalMs": 93908.633,
+      "sharedAuthorThroughOffInspectionMs": 87948.814,
+      "fitChangedHtml": true,
+      "offHtmlPngBound": true,
+      "onHtmlPngBound": true
+    }
+  ],
+  "timingByArmMs": {
+    "baseline": {
+      "authorProviderMs": {
+        "median": 103512.601,
+        "values": [
+          106425.216,
+          100599.985,
+          97321.93,
+          107618.332,
+          73768.44,
+          114724.405
+        ]
+      },
+      "offCaptureMs": {
+        "median": 2957.428,
+        "values": [
+          2984.92,
+          2928.117,
+          2649.105,
+          3693.327,
+          6736.69,
+          2929.936
+        ]
+      },
+      "offInspectionMs": {
+        "median": 76.278,
+        "values": [
+          64.436,
+          93.539,
+          75.014,
+          77.542,
+          65.762,
+          99.37
+        ]
+      },
+      "sharedAuthorThroughOffInspectionMs": {
+        "median": 107084.662,
+        "values": [
+          110086.092,
+          104083.232,
+          100616.092,
+          116398.843,
+          81100.457,
+          118219.93
+        ]
+      },
+      "onAdditionalMs": {
+        "median": 4195.887,
+        "values": [
+          3133.503,
+          4002.968,
+          3644.49,
+          7334.001,
+          5925.01,
+          4388.807
+        ]
+      }
+    },
+    "dense-layout-supplement-v1": {
+      "authorProviderMs": {
+        "median": 85339.264,
+        "values": [
+          80299.761,
+          85994.263,
+          88941.063,
+          116681.494,
+          82805.351,
+          84684.264
+        ]
+      },
+      "offCaptureMs": {
+        "median": 2583.728,
+        "values": [
+          1629.981,
+          4079.12,
+          3468.517,
+          2520.422,
+          2465.441,
+          2647.034
+        ]
+      },
+      "offInspectionMs": {
+        "median": 69.867,
+        "values": [
+          43.264,
+          75.784,
+          99.262,
+          109.238,
+          33.011,
+          63.95
+        ]
+      },
+      "sharedAuthorThroughOffInspectionMs": {
+        "median": 89290.186,
+        "values": [
+          82451.123,
+          90631.558,
+          92990.187,
+          119746.654,
+          85805.677,
+          87948.814
+        ]
+      },
+      "onAdditionalMs": {
+        "median": 4294.028,
+        "values": [
+          2181.229,
+          4343.173,
+          4244.882,
+          6401.72,
+          2829.957,
+          5876.735
+        ]
+      }
+    }
+  },
+  "sameSamplePromptPairs": [
+    {
+      "sampleId": "astra-p17",
+      "differenceDirection": "improved-minus-baseline",
+      "differenceMs": {
+        "authorProviderMs": -26125.455,
+        "offCaptureMs": -1354.939,
+        "offInspectionMs": -21.172,
+        "sharedAuthorThroughOffInspectionMs": -27634.969,
+        "onAdditionalMs": -952.274
+      }
+    },
+    {
+      "sampleId": "astra-p19",
+      "differenceDirection": "improved-minus-baseline",
+      "differenceMs": {
+        "authorProviderMs": -14605.722,
+        "offCaptureMs": 1151.003,
+        "offInspectionMs": -17.755,
+        "sharedAuthorThroughOffInspectionMs": -13451.674,
+        "onAdditionalMs": 340.205
+      }
+    },
+    {
+      "sampleId": "astra-p25",
+      "differenceDirection": "improved-minus-baseline",
+      "differenceMs": {
+        "authorProviderMs": -8380.867,
+        "offCaptureMs": 819.412,
+        "offInspectionMs": 24.248,
+        "sharedAuthorThroughOffInspectionMs": -7625.905,
+        "onAdditionalMs": 600.392
+      }
+    },
+    {
+      "sampleId": "sol-p02",
+      "differenceDirection": "improved-minus-baseline",
+      "differenceMs": {
+        "authorProviderMs": 9063.162,
+        "offCaptureMs": -1172.905,
+        "offInspectionMs": 31.696,
+        "sharedAuthorThroughOffInspectionMs": 3347.811,
+        "onAdditionalMs": -932.281
+      }
+    },
+    {
+      "sampleId": "sol-p06",
+      "differenceDirection": "improved-minus-baseline",
+      "differenceMs": {
+        "authorProviderMs": 9036.911,
+        "offCaptureMs": -4271.249,
+        "offInspectionMs": -32.751,
+        "sharedAuthorThroughOffInspectionMs": 4705.22,
+        "onAdditionalMs": -3095.053
+      }
+    },
+    {
+      "sampleId": "sol-p28",
+      "differenceDirection": "improved-minus-baseline",
+      "differenceMs": {
+        "authorProviderMs": -30040.141,
+        "offCaptureMs": -282.902,
+        "offInspectionMs": -35.42,
+        "sharedAuthorThroughOffInspectionMs": -30271.116,
+        "onAdditionalMs": 1487.928
+      }
+    }
+  ]
+}

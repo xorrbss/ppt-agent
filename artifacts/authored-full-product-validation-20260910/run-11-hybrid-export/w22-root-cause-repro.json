@@ -1,0 +1,1614 @@
+{
+  "schemaVersion": "w22-hybrid-text-break-repro/v1",
+  "slideNumber": 20,
+  "target": {
+    "id": "q-phone-step-1",
+    "selectedForNativeLayer": false,
+    "classification": {
+      "mode": "raster",
+      "candidateKind": "text",
+      "reasons": [
+        "decorated-text",
+        "ambiguous-whitespace"
+      ]
+    },
+    "plainText": "짧게 소개\n→",
+    "paragraphs": [
+      "짧게 소개",
+      "→"
+    ],
+    "runs": [
+      {
+        "text": "짧게 소개",
+        "bounds": {
+          "px": {
+            "x": 114,
+            "y": 346,
+            "width": 75.25,
+            "height": 27
+          },
+          "inches": {
+            "x": 1.1875,
+            "y": 3.604167,
+            "width": 0.783854,
+            "height": 0.28125
+          }
+        },
+        "fragments": [
+          {
+            "px": {
+              "x": 114,
+              "y": 346,
+              "width": 75.25,
+              "height": 27
+            },
+            "inches": {
+              "x": 1.1875,
+              "y": 3.604167,
+              "width": 0.783854,
+              "height": 0.28125
+            }
+          }
+        ],
+        "style": {
+          "fontFamily": "Noto Sans KR",
+          "fontFamilies": [
+            "Noto Sans KR",
+            "Malgun Gothic",
+            "sans-serif"
+          ],
+          "cjkFallbackFamilies": [
+            "Malgun Gothic",
+            "Noto Sans KR",
+            "Apple SD Gothic Neo",
+            "Arial Unicode MS",
+            "sans-serif"
+          ],
+          "fontSizePt": 14.25,
+          "fontWeight": 600,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "strike": false,
+          "color": {
+            "hex": "1D1D1B",
+            "alpha": 1
+          },
+          "letterSpacingPt": 0,
+          "lineHeight": {
+            "points": 21.750003,
+            "multiple": 1.526316,
+            "source": "computed"
+          },
+          "horizontalAlignment": "left",
+          "verticalAlignment": "middle",
+          "direction": "ltr",
+          "wrapMode": "wrap"
+        },
+        "script": "cjk",
+        "lineIndex": 0
+      },
+      {
+        "text": "→",
+        "bounds": {
+          "px": {
+            "x": 193.25,
+            "y": 344.5,
+            "width": 20,
+            "height": 29
+          },
+          "inches": {
+            "x": 2.013021,
+            "y": 3.588542,
+            "width": 0.208333,
+            "height": 0.302083
+          }
+        },
+        "fragments": [
+          {
+            "px": {
+              "x": 193.25,
+              "y": 344.5,
+              "width": 20,
+              "height": 29
+            },
+            "inches": {
+              "x": 2.013021,
+              "y": 3.588542,
+              "width": 0.208333,
+              "height": 0.302083
+            }
+          }
+        ],
+        "style": {
+          "fontFamily": "Noto Sans KR",
+          "fontFamilies": [
+            "Noto Sans KR",
+            "Malgun Gothic",
+            "sans-serif"
+          ],
+          "cjkFallbackFamilies": [],
+          "fontSizePt": 15,
+          "fontWeight": 700,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "strike": false,
+          "color": {
+            "hex": "08916E",
+            "alpha": 1
+          },
+          "letterSpacingPt": 0,
+          "lineHeight": {
+            "points": 15,
+            "multiple": 1,
+            "source": "computed"
+          },
+          "horizontalAlignment": "left",
+          "verticalAlignment": "top",
+          "direction": "ltr",
+          "wrapMode": "wrap"
+        },
+        "script": "common",
+        "lineIndex": 0
+      }
+    ],
+    "paragraphDerivedBreaks": 1,
+    "measuredHardBreaks": 0
+  },
+  "quality": {
+    "slideNumber": 20,
+    "editable": true,
+    "imageFallback": false,
+    "nativeTextElements": 3,
+    "nativeShapeElements": 25,
+    "nativeChartElements": 0,
+    "nativeTableElements": 0,
+    "nativeGroupElements": 0,
+    "nativeImageElements": 0,
+    "rasterFallbackElements": 40,
+    "logicalCoverage": {
+      "nativeText": 3,
+      "nativeImage": 0,
+      "nativeShape": 25,
+      "nativeChart": 0,
+      "nativeGroup": 0,
+      "rasterRemaining": 40
+    },
+    "ooxmlReadback": {
+      "status": "not-run",
+      "nativeText": 0,
+      "nativeImage": 0,
+      "nativeShape": 0,
+      "nativeChart": 0,
+      "nativeGroup": 0,
+      "rasterRemaining": 0
+    },
+    "backplateCount": 22,
+    "typographyIssues": [
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-div-54fdca616fb4"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-div-54fdca616fb4"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-div-54fdca616fb4"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-div-54fdca616fb4"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "source-block-69c116e93defbdc5"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "source-block-69c116e93defbdc5"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "source-block-69c116e93defbdc5"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "source-block-69c116e93defbdc5"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "source-block-69c116e93defbdc5"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "source-block-69c116e93defbdc5"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "source-block-69c116e93defbdc5"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "source-block-69c116e93defbdc5"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "source-block-69c116e93defbdc5"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "source-block-69c116e93defbdc5"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "source-block-69c116e93defbdc5"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "source-block-69c116e93defbdc5"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "source-block-52f3ff5b7504ce76"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "source-block-52f3ff5b7504ce76"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "source-block-52f3ff5b7504ce76"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "source-block-52f3ff5b7504ce76"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "source-block-52f3ff5b7504ce76"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "source-block-52f3ff5b7504ce76"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-intro-note"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-intro-note"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-intro-note"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-intro-note"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-intro-note"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-intro-note"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-strong-663977331dde"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-strong-663977331dde"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-strong-663977331dde"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-strong-663977331dde"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-title-phone"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-title-phone"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-phone-step-1"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-phone-step-1"
+      },
+      {
+        "code": "line-break-mismatch",
+        "elementId": "q-span-7c3a384ec165"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-phone-step-2"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-phone-step-2"
+      },
+      {
+        "code": "line-break-mismatch",
+        "elementId": "q-span-73ff0e310dd7"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-phone-step-3"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-phone-step-3"
+      },
+      {
+        "code": "line-break-mismatch",
+        "elementId": "q-span-bc7a0125f889"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-phone-step-4"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-phone-step-4"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-title-instagram"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-title-instagram"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-title-instagram"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-title-instagram"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-instagram-step-1"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-instagram-step-1"
+      },
+      {
+        "code": "line-break-mismatch",
+        "elementId": "q-span-585ed20115fa"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-instagram-step-2"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-instagram-step-2"
+      },
+      {
+        "code": "line-break-mismatch",
+        "elementId": "q-span-b3abe04dd3f4"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-instagram-step-3"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-instagram-step-3"
+      },
+      {
+        "code": "line-break-mismatch",
+        "elementId": "q-span-8a1240b4444f"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-instagram-step-4"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-instagram-step-4"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-title-visit"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-title-visit"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-visit-step-1"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-visit-step-1"
+      },
+      {
+        "code": "line-break-mismatch",
+        "elementId": "q-span-77f11232ae5a"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-visit-step-2"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-visit-step-2"
+      },
+      {
+        "code": "line-break-mismatch",
+        "elementId": "q-span-91757515ddc5"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-visit-step-3"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-visit-step-3"
+      },
+      {
+        "code": "line-break-mismatch",
+        "elementId": "q-span-94d91eaef124"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "q-visit-step-4"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "q-visit-step-4"
+      },
+      {
+        "code": "embedding-face-missing",
+        "elementId": "source-block-c78ed5381f160ce0"
+      },
+      {
+        "code": "font-substitution",
+        "elementId": "source-block-c78ed5381f160ce0"
+      }
+    ],
+    "fallbackReasons": [
+      "unsupported-shape",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "unsupported-shape",
+      "unsupported-shape",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "unsupported-shape",
+      "unsupported-shape",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "unsupported-shape",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "typography-line-break-mismatch",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "typography-line-break-mismatch",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "typography-line-break-mismatch",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "unsupported-shape",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "unsupported-shape",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "typography-line-break-mismatch",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "typography-line-break-mismatch",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "typography-line-break-mismatch",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "unsupported-shape",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "unsupported-shape",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "typography-line-break-mismatch",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "typography-line-break-mismatch",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "typography-line-break-mismatch",
+      "typography-embedding-face-missing",
+      "typography-font-substitution",
+      "typography-embedding-face-missing",
+      "typography-font-substitution"
+    ],
+    "fallbackElements": [
+      {
+        "elementId": "q-div-76f0d626b7f0",
+        "domPath": "body > div:nth-of-type(1) > div:nth-of-type(1)",
+        "candidateKind": "shape",
+        "reasons": [
+          "unsupported-shape"
+        ]
+      },
+      {
+        "elementId": "q-div-54fdca616fb4",
+        "domPath": "body > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "source-block-69c116e93defbdc5",
+        "domPath": "body > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "q-div-66757db28fba",
+        "domPath": "body > div:nth-of-type(2)",
+        "candidateKind": "shape",
+        "reasons": [
+          "unsupported-shape"
+        ]
+      },
+      {
+        "elementId": "q-div-8078537fbb51",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(1)",
+        "candidateKind": "shape",
+        "reasons": [
+          "unsupported-shape"
+        ]
+      },
+      {
+        "elementId": "source-block-52f3ff5b7504ce76",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "q-intro-note",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "q-strong-663977331dde",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2) > strong:nth-of-type(1)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "q-div-beb8611456c7",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2)",
+        "candidateKind": "shape",
+        "reasons": [
+          "unsupported-shape"
+        ]
+      },
+      {
+        "elementId": "source-block-86b3b5d52d2f7fe6",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1)",
+        "candidateKind": "shape",
+        "reasons": [
+          "unsupported-shape"
+        ]
+      },
+      {
+        "elementId": "q-title-phone",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "source-block-0d298484b20206a0",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(3)",
+        "candidateKind": "shape",
+        "reasons": [
+          "unsupported-shape"
+        ]
+      },
+      {
+        "elementId": "q-phone-step-1",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(3) > div:nth-of-type(1)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "q-span-7c3a384ec165",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(3) > div:nth-of-type(1) > span:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-line-break-mismatch"
+        ]
+      },
+      {
+        "elementId": "q-phone-step-2",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(3) > div:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "q-span-73ff0e310dd7",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(3) > div:nth-of-type(2) > span:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-line-break-mismatch"
+        ]
+      },
+      {
+        "elementId": "q-phone-step-3",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(3) > div:nth-of-type(3)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "q-span-bc7a0125f889",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(3) > div:nth-of-type(3) > span:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-line-break-mismatch"
+        ]
+      },
+      {
+        "elementId": "q-phone-step-4",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(3) > div:nth-of-type(4)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "source-block-bc9b99a313aeef8f",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1)",
+        "candidateKind": "shape",
+        "reasons": [
+          "unsupported-shape"
+        ]
+      },
+      {
+        "elementId": "q-title-instagram",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "source-block-cf8e278cddd926e4",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3)",
+        "candidateKind": "shape",
+        "reasons": [
+          "unsupported-shape"
+        ]
+      },
+      {
+        "elementId": "q-instagram-step-1",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(1)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "q-span-585ed20115fa",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(1) > span:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-line-break-mismatch"
+        ]
+      },
+      {
+        "elementId": "q-instagram-step-2",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "q-span-b3abe04dd3f4",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(2) > span:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-line-break-mismatch"
+        ]
+      },
+      {
+        "elementId": "q-instagram-step-3",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(3)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "q-span-8a1240b4444f",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(3) > span:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-line-break-mismatch"
+        ]
+      },
+      {
+        "elementId": "q-instagram-step-4",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(4)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "source-block-1e10c5bb5e08300c",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(1)",
+        "candidateKind": "shape",
+        "reasons": [
+          "unsupported-shape"
+        ]
+      },
+      {
+        "elementId": "q-title-visit",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(1) > div:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "source-block-0b50ad5119aedc7f",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(3)",
+        "candidateKind": "shape",
+        "reasons": [
+          "unsupported-shape"
+        ]
+      },
+      {
+        "elementId": "q-visit-step-1",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(3) > div:nth-of-type(1)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "q-span-77f11232ae5a",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(3) > div:nth-of-type(1) > span:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-line-break-mismatch"
+        ]
+      },
+      {
+        "elementId": "q-visit-step-2",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(3) > div:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "q-span-91757515ddc5",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(3) > div:nth-of-type(2) > span:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-line-break-mismatch"
+        ]
+      },
+      {
+        "elementId": "q-visit-step-3",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(3) > div:nth-of-type(3)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "q-span-94d91eaef124",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(3) > div:nth-of-type(3) > span:nth-of-type(2)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-line-break-mismatch"
+        ]
+      },
+      {
+        "elementId": "q-visit-step-4",
+        "domPath": "body > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(3) > div:nth-of-type(4)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      },
+      {
+        "elementId": "source-block-c78ed5381f160ce0",
+        "domPath": "body > div:nth-of-type(3)",
+        "candidateKind": "text",
+        "reasons": [
+          "typography-embedding-face-missing",
+          "typography-font-substitution"
+        ]
+      }
+    ],
+    "qidCoverage": [
+      {
+        "elementId": "q-div-75dcf98740c9",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-div-76f0d626b7f0",
+        "kind": "shape",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-div-54fdca616fb4",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "source-block-69c116e93defbdc5",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-div-59f86380b966",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-div-66757db28fba",
+        "kind": "shape",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-div-8078537fbb51",
+        "kind": "shape",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "source-block-52f3ff5b7504ce76",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-intro-note",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-strong-663977331dde",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-div-beb8611456c7",
+        "kind": "shape",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-card-phone",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "source-block-86b3b5d52d2f7fe6",
+        "kind": "shape",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-icon-phone",
+        "kind": "text",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-title-phone",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-div-e24a51b44c9c",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "source-block-0d298484b20206a0",
+        "kind": "shape",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-phone-step-1",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-033b803a3496",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-7c3a384ec165",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-phone-step-2",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-fc207920a74a",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-73ff0e310dd7",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-phone-step-3",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-95881a75f87f",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-bc7a0125f889",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-phone-step-4",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-36ed9faf794f",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-div-94b1303e9db3",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-div-b17c1f5e9b84",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-card-instagram",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "source-block-bc9b99a313aeef8f",
+        "kind": "shape",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-icon-instagram",
+        "kind": "text",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-title-instagram",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-div-0b8bad9e5967",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "source-block-cf8e278cddd926e4",
+        "kind": "shape",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-instagram-step-1",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-0f65b870aa44",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-585ed20115fa",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-instagram-step-2",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-cf4e843e5c9a",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-b3abe04dd3f4",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-instagram-step-3",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-d1521ae52705",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-8a1240b4444f",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-instagram-step-4",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-89e6d875398f",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-div-f4927021e98c",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-div-1fb143577360",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-card-visit",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "source-block-1e10c5bb5e08300c",
+        "kind": "shape",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-icon-visit",
+        "kind": "text",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-title-visit",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-div-7a9c3ff3b470",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "source-block-0b50ad5119aedc7f",
+        "kind": "shape",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-visit-step-1",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-0663df6b074f",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-77f11232ae5a",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-visit-step-2",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-18801e02e24b",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-91757515ddc5",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-visit-step-3",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-812cc79bd6e2",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-span-94d91eaef124",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-visit-step-4",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-div-70f44fb884bd",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "q-div-18cbc1d41d9b",
+        "kind": "shape",
+        "logical": "native",
+        "ooxml": "not-run",
+        "com": "not-run"
+      },
+      {
+        "elementId": "source-block-c78ed5381f160ce0",
+        "kind": "text",
+        "logical": "raster",
+        "ooxml": "not-run",
+        "com": "not-run"
+      }
+    ],
+    "geometryContract": {
+      "schemaVersion": "presenton.hybrid-geometry/v1",
+      "chromiumDigest": "sha256:55ecb409755b1e2ca52491e577a5e7ede5df1f464b6764e5483f33641e61e2ee",
+      "elements": [
+        {
+          "elementId": "q-card-instagram",
+          "kind": "shape",
+          "x": 456,
+          "y": 204,
+          "width": 368,
+          "height": 417
+        },
+        {
+          "elementId": "q-card-phone",
+          "kind": "shape",
+          "x": 64,
+          "y": 204,
+          "width": 368,
+          "height": 417
+        },
+        {
+          "elementId": "q-card-visit",
+          "kind": "shape",
+          "x": 848,
+          "y": 204,
+          "width": 368,
+          "height": 417
+        },
+        {
+          "elementId": "q-div-0b8bad9e5967",
+          "kind": "shape",
+          "x": 485,
+          "y": 309,
+          "width": 310,
+          "height": 1
+        },
+        {
+          "elementId": "q-div-18cbc1d41d9b",
+          "kind": "shape",
+          "x": 877,
+          "y": 588,
+          "width": 161.187507,
+          "height": 5
+        },
+        {
+          "elementId": "q-div-1fb143577360",
+          "kind": "shape",
+          "x": 485,
+          "y": 588,
+          "width": 235.593701,
+          "height": 5
+        },
+        {
+          "elementId": "q-div-59f86380b966",
+          "kind": "shape",
+          "x": 0,
+          "y": 101,
+          "width": 1280,
+          "height": 3
+        },
+        {
+          "elementId": "q-div-70f44fb884bd",
+          "kind": "shape",
+          "x": 877,
+          "y": 588,
+          "width": 310,
+          "height": 5
+        },
+        {
+          "elementId": "q-div-75dcf98740c9",
+          "kind": "shape",
+          "x": 0,
+          "y": 0,
+          "width": 1280,
+          "height": 104
+        },
+        {
+          "elementId": "q-div-7a9c3ff3b470",
+          "kind": "shape",
+          "x": 877,
+          "y": 309,
+          "width": 310,
+          "height": 1
+        },
+        {
+          "elementId": "q-div-94b1303e9db3",
+          "kind": "shape",
+          "x": 93,
+          "y": 588,
+          "width": 310,
+          "height": 5
+        },
+        {
+          "elementId": "q-div-b17c1f5e9b84",
+          "kind": "shape",
+          "x": 93,
+          "y": 588,
+          "width": 310,
+          "height": 5
+        },
+        {
+          "elementId": "q-div-e24a51b44c9c",
+          "kind": "shape",
+          "x": 93,
+          "y": 309,
+          "width": 310,
+          "height": 1
+        },
+        {
+          "elementId": "q-div-f4927021e98c",
+          "kind": "shape",
+          "x": 485,
+          "y": 588,
+          "width": 310,
+          "height": 5
+        },
+        {
+          "elementId": "q-icon-instagram",
+          "kind": "text",
+          "x": 485,
+          "y": 233,
+          "width": 42,
+          "height": 42
+        },
+        {
+          "elementId": "q-icon-phone",
+          "kind": "text",
+          "x": 93,
+          "y": 233,
+          "width": 42,
+          "height": 42
+        },
+        {
+          "elementId": "q-icon-visit",
+          "kind": "text",
+          "x": 877,
+          "y": 233,
+          "width": 42,
+          "height": 42
+        },
+        {
+          "elementId": "q-span-033b803a3496",
+          "kind": "shape",
+          "x": 93,
+          "y": 356,
+          "width": 7,
+          "height": 7
+        },
+        {
+          "elementId": "q-span-0663df6b074f",
+          "kind": "shape",
+          "x": 877,
+          "y": 356,
+          "width": 7,
+          "height": 7
+        },
+        {
+          "elementId": "q-span-0f65b870aa44",
+          "kind": "shape",
+          "x": 485,
+          "y": 356,
+          "width": 7,
+          "height": 7
+        },
+        {
+          "elementId": "q-span-18801e02e24b",
+          "kind": "shape",
+          "x": 877,
+          "y": 408,
+          "width": 7,
+          "height": 7
+        },
+        {
+          "elementId": "q-span-36ed9faf794f",
+          "kind": "shape",
+          "x": 93,
+          "y": 512.500052,
+          "width": 7,
+          "height": 7
+        },
+        {
+          "elementId": "q-span-812cc79bd6e2",
+          "kind": "shape",
+          "x": 877,
+          "y": 460,
+          "width": 7,
+          "height": 7
+        },
+        {
+          "elementId": "q-span-89e6d875398f",
+          "kind": "shape",
+          "x": 485,
+          "y": 512.500052,
+          "width": 7,
+          "height": 7
+        },
+        {
+          "elementId": "q-span-95881a75f87f",
+          "kind": "shape",
+          "x": 93,
+          "y": 460,
+          "width": 7,
+          "height": 7
+        },
+        {
+          "elementId": "q-span-cf4e843e5c9a",
+          "kind": "shape",
+          "x": 485,
+          "y": 408,
+          "width": 7,
+          "height": 7
+        },
+        {
+          "elementId": "q-span-d1521ae52705",
+          "kind": "shape",
+          "x": 485,
+          "y": 460,
+          "width": 7,
+          "height": 7
+        },
+        {
+          "elementId": "q-span-fc207920a74a",
+          "kind": "shape",
+          "x": 93,
+          "y": 408,
+          "width": 7,
+          "height": 7
+        }
+      ]
+    },
+    "semanticReceipts": {
+      "observationReceiptDigest": "sha256:b8dafcb77488cb2f86f9383ecb57d429c40d965326aaaf5c014e46aa47c103b0",
+      "nativeAdmissionReceiptDigest": "sha256:e052da5d0f23b3d24773534fd1eb9087bb066097a1fa7793dbdf59b5409833b7",
+      "hybridPlanDigest": "sha256:a8c0eeff778b8dcbcd16d1a5d1e7c60009628d15c1af07f997c3926f1a7d9223"
+    }
+  },
+  "assembler": {
+    "ok": true,
+    "bytes": 7958361
+  }
+}

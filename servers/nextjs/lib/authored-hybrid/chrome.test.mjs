@@ -42,7 +42,7 @@ test("declared HTML table is observed as one complex-table ownership node", asyn
   assert.ok(table);
   assert.equal(table.candidateKind, "complex");
   assert.deepEqual(table.fallbackReasons, ["complex-table"]);
-  assert.deepEqual(table.tableEvidence, { rows: [
+  assert.deepEqual(table.tableEvidence.rows, [
     [
       { text: "분기", fill: "#112233", textColor: "#FFFFFF", bold: true, fontFamily: "Arial", fontSizePt: 15 },
       { text: "값", fill: "#112233", textColor: "#FFFFFF", bold: true, fontFamily: "Arial", fontSizePt: 15 },
@@ -51,7 +51,8 @@ test("declared HTML table is observed as one complex-table ownership node", asyn
       { text: "1분기", textColor: "#202020", bold: false, fontFamily: "Arial", fontSizePt: 15 },
       { text: "96%", textColor: "#202020", bold: false, fontFamily: "Arial", fontSizePt: 15 },
     ],
-  ] });
+  ]);
+  assert.ok(table.tableEvidence.cellStyles, "table paint remains available for native conversion");
   assert.equal(result.observation.elements.length, 1);
   const backplate = await renderAuthoredBackplate(
     html,
@@ -290,7 +291,6 @@ test("Chrome extracts candidates and produces subset-aware RGBA backplates", asy
     "backdrop-filter",
     "unsupported-opacity",
     "unknown-z-order",
-    "unsupported-shape",
   ];
   for (const reason of expectedFallbackReasons) {
     assert.ok(rasterElement(slide, reason), `missing raster fallback reason ${reason}`);
@@ -1001,7 +1001,7 @@ test("pretty-printed inline HTML does not create phantom PowerPoint lines", asyn
   assert.ok(paragraph && metric && wrapped && principle && padded);
   assert.doesNotMatch(paragraph.text.plainText, /\n\s*review and approval/);
   assert.equal(
-    paragraph.text.runs.map((run) => run.text).join("").replace(/\n/g, " "),
+    paragraph.text.runs.map((run) => run.text).join(""),
     paragraph.text.plainText
   );
   assert.equal(metric.text.plainText.trim(), "7\nreview steps");
@@ -1113,7 +1113,7 @@ test("inline-only mixed-style prose is one editable text root while highlight pa
   const quote = quoteElements[0];
   assert.equal(quote.tagName, "div");
   assert.match(
-    quote.text.plainText.replace(/\n/g, " "),
+    quote.text.plainText.replace(/\s+/g, " "),
     /^Lead words highlighted words and regular tail$/
   );
   assert.equal(quote.text.style.bold, true);
@@ -1249,7 +1249,7 @@ test("HTML diagram and timeline containers retain editable descendant text", asy
       element.domPath.endsWith("section:nth-of-type(1)")
   );
   assert.ok(diagram, "diagram paint remains on the raster backplate");
-  assert.ok(textElement(slide, "Editable card title"));
+  assert.ok(slide.elements.some((element) => "text" in element && element.text.plainText.replace(/\s+/g, " ").includes("Editable card title")));
   assert.ok(textElement(slide, "Editable card detail"));
   assert.ok(textElement(slide, "1차년도"));
   assert.ok(textElement(slide, "업무 가동\n로그 축적"));

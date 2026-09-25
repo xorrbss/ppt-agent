@@ -97,6 +97,27 @@ describe("FlaggedSlideBadge", () => {
     );
   });
 
+  it("badges a review_required flag and not a repair_not_admitted one", () => {
+    // The backend classifies a flag once the list is final: only the slides
+    // whose published bytes still carry a measured defect ask for a reviewer.
+    const map = deriveFlaggedSlideMap(
+      deck([
+        { ...GATE_ENTRY, classification: "review_required" },
+        { ...AUTHOR_ENTRY, classification: "repair_not_admitted" },
+      ]),
+    );
+
+    expect(Object.keys(map)).to.deep.equal(["s2"]);
+    expect(map["s2"].classification).to.equal("review_required");
+  });
+
+  it("still badges a legacy entry that carries no classification", () => {
+    const map = deriveFlaggedSlideMap(deck([GATE_ENTRY, AUTHOR_ENTRY]));
+
+    expect(Object.keys(map).sort()).to.deep.equal(["s1", "s2"]);
+    expect(map["s1"].classification).to.equal(null);
+  });
+
   it("renders nothing when the receipt has no flags", () => {
     mountSidePanel([]);
     cy.get('[data-slide-thumbnail-index]').should("have.length", 3);

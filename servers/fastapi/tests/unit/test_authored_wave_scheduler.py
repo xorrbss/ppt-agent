@@ -14,6 +14,7 @@ from services.authored_wave_scheduler import (
     AuthoredWaveSchedule,
     run_initial_authoring,
 )
+from utils.provider_idempotency import ProviderQuotaPause
 
 
 @dataclass
@@ -240,3 +241,62 @@ def test_a_raised_batch_is_recorded_and_never_reauthored():
 
     assert sorted(index for batch in seen for index in batch) == [0, 1]
     assert all(is_exception for _batch, is_exception in recorded)
+
+
+def test_quota_pause_escapes_as_a_deck_outcome_before_slide_recording():
+    recorded: list[tuple[int, ...]] = []
+    pause = ProviderQuotaPause(reset_at=2_000_000_000, observed_at=1_999_999_900)
+
+    async def run_batch(_indexes):
+        raise pause
+
+    schedule = AuthoredWaveSchedule(_state())
+    with pytest.raises(ProviderQuotaPause) as raised:
+        _run(
+            run_initial_authoring(
+                [0],
+                schedule,
+                run_batch=run_batch,
+                record=lambda indexes, _outcome: recorded.append(tuple(indexes)) or False,
+                barrier_disabled=True,
+            )
+        )
+
+    assert raised.value is pause
+    assert recorded == []
+
+
+def test_cancelling_admission_reaps_every_inflight_batch():
+    started: set[int] = set()
+    cleaned: set[int] = set()
+    all_started = asyncio.Event()
+
+    async def run_batch(indexes):
+        index = indexes[0]
+        started.add(index)
+        if len(started) == 4:
+            all_started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            await asyncio.sleep(0)
+            cleaned.add(index)
+
+    async def scenario():
+        schedule = AuthoredWaveSchedule(_state(initial=4, steady=4))
+        task = asyncio.create_task(
+            run_initial_authoring(
+                list(range(20)),
+                schedule,
+                run_batch=run_batch,
+                record=lambda _indexes, _outcome: True,
+                barrier_disabled=True,
+            )
+        )
+        await all_started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert started == cleaned == {0, 1, 2, 3}
+
+    _run(scenario())

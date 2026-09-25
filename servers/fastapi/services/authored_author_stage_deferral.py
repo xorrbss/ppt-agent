@@ -47,6 +47,7 @@ from utils.llm_calls.author_slide_stream import (
     output_token_limit_in_cause_chain,
 )
 from utils.renderer_isolation import RendererPolicyError
+from utils.provider_idempotency import ProviderQuotaPause
 
 LOGGER = logging.getLogger(__name__)
 
@@ -60,6 +61,25 @@ _MAX_CAUSE_DEPTH = 6
 #: ``AuthoredStageError.as_safe_dict`` records the cause's class name, which is
 #: how a renderer policy refusal stays recognisable across a resume.
 _RENDERER_POLICY_EXCEPTION = RendererPolicyError.__name__
+
+
+def author_rejection_code(error: BaseException) -> str:
+    """Return a bounded reason for a rejected provider candidate."""
+
+    code = getattr(error, "code", None)
+    if isinstance(code, str) and code:
+        return code[:160]
+    message = str(error)
+    for prefix, reason in (
+        ("header contract violated:", "authored_header_contract_rejected"),
+        ("authored_source_image_slots_missing:", "authored_source_image_slots_missing"),
+        ("authored_semantic_qid_", "authored_semantic_qid_invalid"),
+        ("authored_batch_duplicate_slide", "authored_batch_duplicate_slide"),
+        ("authored_batch_slide_missing", "authored_batch_slide_missing"),
+    ):
+        if message.startswith(prefix):
+            return reason
+    return "authored_candidate_validation_failed"
 
 
 def terminal_provider_code(error: BaseException) -> str | None:
@@ -88,10 +108,10 @@ def author_failure_retryable(error: BaseException) -> bool:
 
     if isinstance(error, AuthoredProviderBudgetExhausted):
         return False
-    if terminal_provider_code(error) is not None:
-        return False
     if output_token_limit_in_cause_chain(error):
         # Replaying the unchanged operation meets the same output ceiling.
+        return False
+    if terminal_provider_code(error) is not None:
         return False
     explicit_retryable = getattr(error, "retryable", None)
     if isinstance(explicit_retryable, bool):
@@ -104,10 +124,23 @@ def author_stage_failure(
     error: BaseException,
     *,
     provider_attempt_count: int | None = None,
-) -> AuthoredStageError:
+) -> AuthoredStageError | ProviderQuotaPause:
     """Build the exact author-stage envelope consumed by operation retry policy."""
 
-    code = terminal_provider_code(error) or "authored_slide_author_failed"
+    if isinstance(error, ProviderQuotaPause):
+        # The durable runner owns this deck-level pause. Wrapping it as a slide
+        # error would consume an operation retry and lose the reset boundary.
+        return error
+
+    # On the chatgpt transport the ceiling abort wraps the outcome guard's
+    # ``public_provider_response_incomplete``; the more specific cause names
+    # the envelope so the operator sees the budget, not the guard.
+    token_limited = output_token_limit_in_cause_chain(error)
+    code = (
+        "authored_slide_author_failed"
+        if token_limited
+        else terminal_provider_code(error) or "authored_slide_author_failed"
+    )
     return AuthoredStageError(
         slide_index=slide_index,
         stage="author",
@@ -116,11 +149,7 @@ def author_stage_failure(
         retryable=author_failure_retryable(error),
         # The envelope's message is what the caller shows; a spent output
         # budget is the one author failure whose fix is a setting, so say so.
-        message=(
-            OUTPUT_TOKEN_LIMIT_GUIDANCE
-            if output_token_limit_in_cause_chain(error)
-            else None
-        ),
+        message=OUTPUT_TOKEN_LIMIT_GUIDANCE if token_limited else None,
         provider_attempt_count=provider_attempt_count,
     )
 
@@ -151,6 +180,15 @@ class DeferredAuthorBudgetExhausted(AuthoredProviderBudgetExhausted):
         # and the deck falls back to today's non-retryable author failure.
         self.cause = cause
         self.retryable = False
+        self.prior_failure = (
+            {
+                "code": author_rejection_code(cause),
+                "exception_type": type(cause).__name__,
+                "cause": str(cause),
+            }
+            if isinstance(cause, BaseException)
+            else None
+        )
 
 
 def _wraps_renderer_policy_refusal(error: BaseException) -> bool:
@@ -184,14 +222,16 @@ def author_failure_is_rescuable(failure: AuthoredBatchFailure) -> bool:
         return False
     if _wraps_renderer_policy_refusal(error):
         return False
-    if terminal_provider_code(error) is not None:
-        return False
     if output_token_limit_in_cause_chain(error):
         # The provider answered and ran out of output budget. The abort is
         # ``retryable`` in the stream reader's vocabulary (the slide's next
         # call may fix it), but the operation replaying the same call will
-        # not; the rescue's plainer, shorter brief is the fix.
+        # not; the rescue's plainer, shorter brief is the fix. Checked before
+        # the terminal-code walk: on the chatgpt transport the abort wraps
+        # the guard's ``public_provider_response_incomplete``.
         return True
+    if terminal_provider_code(error) is not None:
+        return False
     if getattr(error, "retryable", None) is True:
         return False
     if isinstance(error, AuthoredProviderBudgetExhausted):
@@ -213,13 +253,12 @@ def defer_rescuable_author_failures(
 ) -> dict[int, DeferredAuthorBudgetExhausted]:
     """The unresolved slides the tail may rescue, keyed by slide index.
 
-    Returns an empty mapping -- today's behaviour exactly -- when the deck's
-    rescue predicate is inactive, so an exact-reconstruction, verbatim or
-    non-strict deck still fails closed on the first unresolved slide.
+    Source-reflow decks may use the same bounded third provider call, but never
+    the lossy placeholder fallback. The downstream rescue keeps that boundary.
     """
 
-    if not terminal_fallback_active(
-        profile=profile, reference_mode=reference_mode, source_reflow=source_reflow
+    if not source_reflow and not terminal_fallback_active(
+        profile=profile, reference_mode=reference_mode, source_reflow=False
     ):
         return {}
     deferred: dict[int, DeferredAuthorBudgetExhausted] = {}
@@ -244,10 +283,11 @@ def defer_rescuable_author_failures(
             cause=error,
         )
         LOGGER.warning(
-            "[authored] slide %d unresolved after its author budget (%s); "
+            "[authored] slide %d unresolved after its author budget (%s:%s); "
             "deferred to the tail's rescue instead of failing the deck",
             index + 1,
             type(error).__name__,
+            author_rejection_code(error),
         )
     return deferred
 
@@ -288,7 +328,9 @@ def deferred_author_budget_error(
 
     if not terminal_fallback_active(
         profile=profile, reference_mode=reference_mode, source_reflow=source_reflow
-    ):
+    ) and not source_reflow:
+        return None
+    if provider_attempt_count != 2:
         return None
     deferred = deferrals.get(index)
     if deferred is not None:
@@ -317,6 +359,7 @@ def deferred_author_budget_error(
 __all__ = [
     "AUTHOR_BUDGET_EXHAUSTED_CODE",
     "DeferredAuthorBudgetExhausted",
+    "author_rejection_code",
     "author_failure_is_rescuable",
     "author_failure_retryable",
     "author_stage_failure",

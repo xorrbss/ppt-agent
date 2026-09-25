@@ -1,0 +1,302 @@
+{
+ "sourceUnitId": "source-slide:14",
+ "sourceIndex": 13,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:14:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:14:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "2주차 PART 2 | 벤치마킹",
+    "paragraphs": [
+     {
+      "runs": [
+       "2주차 PART 2 | 벤치마킹"
+      ],
+      "text": "2주차 PART 2 | 벤치마킹"
+     }
+    ],
+    "runs": [
+     "2주차 PART 2 | 벤치마킹"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:5f7223a11b7d38c3b503bf0948dc25f524a8d2ee8e070693a9aeecd5dc9bc6cc",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:14:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "14",
+    "paragraphs": [
+     {
+      "runs": [
+       "14"
+      ],
+      "text": "14"
+     }
+    ],
+    "runs": [
+     "14"
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:e39594995d9286d784a52fd41244e1ec5a174d7144631e8ba77c8c06844560ec",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:14:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:74f52ea3fedff52018a6c922ae9f9a5650ace6385c0dd96cc4f477c74504ce90",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:14:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "• 조회수 높은 영상 찾기\n• 첫 3초를 분리해서 보기\n• 카메라 움직임과 구도 보기\n• 자막과 편집 리듬 보기\n• 같은 구조를 내 업종에 맞게 재구성",
+    "paragraphs": [
+     {
+      "runs": [
+       "• 조회수 높은 영상 찾기"
+      ],
+      "text": "• 조회수 높은 영상 찾기"
+     },
+     {
+      "runs": [
+       "• 첫 3초를 분리해서 보기"
+      ],
+      "text": "• 첫 3초를 분리해서 보기"
+     },
+     {
+      "runs": [
+       "• 카메라 움직임과 구도 보기"
+      ],
+      "text": "• 카메라 움직임과 구도 보기"
+     },
+     {
+      "runs": [
+       "• 자막과 편집 리듬 보기"
+      ],
+      "text": "• 자막과 편집 리듬 보기"
+     },
+     {
+      "runs": [
+       "• 같은 구조를 내 업종에 맞게 재구성"
+      ],
+      "text": "• 같은 구조를 내 업종에 맞게 재구성"
+     }
+    ],
+    "runs": [
+     "• 조회수 높은 영상 찾기",
+     "\n",
+     "• 첫 3초를 분리해서 보기",
+     "\n",
+     "• 카메라 움직임과 구도 보기",
+     "\n",
+     "• 자막과 편집 리듬 보기",
+     "\n",
+     "• 같은 구조를 내 업종에 맞게 재구성"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 822960,
+     "y": 1463040,
+     "cx": 6675120,
+     "cy": 4114800
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:9a08e01bad020c399b8c3a365fc559a9dee5b04736530d9b42c0dc2aaf635834",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:14:shape:7",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 5,
+   "payload": {
+    "shapeName": "Rounded Rectangle 6",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 7863840,
+     "y": 1600200,
+     "cx": 3291840,
+     "cy": 3200400
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:50e89c9ff3a032be546fab1f76690628b9f92c45dff401af9b7aa4a631377dcd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:14:shape:8",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 6,
+   "payload": {
+    "shapeName": "Rectangle 7",
+    "preset": "rect",
+    "geometry": {
+     "x": 7863840,
+     "y": 1600200,
+     "cx": 73152,
+     "cy": 3200400
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:fc452fe77f4eabec5e01ff4ef32151c70a0fc1ea8d78f307ff165446623f7b67",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:14:text:9",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 7,
+   "payload": {
+    "text": "주의",
+    "paragraphs": [
+     {
+      "runs": [
+       "주의"
+      ],
+      "text": "주의"
+     }
+    ],
+    "runs": [
+     "주의"
+    ],
+    "shapeName": "TextBox 8",
+    "geometry": {
+     "x": 8065008,
+     "y": 1737360,
+     "cx": 2926080,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:4d4ebb19d79f135d03029fe6a3a890d625c82d0cbc0d32197bf30b10fd1173ab",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:14:text:10",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 8,
+   "payload": {
+    "text": "영상 자체를 복제하는 것이 아니라\n‘구조와 아이디어’를 분석합니다.",
+    "paragraphs": [
+     {
+      "runs": [
+       "영상 자체를 복제하는 것이 아니라\n‘구조와 아이디어’를 분석합니다."
+      ],
+      "text": "영상 자체를 복제하는 것이 아니라\n‘구조와 아이디어’를 분석합니다."
+     }
+    ],
+    "runs": [
+     "영상 자체를 복제하는 것이 아니라\n‘구조와 아이디어’를 분석합니다."
+    ],
+    "shapeName": "TextBox 9",
+    "geometry": {
+     "x": 8065008,
+     "y": 2167128,
+     "cx": 2926080,
+     "cy": 2514600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:a076b8c83edf5dcb300afb7840a325de7d3652efce7017617025e029f4b66b12",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

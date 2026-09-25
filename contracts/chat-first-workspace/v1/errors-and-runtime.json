@@ -55,6 +55,12 @@
   },
   "errors": [
     {
+      "code": "svg_source_export_format_unsupported",
+      "status_code": 422,
+      "safe_message": "원본 보존 SVG는 현재 PPTX로만 내보낼 수 있습니다. PPTX를 선택해 주세요.",
+      "retryable": false
+    },
+    {
       "code": "chat_first_feature_disabled",
       "status_code": 503,
       "safe_message": "Workspace operations are not enabled.",
@@ -168,20 +174,20 @@
       "safe_message": "The exported file was not found.",
       "retryable": false
     },
-      {
-        "code": "workspace_export_expired",
-        "status_code": 410,
-        "safe_message": "The exported file expired. Export it again.",
-        "retryable": false
-      },
-      {
-        "code": "workspace_export_operation_invalid",
-        "status_code": 409,
-        "safe_message": "The export operation no longer matches this presentation.",
-        "retryable": false
-      },
-      {
-        "code": "workspace_export_not_ready",
+    {
+      "code": "workspace_export_expired",
+      "status_code": 410,
+      "safe_message": "The exported file expired. Export it again.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_export_operation_invalid",
+      "status_code": 409,
+      "safe_message": "The export operation no longer matches this presentation.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_export_not_ready",
       "status_code": 409,
       "safe_message": "The exported file is not ready yet.",
       "retryable": true
@@ -583,6 +589,24 @@
       "retryable": true
     },
     {
+      "code": "quality_receipt_v3_blocked",
+      "status_code": 409,
+      "safe_message": "This deck's quality review has not passed, so it cannot be exported in any format. Remake the affected pages and try again.",
+      "retryable": false
+    },
+    {
+      "code": "quality_receipt_v3_required",
+      "status_code": 409,
+      "safe_message": "This deck has no quality record yet, so it cannot be exported. Remake it and try again.",
+      "retryable": false
+    },
+    {
+      "code": "quality_receipt_v3_digest_invalid",
+      "status_code": 409,
+      "safe_message": "This deck's quality record could not be verified, so it cannot be exported. Remake it and try again.",
+      "retryable": false
+    },
+    {
       "code": "page_remake_request_invalid",
       "status_code": 400,
       "safe_message": "This page remake request is missing its page or preview.",
@@ -718,6 +742,318 @@
       "code": "authored_batch_remake_all_slides_failed",
       "status_code": 409,
       "safe_message": "None of the selected pages could be applied.",
+      "retryable": false
+    },
+    {
+      "code": "slide_order_request_invalid",
+      "status_code": 422,
+      "safe_message": "The slide order request is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "slide_order_id_set_mismatch",
+      "status_code": 409,
+      "safe_message": "The requested slide order does not match the presentation's current slides. Reload and try again.",
+      "retryable": true
+    },
+    {
+      "code": "slide_order_duplicate_id",
+      "status_code": 422,
+      "safe_message": "The requested slide order lists the same slide more than once.",
+      "retryable": false
+    },
+    {
+      "code": "slide_order_requires_slide",
+      "status_code": 409,
+      "safe_message": "The presentation has no slides to reorder.",
+      "retryable": false
+    },
+    {
+      "code": "slide_order_publish_failed",
+      "status_code": 500,
+      "safe_message": "The slide order could not be saved. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "slide_order_still_running",
+      "status_code": 503,
+      "safe_message": "The slide order is still being saved.",
+      "retryable": true
+    },
+    {
+      "code": "authored_batch_remake_preview_incomplete",
+      "status_code": 503,
+      "safe_message": "The operation could not finish. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "release_quality_review_post_gate_failed",
+      "status_code": 503,
+      "safe_message": "The operation could not finish. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "authored_vnext_native_export_mode_required",
+      "status_code": 422,
+      "safe_message": "The operation request is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "authored_vnext_regenerate_body_contract_invalid",
+      "status_code": 422,
+      "safe_message": "The operation request is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "batch_remake_preview_request_invalid",
+      "status_code": 422,
+      "safe_message": "The operation request is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "page_remake_preview_request_invalid",
+      "status_code": 422,
+      "safe_message": "The operation request is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "svg_export_source_required",
+      "status_code": 422,
+      "safe_message": "The operation request is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "svg_font_embedding_not_supported",
+      "status_code": 422,
+      "safe_message": "The operation request is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "svg_release_quality_review_not_supported",
+      "status_code": 422,
+      "safe_message": "The operation request is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "authored_vnext_export_master_changed",
+      "status_code": 409,
+      "safe_message": "The presentation changed. Review it and try again.",
+      "retryable": false
+    },
+    {
+      "code": "authored_vnext_regenerate_master_changed",
+      "status_code": 409,
+      "safe_message": "The presentation changed. Review it and try again.",
+      "retryable": false
+    },
+    {
+      "code": "public_operation_fence_conflict",
+      "status_code": 409,
+      "safe_message": "The presentation changed. Review it and try again.",
+      "retryable": false
+    },
+    {
+      "code": "release_quality_review_checker_changed",
+      "status_code": 409,
+      "safe_message": "The presentation changed. Review it and try again.",
+      "retryable": false
+    },
+    {
+      "code": "release_quality_review_render_identity_changed",
+      "status_code": 409,
+      "safe_message": "The presentation changed. Review it and try again.",
+      "retryable": false
+    },
+    {
+      "code": "release_quality_review_result_drift",
+      "status_code": 409,
+      "safe_message": "The presentation changed. Review it and try again.",
+      "retryable": false
+    },
+    {
+      "code": "release_quality_review_runtime_changed",
+      "status_code": 409,
+      "safe_message": "The presentation changed. Review it and try again.",
+      "retryable": false
+    },
+    {
+      "code": "authored_vnext_export_projection_incomplete",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "content_integrity_receipt_invalid",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "generation_strategy_capability_missing",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "public_export_admission_required",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "public_export_execution_receipt_invalid",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "public_export_render_identity_invalid",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "public_export_render_runtime_identity_invalid",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "public_generation_publication_missing",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "public_isolated_authored_html_required",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "public_operation_deadline_missing",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "public_phase2_admission_invalid",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "public_quality_projection_inputs_missing",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "release_quality_review_admission_required",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "release_quality_review_authored_html_required",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "release_quality_review_authority_invalid",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "release_quality_review_base_invalid",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "release_quality_review_base_missing",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "release_quality_review_blocked",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "release_quality_review_identity_required",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "release_quality_review_recheck_base_invalid",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "release_quality_review_required",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "svg_export_active_admission_required",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "svg_export_incomplete_presentation",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "authored_manifest_publication_failed",
+      "status_code": 503,
+      "safe_message": "The operation could not finish. Try again later.",
+      "retryable": false
+    },
+    {
+      "code": "generation_timing_receipt_persistence_failed",
+      "status_code": 503,
+      "safe_message": "The operation could not finish. Try again later.",
+      "retryable": false
+    },
+    {
+      "code": "generation_timing_receipt_projection_invalid",
+      "status_code": 503,
+      "safe_message": "The operation could not finish. Try again later.",
+      "retryable": false
+    },
+    {
+      "code": "public_admission_authority_unavailable",
+      "status_code": 503,
+      "safe_message": "The operation could not finish. Try again later.",
+      "retryable": false
+    },
+    {
+      "code": "public_operation_authority_unavailable",
+      "status_code": 503,
+      "safe_message": "The operation could not finish. Try again later.",
+      "retryable": false
+    },
+    {
+      "code": "release_quality_review_failed",
+      "status_code": 503,
+      "safe_message": "The operation could not finish. Try again later.",
+      "retryable": false
+    },
+    {
+      "code": "public_deadline_exceeded",
+      "status_code": 408,
+      "safe_message": "The operation deadline has passed.",
       "retryable": false
     }
   ],

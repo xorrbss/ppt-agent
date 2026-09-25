@@ -25,6 +25,10 @@ from dataclasses import asdict, dataclass, field
 from html.parser import HTMLParser
 from typing import Any, Literal
 
+from utils.authored_empty_media import (
+    EMPTY_MEDIA_CATEGORY, EMPTY_MEDIA_DETAIL, find_empty_media_panels,
+)
+
 from utils.authored_dom_fit_magnitude import (
     build_element_kind_index,
     build_fit_summary,
@@ -129,6 +133,7 @@ class DomQualityIssue:
         "image",
         "content",
         "contrast",
+        "empty_media_panel",
     ]
     severity: Literal["high", "medium", "low"]
     detail: str
@@ -649,6 +654,8 @@ def inspect_authored_dom(
     *,
     reference_mode: str = STYLE_REFERENCE,
     strict_structural_off_canvas: bool = False,
+    viewport_width: int | None = None,
+    viewport_height: int | None = None,
 ) -> DomQualityReport:
     """Classify cheap, deterministic defects from browser-collected metrics.
 
@@ -665,8 +672,8 @@ def inspect_authored_dom(
     compact = build_compact_dom_map(html, normalized)
     expected = _expected_text_by_qid(html)
     issues: list[DomQualityIssue] = []
-    width = normalized["viewport"]["width"] or 1280
-    height = normalized["viewport"]["height"] or 720
+    width = normalized["viewport"]["width"] or viewport_width or 1280
+    height = normalized["viewport"]["height"] or viewport_height or 720
     elements = normalized["elements"]
     item_by_qid = {str(item.get("qid")): item for item in elements}
     parent_by_qid = {
@@ -710,6 +717,23 @@ def inspect_authored_dom(
             "svg",
             "video",
         }
+
+    def owns_painted_text(item: Mapping[str, Any]) -> bool:
+        """Whether this element paints glyphs of its own, for the contrast check.
+
+        A text contrast ratio is a statement about glyphs the element itself
+        paints.  Structural card and wrapper divs inherit a ``color`` and carry
+        their own (often near-transparent) background, so the check used to read
+        a ratio for text that does not exist there -- and, when the browser
+        probe had declined to measure the element at all, invented one from the
+        computed style, compositing a 3.5%-alpha wash as if it were opaque
+        paint.  Replayed over 905 stored bench slides, 1,577 of 7,843 contrast
+        findings (20.1%) sat on such elements, including every finding below a
+        ratio of 2.0 in the run 48 deck.  Payloads from a probe that does not
+        report ownership keep the historical conservative behaviour.
+        """
+
+        return "has_owned_text" not in item or bool(item.get("has_owned_text"))
 
     occluded_fraction_threshold = 0.2
     continuous_occluded_fraction_threshold = 0.12
@@ -1389,7 +1413,7 @@ def inspect_authored_dom(
                     )
                 )
         style = item.get("computed_style", item.get("style", {}))
-        if isinstance(style, Mapping):
+        if isinstance(style, Mapping) and owns_painted_text(item):
             measurement = item.get("measurement")
             pixel_contrast_unavailable = (
                 item["contrast_ratio"] is None
@@ -1633,6 +1657,13 @@ def inspect_authored_dom(
                 footer_zone_magnitude(intrusion, kind=kind_of(intrusion.qid)),
             )
         )
+    for qid in find_empty_media_panels(
+        html, elements, width=width, height=height,
+        exact_reconstruction=mode == EXACT_RECONSTRUCTION,
+    ):
+        issues.append(DomQualityIssue(
+            EMPTY_MEDIA_CATEGORY, "medium", EMPTY_MEDIA_DETAIL, (qid,), mode,
+        ))
     # Coalesce same category/target reports while retaining deterministic ordering.
     unique = {(issue.category, issue.qids, issue.detail): issue for issue in issues}
     ordered = tuple(

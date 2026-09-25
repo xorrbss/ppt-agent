@@ -19,14 +19,14 @@ from models.sql.slide import SlideModel
 from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
 from utils.authored_styles import AuthoredStyle
 from services.database import sql_engine
-from services.presentation_generation_export_orchestration import (
-    execute_generation_export,
-    publish_staged_presentation,
-    record_generation_export_failure,
+from services.authored_local_fit_policy import POLICY_REVISION, font_policy
+from services.authored_canvas import (
+    request_canvas_metadata,
+    restore_request_canvas_metadata,
 )
-from services.presentation_export_attempt_service import terminalize_export_attempt_failed
-from services.presentation_export_router import PresentationExportExecution, execute_presentation_export
-from services.template_v2_generation_service import TemplateV2GenerationTarget
+from services.presentation_generation_export_orchestration import (
+    publish_staged_presentation,
+)
 from services.workspace_artifact_publication_service import (
     PreparedWorkspaceArtifact,
     PreparedWorkspaceChatArtifactStaging,
@@ -35,6 +35,11 @@ from services.workspace_artifact_publication_service import (
     prepare_workspace_generation_artifact,
     publish_workspace_generation_artifact,
     stage_workspace_chat_artifacts_for_publication,
+)
+from services.authored_rollout_profile import (
+    ROLLOUT_PROFILE_PAYLOAD_KEY,
+    resolve_rollout_profile,
+    rollout_profile_from_payload,
 )
 from services.workspace_runtime_profile import UnsupportedWorkspaceRuntimeError, require_supported_workspace_runtime
 
@@ -46,6 +51,10 @@ INTERNAL_RESOLVED_MASTER_PIN_KEY = "_internal_authored_resolved_master_pin"
 INTERNAL_STYLE_SNAPSHOT_KEY = "_internal_authored_style_snapshot"
 INTERNAL_DECK_METADATA_KEY = "_internal_authored_deck_metadata"
 INTERNAL_SOURCE_SEMANTIC_SNAPSHOT_KEY = "_internal_authored_source_semantic_snapshot"
+INTERNAL_LOCAL_FIT_POLICY_REVISION_KEY = "_internal_authored_local_fit_policy_revision"
+INTERNAL_ROLLOUT_PROFILE_KEY = ROLLOUT_PROFILE_PAYLOAD_KEY
+INTERNAL_CANVAS_KEY = "_internal_authored_canvas"
+_MISSING_CANVAS_PAYLOAD = object()
 
 
 def _durable_style_snapshot(style: AuthoredStyle) -> dict[str, Any]:
@@ -68,17 +77,59 @@ def _durable_style_snapshot(style: AuthoredStyle) -> dict[str, Any]:
         "mono_font": style.mono_font,
         "illustration_prompt": style.illustration_prompt,
         "reference_mode": style.reference_mode,
+        "composer_profile": dict(style.composer_profile) if style.composer_profile is not None else None,
     }
 
-def _durable_request_payload(request: GeneratePresentationRequest) -> dict:
+def _durable_request_payload(
+    request: GeneratePresentationRequest, *, admission_retry: bool = False
+) -> dict:
     """Persist canonical identities only, never admission-time raw paths."""
 
     payload = request.model_dump(mode="json")
+    incomplete_source_retry = (
+        admission_retry
+        and request.strategy == "svg"
+        and request.source_mode == "source_content_restyle"
+        and (
+            getattr(request, "_document_canvas", None) is None
+            or getattr(request, "_svg_source_binding", None) is None
+        )
+    )
+    if admission_retry:
+        payload[INTERNAL_ADMISSION_RETRY_KEY] = True
+    if request.strategy == "svg":
+        if not incomplete_source_retry:
+            from services.svg_generation_admission import pin_svg_style
+
+            payload["_internal_svg_style_snapshot"] = pin_svg_style(request)
+        if request.source_mode == "source_content_restyle" and request._svg_source_binding is not None:
+            payload["_internal_svg_source_binding"] = dict(request._svg_source_binding)
     # ``files`` is a compatibility-only admission field. Validation has already
     # converted it to an immutable uploaded-document snapshot. Preserve the
     # optional field's wire shape for old workers while ensuring its value can
     # never contain a locator.
     payload["files"] = None
+    if request.strategy == "authored" or str(request.template or "").lower() == "authored":
+        if not incomplete_source_retry:
+            payload[INTERNAL_CANVAS_KEY] = request_canvas_metadata(request)
+            if getattr(request, "_document_canvas", None) is not None:
+                from services.document_canvas import canvas_digest
+
+                payload["_internal_canvas_digest"] = canvas_digest(payload[INTERNAL_CANVAS_KEY])
+        policy_revision = (
+            request._authored_local_fit_policy_revision or POLICY_REVISION
+        )
+        font_policy(policy_revision)
+        request._authored_local_fit_policy_revision = policy_revision
+        payload[INTERNAL_LOCAL_FIT_POLICY_REVISION_KEY] = policy_revision
+        # Freeze the rollout switches with the job, so every attempt of it --
+        # including one resumed after an operator flipped a knob -- authors,
+        # normalizes, substitutes and repairs the same way.
+        rollout_profile = (
+            request._authored_rollout_profile or resolve_rollout_profile().as_dict()
+        )
+        request._authored_rollout_profile = rollout_profile
+        payload[INTERNAL_ROLLOUT_PROFILE_KEY] = rollout_profile
     if request._authored_exact_snapshot_id is not None:
         payload[INTERNAL_EXACT_SNAPSHOT_KEY] = request._authored_exact_snapshot_id
     if request._authored_composition_pin is not None:
@@ -223,7 +274,6 @@ async def _publish_staged_presentation(
     generated_assets: tuple[ImageAsset, ...] = (),
     image_staging: PreparedWorkspaceChatArtifactStaging | None = None,
     image_artifacts: tuple[PreparedWorkspaceArtifact, ...] = (),
-    export_execution: PresentationExportExecution | None = None,
     *,
     prepare_artifact=prepare_workspace_generation_artifact,
     publish_artifact=publish_workspace_generation_artifact,
@@ -240,47 +290,10 @@ async def _publish_staged_presentation(
         generated_assets,
         image_staging,
         image_artifacts,
-        export_execution,
         prepare_artifact=prepare_artifact,
         publish_artifact=publish_artifact,
         compensate_artifact=compensate_artifact,
         stage_image_artifacts=stage_image_artifacts,
-    )
-
-
-async def _execute_generation_export(
-    sql_session: AsyncSession,
-    *,
-    publication_target: PresentationModel,
-    render_presentation: PresentationModel,
-    request: GeneratePresentationRequest,
-    export_cookie_header: str | None,
-    generation_job: PresentationGenerationJob | None,
-    template_target: TemplateV2GenerationTarget | None = None,
-    execute_export=execute_presentation_export,
-) -> PresentationExportExecution:
-    return await execute_generation_export(
-        sql_session,
-        publication_target=publication_target,
-        render_presentation=render_presentation,
-        request=request,
-        export_cookie_header=export_cookie_header,
-        generation_job=generation_job,
-        template_target=template_target,
-        execute_export=execute_export,
-    )
-
-
-async def _record_generation_export_failure(
-    sql_session: AsyncSession,
-    execution: PresentationExportExecution | None,
-    error: BaseException,
-) -> None:
-    await record_generation_export_failure(
-        sql_session,
-        execution,
-        error,
-        terminalize_failure=terminalize_export_attempt_failed,
     )
 
 
@@ -292,16 +305,42 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     composition_payload = values.pop(INTERNAL_COMPOSITION_PIN_KEY, None)
     resolved_master_payload = values.pop(INTERNAL_RESOLVED_MASTER_PIN_KEY, None)
     style_snapshot_payload = values.pop(INTERNAL_STYLE_SNAPSHOT_KEY, None)
+    svg_style_snapshot = values.pop("_internal_svg_style_snapshot", None)
+    svg_source_binding = values.pop("_internal_svg_source_binding", None)
     design_replay = values.pop(INTERNAL_DESIGN_REPLAY_KEY, False)
     deck_metadata_payload = values.pop(INTERNAL_DECK_METADATA_KEY, None)
     source_semantic_snapshot = values.pop(
         INTERNAL_SOURCE_SEMANTIC_SNAPSHOT_KEY, None
     )
+    local_fit_policy_revision = values.pop(
+        INTERNAL_LOCAL_FIT_POLICY_REVISION_KEY, None
+    )
+    rollout_profile_payload = values.pop(INTERNAL_ROLLOUT_PROFILE_KEY, None)
+    canvas_payload = values.pop(INTERNAL_CANVAS_KEY, _MISSING_CANVAS_PAYLOAD)
+    frozen_canvas_digest = values.pop("_internal_canvas_digest", None)
     # Internal runner metadata is deliberately outside the public request
     # schema. It remains on the durable job across operation rebinds, but must
     # never be passed to Pydantic as caller input.
     values.pop(INTERNAL_ADMISSION_RETRY_KEY, None)
+    from services.public_generation_route import LEGACY_RESTYLE_FIT_POLICY_KEY
+
+    values.pop(LEGACY_RESTYLE_FIT_POLICY_KEY, None)
     request = GeneratePresentationRequest.model_validate(values)
+    request._svg_style_snapshot = svg_style_snapshot
+    request._svg_source_binding = svg_source_binding
+    if request.strategy == "svg" and request.source_mode == "source_content_restyle":
+        if not isinstance(svg_source_binding, dict) and not payload.get(INTERNAL_ADMISSION_RETRY_KEY):
+            raise ValueError("svg_source_input_binding_required")
+    restore_request_canvas_metadata(
+        request,
+        canvas_payload,
+        present=canvas_payload is not _MISSING_CANVAS_PAYLOAD,
+    )
+    if getattr(request, "_document_canvas", None) is not None:
+        from services.document_canvas import canvas_digest
+
+        if frozen_canvas_digest != canvas_digest(canvas_payload):
+            raise ValueError("document_canvas_digest_mismatch")
     if snapshot_id is not None:
         request._authored_exact_snapshot_id = str(snapshot_id)
     if composition_payload is not None:
@@ -322,5 +361,15 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
         )
     request._authored_source_semantic_snapshot = source_semantic_snapshot
     request._authored_design_replay = design_replay is True
+    if local_fit_policy_revision is not None:
+        local_fit_policy_revision = str(local_fit_policy_revision)
+        font_policy(local_fit_policy_revision)
+        request._authored_local_fit_policy_revision = local_fit_policy_revision
+    if rollout_profile_payload is not None:
+        # Validate here, at restore, so a job whose pinned profile this build can
+        # no longer honour fails with its own code instead of silently running
+        # the live switches over slides produced under different ones.
+        request._authored_rollout_profile = rollout_profile_from_payload(
+            rollout_profile_payload
+        ).as_dict()
     return request
-

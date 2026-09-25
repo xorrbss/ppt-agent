@@ -706,6 +706,26 @@ def test_v3_rejects_silent_t1_downgrade_unbounded_provider_and_source_complete_c
     assert "capabilityRegistry.consumer_mismatch:chromium" in receipt.blockers
 
 
+def test_v3_rejects_third_author_call_without_rescue_marker() -> None:
+    evidence = _v3_evidence()
+    evidence["providerCalls"] = {
+        "slides": [
+            {"slideIndex": 0, "initial": 1, "recovery": 2, "total": 3},
+            {"slideIndex": 1, "initial": 1, "recovery": 0, "total": 1},
+        ]
+    }
+
+    receipt = create_quality_receipt_v3(
+        QualityReceiptV3Ledger(),
+        attempt_id="v3-third-call-without-rescue",
+        revision=1,
+        evidence=evidence,
+    )
+
+    assert "providerCalls.slide_budget_invalid:0" in receipt.blockers
+    assert "providerCalls.slide_total_mismatch:0" not in receipt.blockers
+
+
 def test_v3_distinguishes_unavailable_from_not_required_consumers() -> None:
     evidence = _v3_evidence()
     evidence["capabilityRegistry"]["consumers"]["ooxml"] = {

@@ -43,27 +43,28 @@ const SettingsPage = () => {
 
 
   return (
-    <div className="h-screen font-syne flex flex-col overflow-hidden relative">
-      <main className="w-full mx-auto gap-6   overflow-hidden flex ">
+    <div className="relative flex min-h-screen flex-col bg-[#FAFAFA] font-syne">
+      <main className="mx-auto flex w-full min-w-0 flex-col gap-6 p-4 sm:p-6 lg:flex-row lg:gap-8 lg:p-8">
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 lg:hidden">설정</h1>
         <SettingSideBar
           mode={mode}
           setMode={setMode}
           selectedProvider={selectedProvider}
           setSelectedProvider={setSelectedProvider}
         />
-        <div className="w-full">
-          <div className="sticky top-0 right-0 z-50 py-[28px]   backdrop-blur mb-4 ">
-            <div className="flex  gap-3 items-center ">
-              <h3 className=" text-[28px] tracking-[-0.84px] font-unbounded font-normal text-black flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="mb-6 hidden min-h-12 items-center py-2 lg:flex">
+            <div className="flex flex-wrap items-center gap-3">
+              <h3 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
                 설정
               </h3>
-              <p className="text-[10px] px-2.5 py-0.5 rounded-[50px] text-[#7A5AF8] border border-[#EDEEEF]  font-medium ">
+              <p className="rounded-full border border-violet-100 bg-violet-50 px-3 py-1 text-xs font-medium text-violet-700">
                 {textSummary} · {imageSummary}
               </p>
             </div>
           </div>
 
-          {mode === 'nanobanana' && <div className=" w-full bg-[#F9F8F8] p-7 rounded-[20px]">
+          {mode === 'nanobanana' && <div className="w-full rounded-2xl border border-zinc-200/80 bg-white p-5 sm:p-7">
             <h4>Nano Banana</h4>
           </div>}
           {mode === 'presenton' && selectedProvider === 'text-provider' && <TextProvider

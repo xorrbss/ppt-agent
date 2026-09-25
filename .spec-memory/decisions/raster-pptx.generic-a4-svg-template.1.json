@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "key": "raster-pptx.generic-a4-svg-template",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "이미지 중심 PPTX를 파일명이나 페이지 수에 종속되지 않는 재사용 가능한 A4 SVG 생성 템플릿으로 처리한다.",
+  "scope": [
+    "raster-pptx",
+    "svg",
+    "a4"
+  ],
+  "invariants": [
+    "원본 페이지 순서와 이미지 픽셀 출처를 보존한다.",
+    "A4 가로와 세로는 원본 16:9 비율과 독립적으로 선택한다."
+  ],
+  "forbidden": [
+    "특정 원본 파일명이나 페이지 좌표를 생성 경로에 고정하지 않는다."
+  ],
+  "evidence": [],
+  "supersedes": null,
+  "recordedAt": "2026-09-24T04:16:35.2542162+00:00"
+}

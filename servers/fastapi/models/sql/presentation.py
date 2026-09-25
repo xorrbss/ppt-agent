@@ -237,6 +237,9 @@ class PresentationModel(SQLModel, table=True):
     def set_structure(self, structure: PresentationStructureModel):
         self.structure = structure.model_dump()
 
+    def is_svg(self) -> bool:
+        return self.mode == "svg" or (self.mode is None and isinstance(self.theme, dict) and self.theme.get("mode") == "svg")
+
     def is_authored(self) -> bool:
         """True for authored-mode decks: the model authored bespoke HTML per slide,
         rendered to full-bleed images (no React layout/structure — both are None).

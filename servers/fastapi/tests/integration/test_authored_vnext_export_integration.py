@@ -54,6 +54,7 @@ from services.authored_vnext.generation.legacy_bridge import (
 )
 from models.authored_vnext.master.contract import DeckMasterContract
 from models.sql.user import User
+from models.sql.account_deletion_request import AccountDeletionRequest
 from models.authored_vnext.deck import (
     DeckGenerationSnapshot,
     MasterDigestPin,
@@ -86,6 +87,72 @@ PPTX_MEDIA_TYPE = (
 OWNER_ID = uuid.uuid5(uuid.NAMESPACE_URL, "authored-vnext-export-owner-a")
 
 
+class _SceneSnapshot(DeckGenerationSnapshot):
+    """Keep the fixture's master aliases while persisting the canonical snapshot."""
+    @property
+    def master_id(self):
+        return self.master.master_id
+
+    @property
+    def master_revision(self):
+        return self.master.master_revision
+
+    @property
+    def master_digest(self):
+        return self.master.master_digest
+
+
+def _scene_snapshot(deck, published, *, revision=None):
+    from models.authored_vnext.deck.scene import (
+        SceneEditability, SceneTextElement, SceneTextStyle,
+        seal_deck_scene, seal_slide_scene,
+    )
+    from models.authored_vnext.master.contract import Rect
+    from services.authored_vnext.generation.scene_compiler import default_scene_capabilities
+
+    revision = revision or deck.revision
+    source_digest = f"sha256:{raw_sha256([s.model_dump(mode='json', by_alias=True) for s in deck.slides])}"
+    layout_digest = "sha256:" + "8" * 64
+    scenes = [seal_slide_scene(
+        slide_id=slide.slide_id, revision=slide.revision,
+        elements=[SceneTextElement(
+            kind="text", element_id=f"{slide.slide_id}:title", z_order=1,
+            bounds=Rect(x=60, y=80, width=800, height=140), semantic_role="title",
+            editability=SceneEditability(text=True), text=slide.title.text,
+            style=SceneTextStyle(font_family=slide.title_fit.font_family, font_size=24),
+        ), SceneTextElement(
+            kind="text", element_id=f"{slide.slide_id}:body", z_order=2,
+            bounds=Rect(x=60, y=240, width=800, height=220), semantic_role="body",
+            editability=SceneEditability(text=True), text=slide.body,
+            style=SceneTextStyle(font_family=slide.title_fit.font_family, font_size=16),
+        )],
+    ) for slide in deck.slides]
+    scene = seal_deck_scene(
+        deck_id=deck.deck_id, revision=revision, composition_digest=published.digest,
+        source_digest=source_digest, slides=scenes, capabilities=default_scene_capabilities(),
+    )
+    snapshot = _SceneSnapshot(
+        deck_id=deck.deck_id, revision=revision, digest=deck.digest,
+        master=MasterDigestPin(
+            master_id=deck.master_id, master_revision=deck.master_revision,
+            master_digest=published.digest, layout_registry_digest=layout_digest,
+            font_manifest_digest=deck.slides[0].title_fit.font_manifest_digest,
+        ),
+        source_digest=source_digest, scene=scene,
+        slides=[ValidatedSlideSpecV2(slide=slide, scene=slide_scene,
+            checkpoint=SlideValidationCheckpoint(
+                master_digest=published.digest, layout_registry_digest=layout_digest,
+                font_manifest_digest=slide.title_fit.font_manifest_digest,
+                source_digest=source_digest, visual_plan_digest="sha256:" + "9" * 64,
+                scene_digest=slide_scene.slide_digest, quality_policy_version="quality/v1",
+                layout_id=slide.layout_id, body_slot_id="slot:long-body",
+                validated_at="2026-08-13T12:00:00Z",
+            )) for slide, slide_scene in zip(deck.slides, scenes, strict=True)],
+        created_at="2026-08-13T12:00:00Z",
+    )
+    return snapshot.model_copy(update={"digest": f"sha256:{raw_sha256(snapshot.model_dump(mode='json', by_alias=True, exclude={'digest'}))}"})
+
+
 def test_legacy_export_job_identity_is_stable_per_attempt_and_rotates_on_retry() -> None:
     deck_id = "deck:legacy-retry"
     deck_digest = "sha256:" + "a" * 64
@@ -113,6 +180,7 @@ def test_legacy_export_job_identity_is_stable_per_attempt_and_rotates_on_retry()
 
 def _create_owner(engine) -> None:
     User.__table__.create(engine, checkfirst=True)
+    AccountDeletionRequest.__table__.create(engine, checkfirst=True)
     with Session(engine) as session:
         if session.get(User, OWNER_ID) is None:
             session.add(
@@ -173,6 +241,16 @@ def _worker_success(
     master_digest = (
         f"sha256:{payload.get('digests', {}).get('masterSha256', '0' * 64)}"
     )
+    scene_receipt = {}
+    if payload.get("scene"):
+        from services.authored_vnext.ooxml.native_scene import materialize_scene_pptx
+        # This transport still simulates buffering/fencing failures. Its Scene
+        # receipt comes from the real native converter rather than bypassing the
+        # newly required Scene/readback contract with a legacy title/body stub.
+        _, readback = materialize_scene_pptx(payload["scene"], payload.get("assets", []), master)
+        scene_receipt = {key: readback[key] for key in (
+            "scene", "capabilities", "nativeObjectCounts", "hybridOwnership",
+        )}
     return {
         "schemaVersion": "authored-vnext-ooxml-worker/v1",
         "operation": "EXPORT_PPTX",
@@ -187,6 +265,7 @@ def _worker_success(
             "contentBase64": base64.b64encode(artifact).decode("ascii"),
         },
         "receipt": {
+            **scene_receipt,
             "adapterRevision": 1,
             "validation": "candidate-reopened",
             "candidateDigestVerified": True,
@@ -223,6 +302,12 @@ def _worker_success(
                     "slideId": slide["slideId"],
                     "layoutId": slide["layoutId"],
                     "masterDigest": master_digest,
+                    **({
+                        "slideDigest": readback["scene"]["slides"][index - 1]["slideDigest"],
+                        "elementIds": [item["elementId"] for item in readback["scene"]["slides"][index - 1]["elements"]],
+                        "rasterIslandIds": [item["islandId"] for item in readback["scene"]["slides"][index - 1].get("rasterIslands", [])],
+                        "rasterOwnerIds": sorted(owner for item in readback["scene"]["slides"][index - 1].get("rasterIslands", []) for owner in item["sourceOwnerIds"]),
+                    } if payload.get("scene") else {}),
                 }
                 for index, slide in enumerate(payload["slides"], start=1)
             ],
@@ -362,6 +447,8 @@ def test_published_master_and_deck_build_exact_versioned_worker_digest_envelope(
         )
     )
 
+    legacy_deck = deck
+    deck = _scene_snapshot(legacy_deck, published)
     payload, digests = build_worker_request(
         operation_id="job:export-contract",
         fence_token=7,
@@ -381,12 +468,8 @@ def test_published_master_and_deck_build_exact_versioned_worker_digest_envelope(
         "layout:section",
         "layout:standard-title",
     ]
-    assert [set(slide["values"]) for slide in payload["slides"]] == [
-        {"long-title", "long-body"},
-        {"cover-title", "cover-body"},
-        {"section-title", "section-body"},
-        {"standard-title", "standard-body"},
-    ]
+    assert all(slide["values"] == {} for slide in payload["slides"])
+    assert [slide["elements"][0]["text"] for slide in payload["scene"]["slides"]] == [slide.title.text for slide in legacy_deck.slides]
     assert [item["kind"] for item in payload["master"]["furniture"]] == [
         "logo", "text", "text", "line", "pageNumber"
     ]
@@ -406,7 +489,7 @@ def test_published_master_and_deck_build_exact_versioned_worker_digest_envelope(
     )
     assert payload["digests"] == {
         "masterSha256": raw_sha256(payload["master"]),
-        "specSha256": raw_sha256(payload["slides"]),
+        "specSha256": deck.scene.scene_digest.removeprefix("sha256:"),
         "assetManifestSha256": raw_sha256([]),
         "fontManifestSha256": raw_sha256(payload["master"]["fontManifest"]),
         "packageSha256": None,
@@ -418,35 +501,7 @@ def test_published_master_and_deck_build_exact_versioned_worker_digest_envelope(
         "fontManifest": f"sha256:{payload['digests']['fontManifestSha256']}",
     }
 
-    slide = deck.slides[0]
-    source_digest = "sha256:" + "7" * 64
-    layout_registry_digest = "sha256:" + "8" * 64
-    checkpoint = SlideValidationCheckpoint(
-        master_digest=published.digest,
-        layout_registry_digest=layout_registry_digest,
-        font_manifest_digest=slide.title_fit.font_manifest_digest,
-        source_digest=source_digest,
-        visual_plan_digest="sha256:" + "9" * 64,
-        quality_policy_version="quality/v1",
-        layout_id=slide.layout_id,
-        body_slot_id="slot:long-body",
-        validated_at="2026-08-13T12:00:00Z",
-    )
-    generated = DeckGenerationSnapshot(
-        deck_id=deck.deck_id,
-        revision=deck.revision,
-        digest=deck.digest,
-        master=MasterDigestPin(
-            master_id=deck.master_id,
-            master_revision=deck.master_revision,
-            master_digest=published.digest,
-            layout_registry_digest=layout_registry_digest,
-            font_manifest_digest=slide.title_fit.font_manifest_digest,
-        ),
-        source_digest=source_digest,
-        slides=[ValidatedSlideSpecV2(slide=slide, checkpoint=checkpoint)],
-        created_at="2026-08-13T12:00:00Z",
-    )
+    generated = _scene_snapshot(legacy_deck.model_copy(update={"slides": legacy_deck.slides[:1]}), published)
     generated_payload, generated_digests = build_worker_request(
         operation_id="job:generation-snapshot",
         fence_token=8,
@@ -507,6 +562,9 @@ def _published_sql_deck(
             slides=[long_title_slide_payload()],
         )
     )
+    generated = _scene_snapshot(deck, published, revision=deck.revision + 1)
+    repository.append_deck(generated, expected_revision=deck.revision, expected_digest=deck.digest)
+    deck = generated
     _payload, digests = build_worker_request(
         operation_id="job:sql",
         fence_token=1,
@@ -771,7 +829,9 @@ def test_sql_claim_cas_fences_one_of_two_independent_processes(
     for process in processes:
         process.start()
     for process in processes:
-        process.join(timeout=15)
+        # Windows spawn imports the full application model graph; keep the
+        # concurrency assertion bounded without assuming warm imports.
+        process.join(timeout=60)
         assert process.exitcode == 0
     outcomes = sorted(queue.get(timeout=2) for _process in processes)
 
@@ -886,6 +946,7 @@ def test_export_service_resolves_owner_logo_bytes_into_verified_worker_asset(
             "assetId": receipt["assetId"],
             "mediaType": "image/png",
             "sha256": str(receipt["digest"]).removeprefix("sha256:"),
+            "sizeBytes": len(logo_bytes),
             "bytesBase64": base64.b64encode(logo_bytes).decode("ascii"),
         }
         _master, deck, digests = _published_sql_deck(
@@ -916,6 +977,120 @@ def test_export_service_resolves_owner_logo_bytes_into_verified_worker_asset(
         assert sent["assets"] == [worker_asset]
         assert sent["master"]["furniture"][0]["assetSha256"] == worker_asset["sha256"]
         assert repository.get_active_artifact(deck.deck_id) is not None
+    finally:
+        engine.dispose()
+
+
+def test_export_job_accepts_distinct_scene_assets_with_one_digest_pin(
+    tmp_path: Path,
+) -> None:
+    from models.authored_vnext.deck.scene import (
+        SceneAssetManifestEntry,
+        SceneEditability,
+        SceneImageElement,
+        seal_deck_scene,
+        seal_slide_scene,
+    )
+    from models.authored_vnext.master.contract import Rect
+
+    engine, repository = _sql_repository(tmp_path)
+    try:
+        _master, deck, _digests = _published_sql_deck(
+            repository, "deck:duplicate-scene-image-bytes"
+        )
+        image_bytes = (
+            Path(__file__).resolve().parents[3] / "nextjs" / "public" / "Logo.png"
+        ).read_bytes()
+        digest = f"sha256:{sha256(image_bytes).hexdigest()}"
+        encoded = base64.b64encode(image_bytes).decode("ascii")
+        asset_ids = ("asset:scene-image-one", "asset:scene-image-two")
+        slide = deck.scene.slides[0]
+        images = [
+            SceneImageElement(
+                kind="image",
+                element_id=f"{slide.slide_id}:image-{index}",
+                z_order=2 + index,
+                bounds=Rect(x=100 + index * 220, y=500, width=180, height=100),
+                semantic_role="illustration",
+                editability=SceneEditability(asset=True),
+                asset_id=asset_id,
+                asset_digest=digest,
+                alt_text=f"Fixture image {index}",
+            )
+            for index, asset_id in enumerate(asset_ids, start=1)
+        ]
+        updated_slide = seal_slide_scene(
+            slide_id=slide.slide_id,
+            revision=slide.revision,
+            elements=[*slide.elements, *images],
+        )
+        manifest = [
+            SceneAssetManifestEntry(
+                asset_id=asset_id,
+                asset_digest=digest,
+                media_type="image/png",
+                storage_reference=f"data:image/png;base64,{encoded}",
+                size_bytes=len(image_bytes),
+            )
+            for asset_id in asset_ids
+        ]
+        updated_scene = seal_deck_scene(
+            deck_id=deck.deck_id,
+            revision=deck.revision + 1,
+            composition_digest=deck.scene.composition_digest,
+            source_digest=deck.source_digest,
+            slides=[updated_slide],
+            asset_manifest=manifest,
+            capabilities=list(deck.scene.capabilities),
+        )
+        updated_slide_spec = deck.slides[0].model_copy(update={
+            "scene": updated_slide,
+            "checkpoint": deck.slides[0].checkpoint.model_copy(
+                update={"scene_digest": updated_slide.slide_digest}
+            ),
+        })
+        updated_deck = _SceneSnapshot.model_validate({
+            **deck.model_dump(mode="json", by_alias=True),
+            "revision": deck.revision + 1,
+            "parentRevisionDigest": deck.digest,
+            "scene": updated_scene.model_dump(mode="json", by_alias=True),
+            "slides": [updated_slide_spec.model_dump(mode="json", by_alias=True)],
+        })
+        updated_deck = updated_deck.model_copy(update={
+            "digest": f"sha256:{raw_sha256(updated_deck.model_dump(mode='json', by_alias=True, exclude={'digest'}))}"
+        })
+        repository.append_deck(
+            updated_deck,
+            expected_revision=deck.revision,
+            expected_digest=deck.digest,
+        )
+        service = AuthoredVNextExportService(
+            repository,
+            DeterministicWorkerTransport(lambda payload: _worker_success(payload, b"PK\x03\x04fixture")),
+            BufferedArtifactStore(tmp_path / "duplicate-scene-artifacts"),
+        )
+        assets = service._worker_assets(
+            repository.get_master(updated_deck.master_id, updated_deck.master_revision).contract,
+            updated_deck,
+        )
+        assert {asset["assetId"] for asset in assets} == set(asset_ids)
+        assert {asset["sha256"] for asset in assets} == {digest.removeprefix("sha256:")}
+        _, digests = build_worker_request(
+            operation_id="job:duplicate-scene",
+            fence_token=1,
+            master=repository.get_master(updated_deck.master_id, updated_deck.master_revision).contract,
+            deck=updated_deck,
+            expected_package_digest=None,
+            assets=assets,
+        )
+        job = _create_service_job(
+            service,
+            deck=updated_deck,
+            digests=digests,
+            key="duplicate-scene-image-bytes",
+            asset_digests=[digest],
+        )
+        assert job.state == "queued"
     finally:
         engine.dispose()
 

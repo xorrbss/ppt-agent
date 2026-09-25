@@ -1,0 +1,56 @@
+{
+  "id": "environment-09-carbon-capture",
+  "category": "environment",
+  "tags": {
+    "ko": [
+      "환경",
+      "탄소포집"
+    ],
+    "en": [
+      "environment",
+      "carbon",
+      "capture"
+    ]
+  },
+  "alt": {
+    "ko": "탄소포집 단색 벡터 인포그래픽",
+    "en": "carbon capture monochrome vector infographic"
+  },
+  "path": "originals/environment-09-carbon-capture.svg",
+  "thumbnail": "thumbnails/environment-09-carbon-capture.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 516,
+  "sha256": "1f1b0177f9a475bcdeb747e9a6d14a08cd93b1d707c6a1f7afb329a1c8591abd",
+  "geometry_sha256": "33e7f1b4fba938718841703b398f908934c443d40108d14b441a6ec3ccc0156e",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 59219,
+    "preview_opaque_pixels": 4902,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Cloud",
+      "Leaf"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

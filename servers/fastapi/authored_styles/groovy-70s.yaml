@@ -23,34 +23,60 @@ preview:
     - "#FBC02D"
     - "#006064"
   variant: light
+  image: catalogue-previews/groovy-70s.png
+reference_images:
+  content: [catalogue-previews/groovy-70s.png]
 brief: |-
   MOOD:
   Create warm, soulful 1970s print and record-sleeve nostalgia. The feeling is optimistic, playful, analog, and composed rather than chaotic acid psychedelia. Let a few bold curves and rounded forms carry the period voice.
 
+  Give the retro optimism an editorial purpose: flowing shapes should lead into a clear comparison or journey, not replace substantive content.
+
   PALETTE:
   Use warm cream #E8DCC4 as the main paper field, charcoal #212121 for outlines and copy, burnt orange #BF360C as the primary accent, mustard #FBC02D for warmth, and deep teal #006064 for counterpoint. Keep the full deck to these five flat colors and avoid neon.
 
+  Preserve cream, burnt orange, mustard and deep teal with dark ink. Use cream or dark ink based on contrast; mustard is a surface with dark labels, not a small-text color.
+
   TYPOGRAPHY:
   Use one rounded, flowing psychedelic serif for very large short titles only, supported by a clear condensed or modern sans serif for body copy and labels. Keep distorted display phrases to a few words. Never force paragraphs, tables, or small annotations into the decorative face.
+  Use the readable body face for Korean explanations and evidence labels, retaining the display style in short headings. Preserve required wording and follow the runtime typography policy.
+
+  Use a local rounded or sturdy serif for a short Latin display accent when available, with clear Korean sans-serif for body and labels. Reserve extreme curves for art, not reading text. All Korean text must resolve through a local stack including "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif. At a 1280x720 canvas, target body 22-28px and labels at least 16px; 9.5pt (12.667px) is the hard floor for every text run, including SVG, captions and sources. If text cannot fit, shorten with evidence intact or split the slide; never shrink below the floor.
 
   LAYOUT SYSTEM:
-  Use thick charcoal outlines, rounded two-by-two panels, oversized display titles, and one broad multicolor wavy ribbon that connects or divides sections. Add restrained paper grain or vignette for analog warmth. Leave open cream areas so the system does not become a wall of pattern.
+  Use thick charcoal outlines, rounded panels grouped to suit the content, oversized display titles, and one broad multicolor wavy ribbon that connects or divides sections. Add restrained paper grain or vignette for analog warmth. Leave open cream areas so the system does not become a wall of pattern.
+  Use outlined panels only when the content benefits from grouping, and let a single broad cream field replace the two-by-two arrangement for long Korean prose. Keep wavy ribbons outside text and chart bounds, and reserve display lettering for short headings. Alternate poster, open editorial and chart compositions across the deck.
+
+  Use one curved color field or arch to organize an open reading area, with data placed on a calm cream plane. Alternate a flowing poster, a straightforward evidence sheet and a warm process story. Keep up to three data groups; move long copy out of curved shapes rather than narrowing the font. These are flexible compositional directions for freely authored HTML/CSS, not fixed layouts, slots, Deck IR or a layout engine.
 
   SIGNATURE ELEMENTS:
   Repeat an orange-mustard-teal ribbon, a flower-power rosette, a four-point sparkle, and a small period illustration such as vinyl, microphone, projector, or reel. Use one or two signatures per slide, never all at once.
 
+  Use nested arches, rounded bands and one playful display word with consistent stroke weight. A ribbon can guide a three-stage journey but its width must remain decorative unless a scale is supplied.
+
   DATA VISUALIZATION:
-  Favor illustrated four-quadrant infographics, thick simple bars or arrows, record-like donuts, and very large numerals. Limit legends and axis detail, and label values directly. Data must remain legible above nostalgia; use charcoal outlines and flat fills without gradients.
+  Use simple outlined charts, direct labels and large supported numerals on cream, keeping charcoal labels clear of ribbons and grain. A record-like donut requires a known whole and source-supported shares; a quadrant requires meaningful labeled categories. Keep chart marks proportional, retain units and source context, and use mustard primarily as a fill with charcoal text. Do not turn decorative waves, rosettes or panels into invented measurements.
+
+  Use rounded-end bars on a common baseline, a direct-labeled period comparison or a three-step observation sequence. Keep values and units outside saturated bands. Do not imply proportional area from decorative circles or make nostalgia stand in for evidence.
 
   IMAGE DIRECTION:
   Choose either warm grainy film photography of people or halftone-and-ink illustration of period objects as the deck's primary medium. Maintain one dominant medium across the deck. Avoid glossy modern stock, photorealistic three-dimensional renders, and mixed visual eras.
 
+  Draw original retro arch, botanical or sun-like SVG forms with the existing warm palette. Use credited source imagery only when relevant; avoid copying recognizable album art or embedding text in texture.
+
   SLIDE ARCHETYPES:
-  - cover: Use one huge groovy serif title with a wavy ribbon entering from two corners and only a few sparkles.
-  - content: Organize up to four rounded outlined blocks around one flower badge or period illustration.
-  - data: Use one illustrated quadrant, bold simple chart, or oversized number with direct labels.
-  - timeline: Carry up to five milestones along a single orange-mustard-teal wave with very short captions.
-  - closing: Center one memorable sentence between a restrained pair of sparkles or flowers.
+  cover: Use a groovy serif title with a ribbon entering from two corners and a restrained sparkle.
+  agenda: Place topic names on open cream rows with small rosette navigation marks, avoiding a mandatory four-panel grid.
+  section: Use a short section name with one broad ribbon and an open cream field.
+  content: Group concise ideas in outlined panels when useful, or pair one illustration with a broad reading area for longer explanations.
+  data: Use a clearly labeled chart or one supported number, with decorative period details kept outside the evidence.
+  timeline: Carry supplied milestones along a single ribbon, placing captions on flat cream fields. Use numbered stages if dates are unavailable.
+  architecture: Use labeled rounded regions with simple connectors for supported roles or components; keep the ribbon decorative and separate from dependency arrows.
+  closing: Center a supported final sentence between restrained flowers or sparkles, using a next action only when the brief supplies one.
+
+  Explore — optimistic proposition with evidence; three-period comparison under an arch; warm process ribbon; product or material study; paired option spread; source-backed quotation with context; next-step poster with one condition.
 
   AVOID:
   Avoid extreme letter warping, decorative type at small sizes, more than five colors, neon, glass effects, thin modern SaaS cards, detailed chart furniture, patterns in every empty area, mixed photo and illustration styles, dense paragraphs, and unreplaced template text.
+
+  Do not invent claims, measurements, quotations, citations or provenance. Keep illustrative data visibly labeled and supplied evidence traceable. Avoid repeating the same composition throughout a deck; alternate the narrative scenes above while retaining this style's visual identity. Keep all original reference images and their provenance intact.

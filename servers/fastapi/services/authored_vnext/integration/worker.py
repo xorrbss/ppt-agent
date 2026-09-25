@@ -136,7 +136,7 @@ class NativeSceneOoxmlWorkerTransport:
                 "contentBase64": base64.b64encode(content).decode("ascii"),
             },
             "receipt": {
-                "adapterRevision": 4,
+                "adapterRevision": 5,
                 "validation": "candidate-reopened",
                 "candidateDigestVerified": True,
                 "package": {

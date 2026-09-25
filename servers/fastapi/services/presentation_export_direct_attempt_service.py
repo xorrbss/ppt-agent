@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import hmac
 from pathlib import Path
@@ -46,6 +45,9 @@ from services.presentation_export_capabilities import (
     PresentationExportFreshnessError,
     analyze_presentation_export_capabilities,
 )
+from services.presentation_export_route_inputs import (
+    resolve_authored_local_fit_receipts,
+)
 from services.presentation_export_powerpoint_qa import (
     publish_finalized_hybrid_sidecars,
     require_matching_hybrid_sidecars,
@@ -78,11 +80,12 @@ from services.presentation_export_direct_attempt_semantic import (
     prefixed_digest as _prefixed_digest,
     release_authority_pin_from_projection as _release_authority_pin_from_projection,
 )
+from services.presentation_export_direct_attempt_history import (
+    HYBRID_ATTEMPT_RETENTION_DAYS,  # noqa: F401  (re-exported for callers)
+    HYBRID_EVIDENCE_RETENTION_DAYS,  # noqa: F401  (re-exported for callers)
+    list_direct_hybrid_export_attempt_history,
+)
 from utils.owner_context import get_current_owner_id
-
-
-HYBRID_ATTEMPT_RETENTION_DAYS = 180
-HYBRID_EVIDENCE_RETENTION_DAYS = 30
 
 
 def _sha256_file(path: Path) -> str:
@@ -326,6 +329,24 @@ async def complete_direct_hybrid_export_attempt(
     actual_sha256 = await asyncio.to_thread(_sha256_file, artifact)
     if actual_size != pptx_size_bytes or not hmac.compare_digest(actual_sha256, pptx_sha256):
         raise PresentationExportFreshnessError("presentation_export_artifact_digest_mismatch")
+    local_fit_receipts = resolve_authored_local_fit_receipts(
+        presentation, slides
+    )
+    local_fit_export_evidence = None
+    if local_fit_receipts:
+        from services.authored_local_fit_export import verify_local_fit_pptx
+
+        supplied_evidence = quality.get("localFitExportEvidence")
+        local_fit_export_evidence = verify_local_fit_pptx(
+            artifact,
+            local_fit_receipts,
+            mode="hybrid",
+            export_evidence=(
+                supplied_evidence
+                if isinstance(supplied_evidence, dict)
+                else None
+            ),
+        )
     require_matching_hybrid_sidecars(
         artifact,
         quality=quality,
@@ -422,6 +443,12 @@ async def complete_direct_hybrid_export_attempt(
     provenance["coverage_manifest"] = finalized_coverage_json
     provenance["atomic_binding"] = atomic_binding
     provenance["powerpoint_qa"] = qa.model_dump(mode="json")
+    if local_fit_export_evidence is not None:
+        capability_evidence = dict(provenance["capability_evidence"])
+        capability_evidence["authored_local_fit_export"] = (
+            local_fit_export_evidence
+        )
+        provenance["capability_evidence"] = capability_evidence
     provenance["visual_parity"] = {
         "status": visual_parity_status,
         "binding": atomic_binding,
@@ -683,6 +710,18 @@ async def complete_direct_fidelity_export_attempt(
     actual_sha256 = await asyncio.to_thread(_sha256_file, artifact)
     if actual_size != pptx_size_bytes or not hmac.compare_digest(actual_sha256, pptx_sha256):
         raise PresentationExportFreshnessError("presentation_export_artifact_digest_mismatch")
+    local_fit_receipts = resolve_authored_local_fit_receipts(
+        presentation, slides
+    )
+    local_fit_export_evidence = None
+    if local_fit_receipts:
+        from services.authored_local_fit_export import verify_local_fit_pptx
+
+        local_fit_export_evidence = verify_local_fit_pptx(
+            artifact,
+            local_fit_receipts,
+            mode="fidelity",
+        )
 
     renderer_source_sha256 = attempt.provenance["freshness"]["renderer_source_sha256"]
     atomic_binding = {
@@ -704,6 +743,12 @@ async def complete_direct_fidelity_export_attempt(
     freshness["package_sha256"] = pptx_sha256
     provenance["freshness"] = freshness
     provenance["atomic_binding"] = atomic_binding
+    if local_fit_export_evidence is not None:
+        capability_evidence = dict(provenance["capability_evidence"])
+        capability_evidence["authored_local_fit_export"] = (
+            local_fit_export_evidence
+        )
+        provenance["capability_evidence"] = capability_evidence
     await terminalize_export_attempt_succeeded(
         session,
         attempt_id=attempt.id,
@@ -740,182 +785,6 @@ async def complete_direct_fidelity_export_attempt(
             "rendererSourceDigest": renderer_source_sha256,
             "pptxSha256": pptx_sha256,
         },
-    }
-
-
-def _is_hybrid_attempt(attempt: PresentationExportAttempt) -> bool:
-    provenance = attempt.provenance or {}
-    evidence = provenance.get("capability_evidence") or {}
-    compiler = (provenance.get("compiler_runtime") or {}).get("compiler")
-    return (
-        evidence.get("export_mode") == "hybrid"
-        or compiler == "authored-hybrid"
-        or provenance.get("coverage_manifest") is not None
-    )
-
-
-def _projected_value(value: dict[str, Any], snake: str, camel: str) -> Any:
-    return value.get(snake) if snake in value else value.get(camel)
-
-
-async def list_direct_hybrid_export_attempt_history(
-    session: AsyncSession,
-    *,
-    presentation_id: uuid.UUID,
-) -> dict[str, Any]:
-    """Project immutable attempts into derived active/resolved/superseded history."""
-
-    owner_id = get_current_owner_id()
-    owner_scope = get_workspace_owner_scope()
-    attempts = (
-        await session.execute(
-            select(PresentationExportAttempt)
-            .where(
-                PresentationExportAttempt.presentation_id == presentation_id,
-                PresentationExportAttempt.owner_id == owner_id,
-                PresentationExportAttempt.owner_scope == owner_scope,
-                PresentationExportAttempt.format == "pptx",
-                PresentationExportAttempt.state.in_(("succeeded", "failed")),
-            )
-            .order_by(
-                PresentationExportAttempt.created_at.desc(),
-                PresentationExportAttempt.id.desc(),
-            )
-        )
-    ).scalars().all()
-    attempts = [attempt for attempt in attempts if _is_hybrid_attempt(attempt)]
-    newest_success: dict[tuple[int, str], PresentationExportAttempt] = {}
-    for attempt in attempts:
-        key = (attempt.source_revision, attempt.format)
-        if attempt.state == "succeeded" and key not in newest_success:
-            newest_success[key] = attempt
-
-    projected: list[dict[str, Any]] = []
-    for attempt in attempts:
-        successor = newest_success.get((attempt.source_revision, attempt.format))
-        successor_is_later = bool(
-            successor is not None
-            and successor.id != attempt.id
-            and successor.created_at > attempt.created_at
-        )
-        if successor_is_later:
-            resolution = "resolved" if attempt.state == "failed" else "superseded"
-        else:
-            resolution = "active"
-        provenance = attempt.provenance or {}
-        freshness = provenance.get("freshness") or {}
-        parity = provenance.get("visual_parity") or {}
-        binding = parity.get("binding") or {}
-        qa = parity.get("powerpoint_qa") or provenance.get("powerpoint_qa") or {}
-        rendered = qa.get("rendered_png_sha256") or []
-        coverage = provenance.get("coverage_manifest") or {}
-        quality = provenance.get("quality_sidecar") or {}
-        expires_at = (
-            attempt.completed_at + timedelta(days=HYBRID_EVIDENCE_RETENTION_DAYS)
-            if attempt.completed_at
-            else None
-        )
-        expired = bool(
-            expires_at
-            and datetime.now(timezone.utc)
-            >= expires_at.replace(tzinfo=expires_at.tzinfo or timezone.utc)
-        )
-        evidence_complete = (
-            attempt.state == "succeeded"
-            and bool(parity)
-            and binding.get("presentation_id") == str(presentation_id)
-            and binding.get("export_attempt_id") == str(attempt.id)
-            and binding.get("presentation_revision") == attempt.source_revision
-            and binding.get("canonical_source_sha256")
-            == attempt.source_snapshot_sha256
-            and binding.get("renderer_source_sha256")
-            == freshness.get("renderer_source_sha256")
-            and binding.get("pptx_sha256") == attempt.artifact_sha256
-        )
-        projected.append(
-            {
-                "exportAttemptId": str(attempt.id),
-                "state": attempt.state,
-                "resolution": resolution,
-                **(
-                    {"supersededByAttemptId": str(successor.id)}
-                    if successor_is_later and successor is not None
-                    else {}
-                ),
-                "presentationRevision": attempt.source_revision,
-                "format": attempt.format,
-                "createdAt": attempt.created_at.isoformat(),
-                "completedAt": (
-                    attempt.completed_at.isoformat() if attempt.completed_at else None
-                ),
-                "failureCode": attempt.failure_code,
-                "evidence": {
-                    "status": (
-                        "expired"
-                        if evidence_complete and expired
-                        else "complete" if evidence_complete else "incomplete"
-                    ),
-                    "attemptId": str(attempt.id),
-                    "presentationRevision": attempt.source_revision,
-                    "canonicalSourceDigest": attempt.source_snapshot_sha256,
-                    "rendererSourceDigest": freshness.get("renderer_source_sha256"),
-                    "pptxSha256": attempt.artifact_sha256,
-                    "pptxSizeBytes": attempt.artifact_size_bytes,
-                    "coverageManifestSha256": parity.get(
-                        "coverage_sidecar_sha256"
-                    ),
-                    "renderManifestSha256": (
-                        sha256_canonical_json(rendered) if rendered else None
-                    ),
-                    "reportManifestSha256": parity.get(
-                        "quality_sidecar_sha256"
-                    ),
-                    "bundleManifestSha256": (
-                        sha256_canonical_json(parity) if parity else None
-                    ),
-                    "slidePngSha256": rendered,
-                    "visualParity": parity.get(
-                        "status", "failed" if attempt.state == "failed" else "not-verified"
-                    ),
-                    "nativeText": _projected_value(
-                        coverage, "native_text", "nativeText"
-                    ),
-                    "nativeImage": _projected_value(
-                        coverage, "native_image", "nativeImage"
-                    ),
-                    "nativeShape": _projected_value(
-                        coverage, "native_shape", "nativeShape"
-                    ),
-                    "nativeTable": _projected_value(
-                        coverage, "native_table", "nativeTable"
-                    ),
-                    "nativeChart": _projected_value(
-                        coverage, "native_chart", "nativeChart"
-                    ),
-                    "rasterRemaining": _projected_value(
-                        coverage, "raster_remaining", "rasterRemaining"
-                    ),
-                    "typographyIssues": _projected_value(
-                        coverage, "typography_issues", "typographyIssues"
-                    )
-                    or [],
-                    "fallbackReasonCounts": _projected_value(
-                        quality, "fallback_reason_counts", "fallbackReasonCounts"
-                    )
-                    or {},
-                    "expiresAt": expires_at.isoformat() if expires_at else None,
-                },
-            }
-        )
-    return {
-        "schemaVersion": "presenton.authored-hybrid-export-history/v1",
-        "retention": {
-            "attemptRetentionDays": HYBRID_ATTEMPT_RETENTION_DAYS,
-            "evidenceRetentionDays": HYBRID_EVIDENCE_RETENTION_DAYS,
-            "expiryAction": "mark_expired_retain_metadata",
-            "deletionAuthorized": False,
-        },
-        "attempts": projected,
     }
 
 

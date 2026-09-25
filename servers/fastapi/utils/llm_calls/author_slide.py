@@ -31,9 +31,11 @@ from utils.llm_calls.author_slide_admission import (
 from utils.llm_calls import author_slide_effort, author_slide_prompt, author_slide_rules
 from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
 from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
+from utils.llm_calls.author_prompt_profile import authoring_model, current_author_prompt_profile
 from utils.llm_calls.author_prompt_split import author_messages, invariant_prefix_source
 from utils.llm_calls.author_slide_stream import (
     is_authored_author_streaming_enabled,
+    output_token_limit_from_provider_outcome,
     raise_if_output_token_limited,
     stream_author_call,
 )
@@ -286,6 +288,9 @@ def build_design_system(
     *,
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
     header_contract: Optional[AuthoredHeaderContract] = None,
+    canvas_width_px: int = 1280,
+    canvas_height_px: int = 720,
+    canvas_safe_area: object | None = None,
 ) -> str:
     """Build the concrete shared brief for a brand and optional authored style.
 
@@ -299,11 +304,12 @@ def build_design_system(
     deck reproduce the same header.
     """
     validate_page_number_mode(page_number_mode)
+    profile = current_author_prompt_profile()
     return author_slide_prompt.build_design_system(
         brand,
         style,
-        default_style_brief=author_slide_rules.DEFAULT_STYLE_BRIEF,
-        design_system_rules=author_slide_rules.DESIGN_SYSTEM_RULES,
+        default_style_brief=profile.sections.default_style_brief,
+        design_system_rules=profile.sections.design_system_rules,
         # The wider rule is opt-in with the feature: offering asset ids the
         # deck cannot produce would only invite an unresolvable slot.
         illustration_slot_rules=illustration_slot_rules(
@@ -315,7 +321,7 @@ def build_design_system(
         page_number_system=author_slide_rules.PAGE_NUMBER_RULES_BY_MODE[
             page_number_mode
         ],
-        type_scale=type_scale_rules(getattr(brand, "verbosity", None)),
+        type_scale=profile.type_scale(getattr(brand, "verbosity", None)),
         header_system=(
             render_header_contract(
                 header_contract,
@@ -324,6 +330,9 @@ def build_design_system(
             if header_contract is not None
             else ""
         ),
+        canvas_width_px=canvas_width_px,
+        canvas_height_px=canvas_height_px,
+        canvas_safe_area=canvas_safe_area,
     )
 
 
@@ -697,6 +706,8 @@ def validate_authored_slide_html(
     allow_illustration_slots: bool = False,
     finalized: bool = False,
     normalization_receipt: list[dict] | None = None,
+    read_only: bool = False,
+    normalization_mode: str | None = None,
 ) -> str:
     """Return canonical HTML after applying the renderer's existing admission policy.
 
@@ -720,18 +731,29 @@ def validate_authored_slide_html(
     """
     canonical = canonicalize_authored_slide_html(html, finalized=finalized)
     if is_authored_html_normalize_enabled():
-        normalized = normalize_authored_html(canonical)
-        if normalized.normalizations:
+        normalized = normalize_authored_html(canonical, mode=normalization_mode)
+        # Adopt whenever the normalizer actually changed the bytes, not
+        # whenever a rule fired: `legacy` only ever changes bytes when a rule
+        # fires (byte-identical otherwise), so this is equivalent for it, but
+        # `tree` mode's whole point is a canonical HTML5 reserialization that
+        # can differ from the input even when no rewrite rule fired (empty
+        # receipt list). Gating adoption on `normalizations` truthiness left
+        # the reserialized tree discarded on every slide that fired no rule.
+        if normalized.html != canonical:
             canonical = normalized.html
             if normalization_receipt is not None:
                 normalization_receipt.extend(normalized.normalizations)
-            logger.info(
-                "authored_html_normalize fired %d rule(s): %s",
-                len(normalized.normalizations),
-                ", ".join(
-                    f"{entry['rule']}x{entry['count']}" for entry in normalized.normalizations
-                ),
-            )
+            if normalized.normalizations:
+                logger.info(
+                    "authored_html_normalize fired %d rule(s): %s",
+                    len(normalized.normalizations),
+                    ", ".join(
+                        f"{entry['rule']}x{entry['count']}" for entry in normalized.normalizations
+                    ),
+                )
+            else:
+                logger.info("authored_html_normalize adopted canonical reserialization (no rule fired)")
+
     validation_source = (
         _without_authoring_only_image_attributes(canonical)
         if allow_illustration_slots
@@ -743,6 +765,11 @@ def validate_authored_slide_html(
     except RendererPolicyError as error:
         error.rejected_html = canonical
         raise
+    if read_only and canonical != html:
+        error = RendererPolicyError("Captured authored HTML requires normalization.")
+        error.normalization_required = True
+        error.rejected_html = canonical
+        raise error
     return canonical
 
 
@@ -791,6 +818,8 @@ def fallback_slide_html(
     n: int,
     *,
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
+    canvas_width_px: int = 1280,
+    canvas_height_px: int = 720,
 ) -> str:
     """A clean, on-brand placeholder slide used when authoring a slide fails or returns
     invalid HTML — so one bad slide degrades to a simple branded slide instead of
@@ -812,10 +841,21 @@ def fallback_slide_html(
     # The numbered layout reserves a 72px footer zone; an unnumbered deck keeps
     # the 32px bottom margin its slides were authored against.
     bottom_padding = 72 if page_number_mode == TEMPLATE_PAGE_NUMBER_MODE else 32
+    from services.authored_local_fit_policy import FONT_FLOOR_PT, pt_per_css_px, required_font_px
+    footer_font_px = required_font_px(
+        FONT_FLOOR_PT,
+        1,
+        pt_per_css_px(
+            width_pt=canvas_width_px * 0.75,
+            height_pt=canvas_height_px * 0.75,
+            viewport_width=canvas_width_px,
+            viewport_height=canvas_height_px,
+        ),
+    )
     return (
         f"<!DOCTYPE html><html lang=\"ko\" {_FALLBACK_SLIDE_MARKER}>"
         "<head><meta charset=\"utf-8\"><style>"
-        f"body{{margin:0;width:1280px;height:720px;overflow:hidden;background:#F8FAFC;"
+        f"body{{margin:0;width:{canvas_width_px}px;height:{canvas_height_px}px;overflow:hidden;background:#F8FAFC;"
         f"font-family:{font_stack};"
         f"box-sizing:border-box;padding:64px 64px {bottom_padding}px;"
         "display:flex;flex-direction:column;position:relative;}"
@@ -824,7 +864,7 @@ def fallback_slide_html(
         "font-weight:700;margin-bottom:18px;}"
         ".body{font-size:30px;line-height:1.5;color:#0F172A;font-weight:500;max-width:1000px;}"
         ".foot{position:absolute;left:0;right:0;bottom:14px;text-align:center;"
-        "font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3;}"
+        f"font-size:{footer_font_px:g}px;line-height:16px;font-weight:500;color:#A7ACB3;}}"
         "</style></head><body>"
         f"<div class=\"bar\"></div><div class=\"eyebrow\">{eyebrow}</div>"
         f"<div class=\"body\">{text}</div>{footer}"
@@ -882,7 +922,9 @@ def authored_provider_semantic_slot(
     """
 
     base = (
-        "author.recovery"
+        "author.rescue"
+        if receipt_attempt_ordinal == 3
+        else "author.recovery"
         if receipt_attempt_ordinal == 2 or receipt_retry_class == "recovery"
         else "author.initial"
     )
@@ -907,6 +949,7 @@ async def author_slide_html(
     *,
     source_images: Mapping[str, SourceImageCandidate] | Sequence[SourceImageCandidate] = (),
     require_all_source_images: bool = False,
+    source_image_placement_plan: Mapping | None = None,
     # The user's request text and this slide's deck-scoped illustration decision;
     # both default to absent, reproducing the prompt for callers that have neither.
     instructions: Optional[str] = None,
@@ -922,13 +965,12 @@ async def author_slide_html(
     allow_provider_fallback: bool = True,
     receipt_retry_class: Optional[str] = None,
     receipt_attempt_ordinal: Optional[int] = None,
+    normalization_receipt: list[dict] | None = None,
 ) -> str:
     """Author one bespoke, self-contained 1280x720 HTML slide. Single text-generation
     call against the configured provider; returns the cleaned HTML document.
-
-    `reasoning_effort` overrides the codex reasoning effort for this call (see
-    _authoring_extra_body); the vision-QA re-author pass passes 'off' so corrections
-    run at the provider's full default effort rather than the fast authoring 'low'.
+    `reasoning_effort` overrides the codex reasoning effort; the vision-QA
+    re-author pass uses 'off' so corrections run at the provider default.
 
     `source_images` are pictures the user already owns that this slide may place.
     An empty sequence attaches nothing and leaves the request as it was."""
@@ -981,7 +1023,7 @@ async def author_slide_html(
     )
     image_parts = [*reference_image_parts, *source_parts]
     client = get_client(config=get_llm_config())
-    model = get_model()
+    model = authoring_model(get_model())
     if mode == EXACT_RECONSTRUCTION:
         reference_guidance = author_slide_rules.EXACT_RECONSTRUCTION_GUIDANCE
     else:
@@ -1004,6 +1046,10 @@ async def author_slide_html(
         source_slot_candidates,
         required=require_all_source_images,
     )
+    if not require_all_source_images:
+        source_guidance += author_slide_prompt.planned_source_image_brief(
+            source_image_placement_plan or (structured_context or {}).get("source_image_placement_plan")
+        )
     if require_all_source_images and source_slot_candidates:
         source_guidance = (
             "\n\nSLIDE-SPECIFIC SOURCE AUTHORITY: The immutable source-content "
@@ -1011,7 +1057,7 @@ async def author_slide_html(
             "listed source slots are the required exception to any deck-wide "
             "optional-source-image prohibition; URL and invented-image bans "
             "remain in force. Render every source image materially inside the "
-            "1280x720 viewport: never use display:none, hidden visibility, low "
+            "declared canvas viewport: never use display:none, hidden visibility, low "
             "opacity, a 1x1/tiny box, an off-canvas position, or a distorted "
             "strip as a storage trick. Each image must be part of the visible "
             "slide composition. When five to eight images are required, reserve "
@@ -1046,9 +1092,9 @@ async def author_slide_html(
     if receipt_attempt_ordinal is not None and (
         isinstance(receipt_attempt_ordinal, bool)
         or not isinstance(receipt_attempt_ordinal, int)
-        or receipt_attempt_ordinal not in {1, 2}
+        or receipt_attempt_ordinal not in {1, 2, 3}
     ):
-        raise ValueError("receipt_attempt_ordinal must be 1 or 2 when provided")
+        raise ValueError("receipt_attempt_ordinal must be 1, 2, or 3 when provided")
     if (
         receipt_retry_class is not None
         and receipt_attempt_ordinal is not None
@@ -1085,6 +1131,7 @@ async def author_slide_html(
         provider_call_attempt += 1
         timer = ProviderCallTimer()
         response = None
+        generate_call = None
         try:
             async with provider_call_admission(
                 is_retry=provider_call_attempt > 1,
@@ -1097,15 +1144,20 @@ async def author_slide_html(
             ):
                 spans.mark_admitted()
                 enforce_llm_egress_policy()
+                # SPEED-9: streaming keeps the socket busy and returns the same
+                # response shape, so it replaces the executor hand-off entirely.
+                # The bounded-call wrapper is built only on the path that uses
+                # it. Building it on both would no longer lose this attempt's
+                # retry reservation -- the wrapper only claims it as its
+                # physical call starts -- but a wrapper nothing runs is still
+                # dead weight.
+                if is_authored_author_streaming_enabled():
+                    response = await stream_author_call(client, generate_kwargs)
+                    return response
                 generate_call = provider_generate_call(
                     client, provider_id=provider, kwargs=generate_kwargs,
                     idempotency_key=current_provider_idempotency_key(), outcome_scope="authored",
                 )
-                # SPEED-9: streaming keeps the socket busy and returns the same
-                # response shape, so it replaces the executor hand-off entirely.
-                if is_authored_author_streaming_enabled():
-                    response = await stream_author_call(client, generate_kwargs)
-                    return response
                 response = await loop.run_in_executor(_AUTHOR_EXECUTOR, spans.wrap(generate_call))
                 # The openai API-key transport has no terminal-event guard, so a
                 # document the provider cut at its output ceiling is named here
@@ -1119,6 +1171,13 @@ async def author_slide_html(
             # A provider-declared cooldown is shared by all subsequent authored
             # calls in this process, including multimodal -> text-only fallback.
             _register_author_rate_limit(error)
+            # The chatgpt transport's outcome guard ends an incomplete stream
+            # before the call returns; when the ceiling was the reason, name it.
+            aborted = output_token_limit_from_provider_outcome(
+                error, getattr(generate_call, "terminal_outcome", None)
+            )
+            if aborted is not None:
+                raise aborted from error
             raise
         finally:
             record_call_spans(spans, response)
@@ -1169,14 +1228,17 @@ async def author_slide_html(
         except Exception as fallback_error:
             reraise_author_call_error(fallback_error)
     authored_html = extract_html_document(extract_text(response.content) or "")
+    from services.authored_admission_producers import provider_raw_html, provider_expanded_html
+    authored_html = provider_raw_html(authored_html, index=index, normalization_receipt=normalization_receipt)
     authored_html = _strip_nonvisual_pointer_events(authored_html)
     if mode != EXACT_RECONSTRUCTION:
         # The floor the fragmentation gate resolves (15px on, 12px off) is
         # applied here mechanically: a model that writes 13px labels against
         # the prompt gets them raised before the first render, not after a
-        # repair round.
+        # repair round. An explicit user-requested size in `instructions` can
+        # still lower that floor; `enforce_authored_font_floor` reconciles both.
         authored_html = enforce_authored_font_floor(
-            authored_html, minimum_px=fit_font_floor_px()
+            authored_html, minimum_px=fit_font_floor_px(), instructions=instructions
         )
         # A pinned data-header-part="body" wrapper with no left/right/width
         # has no horizontal extent and collapses to zero width, taking every
@@ -1226,9 +1288,9 @@ async def author_slide_html(
             authored_html,
             source_slot_candidates,
         )
-    authored_html = validate_authored_slide_html(
-        authored_html,
-        allow_illustration_slots=True,
+    authored_html = provider_expanded_html(
+        authored_html, index=index, validate=validate_authored_slide_html,
+        normalization_receipt=normalization_receipt,
     )
     if authored_semantic_dual_output_mode() == "declared":
         try:

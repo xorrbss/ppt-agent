@@ -1,0 +1,64 @@
+{
+ "run": "run-13",
+ "slide_index": 22,
+ "fixture_role": "failing_slide",
+ "is_failing_slide": true,
+ "authoring_passed": false,
+ "job_id": "88c1e3e6-ef8d-40e6-9661-61d884a23a6d",
+ "job_id_basis": "05-admission.json operation_id -> presentation_generation_jobs.workspace_operation_id (authoritative join; agrees with the created_at ordering it replaces for all 11 runs)",
+ "job_id_basis_note": "repeatability-20260911.md",
+ "workspace_operation_id": "19a08008-3cbd-4cab-80dd-e76ec25a1144",
+ "job_state": "failed",
+ "presentation_id": "78faf730-e7e6-49f5-a03f-9c1b4ed4a043",
+ "completed_slides": 33,
+ "created_at": "2026-09-11 12:28:06.514669+09:00",
+ "checkpoint": {
+  "render_sha256": null,
+  "failed_stage": "author",
+  "error": {
+   "status_code": 500,
+   "code": "authored_slide_author_failed",
+   "detail": "Slide authoring failed after retries",
+   "message": "Slide authoring failed after retries",
+   "stage": "author",
+   "slide_index": 22,
+   "slide_number": 23,
+   "exception_type": "AuthoredProviderBudgetExhausted",
+   "cause": "authored_renderer_css_property_budget_exhausted:CSS property is not allowed: content: \"1\"",
+   "fingerprint": "d8134709a382cf26",
+   "retryable": false,
+   "request_id": "deade968-b4a0-4f7a-adcb-b81d2667c256",
+   "attempt_number": 1,
+   "provider_attempt_count": 3
+  },
+  "author_status": "failed",
+  "render_status": "pending"
+ },
+ "run_artifacts": {
+  "files": [
+   "01-upload.json",
+   "02-snapshot.json",
+   "03-analysis.json",
+   "04-generate-request.json",
+   "05-admission.json",
+   "06-final-status.json",
+   "08-audit.json"
+  ],
+  "06-final-status.json": {
+   "code": "authored_slide_author_failed",
+   "detail": "Presentation generation failed"
+  },
+  "08-audit.json": {
+   "visibilityFailures": 1,
+   "missingBlockIds": 1,
+   "orderViolations": null,
+   "flaggedSlides": "unavailable"
+  }
+ },
+ "absent": [
+  "html-render.txt: deck did not publish, no slides row",
+  "html-author.txt: checkpoint author_html is null (cleared after publication on published decks)",
+  "html-illustrated.txt: checkpoint illustrated_html is null",
+  "metrics.json: browser metrics are not persisted anywhere (authored_slide_checkpoints has no metrics column, artifact_refs is null, authored_evidence_*_v3 are empty)"
+ ]
+}

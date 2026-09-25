@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#08916E}
+.header-left{position:absolute;left:64px;top:20px;width:820px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:6px;font-size:32px;line-height:39px;font-weight:800;color:#1D1D1B}
+.header-right{position:absolute;left:956px;top:20px;width:260px;min-height:39px;padding:8px 14px;background:#00140E;color:#FFFFFF;text-align:right;font-size:15px;line-height:18px;font-weight:600;border-radius:12px}
+.body-wrap{position:absolute;left:0;right:0;top:120px;width:1152px;margin-left:64px}
+.main-grid{display:grid;grid-template-columns:500px 628px;gap:24px;height:500px}
+.panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:28px}
+.panel-title{font-size:22px;line-height:32px;font-weight:800;color:#002060;margin-bottom:22px}
+.bullet-list{display:flex;flex-direction:column;gap:17px}
+.bullet-row{display:flex;align-items:flex-start;gap:14px;font-size:18px;line-height:28px;font-weight:600}
+.bullet-mark{width:8px;height:8px;flex:none;margin-top:10px;background:#08916E;border-radius:12px}
+.flow-panel{padding:24px 28px 22px}
+.flow-title{font-size:22px;line-height:32px;font-weight:800;color:#002060;margin-bottom:19px}
+.flow{display:flex;align-items:center;gap:10px;height:86px}
+.step{height:72px;flex:1;padding:14px 10px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px;text-align:center;color:#002060;font-size:18px;line-height:25px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.step:nth-child(1){background:#CCECFF}
+.step:nth-child(3){background:#E0F3FF}
+.step:nth-child(5){background:#CCECFF}
+.step:nth-child(7){background:#E0F3FF}
+.step:nth-child(9){background:#CCECFF}
+.arrow{width:18px;height:2px;flex:none;background:#00828E;position:relative}
+.arrow:after{;position:absolute;right:-1px;top:-4px;width:8px;height:8px;border-top:2px solid #00828E;border-right:2px solid #00828E;transform:rotate(45deg)}
+.image-panel{margin-top:19px;height:220px;padding:8px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.image-panel img{display:block;width:570px;height:202px;border-radius:12px;object-fit:cover;background:#EAEDF2}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="96" class="header-band" style="height:96px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-3aab73a300f5c8cd" data-source-block-id="source-slide:19:text:3:run:0">3주차 PART 1</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-876d03b38fc8c738" data-source-block-id="source-slide:19:text:3:run:1">무료 샘플 전략</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-a219155582a20462" data-source-block-id="source-slide:19:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:120px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="main-grid" data-qid="q-div-948c49f110fb" data-semantic-role="decoration">
+    <section class="panel" data-qid="q18-guidance-card" data-semantic-role="decoration">
+      <div class="panel-title" data-semantic-role="supporting" data-qid="q18-guidance-title">무료 샘플 전략</div>
+      <div class="bullet-list" data-qid="source-block-937edc0fc8d273d6" data-semantic-role="decoration" data-source-block-id="source-slide:19:text:6">
+        <div class="bullet-row" data-semantic-role="decoration" data-qid="q18-bullet-1"><span class="bullet-mark" data-qid="q-span-42f15cbbf745" data-semantic-role="decoration"></span><span data-qid="q-span-f32986c526a1" data-semantic-role="body">첫 고객에게 무작정 가격부터 말하지 않는다</span></div>
+        <div class="bullet-row" data-semantic-role="decoration" data-qid="q18-bullet-2"><span class="bullet-mark" data-qid="q-span-b5961728f975" data-semantic-role="decoration"></span><span data-qid="q-span-c83eac29f2ad" data-semantic-role="body">가능하면 가게 특성에 맞는 샘플을 준비</span></div>
+        <div class="bullet-row" data-semantic-role="decoration" data-qid="q18-bullet-3"><span class="bullet-mark" data-qid="q-span-e331268f35e2" data-semantic-role="decoration"></span><span data-qid="q-span-eedec0ea8962" data-semantic-role="body">한 가게에 4개 소재를 기획해보기</span></div>
+        <div class="bullet-row" data-semantic-role="decoration" data-qid="q18-bullet-4"><span class="bullet-mark" data-qid="q-span-9f77a5cecf39" data-semantic-role="decoration"></span><span data-qid="q-span-2af01d53a93e" data-semantic-role="body">무료 제공 범위와 기간을 명확히</span></div>
+        <div class="bullet-row" data-semantic-role="decoration" data-qid="q18-bullet-5"><span class="bullet-mark" data-qid="q-span-20a9079739ea" data-semantic-role="decoration"></span><span data-qid="q-span-0856754b8eb9" data-semantic-role="body">목표는 ‘공짜 노동’이 아니라 유료 전환</span></div>
+      </div>
+    </section>
+
+    <section class="panel flow-panel" data-qid="q18-architecture-card" data-semantic-role="decoration">
+      <div class="flow-title" data-semantic-role="supporting" data-qid="source-block-07640de12403b83a" data-source-block-id="source-slide:19:text:9">샘플 구조</div>
+      <div class="flow" data-qid="source-block-2528122476d8e673" data-semantic-role="decoration" data-source-block-id="source-slide:19:text:10">
+        <div class="step" data-semantic-role="body" data-qid="q18-step-1">가게 분석</div>
+        <div class="arrow" data-semantic-role="decoration" data-qid="q-div-f2e763bf438c"></div>
+        <div class="step" data-semantic-role="body" data-qid="q18-step-2">4개 기획</div>
+        <div class="arrow" data-semantic-role="decoration" data-qid="q-div-d3cb923b1c37"></div>
+        <div class="step" data-semantic-role="body" data-qid="q18-step-3">1~4개 제작</div>
+        <div class="arrow" data-semantic-role="decoration" data-qid="q-div-6221deea81c6"></div>
+        <div class="step" data-semantic-role="body" data-qid="q18-step-4">반응 확인</div>
+        <div class="arrow" data-semantic-role="decoration" data-qid="q-div-956e65aa97b2"></div>
+        <div class="step" data-semantic-role="body" data-qid="q18-step-5">유료 제안</div>
+      </div>
+      <div class="image-panel" data-qid="q18-image-panel" data-semantic-role="decoration">
+        
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="source-block-0835442ac46726d4" data-source-block-id="source-slide:19:text:4">19</div>
+</body>
+</html>

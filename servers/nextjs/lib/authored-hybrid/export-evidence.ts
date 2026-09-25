@@ -10,8 +10,10 @@ import {
 } from "./export-metadata.ts";
 import type { ActiveEmissionExportBinding } from "./active-emission.ts";
 import { createPowerPointQidExpectation } from "./powerpoint-qid-expectation.ts";
+import type { LocalFitExportEvidence } from "./local-fit-export-evidence.ts";
 
 export interface AuthoredHybridEvidenceSource {
+  localFitExportEvidence?: LocalFitExportEvidence;
   exportAttemptId: string;
   presentationId: string;
   presentationRevision: number;
@@ -58,7 +60,9 @@ export async function attachAuthoredHybridEvidence(
   let coveragePublished = false;
   let expectationPublished = false;
   try {
-    await fs.writeFile(temporaryQualityPath, JSON.stringify(boundQuality, null, 2), {
+    await fs.writeFile(temporaryQualityPath, JSON.stringify({ ...boundQuality,
+      ...(source.localFitExportEvidence ? { localFitExportEvidence: source.localFitExportEvidence } : {}),
+    }, null, 2), {
       flag: "wx",
       mode: 0o600,
     });

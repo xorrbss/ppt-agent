@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "svg.source-layout-v2-runtime",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "SVG 원본 보존 v2는 서버가 문자 배치와 실제 글꼴을 검증하며, 제한된 템플릿 탐색으로 미해결된 페이지만 모델에 전달한다.",
+  "scope": [
+    "svg",
+    "generation",
+    "templates"
+  ],
+  "invariants": [
+    "Public v2 plans contain no character ranges; the server resolves wrapping with the pinned template font bytes.",
+    "Local search admits at most 3 candidates and 2 repairs per candidate within 1500 ms; preparation time is reported separately.",
+    "Only explicit unresolved-layout outcomes allow model generation and one repair; local successes consume no model attempt.",
+    "A terminal page failure cancels sibling waits without claiming cancellation of already dispatched provider calls."
+  ],
+  "forbidden": [
+    "Bypass invalid source, missing template or font authority through model fallback.",
+    "Treat automated geometry checks as visual or full-document acceptance."
+  ],
+  "evidence": [
+    "servers/fastapi/services/svg_source_template_layout.py",
+    "servers/fastapi/services/svg_presentation_service.py",
+    "servers/fastapi/tests/unit/test_svg_source_layout.py",
+    "servers/fastapi/tests/unit/test_svg_source_generation_flow.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-22T14:41:52.5852934+00:00"
+}

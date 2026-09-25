@@ -1,0 +1,56 @@
+{
+  "id": "finance-13-balance-sheet",
+  "category": "finance",
+  "tags": {
+    "ko": [
+      "금융",
+      "재무제표"
+    ],
+    "en": [
+      "finance",
+      "balance",
+      "sheet"
+    ]
+  },
+  "alt": {
+    "ko": "재무제표 단색 벡터 인포그래픽",
+    "en": "balance sheet monochrome vector infographic"
+  },
+  "path": "originals/finance-13-balance-sheet.svg",
+  "thumbnail": "thumbnails/finance-13-balance-sheet.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 750,
+  "sha256": "c202217a8af9052f6862d922bbb49370fa622ba30fbb72076476056e51c533cc",
+  "geometry_sha256": "63530b72503552a8614058bb08b1a3ac388e8f18c299ac9e46053ff0c03b87d9",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 53370,
+    "preview_opaque_pixels": 10070,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Sheet",
+      "Scale"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

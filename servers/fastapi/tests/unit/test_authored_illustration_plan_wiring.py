@@ -224,7 +224,8 @@ def test_a_deck_without_a_plan_illustrates_exactly_as_before(monkeypatch, tmp_pa
     assert all("data:image" in html for html in result.deck.htmls)
 
 
-def test_optional_generated_image_failure_removes_slot_and_keeps_slide(monkeypatch):
+@pytest.mark.parametrize("source_images", [None, {}])
+def test_optional_generated_image_failure_removes_slot_and_keeps_slide(monkeypatch, source_images):
     async def fail_optional_generation(*_args, **_kwargs):
         raise TimeoutError("optional image provider unavailable")
 
@@ -246,7 +247,7 @@ def test_optional_generated_image_failure_removes_slot_and_keeps_slide(monkeypat
             illustration_allowed=True,
             generation_job=None,
             attempt_token=None,
-            source_images=None,
+            source_images=source_images,
         )
     )
 

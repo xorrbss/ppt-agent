@@ -2,14 +2,32 @@
 
 from __future__ import annotations
 
+import asyncio
 from copy import copy
 import logging
 import threading
+import time
 from types import MethodType
 from typing import Any, Callable, Mapping
 
+from services.authored_batch_policy import OVERLOAD_COOLDOWN_BASE_SECONDS
+from utils.provider_attempt_reservations import (
+    ProviderAttemptReservationLease,
+    lease_provider_attempt_reservations,
+)
+from utils.provider_overload import (
+    BoundedProviderCall,
+    ProviderOutcomeError,
+    ProviderQuotaPause,
+    ProviderRetryReservation,
+    is_provider_overload,
+    usage_limit_reset_epoch,
+)
+from utils.provider_stream_guard import (
+    GuardedResponsesClient as _GuardedResponsesClient,
+    ProviderCallAborted as ProviderCallAborted,
+)
 from utils.provider_terminal_outcome import (
-    ProviderTerminalOutcome,
     ProviderTerminalOutcomeRecorder,
 )
 
@@ -19,7 +37,16 @@ LOGGER = logging.getLogger(__name__)
 _SUPPORTED_PROVIDER_IDS = frozenset({"openai"})
 _LLMAI_OPENAI_MODULE_PREFIX = "llmai.openai."
 _LLMAI_CHATGPT_MODULE_PREFIX = "llmai.chatgpt."
+#: One authored slide attempt: it may hold an attempt reservation of its own.
 _AUTHORED_OUTCOME_SCOPE = "authored"
+#: A deck-level authored call (the vision advisory) -- same outcome mapping and
+#: quota pause, but no slide attempt, so it must never spend a slide's
+#: reservation.  Stated here, at the only constructor of a bounded call, rather
+#: than as a guard each deck-level caller could forget.
+_AUTHORED_DECK_OUTCOME_SCOPE = "authored_deck"
+_AUTHORED_OUTCOME_SCOPES = frozenset(
+    {_AUTHORED_OUTCOME_SCOPE, _AUTHORED_DECK_OUTCOME_SCOPE}
+)
 
 # One provider call must not outlive its slice of the job budget.  Measured
 # three-slide authoring calls land between ~170s and ~240s, so this only fires
@@ -31,50 +58,6 @@ _AUTHORED_OUTCOME_SCOPE = "authored"
 # s) passes it as ``timeout_seconds`` and it replaces this generic guard.
 PROVIDER_CALL_TIMEOUT_SECONDS = 360.0
 
-
-class ProviderCallAborted(RuntimeError):
-    """The caller abandoned this call at its deadline and its stream was closed."""
-
-
-class BoundedProviderCall:
-    """One bounded provider call.  ``abort()`` stops a streaming transport at its next event.
-
-    The SDK request timeout bounds a non-streaming call outright, but on a
-    streaming transport it only bounds the gap between events, so a stream
-    that keeps producing would otherwise run to completion behind a cancelled
-    await.  ``abort()`` flips the flag the guarded stream checks per event.
-    """
-
-    __slots__ = ("_run", "_abort_event", "_terminal")
-
-    def __init__(
-        self,
-        run: Callable[[], Any],
-        abort_event: threading.Event,
-        terminal: ProviderTerminalOutcomeRecorder | None = None,
-    ) -> None:
-        self._run = run
-        self._abort_event = abort_event
-        self._terminal = terminal
-
-    def __call__(self) -> Any:
-        return self._run()
-
-    def abort(self) -> None:
-        self._abort_event.set()
-
-    @property
-    def abort_requested(self) -> bool:
-        return self._abort_event.is_set()
-
-    @property
-    def terminal_outcome(self) -> ProviderTerminalOutcome | None:
-        """How the Responses stream ended, once its terminal event was seen.
-
-        ``None`` on a transport without a Responses resource, before the
-        terminal event, and on a stream that was closed early.
-        """
-        return self._terminal.outcome if self._terminal is not None else None
 
 _TIMEOUT_UNENFORCEABLE_PROVIDERS: set[str] = set()
 
@@ -105,7 +88,7 @@ def _clone_raw_client(
     timeout = (
         PROVIDER_CALL_TIMEOUT_SECONDS
         if timeout_seconds is None
-        else max(1.0, float(timeout_seconds))
+        else max(0.05, float(timeout_seconds))
     )
     try:
         return raw_client.with_options(**options, timeout=timeout)
@@ -132,34 +115,6 @@ def _is_call_timeout(error: BaseException) -> bool:
         nested = getattr(current, "cause", None) or getattr(current, "__cause__", None)
         current = nested if isinstance(nested, BaseException) else None
     return False
-
-
-class ProviderOutcomeError(RuntimeError):
-    """Content-free provider outcome that survives the authored job boundary.
-
-    ``retryable`` deliberately describes whether the *outer operation* may be
-    replayed. Authored authoring owns its one bounded in-slide recovery through
-    ``recovery_allowed``; after that recovery the durable operation must retain
-    the original outcome instead of degrading to attempt-budget exhaustion.
-    """
-
-    def __init__(self, code: str, *, recovery_allowed: bool) -> None:
-        self.code = code
-        self.retryable = False
-        self.recovery_allowed = recovery_allowed
-        super().__init__(code)
-
-
-def _exception_status_code(error: BaseException) -> int | None:
-    value = getattr(error, "status_code", None)
-    if value is None:
-        value = getattr(getattr(error, "response", None), "status_code", None)
-    return value if isinstance(value, int) and not isinstance(value, bool) else None
-
-
-def _bridge_recovery_allowed(error: BaseException) -> bool:
-    status_code = _exception_status_code(error)
-    return status_code is None or status_code == 429 or status_code >= 500
 
 
 def _provider_outcome_cause(error: BaseException) -> ProviderOutcomeError | None:
@@ -193,100 +148,6 @@ def _content_has_text(value: Any) -> bool:
     return False
 
 
-class _GuardedResponsesResource:
-    """Wrap ``responses.create`` so a streamed call can be aborted and, for the
-    authored scope, so terminal stream events become durable outcomes."""
-
-    def __init__(
-        self,
-        resource: Any,
-        *,
-        abort_event: threading.Event,
-        guard_outcomes: bool,
-        terminal: ProviderTerminalOutcomeRecorder | None = None,
-    ) -> None:
-        self._resource = resource
-        self._abort_event = abort_event
-        self._guard_outcomes = guard_outcomes
-        self._terminal = terminal or ProviderTerminalOutcomeRecorder()
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._resource, name)
-
-    def create(self, *args: Any, **kwargs: Any) -> Any:
-        stream = self._resource.create(*args, **kwargs)
-        if not hasattr(stream, "__next__"):
-            # A non-streaming response is complete on return: nothing to abort,
-            # and the SDK request timeout has already bounded it.
-            self._terminal.observe_response(stream)
-            return stream
-
-        def guarded_events():
-            try:
-                for event in stream:
-                    if self._abort_event.is_set():
-                        raise ProviderCallAborted("provider_call_aborted")
-                    # Recorded for every transport, before the authored-only
-                    # guard below can turn the same event into an outcome error.
-                    self._terminal.observe_event(event)
-                    if self._guard_outcomes:
-                        _raise_for_terminal_event(event)
-                    yield event
-            finally:
-                if self._abort_event.is_set():
-                    _close_quietly(stream)
-
-        return guarded_events()
-
-
-def _raise_for_terminal_event(event: Any) -> None:
-    event_type = getattr(event, "type", None)
-    if event_type == "response.failed":
-        raise ProviderOutcomeError(
-            "public_provider_response_failed",
-            recovery_allowed=True,
-        )
-    if event_type == "response.incomplete":
-        raise ProviderOutcomeError(
-            "public_provider_response_incomplete",
-            # The Responses API reports incomplete only after it has
-            # accepted and bounded the request (for example at its
-            # output limit). Replaying the unchanged call is not a
-            # transport recovery.
-            recovery_allowed=False,
-        )
-
-
-def _close_quietly(stream: Any) -> None:
-    close = getattr(stream, "close", None)
-    if callable(close):
-        try:
-            close()
-        except Exception:
-            LOGGER.debug("Failed to close an aborted provider stream", exc_info=True)
-
-
-class _GuardedResponsesClient:
-    def __init__(
-        self,
-        client: Any,
-        *,
-        abort_event: threading.Event,
-        guard_outcomes: bool,
-        terminal: ProviderTerminalOutcomeRecorder | None = None,
-    ) -> None:
-        self._client = client
-        self.responses = _GuardedResponsesResource(
-            client.responses,
-            abort_event=abort_event,
-            guard_outcomes=guard_outcomes,
-            terminal=terminal,
-        )
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._client, name)
-
-
 def supports_provider_idempotency(client: Any, *, provider_id: str) -> bool:
     """Declare support only for the inspected llmai OpenAI SDK transport."""
 
@@ -298,6 +159,75 @@ def supports_provider_idempotency(client: Any, *, provider_id: str) -> bool:
     )
 
 
+class _AuthoredRetryReservation:
+    """This one bounded call's claim on the authored attempt reservations.
+
+    A reservation authorizes a single physical replay of the call that spends
+    it, so it must leave the context with that call -- otherwise the next call
+    in the same task (a different slide, a fallback request, an unrelated
+    structured call) could reserve a physical ordinal against an attempt token
+    that is not its own.  But it must leave *when that call starts*, not when
+    this wrapper is built: a wrapper that an early return or a cancelled
+    executor hand-off then drops would otherwise spend a reservation for a
+    physical call that never happened, and leave the call that does run with
+    nothing to replay.
+
+    ``claim`` is therefore made by :class:`BoundedProviderCall` as the physical
+    request begins, from the SDK thread it runs on.  That thread cannot rebind
+    the caller's ``ContextVar``, which is why the ledger keeps the reservations
+    in a shared holder and hands out leases against it.
+    """
+
+    __slots__ = ("_lease", "_loop", "_reserve")
+
+    def __init__(
+        self,
+        lease: ProviderAttemptReservationLease,
+        loop: asyncio.AbstractEventLoop,
+        reserve: Callable[..., Any],
+    ) -> None:
+        self._lease = lease
+        self._loop = loop
+        self._reserve = reserve
+
+    @property
+    def pending(self) -> bool:
+        return self._lease.available
+
+    def claim(self) -> None:
+        self._lease.claim()
+
+    def __call__(self, physical_ordinal: int) -> None:
+        reservations = self._lease.claim()
+        if not reservations:
+            raise RuntimeError("authored_provider_attempt_reservation_unavailable")
+        future = asyncio.run_coroutine_threadsafe(
+            self._reserve(reservations, physical_ordinal=physical_ordinal),
+            self._loop,
+        )
+        future.result()
+
+
+def _authored_retry_reserver() -> _AuthoredRetryReservation | None:
+    """Lease this authored call's attempt reservations, spending none yet.
+
+    The ledger coroutine is resolved here, on the caller's loop thread: the
+    lease is later claimed and spent from the authoring executor's SDK thread,
+    and a first import taken there could contend with the main thread's.
+    """
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return None
+    lease = lease_provider_attempt_reservations()
+    if lease is None:
+        return None
+    from services.authored_checkpoint_state import reserve_provider_overload_retry
+
+    return _AuthoredRetryReservation(lease, loop, reserve_provider_overload_retry)
+
+
 def provider_generate_call(
     client: Any,
     *,
@@ -306,6 +236,9 @@ def provider_generate_call(
     idempotency_key: str | None,
     outcome_scope: str | None = None,
     timeout_seconds: float | None = None,
+    retry_reserver: ProviderRetryReservation | None = None,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> BoundedProviderCall:
     """Return one bounded provider call with optional authored outcome guards.
 
@@ -319,15 +252,37 @@ def provider_generate_call(
     a second physical request under one admission.
     """
 
-    if outcome_scope not in {None, _AUTHORED_OUTCOME_SCOPE}:
+    if outcome_scope is not None and outcome_scope not in _AUTHORED_OUTCOME_SCOPES:
         raise ValueError("provider outcome scope is unsupported")
     generate_kwargs = dict(kwargs)
+    # ``outcome_scope`` is the only authority for the authored guards.  A
+    # pending attempt reservation is not one: the streaming author path omits
+    # the scope deliberately (the guard reads a document's text and a stream
+    # returns an iterator), and every unrelated call a task makes while an
+    # authored attempt is open would otherwise inherit the authored outcome
+    # mapping, the quota pause and another slide's retry reservation.
+    authored_request = outcome_scope in _AUTHORED_OUTCOME_SCOPES
+    # Only a slide attempt owns a reservation.  A deck-level authored call runs
+    # while a slide's reservation may still be pending in the same task, so
+    # leasing one here would reserve a physical replay against another slide's
+    # attempt token.
+    slide_attempt_request = outcome_scope == _AUTHORED_OUTCOME_SCOPE
+    # ``generate(stream=True)`` returns a generator: the request is issued at
+    # iteration, outside ``BoundedProviderCall.__call__``, so no overload can
+    # ever reach its replay branch on any transport.  A wrapper that cannot
+    # replay must not hold a reservation either.
+    streamed_response = bool(generate_kwargs.get("stream"))
+    selected_retry_reserver = retry_reserver
+    if selected_retry_reserver is None and slide_attempt_request:
+        selected_retry_reserver = _authored_retry_reserver()
+    if streamed_response:
+        selected_retry_reserver = None
     is_chatgpt = type(client).__module__.startswith(_LLMAI_CHATGPT_MODULE_PREFIX)
     can_clone_raw_client = callable(
         getattr(getattr(client, "_client", None), "with_options", None)
     )
     should_adapt = supports_provider_idempotency(client, provider_id=provider_id) or (
-        outcome_scope == _AUTHORED_OUTCOME_SCOPE
+        authored_request
         and is_chatgpt
         and can_clone_raw_client
     )
@@ -337,7 +292,7 @@ def provider_generate_call(
     # ``response.incomplete``; read back through ``call.terminal_outcome``.
     terminal = ProviderTerminalOutcomeRecorder()
     options: dict[str, Any] = {}
-    if should_adapt or timeout_seconds is not None:
+    if should_adapt or timeout_seconds is not None or authored_request:
         options["max_retries"] = 0
     if should_adapt and idempotency_key and supports_provider_idempotency(
         client, provider_id=provider_id
@@ -364,7 +319,7 @@ def provider_generate_call(
                 raw_client,
                 abort_event=abort_event,
                 guard_outcomes=(
-                    outcome_scope == _AUTHORED_OUTCOME_SCOPE and is_chatgpt
+                    authored_request and is_chatgpt
                 ),
                 terminal=terminal,
             )
@@ -400,7 +355,24 @@ def provider_generate_call(
             create_chat_completion_once,
             adapted_client,
         )
-    def generate_once() -> Any:
+    def generate_once(_remaining_seconds: float | None) -> Any:
+        if can_clone_raw_client and _remaining_seconds is not None:
+            request_raw_client = _clone_raw_client(
+                client._client,
+                options,
+                provider_id=provider_id,
+                timeout_seconds=_remaining_seconds,
+            )
+            adapted_client._client = (
+                _GuardedResponsesClient(
+                    request_raw_client,
+                    abort_event=abort_event,
+                    guard_outcomes=(authored_request and is_chatgpt),
+                    terminal=terminal,
+                )
+                if getattr(request_raw_client, "responses", None) is not None
+                else request_raw_client
+            )
         try:
             response = adapted_client.generate(**generate_kwargs)
         except Exception as error:
@@ -409,8 +381,11 @@ def provider_generate_call(
                 if provider_outcome is error:
                     raise
                 raise provider_outcome from error
-            if outcome_scope != _AUTHORED_OUTCOME_SCOPE:
+            if not authored_request:
                 raise
+            reset_at = usage_limit_reset_epoch(error)
+            if reset_at is not None:
+                raise ProviderQuotaPause(reset_at=reset_at) from error
             if _is_call_timeout(error):
                 # Distinct from the generic bridge failure so the batch policy
                 # can treat a stuck call as overload and the failed slides
@@ -418,12 +393,20 @@ def provider_generate_call(
                 raise ProviderOutcomeError(
                     "public_provider_call_timeout",
                     recovery_allowed=True,
+                    overload=True,
+                ) from error
+            if is_provider_overload(error):
+                raise ProviderOutcomeError(
+                    "public_provider_overload",
+                    recovery_allowed=True,
+                    overload=True,
+                    cooldown_seconds=OVERLOAD_COOLDOWN_BASE_SECONDS,
                 ) from error
             raise ProviderOutcomeError(
                 "public_provider_bridge_exception",
-                recovery_allowed=_bridge_recovery_allowed(error),
+                recovery_allowed=False,
             ) from error
-        if outcome_scope == _AUTHORED_OUTCOME_SCOPE and not _content_has_text(
+        if authored_request and not _content_has_text(
             getattr(response, "content", None)
         ):
             raise ProviderOutcomeError(
@@ -432,14 +415,55 @@ def provider_generate_call(
             )
         return response
 
-    return BoundedProviderCall(generate_once, abort_event, terminal)
+    idempotency_capable = authored_request and supports_provider_idempotency(
+        client, provider_id=provider_id
+    )
+    replay_unavailable: str | None = None
+    if streamed_response:
+        # Structural, not transport-specific: the overload surfaces at
+        # iteration, where the bounded wrapper has already returned.  Saying so
+        # at construction is the only way the receipt can distinguish this from
+        # a call that simply never needed a replay.
+        replay_unavailable = "stream_response_not_replayable"
+    elif outcome_scope == _AUTHORED_DECK_OUTCOME_SCOPE:
+        replay_unavailable = "deck_scope_no_slide_attempt"
+    elif authored_request and not idempotency_capable:
+        # The chatgpt/codex transport confirms no request-level idempotency, so
+        # replaying an overload could bill and publish a second document.  The
+        # call still runs once -- the rescue keeps its one bounded attempt --
+        # and the receipt names the reason instead of reading as a call that
+        # simply never needed a replay.
+        replay_unavailable = "transport_idempotency_unconfirmed"
+    elif authored_request and selected_retry_reserver is None:
+        replay_unavailable = "attempt_reservation_unavailable"
+    return BoundedProviderCall(
+        generate_once,
+        abort_event,
+        terminal,
+        idempotency_capable=idempotency_capable,
+        replay_unavailable=replay_unavailable,
+        reserve_retry=selected_retry_reserver,
+        clock=clock,
+        sleep=sleep,
+        deadline_seconds=(
+            PROVIDER_CALL_TIMEOUT_SECONDS
+            if timeout_seconds is None
+            else max(0.05, float(timeout_seconds))
+        ),
+    )
+
+
+#: Deck-level authored calls declare this instead of the slide scope.
+AUTHORED_DECK_OUTCOME_SCOPE = _AUTHORED_DECK_OUTCOME_SCOPE
 
 
 __all__ = [
+    "AUTHORED_DECK_OUTCOME_SCOPE",
     "PROVIDER_CALL_TIMEOUT_SECONDS",
     "BoundedProviderCall",
     "ProviderCallAborted",
     "ProviderOutcomeError",
+    "ProviderQuotaPause",
     "provider_generate_call",
     "supports_provider_idempotency",
 ]

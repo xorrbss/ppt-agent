@@ -88,8 +88,8 @@ const ThemeComposer: React.FC = () => {
   };
 
   return (
-    <div className="w-full" data-testid="theme-composer">
-      <h2 className="mb-1 text-base font-semibold text-[#101828] font-syne">스타일 + 브랜드색으로 테마 만들기</h2>
+    <div className="w-full rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm sm:p-7" data-testid="theme-composer">
+      <h2 className="mb-2 text-xl font-semibold tracking-tight text-zinc-900 font-syne">스타일 + 브랜드색으로 테마 만들기</h2>
       <p className="mb-4 text-sm text-[#667085]">큐레이티드 스타일을 고르고 브랜드 색을 넣으면 완성된 테마를 만들어 저장합니다.</p>
 
       <label className="mb-2 block text-xs font-medium text-[#344054]">스타일</label>
@@ -114,17 +114,17 @@ const ThemeComposer: React.FC = () => {
       <div className="mb-4 flex flex-wrap items-end gap-4">
         <label className="flex flex-col gap-1 text-xs font-medium text-[#344054]">
           기본색(primary)
-          <input type="color" data-testid="composer-primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="h-9 w-16 cursor-pointer rounded border border-[#EAECF0]" />
+          <input type="color" data-testid="composer-primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="h-11 w-16 cursor-pointer rounded-lg border border-zinc-200 bg-white p-1" />
         </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-[#344054]">
           배경색(background)
-          <input type="color" data-testid="composer-background" value={background} onChange={(e) => setBackground(e.target.value)} className="h-9 w-16 cursor-pointer rounded border border-[#EAECF0]" />
+          <input type="color" data-testid="composer-background" value={background} onChange={(e) => setBackground(e.target.value)} className="h-11 w-16 cursor-pointer rounded-lg border border-zinc-200 bg-white p-1" />
         </label>
         <label className="flex flex-1 flex-col gap-1 text-xs font-medium text-[#344054]">
           테마 이름(선택)
-          <input type="text" data-testid="composer-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={`${style?.name ?? "Custom"} 스타일`} className="h-9 rounded border border-[#EAECF0] px-2 text-sm" />
+          <input type="text" data-testid="composer-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={`${style?.name ?? "Custom"} 스타일`} className="h-11 rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/10" />
         </label>
-        <button type="button" data-testid="composer-generate" disabled={busy} onClick={handleGenerate} className="h-9 rounded-full bg-[#5141E5] px-4 text-sm font-medium text-white disabled:opacity-50">
+        <button type="button" data-testid="composer-generate" disabled={busy} onClick={handleGenerate} className="h-11 rounded-xl bg-zinc-900 px-5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2 disabled:opacity-50">
           생성
         </button>
       </div>
@@ -149,7 +149,7 @@ const ThemeComposer: React.FC = () => {
               </div>
             </div>
           </div>
-          <button type="button" data-testid="composer-save" disabled={busy} onClick={handleSave} className="mt-3 h-9 rounded-full border border-[#5141E5] px-4 text-sm font-medium text-[#5141E5] disabled:opacity-50">
+          <button type="button" data-testid="composer-save" disabled={busy} onClick={handleSave} className="mt-4 h-11 rounded-xl border border-zinc-200 bg-white px-5 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2 disabled:opacity-50">
             내 테마로 저장
           </button>
         </div>

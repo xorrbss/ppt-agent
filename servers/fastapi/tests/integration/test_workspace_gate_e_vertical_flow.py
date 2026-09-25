@@ -96,7 +96,6 @@ def test_api_runner_timeline_reconnect_and_retry_are_one_durable_flow(
     tmp_path: Path,
     monkeypatch,
 ):
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "true")
     monkeypatch.setenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", "sqlite-local")
     asyncio.run(_exercise_vertical_flow(tmp_path, monkeypatch))
 

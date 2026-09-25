@@ -1,0 +1,65 @@
+id: chroma-fold
+name: 크로마 폴드
+description: 붉은 입체 리본과 압도적인 활자, 라일락·라임의 무대를 넘나들며 아이디어를 하나의 전시처럼 펼치는 조형적 발표 스타일
+category: creative
+tags:
+  - sculptural
+  - art-direction
+  - chromatic
+  - keynote
+use_cases:
+  - 대담한 브랜드 비전과 캠페인
+  - 신제품과 새로운 서비스 공개
+  - 크리에이티브 전략과 컨퍼런스 키노트
+preview:
+  bg: '#F4F3EE'
+  accent: '#EE4931'
+  palette: ['#F4F3EE', '#171918', '#EE4931', '#C6B9F1', '#E3F477']
+  variant: chroma-sculptural-fold
+  image: chroma-fold/cover.png
+design_tokens:
+  primary: '#EE4931'
+  background: '#F4F3EE'
+  heading_font: '"Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif'
+  body_font: '"Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif'
+reference_images:
+  cover: [chroma-fold/cover.png]
+  content: [chroma-fold/content.png]
+  data: [chroma-fold/data.png]
+  timeline: [chroma-fold/timeline.png]
+  closing: [chroma-fold/closing.png]
+brief: |-
+  MOOD:
+  Art-direct a contemporary sculpture exhibition expressed as a presentation. The core gesture is a broad ribbon that folds, turns, and changes plane: sometimes a monumental object, sometimes a crisp inflection in an evidence diagram. Pair that physical gesture with exceptionally clear Korean typography and generous uncluttered space. The result should feel surprising, intentional, tactile, and legible at a distance. Use the five original reference compositions as demonstrations of a coherent visual language across different page functions, never as fixed layouts or a five-page script.
+
+  PALETTE:
+  Build a deliberate sequence of full fields: warm chalk #F4F3EE, lacquer coral #EE4931, mineral lilac #C6B9F1, citron #E3F477, and ink #171918. Give each slide one dominant field, one clear type color, and at most one secondary accent. Use ink text on chalk, coral, lilac, and citron; chalk on ink. Chalk text on coral is reserved for genuinely large display headlines, never small body copy or captions. Pale decorative sculpture planes must not carry essential text. Use gradients only to describe an original object's orientation and lighting, not as an arbitrary background wash.
+
+  TYPOGRAPHY:
+  Use "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif with substantial 650-800 weight for short, naturally phrased Korean headlines. On a 1280 by 720 CSS canvas, covers and chapter statements may use 76-100px type; evidence pages normally use 44-62px headings, 22-28px body, 18-22px chart labels, and at least 16px captions. Preserve a hard 9.5pt floor, equivalent to 12.667px at 96dpi, for every visible label. Keep Korean tracking natural to slightly tight, never widely letter-spaced. Set display leading around 1.08-1.18 and prose around 1.4-1.55. Use tabular numerals where comparison matters. Edit a headline or spread dense material over additional pages instead of shrinking it into fine print.
+
+  LAYOUT SYSTEM:
+  Author each page around its actual idea. Possible movements include an open typographic field beside a large sculptural ribbon, an almost full-canvas thesis, a broad chart with a folded edge, a rising spatial sequence, or a quiet dark ending. Preserve about 60-72px safe space for text while allowing purely decorative sculpture to crop at a canvas edge. Keep one dominant focal point and a clear next reading step. Change scale, silhouette, and the relationship of text to art across neighboring slides; do not repeat the same title-left/object-right composition, three cards, a bento grid, or fixed slots throughout the deck. Numeric figures, quotes, and dense evidence must earn their area without competing with a decorative hero.
+
+  SIGNATURE ELEMENTS:
+  The signature is one tangible fold or turn: a coral sculptural loop, two meeting paper planes, an angled bar end, or a raised stage. Use original SVG paths, simple polygons, or safe CSS planes with coherent light from the upper left. Keep edges precise and material matte, with restrained shadows rather than glossy glass. A small slash in the folio can echo the fold; it is punctuation, not a dashboard border. One expressive object is enough. Do not fill every empty region with shapes, motion lines, floating badges, or fake interface details.
+
+  DATA VISUALIZATION:
+  Let geometry clarify actual values. Use readable horizontal bars whose measured length starts at one common baseline; a folded end is decorative and must not change the represented length. Place labels and values directly in clear HTML text. Prefer a single focused chart, wide comparison, or explicitly qualitative sequence. Keep units, dates, sources, denominators, and assumptions readable and grounded in the supplied material. Reserve sculpture for an adjacent or secondary field so it does not imply a quantity. The reference data page contains labeled illustrative percentages; never import those numbers, the sample labels, or any synthetic proof into a user's deck. Never invent performance, awards, clients, or results.
+
+  IMAGE DIRECTION:
+  The shipped sculpture and reference pages are original mathematical SVG/CSS artwork, with no external brand or stock-image provenance. Refer to their material, proportion, and visual rhythm. When the user supplies product imagery, give it a distinct open stage and let one restrained fold direct attention toward it. When imagery is unnecessary, make typography or evidence the hero. Do not require remote fonts, new image generation, a known brand's campaign, or an inaccessible asset for this style to work. Keep meaningful text as HTML, not pixels inside decorative imagery. Use normal HTML elements for decoration; CSS generated content is not allowed by the authored renderer.
+
+  SLIDE ARCHETYPES:
+  - cover: A monumental short Korean statement in a spacious chalk field, with one oversized coral ribbon sculpture and a restrained editorial index.
+  - agenda: A bold chapter list aligned along one deliberate changing edge, leaving enough blank space for the audience to grasp the whole route.
+  - section: One very large sentence or chapter numeral on a confident full-color field; simplify the sculpture to a single plane or omit it.
+  - content: A coral thesis page with large chalk display type, a sharply separated ink explanation, and one compact folded-paper gesture.
+  - data: A lilac evidence field with a clear headline, directly labeled bars or another source-supported chart, and a single selective fold at the chart edge.
+  - comparison: Two unequal visual fields shaped by the actual argument, using consistent comparison criteria and only one dominant sculptural intervention.
+  - architecture: A legible system relationship diagram in an open chalk field; let a few clearly connected planes express layers without turning relationships into decorative sculpture.
+  - timeline: A citron stage with a rising sequence of annotated planes, using clear labels and actual dependencies rather than an ornamental staircase with invented milestones.
+  - closing: A spacious ink field, a decisive chalk statement, one concrete next action, and a sculptural echo placed at a different scale from the opening.
+
+  AVOID:
+  Avoid generic navy reports, muted magazine spreads, neon sci-fi dashboards, bento grids, glossy interface mockups, ornamental stock photography, repeated identical hero splits, dense decorative grids, arbitrary rainbow gradients, unreadable rotated prose, text clipped at the slide edge, pale captions, CSS generated content, and charts distorted by perspective. Preserve the freedom to compose content-specific slides; these references are art direction, not an exact-reconstruction preset, slot engine, or fixed sequence.

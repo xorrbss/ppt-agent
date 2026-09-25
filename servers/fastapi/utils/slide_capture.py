@@ -24,6 +24,7 @@ import time
 import urllib.parse
 import urllib.request
 from collections import OrderedDict
+from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
@@ -36,19 +37,17 @@ from services.authored_vnext.capability_registry import (
 from utils.authored_dom_quality import ensure_authored_qids
 from utils.process_kill_on_parent_death import bind_to_parent_lifetime
 from utils.slide_capture_fit import (
-    fit_capture_fields, fit_font_floor_px, fit_probe_prelude, fit_request_html, require_qid_complete)
+    fit_capture_fields, fit_font_floor_px, fit_request_html, probe_fit_prelude, require_qid_complete)
 from utils.slide_capture_hit_test import THIN_VIEWPORT_HIT_TEST_JS
 from utils.slide_capture_polygon_paint import POLYGON_PAINT_DOMAIN_JS
 from utils.slide_capture_rounded_paint import ROUNDED_PAINT_DOMAIN_JS
 from utils.renderer_internal_capability import issue_internal_render_capability
+from utils.shared_render_join import await_shared_render_task
 from utils.renderer_isolation import (
     MAX_RESPONSE_BYTES,
     AdmittedHtml,
     RendererDisabledError,
     RendererPolicyError,
-    admit_authored_html,
-    admit_internal_instrumented_html,
-    admit_static_output_html,
     build_worker_environment,
     encode_request,
     ensure_renderer_enabled,
@@ -57,6 +56,7 @@ from utils.renderer_isolation import (
     renderer_requires_external_worker,
     worker_command,
 )
+from utils.renderer_profile import select_render_profile
 from utils.slide_capture_assets import (
     _asset_fingerprint,
     # Re-exported: `authored_presentation_generation` collects a slide's asset
@@ -87,7 +87,7 @@ _BLOCKED_RENDERER_URL_PATTERNS = [
 # is insufficient: local font/image/CSS files and the resolved Chromium binary
 # may change without changing the authored Scene payload.
 CACHE_IDENTITY_VERSION = "authored-render-cache-identity/v2-capability-registry"
-MEASUREMENT_CACHE_VERSION = "authored-measurement/v12-fit-floor-identity"
+MEASUREMENT_CACHE_VERSION = "authored-measurement/v15-fit-floor-canvas-identity"
 _SCENE_DIGEST_PATTERN = re.compile(
     r'(?:data-scene-digest|data-scene-hash|name\s*=\s*["\']scene-digest["\'])'
     r'\s*=\s*["\']([^"\']+)["\']',
@@ -114,7 +114,9 @@ def _scene_digest(html: str, source_digest: str) -> str:
     return match.group(1) if match else source_digest
 
 
-def _render_cache_identity(html: str) -> _RenderCacheIdentity:
+def _render_cache_identity(
+    html: str, *, width_px: int = SLIDE_W, height_px: int = SLIDE_H
+) -> _RenderCacheIdentity:
     source_digest = "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
     scene_digest = _scene_digest(html, source_digest)
     chrome_digest = chrome_runtime_digest()
@@ -122,6 +124,7 @@ def _render_cache_identity(html: str) -> _RenderCacheIdentity:
     floor_px = fit_font_floor_px()
     payload = "\0".join(
         (CACHE_IDENTITY_VERSION, source_digest, scene_digest, chrome_digest, asset_digest,
+         f"{int(width_px)}x{int(height_px)}",
          MEASUREMENT_CACHE_VERSION, CAPABILITY_REGISTRY_DIGEST, f"fit-floor:{floor_px:g}")
     )
     return _RenderCacheIdentity(
@@ -198,18 +201,24 @@ def _register_internal_render_source(source: str) -> None:
             _internal_capabilities.popitem(last=False)
 
 
-def _admit_render_source(source: str) -> AdmittedHtml:
-    """Select a fail-closed admission profile for the exact in-memory source."""
+def _take_probe_capability(source: str) -> str | None:
+    """Consume this source's single-use internal probe capability, if any."""
+    digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
+    with _internal_capability_lock:
+        return _internal_capabilities.pop(digest, None)
 
-    try:
-        return admit_authored_html(source)
-    except RendererPolicyError:
-        digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
-        with _internal_capability_lock:
-            capability = _internal_capabilities.pop(digest, None)
-        if capability is not None:
-            return admit_internal_instrumented_html(source, capability)
-        return admit_static_output_html(source)
+
+def _admit_render_source(source: str) -> AdmittedHtml:
+    """Select a fail-closed admission profile for the exact in-memory source.
+
+    The selection lives in ``utils.renderer_profile``, so the checkpoint gate
+    judges these bytes under the policy the renderer accepted them under.
+    """
+    admitted = select_render_profile(
+        source, internal_capability=lambda: _take_probe_capability(source)
+    ).require()
+    from services.svg_renderer import materialize_trusted_svg_fonts
+    return materialize_trusted_svg_fonts(source, admitted)
 
 
 def _source_render_digests(html: str) -> tuple[str, str]:
@@ -226,7 +235,8 @@ def _source_render_digests(html: str) -> tuple[str, str]:
 
 
 def _metric_evidence_cache_key(
-    html: str, *, qid: str = "*", metric: str = "*"
+    html: str, *, qid: str = "*", metric: str = "*",
+    width_px: int = SLIDE_W, height_px: int = SLIDE_H,
 ) -> str:
     """Build the scoped identity used by browser metric caches/evidence atoms."""
 
@@ -234,7 +244,9 @@ def _metric_evidence_cache_key(
     return _metric_evidence_cache_key_from_digests(
         source_digest,
         render_digest,
-        cache_identity=_render_cache_identity(html).digest,
+        cache_identity=_render_cache_identity(
+            html, width_px=width_px, height_px=height_px
+        ).digest,
         qid=qid,
         metric=metric,
     )
@@ -268,8 +280,12 @@ def _metric_evidence_cache_key_from_digests(
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _metrics_cache_key(html: str) -> tuple[str, str, str]:
-    return _cache_key_for("metrics", html)
+def _metrics_cache_key(
+    html: str, *, width_px: int = SLIDE_W, height_px: int = SLIDE_H
+) -> tuple[str, str, str]:
+    return _cache_key_for(
+        "metrics", html, width_px=width_px, height_px=height_px
+    )
 
 
 def _instrument_authored_html(
@@ -277,6 +293,8 @@ def _instrument_authored_html(
     *,
     script_nonce: str | None = None,
     issue_capability: bool = True,
+    width_px: int = SLIDE_W,
+    height_px: int = SLIDE_H,
 ) -> tuple[str, str]:
     """Add stable edit ids and an invisible, same-render browser probe."""
     enriched = ensure_authored_qids(html)
@@ -285,7 +303,9 @@ def _instrument_authored_html(
     key = _metric_evidence_cache_key_from_digests(
         source_digest,
         render_digest,
-        cache_identity=_render_cache_identity(html).digest,
+        cache_identity=_render_cache_identity(
+            html, width_px=width_px, height_px=height_px
+        ).digest,
     )
     if _METRICS_ELEMENT_ID in enriched:
         if issue_capability:
@@ -297,93 +317,18 @@ def _instrument_authored_html(
     registry_metadata = json.dumps(
         capability_metadata(consumer="chromium"), sort_keys=True, separators=(",", ":")
     )
-    # Plain JavaScript with single braces.  Interpolating it as an f-string value
-    # is safe -- a substituted value is never re-scanned -- and this template is
-    # never passed through ``str.format``.
-    # The floor rides in the probe, so a worker fits to the floor the API resolved.
-    fit_prelude = fit_probe_prelude(font_floor_px=fit_font_floor_px())
+    from utils.slide_capture_local_fit import observation_script
+    from utils.source_canvas_normalization import normalization_probe_js
+    from utils.slide_capture_font_paint import FONT_AND_PAINT_JS
+    fit_prelude = probe_fit_prelude(html)  # local fit, else in-render class, else none
     script = rf"""<script data-codex-dom-probe{nonce_attribute}>
 (() => {{
-{fit_prelude}
-  const done = (pass) => {{
-    const fit = __codexFitPass(pass === 'final' ? 'final' : 'provisional');
+  {fit_prelude}
+  {normalization_probe_js()}
+  const done = (pass = 'final') => {{
+    const fit = __codexFitPass(pass);
     const px = (value) => {{ const parsed = parseFloat(value || '0'); return Number.isFinite(parsed) ? parsed : 0; }};
-    const rgba = (value) => {{
-      const match = String(value || '').match(/rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)/i);
-      return match ? [Number(match[1]), Number(match[2]), Number(match[3]), match[4] === undefined ? 1 : Number(match[4])] : null;
-    }};
-    const composite = (front, back) => {{
-      const alpha = front[3] + back[3] * (1 - front[3]);
-      if (alpha <= 0) return [255, 255, 255, 1];
-      return [0, 1, 2].map((index) => (front[index] * front[3] + back[index] * back[3] * (1 - front[3])) / alpha).concat(alpha);
-    }};
-    const effectiveBackground = (node) => {{
-      const layers = [];
-      for (let current = node; current; current = current.parentElement) {{
-        const style = getComputedStyle(current);
-        // A single sampled color is not sound evidence for gradients, images,
-        // blend modes, filters, or backdrop effects.  Return unknown so hard
-        // readability constraints fail closed instead of accepting a guessed
-        // white background.
-        if (style.backgroundImage !== 'none' || style.mixBlendMode !== 'normal' ||
-            style.backgroundBlendMode !== 'normal' || style.filter !== 'none' ||
-            style.backdropFilter !== 'none') return null;
-        const color = rgba(style.backgroundColor);
-        if (color && color[3] > 0) layers.push(color);
-      }}
-      return layers.reverse().reduce((back, front) => composite(front, back), [255, 255, 255, 1]);
-    }};
-    const luminance = (color) => {{
-      const channel = (value) => {{ value /= 255; return value <= .04045 ? value / 12.92 : Math.pow((value + .055) / 1.055, 2.4); }};
-      return .2126 * channel(color[0]) + .7152 * channel(color[1]) + .0722 * channel(color[2]);
-    }};
-    const contrastRatio = (node, style) => {{
-      const foreground = rgba(style.color); const background = effectiveBackground(node);
-      if (!foreground || !background) return null;
-      const paintedForeground = composite(foreground, background);
-      const first = luminance(paintedForeground), second = luminance(background);
-      return (Math.max(first, second) + .05) / (Math.min(first, second) + .05);
-    }};
-    const ownedTextNodes = (node) => {{
-      const result = [];
-      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
-      for (let text = walker.nextNode(); text; text = walker.nextNode()) {{
-        if (!String(text.textContent || '').trim()) continue;
-        if (text.parentElement?.closest('[data-qid]') !== node) continue;
-        result.push(text);
-      }}
-      return result;
-    }};
-    const ownedTextRectCache = new WeakMap();
-    const ownedTextRects = (node) => {{
-      const cached = ownedTextRectCache.get(node);
-      if (cached) return cached;
-      const rects = [];
-      for (const text of ownedTextNodes(node)) {{
-        const range = document.createRange(); range.selectNodeContents(text);
-        for (const rect of range.getClientRects()) {{
-          if (rect.width > 0 && rect.height > 0) rects.push({{x: rect.x, y: rect.y, width: rect.width, height: rect.height}});
-        }}
-      }}
-      ownedTextRectCache.set(node, rects);
-      return rects;
-    }};
-    const replacedPaintTags = new Set(['IMG', 'PICTURE', 'SVG', 'CANVAS', 'VIDEO', 'OBJECT', 'EMBED']);
-    const visibleColor = (value) => {{
-      const color = rgba(value);
-      return color !== null && color[3] > .001;
-    }};
-    const ownsSurfacePaint = (node, style = getComputedStyle(node)) => {{
-      if (style.visibility === 'hidden' || Number(style.opacity || 1) <= .001) return false;
-      if (replacedPaintTags.has(node.tagName)) return true;
-      if (style.backgroundImage !== 'none' || visibleColor(style.backgroundColor)) return true;
-      if (style.boxShadow !== 'none' || style.outlineStyle !== 'none') return true;
-      return ['Top', 'Right', 'Bottom', 'Left'].some((side) =>
-        px(style[`border${{side}}Width`]) > 0 &&
-        !['none', 'hidden'].includes(style[`border${{side}}Style`]) &&
-        visibleColor(style[`border${{side}}Color`])
-      );
-    }};
+    {FONT_AND_PAINT_JS}
     {ROUNDED_PAINT_DOMAIN_JS}
     {POLYGON_PAINT_DOMAIN_JS}
     const ownedSurfaceRectCache = new WeakMap();
@@ -413,9 +358,12 @@ def _instrument_authored_html(
     }};
     const pointInRect = (x, y, rect) =>
       x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
+    {IMAGE_ALPHA_PAINT_JS}
     const candidatePaintsAt = (candidate, x, y) => {{
       const style = getComputedStyle(candidate);
       if (style.visibility === 'hidden' || Number(style.opacity || 1) <= .001) return false;
+      const imageAlpha = sourceImageAlphaAt(candidate, x, y);
+      if (imageAlpha !== null) return imageAlpha > 0;
       if (ownsSurfacePaint(candidate, style)) return true;
       const owner = candidate.closest?.('[data-qid]');
       if (!owner) return false;
@@ -614,10 +562,14 @@ def _instrument_authored_html(
         polygon_domain_supported_rects: surfaceRects.filter(r => r.polygon_domain?.status === 'supported').length,
         polygon_domain_unsupported_rects: surfaceRects.filter(r => r.polygon_domain?.status === 'unsupported').length,
         polygon_edge_retry_count: polygonEdgeRetries, polygon_edge_recovered_samples: polygonEdgeRecovered,
-        thin_edge_retry_count: thinEdgeRetries, thin_edge_recovered_samples: thinEdgeRecovered
+        thin_edge_retry_count: thinEdgeRetries, thin_edge_recovered_samples: thinEdgeRecovered,
+        inline_fragment_retry_count: inlineFragmentRetries, inline_fragment_recovered_samples: inlineFragmentRecovered,
+        image_alpha_excluded_samples: imageAlphaExcluded,
+        image_alpha_target_supported: sourceImageAlphaData(node) !== null
       }});
       let roundedExcluded = 0, polygonExcluded = 0, polygonEdgeRetries = 0, polygonEdgeRecovered = 0;
       let thinEdgeRetries = 0, thinEdgeRecovered = 0;
+      let inlineFragmentRetries = 0, inlineFragmentRecovered = 0, imageAlphaExcluded = 0;
       const empty = (values, status, reason) => ({{
         fraction: values.fraction, continuous: values.continuous,
         step: values.step, unknown: values.unknown,
@@ -658,6 +610,7 @@ def _instrument_authored_html(
       const cells = Array.from({{length: rows}}, () => Array(cols).fill(-1));
       const samples = [];
       const addSample = (x, y, group, origin, surfaceDomain = null) => {{
+        if (sourceImageAlphaAt(node, x, y) === 0) {{ imageAlphaExcluded += 1; return false; }}
         if (surfaceDomain && !pointInOwnedPaintSurface(x, y, surfaceDomain)) {{
           if (!pointInPolygonSurface(x, y, surfaceDomain)) polygonExcluded += 1;
           else roundedExcluded += 1;
@@ -701,10 +654,13 @@ def _instrument_authored_html(
       let covered = 0, unknown = 0, unbound = 0;
       const occluderQids = new Set();
       const groupCovered = new Map();
+      let coveredWeight = 0;
+      const imageTarget = sourceImageAlphaEnabled && node.tagName === 'IMG';
+      const cellWeights = Array.from({{length: rows}}, () => Array(cols).fill(0));
       for (const sample of samples) {{
         const {{x, y, row, col, group}} = sample;
         if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) {{
-          sample.state = 1; cells[row][col] = 1; covered += 1;
+          sample.state = 1; cells[row][col] = 1; covered += 1; coveredWeight += 1; cellWeights[row][col] = 1;
           if (group !== null) groupCovered.set(group, (groupCovered.get(group) || 0) + 1);
           continue;
         }}
@@ -717,17 +673,29 @@ def _instrument_authored_html(
         // and actual hit stack; the unknown threshold is unchanged.
         if (owner < 0) {{
           const polygonSamples = polygonAAInteriorSamples(node, x, y, textRects, surfaceRects, stack);
+          // A multiline inline owner's union box includes space between and
+          // beside its line fragments. At an exact line edge, moving towards
+          // that union's centre can move OUT of the line being sampled. Keep
+          // the same bounded retry distances, but aim inside the actual owned
+          // text fragment; every retry still requires a real browser hit.
+          const inlineFragment = !surfaceRects.length && textRects.length > 1 &&
+            getComputedStyle(node).display === 'inline'
+            ? textRects.find(fragment => pointInRect(x, y, fragment)) : null;
+          const retryCenterX = inlineFragment ? inlineFragment.x + inlineFragment.width / 2 : rect.left + rect.width / 2;
+          const retryCenterY = inlineFragment ? inlineFragment.y + inlineFragment.height / 2 : rect.top + rect.height / 2;
           const retrySamples = polygonSamples ?? [.5, 1].map(inset => [
-            x + Math.sign(rect.left + rect.width / 2 - x) * inset,
-            y + Math.sign(rect.top + rect.height / 2 - y) * inset
+            x + Math.sign(retryCenterX - x) * inset,
+            y + Math.sign(retryCenterY - y) * inset
           ]);
           for (const [cx, cy] of retrySamples) {{
             hitX = cx; hitY = cy;
             if (polygonSamples !== null) polygonEdgeRetries += 1;
+            else if (inlineFragment) inlineFragmentRetries += 1;
             stack = document.elementsFromPoint(hitX, hitY);
             owner = stack.findIndex((candidate) => candidate === node || node.contains(candidate));
             if (owner >= 0) {{
               if (polygonSamples !== null) polygonEdgeRecovered += 1;
+              else if (inlineFragment) inlineFragmentRecovered += 1;
               break;
             }}
           }}
@@ -745,6 +713,14 @@ def _instrument_authored_html(
         const occluders = stack.slice(0, owner).filter((candidate) =>
           candidate !== node && !node.contains(candidate) && candidatePaintsAt(candidate, hitX, hitY));
         const isCovered = occluders.length > 0;
+        // Only image targets use alpha-weighted loss of source pixels. Text
+        // targets remain conservative for every nontransparent occluder.
+        const coverage = imageTarget ? occluders.reduce((value, candidate) => {{
+          const alpha = sourceImageAlphaAt(candidate, hitX, hitY);
+          return 1 - (1 - value) * (1 - (alpha === null ? 1 : alpha));
+        }}, 0) : (isCovered ? 1 : 0);
+        coveredWeight += coverage;
+        cellWeights[row][col] = Math.max(cellWeights[row][col], coverage);
         for (const candidate of occluders) {{
           const ownerNode = candidate.closest?.('[data-qid]');
           const ownerQid = ownerNode?.getAttribute('data-qid');
@@ -753,7 +729,7 @@ def _instrument_authored_html(
         sample.state = isCovered ? 1 : 0;
         if (isCovered) {{
           cells[row][col] = 1; covered += 1;
-          if (group !== null) groupCovered.set(group, (groupCovered.get(group) || 0) + 1);
+          if (group !== null) groupCovered.set(group, (groupCovered.get(group) || 0) + coverage);
         }} else if (cells[row][col] !== 1) cells[row][col] = 0;
       }}
       const sampled = samples.length;
@@ -783,7 +759,7 @@ def _instrument_authored_html(
         if (cells[row][col] !== 1 || seen.has(key)) continue;
         let size = 0; const queue = [[row, col]]; seen.add(key);
         while (queue.length) {{
-          const [r, c] = queue.pop(); size += 1;
+          const [r, c] = queue.pop(); size += cellWeights[r][c];
           for (const [nr, nc] of [[r-1,c],[r+1,c],[r,c-1],[r,c+1]]) {{
             const next = `${{nr}}:${{nc}}`;
             if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && cells[nr][nc] === 1 && !seen.has(next)) {{ seen.add(next); queue.push([nr,nc]); }}
@@ -792,10 +768,10 @@ def _instrument_authored_html(
         largest = Math.max(largest, size);
       }}
       const largestOwnedGroup = Math.max(0, ...groupCovered.values());
-      const fraction = covered / known;
+      const fraction = coveredWeight / known;
       return {{
         fraction, continuous: Math.max(largest, largestOwnedGroup) / known, ...common,
-        evidence: evidence('measured', null, {{sampled, known, covered, known_occluded_fraction: fraction, owned_paint_source: ownedPaintSource}})
+        evidence: evidence('measured', null, {{sampled, known, covered, known_occluded_fraction: fraction, covered_alpha_weight: coveredWeight, owned_paint_source: ownedPaintSource}})
       }};
     }};
     const elements = allQids.map((node, domIndex) => {{
@@ -840,12 +816,12 @@ def _instrument_authored_html(
         naturalWidth: Number(node.naturalWidth || 0), naturalHeight: Number(node.naturalHeight || 0),
         cssVisible, effectiveOpacity, viewportIntersectionRatio
       }} : undefined;
-      let fontLoaded = true;
-      try {{ fontLoaded = !document.fonts || document.fonts.check(style.font); }} catch (_) {{}}
+      const resolvedFont = fontEvidence(style, node.innerText || node.textContent || '');
       return {{
         qid: node.getAttribute('data-qid'), tag: node.tagName.toLowerCase(),
         semantic_role: node.getAttribute('data-semantic-role') || node.getAttribute('data-role') || node.getAttribute('role') || null,
         source_block_id: node.getAttribute('data-source-block-id'),
+        source_clip_bounds: node.hasAttribute('data-source-block-id') ? visibleClip(node).bounds : undefined,
         source_image_kind: node.getAttribute('data-source-image-kind'),
         source_image_aspect_ratio: node.getAttribute('data-source-image-aspect-ratio'),
         css_visible: cssVisible, effective_opacity: effectiveOpacity,
@@ -901,10 +877,12 @@ def _instrument_authored_html(
         measurement: {{geometry: true, transform: q.measured, clipping: true, contrast: contrast !== null, occlusion: occultation.fraction !== null, stacking: true, visual_effects: !complexEffect}},
         intentional: node.hasAttribute('data-allow-overlap') || node.hasAttribute('data-intentional-crop'),
         unintentional: node.hasAttribute('data-quality-unintentional'),
-        font_loaded: fontLoaded, image,
+        font_loaded: resolvedFont.loaded,
+        resolved_font_family: resolvedFont.family,
+        font_resolution_source: resolvedFont.source, image,
         connector_geometry: connector,
         static_translation_probe: staticTranslationProbe,
-        font_size: px(style.fontSize),
+        font_size: px(style.fontSize), effective_font_size: effectiveOwnedFontSize(node, ownedTextNodes(node)), owned_text_length: ownedTextNodes(node).reduce((sum, text) => sum + String(text.textContent || '').replace(/\s/g, '').length, 0),
         computed_style: {{
           color: style.color, backgroundColor: style.backgroundColor,
           backgroundImage: style.backgroundImage, backgroundBlendMode: style.backgroundBlendMode,
@@ -949,7 +927,8 @@ def _instrument_authored_html(
       fonts_ready: !document.fonts || document.fonts.status === 'loaded',
       capabilityRegistry: {registry_metadata},
       source_digest: '{source_digest}', render_digest: '{render_digest}',
-      dom_metrics_version: '{DOM_METRICS_VERSION}', metrics_cache_key: '{key}', fit, elements
+      dom_metrics_version: '{DOM_METRICS_VERSION}', metrics_cache_key: '{key}', fit, elements,
+      observation_state: pass, source_viewport_normalization: freezeSourceViewport()
     }};
     let marker = document.getElementById('{_METRICS_ELEMENT_ID}');
     if (!marker) {{ marker = document.createElement('meta'); marker.id = '{_METRICS_ELEMENT_ID}'; document.head.appendChild(marker); }}
@@ -960,14 +939,7 @@ def _instrument_authored_html(
     if (!marker) {{ marker = document.createElement('meta'); marker.id = '{_METRICS_ELEMENT_ID}'; document.head.appendChild(marker); }}
     marker.setAttribute('content', encodeURIComponent(JSON.stringify({{width: innerWidth, height: innerHeight, fonts_ready: false, elements: [], probe_error: String(error && (error.stack || error.message) || error)}})));
   }};
-  const run = () => {{
-    // Without web fonts the first pass already sees final glyph geometry, so its fit is the final one.
-    try {{ done(!document.fonts || document.fonts.status === 'loaded' ? 'final' : 'provisional'); }} catch (error) {{ failed(error); }}
-    // Publish synchronously so --dump-dom can never race an unresolved font
-    // promise.  If web fonts settle within Chrome's virtual-time budget, refresh
-    // the same marker with final glyph geometry before the dump/screenshot.
-    try {{ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => done('final')).catch(failed); }} catch (_) {{}}
-  }};
+  {observation_script(_METRICS_ELEMENT_ID)}
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, {{once: true}}); else run();
 }})();
 </script>"""
@@ -979,8 +951,6 @@ def _instrument_authored_html(
     if issue_capability:
         _register_internal_render_source(enriched)
     return enriched, key
-
-
 def _extract_browser_metrics(dumped_dom: bytes) -> Mapping[str, Any] | None:
     if not dumped_dom:
         return None
@@ -994,8 +964,7 @@ def _extract_browser_metrics(dumped_dom: bytes) -> Mapping[str, Any] | None:
     except (ValueError, TypeError):
         return None
     return value if isinstance(value, Mapping) else None
-
-
+from utils.slide_capture_image_alpha import IMAGE_ALPHA_PAINT_JS
 from utils.slide_capture_pixel_probe import (
     _append_probe_style,
     _enrich_pixel_contrast,
@@ -1007,26 +976,28 @@ from utils.slide_capture_glyph_probe import (
     GLYPH_CLIPPING_SENSOR_VERSION,
     probe_glyph_clipping_file,
 )
-
-
-
-def _peek_cached_browser_metrics(html: str) -> Mapping[str, Any] | None:
-    key = _metrics_cache_key(html)
+def _peek_cached_browser_metrics(
+    html: str, *, width_px: int = SLIDE_W, height_px: int = SLIDE_H
+) -> Mapping[str, Any] | None:
+    key = _metrics_cache_key(html, width_px=width_px, height_px=height_px)
     metrics = _browser_metrics_cache.get(key)
     if metrics is not None:
         _browser_metrics_cache.move_to_end(key)
     return metrics
-
-
-def get_cached_browser_metrics(html: str) -> Mapping[str, Any] | None:
+def get_cached_browser_metrics(
+    html: str, *, width_px: int = SLIDE_W, height_px: int = SLIDE_H
+) -> Mapping[str, Any] | None:
     """Return metrics captured by the same Chrome invocation as the PNG render."""
-    metrics = _peek_cached_browser_metrics(html)
+    metrics = _peek_cached_browser_metrics(
+        html, width_px=width_px, height_px=height_px
+    )
     if metrics is not None:
         _count_runtime("metrics_cache_hits")
     return metrics
-
-
-def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> Mapping[str, Any]:
+def _cache_browser_metrics(
+    html: str, metrics: Mapping[str, Any], *,
+    width_px: int = SLIDE_W, height_px: int = SLIDE_H,
+) -> Mapping[str, Any]:
     """Store metrics under the same authored HTML identity as its rendered PNG."""
     # The in-page probe runs over nonce-bearing admitted HTML, but its source
     # identity is the exact pre-admission render request (the same contract as
@@ -1036,7 +1007,7 @@ def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> Mapping[str
         **dict(metrics),
         "source_digest": "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest(),
     }
-    key = _metrics_cache_key(html)
+    key = _metrics_cache_key(html, width_px=width_px, height_px=height_px)
     _browser_metrics_cache[key] = metrics
     _browser_metrics_cache.move_to_end(key)
     try:
@@ -1044,10 +1015,6 @@ def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> Mapping[str
     except Exception:
         metric_bytes = 0
     _count_runtime("metrics_cache_bytes", metric_bytes)
-    # The rebound mapping is what identifies this HTML: callers that keep the
-    # metrics (the fitted capture) must carry these, not the ones the renderer
-    # measured from its own request copy.
-    return metrics
     max_entries, max_bytes = _dom_metrics_cache_limits()
     while (
         len(_browser_metrics_cache) > max_entries
@@ -1055,36 +1022,42 @@ def _cache_browser_metrics(html: str, metrics: Mapping[str, Any]) -> Mapping[str
     ):
         _browser_metrics_cache.popitem(last=False)
         _count_runtime("metrics_cache_evictions")
+    # Callers that keep metrics (a fitted capture) must carry this rebound mapping.
+    return metrics
+#: Re-exported so the render and metrics joins share one implementation.
+_await_shared_render_task = await_shared_render_task
 
 
 async def ensure_browser_metrics(
-    html: str, timeout: int = 60, *, deck_scope: str | None = None
+    html: str, timeout: int = 60, *, deck_scope: str | None = None,
+    width_px: int = SLIDE_W, height_px: int = SLIDE_H,
 ) -> Mapping[str, Any] | None:
     """Return browser telemetry for ``html``, recollecting it when a PNG outlives it.
-
     PNG and DOM caches have different retention limits by design, so a render-cache
     hit cannot assume the corresponding probe payload remains resident.  Recollect
     with the exact instrumented render path when necessary.  A failed extraction is
     intentionally returned as ``None``; the DOM inspector will escalate it instead
     of interpreting it as a clean slide.
     """
-    cached = get_cached_browser_metrics(html)
+    cached = get_cached_browser_metrics(
+        html, width_px=width_px, height_px=height_px
+    )
     if cached is not None:
         return cached
-
     # A cache miss means the PNG outlived its DOM telemetry and requires a
     # second browser pass; expose that duplicate work in benchmark evidence.
     _count_runtime("metrics_recollection_requests")
     _count_runtime("metrics_cache_misses")
-
-    key = _metrics_cache_key(html)
+    key = _metrics_cache_key(html, width_px=width_px, height_px=height_px)
     task = _browser_metrics_inflight.get(key)
     if task is None:
         async def recollect() -> Mapping[str, Any] | None:
             if renderer_requires_external_worker():
                 # Production keeps the renderer isolation boundary: the
                 # external worker owns both pixels and browser telemetry.
-                await _render_html_to_png_uncached(html, timeout=timeout)
+                await _render_html_to_png_uncached(
+                    html, timeout=timeout, width_px=width_px, height_px=height_px
+                )
             else:
                 # A retry after process recovery has no in-memory metrics even
                 # when its authored PNG checkpoint survived.  Do not route this
@@ -1100,9 +1073,12 @@ async def ensure_browser_metrics(
                     admitted_source=True,
                     cache_html=html,
                     script_nonce=admitted.nonce,
+                    width_px=width_px,
+                    height_px=height_px,
                 )
-            return _peek_cached_browser_metrics(html)
-
+            return _peek_cached_browser_metrics(
+                html, width_px=width_px, height_px=height_px
+            )
         with set_render_deck_scope(resolve_render_deck_scope(deck_scope)):
             task = asyncio.create_task(recollect())
         _browser_metrics_inflight[key] = task
@@ -1110,9 +1086,11 @@ async def ensure_browser_metrics(
         # The renderer owns its own timeout, but a wedged browser semaphore or
         # detached Windows Chrome child can otherwise leave this shared task
         # pending forever and block the entire FastAPI event loop during
-        # canonical Scene publication.  Bound the outer wait as well and cancel
-        # the poisoned in-flight entry so a later retry can recollect cleanly.
-        return await asyncio.wait_for(task, timeout=max(1, timeout) + 15)
+        # canonical Scene publication. Bound each outer wait independently;
+        # shared work is cancelled only after its last waiter departs.
+        return await _await_shared_render_task(
+            task, _browser_metrics_inflight, key, timeout=max(1, timeout) + 15
+        )
     except Exception as error:
         # Rendering an already-cached PNG remains useful even if a best-effort
         # telemetry recollection cannot start.  Consumers receive ``None`` and
@@ -1122,29 +1100,47 @@ async def ensure_browser_metrics(
     finally:
         if _browser_metrics_inflight.get(key) is task and task.done():
             _browser_metrics_inflight.pop(key, None)
-
-
 async def render_html_to_png_with_metrics(
-    html: str, timeout: int = 60, *, deck_scope: str | None = None, fit: bool = False
+    html: str, timeout: int = 60, *, deck_scope: str | None = None,
+    fit: bool = False, fit_policy: Mapping[str, Any] | None = None,
+    fresh: bool = False,
+    width_px: int = SLIDE_W, height_px: int = SLIDE_H,
 ) -> "RenderCapture":
     """Render one slide and return telemetry tied to the same HTML cache identity.
-
     This is the preferred API for quality-review callers.  It preserves the legacy
     bytes-only renderer while making cache divergence explicit and recoverable.
-
-    ``fit`` requests the in-page card fit: the opt-in class rides only on the
-    render request, and an edited DOM comes back as ``fitted_html`` (the HTML of
-    record, whose digest is ``html_digest``, and the key its metrics are cached
-    under).  Callers that persist HTML must persist ``fitted_html``.
+    ``fit_policy`` selects local fit (live); ``fit`` alone the in-render card fit
+    (``utils/slide_capture_fit.py``), whose ``fitted_html`` callers must persist.
     """
     # Preserve renderer admission semantics even when the atomic result cache
     # contains a prior successful capture.
     ensure_renderer_enabled()
+    if fit_policy is not None:
+        from utils.slide_capture_local_fit import capture_with_policy
+        return await capture_with_policy(
+            html, timeout, deck_scope=deck_scope, fit=fit, policy=fit_policy,
+            fresh=fresh, width_px=width_px, height_px=height_px,
+        )
     if fit:
+        if fresh:
+            raise ValueError("a fresh render requires an explicit authored local policy")
         require_qid_complete(html)
     request_html = fit_request_html(html) if fit else html
     html_digest = "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
-    cached_capture = _peek_cached_capture(request_html, timeout)
+    if fresh:
+        # Bypass every pixel/capture cache and in-flight alias. The renderer
+        # opens a disposable document even when its Chrome process is reused.
+        _browser_metrics_cache.pop(
+            _metrics_cache_key(html, width_px=width_px, height_px=height_px), None
+        )
+        with set_render_deck_scope(deck_scope) if deck_scope else nullcontext():
+            png = await _render_html_to_png_uncached(html, timeout=timeout, width_px=width_px, height_px=height_px)
+        return RenderCapture.from_payload(
+            html_digest=html_digest, png=png, runtime_counters=get_render_runtime_counters(),
+            browser_metrics=_peek_cached_browser_metrics(html, width_px=width_px, height_px=height_px))
+    cached_capture = _peek_cached_capture(
+        request_html, timeout, width_px=width_px, height_px=height_px
+    )
     if cached_capture is not None:
         _count_runtime("requests")
         _count_runtime("capture_cache_hits")
@@ -1160,117 +1156,66 @@ async def render_html_to_png_with_metrics(
             fit_report=cached_capture.fit_report,
         )
     _count_runtime("capture_cache_misses")
-    metrics = _peek_cached_browser_metrics(request_html)
-    if metrics is not None:
+    cached_metrics = _peek_cached_browser_metrics(
+        request_html, width_px=width_px, height_px=height_px
+    )
+    png = await render_html_to_png(
+        request_html, timeout=timeout, deck_scope=deck_scope,
+        width_px=width_px, height_px=height_px,
+    )
+    if cached_metrics is not None:
         _count_runtime("metrics_cache_hits")
-    png = await render_html_to_png(request_html, timeout=timeout, deck_scope=deck_scope)
-    if metrics is None:
-        metrics = _peek_cached_browser_metrics(request_html)
-        if metrics is None:
-            metrics = await ensure_browser_metrics(request_html, timeout=timeout)
+        metrics = cached_metrics
+    else:
+        captured_metrics = _peek_cached_browser_metrics(
+            request_html, width_px=width_px, height_px=height_px
+        )
+        if captured_metrics is not None:
+            metrics = captured_metrics
+        else:
+            metrics = await ensure_browser_metrics(
+                request_html, timeout=timeout, width_px=width_px, height_px=height_px
+            )
     _count_runtime("capture_results")
     _count_runtime("capture_png_bytes", len(png))
     if metrics is not None:
         _count_runtime("capture_metric_results")
     digest, fitted_html, fit_report, metrics = fit_capture_fields(
-        html, metrics, fit=fit, digest=html_digest, cache_metrics=_cache_browser_metrics,
-    )
+        html, metrics, fit=fit, digest=html_digest, cache_metrics=lambda key, value:
+        _cache_browser_metrics(key, value, width_px=width_px, height_px=height_px))
     capture = RenderCapture.from_payload(
         html_digest=digest, png=png, browser_metrics=metrics,
         runtime_counters=get_render_runtime_counters(),
         fitted_html=fitted_html, fit_report=fit_report,
     )
-    _cache_capture(request_html, timeout, capture)
+    _cache_capture(
+        request_html, timeout, capture, width_px=width_px, height_px=height_px
+    )
     return capture
-
-
-@dataclass(frozen=True, slots=True)
-class RenderCapture:
-    """Atomic result for one HTML render.
-
-    ``html_digest``, PNG bytes and browser metrics are produced/selected as one
-    value so callers cannot accidentally pair telemetry from a different HTML
-    revision.  ``__iter__`` retains the historical ``png, metrics = ...`` API.
-    ``runtime_counters`` is a snapshot for measuring duplicate browser/I/O work
-    across large decks without retaining process objects in the result.
-    """
-
-    html_digest: str
-    png: bytes
-    browser_metrics: Mapping[str, Any] | None
-    png_digest: str
-    metrics_digest: str | None
-    runtime_counters: Mapping[str, int]
-    # Set only by a ``fit=True`` render whose fitter edited the DOM; ``fitted_html``
-    # is then the HTML of record and ``html_digest`` is its digest.
-    fitted_html: str | None = None
-    fit_report: Mapping[str, Any] | None = None
-
-    @classmethod
-    def from_payload(
-        cls,
-        *,
-        html_digest: str,
-        png: bytes,
-        browser_metrics: Mapping[str, Any] | None,
-        runtime_counters: Mapping[str, int],
-        fitted_html: str | None = None,
-        fit_report: Mapping[str, Any] | None = None,
-    ) -> "RenderCapture":
-        canonical = json.dumps(
-            browser_metrics, sort_keys=True, separators=(",", ":"),
-            ensure_ascii=False, default=str,
-        ).encode("utf-8") if browser_metrics is not None else None
-        return cls(
-            html_digest=html_digest,
-            png=png,
-            browser_metrics=browser_metrics,
-            png_digest="sha256:" + hashlib.sha256(png).hexdigest(),
-            metrics_digest=("sha256:" + hashlib.sha256(canonical).hexdigest()) if canonical is not None else None,
-            runtime_counters=dict(runtime_counters),
-            fitted_html=fitted_html, fit_report=fit_report,
-        )
-
-    def __iter__(self):
-        # Backward compatible with all existing callers.
-        yield self.png
-        yield self.browser_metrics
-
-    @property
-    def metrics(self) -> Mapping[str, Any] | None:
-        """Short alias for callers that refer to browser telemetry as metrics."""
-        return self.browser_metrics
-
-    def as_dict(self, *, include_payload: bool = False) -> dict[str, Any]:
-        result: dict[str, Any] = {
-            "htmlDigest": self.html_digest,
-            "pngDigest": self.png_digest,
-            "metricsDigest": self.metrics_digest,
-            "browserMetricsCaptured": self.browser_metrics is not None,
-            "runtimeCounters": dict(self.runtime_counters),
-        }
-        if include_payload:
-            result["pngBase64"] = base64.b64encode(self.png).decode("ascii")
-            result["browserMetrics"] = self.browser_metrics
-        return result
-
-
-def _capture_cache_key(html: str, timeout: int) -> tuple[str, str, str]:
+from utils.slide_capture_result import RenderCapture
+def _capture_cache_key(
+    html: str, timeout: int, *, width_px: int = SLIDE_W, height_px: int = SLIDE_H
+) -> tuple[str, str, str]:
     # Timeout only bounds work; it does not alter a successful deterministic
     # render.  Excluding it lets retries with a larger budget reuse the same
     # atomic capture instead of relaunching Chromium.
-    return _cache_key_for("capture", html)
-
-
-def _peek_cached_capture(html: str, timeout: int) -> RenderCapture | None:
-    key = _capture_cache_key(html, timeout)
+    return _cache_key_for(
+        "capture", html, width_px=width_px, height_px=height_px
+    )
+def _peek_cached_capture(
+    html: str, timeout: int, *, width_px: int = SLIDE_W, height_px: int = SLIDE_H
+) -> RenderCapture | None:
+    key = _capture_cache_key(
+        html, timeout, width_px=width_px, height_px=height_px
+    )
     capture = _capture_cache.get(key)
     if capture is not None:
         _capture_cache.move_to_end(key)
     return capture
-
-
-def _cache_capture(html: str, timeout: int, capture: RenderCapture) -> None:
+def _cache_capture(
+    html: str, timeout: int, capture: RenderCapture, *,
+    width_px: int = SLIDE_W, height_px: int = SLIDE_H,
+) -> None:
     # Keep only a small atomic-result tail.  PNG bytes are shared with the render
     # LRU by reference, while this tail protects the corresponding metrics from
     # DOM-cache eviction without retaining an unbounded second image cache.
@@ -1279,7 +1224,9 @@ def _cache_capture(html: str, timeout: int, capture: RenderCapture) -> None:
     # recollection after a transient browser probe failure.
     if CAPTURE_CACHE_SIZE <= 0 or capture.browser_metrics is None:
         return
-    key = _capture_cache_key(html, timeout)
+    key = _capture_cache_key(
+        html, timeout, width_px=width_px, height_px=height_px
+    )
     _capture_cache[key] = capture
     _capture_cache.move_to_end(key)
     while (
@@ -1288,8 +1235,6 @@ def _cache_capture(html: str, timeout: int, capture: RenderCapture) -> None:
     ):
         _capture_cache.popitem(last=False)
         _count_runtime("capture_cache_evictions")
-
-
 async def _wait_for_output(out: str, timeout: float = 15.0) -> bool:
     """Poll for the --screenshot file after the chrome process we waited on exits.
     On Windows chrome.exe is a thin launcher: it spawns the real browser child and
@@ -1302,12 +1247,7 @@ async def _wait_for_output(out: str, timeout: float = 15.0) -> bool:
             return True
         await asyncio.sleep(0.25)
     return os.path.isfile(out) and os.path.getsize(out) > 0
-
-
 from utils.slide_capture_chrome_discovery import _playwright_headless_shell_candidates, find_chrome
-
-
-
 _runtime_counter_lock = threading.Lock()
 _runtime_counters: dict[str, int] = {
     "requests": 0,
@@ -1343,16 +1283,11 @@ _runtime_counters: dict[str, int] = {
     "metrics_cache_bytes": 0,
 }
 _chrome_identity_cache: tuple[str, int, int, str] | None = None
-
-
 def _count_runtime(name: str, amount: int = 1) -> None:
     with _runtime_counter_lock:
         _runtime_counters[name] = _runtime_counters.get(name, 0) + amount
-
-
 def get_render_runtime_counters() -> dict[str, int]:
     """Return a read-only snapshot of cache/process/session activity."""
-
     with _runtime_counter_lock:
         snapshot = dict(_runtime_counters)
     # Current resident payload size is intentionally derived outside the counter
@@ -1369,17 +1304,13 @@ def get_render_runtime_counters() -> dict[str, int]:
     snapshot["capture_cache_bytes_current"] = _capture_cache_resident_bytes()
     snapshot["capture_cache_byte_budget"] = CAPTURE_CACHE_BYTE_BUDGET
     return snapshot
-
-
 def get_render_runtime_snapshot() -> dict[str, Any]:
     """Return metadata-only cache/pool evidence safe for a public metrics read.
-
     This intentionally omits HTML, QIDs, asset URLs, profiles, and filesystem
     paths.  The digest and cache-version fields let a controlled-load report
     prove which renderer identity and invalidation contract produced its
     counters without exposing slide content.
     """
-
     return {
         "schemaVersion": "authored-render-runtime/v2",
         "chromeRuntimeDigest": chrome_runtime_digest(),
@@ -1395,11 +1326,8 @@ def get_render_runtime_snapshot() -> dict[str, Any]:
         },
         "counters": get_render_runtime_counters(),
     }
-
-
 def chrome_runtime_digest() -> str:
     """Digest the resolved Chrome binary identity used by incremental caches."""
-
     global _chrome_identity_cache
     chrome = find_chrome()
     if not chrome:
@@ -1432,11 +1360,8 @@ def chrome_runtime_digest() -> str:
     result = "sha256:" + hashlib.sha256(payload).hexdigest()
     _chrome_identity_cache = (str(path), size, modified, result)
     return result
-
-
 class _ReusableChromeRuntime:
     """One isolated Chrome process serving bounded, disposable CDP pages."""
-
     def __init__(
         self,
         process: subprocess.Popen[bytes],
@@ -1447,14 +1372,13 @@ class _ReusableChromeRuntime:
         self.profile = profile
         self.port = port
         self.session_count = 0
-
+        self.active_sessions = 0
+        self.retired = False
     @property
     def base_url(self) -> str:
         return f"http://127.0.0.1:{self.port}"
-
     def alive(self) -> bool:
         return self.process.poll() is None
-
     def close(self) -> None:
         if self.process.poll() is None:
             _kill_process_tree(self.process)
@@ -1463,12 +1387,9 @@ class _ReusableChromeRuntime:
             except Exception:
                 pass
         self.profile.cleanup()
-
-
 _reusable_chrome_lock = threading.Lock()
 _reusable_chrome: _ReusableChromeRuntime | None = None
-
-
+_retired_reusable_chromes: set[_ReusableChromeRuntime] = set()
 def _launch_reusable_chrome() -> _ReusableChromeRuntime:
     if renderer_requires_external_worker():
         raise RendererPolicyError(
@@ -1530,37 +1451,54 @@ def _launch_reusable_chrome() -> _ReusableChromeRuntime:
         _kill_process_tree(process)
     profile.cleanup()
     raise RuntimeError("reusable Chrome did not publish DevToolsActivePort")
-
-
 def _get_reusable_chrome_sync() -> _ReusableChromeRuntime:
     global _reusable_chrome
     with _reusable_chrome_lock:
         if _reusable_chrome is not None and _reusable_chrome.alive():
             _reusable_chrome.session_count += 1
+            _reusable_chrome.active_sessions += 1
             _count_runtime("session_reuse_hits")
             return _reusable_chrome
         if _reusable_chrome is not None:
             _count_runtime("session_restarts")
-            _reusable_chrome.close()
+            _reusable_chrome.retired = True
+            if _reusable_chrome.active_sessions:
+                _retired_reusable_chromes.add(_reusable_chrome)
+            else:
+                _reusable_chrome.close()
         _reusable_chrome = _launch_reusable_chrome()
         _reusable_chrome.session_count = 1
+        _reusable_chrome.active_sessions = 1
         return _reusable_chrome
-
-
 def _discard_reusable_chrome_sync(runtime: _ReusableChromeRuntime) -> None:
+    """Stop new admissions without killing sibling pages already using it."""
     global _reusable_chrome
     with _reusable_chrome_lock:
         if _reusable_chrome is runtime:
             _count_runtime("session_restarts")
-            runtime.close()
             _reusable_chrome = None
+        runtime.retired = True
+        _retired_reusable_chromes.add(runtime)
+
+def _release_reusable_chrome_sync(runtime: _ReusableChromeRuntime) -> None:
+    with _reusable_chrome_lock:
+        runtime.active_sessions -= 1
+        should_close = runtime.retired and runtime.active_sessions == 0
+        if should_close:
+            _retired_reusable_chromes.discard(runtime)
+    if should_close:
+        runtime.close()
 
 
 def _close_reusable_chrome() -> None:
     global _reusable_chrome
     with _reusable_chrome_lock:
         runtime, _reusable_chrome = _reusable_chrome, None
-    if runtime is not None:
+        runtimes = set(_retired_reusable_chromes)
+        _retired_reusable_chromes.clear()
+        if runtime is not None:
+            runtimes.add(runtime)
+    for runtime in runtimes:
         runtime.close()
 
 
@@ -1631,16 +1569,19 @@ from utils.authored_renderer_session import (
 async def _render_html_in_reusable_chrome(
     html: str, timeout: int, *, script_nonce: str | None = None,
     cache_html: str | None = None,
+    width_px: int = SLIDE_W, height_px: int = SLIDE_H,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     from utils.slide_capture_reusable_render import render_html_in_reusable_chrome
 
     return await render_html_in_reusable_chrome(
         html, timeout, script_nonce=script_nonce, cache_html=cache_html,
+        width_px=width_px, height_px=height_px,
         blocked_urls=_BLOCKED_RENDERER_URL_PATTERNS,
         cache_metrics=_cache_browser_metrics,
         cdp_command=_cdp_command,
         count_runtime=_count_runtime,
         discard_runtime=_discard_reusable_chrome_sync,
+        release_runtime=_release_reusable_chrome_sync,
         enrich_contrast=_enrich_pixel_contrast,
         get_runtime=_get_reusable_chrome_sync,
         instrument_html=_instrument_authored_html,
@@ -1657,6 +1598,8 @@ async def _render_html_to_png_subprocess(
     admitted_source: bool = False,
     cache_html: str | None = None,
     script_nonce: str | None = None,
+    width_px: int = SLIDE_W,
+    height_px: int = SLIDE_H,
 ) -> bytes:
     """Render a self-contained HTML document to an exact 1280x720 PNG via headless
     chrome. Used by the authored-mode pipeline (the HTML is authored in-memory, not
@@ -1686,6 +1629,8 @@ async def _render_html_to_png_subprocess(
                 html,
                 script_nonce=script_nonce,
                 issue_capability=False,
+                width_px=width_px,
+                height_px=height_px,
             )
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(instrumented_html)
@@ -1707,7 +1652,7 @@ async def _render_html_to_png_subprocess(
                 "--no-default-browser-check",
                 "--hide-scrollbars",
                 "--force-device-scale-factor=1",
-                f"--window-size={SLIDE_W},{SLIDE_H}",
+                f"--window-size={width_px},{height_px}",
                 f"--screenshot={out}",
                 "--dump-dom",
                 "--virtual-time-budget=20000",
@@ -1718,7 +1663,7 @@ async def _render_html_to_png_subprocess(
             if not await _wait_for_output(out):
                 raise RuntimeError("chrome screenshot produced no output file")
             metrics = _extract_browser_metrics(dumped_dom)
-            img = Image.open(out).convert("RGB").crop((0, 0, SLIDE_W, SLIDE_H))
+            img = Image.open(out).convert("RGB").crop((0, 0, width_px, height_px))
             if metrics is not None:
                 requires_pixel_probe = any(
                     isinstance(item, Mapping)
@@ -1729,7 +1674,11 @@ async def _render_html_to_png_subprocess(
                     probe_html_path = os.path.join(td, "pixel-probe.html")
                     probe_out = os.path.join(td, "pixel-probe.png")
                     with open(probe_html_path, "w", encoding="utf-8") as file:
-                        file.write(_pixel_probe_document(html))
+                        from utils.slide_capture_local_fit import measured_html
+                        file.write(_pixel_probe_document(
+                            measured_html(html, metrics),
+                            width_px=width_px, height_px=height_px,
+                        ))
                     probe_args = [
                         chrome,
                         "--headless=new",
@@ -1745,7 +1694,7 @@ async def _render_html_to_png_subprocess(
                         "--no-default-browser-check",
                         "--hide-scrollbars",
                         "--force-device-scale-factor=1",
-                        f"--window-size={SLIDE_W},{SLIDE_H * 2}",
+                        f"--window-size={width_px},{height_px * 2}",
                         f"--screenshot={probe_out}",
                         "--virtual-time-budget=20000",
                         pathlib.Path(probe_html_path).as_uri(),
@@ -1760,7 +1709,7 @@ async def _render_html_to_png_subprocess(
                                 "chrome pixel probe produced no output file"
                             )
                         probe_image = Image.open(probe_out).convert("RGB")
-                        if probe_image.size[0] < SLIDE_W or probe_image.size[1] < SLIDE_H * 2:
+                        if probe_image.size[0] < width_px or probe_image.size[1] < height_px * 2:
                             raise RuntimeError(
                                 f"chrome pixel probe has unexpected size {probe_image.size}"
                             )
@@ -1773,24 +1722,26 @@ async def _render_html_to_png_subprocess(
             buf = io.BytesIO()
             img.save(buf, format="PNG")
             if metrics is not None:
+                from utils.slide_capture_local_fit import measured_html
                 metrics = await probe_glyph_clipping_file(
-                    html, metrics, buf.getvalue(), directory=td, screenshot_args=args,
+                    measured_html(html, metrics), metrics, buf.getvalue(), directory=td, screenshot_args=args,
                     timeout=timeout, count_runtime=_count_runtime,
                     run_screenshot=_run_chrome_screenshot, wait_for_output=_wait_for_output,
+                    width_px=width_px, height_px=height_px,
                 )
-                _cache_browser_metrics(cache_html or html, metrics)
+                _cache_browser_metrics(
+                    cache_html or html, metrics,
+                    width_px=width_px, height_px=height_px,
+                )
             return buf.getvalue()
 
 
 from utils.renderer_worker_response import RendererIsolationError
 from utils.slide_capture_deck_scope import resolve_render_deck_scope, set_render_deck_scope
 
-# The worker CLIENT (lease, dispatch, response decoding) is API-side code: it
-# reads runtime settings through utils.get_env, which reaches the provider
-# credential and database models.  Importing it here eagerly would pull that
-# subtree into the isolated renderer image, whose lock carries none of those
-# packages, and the image would die on its first request.  The names are bound
-# on first use instead; a test that sets them on this module beforehand wins.
+# The worker CLIENT is API-side code (utils.get_env reaches credentials and DB
+# models) that the isolated renderer image cannot import, so its names are bound
+# on first use; a test that sets them on this module beforehand wins.
 _WORKER_CLIENT_NAMES = ("_decode_worker_response", "_render_html_in_isolated_worker", "render_with_lease")
 _render_html_in_isolated_worker: Any = None
 render_with_lease: Any = None
@@ -1816,7 +1767,8 @@ def __getattr__(name: str):
 
 
 async def _render_admitted_html_in_worker(
-    admitted: AdmittedHtml, *, timeout: int
+    admitted: AdmittedHtml, *, timeout: int,
+    width_px: int = SLIDE_W, height_px: int = SLIDE_H,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     """Low-level worker-only CDP entry; never starts another worker or file render."""
 
@@ -1826,10 +1778,15 @@ async def _render_admitted_html_in_worker(
     # private Chrome process.  Keeping POSIX FD inheritance on its main thread
     # avoids threaded spawn hazards.  A framed worker instead renders through
     # its own long-lived session (utils/authored_renderer_session.py).
-    return _render_admitted_html_over_pipe(admitted, timeout)
+    return _render_admitted_html_over_pipe(
+        admitted, timeout, width_px=width_px, height_px=height_px
+    )
 
 
-async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
+async def _render_html_to_png_uncached(
+    html: str, timeout: int = 60, *,
+    width_px: int = SLIDE_W, height_px: int = SLIDE_H,
+) -> bytes:
     """Render through isolation by default; legacy file input requires two opt-ins."""
 
     _bind_worker_client()
@@ -1839,7 +1796,9 @@ async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
     if mode == "legacy":
         # Kept only for legacy read/export migrations.  New authored requests use
         # isolated mode and never auto-downgrade here after a worker failure.
-        return await _render_html_to_png_subprocess(html, timeout=timeout)
+        return await _render_html_to_png_subprocess(
+            html, timeout=timeout, width_px=width_px, height_px=height_px
+        )
 
     # A production renderer never enters the in-process Chrome branch. It must
     # cross the external non-root/read-only/network-none worker boundary, and a
@@ -1852,13 +1811,16 @@ async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
         scope = resolve_render_deck_scope()
         async with _get_render_sem():
             rendered, metrics = await render_with_lease(
-                scope, html, timeout, render_fn=_render_html_in_isolated_worker
+                scope, html, timeout, render_fn=_render_html_in_isolated_worker,
+                width_px=width_px, height_px=height_px,
             )
         if metrics is not None:
             # Keep the worker's atomic PNG/metrics pair. Otherwise callers of
             # render_html_to_png_with_metrics recollect DOM telemetry in a
             # second browser invocation after the PNG render.
-            _cache_browser_metrics(html, metrics)
+            _cache_browser_metrics(
+                html, metrics, width_px=width_px, height_px=height_px
+            )
         return rendered
 
     # Development uses one isolated Chrome process with disposable page sessions.
@@ -1870,9 +1832,13 @@ async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
                     timeout,
                     script_nonce=admitted.nonce,
                     cache_html=html,
+                    width_px=width_px,
+                    height_px=height_px,
                 )
             if metrics is not None:
-                _cache_browser_metrics(html, metrics)
+                _cache_browser_metrics(
+                    html, metrics, width_px=width_px, height_px=height_px
+                )
             return rendered
         except Exception as error:
             # A request gets one browser attempt. Silently retrying the exact
@@ -1885,11 +1851,14 @@ async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
         admitted_source=True,
         cache_html=html,
         script_nonce=admitted.nonce,
+        width_px=width_px,
+        height_px=height_px,
     )
 
 
 async def render_html_to_png(
-    html: str, timeout: int = 60, *, deck_scope: str | None = None
+    html: str, timeout: int = 60, *, deck_scope: str | None = None,
+    width_px: int = SLIDE_W, height_px: int = SLIDE_H,
 ) -> bytes:
     """Render one authored slide, reusing successful identical renders in-process.
 
@@ -1903,20 +1872,31 @@ async def render_html_to_png(
     """
     if deck_scope:
         with set_render_deck_scope(deck_scope):
-            return await _render_html_to_png_cached(html, timeout)
-    return await _render_html_to_png_cached(html, timeout)
+            return await _render_html_to_png_cached(
+                html, timeout, width_px=width_px, height_px=height_px
+            )
+    return await _render_html_to_png_cached(
+        html, timeout, width_px=width_px, height_px=height_px
+    )
 
 
-async def _render_html_to_png_cached(html: str, timeout: int) -> bytes:
+async def _render_html_to_png_cached(
+    html: str, timeout: int, *,
+    width_px: int = SLIDE_W, height_px: int = SLIDE_H,
+) -> bytes:
     ensure_renderer_enabled()
     _count_runtime("requests")
     if RENDER_CACHE_SIZE <= 0:
         _count_runtime("render_cache_misses")
-        return await _render_html_to_png_uncached(html, timeout=timeout)
+        return await _render_html_to_png_uncached(
+            html, timeout=timeout, width_px=width_px, height_px=height_px
+        )
 
     # Timeout bounds work only; the digest-safe identity deliberately excludes
     # it so a later retry can reuse pixels and measurements from the same Scene.
-    key = _cache_key_for("render", html)
+    key = _cache_key_for(
+        "render", html, width_px=width_px, height_px=height_px
+    )
     cached = _render_cache.get(key)
     if cached is not None:
         _count_runtime("render_cache_hits")
@@ -1926,12 +1906,15 @@ async def _render_html_to_png_cached(html: str, timeout: int) -> bytes:
     task = _render_inflight.get(key)
     if task is None:
         _count_runtime("render_cache_misses")
-        task = asyncio.create_task(_render_html_to_png_uncached(html, timeout=timeout))
+        task = asyncio.create_task(_render_html_to_png_uncached(
+            html, timeout=timeout, width_px=width_px, height_px=height_px
+        ))
         _render_inflight[key] = task
     else:
         _count_runtime("render_inflight_joins")
     try:
-        rendered = await asyncio.shield(task)
+        rendered = await _await_shared_render_task(
+            task, _render_inflight, key, timeout=max(1, timeout) + 15)
     finally:
         if _render_inflight.get(key) is task and task.done():
             _render_inflight.pop(key, None)
@@ -1939,7 +1922,9 @@ async def _render_html_to_png_cached(html: str, timeout: int) -> bytes:
     _render_cache[key] = rendered
     _render_cache.move_to_end(key)
     _count_runtime("render_cache_bytes", len(rendered))
-    metrics = _peek_cached_browser_metrics(html)
+    metrics = _peek_cached_browser_metrics(
+        html, width_px=width_px, height_px=height_px
+    )
     if metrics is not None:
         _cache_capture(
             html,
@@ -1950,6 +1935,8 @@ async def _render_html_to_png_cached(html: str, timeout: int) -> bytes:
                 browser_metrics=metrics,
                 runtime_counters=get_render_runtime_counters(),
             ),
+            width_px=width_px,
+            height_px=height_px,
         )
     while (
         len(_render_cache) > RENDER_CACHE_SIZE
@@ -1997,8 +1984,8 @@ CAPTURE_CACHE_BYTE_BUDGET = _env_nonnegative_int(
 )
 _capture_cache: "OrderedDict[tuple[str, str, str], RenderCapture]" = OrderedDict()
 OCCLUSION_PROBE_CONTRACT_VERSION = "owned-paint-v3"
-OCCLUSION_SENSOR_VERSION = "owned-paint-v12-polygon-normal-hit"
-DOM_METRICS_VERSION = "authored-dom-metrics-v25-polygon-normal-hit"
+OCCLUSION_SENSOR_VERSION = "owned-paint-v14-source-image-alpha"
+DOM_METRICS_VERSION = "authored-dom-metrics-v27-source-viewport-effective-font"
 DOM_METRICS_CACHE_SIZE = max(1, RENDER_CACHE_SIZE)
 DOM_METRICS_CACHE_BYTE_BUDGET = _env_nonnegative_int(
     "AUTHORED_DOM_METRICS_CACHE_BYTE_BUDGET", 32 * 1024 * 1024
@@ -2027,7 +2014,13 @@ _browser_metrics_cache: "OrderedDict[tuple[str, str, str], Mapping[str, Any]]" =
 _browser_metrics_inflight: Dict[tuple[str, str, str], "asyncio.Task[Mapping[str, Any] | None]"] = {}
 _observed_cache_identities: "OrderedDict[str, _RenderCacheIdentity]" = OrderedDict()
 _CACHE_IDENTITY_OBSERVATION_LIMIT = 256
-RENDER_CONCURRENCY = _env_int("AUTHORED_RENDER_CONCURRENCY", 4)
+# The authored override remains authoritative.  Managed stacks already expose
+# their shared Chromium ceiling as PUBLIC_RENDER_MAX_CONCURRENCY, so inherit it
+# when no authored-specific value is present instead of silently using four.
+RENDER_CONCURRENCY = _env_int(
+    "AUTHORED_RENDER_CONCURRENCY",
+    _env_int("PUBLIC_RENDER_MAX_CONCURRENCY", 4),
+)
 CHROME_REUSE_ENABLED = os.getenv("AUTHORED_CHROME_REUSE", "1").strip().lower() not in {
     "0",
     "false",
@@ -2094,8 +2087,13 @@ def _observe_cache_identity(identity: _RenderCacheIdentity) -> None:
         _observed_cache_identities.popitem(last=False)
 
 
-def _cache_key_for(kind: str, html: str) -> tuple[str, str, str]:
-    identity = _render_cache_identity(html)
+def _cache_key_for(
+    kind: str, html: str, *,
+    width_px: int = SLIDE_W, height_px: int = SLIDE_H,
+) -> tuple[str, str, str]:
+    identity = _render_cache_identity(
+        html, width_px=width_px, height_px=height_px
+    )
     _observe_cache_identity(identity)
     return identity.source_digest, identity.digest, kind
 

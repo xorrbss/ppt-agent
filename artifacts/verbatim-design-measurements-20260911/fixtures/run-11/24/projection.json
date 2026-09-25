@@ -1,0 +1,237 @@
+{
+ "source-slide:25:text:3": {
+  "text": "4주차 PART 1 | 제안서 만들기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "4주차 PART 1",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "제안서 만들기",
+    "begin": 13,
+    "end": 20,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:25:text:4": {
+  "text": "25",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "25",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:25:text:5": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:25:text:6": {
+  "text": "• 나는 누구인가 • 어떤 업종을 돕는가 • 무엇을 제작하는가 • 작업 과정 • 포트폴리오 • 가격과 포함 범위 • 문의 방법",
+  "run_count": 7,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    4,
+    4
+   ],
+   [
+    5,
+    5
+   ],
+   [
+    6,
+    6
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "• ",
+    "body": "나는 누구인가",
+    "begin": 0,
+    "end": 9,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "• ",
+    "body": "어떤 업종을 돕는가",
+    "begin": 10,
+    "end": 22,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "• ",
+    "body": "무엇을 제작하는가",
+    "begin": 23,
+    "end": 34,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "• ",
+    "body": "작업 과정",
+    "begin": 35,
+    "end": 42,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 4,
+    "marker": "• ",
+    "body": "포트폴리오",
+    "begin": 43,
+    "end": 50,
+    "order_free_before": false
+   },
+   {
+    "index": 5,
+    "line": 5,
+    "marker": "• ",
+    "body": "가격과 포함 범위",
+    "begin": 51,
+    "end": 62,
+    "order_free_before": false
+   },
+   {
+    "index": 6,
+    "line": 6,
+    "marker": "• ",
+    "body": "문의 방법",
+    "begin": 63,
+    "end": 70,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:25:text:9": {
+  "text": "원칙",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "원칙",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:25:text:10": {
+  "text": "제안서는 예쁜 문서보다 ‘사장님이 이해하기 쉬운 문서’가 우선",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "제안서는 예쁜 문서보다",
+    "begin": 0,
+    "end": 12,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "‘사장님이 이해하기 쉬운 문서’가 우선",
+    "begin": 13,
+    "end": 34,
+    "order_free_before": false
+   }
+  ]
+ }
+}

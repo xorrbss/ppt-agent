@@ -1,0 +1,55 @@
+{
+  "id": "innovation-18-brainstorm",
+  "category": "innovation",
+  "tags": {
+    "ko": [
+      "혁신",
+      "발상"
+    ],
+    "en": [
+      "innovation",
+      "brainstorm"
+    ]
+  },
+  "alt": {
+    "ko": "발상 단색 벡터 인포그래픽",
+    "en": "brainstorm monochrome vector infographic"
+  },
+  "path": "originals/innovation-18-brainstorm.svg",
+  "thumbnail": "thumbnails/innovation-18-brainstorm.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 1008,
+  "sha256": "c916013cb93e32fc991259a932b45a701c52b33e5b8d4c9d76c6680545a15015",
+  "geometry_sha256": "eca3da6976792c522c96f7a66acfa059de58e1313872c537b886bb0eb80f1292",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56323,
+    "preview_opaque_pixels": 7355,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Brain",
+      "Lightbulb"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -163,11 +163,17 @@ def resolve_generation_route(
     if resolved_owner is None:
         raise GenerationRouteError("design_pack_owner_invalid")
     pin: dict[str, object] | None = None
-    if source_mode == "source_content_restyle" and design_pack_pin is None:
-        design_pack_pin = resolve_internal_design_pack_pin(
-            owner_id=resolved_owner,
-            authored_style=str(authored_style or ""),
-        )
+    if source_mode == "source_content_restyle":
+        if not str(authored_style or "").strip():
+            raise GenerationRouteError("source_content_template_required")
+        if design_pack_pin is not None:
+            raise GenerationRouteError("source_content_design_pack_not_supported")
+        return {
+            "selectedRoute": "authored-fallback",
+            "designPackPin": None,
+            "narrativeIrDigest": None,
+            "fallbackReason": "source-content-authored-reflow",
+        }
     if design_pack_pin is not None:
         package = load_pinned_design_pack(
             owner_id=resolved_owner, design_pack_pin=design_pack_pin

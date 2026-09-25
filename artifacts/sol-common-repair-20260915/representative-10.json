@@ -1,0 +1,105 @@
+{
+  "sourceCount": 42,
+  "providerCalls": 0,
+  "samples": [
+    {
+      "sourcePath": "runs/stage1/case-01/C",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": true,
+      "defects": [
+        "parent_escape_sibling_overlap"
+      ],
+      "selectionReason": "nested painted cards escape outer card"
+    },
+    {
+      "sourcePath": "runs/stage1/case-01/A",
+      "geometryPass": false,
+      "contentPreserved": true,
+      "automaticPass": false,
+      "defects": [
+        "parent_escape_footer_overlap"
+      ],
+      "selectionReason": "owned text escapes card into footer"
+    },
+    {
+      "sourcePath": "runs/stage1/case-03/B",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": true,
+      "defects": [
+        "parent_escape",
+        "forbidden_source_image_overlay"
+      ],
+      "selectionReason": "source image overlay plus card escape"
+    },
+    {
+      "sourcePath": "runs/stage1/case-04/C",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": false,
+      "defects": [
+        "parent_escape_offcanvas"
+      ],
+      "selectionReason": "source proposition off canvas"
+    },
+    {
+      "sourcePath": "runs/stage1/case-05/A",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": true,
+      "defects": [
+        "connector_crosses_text"
+      ],
+      "selectionReason": "connector crosses meaningful labels"
+    },
+    {
+      "sourcePath": "runs/stage2/round-2/case-05/C",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": false,
+      "defects": [
+        "text_clipping_at_semantic_panel_boundary"
+      ],
+      "selectionReason": "text clipping at card boundary"
+    },
+    {
+      "sourcePath": "runs/stage2/round-3/case-02/C",
+      "geometryPass": false,
+      "contentPreserved": false,
+      "automaticPass": false,
+      "defects": [
+        "sibling_text_overlap",
+        "semantic_panel_escape_and_sibling_occlusion",
+        "sibling_text_overlap"
+      ],
+      "selectionReason": "sibling text overlap"
+    },
+    {
+      "sourcePath": "runs/stage2/round-3/case-06/C",
+      "geometryPass": true,
+      "contentPreserved": false,
+      "automaticPass": true,
+      "defects": [
+        "assigned_image_loaded_but_invisible"
+      ],
+      "selectionReason": "assigned image loaded but invisible"
+    },
+    {
+      "sourcePath": "runs/stage1/case-05/C",
+      "geometryPass": true,
+      "contentPreserved": true,
+      "automaticPass": true,
+      "defects": [],
+      "selectionReason": "normal roles control"
+    },
+    {
+      "sourcePath": "runs/stage1/case-04/A",
+      "geometryPass": true,
+      "contentPreserved": true,
+      "automaticPass": true,
+      "defects": [],
+      "selectionReason": "normal trace/image control"
+    }
+  ]
+}

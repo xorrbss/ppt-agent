@@ -14,7 +14,9 @@ const PrivacySettings = () => {
         const data = await fetch("/api/telemetry-status").then((res) => res.json());
         setTrackingEnabled(data.telemetryEnabled);
       } catch {
-        setTrackingEnabled(true);
+        // Fail closed: an unreachable status probe must not display
+        // tracking as enabled.
+        setTrackingEnabled(false);
       }
     }
     fetchStatus();
@@ -26,15 +28,17 @@ const PrivacySettings = () => {
     setTelemetryEnabled(enabled);
     setSaving(true);
     try {
+      // Telemetry defaults to disabled: persist an explicit "false" so
+      // opting in is distinguishable from never having configured it.
       await fetch("/api/user-config", {
         method: "POST",
         body: JSON.stringify({
-          DISABLE_ANONYMOUS_TRACKING: enabled ? undefined : "true",
+          DISABLE_ANONYMOUS_TRACKING: enabled ? "false" : "true",
         }),
       });
     } catch {
       setTrackingEnabled(prev);
-      setTelemetryEnabled(prev ?? true);
+      setTelemetryEnabled(prev ?? false);
     } finally {
       setSaving(false);
     }
@@ -42,7 +46,7 @@ const PrivacySettings = () => {
 
   if (trackingEnabled === null) {
     return (
-      <div className="w-full bg-[#F9F8F8] p-7 rounded-[20px] flex items-center justify-center min-h-[200px]">
+      <div className="flex min-h-[200px] w-full items-center justify-center rounded-2xl border border-zinc-200/80 bg-white p-7">
         <Loader2 className="w-5 h-5 animate-spin text-[#5146E5]" />
       </div>
     );
@@ -50,7 +54,7 @@ const PrivacySettings = () => {
 
   return (
     <div className="w-full space-y-6">
-      <div className="bg-[#F9F8F8] p-7 rounded-[20px]">
+      <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 sm:p-7">
         <h4 className="text-sm font-semibold text-[#191919] mb-1">
           사용 분석
         </h4>
@@ -58,7 +62,7 @@ const PrivacySettings = () => {
           익명 사용 데이터를 공유하여 DevAX 개선에 도움을 주세요. 개인 정보나 발표자료 내용은 수집되지 않습니다.
         </p>
 
-        <div className="flex items-center justify-between gap-4 rounded-[10px] bg-white border border-[#EDEEEF] p-4">
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-zinc-200/80 bg-zinc-50/70 p-4 sm:p-5">
           <div>
             <label
               htmlFor="tracking-toggle"

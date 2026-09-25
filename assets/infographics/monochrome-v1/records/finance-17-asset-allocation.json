@@ -1,0 +1,56 @@
+{
+  "id": "finance-17-asset-allocation",
+  "category": "finance",
+  "tags": {
+    "ko": [
+      "금융",
+      "자산배분"
+    ],
+    "en": [
+      "finance",
+      "asset",
+      "allocation"
+    ]
+  },
+  "alt": {
+    "ko": "자산배분 단색 벡터 인포그래픽",
+    "en": "asset allocation monochrome vector infographic"
+  },
+  "path": "originals/finance-17-asset-allocation.svg",
+  "thumbnail": "thumbnails/finance-17-asset-allocation.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 638,
+  "sha256": "3dfd937178f0534be071bd4ae6e8f2aba9fcca885f247cd4ad1954d66b73f7a4",
+  "geometry_sha256": "382bb47354688cb0b2cf70ba0f38f130b489b9dd9cd2cdff17dccfb52ac18448",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56865,
+    "preview_opaque_pixels": 6790,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ChartPie",
+      "BriefcaseBusiness"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

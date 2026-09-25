@@ -1,5 +1,4 @@
 import React from "react";
-import Image from "next/image";
 import { PresentationCard } from "./PresentationCard";
 import { PresentationResponse } from "@/app/(presentation-generator)/services/api/dashboard";
 import { EmptyState } from "./EmptyState";
@@ -22,17 +21,12 @@ export const PresentationGrid = ({
   emptyDescription,
 }: PresentationGridProps) => {
   const ShimmerCard = () => (
-    <div className="flex min-h-[216px] flex-col overflow-hidden rounded-[12px] border border-[#EDEEEF] bg-[#F8FBFB] shadow-none animate-pulse">
+    <div className="flex min-h-[216px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 shadow-none animate-pulse">
       <div className="relative flex-1 overflow-hidden p-4">
-        <Image
-          src="/card_bg.svg"
-          alt=""
-          fill
-          className="absolute object-cover opacity-70"
-        />
+        
         <div className="relative mx-auto mt-2 aspect-video w-[88%] rounded-lg border border-gray-200 bg-gray-200" />
       </div>
-      <div className="relative z-10 border-t border-[#EDEEEF] bg-white px-5 py-3">
+      <div className="relative z-10 border-t border-zinc-200 bg-white px-5 py-3">
         <div className="flex items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="h-3.5 w-24 rounded bg-gray-200" />
@@ -46,7 +40,7 @@ export const PresentationGrid = ({
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6 w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 sm:gap-6 w-full">
         {[...Array(12)].map((_, i) => (
           <ShimmerCard key={i} />
         ))}
@@ -56,7 +50,7 @@ export const PresentationGrid = ({
 
   if (error) {
     return (
-      <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-[#EDEEEF] bg-white/80">
+      <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-zinc-200 bg-white/80">
         <div className="text-center text-gray-500">
           <p className="mb-2">{error}</p>
           <button
@@ -75,7 +69,7 @@ export const PresentationGrid = ({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
       {presentations.map((presentation) => (
         <PresentationCard
           key={presentation.id}

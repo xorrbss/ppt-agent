@@ -1,0 +1,55 @@
+{
+  "id": "collaboration-14-mutual-support",
+  "category": "collaboration",
+  "tags": {
+    "ko": [
+      "협업",
+      "상호지원"
+    ],
+    "en": [
+      "collaboration",
+      "mutual",
+      "support"
+    ]
+  },
+  "alt": {
+    "ko": "상호지원 단색 벡터 인포그래픽",
+    "en": "mutual support monochrome vector infographic"
+  },
+  "path": "originals/collaboration-14-mutual-support.svg",
+  "thumbnail": "thumbnails/collaboration-14-mutual-support.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 443,
+  "sha256": "df7d03b622ae1c8f251b915037657ab97b1a9e197ee98c3d1ff346f6a6279c57",
+  "geometry_sha256": "2679aa0d441b3f486af978cd7d6edc23a1dc1744d5922f56469ac238f5a453c7",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57500,
+    "preview_opaque_pixels": 6895,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "HelpingHand"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

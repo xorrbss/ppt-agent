@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "ui.template-kbs-company-proposal",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "KBS 제안사 일반 supports user-selectable portrait 9:13 while preserving its source design and canvas through generation and export metadata.",
+  "scope": [
+    "authored",
+    "styles",
+    "catalogue",
+    "canvas"
+  ],
+  "invariants": [
+    "Offer 9:13 in the upload aspect ratio selector for default and KBS styles; preserve the selected KBS style.",
+    "9:13 uses 720x1040 pixels and 540x780 points, matching the source ratio and physical page size.",
+    "Durable canvas metadata and author instructions retain the selected ratio.",
+    "Existing pinned company-master restrictions remain enforced."
+  ],
+  "forbidden": [
+    "Silently converting a 9:13 KBS request to landscape or the default style.",
+    "Claiming a real generated PPTX readback from the canvas contract check alone."
+  ],
+  "evidence": [
+    "servers/fastapi/services/authored_canvas.py",
+    "servers/nextjs/lib/authored-canvas.ts",
+    "servers/nextjs/app/(presentation-generator)/upload/components/ConfigurationSelects.tsx",
+    "servers/fastapi/utils/llm_calls/author_slide_prompt.py",
+    "servers/fastapi/authored_styles/kbs-company-proposal.yaml"
+  ],
+  "supersedes": "ui.template-kbs-company-proposal@1",
+  "recordedAt": "2026-09-14T01:37:19.2873979+00:00"
+}

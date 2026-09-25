@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:28px;width:980px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:6px;font-size:28px;line-height:35px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:3px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:126px;height:522px}
+.claim{height:45px;margin:0 64px 17px 64px;display:flex;align-items:center;justify-content:space-between}
+.claim-text{font-size:25px;line-height:34px;font-weight:700;letter-spacing:-.02em}
+.claim-text strong{color:#08916E}
+.claim-note{font-size:15px;line-height:22px;color:#5B6670;font-weight:700}
+.content-grid{display:grid;grid-template-columns:760px 368px;gap:24px;margin:0 64px;height:460px}
+.map-panel{height:460px;padding:22px 24px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.architecture{position:relative;margin-top:2px;height:414px}
+.zone{position:absolute;left:0;right:0;border:1px solid #CCECFF;border-radius:12px;background:#E0F3FF;padding:14px 16px}
+.zone-one{top:0;height:98px}
+.zone-two{top:114px;height:98px;background:#EAF7F4;border-color:#B9E5D9}
+.zone-three{top:228px;height:178px;background:#F4F7F8;border-color:#E2E8F0}
+.module-row{display:flex;gap:12px;margin-top:14px}
+.module{height:45px;display:flex;align-items:center;justify-content:center;padding:0 14px;border-radius:12px;background:#FFFFFF;border:1px solid #1B469C;color:#002060;font-size:17px;line-height:24px;font-weight:700}
+.module-wide{flex:1}
+.module-accent{background:#08916E;border-color:#08916E;color:#FFFFFF}
+.service-row{display:flex;gap:12px;margin-top:14px}
+.service-box{height:45px;display:flex;align-items:center;justify-content:center;flex:1;border-radius:12px;background:#FFFFFF;border:1px solid #219F88;color:#007661;font-size:17px;line-height:24px;font-weight:700;text-align:center;padding:0 10px}
+.connector{width:16px;height:1px;background:#00828E;flex:none;margin-top:22px}
+.result-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.result-card{height:91px;padding:13px 14px;border-radius:12px;background:#FFFFFF;border:1px solid #E2E8F0}
+.result-card strong{display:block;font-size:18px;line-height:27px;color:#002060;font-weight:700}
+.result-card span{display:block;margin-top:6px;font-size:16px;line-height:24px;color:#4B5563}
+.side-column{height:460px;display:flex;flex-direction:column;gap:16px}
+.image-panel{height:200px;padding:8px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.image-panel img{display:block;width:350px;height:182px;border-radius:12px;object-fit:cover;background:#E0F3FF}
+.question-panel{height:244px;padding:22px 24px;background:#00140E;border-radius:12px;color:#FFFFFF}
+.question-label{font-size:15px;line-height:22px;color:#219F88;font-weight:700;letter-spacing:.02em}
+.question-text{margin-top:14px;font-size:22px;line-height:34px;font-weight:700}
+.question-rule{height:3px;width:48px;margin-top:20px;background:#08916E}
+.question-detail{margin-top:18px;font-size:18px;line-height:29px;color:#D8E7E2}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" class="header-band" style="height:104px" data-semantic-role="decoration" data-qid="q-band-6-01">
+  <div class="header-left" data-semantic-role="decoration" data-qid="q-header-left-6-02">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-6-03">숏폼 대행사업</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-9366bacde0801bd1" data-source-block-id="source-slide:7:text:3">1주차 PART 1 | 숏폼 대행사업의 구조</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-semantic-role="decoration" data-qid="q-divider-6-05"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:126px" data-semantic-role="decoration" data-qid="q-body-6-06">
+  <div class="claim" data-semantic-role="decoration" data-qid="q-claim-wrap-6-07">
+    <div class="claim-text" data-semantic-role="body" data-qid="source-block-66cc49b73bfdaf11" data-source-block-id="source-slide:7:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    <div class="claim-note" data-semantic-role="supporting" data-qid="source-block-89815c94430fc4bb" data-source-block-id="source-slide:7:text:9">핵심</div>
+  </div>
+
+  <div class="content-grid" data-semantic-role="decoration" data-qid="q-content-grid-6-10">
+    <div class="map-panel" data-semantic-role="decoration" data-qid="q-map-panel-6-11">
+      <div class="architecture" data-semantic-role="decoration" data-qid="q-architecture-6-12">
+        <div class="zone zone-one" data-semantic-role="decoration" data-qid="q-zone-one-6-13">
+          <div class="module-row" data-semantic-role="decoration" data-qid="source-block-7fee419cca712c1a" data-source-block-id="source-slide:7:text:6:run:0-1">
+            <div class="module module-wide" data-semantic-role="body" data-qid="q-bullet-one-6-15">• 숏폼 대행사는 무엇을 돈 받고 해주는가</div>
+            <div class="module module-wide" data-semantic-role="body" data-qid="q-bullet-two-6-16">• 영상 편집자와 대행사의 차이</div>
+          </div>
+        </div>
+
+        <div class="zone zone-two" data-semantic-role="decoration" data-qid="q-zone-two-6-17">
+          <div class="service-row" data-semantic-role="decoration" data-qid="q-service-row-6-18">
+            <div class="service-box" data-semantic-role="body" data-qid="source-block-3f28bdb0f4d66448" data-source-block-id="source-slide:7:text:6:run:2">• 1인이 맡을 수 있는 업무 범위</div>
+            <div class="connector" data-semantic-role="decoration" data-qid="q-connector-6-20"></div>
+            <div class="service-box" data-semantic-role="body" data-qid="source-block-ac0137e46840404d" data-source-block-id="source-slide:7:text:6:run:4">• 월 관리형 대행의 기본 구조</div>
+          </div>
+        </div>
+
+        <div class="zone zone-three" data-semantic-role="decoration" data-qid="q-zone-three-6-22">
+          <div class="result-grid" data-semantic-role="decoration" data-qid="q-result-grid-6-23">
+            <div class="result-card" data-semantic-role="decoration" data-qid="q-result-card-one-6-24">
+              <strong data-semantic-role="body" data-qid="source-block-011c511be654e153" data-source-block-id="source-slide:7:text:6:run:3">• 고객이 실제로 원하는 결과</strong>
+              <span data-semantic-role="supporting" data-qid="q-core-word-6-26">핵심</span>
+            </div>
+            <div class="result-card" data-semantic-role="decoration" data-qid="q-result-card-two-6-27">
+              <strong data-semantic-role="body" data-qid="source-block-63e840416b8365ef" data-source-block-id="source-slide:7:text:10">‘영상’이 아니라 ‘콘텐츠 운영’을 판다</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-column" data-semantic-role="decoration" data-qid="q-side-column-6-29">
+      <div class="image-panel" data-semantic-role="decoration" data-qid="q-image-panel-6-30">
+        
+      </div>
+
+      <div class="question-panel" data-semantic-role="decoration" data-qid="q-question-panel-6-32">
+        <div class="question-label" data-semantic-role="supporting" data-qid="source-block-f87f57377a8365d6" data-source-block-id="source-slide:7:text:13">생각할 질문</div>
+        <div class="question-text" data-semantic-role="body" data-qid="source-block-50ea3177f0052651" data-source-block-id="source-slide:7:text:14">나는 어떤 사장님에게 강한가?.</div>
+        <div class="question-rule" data-semantic-role="decoration" data-qid="q-question-rule-6-35"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-655b2c17b138ffa8" data-source-block-id="source-slide:7:text:4">07</div>
+</body>
+</html>

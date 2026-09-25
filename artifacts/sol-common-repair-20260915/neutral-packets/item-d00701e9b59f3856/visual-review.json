@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "item_id": "item-d00701e9b59f3856",
+  "method": "Direct render inspection against packet sourceContent and requiredImages. No content-audit, private metadata, or automated diagnostics read.",
+  "hash_verification": {
+    "html_sha256": "55891015b05f6ca7827fd7c12c05cef080d191884134394600f6b3908410d2d3",
+    "png_sha256": "386564681aa12233b573c5747b0e8380f35eb316aec022302a629a1791857519",
+    "matches_packet_after_sha256_prefix_normalization": true
+  },
+  "verdict": "fail",
+  "geometry": {
+    "pass": false,
+    "findings": [
+      "Four-card row ends near y=567, but third-card responsibility rows continue into the bottom dark banner. The contractor row is obscured and its detail is not readable.",
+      "Fourth-card method steps 05-08 extend below their card into the dark banner; step pills cover the banner sentence at the right.",
+      "Second-card last two strategy pills extend slightly below the card bottom.",
+      "Upper summary band has very tight bottom text clearance, with the left title reaching its lower boundary."
+    ]
+  },
+  "readability": {
+    "pass": false,
+    "findings": [
+      "Most body text is large and readable, but lower responsibility details and the right end of the bottom principle sentence are obscured by overlapping elements."
+    ],
+    "score": 0
+  },
+  "required_images": {
+    "candidate_count": 0,
+    "require_all": false,
+    "verdict": "not_applicable",
+    "visible_raster_images": false
+  },
+  "style": {
+    "verdict": "coherent",
+    "observation": "Consistent teal, pale mint, dark green, white cards, and strong heading hierarchy. Style coherence does not compensate for the lower-card overflow.",
+    "score": 1
+  },
+  "content_visibility": {
+    "observation": "Required role-responsibility content is not fully readable because of occlusion. Eight methodology steps are visible but the lower four escape their intended card."
+  },
+  "readability_score": 0,
+  "style_score": 1
+}

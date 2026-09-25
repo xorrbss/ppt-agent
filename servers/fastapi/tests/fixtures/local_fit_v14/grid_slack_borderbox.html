@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}html,body{margin:0;width:1280px;height:720px;overflow:hidden;font-family:Arial,sans-serif;background:#fff}
+.root{position:absolute;left:80px;top:80px;width:900px;height:360px;border:1px solid #cbd5e1;background:#fff;padding:16px;display:flex;flex-direction:column;gap:12px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);column-gap:12px;height:160px}
+.card{position:relative;background:#f1f5f9;border:1px solid #cbd5e1;padding:10px;font-size:15px;line-height:21px;color:#111827}
+.desc{position:absolute;left:10px;right:10px;bottom:8px;height:44px;background:#0f172a;color:#fff;font-size:14px;line-height:20px;padding:2px 8px}
+.summary{height:120px;background:#e2e8f0;padding:12px;font-size:15px;line-height:21px;color:#334155}
+</style></head><body>
+<main class="root" data-qid="root">
+  <section class="grid" data-qid="grid">
+    <article class="card" data-qid="card-1"><div data-qid="body-1">One.<br>Two.<br>Three.<br>Four.<br>Five.</div><div class="desc" data-qid="desc-1">Description one</div></article>
+    <article class="card" data-qid="card-2"><div data-qid="body-2">One.<br>Two.<br>Three.<br>Four.<br>Five.</div><div class="desc" data-qid="desc-2">Description two</div></article>
+    <article class="card" data-qid="card-3"><div data-qid="body-3">One.<br>Two.<br>Three.<br>Four.<br>Five.</div><div class="desc" data-qid="desc-3">Description three</div></article>
+  </section>
+  <section class="summary" data-qid="summary">Summary with plenty of slack.</section>
+</main>
+</body></html>

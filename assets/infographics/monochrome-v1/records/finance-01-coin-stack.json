@@ -1,0 +1,55 @@
+{
+  "id": "finance-01-coin-stack",
+  "category": "finance",
+  "tags": {
+    "ko": [
+      "금융",
+      "동전더미"
+    ],
+    "en": [
+      "finance",
+      "coin",
+      "stack"
+    ]
+  },
+  "alt": {
+    "ko": "동전더미 단색 벡터 인포그래픽",
+    "en": "coin stack monochrome vector infographic"
+  },
+  "path": "originals/finance-01-coin-stack.svg",
+  "thumbnail": "thumbnails/finance-01-coin-stack.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 398,
+  "sha256": "7e737ea96ab8da7cfd6cecd835414e8090c75171b58c8bc3c2ae8b5270febfa2",
+  "geometry_sha256": "588d4a20cd02641e25079ad8439da644872e3252c3433fec126093afa125babb",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54767,
+    "preview_opaque_pixels": 9140,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Coins"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

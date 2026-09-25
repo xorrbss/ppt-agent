@@ -20,6 +20,7 @@ const DECK_REVISION = 3;
 
 const createDeck = () => ({
   id: "deck-1",
+  revision: 1,
   language: "en",
   layout: null,
   n_slides: 1,

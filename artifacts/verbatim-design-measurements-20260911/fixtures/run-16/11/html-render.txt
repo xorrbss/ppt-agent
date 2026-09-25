@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:104px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:1000px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.04em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:132px;margin-left:64px;width:1152px}
+.content-grid{display:grid;grid-template-columns:350px 778px;gap:24px;height:488px}
+.left-column{display:flex;flex-direction:column;gap:24px}
+.panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:28px}
+.goal-panel{height:178px;background:#E0F3FF;border-color:#CCECFF}
+.goal-kicker{font-size:18px;line-height:28px;font-weight:700;color:#08916E}
+.goal-copy{margin-top:18px;font-size:24px;line-height:36px;font-weight:700;color:#002060}
+.standard-panel{height:286px;border-top:5px solid #08916E;padding-top:23px}
+.standard-title{font-size:22px;line-height:31px;font-weight:700;color:#002060}
+.standard-line{height:1px;background:#E2E8F0;margin:18px 0 20px}
+.standard-row{display:flex;align-items:center;gap:12px;font-size:20px;line-height:32px;font-weight:700}
+.mark-no,.mark-yes{width:30px;height:30px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;line-height:30px;font-weight:700;flex:none}
+.mark-no{background:#EAEDF2;color:#1D1D1B}
+.mark-yes{background:#08916E;color:#FFFFFF}
+.row-gap{height:18px}
+.architecture-panel{height:488px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:24px 28px}
+.architecture-head{height:50px;display:flex;align-items:flex-start}
+.architecture-title{font-size:22px;line-height:31px;font-weight:700;color:#002060}
+.architecture{position:relative;height:348px;margin-top:18px}
+.zone{position:absolute;left:0;right:0;border:1px solid #CCECFF;border-radius:12px;padding:16px 18px;background:#E0F3FF}
+.zone-one{top:0;height:86px}
+.zone-two{top:108px;height:106px;background:#F4FBF9;border-color:#B9E5D9}
+.zone-three{top:236px;height:112px;background:#FFFFFF;border-color:#E2E8F0}
+.module-row{display:flex;gap:12px;margin-top:4px}
+.module{height:42px;flex:1;display:flex;align-items:center;justify-content:center;padding:0 10px;background:#002060;border-radius:12px;color:#FFFFFF;font-size:18px;line-height:26px;font-weight:700}
+.skill-list{display:grid;grid-template-columns:1.45fr 1fr .65fr;gap:12px;margin-top:4px}
+.skill{height:52px;display:flex;align-items:center;justify-content:center;padding:0 10px;background:#219F88;border-radius:12px;color:#FFFFFF;font-size:18px;line-height:26px;font-weight:700;text-align:center}
+.output-row{display:flex;align-items:center;gap:14px;margin-top:10px}
+.output-box{height:54px;flex:1;display:flex;align-items:center;justify-content:center;border:2px solid #00828E;border-radius:12px;background:#FFFFFF;color:#002060;font-size:19px;line-height:28px;font-weight:700;text-align:center}
+.connector{width:24px;height:2px;background:#00828E;flex:none}
+.takeaway{height:42px;display:flex;align-items:center;gap:10px;margin-top:14px;padding:0 14px;background:#F4FBF9;border-radius:12px;color:#164F43;font-size:18px;line-height:27px;font-weight:700}
+.takeaway-mark{width:7px;height:22px;border-radius:12px;background:#E5A93D;flex:none}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" class="header-band" style="height:104px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-11">숏폼 제작</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-4fa73e5d453f6213" data-source-block-id="source-slide:12:text:3">2주차 | 숏폼 제작의 핵심</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:132px;margin-left:64px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="left-column" data-qid="q-div-1d730edd387a" data-semantic-role="decoration">
+      <div class="panel goal-panel" data-semantic-role="decoration" data-qid="source-block-9b5a4183fd82a0c1" data-source-block-id="source-slide:12:text:4">
+        <div class="goal-kicker" data-semantic-role="supporting" data-qid="q-goal-kicker-11">목표:</div>
+        <div class="goal-copy" data-semantic-role="body" data-qid="q-goal-copy-11">포트폴리오로 보여줄 영상 1~2개 완성</div>
+      </div>
+
+      <div class="panel standard-panel" data-qid="q-standard-card-11" data-semantic-role="decoration">
+        <div class="standard-title" data-semantic-role="body" data-qid="source-block-8cceaa7d9e37d877" data-source-block-id="source-slide:12:text:10">오늘의 기준</div>
+        <div class="standard-line" data-qid="q-div-5fa4409fdefd" data-semantic-role="decoration"></div>
+        <div class="standard-row" data-qid="q-div-28f0da628180" data-semantic-role="decoration">
+          <span class="mark-no" data-semantic-role="supporting" data-qid="q-mark-no-11">X</span>
+          <span data-semantic-role="body" data-qid="q-standard-no-text-11">완벽한 영상</span>
+        </div>
+        <div class="row-gap" data-qid="q-div-c6c535718698" data-semantic-role="decoration"></div>
+        <div class="standard-row" data-qid="q-div-c92fc72b3057" data-semantic-role="decoration">
+          <span class="mark-yes" data-semantic-role="supporting" data-qid="q-mark-yes-11">O</span>
+          <span data-semantic-role="body" data-qid="q-standard-yes-text-11">팔 수 있는 영상</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="architecture-panel" data-qid="q-architecture-card-11" data-semantic-role="decoration">
+      <div class="architecture-head" data-qid="q-div-c81d8f7c1448" data-semantic-role="decoration">
+        <div class="architecture-title" data-semantic-role="body" data-qid="source-block-c6a4d602bf6b9e9d" data-source-block-id="source-slide:12:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      </div>
+
+      <div class="architecture" data-qid="q-architecture-map-11" data-semantic-role="decoration">
+        <div class="zone zone-one" data-qid="q-div-f898d075c239" data-semantic-role="decoration">
+          <div class="module-row" data-qid="q-div-8ea2f4c3266a" data-semantic-role="decoration">
+            <div class="module" data-semantic-role="body" data-qid="source-block-e911b97de99f4a4a" data-source-block-id="source-slide:12:text:7:run:0">후킹</div>
+            <div class="module" data-semantic-role="body" data-qid="source-block-dc31e53d030a1806" data-source-block-id="source-slide:12:text:7:run:1">본문</div>
+            <div class="module" data-semantic-role="body" data-qid="source-block-dca0a919fe8c7fc7" data-source-block-id="source-slide:12:text:7:run:2">유도 구조</div>
+          </div>
+        </div>
+
+        <div class="zone zone-two" data-qid="q-div-8b86efd02954" data-semantic-role="decoration">
+          <div class="skill-list" data-qid="source-block-31d8e6537ac5f698" data-semantic-role="decoration" data-source-block-id="source-slide:12:text:7:run:3-5">
+            <div class="skill" data-semantic-role="body" data-qid="q-benchmark-11">조회수 높은 콘텐츠 벤치마킹</div>
+            <div class="skill" data-semantic-role="body" data-qid="q-smartphone-11">스마트폰 촬영 기본</div>
+            <div class="skill" data-semantic-role="body" data-qid="q-ai-11">AI 활용</div>
+          </div>
+        </div>
+
+        <div class="zone zone-three" data-qid="q-div-6a9add3e43bf" data-semantic-role="decoration">
+          <div class="output-row" data-qid="q-div-a955a9b380d4" data-semantic-role="decoration">
+            <div class="output-box" data-semantic-role="body" data-qid="source-block-32ec190d0d6378bc" data-source-block-id="source-slide:12:text:7:run:6">캡컷 핵심 기능</div>
+            <div class="connector" data-qid="q-div-1bfec761b021" data-semantic-role="decoration"></div>
+            <div class="output-box" data-semantic-role="body" data-qid="q-finished-11">영상 1~2개 완성</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="takeaway" data-qid="q-takeaway-11" data-semantic-role="decoration">
+        <span class="takeaway-mark" data-qid="q-span-44a446e52719" data-semantic-role="decoration"></span>
+        <span data-semantic-role="body" data-qid="source-block-423bc1ef63d38cd3" data-source-block-id="source-slide:12:text:11">완벽한 영상 X<br>팔 수 있는 영상 O</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-e016b77742690b0b" data-source-block-id="source-slide:12:text:5">12</div>
+</body>
+</html>

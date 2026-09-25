@@ -6,7 +6,9 @@
  * actually needs via unicode-range coverage. No network access lives here.
  */
 
+import { isBundledFontFamily } from "./bundled-fonts-manifest.ts";
 import { rewriteKnownFontFamiliesInCss } from "./font-policy.ts";
+import { stripBundledFamiliesFromGoogleFontsCssUrl } from "./google-fonts-local-first.ts";
 import {
   DISPLAY_VALUES,
   GOOGLE_FONTS_CSS_HOST,
@@ -21,6 +23,11 @@ interface ExtractedGoogleFontsReferences {
   htmlForPreflight: string;
   stylesheets: string[];
   inlineFontFaceBodies: string[];
+  /**
+   * Families the document asked Google for that the bundled manifest serves
+   * locally. They were removed from the requests above and are never fetched.
+   */
+  bundledFamilies: string[];
 }
 
 export interface ParsedFontFace {
@@ -84,6 +91,15 @@ export function extractGoogleFontsReferences(
 ): ExtractedGoogleFontsReferences {
   const stylesheets: string[] = [];
   const inlineFontFaceBodies: string[] = [];
+  const bundledFamilies: string[] = [];
+  // Local-first: a manifest family is dropped from the Google request before
+  // any fetch. The reference itself is still removed from the document; the
+  // bundled collector supplies that family under the same name afterwards.
+  const requestStylesheet = (url: URL) => {
+    const localFirst = stripBundledFamiliesFromGoogleFontsCssUrl(url);
+    bundledFamilies.push(...localFirst.localFamilies);
+    if (localFirst.url) stylesheets.push(localFirst.url.href);
+  };
   let htmlForPreflight = html.replace(/<link\b[^>]*>/gi, (tag) => {
     const rawHref = extractAttribute(tag, "href");
     const rawRel = extractAttribute(tag, "rel");
@@ -92,8 +108,7 @@ export function extractGoogleFontsReferences(
     const rel = rawRel.toLowerCase().split(/\s+/);
     if (rel.includes("stylesheet")) {
       try {
-        const url = validateGoogleFontsCssUrl(href);
-        stylesheets.push(url.href);
+        requestStylesheet(validateGoogleFontsCssUrl(href));
         return "";
       } catch {
         return tag;
@@ -123,8 +138,7 @@ export function extractGoogleFontsReferences(
         (statement, _urlQuote: string, urlValue: string, _quote: string, quotedValue: string) => {
           const candidate = decodeHtmlUrlAttribute(urlValue || quotedValue);
           try {
-            const url = validateGoogleFontsCssUrl(candidate);
-            stylesheets.push(url.href);
+            requestStylesheet(validateGoogleFontsCssUrl(candidate));
             return "";
           } catch {
             return statement;
@@ -138,8 +152,12 @@ export function extractGoogleFontsReferences(
             // Validation is intentionally complete before removal. A malformed
             // or ambiguous block stays untrusted and the ordinary preflight
             // will reject its remote/data URL.
-            parseFontFaceBody(body);
-            inlineFontFaceBodies.push(body);
+            const parsed = parseFontFaceBody(body);
+            if (isBundledFontFamily(parsed.family)) {
+              bundledFamilies.push(parsed.family);
+            } else {
+              inlineFontFaceBodies.push(body);
+            }
             return "";
           } catch {
             return fontFaceBlock;
@@ -154,6 +172,7 @@ export function extractGoogleFontsReferences(
     htmlForPreflight: rewriteKnownFontFamiliesInHtml(htmlForPreflight),
     stylesheets: [...new Set(stylesheets)],
     inlineFontFaceBodies,
+    bundledFamilies: [...new Set(bundledFamilies)],
   };
 }
 

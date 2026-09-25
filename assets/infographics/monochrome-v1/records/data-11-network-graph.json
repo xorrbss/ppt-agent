@@ -1,0 +1,55 @@
+{
+  "id": "data-11-network-graph",
+  "category": "data",
+  "tags": {
+    "ko": [
+      "데이터",
+      "네트워크"
+    ],
+    "en": [
+      "data",
+      "network",
+      "graph"
+    ]
+  },
+  "alt": {
+    "ko": "네트워크 단색 벡터 인포그래픽",
+    "en": "network graph monochrome vector infographic"
+  },
+  "path": "originals/data-11-network-graph.svg",
+  "thumbnail": "thumbnails/data-11-network-graph.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 488,
+  "sha256": "aa82bf713d4c195f083f16c90c80eb2d31e8913661ac0f37c672ab00297a609f",
+  "geometry_sha256": "61ec7590558895339098ea73280ff3f0e6120b61fb5b3af7295db352d8abcda0",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 53223,
+    "preview_opaque_pixels": 10760,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Network"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -14,8 +14,8 @@ import hashlib
 import shutil
 import uuid
 from collections import defaultdict
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.image_asset import ImageAsset
 from services.source_images.extract import extract_pptx_images
+from services.source_images.extract_documents import extract_document_images
 from services.source_images.models import (
     FULL_SLIDE_COVERAGE_THRESHOLD,
     FURNITURE_REPEAT_THRESHOLD,
@@ -74,6 +75,9 @@ class _RawImage:
     # Present only for strict source-content reflow.  Two drawing occurrences
     # may intentionally point at the same bytes and still need distinct slots.
     occurrence_id: Optional[str] = None
+    original_name: Optional[str] = None
+    ocr_text: Optional[str] = None
+    source_locator: Optional[dict] = None
 
 
 @dataclass(frozen=True)
@@ -94,6 +98,9 @@ async def register_source_images(
     *,
     presentation_id: uuid.UUID,
     upload_paths: Sequence[Path],
+    upload_metadata: Mapping[str, dict] | None = None,
+    registration_report: list[dict] | None = None,
+    include_document_images: bool = False,
 ) -> list[SourceImageCandidate]:
     """Collect, filter and persist the pictures a deck may reuse.
 
@@ -102,8 +109,41 @@ async def register_source_images(
     ``ImageAsset`` id, which is the only identifier later stages resolve.
     """
 
-    collected = await _collect_raw_images(upload_paths)
-    kept = _apply_source_image_filters(collected)
+    collected = await _collect_raw_images(upload_paths, include_document_images=include_document_images, registration_report=registration_report)
+    collected = [
+        replace(
+            raw,
+            original_name=str((upload_metadata or {}).get(str(raw.source_path), {}).get("original_name") or raw.source_path.name),
+            ocr_text=str((upload_metadata or {}).get(str(raw.source_path), {}).get("ocr_text") or "")[:20000] or None,
+        ) if raw.source_path is not None else raw
+        for raw in collected
+    ]
+    kept = [raw for raw in collected if raw.mime_type in SUPPORTED_SOURCE_IMAGE_MIME_TYPES] if include_document_images else _apply_source_image_filters(collected)
+    if registration_report is not None:
+        kept_digests = {raw.digest for raw in kept}
+        seen_digests: set[str] = set()
+        for raw in collected:
+            if raw.mime_type not in SUPPORTED_SOURCE_IMAGE_MIME_TYPES:
+                reason = "unsupported_format"
+            elif include_document_images:
+                reason = "registered"
+            elif min(raw.width, raw.height) < MIN_SOURCE_IMAGE_EDGE_PX:
+                reason = "below_size_floor"
+            elif raw.digest not in kept_digests:
+                reason = "source_furniture_or_backplate"
+            elif raw.digest in seen_digests:
+                reason = "duplicate_content"
+            else:
+                reason = "registered"
+            seen_digests.add(raw.digest)
+            registration_report.append({"digest": raw.digest, "original_name": raw.original_name,
+                                        "status": reason})
+        collected_paths = {raw.source_path for raw in collected if raw.source_path is not None}
+        for upload_path in upload_paths:
+            path = Path(upload_path)
+            if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff", ".tif"} and path not in collected_paths:
+                registration_report.append({"original_name": (upload_metadata or {}).get(str(path), {}).get("original_name") or path.name,
+                                            "status": "image_read_failed"})
     if not kept:
         return []
 
@@ -195,16 +235,29 @@ async def register_manifest_image_occurrences(
     return registered
 
 
-async def _collect_raw_images(upload_paths: Sequence[Path]) -> list[_RawImage]:
+async def _collect_raw_images(upload_paths: Sequence[Path], *, include_document_images: bool = False, registration_report: list[dict] | None = None) -> list[_RawImage]:
     """Expand every upload into the pictures it contributes, in upload order."""
 
     collected: list[_RawImage] = []
     for upload_path in upload_paths:
         path = Path(upload_path)
+        if include_document_images and path.suffix.lower() in {".docx", ".pdf"}:
+            result = await asyncio.to_thread(extract_document_images, path)
+            if registration_report is not None:
+                registration_report.append({"original_name": path.name, "status": result.status,
+                                            "coverage": result.coverage, "diagnostics": result.diagnostics,
+                                            "asset_count": len(result.assets), "occurrence_count": len(result.occurrences)})
+            collected.extend(_RawImage(mime_type=item.mime_type, width=item.width, height=item.height,
+                                      digest=item.digest, payload=item.payload, source_path=path,
+                                      source_slide_index=item.locator.get("pageIndex"), source_text=item.source_text,
+                                      occurrence_id=item.occurrence_id, source_locator=item.locator)
+                             for item in result.occurrences)
+            continue
         if path.suffix.lower() in _SOURCE_DECK_SUFFIXES:
             # Zip reading plus per-picture decoding is blocking work; keep it
             # off the event loop that is driving the rest of generation.
             extracted = await asyncio.to_thread(extract_pptx_images, path)
+            document_digest = await asyncio.to_thread(_file_digest, path) if include_document_images else None
             collected.extend(
                 _RawImage(
                     mime_type=image.mime_type,
@@ -216,8 +269,14 @@ async def _collect_raw_images(upload_paths: Sequence[Path]) -> list[_RawImage]:
                     source_heading=image.source_heading,
                     source_text=image.source_text,
                     slide_coverage=image.slide_coverage,
+                    source_path=path if include_document_images else None,
+                    occurrence_id=(hashlib.sha256(f"{document_digest}:slide/{image.source_slide_index}/image/{index}".encode()).hexdigest() if include_document_images else None),
+                    source_locator=({"sourceDocumentSha256": document_digest, "sourceFormat": "pptx",
+                                     "pageIndex": image.source_slide_index,
+                                     "objectLocator": f"slide/{image.source_slide_index}/image/{index}",
+                                     "extractionKind": "embedded_raster"} if include_document_images else None),
                 )
-                for image in extracted
+                for index, image in enumerate(extracted)
             )
             continue
         raw = await asyncio.to_thread(_probe_uploaded_image, path)
@@ -370,9 +429,13 @@ async def _persist_raw_image(
                 "source_heading": raw.source_heading,
                 "source_text": raw.source_text,
                 "source_occurrence_id": raw.occurrence_id,
+                "source_locator": raw.source_locator,
             },
         )
         session.add(asset)
+
+    if raw.occurrence_id is None:
+        asset.extras = {**(asset.extras or {}), "original_name": raw.original_name, "ocr_text": raw.ocr_text}
 
     return SourceImageCandidate(
         asset_id=str(asset_id),
@@ -384,6 +447,10 @@ async def _persist_raw_image(
         source_slide_index=raw.source_slide_index,
         source_heading=raw.source_heading,
         source_text=raw.source_text,
+        original_name=raw.original_name,
+        ocr_text=raw.ocr_text,
+        occurrence_id=raw.occurrence_id,
+        source_locator=raw.source_locator,
     )
 
 

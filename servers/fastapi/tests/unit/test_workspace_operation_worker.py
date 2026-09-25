@@ -12,6 +12,7 @@ from services.workspace_operation_handler_registry import (
     WorkspaceOperationHandlerRegistry,
     workspace_operation_handler_registry,
 )
+from services.workspace_operation_runner import claim_next_workspace_operation
 from services.workspace_runtime_profile import UnsupportedWorkspaceRuntimeError
 
 
@@ -133,7 +134,16 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
         replace=True
     )
     profile = get_public_worker_profile("generation")
-    assert profile.operation_kinds == ("presentation.generate", "quality.review")
+    assert profile.operation_kinds == (
+        "presentation.generate",
+        "raster.analysis",
+        "quality.review",
+        "slide.regenerate.preview",
+        "slide.regenerate",
+        "template.apply",
+        "design.apply",
+        "presentation.slides.reorder",
+    )
     assert profile.canonical_database_access is True
     assert profile.provider_network_access is True
     assert profile.browser_allowed is False
@@ -143,11 +153,41 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
         registry.resolve("quality.review"), worker.WorkspaceQualityReviewOperationHandler
     )
     assert registry.recovery_policy("quality.review") == "automatic"
+    assert isinstance(
+        registry.resolve("slide.regenerate.preview"),
+        worker.WorkspacePageRemakePreviewOperationHandler,
+    )
+    assert registry.recovery_policy("slide.regenerate.preview") == "automatic"
+    assert isinstance(
+        registry.resolve("slide.regenerate"),
+        worker.WorkspacePageRemakeOperationHandler,
+    )
+    assert registry.recovery_policy("slide.regenerate") == "automatic"
+    for kind in ("template.apply", "design.apply"):
+        assert registry.resolve(kind) is not None
+        assert registry.recovery_policy(kind) == "automatic"
+    assert registry.resolve("presentation.slides.reorder") is not None
+    # raster.analysis's own registration call in this same branch
+    # (register_raster_analysis_operation_handler(replace=True), no explicit
+    # registry= override) is a separate, pre-existing gap against this
+    # test's swapped-in local registry -- out of scope here.
+    assert registry.resolve("presentation.edit") is None
+    assert registry.resolve("slide.regenerate.batch.preview") is None
+    assert registry.resolve("slide.regenerate.batch") is None
     assert registry.resolve("export.pptx") is None
     assert registry.resolve("export.pdf") is None
     worker.start_workspace_worker_metrics_exporter.assert_awaited_once_with()
     worker.start_workspace_operation_runner.assert_awaited_once_with(
-        allowed_kinds=("presentation.generate", "quality.review")
+        allowed_kinds=(
+            "presentation.generate",
+            "raster.analysis",
+            "quality.review",
+            "slide.regenerate.preview",
+            "slide.regenerate",
+            "template.apply",
+            "design.apply",
+            "presentation.slides.reorder",
+        )
     )
     worker.start_workspace_cleanup_maintenance.assert_awaited_once_with()
     worker.start_workspace_asset_maintenance.assert_awaited_once_with()
@@ -195,3 +235,44 @@ def test_external_worker_requires_a_supported_sql_runtime(monkeypatch) -> None:
         match="^chat_first_runtime_unsupported$",
     ):
         asyncio.run(worker.run_external_worker(asyncio.Event()))
+
+
+def test_generation_controller_can_claim_a_slide_order_operation(
+    monkeypatch, tmp_path
+) -> None:
+    """D found this in a real run: a presentation.slides.reorder operation
+    sat "queued" (retryCount 0) for 3+ minutes because no external
+    controller's allowed_kinds included the kind -- neither the "generation"
+    role's claim allowlist (external_workspace_operation_kinds) nor its
+    declared manifest (services/public_worker_profiles.py's
+    PublicWorkerProfile.operation_kinds) listed it, and the "generation"
+    branch of run_external_worker never registered a handler for it either.
+    This exercises the real DB claim query with exactly the allowlist the
+    "generation" external controller process uses, the same seam
+    claim_next_workspace_operation is exercised through elsewhere in this
+    file (test_external_worker_owns_migrations_runner_and_shutdown mocks the
+    runner instead, so it never proves a row is actually claimable).
+    """
+    import test_workspace_operation_runner as runner_test
+
+    monkeypatch.setenv("WORKSPACE_OPERATION_EXTERNAL_CONTROLLER", "generation")
+    allowed_kinds = worker.external_workspace_operation_kinds("generation")
+    assert "presentation.slides.reorder" in allowed_kinds
+
+    async def _claim():
+        engine, maker = await runner_test._database(tmp_path / "reorder-claim.db")
+        try:
+            _, operation_ids = await runner_test._seed_operations(
+                maker, kind="presentation.slides.reorder"
+            )
+            claim = await claim_next_workspace_operation(
+                session_factory=maker, allowed_kinds=allowed_kinds
+            )
+            return claim, operation_ids
+        finally:
+            await engine.dispose()
+
+    claim, operation_ids = asyncio.run(_claim())
+    assert claim is not None
+    assert claim.kind == "presentation.slides.reorder"
+    assert claim.operation_id == operation_ids[0]

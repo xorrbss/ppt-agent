@@ -1,0 +1,56 @@
+{
+  "id": "health-07-wellness-balance",
+  "category": "health",
+  "tags": {
+    "ko": [
+      "건강",
+      "건강균형"
+    ],
+    "en": [
+      "health",
+      "wellness",
+      "balance"
+    ]
+  },
+  "alt": {
+    "ko": "건강균형 단색 벡터 인포그래픽",
+    "en": "wellness balance monochrome vector infographic"
+  },
+  "path": "originals/health-07-wellness-balance.svg",
+  "thumbnail": "thumbnails/health-07-wellness-balance.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 641,
+  "sha256": "53dd904aeaf40656b71db8579b6e133676323bc7cb4df3f51143d0f803277230",
+  "geometry_sha256": "396558226c43a639540163fd1caacbad9cc3cda2f332baed9d5215ad835fce67",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 60169,
+    "preview_opaque_pixels": 4114,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "PersonStanding",
+      "Scale"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

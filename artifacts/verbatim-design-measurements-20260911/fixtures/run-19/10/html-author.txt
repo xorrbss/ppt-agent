@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:106px;background:#FFFFFF;border-bottom:2px solid #08916E}
+.header-left{position:absolute;left:64px;top:24px;width:960px}
+.eyebrow{font-size:14px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:38px;font-weight:700;color:#1D1D1B}
+.body-wrap{position:absolute;left:0;right:0;top:134px;width:1280px;height:514px;padding:0 64px}
+.claim{height:64px;display:flex;align-items:flex-start;justify-content:space-between}
+.claim-text{width:780px;font-size:25px;line-height:36px;font-weight:700;letter-spacing:-.02em}
+.claim-text strong{color:#08916E}
+.claim-mark{width:260px;height:40px;margin-top:4px;padding:9px 16px;border-radius:12px;background:#EAF7F4;color:#00828E;font-size:16px;line-height:22px;font-weight:700;text-align:center}
+.content-grid{display:grid;grid-template-columns:548px 548px;gap:24px;height:410px}
+.task-panel{height:410px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.task-heading{font-size:20px;line-height:30px;font-weight:700;color:#002060;margin-bottom:20px}
+.task-list{display:flex;flex-direction:column;gap:12px}
+.task-item{min-height:63px;display:flex;align-items:center;gap:16px;padding:12px 16px;border:1px solid #E2E8F0;border-radius:12px;background:#F9F9F9}
+.task-num{flex:none;width:34px;height:34px;border-radius:12px;background:#08916E;color:#FFFFFF;font-family:"IBM Plex Mono","Consolas",monospace;font-size:17px;line-height:34px;font-weight:700;text-align:center}
+.task-copy{font-size:18px;line-height:27px;font-weight:600;color:#1D1D1B}
+.visual-panel{height:410px;padding:16px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.visual-panel img{display:block;width:516px;height:376px;border-radius:12px;object-fit:cover;background:linear-gradient(135deg,#E0F3FF,#EAF7F4)}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;height:16px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="106" class="header-band" style="height:106px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-qid="source-block-7edc6420f9ce5f3b" data-semantic-role="supporting" data-source-block-id="source-slide:11:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    <div data-header-part="title" class="title" data-qid="source-block-b81dc1621dacc617" data-semantic-role="title" data-source-block-id="source-slide:11:text:3">1주차 과제</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:134px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+    <div class="claim-text" data-semantic-role="body" data-qid="source-block-c99474ef3121add8" data-source-block-id="source-slide:11:text:4">30~60분 투자해서 ‘내 사업의 첫 화면’을 완성합니다.</div>
+    <div class="claim-mark" data-semantic-role="supporting" data-qid="q-supporting-claim-10">첫 화면 완성</div>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="task-panel" data-semantic-role="decoration" data-qid="q-card-task-panel-10">
+      <div class="task-heading" data-semantic-role="supporting" data-qid="q-task-heading-10">30~60분 투자해서 ‘내 사업의 첫 화면’을 완성합니다.</div>
+      <div class="task-list" data-qid="q-div-ed88754d3b8a" data-semantic-role="decoration">
+        <div class="task-item" data-semantic-role="decoration" data-qid="q-card-task-01-10">
+          <div class="task-num" data-semantic-role="supporting" data-qid="q-num-01-10">01</div>
+          <div class="task-copy" data-semantic-role="body" data-qid="source-block-e976499e73b6d87f" data-source-block-id="source-slide:11:text:7:run:0">인스타 프로필 완성</div>
+        </div>
+        <div class="task-item" data-semantic-role="decoration" data-qid="q-card-task-02-10">
+          <div class="task-num" data-semantic-role="supporting" data-qid="q-num-02-10">02</div>
+          <div class="task-copy" data-semantic-role="body" data-qid="source-block-59f93eb378ee3dfc" data-source-block-id="source-slide:11:text:7:run:1">블로그 소개 및 핵심 키워드 3개 선정</div>
+        </div>
+        <div class="task-item" data-semantic-role="decoration" data-qid="q-card-task-03-10">
+          <div class="task-num" data-semantic-role="supporting" data-qid="q-num-03-10">03</div>
+          <div class="task-copy" data-semantic-role="body" data-qid="source-block-c137f70e1ebb9e6b" data-source-block-id="source-slide:11:text:7:run:2">상품 1개와 가격 결정</div>
+        </div>
+        <div class="task-item" data-semantic-role="decoration" data-qid="q-card-task-04-10">
+          <div class="task-num" data-semantic-role="supporting" data-qid="q-num-04-10">04</div>
+          <div class="task-copy" data-semantic-role="body" data-qid="source-block-316db5ac907b8b0b" data-source-block-id="source-slide:11:text:7:run:3">내가 공략할 업종 1개 선정</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="visual-panel" data-semantic-role="decoration" data-qid="q-card-visual-panel-10">
+      <img data-semantic-role="image" data-qid="q-image-10" data-illust-prompt="A premium editorial-style workspace showing the first screen of a one-person short-form content business: a smartphone displaying an Instagram profile, an open laptop with a blog introduction and three keyword tags, a product offer card with one price, and a planning sheet identifying one target industry. Arrange the four artefacts in a clean diagonal composition viewed from above, with no people, no logos, and no paragraphs. labels: &quot;인스타 프로필 완성&quot;, &quot;블로그 소개 및 핵심 키워드 3개 선정&quot;, &quot;상품 1개와 가격 결정&quot;, &quot;내가 공략할 업종 1개 선정.&quot;" style="width:516px;height:376px">
+    </div>
+  </div>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="source-block-afd42c07c4e9491d" data-source-block-id="source-slide:11:text:5">11</div>
+</body>
+</html>

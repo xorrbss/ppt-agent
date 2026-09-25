@@ -23,34 +23,60 @@ preview:
     - "#7EA89B"
     - "#A0522D"
   variant: light
+  image: catalogue-previews/architectural-portfolio.png
+reference_images:
+  content: [catalogue-previews/architectural-portfolio.png]
 brief: |-
   MOOD:
   Create a contemporary architecture-studio portfolio that feels bright, sculptural, orderly, and environmentally aware. The system is image-first and modular. Distinguish it from minimal-vellum: use no warm paper texture, muted-brown text-first minimalism, or single-image austerity; repeat sage, teal, terracotta, curved photo masks, and blueprint logic.
 
+  Present spatial reasoning as an edited portfolio: plan, section and material evidence should explain why the proposal works.
+
   PALETTE:
   Use off-white #F4F4F4 as the main canvas, charcoal #333333 for type, sage #8B9B7B and soft teal #7EA89B for structural accents, and terracotta #A0522D for one small note or focal shape. Keep colors low-saturation and spatially separated.
 
+  Keep light neutral surfaces, charcoal, sage, muted green and terracotta. Sage can mark landscape or a selected material but needs ink labels and line boundaries.
+
   TYPOGRAPHY:
   Use a bold geometric sans serif for oversized project titles, a light clean sans serif for narrative text, and a compact mono or condensed sans serif for project metadata. Keep labels small and precise. Do not introduce serif or handwritten faces.
+  Keep the existing font character, using the installed Korean-capable fallback for continuous prose and readable metadata. Preserve required wording and use the available width before reducing type.
+
+  Use a precise geometric sans-serif for headings and neutral Korean sans-serif for captions. Dimension labels stay horizontal and outside crowded geometry. All Korean text must resolve through a local stack including "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif. At a 1280x720 canvas, target body 22-28px and labels at least 16px; 9.5pt (12.667px) is the hard floor for every text run, including SVG, captions and sources. If text cannot fit, shorten with evidence intact or split the slide; never shrink below the floor.
 
   LAYOUT SYSTEM:
   Build asymmetric two-column compositions and connected modular clusters using arch, pill, stadium, and circle image masks. Balance one large project title with small location, year, role, and material metadata. Use fine perimeter rules and selective bento groupings; every module should align to an intentional architectural datum.
+  Let the case-study narrative determine column width. Expand long Korean descriptions into a broad text field before reducing type, and omit unsupplied location, year, role, or material fields. Keep project evidence in rectangular crops whenever curved masks would hide labels or spatial context.
+
+  Compose a dominant drawing or spatial crop with a measured caption rail and a calm title margin. Alternate plan-led studies, material comparisons and a short project narrative. Keep three callouts per drawing; use a detail page for dense dimensions instead of shrinking the whole plan. These are flexible compositional directions for freely authored HTML/CSS, not fixed layouts, slots, Deck IR or a layout engine.
 
   SIGNATURE ELEMENTS:
   Repeat a sage four-point compass, linked pill-photo mosaics, a small terracotta disc or note, circular blueprint overlays, thin leader lines, and name-or-role identity rails. Curved masks must feel like architectural openings, not soft social-media cards.
 
+  Use fine datum lines, numbered detail locators, scale annotations only when supplied, and small material swatches. Keep diagrams geometrically coherent; purely conceptual drawings must say schematic or not to scale.
+
   DATA VISUALIZATION:
-  Favor a large circular floor-plan or network diagram with sparse surrounding callouts, bento metric blocks, and fine leader lines. Use area, adjacency, material, or program relationships as the visual logic. Keep conventional bar charts secondary and avoid dashboard chrome.
+  Use a circular floor-plan or relationship network only when source geometry or relationships support it. Keep leader lines outside text and distinguish schematic relationships from measured drawings. Use aligned metric rows or a simple chart for actual quantities, with source values, units, scale and provenance visible. Do not invent dimensions, program shares, or project statistics to complete a composition.
+
+  Prefer site-area comparisons, program ledgers or before/after circulation diagrams. Label supplied units and boundaries and separate measured area from qualitative spatial intent. Do not invent building dimensions, environmental performance or project status.
 
   IMAGE DIRECTION:
   Choose soft-daylight modern houses, interiors, concrete, glass, light wood, and architects working over drawings. Use low saturation, frontal geometry, and deliberate crops. Combine multiple views only through the recurring arch-and-pill mask family.
 
+  Create original restrained plan/section SVGs or use supplied architectural images with existing provenance. Use consistent orthographic geometry, pale material hatching made from real lines, and live readable labels.
+
   SLIDE ARCHETYPES:
-  - cover: Place an oversized title at left, a connected pill-image mosaic at right, and a compact identity rail along the bottom.
-  - content: Pair a concise case-study narrative with one large arch photograph and small project metadata.
-  - data: Center a circular blueprint or relationship network with up to four leader-line callouts.
-  - timeline: Use a two-column experience or awards chronology with dates on one datum and concise project notes on the other.
-  - closing: Balance one modular image cluster with contact details and a single terracotta circle.
+  cover: Pair a large project title with the linked pill-photo mosaic and a restrained identity rail using supplied metadata.
+  agenda: Align project or topic names along one architectural datum with optional supplied thumbnails; allow long labels a full row.
+  section: Use a single arch crop, the section title and sage compass mark; leave the transition otherwise quiet.
+  content: Balance a large project photograph with a readable case-study narrative. Use an open text-and-caption layout when the description needs more width.
+  data: Use a measured chart or labeled schematic according to the evidence, with a compact interpretation beside it and the source beneath.
+  timeline: Align supplied dates and project notes on a shared vertical datum. If dates are absent, present an ordered project sequence without invented years.
+  architecture: Show source-supported spaces, components or dependencies with labeled zones and a small number of clear leader lines. Separate a schematic from a measured plan in its caption.
+  closing: Pair a compact modular image cluster with the stated takeaway and supplied contact details, when available.
+
+  Compose — project intent with plan fragment; plan-and-section study; material palette with performance evidence; circulation comparison; program-area ledger; detail and construction rationale; portfolio conclusion with limitations.
 
   AVOID:
   Avoid vellum or kraft texture, serif type, brown-dominant palettes, one-photo minimalism, generic rectangular galleries, unrelated rounded cards, decorative gradients, heavy shadows, crowded floor plans, arbitrary masks, and unreplaced template text.
+
+  Do not invent claims, measurements, quotations, citations or provenance. Keep illustrative data visibly labeled and supplied evidence traceable. Avoid repeating the same composition throughout a deck; alternate the narrative scenes above while retaining this style's visual identity. Keep all original reference images and their provenance intact.

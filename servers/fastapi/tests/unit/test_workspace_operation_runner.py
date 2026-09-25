@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import replace
 from datetime import timedelta
+import logging
 from pathlib import Path
 import uuid
 
@@ -14,7 +15,11 @@ from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_DELETED,
     PresentationModel,
 )
+from models.sql.async_presentation_generation_status import (
+    AsyncPresentationGenerationTaskModel,
+)
 from models.sql.account_deletion_request import AccountDeletionRequest
+from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.user import User
 from models.sql.workspace import (
@@ -52,6 +57,8 @@ RUNNER_TABLES = [
     WorkspaceOperation.__table__,
     WorkspaceOperationEvent.__table__,
     WorkspaceOutbox.__table__,
+    AsyncPresentationGenerationTaskModel.__table__,
+    PresentationGenerationJob.__table__,
     # The runner reads the public admission row when it fences a finished or
     # recovered operation, so the scratch schema has to carry that table too.
     PublicOperationAdmission.__table__,
@@ -338,6 +345,47 @@ async def _expired_manual_handler_requires_recovery(tmp_path: Path):
         assert events[0].payload["reason_code"] == "manual_recovery_required"
     finally:
         await engine.dispose()
+
+
+def test_apply_operations_project_their_linked_generation_job_on_claim(tmp_path: Path):
+    asyncio.run(_apply_operations_project_linked_generation_job_on_claim(tmp_path))
+
+
+async def _apply_operations_project_linked_generation_job_on_claim(tmp_path: Path):
+    for kind in ("template.apply", "design.apply"):
+        engine, maker = await _database(tmp_path / f"{kind}.db")
+        try:
+            presentation_id, operation_ids = await _seed_operations(maker, kind=kind)
+            operation_id = operation_ids[0]
+            task = AsyncPresentationGenerationTaskModel(status="pending")
+            job = PresentationGenerationJob(
+                task_id=task.id,
+                presentation_id=presentation_id,
+                workspace_operation_id=operation_id,
+                request_sha256="a" * 64,
+                request_payload={"strategy": "authored"},
+            )
+            async with maker() as session:
+                session.add_all((task, job))
+                await session.flush()
+                await session.execute(
+                    update(WorkspaceOperation)
+                    .where(WorkspaceOperation.id == operation_id)
+                    .values(request_payload={"job_id": str(job.id)})
+                )
+                await session.commit()
+
+            claim = await claim_next_workspace_operation(session_factory=maker)
+            assert claim is not None
+            assert claim.kind == kind
+            async with maker() as session:
+                projected = await session.get(PresentationGenerationJob, job.id)
+                assert projected is not None
+                assert projected.state == "running"
+                assert projected.attempt_token == claim.attempt_token
+                assert projected.attempt_number == claim.attempt_number
+        finally:
+            await engine.dispose()
 
 
 def test_registry_defaults_unknown_handlers_to_manual_and_generation_to_automatic():
@@ -722,5 +770,59 @@ async def _runner_backfills_result_event_after_publication(tmp_path: Path):
                 if event.event_type == "operation.result"
             ]
         ) == 1
+    finally:
+        await engine.dispose()
+
+
+def test_runner_logs_traceback_for_an_unexpected_handler_exception(
+    tmp_path: Path, caplog
+):
+    asyncio.run(_runner_logs_unexpected_handler_exception(tmp_path, caplog))
+
+
+async def _runner_logs_unexpected_handler_exception(tmp_path: Path, caplog):
+    # A handler raising anything other than one of the typed workspace
+    # operation errors falls into _execute's generic `except Exception`
+    # branch, which converts it into the opaque "workspace_operation_internal_
+    # error" code. Before this test the branch never logged, so the real
+    # traceback never reached any log -- only the generic code survived.
+    engine, maker = await _database(tmp_path / "internal-error.db")
+    try:
+        _, operation_ids = await _seed_operations(maker)
+
+        async def handler(_context):
+            raise RuntimeError("boom: not a typed workspace operation error")
+
+        registry = WorkspaceOperationHandlerRegistry()
+        registry.register("test.operation", handler)
+        runner = WorkspaceOperationRunner(
+            session_factory=maker,
+            registry=registry,
+            max_concurrency=1,
+            heartbeat_seconds=60,
+        )
+        with caplog.at_level(
+            logging.ERROR, logger="services.workspace_operation_runner"
+        ):
+            assert await _drain_once(runner) == 1
+        operation = await _operation(maker, operation_ids[0])
+        # Retryable: requeued (not terminally failed) on the first attempt.
+        assert operation.state == "queued"
+        assert operation.error_code == "workspace_operation_internal_error"
+
+        matching = [
+            record
+            for record in caplog.records
+            if record.name == "services.workspace_operation_runner"
+            and record.levelno == logging.ERROR
+            and record.exc_info is not None
+        ]
+        assert matching, "expected the handler traceback to be logged"
+        assert any(
+            "test.operation" in record.getMessage()
+            and str(operation_ids[0]) in record.getMessage()
+            for record in matching
+        )
+        assert any(record.exc_info[0] is RuntimeError for record in matching)
     finally:
         await engine.dispose()

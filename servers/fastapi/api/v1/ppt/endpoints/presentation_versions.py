@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -54,16 +54,26 @@ async def restore_presentation_version(
     id: uuid.UUID,
     version_id: uuid.UUID,
     sql_session: AsyncSession = Depends(get_async_session),
+    canvas_contracts: Optional[str] = Header(default=None, alias="X-Document-Canvas-Contracts"),
 ):
     require_legacy_presentation_write_path(id)
     presentation = await require_live_presentation(sql_session, id)
 
-    restored_slides = await version_service.restore_version(
-        sql_session, id, version_id
-    )
+    from services.document_canvas import require_canvas_capability
+
+    require_canvas_capability(presentation.theme, canvas_contracts)
+    try:
+        restored_slides = await version_service.restore_version(
+            sql_session, id, version_id
+        )
+    except ValueError as error:
+        if str(error).startswith("document_canvas"):
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        raise
     if restored_slides is None:
         raise HTTPException(status_code=404, detail="Version not found")
 
+    require_canvas_capability(presentation.theme, canvas_contracts)
     await sql_session.commit()
 
     # fonts are omitted here; the editor re-fetches the presentation after a restore

@@ -35,6 +35,7 @@ from services.provider_usage_instrumentation import current_provider_idempotency
 from utils.get_env import (
     get_gpt_image_1_5_quality_env,
     get_gpt_image_2_quality_env,
+    get_gpt_image_2_5_quality_env,
     get_openai_api_key_env,
     get_image_generation_timeout_seconds,
     is_parallel_image_generation_enabled,
@@ -48,9 +49,12 @@ from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
 TransparentSize = Literal["1024x1024", "1536x1024", "1024x1536"]
 
 #: Providers whose model accepts ``background="transparent"`` and were
-#: verified to honour it. Keyed by provider, valued by the API model id.
+#: verified to honour it, or documented by OpenAI (GPT Image 2.5).
+#: Keyed by provider, valued by the API model id.
 _TRANSPARENT_MODELS: dict[ImageProvider, str] = {
     ImageProvider.GPT_IMAGE_2: "gpt-image-2",
+    ImageProvider.GPT_IMAGE_2_5_FLARE: "gpt-image-2.5-flare",
+    ImageProvider.GPT_IMAGE_2_5_SUNBURST: "gpt-image-2.5-sunburst",
     ImageProvider.GPT_IMAGE_1_5: "gpt-image-1.5",
 }
 
@@ -76,6 +80,8 @@ def transparent_model_for(settings: RuntimeSettings | None = None) -> Optional[s
 
 
 def _quality_for(model: str, settings: RuntimeSettings | None) -> str:
+    if model in {"gpt-image-2.5-flare", "gpt-image-2.5-sunburst"}:
+        return get_gpt_image_2_5_quality_env(settings) or "medium"
     if model == "gpt-image-1.5":
         return get_gpt_image_1_5_quality_env(settings) or "medium"
     return get_gpt_image_2_quality_env(settings) or "medium"

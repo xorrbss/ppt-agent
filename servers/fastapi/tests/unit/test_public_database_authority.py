@@ -99,6 +99,12 @@ def test_owned_postgres_strict_api_authority_is_not_skipped(monkeypatch) -> None
         "is_api": True,
     }
     probe = AsyncMock(return_value=authority)
+    # The engines below are role-authority stand-ins with no connection; the
+    # schema-revision half of the gate is exercised on real databases in
+    # ``test_database_revision_authority.py``.
+    monkeypatch.setattr(
+        database, "require_database_schema_revision_authority", AsyncMock()
+    )
     monkeypatch.setenv("ENVIRONMENT", "local")
     monkeypatch.setenv("PUBLIC_DATABASE_PROCESS_ROLE", "api")
     monkeypatch.setenv("PUBLIC_V2_INTEGRATION_PROFILE", "postgresql-strict")

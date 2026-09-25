@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "w25-authored-author-rescue-readback/v1",
+  "run": 19,
+  "operationId": "ce3d44bf-4e36-4f89-8698-c312db29ca3a",
+  "presentationId": "4fe7204e-5f74-4ae7-a74e-2458e4ab4b67",
+  "jobId": "0e66d677-30cc-4eec-b25d-7b0379ef681b",
+  "failure": {
+    "slideIndex": 33,
+    "slideNumber": 34,
+    "stage": "author",
+    "providerAttemptCount": 3,
+    "exceptionType": "BrowserSourceReadbackError",
+    "code": "source_content_browser_readback_failed",
+    "blockIds": [
+      "source-slide:34:text:6"
+    ],
+    "predicate": "source_binding_admission",
+    "classification": "missing_or_conflicting_exact_text_binding",
+    "excludedPredicates": [
+      "order",
+      "telemetry",
+      "visibility"
+    ],
+    "explanation": "The historical exception was raised by stamp_source_blocks after the simplified author call returned and before Chromium render/readback. The old AuthoredStageError wrapper omitted BrowserSourceReadbackError.detail, so the retained checkpoint cannot distinguish no exact DOM match from conflicting or duplicate binding integrity; it does prove this was not a browser visibility or telemetry rejection."
+  },
+  "priorAuthorFailures": [
+    {
+      "slideNumber": 3,
+      "loggedExceptionType": "ValueError",
+      "reason": null,
+      "reasonStatus": "not_recoverable_from_run_19"
+    },
+    {
+      "slideNumber": 13,
+      "loggedExceptionType": "ValueError",
+      "reason": null,
+      "reasonStatus": "not_recoverable_from_run_19"
+    },
+    {
+      "slideNumber": 34,
+      "loggedExceptionType": "ValueError",
+      "reason": null,
+      "reasonStatus": "not_recoverable_from_run_19"
+    }
+  ],
+  "priorFailureFinding": "BrowserSourceReadbackError subclasses ValueError, but the deferral logger used type(error).__name__; therefore these three recorded names were base ValueError instances, not per-attempt BrowserSourceReadbackError instances. Their messages and rejected HTML existed only in the in-memory AuthoredBatchFailure and were not written to the checkpoint or log.",
+  "readOnlyCheckpointProbe": {
+    "method": "Read-StackEnvironment wrapper with SET TRANSACTION READ ONLY",
+    "slide3": {
+      "authorStatus": "running",
+      "providerAttemptCount": 3,
+      "authorHtmlPresent": false
+    },
+    "slide13": {
+      "authorStatus": "running",
+      "providerAttemptCount": 3,
+      "authorHtmlPresent": false
+    },
+    "slide34": {
+      "authorStatus": "failed",
+      "providerAttemptCount": 3,
+      "authorHtmlPresent": false,
+      "retainedBlockIds": [
+        "source-slide:34:text:6"
+      ]
+    }
+  },
+  "implementedRouting": {
+    "visibilityOnly": "canonical inspect_browser_source_readback result becomes a predeclared verbatim_flag_only entry only when source-reflow terminal fallback is active",
+    "hardReadback": "missing, order, integrity, telemetry, and diagnostic failures raise AuthoredStageError with source_content_browser_readback_failed, the bounded detail, block IDs, provider attempt count, and prior author failure",
+    "observability": "source_content_browser_readback_failed is allowlisted and no longer collapses to authored_unexpected_failure",
+    "priorValueErrors": "new runs classify bounded reasons and carry the original sanitized ValueError reason into failure or flagged-slide receipt evidence"
+  },
+  "sourceEvidence": {
+    "workerLogLines": [749, 750, 751, 752, 753, 754, 765, 766],
+    "finalStatus": "06-final-status.json"
+  }
+}

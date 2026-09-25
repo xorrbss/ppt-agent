@@ -75,7 +75,6 @@ def _configure_production_environment(
             # so no credentialed wildcard request is permitted or required.
             "CORS_ALLOWED_ORIGINS": "*",
             "ENABLE_TEMPLATE_V2": "false",
-            "CHAT_FIRST_WORKSPACE_ENABLED": "true",
             "CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE": "sqlite-local",
             "CHAT_FIRST_WORKSPACE_ROLLOUT_PERCENT": "100",
             "CHAT_FIRST_WORKSPACE_SHADOW_ENABLED": "false",
@@ -324,6 +323,8 @@ def create_app(database_path: Path | None = None):
                             id=PRESENTATION_ID,
                             owner_id=AUTHORED_OWNER_ID,
                             content="Live browser workspace fixture",
+                            mode="template",
+                            version="v2-standard",
                             n_slides=5,
                             language="ko",
                             layout={"name": "live-browser"},

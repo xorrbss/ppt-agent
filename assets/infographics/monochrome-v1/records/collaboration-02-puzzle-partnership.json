@@ -1,0 +1,56 @@
+{
+  "id": "collaboration-02-puzzle-partnership",
+  "category": "collaboration",
+  "tags": {
+    "ko": [
+      "협업",
+      "퍼즐협력"
+    ],
+    "en": [
+      "collaboration",
+      "puzzle",
+      "partnership"
+    ]
+  },
+  "alt": {
+    "ko": "퍼즐협력 단색 벡터 인포그래픽",
+    "en": "puzzle partnership monochrome vector infographic"
+  },
+  "path": "originals/collaboration-02-puzzle-partnership.svg",
+  "thumbnail": "thumbnails/collaboration-02-puzzle-partnership.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 1311,
+  "sha256": "988fdb94f05a947939360c844b0ff918cfa04d50358d2ad3526181dc0d689ba5",
+  "geometry_sha256": "097c95b425b09986c03049a98baede059ed68a4196baf493637ae8e21eb9b5c9",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56347,
+    "preview_opaque_pixels": 7120,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Puzzle",
+      "Link"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

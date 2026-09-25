@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "item_id": "item-f8038519deae7011",
+  "method": "Direct inspection of this packet render, sourceContent, and requiredImages; no other reviews or automatic diagnostics read",
+  "hash_verification": {
+    "html_sha256": "a213f8060202af6c92ea9c632ed45fe0d3cffdf422ed8b48a0e88a31219b86dc",
+    "png_sha256": "c0bb0428ba7b9e5e8edf5f79bb1e89171fe0a2fdf341417e4859158fed099ea7",
+    "matches_packet_after_sha256_prefix_normalization": true
+  },
+  "verdict": "visual_pass",
+  "geometry": {
+    "pass": true,
+    "findings": [
+      "No visible text collision, panel overflow, or off-canvas content. Source screenshot and its caption are separated from the right-side explanation cards."
+    ]
+  },
+  "readability": {
+    "pass": true,
+    "findings": [
+      "Slide headings, traceability labels, baseline statement, and bottom deliverable sentence are readable.",
+      "Dense spreadsheet cell text and small AI-panel text are too small for reliable reading at this render size; source-image detail readability remains limited."
+    ],
+    "score": 1
+  },
+  "required_images": {
+    "candidate_count": 1,
+    "require_all": false,
+    "verdict": "visible_complete",
+    "visible_raster_images": true,
+    "observation": "Spreadsheet ribbon, inventory rows, AI sidebar, and bottom workbook controls are visible without overlay or obvious cropping. Exact pixel identity was not separately verified."
+  },
+  "style": {
+    "verdict": "coherent",
+    "observation": "Balanced image-left and structured-card-right composition with consistent mint and teal accents.",
+    "score": 2
+  },
+  "content_visibility": {
+    "observation": "Caption separates the depicted inventory/AI interface from full automatic tracing proof. Geometry is acceptable. Small screenshot text is a limitation, not an explicit acceptance gate in this packet."
+  },
+  "criteria_basis": {
+    "location": "packet.json requiredImages.placementPlan.assignments[0].purpose and critical_regions[0..3]",
+    "summary": "Requires complete screenshot and AI-panel preservation in a large landscape panel without overlap. No explicit all-microtext readability gate. Earlier partial verdict based solely on small screenshot text was overstrict and is corrected."
+  },
+  "readability_score": 1,
+  "style_score": 2
+}

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "key": "svg.source-preserving-layout-contract",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "원본 크기와 내용을 유지하고 선택 템플릿을 적용한다. 서버 우선 배치와 템플릿 캐시를 사용하며 미해결 페이지에만 모델을 호출한다.",
+  "scope": [
+    "svg",
+    "source-content",
+    "templates",
+    "export"
+  ],
+  "invariants": [
+    "Preserve source canvas including A4, text, tables, image occurrences and page order; apply selected template design.",
+    "Analyze the template once; pin and cache authorized template, layout and actual font versions.",
+    "Server layout, character offsets and repair come first; models handle unresolved pages only.",
+    "Keep verified SVG immutable; require template, content, canvas, PPTX and actual 30-page performance acceptance."
+  ],
+  "forbidden": [
+    "Force 16:9 or silently substitute original design, generic styling or Pretendard.",
+    "Duplicate uncertain provider calls or publish late results after terminal failure.",
+    "Treat this revised design as implemented or product verified."
+  ],
+  "evidence": [
+    "docs/svg-source-preserving-landscape-design-20260922.md"
+  ],
+  "supersedes": "svg.source-preserving-layout-contract@1",
+  "recordedAt": "2026-09-22T13:46:40.2640391+00:00"
+}

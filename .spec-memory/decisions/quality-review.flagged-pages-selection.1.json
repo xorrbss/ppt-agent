@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "key": "quality-review.flagged-pages-selection",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Offer automatic selection of pages marked review required for quality review, without manual page-number entry.",
+  "scope": [
+    "quality-review",
+    "presentation-ui"
+  ],
+  "invariants": [
+    "Use the same slide classification as the visible review-required badges."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "servers/nextjs/app/(presentation-generator)/presentation/workspace/WorkspaceChatPanel.tsx"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-14T06:57:22.0109915+00:00"
+}

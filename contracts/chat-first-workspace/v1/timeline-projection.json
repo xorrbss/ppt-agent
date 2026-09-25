@@ -54,6 +54,12 @@
         "error": null,
         "error_message": null,
         "retryable": null,
+        "providerAttemptCount": null,
+        "retryCount": null,
+        "recoveryReason": null,
+        "recoveryStatus": "unavailable",
+        "capacity_waiting": false,
+        "queue_position": null,
         "result": {
           "outline_sections": 8
         },
@@ -109,6 +115,12 @@
             "error": null,
             "safe_message": null,
             "retryable": null,
+            "providerAttemptCount": null,
+            "retryCount": null,
+            "recoveryReason": null,
+            "recoveryStatus": "unavailable",
+            "capacity_waiting": null,
+            "queue_position": null,
             "result": null,
             "created_at": "2026-08-03T00:00:01Z"
           },
@@ -127,6 +139,12 @@
             "error": null,
             "safe_message": null,
             "retryable": null,
+            "providerAttemptCount": null,
+            "retryCount": null,
+            "recoveryReason": null,
+            "recoveryStatus": "unavailable",
+            "capacity_waiting": null,
+            "queue_position": null,
             "result": null,
             "created_at": "2026-08-03T00:00:02Z"
           },
@@ -145,6 +163,12 @@
             "error": null,
             "safe_message": null,
             "retryable": null,
+            "providerAttemptCount": null,
+            "retryCount": null,
+            "recoveryReason": null,
+            "recoveryStatus": "unavailable",
+            "capacity_waiting": null,
+            "queue_position": null,
             "result": {
               "outline_sections": 8
             },
@@ -187,6 +211,12 @@
         "error": null,
         "safe_message": null,
         "retryable": null,
+        "providerAttemptCount": null,
+        "retryCount": null,
+        "recoveryReason": null,
+        "recoveryStatus": "unavailable",
+        "capacity_waiting": null,
+        "queue_position": null,
         "result": {
           "outline_sections": 8
         },

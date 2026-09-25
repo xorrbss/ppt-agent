@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}html,body{margin:0;width:1280px;height:720px;overflow:hidden;font-family:Arial,sans-serif;background:#fff}
+.root{position:absolute;top:40px;width:360px;height:200px;background:#fff;border:1px solid #cbd5e1;padding:16px}
+.r1{left:40px}.r2{left:440px}.r3{left:840px}
+.card{height:120px;background:#eef2ff;border:1px solid #c7d2fe;padding:12px;font-size:16px;line-height:22px;color:#111827}
+.band{position:absolute;left:16px;right:16px;bottom:40px;height:40px;background:#1e293b;color:#fff;font-size:16px;line-height:40px;padding:0 12px}
+</style></head><body>
+<div data-qid="wrap-1" data-allow-overlap="true">
+  <main class="root r1" data-qid="root-1">
+    <section class="card" data-qid="card-1"><div data-qid="text-1">Intentional overlap</div></section>
+    <div class="band" data-qid="band-1">Band one</div>
+  </main>
+</div>
+<footer class="root r2" data-qid="root-2">
+  <section class="card" data-qid="card-2"><div data-qid="text-2">Inside a footer</div></section>
+  <div class="band" data-qid="band-2">Band two</div>
+</footer>
+<main class="root r3" data-qid="root-3">
+  <section class="card" data-qid="card-3"><div data-qid="text-3">Footer part band</div></section>
+  <div class="band" data-qid="band-3" data-header-part="band">Band three</div>
+</main>
+</body></html>

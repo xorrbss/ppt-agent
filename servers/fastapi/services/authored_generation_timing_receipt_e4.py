@@ -279,7 +279,8 @@ _FLAGGED_SLIDE_KEYS = frozenset(
 #: flagged slide always carries both, so omitting them here silently dropped
 #: the whole attempt receipt.
 _FLAGGED_SLIDE_OPTIONAL_KEYS = frozenset(
-    {"repeated", "remakeCount", "slideId", "reasons"}
+    {"repeated", "remakeCount", "slideId", "reasons", "classification",
+     "sourceVisibilityBlockIds"}
 )
 
 

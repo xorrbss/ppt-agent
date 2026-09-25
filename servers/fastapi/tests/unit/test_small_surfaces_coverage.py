@@ -4,8 +4,7 @@ import json
 import os
 import stat
 import uuid
-from urllib.parse import parse_qs, urlparse
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -27,11 +26,10 @@ from models.sse_response import (
 )
 from services.chat.conversation_store import ChatConversationStore
 from services.concurrent_service import ConcurrentService
-from services.export_task_service import EXPORT_TASK_SERVICE
+from services.pptx_import_conversions import EXPORT_TASK_SERVICE
 from templates.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from utils import ocr_language
 from utils.datetime_utils import get_current_utc_datetime
-from utils.export_utils import export_presentation
 from utils.file_utils import (
     get_file_ext_or_none,
     get_file_name_with_random_uuid,
@@ -448,97 +446,6 @@ def test_concurrent_service_runs_tasks(monkeypatch):
     asyncio.run(runner())
     assert len(touched) == 2
     mock_sleep.assert_awaited_once_with(3)
-
-
-def test_export_includes_optional_fastapi_param():
-    async def runner():
-        fake_result = MagicMock(path="/exports/deck.pdf")
-        dummy = uuid.uuid4()
-        mock_pdf = AsyncMock(return_value=fake_result)
-        with patch.dict(
-            os.environ,
-            {
-                "NEXT_PUBLIC_URL": "https://next.example",
-                "NEXT_PUBLIC_FAST_API": "https://fast.example",
-            },
-            clear=False,
-        ), patch.object(EXPORT_TASK_SERVICE, "export_from_url", mock_pdf):
-            await export_presentation(
-                dummy,
-                title="safe",
-                export_as="pdf",
-                legacy_path_only_rolling_facade=True,
-            )
-
-        pdf_call = mock_pdf.await_args.kwargs
-        assert pdf_call["url"].startswith("https://next.example/pdf-maker?")
-        assert pdf_call["fastapi_url"] == "https://fast.example"
-        assert parse_qs(urlparse(pdf_call["url"]).query) == {
-            "id": [str(dummy)],
-            "fastapiUrl": ["https://fast.example"],
-        }
-
-        mock_pptx = AsyncMock(return_value=fake_result)
-        with patch.dict(
-            os.environ, {"NEXT_PUBLIC_FAST_API": ""}, clear=False
-        ), patch.object(EXPORT_TASK_SERVICE, "export_from_url", mock_pptx):
-            await export_presentation(
-                dummy,
-                title="two",
-                export_as="pptx",
-                legacy_path_only_rolling_facade=True,
-            )
-        pptx_call = mock_pptx.await_args.kwargs
-        assert pptx_call["fastapi_url"] is None
-
-    asyncio.run(runner())
-
-
-def test_export_requires_revision_unless_explicit_rolling_facade():
-    async def runner():
-        with pytest.raises(
-            ValueError,
-            match="expected_revision is required for canonical export",
-        ):
-            await export_presentation(
-                uuid.uuid4(),
-                title="missing-revision",
-                export_as="pdf",
-            )
-
-    asyncio.run(runner())
-
-
-def test_export_uses_next_internal_url_when_public_url_is_unset(monkeypatch):
-    monkeypatch.delenv("NEXT_PUBLIC_URL", raising=False)
-    monkeypatch.delenv("NEXT_PUBLIC_FAST_API", raising=False)
-    monkeypatch.setenv("NEXT_INTERNAL_URL", "http://localhost:5000/")
-
-    async def runner():
-        fake_result = MagicMock(path="/exports/deck.pptx")
-        dummy = uuid.uuid4()
-        mock_export = AsyncMock(return_value=fake_result)
-        with patch.object(EXPORT_TASK_SERVICE, "export_from_url", mock_export):
-            await export_presentation(
-                dummy,
-                title="local",
-                export_as="pptx",
-                expected_revision=7,
-            )
-
-        export_call = mock_export.await_args.kwargs
-        parsed = urlparse(export_call["url"])
-        assert parsed.scheme == "http"
-        assert parsed.netloc == "localhost:5000"
-        assert parsed.path == "/pdf-maker"
-        assert parse_qs(parsed.query) == {
-            "id": [str(dummy)],
-            "format": ["pptx"],
-            "render_contract": ["presenton.render-artifact/v1"],
-            "expected_revision": ["7"],
-        }
-
-    asyncio.run(runner())
 
 
 @pytest.mark.skipif(

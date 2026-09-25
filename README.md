@@ -328,7 +328,7 @@ Docker images install the default spaCy model (`en_core_web_sm`) during build so
 
 #### Image generation
 
-**`IMAGE_PROVIDER`** selects the backend (`pexels`, `pixabay`, `gemini_flash`, `nanobanana_pro`, `dall-e-3`, `gpt-image-1.5`, `gpt-image-2`, `comfyui`, `open_webui`, `openai_compatible`). Use **OPENAI_API_KEY** for OpenAI image modes and **GOOGLE_API_KEY** for Gemini image modes (same keys as the LLM section).
+**`IMAGE_PROVIDER`** selects the backend (`pexels`, `pixabay`, `gemini_flash`, `nanobanana_pro`, `dall-e-3`, `gpt-image-1.5`, `gpt-image-2`, `gpt-image-2.5-flare`, `gpt-image-2.5-sunburst`, `codex_image`, `comfyui`, `open_webui`, `openai_compatible`). Use **OPENAI_API_KEY** for OpenAI image modes and **GOOGLE_API_KEY** for Gemini image modes (same keys as the LLM section).
 
 - **DISABLE_IMAGE_GENERATION**=[true/false]: Disable slide image generation.
 - **ENABLE_PARALLEL_IMAGE_GENERATION**=[true/false]: Allow concurrent image provider requests (default `true`). Set to `false` to generate images one at a time when the provider has strict rate limits.
@@ -338,6 +338,8 @@ Docker images install the default spaCy model (`en_core_web_sm`) during build so
 - **DALL_E_3_QUALITY**=[standard/hd]: Optional for **dall-e-3** (default `standard`).
 - **GPT_IMAGE_1_5_QUALITY**=[low/medium/high]: Optional for **gpt-image-1.5** (default `medium`).
 - **GPT_IMAGE_2_QUALITY**=[low/medium/high]: Optional for **gpt-image-2** (default `medium`).
+- **codex_image** reuses the stored Codex OAuth login without an OpenAI API key. It requests `gpt-image-2.5-sunburst` and uses `GPT_IMAGE_2_5_QUALITY`; the Codex service does not attest the effective image model. Only the completed PNG is consumed. This path uses Codex usage limits and never falls back to the paid API.
+- **GPT_IMAGE_2_5_QUALITY**=[low/medium/high/xhigh/max/auto]: Optional for **gpt-image-2.5-flare** and **gpt-image-2.5-sunburst** (default `medium`). Both use the existing OpenAI Images API. See the [official image generation guide](https://developers.openai.com/api/docs/guides/image-generation).
 - **COMFYUI_URL** / **COMFYUI_WORKFLOW**: Self-hosted ComfyUI workflow JSON.
 - **OPEN_WEBUI_IMAGE_URL** / **OPEN_WEBUI_IMAGE_API_KEY**: Open WebUI–compatible image endpoint.
 - **OPENAI_COMPAT_IMAGE_BASE_URL** / **OPENAI_COMPAT_IMAGE_API_KEY** / **OPENAI_COMPAT_IMAGE_MODEL**: Required if using **openai_compatible** to send image requests to any OpenAI-compatible `/v1/images/*` endpoint (LiteLLM, Azure, vLLM Gateways, etc.).
@@ -354,7 +356,9 @@ The parallel image generation option applies everywhere images are generated: in
 
 #### Telemetry
 
-- **DISABLE_ANONYMOUS_TRACKING**=[true/false]: Set to **true** to disable anonymous telemetry.
+- **DISABLE_ANONYMOUS_TRACKING**=[true/false]: Anonymous telemetry (Mixpanel) is
+  **off by default** in this fork's Docker, Windows-native, and Electron
+  deployments. Set to **false** to opt in.
 
 #### Multi-user authentication
 

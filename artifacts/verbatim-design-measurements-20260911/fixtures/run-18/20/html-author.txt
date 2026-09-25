@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:111px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:820px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:956px;top:24px;width:260px;text-align:right;font-size:15px;line-height:21px;color:#5B6570}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:1px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px;margin-top:24px}
+.architecture{position:relative;height:254px;padding-top:24px}
+.architecture-rail{position:absolute;left:0;right:0;top:112px;height:2px;background:#00828E}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;height:210px}
+.card{position:relative;height:210px;padding:30px 28px 26px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-tab{position:absolute;left:28px;top:-14px;height:30px;padding:4px 13px;background:#002060;color:#FFFFFF;border-radius:12px;font-size:15px;line-height:22px;font-weight:700}
+.card-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:28px;line-height:34px;font-weight:700;color:#08916E;margin-bottom:14px}
+.card-title{font-size:22px;line-height:32px;font-weight:700;color:#002060;margin-bottom:20px}
+.card-rule{position:absolute;left:28px;right:28px;bottom:26px;height:4px;background:#E2E8F0;border-radius:12px}
+.card-rule-fill{height:4px;background:#219F88;border-radius:12px}
+.connector{position:absolute;top:102px;width:24px;height:20px}
+.connector-line{position:absolute;left:0;right:7px;top:9px;height:2px;background:#00828E}
+.connector-node{position:absolute;right:0;top:5px;width:10px;height:10px;background:#00828E;border-radius:12px}
+.practice{height:142px;margin-top:24px;padding:24px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-left:6px solid #08916E;border-radius:12px;display:grid;grid-template-columns:220px 1fr;gap:24px;align-items:center}
+.practice-label{font-size:22px;line-height:32px;font-weight:700;color:#002060}
+.practice-copy{font-size:20px;line-height:32px;font-weight:500;color:#1D1D1B}
+.practice-copy strong{font-weight:700;color:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="111" class="header-band" style="height:111px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-20">전화영업 기본 구조</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-efaeb0d4e849116a" data-source-block-id="source-slide:21:text:3">3주차 PART 3 | 전화영업 기본 구조</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-eb0997a27bd21e60" data-source-block-id="source-slide:21:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="architecture" data-qid="q-div-9eabd7e66260" data-semantic-role="decoration">
+    <div class="architecture-rail" data-qid="q-div-fb9863de7644" data-semantic-role="decoration"></div>
+
+    <div class="cards" data-qid="q-div-beb8611456c7" data-semantic-role="decoration">
+      <div class="card" data-qid="q-card-20-1" data-semantic-role="decoration">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-20-1">①</div>
+        <div class="card-number" data-semantic-role="supporting" data-qid="q-number-20-1">01</div>
+        <div class="card-title" data-semantic-role="body" data-qid="source-block-21bbb38a7f23f126" data-source-block-id="source-slide:21:text:6">인사</div>
+        <div class="card-rule" data-qid="q-div-e24a51b44c9c" data-semantic-role="decoration"><div class="card-rule-fill" style="width:25%" data-qid="q-div-820999e5dc47" data-semantic-role="decoration"></div></div>
+      </div>
+
+      <div class="connector" style="left:270px" data-qid="q-div-1bfec761b021" data-semantic-role="decoration">
+        <div class="connector-line" data-qid="q-div-b74025c79c7a" data-semantic-role="decoration"></div>
+        <div class="connector-node" data-qid="q-div-8b813e36675c" data-semantic-role="decoration"></div>
+      </div>
+
+      <div class="card" data-qid="q-card-20-2" data-semantic-role="decoration">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-20-2">②</div>
+        <div class="card-number" data-semantic-role="supporting" data-qid="q-number-20-2">02</div>
+        <div class="card-title" data-semantic-role="body" data-qid="source-block-726cd0a9a2d2805e" data-source-block-id="source-slide:21:text:7">왜 연락했는지</div>
+        <div class="card-rule" data-qid="q-div-0b8bad9e5967" data-semantic-role="decoration"><div class="card-rule-fill" style="width:50%" data-qid="q-div-cb1499f569a1" data-semantic-role="decoration"></div></div>
+      </div>
+
+      <div class="connector" style="left:564px" data-qid="q-div-f954d062b2c8" data-semantic-role="decoration">
+        <div class="connector-line" data-qid="q-div-9640accc6886" data-semantic-role="decoration"></div>
+        <div class="connector-node" data-qid="q-div-8a31b39488c8" data-semantic-role="decoration"></div>
+      </div>
+
+      <div class="card" data-qid="q-card-20-3" data-semantic-role="decoration">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-20-3">③</div>
+        <div class="card-number" data-semantic-role="supporting" data-qid="q-number-20-3">03</div>
+        <div class="card-title" data-semantic-role="body" data-qid="source-block-7b397eaba27cf3c2" data-source-block-id="source-slide:21:text:8">어떤 도움을 줄 수 있는지</div>
+        <div class="card-rule" data-qid="q-div-7a9c3ff3b470" data-semantic-role="decoration"><div class="card-rule-fill" style="width:75%" data-qid="q-div-7656da0bf479" data-semantic-role="decoration"></div></div>
+      </div>
+
+      <div class="connector" style="left:858px" data-qid="q-div-d70e41e2467e" data-semantic-role="decoration">
+        <div class="connector-line" data-qid="q-div-b117411b92eb" data-semantic-role="decoration"></div>
+        <div class="connector-node" data-qid="q-div-9a2b4e6f98a1" data-semantic-role="decoration"></div>
+      </div>
+
+      <div class="card" data-qid="q-card-20-4" data-semantic-role="decoration">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-20-4">④</div>
+        <div class="card-number" data-semantic-role="supporting" data-qid="q-number-20-4">04</div>
+        <div class="card-title" data-semantic-role="body" data-qid="source-block-c6c2008b956970ee" data-source-block-id="source-slide:21:text:9">다음 행동 제안</div>
+        <div class="card-rule" data-qid="q-div-7f25fb171299" data-semantic-role="decoration"><div class="card-rule-fill" style="width:100%" data-qid="q-div-d7238ed88388" data-semantic-role="decoration"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="practice" data-qid="q-practice-20" data-semantic-role="decoration">
+    <div class="practice-label" data-semantic-role="supporting" data-qid="source-block-2b8a18819565a17b" data-source-block-id="source-slide:21:text:12">연습 포인트</div>
+    <div class="practice-copy" data-semantic-role="body" data-qid="source-block-2989314964721e2f" data-source-block-id="source-slide:21:text:13">길게 설명하지 않는다. <strong data-qid="q-strong-663977331dde" data-semantic-role="body">‘관심 있으면 자료/샘플을 보내드리겠다’는 다음 단계</strong>까지 연결하는 것이 목표.</div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-58ae0a9cf5981154" data-source-block-id="source-slide:21:text:4">21</div>
+</body>
+</html>

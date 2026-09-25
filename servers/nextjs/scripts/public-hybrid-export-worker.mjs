@@ -17,12 +17,29 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { installNextjsModuleAliasHooks } from "./lib/nextjs-module-alias-hooks.mjs";
+import {
+  describeHybridErrorChain,
+  mapHybridSlideFallbackCode,
+  prepareHybridSlideWithRecovery,
+} from "./lib/hybrid-slide-fallback-code.mjs";
+import { mapWithDeckBudget } from "./lib/hybrid-deck-budget.mjs";
+import {
+  assembleWithPerSlideIntegrityFallback,
+  createHybridWorkerQualityReport,
+} from "./lib/hybrid-slide-assembly.mjs";
+
+// Re-exported so the worker keeps naming its own classification surface.
+export { describeHybridErrorChain, mapHybridSlideFallbackCode };
 
 const JOB_SCHEMA = "public-hybrid-export-job/v1";
 const RESULT_SCHEMA = "public-hybrid-export-result/v1";
 const MAX_SLIDES = 100;
-const MAX_JOB_BYTES = 1024 * 1024;
+// The parent already admits and stages export bundles at an 8 MiB boundary.
+// A 100-slide declared semantic graph can legitimately exceed 1 MiB even
+// though every slide and artifact reference has passed that outer admission.
+const MAX_JOB_BYTES = 8 * 1024 * 1024;
 const MAX_BASE_PPTX_BYTES = 512 * 1024 * 1024;
+const MAX_SLIDE_FALLBACKS = 200;
 const KOREAN_NATIVE_EMBEDDING_FAMILY = "Noto Sans KR";
 const KOREAN_FACE_PATTERN = /(?:noto\s+sans\s+(?:kr|cjk)|pretendard|malgun|맑은\s*고딕)/iu;
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
@@ -133,6 +150,7 @@ async function readJob() {
     scratchDirectory: value.scratchDirectory,
     fontAllowlistDirectory,
     fontEmbedding: value.fontEmbedding,
+    canvas: value.canvas,
     exportAttemptId,
     rendererSourceDigest,
     semanticSlides,
@@ -148,7 +166,7 @@ async function loadHybridModules() {
   const libRoot = pathToFileURL(
     path.join(path.resolve(path.join(import.meta.dirname, "..")), "lib", path.sep),
   ).href;
-  const [index, slideLayer, assembler, fontEmbedding, fontPolicy, quality, inspection, slideQuality] =
+  const [index, slideLayer, assembler, fontEmbedding, fontPolicy, quality, inspection, slideQuality, localFit, canvasApi, editability] =
     await Promise.all([
       import(`${libRoot}authored-hybrid/index.ts`),
       import(`${libRoot}authored-hybrid/slide-layer.ts`),
@@ -158,10 +176,15 @@ async function loadHybridModules() {
       import(`${libRoot}presentation-export-quality.ts`),
       import(`${libRoot}authored-hybrid/pptx-quality-inspection.ts`),
       import(`${libRoot}authored-hybrid/export-slide-quality.ts`),
+      import(`${libRoot}authored-hybrid/local-fit-export-evidence.ts`),
+      import(`${libRoot}authored-canvas.ts`),
+      import(`${libRoot}authored-hybrid/editability-evidence.ts`),
     ]);
   return {
     resolveAuthoredHybridChromeExecutable: index.resolveAuthoredHybridChromeExecutable,
     prepareSlideLayer: slideLayer.prepareSlideLayer,
+    createPublicHybridEditabilityEvidence: editability.createPublicHybridEditabilityEvidence,
+    resolveAuthoredCanvas: canvasApi.resolveAuthoredCanvas,
     assembleAuthoredHybridPptxAsync: assembler.assembleAuthoredHybridPptxAsync,
     prepareFontEmbedding: fontEmbedding.prepareFontEmbedding,
     embeddedGlyphAvailable: fontEmbedding.embeddedGlyphAvailable,
@@ -171,22 +194,14 @@ async function loadHybridModules() {
     inspectPptxEditability: inspection.inspectPptxEditability,
     imageFallbackSlide: slideQuality.imageFallbackSlide,
     noFontRenderingTelemetry: slideQuality.noFontRenderingTelemetry,
+    createLocalFitExportEvidence: localFit.createLocalFitExportEvidence,
+    writeLocalFitExportEvidence: localFit.writeLocalFitExportEvidence,
   };
 }
 
-async function mapWithBudget(items, concurrency, deadline, callback, onExpired) {
-  const output = new Array(items.length);
-  let next = 0;
-  async function pump() {
-    while (next < items.length) {
-      const index = next++;
-      output[index] =
-        Date.now() >= deadline ? onExpired(items[index]) : await callback(items[index]);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, pump));
-  return output;
-}
+// Deck-budget scheduling lives in ./lib/hybrid-deck-budget.mjs; see the note
+// there for why a slide is no longer started when its estimated cost does not
+// fit the remaining budget.
 
 function summarizeStructural(structural) {
   const slides = structural.slides.map((slide) => ({
@@ -217,14 +232,24 @@ function summarizeStructural(structural) {
   };
 }
 
-function summarizeQuality(report) {
+function summarizeQuality(report, deckBudgetMillis) {
   const tally = {};
   for (const slide of report.slides) {
     for (const reason of slide.fallbackReasons ?? []) {
       tally[reason] = (tally[reason] ?? 0) + 1;
     }
   }
+  const slideFallbacks = report.slides
+    .filter((slide) => slide.imageFallback)
+    .map((slide) => ({
+      n: slide.slideNumber,
+      code: /^[a-z][a-z0-9_-]{0,95}$/u.test(slide.fallbackReasons?.[0] ?? "")
+        ? slide.fallbackReasons[0]
+        : "unknown-exception",
+    }))
+    .slice(0, MAX_SLIDE_FALLBACKS);
   return {
+    schemaVersion: "public-hybrid-quality-summary/v1",
     status: report.status,
     editableSlides: report.slides.filter((slide) => slide.editable).length,
     imageFallbackSlides: report.slides.filter((slide) => slide.imageFallback).length,
@@ -233,10 +258,18 @@ function summarizeQuality(report) {
       0,
     ),
     fallbackReasonTally: tally,
+    slideFallbacks,
+    deckBudgetMillis,
+    slidesNotAttempted: slideFallbacks.filter(
+      (fallback) => fallback.code === "hybrid-deck-budget-exhausted",
+    ).length,
   };
 }
 
 async function run() {
+  const started = performance.now();
+  const timing = { schemaVersion: "public-hybrid-timing/v1", slides: [] };
+  const elapsed = (start) => Math.round(performance.now() - start);
   const job = await readJob();
   // Bundled fonts ship beside the Next.js server; the worker's cwd is its own
   // sandbox, so point the reader at the repository copy explicitly. App data
@@ -253,6 +286,9 @@ async function run() {
   }
 
   const modules = await loadHybridModules();
+  const canvas = modules.resolveAuthoredCanvas(job.canvas === undefined
+    ? undefined : job.canvas?.contractVersion === "document-canvas/v1"
+      ? { documentCanvas: job.canvas } : { authored_vnext: { canvas: job.canvas } });
   const chromeExecutable = await modules.resolveAuthoredHybridChromeExecutable();
   if (!chromeExecutable) throw new HybridWorkerError("hybrid_chrome_unavailable");
 
@@ -268,6 +304,8 @@ async function run() {
     (_slide, index) => job.semanticSlides[index] ?? null,
   );
 
+  timing.setupMillis = elapsed(started);
+  const fontStarted = performance.now();
   const fontPlan = await modules.resolveFontEmbeddingPlan({
     requested: job.fontEmbedding,
     // Browser CSS often names only the Latin face while Hangul resolves through
@@ -305,9 +343,11 @@ async function run() {
     };
   }
 
+  timing.fontEmbeddingMillis = elapsed(fontStarted);
+  const conversionStarted = performance.now();
   const deadline = Date.now() + job.budgetMillis;
   const glyphAvailable = modules.embeddedGlyphAvailable(fontPlan);
-  const outcomes = await mapWithBudget(
+  const { output: outcomes, telemetry: budget } = await mapWithDeckBudget(
     job.slides.map((slide, index) => ({
       ...slide,
       html: htmls[index],
@@ -316,6 +356,8 @@ async function run() {
     job.concurrency,
     deadline,
     async (slide) => {
+      const slideStarted = performance.now();
+      const recovery = {};
       const semanticContext = slide.semantic
         ? {
             exportAttemptId: job.exportAttemptId,
@@ -327,7 +369,7 @@ async function run() {
           }
         : undefined;
       try {
-        return await modules.prepareSlideLayer(
+        return await prepareHybridSlideWithRecovery(() => modules.prepareSlideLayer(
           slide.html,
           slide.slideNumber,
           chromeExecutable,
@@ -335,28 +377,30 @@ async function run() {
           embedding.embeddedTypefaceFaces,
           semanticContext,
           glyphAvailable,
-        );
+          canvas,
+        ), deadline, recovery);
       } catch (error) {
         // A declared graph that does not reconcile with what the browser
         // observed costs this slide its native layer, never the export. The
         // reason is distinct so the receipt says which failure it was.
-        const semanticMismatch =
-          semanticContext !== undefined &&
-          error instanceof Error &&
-          /semantic/i.test(error.name + error.message);
+        const fallbackCode = mapHybridSlideFallbackCode(error);
+        // The stderr tail is the only place the aggregate members are readable
+        // at all, and the isolated lane discards it on success. Name the code
+        // that will be persisted beside the chain that produced it.
         process.stderr.write(
-          `[public-hybrid] slide ${slide.slideNumber} raster fallback: ${String(error)}\n`,
+          `[public-hybrid] slide ${slide.slideNumber} raster fallback ${fallbackCode}: ` +
+            `${describeHybridErrorChain(error)}\n`,
         );
         return {
           layer: null,
           quality: modules.imageFallbackSlide(
             slide.slideNumber,
-            semanticMismatch
-              ? "semantic-observation-mismatch"
-              : "slide-processing-failed",
+            fallbackCode,
           ),
           fontRendering: modules.noFontRenderingTelemetry(),
         };
+      } finally {
+        timing.slides.push({ n: slide.slideNumber, conversionMillis: elapsed(slideStarted), recovery });
       }
     },
     (slide) => ({
@@ -366,44 +410,80 @@ async function run() {
     }),
   );
 
-  const layers = outcomes.map((outcome) => outcome.layer).filter(Boolean);
-  const report = modules.createPresentationExportQuality(
-    "hybrid",
-    outcomes.map((outcome) => outcome.quality),
-    {
-      fontEmbeddingStatus: embedding.status,
-      fontRendering: {
-        browserFontFilesCollected: outcomes.reduce(
-          (total, outcome) => total + outcome.fontRendering.browserFontFilesCollected,
-          0,
-        ),
-        browserCollectionFailures: outcomes.reduce(
-          (total, outcome) => total + outcome.fontRendering.browserCollectionFailures,
-          0,
-        ),
-      },
-    },
+  process.stderr.write(
+    `[public-hybrid] deck budget ${job.budgetMillis}ms: attempted=${budget.attempted} `
+      + `skippedByEstimate=${budget.skippedByEstimate} pastDeadline=${budget.skippedPastDeadline} `
+      + `medianSlideMs=${budget.observedMedianMillis ?? "n/a"} maxSlideMs=${budget.observedMaxMillis ?? "n/a"}
+`,
+  );
+  timing.conversionWallMillis = elapsed(conversionStarted);
+  timing.slides.sort((a, b) => a.n - b.n);
+  timing.slidesNotAttempted = job.slides.length - timing.slides.length;
+  const assemblyStarted = performance.now();
+  let finalOutcomes = outcomes;
+  let layers = finalOutcomes.map((outcome) => outcome.layer).filter(Boolean);
+  let report = createHybridWorkerQualityReport(
+    modules.createPresentationExportQuality,
+    embedding.status,
+    finalOutcomes,
   );
   if (!layers.length) {
     // Every slide fell back. Report why, per slide: a bare "no layers" leaves
     // the caller with a downgrade it can name but cannot explain or act on.
     const noLayers = new HybridWorkerError("hybrid_no_native_layers");
-    noLayers.quality = summarizeQuality(report);
-    throw noLayers;
+    noLayers.quality = summarizeQuality(report, job.budgetMillis);
+    noLayers.timing = { ...timing, wallMillis: elapsed(started) };
+    noLayers.editability = modules.createPublicHybridEditabilityEvidence({ outcomes: finalOutcomes, semantics, htmls, canvas, pptxBytes: embedding.pptx });
+    if (noLayers.editability.verdict !== "not-applicable") throw noLayers;
   }
-  const hybridBytes = await modules.assembleAuthoredHybridPptxAsync(
-    embedding.pptx,
-    layers,
-    { embeddedTypefaceFamilies: embedding.embeddedTypefaceFamilies },
+  const assembled = await assembleWithPerSlideIntegrityFallback({
+    basePptx: embedding.pptx,
+    outcomes: finalOutcomes,
+    assemblerOptions: { embeddedTypefaceFamilies: embedding.embeddedTypefaceFamilies, canvas },
+    assemble: modules.assembleAuthoredHybridPptxAsync,
+    mapFallbackCode: mapHybridSlideFallbackCode,
+    createFallbackOutcome: (slideNumber, code) => ({
+      layer: null,
+      quality: modules.imageFallbackSlide(slideNumber, code),
+      fontRendering: modules.noFontRenderingTelemetry(),
+    }),
+    onFallback: ({ code, error, slideNumber }) => process.stderr.write(
+      `[public-hybrid] slide ${slideNumber} assembler raster fallback ${code}: ` +
+        `${describeHybridErrorChain(error)}\n`,
+    ),
+  });
+  finalOutcomes = assembled.outcomes;
+  layers = assembled.layers;
+  report = createHybridWorkerQualityReport(
+    modules.createPresentationExportQuality,
+    embedding.status,
+    finalOutcomes,
   );
+  if (!assembled.hybridBytes) {
+    const noLayers = new HybridWorkerError("hybrid_no_native_layers");
+    noLayers.quality = summarizeQuality(report, job.budgetMillis);
+    noLayers.timing = { ...timing, wallMillis: elapsed(started) };
+    noLayers.editability = modules.createPublicHybridEditabilityEvidence({ outcomes: finalOutcomes, semantics, htmls, canvas, pptxBytes: embedding.pptx });
+    if (noLayers.editability.verdict !== "not-applicable") throw noLayers;
+  }
+  const hybridBytes = assembled.hybridBytes ?? embedding.pptx;
+  timing.assemblyMillis = elapsed(assemblyStarted);
+  const verificationStarted = performance.now();
   await writeFile(job.outputPath, hybridBytes, { flag: "wx", mode: 0o600 });
-  const structural = modules.inspectPptxEditability(hybridBytes);
+  await modules.writeLocalFitExportEvidence(job.outputPath,
+    modules.createLocalFitExportEvidence(layers, htmls, job.rendererSourceDigest ?? "", hybridBytes, canvas));
+  const structural = modules.inspectPptxEditability(hybridBytes, canvas);
+  const editability = modules.createPublicHybridEditabilityEvidence({ outcomes: finalOutcomes, semantics, htmls, canvas, pptxBytes: hybridBytes });
+  timing.writeAndVerificationMillis = elapsed(verificationStarted);
+  timing.wallMillis = elapsed(started);
 
   return {
     schemaVersion: RESULT_SCHEMA,
     ok: true,
+    timing,
+    editability,
     errorCode: null,
-    quality: summarizeQuality(report),
+    quality: summarizeQuality(report, job.budgetMillis),
     structural: summarizeStructural(structural),
     semantic: {
       slidesWithDeclaredGraph: semantics.filter(Boolean).length,
@@ -421,25 +501,33 @@ async function run() {
   };
 }
 
-try {
-  const result = await run();
-  process.stdout.write(`${JSON.stringify(result)}\n`);
-  process.exit(0);
-} catch (error) {
-  const code =
-    error instanceof HybridWorkerError
-      ? error.code
-      : `hybrid_unexpected_failure:${error instanceof Error ? error.message.slice(0, 120) : "unknown"}`;
-  process.stdout.write(
-    `${JSON.stringify({
-      schemaVersion: RESULT_SCHEMA,
-      ok: false,
-      errorCode: code,
-      // A refusal still owes an account of itself when it has one.
-      ...(error instanceof HybridWorkerError && error.quality
-        ? { quality: error.quality }
-        : {}),
-    })}\n`,
-  );
-  process.exit(1);
+async function main() {
+  try {
+    const result = await run();
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+    process.exit(0);
+  } catch (error) {
+    const code =
+      error instanceof HybridWorkerError
+        ? error.code
+        : `hybrid_unexpected_failure:${error instanceof Error ? error.message.slice(0, 120) : "unknown"}`;
+    process.stdout.write(
+      `${JSON.stringify({
+        schemaVersion: RESULT_SCHEMA,
+        ok: false,
+        errorCode: code,
+        ...(error instanceof HybridWorkerError && error.timing ? { timing: error.timing } : {}),
+        ...(error instanceof HybridWorkerError && error.editability ? { editability: error.editability } : {}),
+        // A refusal still owes an account of itself when it has one.
+        ...(error instanceof HybridWorkerError && error.quality
+          ? { quality: error.quality }
+          : {}),
+      })}\n`,
+    );
+    process.exit(1);
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  await main();
 }

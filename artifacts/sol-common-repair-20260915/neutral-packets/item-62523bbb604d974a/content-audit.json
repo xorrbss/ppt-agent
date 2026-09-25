@@ -1,0 +1,54 @@
+{
+  "schema": "sol-neutral-content-audit/v1",
+  "packetId": "item-62523bbb604d974a",
+  "reviewer": "independent-content",
+  "hashVerification": {
+    "html": true,
+    "png": true
+  },
+  "contentVerdict": "fail",
+  "passed": false,
+  "evidenceBasis": [
+    "this packet source and requiredImages",
+    "HTML cross-check",
+    "PNG visual inspection",
+    "whitelisted target original viewed"
+  ],
+  "requiredImageCount": 1,
+  "requiredImagesVerdict": "fail",
+  "imageEvidence": "Required concentric target symbol is not visible in rendered slide: lower-left image frame appears entirely white, with no discernible rings or center. HTML img presence does not satisfy visual preservation.",
+  "propositions": [
+    {
+      "index": 1,
+      "verdict": "pass",
+      "evidence": "Header IDs/categories and all five domains readable."
+    },
+    {
+      "index": 2,
+      "verdict": "pass",
+      "evidence": "All four convenience metrics and all four productivity metrics readable."
+    },
+    {
+      "index": 3,
+      "verdict": "pass",
+      "evidence": "All quality metrics, 3-second criterion and concurrent-login 300-person load test readable despite quality card overflow."
+    },
+    {
+      "index": 4,
+      "verdict": "pass",
+      "evidence": "All four DevAX metrics and no-unverified-contract-savings qualification readable."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "type": "invisible-required-image",
+      "location": "bottom-left target frame",
+      "detail": "No visible target rings/center against rendered frame."
+    }
+  ],
+  "uncertainties": [],
+  "notes": [
+    "Content failure is image visibility, not DOM absence or quality-card chrome overflow."
+  ]
+}

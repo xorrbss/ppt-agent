@@ -1,0 +1,56 @@
+{
+  "id": "operations-15-return-package",
+  "category": "operations",
+  "tags": {
+    "ko": [
+      "운영",
+      "반품"
+    ],
+    "en": [
+      "operations",
+      "return",
+      "package"
+    ]
+  },
+  "alt": {
+    "ko": "반품 단색 벡터 인포그래픽",
+    "en": "return package monochrome vector infographic"
+  },
+  "path": "originals/operations-15-return-package.svg",
+  "thumbnail": "thumbnails/operations-15-return-package.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 836,
+  "sha256": "429e1336ce76a33f7a49253447d879356a7013a422e3d5e47a57f59e26e4f47f",
+  "geometry_sha256": "a6d533365853ed07c6c74627e14432bfa7abe1edfb7a0eee16c1bb5f6e451e12",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54488,
+    "preview_opaque_pixels": 8906,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "PackageOpen",
+      "Undo2"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -16,10 +16,11 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 
 from api.v2.contracts import QualityReceiptV3 as PublicQualityReceiptV3
+from services.authored_quality_receipt_v2 import validate_current_quality_receipt_payload
 from services.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
 from services.public_export_operation import (
     PUBLIC_RENDER_WORKER_PROTOCOL_VERSION,
@@ -29,6 +30,67 @@ from services.public_export_operation import (
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
 )
+
+
+_PUBLISHED_FLAGGED_HYBRID_BLOCKER = re.compile(
+    r"providerCalls\.slide_budget_invalid:(?:0|[1-9][0-9]*)"
+)
+
+
+def _published_flagged_hybrid_allowed(
+    gate: Mapping[str, object], receipt: Mapping[str, object], *, published: bool
+) -> bool:
+    if (
+        not published
+        or gate.get("documentStatus") != "completed"
+        or gate.get("documentCompleted") is not True
+    ):
+        return False
+    try:
+        v2 = validate_current_quality_receipt_payload(gate)
+    except ValueError:
+        return False
+    flagged = gate.get("flaggedSlides")
+    slide_count = gate.get("slideCount")
+    if (
+        not v2.gate_passed
+        or not isinstance(slide_count, int)
+        or isinstance(slide_count, bool)
+        or not isinstance(flagged, Sequence)
+        or isinstance(flagged, (str, bytes))
+        or not flagged
+    ):
+        return False
+    indices: list[int] = []
+    for item in flagged:
+        if (
+            not isinstance(item, Mapping)
+            or item.get("remakeOutcome") != "verbatim_flag_only"
+        ):
+            return False
+        index = item.get("index")
+        if (
+            not isinstance(index, int)
+            or isinstance(index, bool)
+            or not 0 <= index < slide_count
+        ):
+            return False
+        indices.append(index)
+    blockers = receipt.get("blockers")
+    return (
+        len(indices) == len(set(indices))
+        and receipt.get("gatePassed") is False
+        and isinstance(blockers, list)
+        and bool(blockers)
+        and all(
+            blocker == "visualReview.failed"
+            or (
+                isinstance(blocker, str)
+                and _PUBLISHED_FLAGGED_HYBRID_BLOCKER.fullmatch(blocker) is not None
+            )
+            for blocker in blockers
+        )
+    )
 
 
 def _validated_public_export_render_identity(
@@ -87,8 +149,15 @@ def _validated_authored_quality_receipt_digest(
     theme: object,
     *,
     allow_visual_review_pending: bool = False,
-) -> tuple[str, bool]:
-    """Return a sealed V3 digest and whether only human visual review remains."""
+    allow_published_flagged_hybrid: bool = False,
+    allow_quality_advisory: bool = False,
+) -> tuple[str, str | None]:
+    """Return a sealed V3 digest and any export compatibility used.
+
+    A regular source-preserving export may carry a failed or unassessed quality
+    receipt as advisory evidence.  This does not relax the receipt schema or
+    digest binding, and release-review exports never opt into the advisory path.
+    """
 
     if not isinstance(theme, Mapping):
         raise NonRetryableWorkspaceOperationError("quality_receipt_v3_required")
@@ -102,8 +171,19 @@ def _validated_authored_quality_receipt_digest(
         and receipt.get("gatePassed") is False
         and blockers == ["visualReview.required_failed"]
     )
+    published_flagged_hybrid = (
+        allow_published_flagged_hybrid
+        and _published_flagged_hybrid_allowed(gate, receipt, published=True)
+    )
+    quality_advisory = (
+        allow_quality_advisory
+        and receipt.get("gatePassed") is False
+    )
     if receipt.get("schemaVersion") != "quality-receipt/v3" or not (
-        receipt.get("gatePassed") is True or visual_review_pending
+        receipt.get("gatePassed") is True
+        or visual_review_pending
+        or published_flagged_hybrid
+        or quality_advisory
     ):
         raise NonRetryableWorkspaceOperationError("quality_receipt_v3_blocked")
     receipt_digest = receipt.get("receiptDigest")
@@ -142,7 +222,16 @@ def _validated_authored_quality_receipt_digest(
     ).hexdigest()
     if actual != receipt_digest:
         raise NonRetryableWorkspaceOperationError("quality_receipt_v3_digest_invalid")
-    return receipt_digest.removeprefix("sha256:"), visual_review_pending
+    compatibility = (
+        "visual-review-pending"
+        if visual_review_pending
+        else "published-flagged-hybrid"
+        if published_flagged_hybrid
+        else "quality-advisory"
+        if quality_advisory
+        else None
+    )
+    return receipt_digest.removeprefix("sha256:"), compatibility
 
 
 def _legacy_fidelity_quality_digest(scene_digest: str) -> str:
@@ -169,20 +258,23 @@ def _resolved_authored_quality_digest(
     *,
     scene_digest: str,
     pptx_mode: str,
+    published: bool = False,
+    allow_quality_advisory: bool = False,
 ) -> tuple[str, str | None]:
-    """Resolve strict evidence, or the narrow legacy Fidelity compatibility binding."""
+    """Resolve strict evidence or a source-preserving export compatibility."""
 
     try:
-        digest, visual_review_pending = _validated_authored_quality_receipt_digest(
+        digest, compatibility = _validated_authored_quality_receipt_digest(
             theme,
             allow_visual_review_pending=pptx_mode == "fidelity",
+            allow_published_flagged_hybrid=published and pptx_mode == "hybrid",
+            allow_quality_advisory=allow_quality_advisory,
         )
-        return digest, "visual-review-pending" if visual_review_pending else None
+        return digest, compatibility
     except NonRetryableWorkspaceOperationError as error:
-        # Compatibility covers only a wholly absent V3 receipt. A receipt that
-        # is present but blocked or digest-invalid still refuses every mode, and
-        # the projected public receipt stays releaseReadiness "blocked" with the
-        # missing-checker reason codes for Hybrid exactly as for Fidelity.
+        # Legacy compatibility covers only a wholly absent V3 receipt. A
+        # present receipt remains bound and must be well-formed; ordinary
+        # source-preserving exports may carry its failed state as advisory.
         if error.code != "quality_receipt_v3_required":
             raise
         return _legacy_fidelity_quality_digest(scene_digest), "legacy"

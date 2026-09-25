@@ -20,6 +20,9 @@ preview:
     - "#F4EFE7"
     - "#B8A98B"
   variant: botanical-noir
+  image: catalogue-previews/prime-noir.png
+reference_images:
+  content: [catalogue-previews/prime-noir.png]
 brief: >-
   MOOD: Create a sophisticated hospitality deck with nocturnal elegance, culinary
   craft, and understated ceremony. It should feel exclusive and sensory while still
@@ -28,36 +31,61 @@ brief: >-
   PALETTE: Use pure black (#000000) for dramatic fields, dark charcoal (#1A1A1A) for
   layered surfaces, deep burgundy (#8E1225) for signature emphasis, warm ivory
   (#F4EFE7) for primary type, and muted brass (#B8A98B) for fine details.
+  Use the original palette with strong text/background contrast. Pale tints serve as surfaces, not low-contrast body text; differentiate critical states with wording or shape as well as color.
 
   TYPOGRAPHY: Pair a high-contrast classical serif for titles and short statements
   with a modern sans-serif for financial, operational, and descriptive content. Use
-  measured tracking and generous leading to preserve a premium cadence.
+  measured tracking and generous leading to preserve a premium cadence. Use
+  available Korean-capable faces, natural Hangul spacing, and phrase-based wraps.
+  Keep long Korean explanations left-aligned in the sans-serif body face and use
+  tabular numerals for financial columns. Reflow or widen crowded copy before
+  reducing type, respecting the runtime typography floor.
+  At 1280x720, use the Korean-safe stack "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif for Korean text. Body text should normally be 22-28px; captions and source notes preferably at least 16px. The hard minimum for every visible text run is 9.5pt (12.667px). Recompose, shorten or split content before reducing readability; never shrink below this floor. Preserve any genre-specific display-face accents only where Korean fallback remains clear.
 
   LAYOUT SYSTEM: Alternate full-bleed sensory images with quiet matte-black pages,
   disciplined two-column compositions, and occasional circular crops. Keep business
-  evidence in clean aligned blocks rather than mimicking a restaurant menu.
+  evidence in clean aligned blocks rather than mimicking a restaurant menu. Reserve
+  stable outer margins and a source band. Shrink decorative crops before narrowing
+  long Korean business text, and keep botanical lines outside the text safe area.
+  Keep ivory type over a quiet black surface rather than bright food highlights.
+  Use the tension between near-black space and a few warm-paper text areas. A restrained editorial headline may balance a broad data field or one precise comparison; keep extended Korean explanations in the body face. Vary sparse thesis pages, detailed proof pages and decisive closings without repeating a luxury cover composition. These are free compositional choices driven by content, never fixed layouts or required slots. Give the main evidence generous space and vary visual density across the deck.
 
   SIGNATURE ELEMENTS: Use delicate botanical linework, burgundy title bands, fine
   ivory borders, circular image windows, subtle vignette gradients, and sparse brass
   folios. Treat ornament as a frame for craft, not as filler.
+  Treat deep red as a rare point of consequence: a decision mark, one key interval or a single vertical rule. Use warm neutrals and fine rules for supporting evidence. Richness should come from proportion and typographic spacing rather than gold ornament.
 
   DATA VISUALIZATION: Use ivory labels on charcoal surfaces, burgundy highlights for
   the focal series, restrained brass reference lines, and directly labeled values.
   Favor revenue mix, unit economics, customer profile, and growth comparisons with
-  clear scales and sober annotations.
+  clear scales and sober annotations. Use ivory direct labels and an ivory outline
+  or adjacent label to distinguish burgundy marks against charcoal. Start magnitude
+  bars at zero, keep comparable scales, and show units, periods, supplied sources,
+  and actual-versus-target distinctions. Revenue-mix proportions require a known
+  total; unit economics must retain their supplied per-unit basis. Never invent
+  margins, customer shares, launch dates, or targets for a convincing business case.
+  Use aligned values, slender interval marks and direct labels with sufficient warm-white contrast. Keep zero and comparison baselines honest; add units and a brief explanation of what the highlighted measure changes. Do not imply value, ranking or investment performance through visual prestige alone.
 
   IMAGE DIRECTION: Choose low-key editorial photography of signature dishes,
   ingredients, chefs at work, intimate interiors, and material details. Use deep
   shadows, warm highlights, controlled steam, and deliberate negative space.
 
   SLIDE ARCHETYPES: cover: a full-bleed culinary or interior image with a centered
-  ivory serif title and restrained botanical corners; content: a matte-black business
+  ivory serif title and restrained botanical corners; section: one ivory chapter
+  heading on matte black with a small burgundy band; agenda: supplied topics in
+  aligned ivory rows with fine brass rules, avoiding menu-style price columns;
+  content: a matte-black business
   narrative beside one circular detail crop; data: a charcoal financial chart with a
-  single burgundy emphasis and clear implication; timeline: a refined launch sequence
-  marked by brass dates and burgundy milestones; closing: a quiet black field with
-  the core promise, decision request, and one sensory visual detail.
+  single burgundy emphasis and clear implication; architecture: a hospitality
+  service or operating-model diagram in aligned charcoal lanes with ivory labels
+  and straight brass connectors, using arrows only for supplied direction;
+  timeline: a refined launch sequence with supplied milestones, brass dates only
+  when known, and labels separate from ornament; closing: a quiet black field with
+  the supported core promise or decision request and one sensory visual detail.
+  Additional forms: editorial result with an open comparison chart; value-driver table with one red emphasis; evidence excerpt and interpretation; scenario interval comparison; decision closing that names the remaining trade-off.
 
   AVOID: Avoid turning every slide into a menu, bright food-blog styling, red text on
   black at small sizes, excessive botanical decoration, rustic textures, generic
   luxury clichés, crowded photo collages, and dramatic imagery without business
   relevance.
+  Avoid dim red labels on black, ornate financial symbolism, fake exclusivity claims and serif styling that harms Korean readability.

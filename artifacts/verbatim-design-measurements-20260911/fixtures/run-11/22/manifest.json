@@ -1,0 +1,220 @@
+{
+ "sourceUnitId": "source-slide:23",
+ "sourceIndex": 22,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:23:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:23:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "3주차 과제",
+    "paragraphs": [
+     {
+      "runs": [
+       "3주차 과제"
+      ],
+      "text": "3주차 과제"
+     }
+    ],
+    "runs": [
+     "3주차 과제"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:1c47263255bb130b11c02111929365134d9d7b83a34918c6ac41d53ad9913657",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:23:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "강의가 끝난 뒤 실제 영업이 시작됩니다.",
+    "paragraphs": [
+     {
+      "runs": [
+       "강의가 끝난 뒤 실제 영업이 시작됩니다."
+      ],
+      "text": "강의가 끝난 뒤 실제 영업이 시작됩니다."
+     }
+    ],
+    "runs": [
+     "강의가 끝난 뒤 실제 영업이 시작됩니다."
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 658368,
+     "y": 987552,
+     "cx": 10424160,
+     "cy": 365760
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:3ac866a1a6de10d2215e9177a4213c25da5161f2a5fea22aa8872a9432e8d142",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:23:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "23",
+    "paragraphs": [
+     {
+      "runs": [
+       "23"
+      ],
+      "text": "23"
+     }
+    ],
+    "runs": [
+     "23"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:9a0b823f37ff98dc3508e1016e315235e8dd5d8bef197c294d52fb012faa84ad",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:23:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:36fd55bab03eb0480d24a03055e21590393daa37f1e868df1a69112f2d6294dd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:23:text:7",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 5,
+   "payload": {
+    "text": "• 타깃 업체 30곳 리스트업\n• 전화/DM 중 하나를 선택해 최소 10곳 시도\n• 무료 샘플 1곳 기획\n• 거절 이유를 기록하고 멘트를 수정",
+    "paragraphs": [
+     {
+      "runs": [
+       "• 타깃 업체 30곳 리스트업"
+      ],
+      "text": "• 타깃 업체 30곳 리스트업"
+     },
+     {
+      "runs": [
+       "• 전화/DM 중 하나를 선택해 최소 10곳 시도"
+      ],
+      "text": "• 전화/DM 중 하나를 선택해 최소 10곳 시도"
+     },
+     {
+      "runs": [
+       "• 무료 샘플 1곳 기획"
+      ],
+      "text": "• 무료 샘플 1곳 기획"
+     },
+     {
+      "runs": [
+       "• 거절 이유를 기록하고 멘트를 수정"
+      ],
+      "text": "• 거절 이유를 기록하고 멘트를 수정"
+     }
+    ],
+    "runs": [
+     "• 타깃 업체 30곳 리스트업",
+     "\n",
+     "• 전화/DM 중 하나를 선택해 최소 10곳 시도",
+     "\n",
+     "• 무료 샘플 1곳 기획",
+     "\n",
+     "• 거절 이유를 기록하고 멘트를 수정"
+    ],
+    "shapeName": "TextBox 6",
+    "geometry": {
+     "x": 914400,
+     "y": 1554480,
+     "cx": 9875520,
+     "cy": 3840480
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:a18b35de97155e042014e9c4c46b635b145f7cc6956e77069d238b1d80b25c41",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

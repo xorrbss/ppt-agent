@@ -1,0 +1,1759 @@
+[
+ {
+  "run": "run-11",
+  "slide": 1,
+  "block": "source-slide:2:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 11,
+  "block_chars": 23,
+  "aligns_with_run_span": false,
+  "sample": "‘사업이 굴러가는 구조’"
+ },
+ {
+  "run": "run-11",
+  "slide": 2,
+  "block": "source-slide:3:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 4,
+  "block_chars": 21,
+  "aligns_with_run_span": false,
+  "sample": "완성한 것"
+ },
+ {
+  "run": "run-11",
+  "slide": 3,
+  "block": "source-slide:4:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 2,
+  "block_chars": 30,
+  "aligns_with_run_span": false,
+  "sample": "필수"
+ },
+ {
+  "run": "run-11",
+  "slide": 4,
+  "block": "source-slide:5:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 6,
+  "block_chars": 20,
+  "aligns_with_run_span": false,
+  "sample": "성공입니다."
+ },
+ {
+  "run": "run-11",
+  "slide": 12,
+  "block": "source-slide:13:text:8",
+  "run_binding": null,
+  "run_count": 4,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 9,
+  "block_chars": 56,
+  "aligns_with_run_span": false,
+  "sample": "궁금증 · 문제 · 반전"
+ },
+ {
+  "run": "run-11",
+  "slide": 13,
+  "block": "source-slide:14:text:10",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 9,
+  "block_chars": 30,
+  "aligns_with_run_span": false,
+  "sample": "‘구조와 아이디어’"
+ },
+ {
+  "run": "run-11",
+  "slide": 15,
+  "block": "source-slide:16:text:6",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 2,
+  "block_chars": 11,
+  "aligns_with_run_span": false,
+  "sample": "기회"
+ },
+ {
+  "run": "run-11",
+  "slide": 15,
+  "block": "source-slide:16:text:12",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 14,
+  "block_chars": 23,
+  "aligns_with_run_span": false,
+  "sample": "기획 + 촬영가이드 + 제작 파트너"
+ },
+ {
+  "run": "run-11",
+  "slide": 24,
+  "block": "source-slide:25:text:10",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 14,
+  "block_chars": 27,
+  "aligns_with_run_span": false,
+  "sample": "‘사장님이 이해하기 쉬운 문서’"
+ },
+ {
+  "run": "run-11",
+  "slide": 25,
+  "block": "source-slide:26:text:11",
+  "run_binding": null,
+  "run_count": 3,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 8,
+  "block_chars": 42,
+  "aligns_with_run_span": false,
+  "sample": "패키지와 관리 범위"
+ },
+ {
+  "run": "run-11",
+  "slide": 26,
+  "block": "source-slide:27:text:5",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "color"
+  ],
+  "emphasised_chars": 3,
+  "block_chars": 17,
+  "aligns_with_run_span": true,
+  "sample": "꿀벌쌤"
+ },
+ {
+  "run": "run-11",
+  "slide": 27,
+  "block": "source-slide:28:text:6",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 6,
+  "block_chars": 12,
+  "aligns_with_run_span": false,
+  "sample": "‘월 관리’로"
+ },
+ {
+  "run": "run-11",
+  "slide": 27,
+  "block": "source-slide:28:text:11",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 16,
+  "block_chars": 29,
+  "aligns_with_run_span": false,
+  "sample": "‘내가 계속 아이디어를 내야 하나?’"
+ },
+ {
+  "run": "run-11",
+  "slide": 28,
+  "block": "source-slide:29:text:10",
+  "run_binding": 0,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 5,
+  "block_chars": 38,
+  "aligns_with_run_span": false,
+  "sample": "무제한 노동"
+ },
+ {
+  "run": "run-11",
+  "slide": 29,
+  "block": "source-slide:30:text:6",
+  "run_binding": null,
+  "run_count": 12,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 1,
+  "block_chars": 131,
+  "aligns_with_run_span": false,
+  "sample": "①"
+ },
+ {
+  "run": "run-11",
+  "slide": 29,
+  "block": "source-slide:30:text:6",
+  "run_binding": null,
+  "run_count": 12,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 1,
+  "block_chars": 131,
+  "aligns_with_run_span": false,
+  "sample": "②"
+ },
+ {
+  "run": "run-11",
+  "slide": 29,
+  "block": "source-slide:30:text:6",
+  "run_binding": null,
+  "run_count": 12,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 1,
+  "block_chars": 131,
+  "aligns_with_run_span": false,
+  "sample": "③"
+ },
+ {
+  "run": "run-11",
+  "slide": 29,
+  "block": "source-slide:30:text:6",
+  "run_binding": null,
+  "run_count": 12,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 1,
+  "block_chars": 131,
+  "aligns_with_run_span": false,
+  "sample": "④"
+ },
+ {
+  "run": "run-11",
+  "slide": 29,
+  "block": "source-slide:30:text:6",
+  "run_binding": null,
+  "run_count": 12,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 1,
+  "block_chars": 131,
+  "aligns_with_run_span": false,
+  "sample": "⑤"
+ },
+ {
+  "run": "run-11",
+  "slide": 29,
+  "block": "source-slide:30:text:6",
+  "run_binding": null,
+  "run_count": 12,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 1,
+  "block_chars": 131,
+  "aligns_with_run_span": false,
+  "sample": "⑥"
+ },
+ {
+  "run": "run-11",
+  "slide": 30,
+  "block": "source-slide:31:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 3,
+  "block_chars": 26,
+  "aligns_with_run_span": false,
+  "sample": "실행력"
+ },
+ {
+  "run": "run-11",
+  "slide": 31,
+  "block": "source-slide:32:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 15,
+  "block_chars": 23,
+  "aligns_with_run_span": false,
+  "sample": "‘편집자’에서 끝나면 안 됩니다."
+ },
+ {
+  "run": "run-11",
+  "slide": 31,
+  "block": "source-slide:32:text:7",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 17,
+  "block_chars": 29,
+  "aligns_with_run_span": false,
+  "sample": "무엇을 찍어야 할지 모르기 때문입니다."
+ },
+ {
+  "run": "run-11",
+  "slide": 31,
+  "block": "source-slide:32:text:6",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 15,
+  "block_chars": 17,
+  "aligns_with_run_span": false,
+  "sample": "‘편집자’에서 끝나면 안 됩니다."
+ },
+ {
+  "run": "run-11",
+  "slide": 31,
+  "block": "source-slide:32:text:6",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 17,
+  "block_chars": 17,
+  "aligns_with_run_span": false,
+  "sample": "무엇을 찍어야 할지 모르기 때문입니다."
+ },
+ {
+  "run": "run-11",
+  "slide": 33,
+  "block": "source-slide:34:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 5,
+  "block_chars": 13,
+  "aligns_with_run_span": false,
+  "sample": "혼자서 시작"
+ },
+ {
+  "run": "run-11",
+  "slide": 33,
+  "block": "source-slide:34:text:11",
+  "run_binding": 0,
+  "run_count": 5,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 6,
+  "block_chars": 31,
+  "aligns_with_run_span": true,
+  "sample": "많이 영업하고"
+ },
+ {
+  "run": "run-15",
+  "slide": 1,
+  "block": "source-slide:2:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 11,
+  "block_chars": 23,
+  "aligns_with_run_span": false,
+  "sample": "‘사업이 굴러가는 구조’"
+ },
+ {
+  "run": "run-15",
+  "slide": 2,
+  "block": "source-slide:3:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 6,
+  "block_chars": 21,
+  "aligns_with_run_span": false,
+  "sample": "‘완성한 것’"
+ },
+ {
+  "run": "run-15",
+  "slide": 3,
+  "block": "source-slide:4:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 4,
+  "block_chars": 30,
+  "aligns_with_run_span": false,
+  "sample": "‘필수’"
+ },
+ {
+  "run": "run-15",
+  "slide": 4,
+  "block": "source-slide:5:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 2,
+  "block_chars": 20,
+  "aligns_with_run_span": false,
+  "sample": "성공"
+ },
+ {
+  "run": "run-15",
+  "slide": 6,
+  "block": "source-slide:7:text:6",
+  "run_binding": 0,
+  "run_count": 5,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 16,
+  "block_chars": 67,
+  "aligns_with_run_span": true,
+  "sample": "숏폼 대행사는 무엇을 돈 받고 해주는가"
+ },
+ {
+  "run": "run-15",
+  "slide": 6,
+  "block": "source-slide:7:text:6",
+  "run_binding": 0,
+  "run_count": 5,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 12,
+  "block_chars": 67,
+  "aligns_with_run_span": true,
+  "sample": "영상 편집자와 대행사의 차이"
+ },
+ {
+  "run": "run-15",
+  "slide": 6,
+  "block": "source-slide:7:text:6",
+  "run_binding": 0,
+  "run_count": 5,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 12,
+  "block_chars": 67,
+  "aligns_with_run_span": true,
+  "sample": "1인이 맡을 수 있는 업무 범위"
+ },
+ {
+  "run": "run-15",
+  "slide": 6,
+  "block": "source-slide:7:text:9",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong",
+   "color"
+  ],
+  "emphasised_chars": 18,
+  "block_chars": 2,
+  "aligns_with_run_span": false,
+  "sample": "‘영상’이 아니라 ‘콘텐츠 운영’을 판다"
+ },
+ {
+  "run": "run-15",
+  "slide": 7,
+  "block": "source-slide:8:text:3",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 8,
+  "block_chars": 17,
+  "aligns_with_run_span": true,
+  "sample": "나만의 상품 만들기"
+ },
+ {
+  "run": "run-15",
+  "slide": 8,
+  "block": "source-slide:9:text:5",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 3,
+  "block_chars": 17,
+  "aligns_with_run_span": true,
+  "sample": "꿀벌쌤"
+ },
+ {
+  "run": "run-15",
+  "slide": 10,
+  "block": "source-slide:11:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 9,
+  "block_chars": 26,
+  "aligns_with_run_span": false,
+  "sample": "‘내 사업의 첫 화면’"
+ },
+ {
+  "run": "run-15",
+  "slide": 11,
+  "block": "source-slide:12:text:10",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 6,
+  "block_chars": 5,
+  "aligns_with_run_span": false,
+  "sample": "완벽한 영상 X"
+ },
+ {
+  "run": "run-15",
+  "slide": 11,
+  "block": "source-slide:12:text:11",
+  "run_binding": 1,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 6,
+  "block_chars": 13,
+  "aligns_with_run_span": true,
+  "sample": "완벽한 영상 X"
+ },
+ {
+  "run": "run-15",
+  "slide": 12,
+  "block": "source-slide:13:text:7",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 2,
+  "block_chars": 11,
+  "aligns_with_run_span": false,
+  "sample": "3초"
+ },
+ {
+  "run": "run-15",
+  "slide": 13,
+  "block": "source-slide:14:text:5",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 3,
+  "block_chars": 17,
+  "aligns_with_run_span": true,
+  "sample": "꿀벌쌤"
+ },
+ {
+  "run": "run-15",
+  "slide": 15,
+  "block": "source-slide:16:text:12",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 14,
+  "block_chars": 23,
+  "aligns_with_run_span": false,
+  "sample": "기획 + 촬영가이드 + 제작 파트너"
+ },
+ {
+  "run": "run-15",
+  "slide": 19,
+  "block": "source-slide:20:text:5",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 3,
+  "block_chars": 17,
+  "aligns_with_run_span": true,
+  "sample": "꿀벌쌤"
+ },
+ {
+  "run": "run-15",
+  "slide": 21,
+  "block": "source-slide:22:text:33",
+  "run_binding": null,
+  "run_count": 4,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 2,
+  "block_chars": 10,
+  "aligns_with_run_span": true,
+  "sample": "연락"
+ },
+ {
+  "run": "run-15",
+  "slide": 22,
+  "block": "source-slide:23:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 2,
+  "block_chars": 17,
+  "aligns_with_run_span": false,
+  "sample": "영업"
+ },
+ {
+  "run": "run-15",
+  "slide": 23,
+  "block": "source-slide:24:text:4",
+  "run_binding": null,
+  "run_count": 4,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 3,
+  "block_chars": 19,
+  "aligns_with_run_span": false,
+  "sample": "재계약"
+ },
+ {
+  "run": "run-15",
+  "slide": 24,
+  "block": "source-slide:25:text:10",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 14,
+  "block_chars": 27,
+  "aligns_with_run_span": false,
+  "sample": "‘사장님이 이해하기 쉬운 문서’"
+ },
+ {
+  "run": "run-15",
+  "slide": 25,
+  "block": "source-slide:26:text:11",
+  "run_binding": 0,
+  "run_count": 3,
+  "why": [
+   "tag:strong",
+   "color"
+  ],
+  "emphasised_chars": 8,
+  "block_chars": 42,
+  "aligns_with_run_span": false,
+  "sample": "패키지와 관리 범위"
+ },
+ {
+  "run": "run-15",
+  "slide": 27,
+  "block": "source-slide:28:text:6",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 5,
+  "block_chars": 12,
+  "aligns_with_run_span": false,
+  "sample": "‘월 관리’"
+ },
+ {
+  "run": "run-15",
+  "slide": 28,
+  "block": "source-slide:29:text:10",
+  "run_binding": 0,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 5,
+  "block_chars": 38,
+  "aligns_with_run_span": false,
+  "sample": "무제한 노동"
+ },
+ {
+  "run": "run-15",
+  "slide": 31,
+  "block": "source-slide:32:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 5,
+  "block_chars": 23,
+  "aligns_with_run_span": false,
+  "sample": "‘편집자’"
+ },
+ {
+  "run": "run-16",
+  "slide": 1,
+  "block": "source-slide:2:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 11,
+  "block_chars": 23,
+  "aligns_with_run_span": false,
+  "sample": "‘사업이 굴러가는 구조’"
+ },
+ {
+  "run": "run-16",
+  "slide": 2,
+  "block": "source-slide:3:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 4,
+  "block_chars": 21,
+  "aligns_with_run_span": false,
+  "sample": "완성한 것"
+ },
+ {
+  "run": "run-16",
+  "slide": 3,
+  "block": "source-slide:4:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 4,
+  "block_chars": 30,
+  "aligns_with_run_span": false,
+  "sample": "‘필수’"
+ },
+ {
+  "run": "run-16",
+  "slide": 3,
+  "block": "source-slide:4:text:7",
+  "run_binding": 0,
+  "run_count": 4,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 12,
+  "block_chars": 99,
+  "aligns_with_run_span": false,
+  "sample": "실제 영상 1개를 완성한다."
+ },
+ {
+  "run": "run-16",
+  "slide": 3,
+  "block": "source-slide:4:text:7",
+  "run_binding": 1,
+  "run_count": 4,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 12,
+  "block_chars": 99,
+  "aligns_with_run_span": false,
+  "sample": "핵심 3개를 실제로 해본다."
+ },
+ {
+  "run": "run-16",
+  "slide": 3,
+  "block": "source-slide:4:text:7",
+  "run_binding": 2,
+  "run_count": 4,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 19,
+  "block_chars": 99,
+  "aligns_with_run_span": false,
+  "sample": "‘무엇을 누구에게 팔지’가 명확해야 한다."
+ },
+ {
+  "run": "run-16",
+  "slide": 3,
+  "block": "source-slide:4:text:7",
+  "run_binding": 3,
+  "run_count": 4,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 15,
+  "block_chars": 99,
+  "aligns_with_run_span": false,
+  "sample": "바로 실행할 수 있는 자료를 남긴다."
+ },
+ {
+  "run": "run-16",
+  "slide": 4,
+  "block": "source-slide:5:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 6,
+  "block_chars": 20,
+  "aligns_with_run_span": false,
+  "sample": "성공입니다."
+ },
+ {
+  "run": "run-16",
+  "slide": 6,
+  "block": "source-slide:7:text:10",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 7,
+  "block_chars": 18,
+  "aligns_with_run_span": false,
+  "sample": "‘콘텐츠 운영’"
+ },
+ {
+  "run": "run-16",
+  "slide": 7,
+  "block": "source-slide:8:text:9",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 11,
+  "block_chars": 27,
+  "aligns_with_run_span": true,
+  "sample": "처음에는 한두 업종에 집중"
+ },
+ {
+  "run": "run-16",
+  "slide": 7,
+  "block": "source-slide:8:text:13",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 12,
+  "block_chars": 23,
+  "aligns_with_run_span": true,
+  "sample": "기획 · 촬영 · 편집 범위 설정"
+ },
+ {
+  "run": "run-16",
+  "slide": 7,
+  "block": "source-slide:8:text:17",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 10,
+  "block_chars": 21,
+  "aligns_with_run_span": true,
+  "sample": "초기에는 단순한 패키지"
+ },
+ {
+  "run": "run-16",
+  "slide": 10,
+  "block": "source-slide:11:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 9,
+  "block_chars": 26,
+  "aligns_with_run_span": false,
+  "sample": "‘내 사업의 첫 화면’"
+ },
+ {
+  "run": "run-16",
+  "slide": 12,
+  "block": "source-slide:13:text:5",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 3,
+  "block_chars": 17,
+  "aligns_with_run_span": true,
+  "sample": "꿀벌쌤"
+ },
+ {
+  "run": "run-16",
+  "slide": 12,
+  "block": "source-slide:13:text:8",
+  "run_binding": null,
+  "run_count": 4,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 9,
+  "block_chars": 56,
+  "aligns_with_run_span": false,
+  "sample": "궁금증 · 문제 · 반전"
+ },
+ {
+  "run": "run-16",
+  "slide": 17,
+  "block": "source-slide:18:text:7",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 2,
+  "block_chars": 6,
+  "aligns_with_run_span": false,
+  "sample": "공식"
+ },
+ {
+  "run": "run-16",
+  "slide": 22,
+  "block": "source-slide:23:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 2,
+  "block_chars": 17,
+  "aligns_with_run_span": false,
+  "sample": "영업"
+ },
+ {
+  "run": "run-16",
+  "slide": 23,
+  "block": "source-slide:24:text:4",
+  "run_binding": null,
+  "run_count": 4,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 7,
+  "block_chars": 19,
+  "aligns_with_run_span": true,
+  "sample": "재계약 구조 완성"
+ },
+ {
+  "run": "run-16",
+  "slide": 24,
+  "block": "source-slide:25:text:10",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 14,
+  "block_chars": 27,
+  "aligns_with_run_span": false,
+  "sample": "‘사장님이 이해하기 쉬운 문서’"
+ },
+ {
+  "run": "run-16",
+  "slide": 25,
+  "block": "source-slide:26:text:11",
+  "run_binding": 0,
+  "run_count": 3,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 10,
+  "block_chars": 42,
+  "aligns_with_run_span": true,
+  "sample": "‘영상 1개 얼마’보다"
+ },
+ {
+  "run": "run-16",
+  "slide": 27,
+  "block": "source-slide:28:text:6",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 5,
+  "block_chars": 12,
+  "aligns_with_run_span": false,
+  "sample": "‘월 관리’"
+ },
+ {
+  "run": "run-16",
+  "slide": 27,
+  "block": "source-slide:28:text:11",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:em"
+  ],
+  "emphasised_chars": 16,
+  "block_chars": 29,
+  "aligns_with_run_span": false,
+  "sample": "‘내가 계속 아이디어를 내야 하나?’"
+ },
+ {
+  "run": "run-16",
+  "slide": 30,
+  "block": "source-slide:31:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 3,
+  "block_chars": 26,
+  "aligns_with_run_span": false,
+  "sample": "실행력"
+ },
+ {
+  "run": "run-16",
+  "slide": 31,
+  "block": "source-slide:32:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 15,
+  "block_chars": 23,
+  "aligns_with_run_span": false,
+  "sample": "‘편집자’에서 끝나면 안 됩니다."
+ },
+ {
+  "run": "run-16",
+  "slide": 31,
+  "block": "source-slide:32:text:8",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 15,
+  "block_chars": 17,
+  "aligns_with_run_span": false,
+  "sample": "‘편집자’에서 끝나면 안 됩니다."
+ },
+ {
+  "run": "run-16",
+  "slide": 32,
+  "block": "source-slide:33:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 9,
+  "block_chars": 16,
+  "aligns_with_run_span": false,
+  "sample": "기다리지 않습니다."
+ },
+ {
+  "run": "run-16",
+  "slide": 32,
+  "block": "source-slide:33:text:17",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:em"
+  ],
+  "emphasised_chars": 5,
+  "block_chars": 28,
+  "aligns_with_run_span": false,
+  "sample": "첫 고객 한 명"
+ },
+ {
+  "run": "run-16",
+  "slide": 32,
+  "block": "source-slide:33:text:12",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:em"
+  ],
+  "emphasised_chars": 5,
+  "block_chars": 1,
+  "aligns_with_run_span": false,
+  "sample": "첫 고객 한 명"
+ },
+ {
+  "run": "run-20",
+  "slide": 0,
+  "block": "source-slide:1:text:9",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 18,
+  "block_chars": 32,
+  "aligns_with_run_span": true,
+  "sample": "숏폼으로 돈을 버는 1인사업자가 되는 과정"
+ },
+ {
+  "run": "run-20",
+  "slide": 1,
+  "block": "source-slide:2:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 9,
+  "block_chars": 23,
+  "aligns_with_run_span": false,
+  "sample": "사업이 굴러가는 구조"
+ },
+ {
+  "run": "run-20",
+  "slide": 2,
+  "block": "source-slide:3:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 6,
+  "block_chars": 21,
+  "aligns_with_run_span": false,
+  "sample": "‘완성한 것’"
+ },
+ {
+  "run": "run-20",
+  "slide": 3,
+  "block": "source-slide:4:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 2,
+  "block_chars": 30,
+  "aligns_with_run_span": false,
+  "sample": "필수"
+ },
+ {
+  "run": "run-20",
+  "slide": 4,
+  "block": "source-slide:5:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 6,
+  "block_chars": 20,
+  "aligns_with_run_span": false,
+  "sample": "성공입니다."
+ },
+ {
+  "run": "run-20",
+  "slide": 9,
+  "block": "source-slide:10:text:5",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 3,
+  "block_chars": 17,
+  "aligns_with_run_span": true,
+  "sample": "꿀벌쌤"
+ },
+ {
+  "run": "run-20",
+  "slide": 10,
+  "block": "source-slide:11:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 2,
+  "block_chars": 26,
+  "aligns_with_run_span": false,
+  "sample": "완성"
+ },
+ {
+  "run": "run-20",
+  "slide": 11,
+  "block": "source-slide:12:text:11",
+  "run_binding": 0,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 1,
+  "block_chars": 13,
+  "aligns_with_run_span": false,
+  "sample": "X"
+ },
+ {
+  "run": "run-20",
+  "slide": 11,
+  "block": "source-slide:12:text:11",
+  "run_binding": 1,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 1,
+  "block_chars": 13,
+  "aligns_with_run_span": false,
+  "sample": "O"
+ },
+ {
+  "run": "run-20",
+  "slide": 13,
+  "block": "source-slide:14:text:5",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 3,
+  "block_chars": 17,
+  "aligns_with_run_span": true,
+  "sample": "꿀벌쌤"
+ },
+ {
+  "run": "run-20",
+  "slide": 14,
+  "block": "source-slide:15:text:9",
+  "run_binding": null,
+  "run_count": 4,
+  "why": [
+   "tag:strong",
+   "color"
+  ],
+  "emphasised_chars": 12,
+  "block_chars": 22,
+  "aligns_with_run_span": true,
+  "sample": "전체샷 → 디테일 → 사용 장면"
+ },
+ {
+  "run": "run-20",
+  "slide": 14,
+  "block": "source-slide:15:text:13",
+  "run_binding": null,
+  "run_count": 4,
+  "why": [
+   "tag:strong",
+   "color"
+  ],
+  "emphasised_chars": 11,
+  "block_chars": 22,
+  "aligns_with_run_span": true,
+  "sample": "전신 → 상반신 → 행동 장면"
+ },
+ {
+  "run": "run-20",
+  "slide": 14,
+  "block": "source-slide:15:text:17",
+  "run_binding": null,
+  "run_count": 3,
+  "why": [
+   "tag:strong",
+   "color"
+  ],
+  "emphasised_chars": 14,
+  "block_chars": 24,
+  "aligns_with_run_span": true,
+  "sample": "좌→우 / 우→좌상→하 / 하→상"
+ },
+ {
+  "run": "run-20",
+  "slide": 15,
+  "block": "source-slide:16:text:6",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 2,
+  "block_chars": 11,
+  "aligns_with_run_span": false,
+  "sample": "기회"
+ },
+ {
+  "run": "run-20",
+  "slide": 15,
+  "block": "source-slide:16:text:12",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 14,
+  "block_chars": 23,
+  "aligns_with_run_span": false,
+  "sample": "기획 + 촬영가이드 + 제작 파트너"
+ },
+ {
+  "run": "run-20",
+  "slide": 17,
+  "block": "source-slide:18:text:7",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 2,
+  "block_chars": 6,
+  "aligns_with_run_span": false,
+  "sample": "공식"
+ },
+ {
+  "run": "run-20",
+  "slide": 20,
+  "block": "source-slide:21:text:13",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:em",
+   "color"
+  ],
+  "emphasised_chars": 4,
+  "block_chars": 45,
+  "aligns_with_run_span": false,
+  "sample": "다음 단계"
+ },
+ {
+  "run": "run-20",
+  "slide": 22,
+  "block": "source-slide:23:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 2,
+  "block_chars": 17,
+  "aligns_with_run_span": false,
+  "sample": "영업"
+ },
+ {
+  "run": "run-20",
+  "slide": 24,
+  "block": "source-slide:25:text:10",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 14,
+  "block_chars": 27,
+  "aligns_with_run_span": false,
+  "sample": "‘사장님이 이해하기 쉬운 문서’"
+ },
+ {
+  "run": "run-20",
+  "slide": 25,
+  "block": "source-slide:26:text:11",
+  "run_binding": null,
+  "run_count": 3,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 8,
+  "block_chars": 42,
+  "aligns_with_run_span": false,
+  "sample": "패키지와 관리 범위"
+ },
+ {
+  "run": "run-20",
+  "slide": 27,
+  "block": "source-slide:28:text:6",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 3,
+  "block_chars": 12,
+  "aligns_with_run_span": false,
+  "sample": "월 관리"
+ },
+ {
+  "run": "run-20",
+  "slide": 28,
+  "block": "source-slide:29:text:10",
+  "run_binding": 0,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 5,
+  "block_chars": 38,
+  "aligns_with_run_span": false,
+  "sample": "무제한 노동"
+ },
+ {
+  "run": "run-20",
+  "slide": 31,
+  "block": "source-slide:32:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 5,
+  "block_chars": 23,
+  "aligns_with_run_span": false,
+  "sample": "안 됩니다."
+ },
+ {
+  "run": "run-20",
+  "slide": 32,
+  "block": "source-slide:33:text:17",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 5,
+  "block_chars": 28,
+  "aligns_with_run_span": false,
+  "sample": "첫 고객 한 명"
+ },
+ {
+  "run": "run-21",
+  "slide": 0,
+  "block": "source-slide:1:text:9",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 13,
+  "block_chars": 32,
+  "aligns_with_run_span": false,
+  "sample": "숏폼으로 돈을 버는 1인사업자"
+ },
+ {
+  "run": "run-21",
+  "slide": 1,
+  "block": "source-slide:2:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 11,
+  "block_chars": 23,
+  "aligns_with_run_span": false,
+  "sample": "‘사업이 굴러가는 구조’"
+ },
+ {
+  "run": "run-21",
+  "slide": 2,
+  "block": "source-slide:3:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 4,
+  "block_chars": 21,
+  "aligns_with_run_span": false,
+  "sample": "완성한 것"
+ },
+ {
+  "run": "run-21",
+  "slide": 3,
+  "block": "source-slide:4:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 4,
+  "block_chars": 30,
+  "aligns_with_run_span": false,
+  "sample": "‘필수’"
+ },
+ {
+  "run": "run-21",
+  "slide": 4,
+  "block": "source-slide:5:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 6,
+  "block_chars": 20,
+  "aligns_with_run_span": false,
+  "sample": "성공입니다."
+ },
+ {
+  "run": "run-21",
+  "slide": 6,
+  "block": "source-slide:7:text:14",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 4,
+  "block_chars": 13,
+  "aligns_with_run_span": false,
+  "sample": "강한가?"
+ },
+ {
+  "run": "run-21",
+  "slide": 7,
+  "block": "source-slide:8:text:5",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 13,
+  "block_chars": 17,
+  "aligns_with_run_span": true,
+  "sample": "숏폼대행 1인사업자 홀로서기"
+ },
+ {
+  "run": "run-21",
+  "slide": 10,
+  "block": "source-slide:11:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 9,
+  "block_chars": 26,
+  "aligns_with_run_span": false,
+  "sample": "‘내 사업의 첫 화면’"
+ },
+ {
+  "run": "run-21",
+  "slide": 13,
+  "block": "source-slide:14:text:10",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 9,
+  "block_chars": 30,
+  "aligns_with_run_span": false,
+  "sample": "‘구조와 아이디어’"
+ },
+ {
+  "run": "run-21",
+  "slide": 17,
+  "block": "source-slide:18:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "color"
+  ],
+  "emphasised_chars": 3,
+  "block_chars": 20,
+  "aligns_with_run_span": false,
+  "sample": "목표:"
+ },
+ {
+  "run": "run-21",
+  "slide": 17,
+  "block": "source-slide:18:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 4,
+  "block_chars": 20,
+  "aligns_with_run_span": false,
+  "sample": "접근 방법"
+ },
+ {
+  "run": "run-21",
+  "slide": 22,
+  "block": "source-slide:23:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 2,
+  "block_chars": 17,
+  "aligns_with_run_span": false,
+  "sample": "영업"
+ },
+ {
+  "run": "run-21",
+  "slide": 23,
+  "block": "source-slide:24:text:4",
+  "run_binding": null,
+  "run_count": 4,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 3,
+  "block_chars": 19,
+  "aligns_with_run_span": false,
+  "sample": "재계약"
+ },
+ {
+  "run": "run-21",
+  "slide": 24,
+  "block": "source-slide:25:text:10",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 14,
+  "block_chars": 27,
+  "aligns_with_run_span": false,
+  "sample": "‘사장님이 이해하기 쉬운 문서’"
+ },
+ {
+  "run": "run-21",
+  "slide": 25,
+  "block": "source-slide:26:text:11",
+  "run_binding": null,
+  "run_count": 3,
+  "why": [
+   "tag:strong",
+   "color"
+  ],
+  "emphasised_chars": 11,
+  "block_chars": 42,
+  "aligns_with_run_span": false,
+  "sample": "수정 횟수 · 촬영 · 납품일"
+ },
+ {
+  "run": "run-21",
+  "slide": 28,
+  "block": "source-slide:29:text:10",
+  "run_binding": 0,
+  "run_count": 2,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 5,
+  "block_chars": 38,
+  "aligns_with_run_span": false,
+  "sample": "무제한 노동"
+ },
+ {
+  "run": "run-21",
+  "slide": 30,
+  "block": "source-slide:31:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 9,
+  "block_chars": 26,
+  "aligns_with_run_span": false,
+  "sample": "자료로 제공합니다."
+ },
+ {
+  "run": "run-21",
+  "slide": 31,
+  "block": "source-slide:32:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 3,
+  "block_chars": 23,
+  "aligns_with_run_span": false,
+  "sample": "편집자"
+ },
+ {
+  "run": "run-21",
+  "slide": 31,
+  "block": "source-slide:32:text:8",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 3,
+  "block_chars": 17,
+  "aligns_with_run_span": false,
+  "sample": "편집자"
+ },
+ {
+  "run": "run-21",
+  "slide": 32,
+  "block": "source-slide:33:text:17",
+  "run_binding": null,
+  "run_count": 2,
+  "why": [
+   "tag:em"
+  ],
+  "emphasised_chars": 5,
+  "block_chars": 28,
+  "aligns_with_run_span": false,
+  "sample": "첫 고객 한 명"
+ },
+ {
+  "run": "run-21",
+  "slide": 33,
+  "block": "source-slide:34:text:4",
+  "run_binding": null,
+  "run_count": 1,
+  "why": [
+   "tag:strong"
+  ],
+  "emphasised_chars": 8,
+  "block_chars": 13,
+  "aligns_with_run_span": false,
+  "sample": "시작할 수 있는가?"
+ }
+]

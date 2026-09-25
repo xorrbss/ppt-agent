@@ -120,7 +120,9 @@ def _round_kwargs(htmls, pngs, issues):
 def _install(monkeypatch, *, admits: bool, remakes: bool = False):
     calls: dict[str, list] = {"admit": [], "remake": []}
 
-    async def fake_admit(*, candidate_html, capacity, profile, reference_mode):
+    async def fake_admit(
+        *, candidate_html, capacity, profile, reference_mode, slide_index=None
+    ):
         calls["admit"].append(candidate_html)
         return (candidate_html, b"png", {"ok": True}) if admits else None
 

@@ -593,7 +593,7 @@
       "type": "enum",
       "default": null,
       "secret": false,
-      "choices": ["pexels", "pixabay", "gemini_flash", "nanobanana_pro", "dall-e-3", "gpt-image-1.5", "gpt-image-2", "comfyui", "open_webui", "openai_compatible"],
+      "choices": ["pexels", "pixabay", "gemini_flash", "nanobanana_pro", "dall-e-3", "gpt-image-1.5", "gpt-image-2", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst", "codex_image", "comfyui", "open_webui", "openai_compatible"],
       "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
       "group": "image",
       "description": "Image generation provider id."
@@ -710,6 +710,16 @@
       "description": "GPT Image 2 output quality."
     },
     {
+      "key": "GPT_IMAGE_2_5_QUALITY",
+      "type": "enum",
+      "default": "medium",
+      "secret": false,
+      "choices": ["low", "medium", "high", "xhigh", "max", "auto"],
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image.openai",
+      "description": "GPT Image 2.5 Flare and Sunburst output quality."
+    },
+    {
       "key": "PUBLIC_PROVIDER_PRICING_REVISION",
       "type": "string",
       "default": null,
@@ -774,6 +784,15 @@
       "description": "Brave Search API key."
     },
     {
+      "key": "AUTHORED_ADMISSION_GATE_MODE",
+      "type": "string",
+      "default": "shadow",
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Single authored HTML admission gate rollout: shadow records same-input parity; enforce requires digest-bound admission receipts."
+    },
+    {
       "key": "AUTHORED_HTML_NORMALIZE_ENABLED",
       "type": "boolean",
       "default": true,
@@ -781,6 +800,16 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
       "description": "Strip a whitelist of harmless authored-HTML admission findings (break/page-break CSS declarations, a hidden attribute on bound or unbound elements) before the renderer admission gate."
+    },
+    {
+      "key": "AUTHORED_HTML_NORMALIZATION",
+      "type": "enum",
+      "default": "legacy",
+      "secret": false,
+      "choices": ["legacy", "tree"],
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Authored HTML normalization representation: legacy keeps source-span rewrites; tree uses pinned HTML5 parsing and canonical serialization."
     },
     {
       "key": "AUTHORED_QUALITY_LOOP_ENABLED",
@@ -828,6 +857,26 @@
       "description": "Give a slide that is still terminal after the bounded repair one automatic lower-density remake, then publish the deck with that slide flagged instead of failing the whole deck."
     },
     {
+      "key": "AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Publish a verbatim source-reflow deck with geometry-defective slides flagged after strict whole-deck source readback passes, without re-authoring those slides."
+    },
+    {
+      "key": "AUTHORED_LOCAL_FIT_SOURCE_REFLOW",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": [
+        "fastapi.runtime"
+      ],
+      "group": "authored.quality",
+      "description": "Run the deterministic local fit on verbatim source-reflow decks as well. Off by default: the fitter may shrink type within its 9pt floor and 10% cap, which is a product decision for verbatim source text."
+    },
+    {
       "key": "AUTHORED_RETAIN_CHECKPOINT_HTML",
       "type": "boolean",
       "default": false,
@@ -853,6 +902,16 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
       "description": "Bind ordinary authored decks to the server-frozen composition envelope (text/qid budgets, 15px floor); off leaves composition to the model as before 2026-08-28."
+    },
+    {
+      "key": "AUTHORED_COMPOSITION_ENVELOPE_PROFILE",
+      "type": "enum",
+      "default": "current",
+      "secret": false,
+      "choices": ["current", "august"],
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Density contract for ordinary authored decks: current keeps today's behaviour exactly; august restores the pre-2026-08-28 contract (no server-frozen envelope, no blocking DOM quality gate, no deck-wide figure plan). Source-verbatim and source-outline decks keep their envelope and gate under both."
     },
     {
       "key": "AUTHORED_VISUAL_STORY_PLAN_ENABLED",
@@ -890,6 +949,24 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.throughput",
       "description": "Ceiling for the authored author concurrency under the api rate profile (the token profile keeps 8)."
+    },
+    {
+      "key": "AUTHORED_JOB_CONCURRENCY",
+      "type": "integer",
+      "default": 1,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "In-process authored job semaphore size: how many authored generation jobs run concurrently inside one FastAPI process. Read once at import time; changing it needs a process restart."
+    },
+    {
+      "key": "AUTHORED_CLUSTER_JOB_CONCURRENCY",
+      "type": "integer",
+      "default": 1,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.throughput",
+      "description": "Database-backed cluster-wide authored job cap, enforced across every FastAPI worker/process so adding workers does not silently multiply provider concurrency and spend. Unset takes AUTHORED_JOB_CONCURRENCY. Read once at import time; changing it needs a process restart."
     },
     {
       "key": "AUTHORED_AUTHOR_CONCURRENCY",
@@ -1018,6 +1095,33 @@
       "description": "Stuck-job ceiling on the whole public generation deadline; unset takes the default (14400), set above the formula for the largest admitted deck."
     },
     {
+      "key": "PUBLIC_EXPORT_DEADLINE_PER_SLIDE_SECONDS",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.export_deadline",
+      "description": "Per-slide seconds of public export deadline for the isolated export worker; unset takes the measured default (26)."
+    },
+    {
+      "key": "PUBLIC_EXPORT_DEADLINE_BASE_SECONDS",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.export_deadline",
+      "description": "Fixed seconds of public export deadline for bundle build, worker launch, verification and publication; unset takes the default (120)."
+    },
+    {
+      "key": "PUBLIC_EXPORT_DEADLINE_MIN_SECONDS",
+      "type": "integer",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "public.export_deadline",
+      "description": "Floor of the public export deadline for small or unknown-size decks; unset takes the historical flat budget (600). The 1800 ceiling mirrors the executor export budget and is not a knob."
+    },
+    {
       "key": "CONTENT_BRIEF_OPERATION_DEADLINE_SHARE",
       "type": "number",
       "default": null,
@@ -1079,6 +1183,24 @@
       "targets": ["fastapi.runtime"],
       "group": "runtime",
       "description": "Require the durable, PostgreSQL-backed cross-process provider admission path instead of best-effort in-process admission; multi-process deployments (API and worker processes sharing PostgreSQL) must set this to true."
+    },
+    {
+      "key": "WORKSPACE_OPERATION_MAX_CONCURRENCY",
+      "type": "integer",
+      "default": 2,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "runtime",
+      "description": "Max workspace operations one WorkspaceOperationRunner runs concurrently. Read once at runner construction time; changing it needs a process restart."
+    },
+    {
+      "key": "PUBLIC_EXPORT_SCHEDULER_GLOBAL_CAP",
+      "type": "integer",
+      "default": 4,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "runtime",
+      "description": "Trusted-executor weighted scheduler's global concurrency cap for the public export/generation worker pool (SchedulerCaps.global_cap). Read once at scheduler-policy composition time; changing it needs a process restart."
     },
     {
       "key": "WORKSPACE_OPERATION_WORKER_LAUNCH",
@@ -1143,6 +1265,15 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
       "description": "Author the first content slide alone and hand its stylesheet to every other slide as the deck's established visual language."
+    },
+    {
+      "key": "AUTHORED_CONTENT_BRIEF_ENABLED",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Generate the optional knowledge brief before an authored outline. False skips its provider call and grounds the outline directly in the supplied source and document context."
     },
     {
       "key": "AUTHORED_ILLUSTRATION_SHARE",
@@ -1246,11 +1377,11 @@
     {
       "key": "AUTHORED_IN_RENDER_FIT_ENABLED",
       "type": "boolean",
-      "default": true,
+      "default": false,
       "secret": false,
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
-      "description": "Fit card copy inside its card during the first render: grow into slack, then shrink that card's text to a 12px floor. On by default since bench runs 46 and 47 published zero flagged slides."
+      "description": "Fit card copy inside its card during the first render: grow into slack, then shrink that card's text to a 12px floor. Off by default: local-fit is the active fitter; the in-render path stays available behind this knob."
     },
     {
       "key": "AUTHORED_IN_RENDER_FIT_VERIFY_SAMPLE",
@@ -1468,6 +1599,52 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
       "description": "Ship the 2026-09-05 composition-shaping prompt bundle: the COMPOSITION INTENT block and the type ramp. Off because a blind paired rating of 24 slides preferred the pre-bundle parent 13 to 7 with 4 ties, and the bundle's 18px body floor plus its fill-the-page direction overflowed the card and footer band on 17 of 24 bench slides. With it off a deck reads the parent's pre-bundle type-scale wording and no intent block; the bundle's mechanical half (semantic-role vocabulary, SVG contract, shared universals, deck tokens) ships either way."
+    },
+    {
+      "key": "AUTHORED_VERBATIM_PLACEHOLDER_AUTHORING",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Author source-reflow verbatim slides with whole-block or grapheme-safe exact-cover character-range tokens; substitute trusted source text in the admission gate. Off preserves legacy text binding."
+    },
+    {
+      "key": "AUTHORED_VERBATIM_SINGLE_REPAIR_LOOP",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Replace the four post-author repair paths on the source-reflow verbatim path (gate repair, vision-review repair, structural/patch repair and the separate rescue readback) with one bounded loop: deterministic repairs, then at most AUTHORED_VERBATIM_REPAIR_LOOP_MODEL_CALLS model calls bound by the placeholder token contract, then the unchanged terminal policy. Off keeps today's paths."
+    },
+    {
+      "key": "AUTHORED_VERBATIM_REPAIR_LOOP_MODEL_CALLS",
+      "type": "integer",
+      "default": 1,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Model repair calls the single repair loop may spend on one slide, clamped to 0..3. Only read when AUTHORED_VERBATIM_SINGLE_REPAIR_LOOP is on."
+    },
+    {
+      "key": "AUTHORED_AUTHOR_PROMPT_PROFILE",
+      "type": "enum",
+      "default": "current",
+      "secret": false,
+      "choices": ["current", "august-0819"],
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Authoring prompt text for authored slides: current keeps today's prompt byte for byte; august-0819 restores the 2026-08-19 design-system brief, default style brief and block order (design system stated last, no archetype clause, no deck-token or exemplar tail, pre-bundle type scale), keeping every contract the current gates require - the semantic-role vocabulary, the hidden-overflow prohibition, the data-qid sentence, the header contract and the requirement-identifier rules. Measured on one fixture the deck-invariant brief is 8235 characters under august-0819 and 11569 under current for the default style. It does not change the style anchor, the illustration plan, the composition envelope or the DOM gate; those keep their own knobs."
+    },
+    {
+      "key": "AUTHORED_AUTHOR_PROMPT_MODEL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "authored.quality",
+      "description": "Pin the model that authors slide HTML, so a prompt A/B is measured at a fixed model. Unset - the default - is not a pin and leaves the provider's own model selection exactly as it is."
     }
   ]
 }

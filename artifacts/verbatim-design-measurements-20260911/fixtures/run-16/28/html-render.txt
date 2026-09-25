@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:104px;background:#FFFFFF}
+.header-left{position:absolute;left:56px;top:24px;width:1000px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.04em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px;margin-top:28px}
+.identity{font-size:15px;line-height:22px;font-weight:700;letter-spacing:.04em;color:#08916E;margin-bottom:14px}
+.claim-row{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:20px}
+.claim{font-size:26px;line-height:36px;font-weight:700;color:#00140E}
+.claim strong{color:#08916E}
+.claim-note{font-size:16px;line-height:24px;color:#5D6870;font-weight:700}
+.main-grid{display:grid;grid-template-columns:744px 384px;gap:24px;height:410px}
+.pillar-panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:24px 28px}
+.panel-heading{font-size:20px;line-height:30px;font-weight:700;color:#00140E;margin-bottom:18px}
+.pillar-list{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+.pillar-card{min-height:92px;padding:18px 18px 16px 62px;border:1px solid #E2E8F0;border-radius:12px;background:#F9F9F9;position:relative;font-size:18px;line-height:28px;font-weight:700;color:#1D1D1B}
+.pillar-card:nth-child(5){grid-column:1 / span 2}
+.pillar-num{position:absolute;left:18px;top:18px;width:30px;height:30px;border-radius:12px;background:#08916E;color:#FFFFFF;text-align:center;font-family:"IBM Plex Mono","Consolas",monospace;font-size:16px;line-height:30px;font-weight:700}
+.principle-panel{background:#EAF7F4;border:1px solid #B9E5D9;border-radius:12px;padding:28px}
+.principle-label{font-size:15px;line-height:22px;font-weight:700;letter-spacing:.1em;color:#08916E;margin-bottom:26px}
+.principle-mark{width:42px;height:5px;background:#08916E;border-radius:12px;margin-bottom:22px}
+.principle-quote{font-size:24px;line-height:38px;font-weight:700;color:#00140E}
+.principle-rule{height:1px;background:#A8D9CC;margin:24px 0 20px}
+.principle-body{font-size:18px;line-height:30px;color:#1D1D1B;font-weight:500}
+.takeaway{margin-top:18px;padding:15px 18px;border-left:5px solid #219F88;background:#FFFFFF;border-radius:12px;font-size:17px;line-height:26px;font-weight:700;color:#00140E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" style="height:104px" class="header-band" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" data-semantic-role="supporting" data-qid="q28-eyebrow" class="eyebrow">수정 관리 원칙</div>
+    <div data-header-part="title" data-semantic-role="title" data-qid="source-block-679f559813b2b8f3" class="title" data-source-block-id="source-slide:29:text:3">4주차 PART 5 | 수정 지옥을 피하는 법</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" style="margin-top:28px" class="body-wrap" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div data-semantic-role="supporting" data-qid="source-block-29b191e8a9767bfb" class="identity" data-source-block-id="source-slide:29:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+
+  <div class="claim-row" data-qid="q-div-75b3498fbbe1" data-semantic-role="decoration">
+    <div data-semantic-role="body" data-qid="q28-claim" class="claim">수정의 기준을 세우면 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">노동의 경계</strong>가 선명해집니다.</div>
+    <div data-semantic-role="supporting" data-qid="q28-claim-note" class="claim-note">실행 원칙 5가지</div>
+  </div>
+
+  <div class="main-grid" data-qid="q-div-948c49f110fb" data-semantic-role="decoration">
+    <div class="pillar-panel" data-qid="q-div-f1a09a8d0cf7" data-semantic-role="decoration">
+      <div data-semantic-role="supporting" data-qid="source-block-69c01e277b9ea86d" class="panel-heading" data-source-block-id="source-slide:29:text:9">원칙</div>
+      <div class="pillar-list" data-qid="source-block-f26a4ba34aa77190" data-semantic-role="decoration" data-source-block-id="source-slide:29:text:6">
+        <div data-semantic-role="body" data-qid="q28-card-1" class="pillar-card"><span class="pillar-num" data-qid="q-span-ec388099f8c9" data-semantic-role="supporting">01</span>처음부터 작업 범위를 문서화</div>
+        <div data-semantic-role="body" data-qid="q28-card-2" class="pillar-card"><span class="pillar-num" data-qid="q-span-1d1a6b496d2a" data-semantic-role="supporting">02</span>수정 횟수 기준 설정</div>
+        <div data-semantic-role="body" data-qid="q28-card-3" class="pillar-card"><span class="pillar-num" data-qid="q-span-bf64d425c668" data-semantic-role="supporting">03</span>촬영 전 레퍼런스와 가이드 공유</div>
+        <div data-semantic-role="body" data-qid="q28-card-4" class="pillar-card"><span class="pillar-num" data-qid="q-span-3dc653a030a7" data-semantic-role="supporting">04</span>수정 요청을 한 번에 모아서 받기</div>
+        <div data-semantic-role="body" data-qid="q28-card-5" class="pillar-card"><span class="pillar-num" data-qid="q-span-0aa310e2d753" data-semantic-role="supporting">05</span>‘무제한 수정’은 피하기</div>
+      </div>
+      <div data-semantic-role="body" data-qid="q28-takeaway" class="takeaway">기준을 먼저 합의하면 수정 요청은 감정이 아닌 프로세스로 관리됩니다.</div>
+    </div>
+
+    <div class="principle-panel" data-qid="q-div-e1296d1c52a5" data-semantic-role="decoration">
+      <div data-semantic-role="supporting" data-qid="q28-principle-label" class="principle-label">핵심 원칙</div>
+      <div class="principle-mark" data-qid="q-div-97a6537639db" data-semantic-role="decoration"></div>
+      <div data-semantic-role="body" data-qid="source-block-150e3d875b2eac47" class="principle-quote" data-source-block-id="source-slide:29:text:10:run:0">친절함과 무제한 노동은 다릅니다.</div>
+      <div class="principle-rule" data-qid="q-div-0ddd902ead48" data-semantic-role="decoration"></div>
+      <div data-semantic-role="body" data-qid="source-block-830f050baacf0f86" class="principle-body" data-source-block-id="source-slide:29:text:10:run:1">기준을 정해두는 것이 오히려 장기 고객을 만드는 방법.</div>
+    </div>
+  </div>
+</div>
+
+<div data-semantic-role="supporting" data-qid="source-block-12a28da466c08064" class="page-number" data-source-block-id="source-slide:29:text:4">29</div>
+</body>
+</html>

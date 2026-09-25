@@ -1,0 +1,360 @@
+{
+ "sourceUnitId": "source-slide:34",
+ "sourceIndex": 33,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:34:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:34:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "마지막 체크리스트",
+    "paragraphs": [
+     {
+      "runs": [
+       "마지막 체크리스트"
+      ],
+      "text": "마지막 체크리스트"
+     }
+    ],
+    "runs": [
+     "마지막 체크리스트"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:44b1dac4deb3ea4b9546cba5a6f1609800a321cacb843de4af49eb0aafba0d15",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:34:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "이제 혼자서 시작할 수 있는가?",
+    "paragraphs": [
+     {
+      "runs": [
+       "이제 혼자서 시작할 수 있는가?"
+      ],
+      "text": "이제 혼자서 시작할 수 있는가?"
+     }
+    ],
+    "runs": [
+     "이제 혼자서 시작할 수 있는가?"
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 658368,
+     "y": 987552,
+     "cx": 10424160,
+     "cy": 365760
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:b3ca8ba3546f947b7136ec6d6095bec3b44919806a1055d9b29572dfbe75fc25",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:34:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "34",
+    "paragraphs": [
+     {
+      "runs": [
+       "34"
+      ],
+      "text": "34"
+     }
+    ],
+    "runs": [
+     "34"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:85d364ed7a673d2e99fa2a7c497faff583a2592742a96e41eb4c746a43c40da4",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:34:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:36fd55bab03eb0480d24a03055e21590393daa37f1e868df1a69112f2d6294dd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:34:text:7",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 5,
+   "payload": {
+    "text": "• □ 누구에게 팔지 안다\n• □ 무엇을 팔지 안다\n• □ 가격을 말할 수 있다\n• □ 숏폼 1개를 만들 수 있다\n• □ 영업할 곳을 찾을 수 있다\n• □ 샘플을 제안할 수 있다\n• □ 상담과 계약의 기본을 안다\n• □ 다음 달 콘텐츠를 제안할 수 있다",
+    "paragraphs": [
+     {
+      "runs": [
+       "• □ 누구에게 팔지 안다"
+      ],
+      "text": "• □ 누구에게 팔지 안다"
+     },
+     {
+      "runs": [
+       "• □ 무엇을 팔지 안다"
+      ],
+      "text": "• □ 무엇을 팔지 안다"
+     },
+     {
+      "runs": [
+       "• □ 가격을 말할 수 있다"
+      ],
+      "text": "• □ 가격을 말할 수 있다"
+     },
+     {
+      "runs": [
+       "• □ 숏폼 1개를 만들 수 있다"
+      ],
+      "text": "• □ 숏폼 1개를 만들 수 있다"
+     },
+     {
+      "runs": [
+       "• □ 영업할 곳을 찾을 수 있다"
+      ],
+      "text": "• □ 영업할 곳을 찾을 수 있다"
+     },
+     {
+      "runs": [
+       "• □ 샘플을 제안할 수 있다"
+      ],
+      "text": "• □ 샘플을 제안할 수 있다"
+     },
+     {
+      "runs": [
+       "• □ 상담과 계약의 기본을 안다"
+      ],
+      "text": "• □ 상담과 계약의 기본을 안다"
+     },
+     {
+      "runs": [
+       "• □ 다음 달 콘텐츠를 제안할 수 있다"
+      ],
+      "text": "• □ 다음 달 콘텐츠를 제안할 수 있다"
+     }
+    ],
+    "runs": [
+     "• □ 누구에게 팔지 안다",
+     "\n",
+     "• □ 무엇을 팔지 안다",
+     "\n",
+     "• □ 가격을 말할 수 있다",
+     "\n",
+     "• □ 숏폼 1개를 만들 수 있다",
+     "\n",
+     "• □ 영업할 곳을 찾을 수 있다",
+     "\n",
+     "• □ 샘플을 제안할 수 있다",
+     "\n",
+     "• □ 상담과 계약의 기본을 안다",
+     "\n",
+     "• □ 다음 달 콘텐츠를 제안할 수 있다"
+    ],
+    "shapeName": "TextBox 6",
+    "geometry": {
+     "x": 822960,
+     "y": 1280160,
+     "cx": 6583680,
+     "cy": 4754880
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:527497df58290cd62a0bfdb3ced9b00bfd206572c6f7b6e935b9ca8699732668",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:34:shape:8",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 6,
+   "payload": {
+    "shapeName": "Rounded Rectangle 7",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 7955279,
+     "y": 1554480,
+     "cx": 3108960,
+     "cy": 3566160
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:50f940115a6d68d23d811fce54620d556a3c379f227125611e6874ab91316f97",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:34:shape:9",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 7,
+   "payload": {
+    "shapeName": "Rectangle 8",
+    "preset": "rect",
+    "geometry": {
+     "x": 7955279,
+     "y": 1554480,
+     "cx": 73152,
+     "cy": 3566160
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:a108b1a38c562ef3b4a77f5a3f36d923f9a8ed10eec85d16528ea2c17da81686",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:34:text:10",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 8,
+   "payload": {
+    "text": "기억하세요",
+    "paragraphs": [
+     {
+      "runs": [
+       "기억하세요"
+      ],
+      "text": "기억하세요"
+     }
+    ],
+    "runs": [
+     "기억하세요"
+    ],
+    "shapeName": "TextBox 9",
+    "geometry": {
+     "x": 8156448,
+     "y": 1691639,
+     "cx": 2743200,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:b9cdb7b89c8cf6a4e8f476d5180ec2bfc19b1c92481bf029dfccd363889dce14",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:34:text:11",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 9,
+   "payload": {
+    "text": "작게 시작하고\n빠르게 만들고\n많이 영업하고\n한 명의 고객을\n장기 고객으로.",
+    "paragraphs": [
+     {
+      "runs": [
+       "작게 시작하고\n빠르게 만들고\n많이 영업하고\n한 명의 고객을\n장기 고객으로."
+      ],
+      "text": "작게 시작하고\n빠르게 만들고\n많이 영업하고\n한 명의 고객을\n장기 고객으로."
+     }
+    ],
+    "runs": [
+     "작게 시작하고\n빠르게 만들고\n많이 영업하고\n한 명의 고객을\n장기 고객으로."
+    ],
+    "shapeName": "TextBox 10",
+    "geometry": {
+     "x": 8156448,
+     "y": 2121408,
+     "cx": 2743200,
+     "cy": 2880360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:759daa5c3c8034e6c388b8898064727bb652b481e74020856e9aa001a57ada36",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

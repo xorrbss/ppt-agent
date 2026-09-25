@@ -1,0 +1,54 @@
+{
+  "id": "operations-05-forklift",
+  "category": "operations",
+  "tags": {
+    "ko": [
+      "운영",
+      "지게차"
+    ],
+    "en": [
+      "operations",
+      "forklift"
+    ]
+  },
+  "alt": {
+    "ko": "지게차 단색 벡터 인포그래픽",
+    "en": "forklift monochrome vector infographic"
+  },
+  "path": "originals/operations-05-forklift.svg",
+  "thumbnail": "thumbnails/operations-05-forklift.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 422,
+  "sha256": "39d800243548fae81294b14d646b0ace2726d717095e44a96c498dfb22addb49",
+  "geometry_sha256": "149dac62375eaff1c3490891c0c887bb41356bdfb9ccc1ef65896a9a326d43d0",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54228,
+    "preview_opaque_pixels": 9833,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Forklift"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

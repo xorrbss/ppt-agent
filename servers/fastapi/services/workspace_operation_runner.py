@@ -113,6 +113,7 @@ from services.workspace_operation_observability import (
 from services.workspace_poll_backoff import IdleCycle
 from services.workspace_worker_lane_probe import workspace_operation_work_pending
 from utils.datetime_utils import get_current_utc_datetime
+from utils.get_env import get_workspace_operation_max_concurrency_env
 from utils.owner_context import (
     get_current_owner_id,
     reset_current_owner_id,
@@ -125,7 +126,9 @@ from models.sql.workspace import get_workspace_owner_scope
 LOGGER = logging.getLogger(__name__)
 
 WORKSPACE_OPERATION_POLL_SECONDS = 1.0
-WORKSPACE_OPERATION_MAX_CONCURRENCY = 2
+# Read once at import time; changing WORKSPACE_OPERATION_MAX_CONCURRENCY
+# needs a process restart to take effect.
+WORKSPACE_OPERATION_MAX_CONCURRENCY = get_workspace_operation_max_concurrency_env()
 _MAX_OBSERVATION_DURATION_MS = 30 * 24 * 60 * 60 * 1000
 _PUBLIC_OPERATION_CONTRACT_VERSION = "public-operation/v2"
 _PUBLIC_OPERATION_EXECUTION_PROFILE_VERSION = "public-generation-export/v2"
@@ -257,6 +260,8 @@ _SAFE_PAYLOAD_KEYS = frozenset(
         "fencing_token",
         "queue_position",
         "wait_reason",
+        "provider_quota_reset_at",
+        "provider_quota_resume_semantics",
         "worker_peak_memory_bytes",
         "worker_peak_handle_count",
         "worker_peak_process_count",
@@ -304,6 +309,14 @@ _MAX_TOOL_SUMMARY_LENGTH = 500
 # these out of the general event allowlist prevents an unrelated handler from
 # publishing fields that only make sense for another operation's result card.
 _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
+    "raster.analysis": frozenset(
+        {
+            "review_operation_id",
+            "analysis_id",
+            "analysis_digest",
+            "page_count",
+        }
+    ),
     "presentation.generate": frozenset(
         {
             "stage_timings_ms",
@@ -712,11 +725,51 @@ def sanitize_workspace_event_payload(
                 key: value.get(key)
                 for key in (
                     "schemaVersion", "p0Count", "p1Count", "p2Count",
-                    "passed", "receiptDigest",
+                    "passed", "receiptDigest", "documentStatus",
                 )
                 if value.get(key) is None
                 or isinstance(value.get(key), (str, int, float, bool))
             }
+            page_summary = value.get("pageSummary")
+            if isinstance(page_summary, Mapping):
+                safe[normalized]["pageSummary"] = {
+                    key: count
+                    for key in (
+                        "total", "normal", "autoRepaired", "reviewRequired",
+                    )
+                    if isinstance((count := page_summary.get(key)), int)
+                    and not isinstance(count, bool)
+                    and 0 <= count <= 500
+                }
+            review_pages = value.get("reviewPages")
+            if isinstance(review_pages, Sequence) and not isinstance(
+                review_pages, (str, bytes, bytearray)
+            ):
+                public_review_pages: list[dict[str, object]] = []
+                for page in review_pages[:30]:
+                    if not isinstance(page, Mapping):
+                        continue
+                    index = page.get("index")
+                    reasons = page.get("reasons")
+                    if (
+                        not isinstance(index, int)
+                        or isinstance(index, bool)
+                        or index < 0
+                        or index >= 500
+                        or not isinstance(reasons, Sequence)
+                        or isinstance(reasons, (str, bytes, bytearray))
+                    ):
+                        continue
+                    public_reasons = [
+                        reason.strip()[:240]
+                        for reason in reasons[:3]
+                        if isinstance(reason, str) and reason.strip()
+                    ]
+                    if public_reasons:
+                        public_review_pages.append(
+                            {"index": index, "reasons": public_reasons}
+                        )
+                safe[normalized]["reviewPages"] = public_review_pages
             for stage in ("static", "browser", "deck"):
                 stage_value = value.get(stage)
                 if isinstance(stage_value, Mapping):
@@ -808,10 +861,18 @@ def sanitize_workspace_event_payload(
     return safe
 
 
-def _linked_generation_job_id(operation: WorkspaceOperation) -> uuid.UUID | None:
-    """Return the durable compatibility job id only for admitted generation."""
+_LINKED_GENERATION_OPERATION_KINDS = frozenset(
+    {"presentation.generate", "template.apply", "design.apply"}
+)
 
-    if operation.kind != "presentation.generate" or not isinstance(operation.request_payload, Mapping):
+
+def _linked_generation_job_id(operation: WorkspaceOperation) -> uuid.UUID | None:
+    """Return the durable compatibility job id for generation-backed operations."""
+
+    if (
+        operation.kind not in _LINKED_GENERATION_OPERATION_KINDS
+        or not isinstance(operation.request_payload, Mapping)
+    ):
         return None
     raw_job_id = operation.request_payload.get("job_id")
     if raw_job_id is None:
@@ -4185,10 +4246,7 @@ class WorkspaceOperationRunner:
     ) -> None:
         self.session_factory = session_factory
         self.registry = registry
-        self.max_concurrency = max_concurrency or _positive_int_env(
-            "WORKSPACE_OPERATION_MAX_CONCURRENCY",
-            WORKSPACE_OPERATION_MAX_CONCURRENCY,
-        )
+        self.max_concurrency = max_concurrency or WORKSPACE_OPERATION_MAX_CONCURRENCY
         self.lease_seconds = lease_seconds or _positive_int_env(
             "WORKSPACE_OPERATION_LEASE_SECONDS", WORKSPACE_OPERATION_LEASE_SECONDS
         )
@@ -4528,6 +4586,17 @@ class WorkspaceOperationRunner:
                 await asyncio.shield(release_workspace_operation_claim(claim, session_factory=self.session_factory))
             raise
         except Exception:
+            # This is the catch-all for anything a handler (or the execution
+            # scaffolding around it) didn't raise as one of the typed
+            # workspace-operation errors above. Without logging here the
+            # traceback never reaches any log -- the operation row only
+            # records the generic "workspace_operation_internal_error" code,
+            # so a real bug is indistinguishable from routine retry noise.
+            LOGGER.exception(
+                "workspace_operation_internal_error kind=%s operation_id=%s",
+                claim.kind,
+                claim.operation_id,
+            )
             await _transition_claim_failure(
                 claim,
                 code="workspace_operation_internal_error",

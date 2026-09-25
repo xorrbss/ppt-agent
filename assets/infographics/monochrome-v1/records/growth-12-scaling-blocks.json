@@ -1,0 +1,56 @@
+{
+  "id": "growth-12-scaling-blocks",
+  "category": "growth",
+  "tags": {
+    "ko": [
+      "성장",
+      "규모확대"
+    ],
+    "en": [
+      "growth",
+      "scaling",
+      "blocks"
+    ]
+  },
+  "alt": {
+    "ko": "규모확대 단색 벡터 인포그래픽",
+    "en": "scaling blocks monochrome vector infographic"
+  },
+  "path": "originals/growth-12-scaling-blocks.svg",
+  "thumbnail": "thumbnails/growth-12-scaling-blocks.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 627,
+  "sha256": "3ac50697a246d247feb43385739b177f8e29338bc17a088102db070f200e581c",
+  "geometry_sha256": "5ceda40f16975ae923ce5dbf6fcba04eec406c92fe6d77e05dd747d5f9885891",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56260,
+    "preview_opaque_pixels": 7503,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Blocks",
+      "Expand"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

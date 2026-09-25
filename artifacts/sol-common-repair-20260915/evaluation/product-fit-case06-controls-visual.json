@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "method": "Direct visual comparison of case-06 before/after and case-10 product render against previously directly inspected original; no automatic diagnostics read",
+  "cases": [
+    {
+      "case_id": "case-06",
+      "original": "artifacts/sol-speed-quality-20260915/runs/stage2/round-2/case-05/C/render.png",
+      "candidate": "artifacts/sol-common-repair-20260915/product-fit-replay/case-06/render.png",
+      "verdict": "partial",
+      "improvement": "Bottom-right operations card is vertically compacted and now reveals a readable concluding sentence beneath the tiles. Bottom-left inner panels are also more compact.",
+      "remaining_concern": "Top-left and bottom-left green footer-like strips still terminate at the enclosing card boundary, without their lower region visible. Top-right and bottom-right lower green strips also meet the boundary. PNGs alone cannot establish the content hidden beyond these boundaries, so full clipping clearance is not established.",
+      "new_overlap": false,
+      "readability_regression": false,
+      "image_damage": "No raster image visible on this page",
+      "scope": "Visible improvement is clear; full-page pass is not justified by these renders"
+    },
+    {
+      "case_id": "case-10",
+      "original": "artifacts/sol-speed-quality-20260915/runs/stage1/case-04/A/render.png",
+      "candidate": "artifacts/sol-common-repair-20260915/product-fit-replay/case-10/render.png",
+      "verdict": "visual_pass",
+      "observation": "No visible change from original normal control. Large source screenshot, surrounding text, and cards retain their layout and readability.",
+      "new_overlap": false,
+      "readability_regression": false,
+      "image_damage": false
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "sol-common-repair-offline-comparison/v1",
+  "providerCalls": 0,
+  "inputs": {
+    "initialHtml": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-03\\A\\slide.html",
+    "finalHtml": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-03\\B\\slide.html"
+  },
+  "snapshots": {
+    "initialHtml": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-common-repair-20260915\\offline\\case-03-B\\initial.html",
+    "finalHtml": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-common-repair-20260915\\offline\\case-03-B\\final.html"
+  },
+  "comparison": {
+    "sameBytes": false,
+    "initialSizeBytes": 204012,
+    "finalSizeBytes": 204074,
+    "initialSha256": "b6849077571314c8d6a70b47e67157c18419ea1092fa3df0d61afdf8251a3d7b",
+    "finalSha256": "609dc89a45fed38bb25973dea43539ed757e6300c2674c8de76ead9eb68e0587"
+  },
+  "timing": {
+    "clock": "time.perf_counter_ns",
+    "boundary": "input reads through completed comparison; receipt persistence excluded",
+    "totalStartNs": 289655122410300,
+    "totalEndNs": 289655125749600,
+    "totalMs": 3.339,
+    "phaseDurationSumMs": 2.802,
+    "unattributedWithinBoundaryMs": 0.537,
+    "phases": [
+      {
+        "name": "readInitialHtml",
+        "startNs": 289655122413200,
+        "endNs": 289655122757600,
+        "durationMs": 0.344
+      },
+      {
+        "name": "readFinalHtml",
+        "startNs": 289655123236100,
+        "endNs": 289655123625300,
+        "durationMs": 0.389
+      },
+      {
+        "name": "preserveInitialHtml",
+        "startNs": 289655123655100,
+        "endNs": 289655124280900,
+        "durationMs": 0.626
+      },
+      {
+        "name": "preserveFinalHtml",
+        "startNs": 289655124288600,
+        "endNs": 289655124815800,
+        "durationMs": 0.527
+      },
+      {
+        "name": "compareHtml",
+        "startNs": 289655124823300,
+        "endNs": 289655125739600,
+        "durationMs": 0.916
+      }
+    ]
+  }
+}

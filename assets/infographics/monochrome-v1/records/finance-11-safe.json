@@ -1,0 +1,54 @@
+{
+  "id": "finance-11-safe",
+  "category": "finance",
+  "tags": {
+    "ko": [
+      "금융",
+      "금고"
+    ],
+    "en": [
+      "finance",
+      "safe"
+    ]
+  },
+  "alt": {
+    "ko": "금고 단색 벡터 인포그래픽",
+    "en": "safe monochrome vector infographic"
+  },
+  "path": "originals/finance-11-safe.svg",
+  "thumbnail": "thumbnails/finance-11-safe.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 728,
+  "sha256": "f01a0a718794e61e955bfb2abde276454c0038ab245898abdfb3406c572cb59e",
+  "geometry_sha256": "599757d20a794c19ccc8da574e482c7339859cb2265a4b68726d56c6832f7318",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 51072,
+    "preview_opaque_pixels": 12512,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Vault"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

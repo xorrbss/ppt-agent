@@ -39,10 +39,144 @@ from services.authored_presentation_generation import (
     _evaluate_capacity_role_evidence,
     _final_authored_quality_gate,
     _require_source_verbatim_bindings,
+    _repair_authored_intrinsic_grid_overlap,
     _revise_gate_repair_candidates,
 )
 from services.source_content.browser_readback import BrowserSourceReadbackError
 from utils.renderer_isolation import admit_authored_html
+
+
+def test_bounded_repair_capture_canonicalizes_appended_header_attributes(monkeypatch):
+    from services.authored_admission_capture import canonical_capture_html
+    from services.authored_rollout_profile import RolloutProfile, rollout_profile_scope
+    from utils.authored_qid_namespace import ensure_authored_qids
+
+    source = (
+        '<!DOCTYPE html><html><head><style>body{margin:0}</style></head><body>'
+        '<div data-header-band="88" data-header-part="band" style="height:88px">'
+        '<h1 data-header-part="title" style="font-size:32px">Title</h1></div>'
+        '<div aria-label="chart" class="chart" data-qid="chart" role="img">Chart</div>'
+        '</body></html>'
+    )
+    captured = []
+
+    async def fake_capture(html):
+        captured.append(html)
+        return SimpleNamespace(
+            png=b"canonical-repair-png",
+            browser_metrics={"html_digest": "sha256:" + sha256(html.encode()).hexdigest()},
+        )
+
+    monkeypatch.setattr(
+        "services.authored_presentation_generation.render_html_to_png_with_metrics",
+        fake_capture,
+    )
+    with rollout_profile_scope(RolloutProfile(gate_mode="enforce", html_normalization="tree")):
+        stamped = ensure_authored_semantic_roles(ensure_authored_qids(source))
+        expected = canonical_capture_html(stamped)
+        assert stamped != expected
+        htmls, pngs, metrics = asyncio.run(_bind_bounded_repair_evidence([source], [17]))
+        assert canonical_capture_html(htmls[0]) == htmls[0]
+
+    assert captured == htmls == [expected]
+    assert pngs == [b"canonical-repair-png"]
+    assert metrics == [{"html_digest": "sha256:" + sha256(expected.encode()).hexdigest()}]
+
+
+def test_intrinsic_grid_overlap_repair_only_releases_measured_grid_items():
+    html = """<!doctype html><html><body>
+    <div data-qid="grid"><div data-qid="card-a">긴 원문 __________</div>
+    <div data-qid="card-b">원문 유지</div></div>
+    <div data-qid="panel"><span data-qid="victim">실행 패널</span></div>
+    </body></html>"""
+    metrics = {
+        "elements": [
+            {
+                "qid": "grid", "parent_qid": "", "clientWidth": 200,
+                "scrollWidth": 320,
+                "computed_style": {"display": "grid", "minWidth": "0px"},
+            },
+            {
+                "qid": "card-a", "parent_qid": "grid",
+                "computed_style": {"display": "block", "minWidth": "auto"},
+            },
+            {
+                "qid": "card-b", "parent_qid": "grid",
+                "computed_style": {"display": "block", "minWidth": "auto"},
+            },
+            {
+                "qid": "panel", "parent_qid": "",
+                "computed_style": {"display": "block", "minWidth": "auto"},
+            },
+            {
+                "qid": "victim", "parent_qid": "panel",
+                "continuous_occluded_fraction": 0.8,
+                "occlusion_occluder_qids": ["card-a"],
+                "computed_style": {"display": "inline", "minWidth": "auto"},
+            },
+        ]
+    }
+
+    repaired = _repair_authored_intrinsic_grid_overlap(html, metrics)
+
+    assert repaired != html
+    assert repaired.count('data-qid="') == html.count('data-qid="')
+    assert "긴 원문 __________" in repaired and "원문 유지" in repaired
+    assert repaired.count("min-width: 0px") == 2
+    assert "font-size" not in repaired
+    no_collision = deepcopy(metrics)
+    no_collision["elements"][-1]["occlusion_occluder_qids"] = []
+    assert _repair_authored_intrinsic_grid_overlap(html, no_collision) == html
+
+    escaped = deepcopy(no_collision)
+    escaped["elements"][0]["bbox"] = {"x": 0, "width": 200}
+    escaped["elements"][2]["bbox"] = {"x": 220, "width": 100}
+    assert _repair_authored_intrinsic_grid_overlap(html, escaped).count("min-width: 0px") == 2
+
+
+@pytest.mark.parametrize("decision", ["reject", "provisional", "admitted"])
+def test_structural_gate_measures_deterministic_candidate_before_model(monkeypatch, decision):
+    from services import authored_presentation_generation as generation
+
+    captured = []
+    reviewed = []
+    source_metrics = {"source": "original"}
+    candidate_metrics = {"source": "candidate"}
+
+    async def capture(html, index):
+        captured.append((html, index))
+        return html, b"candidate-png", candidate_metrics
+
+    async def evaluate(index, html, metrics):
+        assert (index, html, metrics) == (21, "candidate", candidate_metrics)
+        return SimpleNamespace(decision=decision)
+
+    async def revise(htmls, pngs, contents, roles, brand, design_system, **kwargs):
+        reviewed.append((htmls, pngs, kwargs))
+        return htmls, pngs, [], []
+
+    monkeypatch.setattr(generation, "revise_authored_deck", revise)
+    htmls = ["original"] * 35
+    result, _ = asyncio.run(_revise_gate_repair_candidates(
+        flagged=[21, 27], htmls=htmls, pngs=[b"original-png"] * 35,
+        contents=["source"] * 35, roles=["CONTENT"] * 35,
+        deterministic_candidates={21: "candidate", 27: "original"},
+        brand=object(), design_system="design",
+        repair_kwargs={
+            "candidate_evaluator": evaluate, "structural_candidate_capture": capture,
+            "initial_browser_metrics": [source_metrics, source_metrics],
+            "slide_indices": [21, 27], "provider_recovery_allowed": [True, True],
+        },
+    ))
+    selected = "original" if decision == "reject" else "candidate"
+    assert captured == [("candidate", 21)]
+    assert result == [selected, "original"]
+    kwargs = reviewed[0][2]
+    assert kwargs["slide_indices"] == [21, 27]
+    assert kwargs["provider_recovery_allowed"] == [True, True]
+    assert kwargs["initial_browser_metrics"][0] is (
+        source_metrics if decision == "reject" else candidate_metrics
+    )
 
 
 def test_capacity_treats_only_exact_chart_week_ticks_as_supporting() -> None:
@@ -723,6 +857,7 @@ def test_vision_qa_false_gate_repair_normalizes_short_labels_without_qid_loss(
             )
         )
     assert residual.value is residual_error
+    assert residual.value.checkpoint_absolute_indices == (4,)
     assert reviews[-1] == {"indices": [4], "allowed": [False]}
 
 

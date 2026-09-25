@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "raster-pptx.full-page-preserve-approval",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "화면 캡처 중심 PPTX는 덱 전체 원본 화면 보존을 두 단계로 선택·경고 확인하고 별도로 생성 승인할 수 있다.",
+  "scope": [
+    "raster-pptx",
+    "review",
+    "svg-export"
+  ],
+  "invariants": [
+    "전체 선택은 미검토 상태로 저장하며 자동 승인하지 않는다.",
+    "모든 페이지의 원본 픽셀·crop 참조를 확인한 뒤 이미지 편집 제한과 A4 가독성 경고를 명시 확인한다.",
+    "최종 생성 승인은 별도 요청과 승인 pin으로 처리한다."
+  ],
+  "forbidden": [
+    "208개 내부 차단 표시를 각각 클릭하도록 강요하지 않는다.",
+    "페이지 누락이나 CAS 충돌 상태에서 전체 승인을 진행하지 않는다."
+  ],
+  "evidence": [
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/RasterSourceReview.tsx",
+    "servers/nextjs/app/(presentation-generator)/upload/hooks/useUploadPageState.ts",
+    "servers/fastapi/services/source_content/raster_reconstruction_store.py"
+  ],
+  "supersedes": "raster-pptx.full-page-preserve-approval@1",
+  "recordedAt": "2026-09-24T06:19:11.5175705+00:00"
+}

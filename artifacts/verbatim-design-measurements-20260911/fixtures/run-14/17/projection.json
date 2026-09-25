@@ -1,0 +1,299 @@
+{
+ "source-slide:18:text:3": {
+  "text": "3주차 | 첫 고객 만들기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "3주차",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "첫 고객 만들기",
+    "begin": 6,
+    "end": 14,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:18:text:4": {
+  "text": "목표: 실제 영업할 대상과 접근 방법을 만든다.",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "목표: 실제 영업할 대상과 접근 방법을 만든다.",
+    "begin": 0,
+    "end": 26,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:18:text:5": {
+  "text": "18",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "18",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:18:text:6": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:18:text:7": {
+  "text": "첫 고객의 공식",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "첫 고객의 공식",
+    "begin": 0,
+    "end": 8,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:18:text:8": {
+  "text": "포트폴리오 → 무료 샘플 → 영업 → 상담",
+  "run_count": 4,
+  "lines": [
+   [
+    0,
+    3
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "포트폴리오",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "무료 샘플",
+    "begin": 8,
+    "end": 13,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 0,
+    "marker": "",
+    "body": "영업",
+    "begin": 16,
+    "end": 18,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 0,
+    "marker": "",
+    "body": "상담",
+    "begin": 21,
+    "end": 23,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:18:text:11": {
+  "text": "1",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "1",
+    "begin": 0,
+    "end": 1,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:18:text:12": {
+  "text": "보여줄 영상 준비",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "보여줄 영상 준비",
+    "begin": 0,
+    "end": 9,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:18:text:15": {
+  "text": "2",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "2",
+    "begin": 0,
+    "end": 1,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:18:text:16": {
+  "text": "가게 하나 선정",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "가게 하나 선정",
+    "begin": 0,
+    "end": 8,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:18:text:19": {
+  "text": "3",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "3",
+    "begin": 0,
+    "end": 1,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:18:text:20": {
+  "text": "직접 제안",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "직접 제안",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   }
+  ]
+ }
+}

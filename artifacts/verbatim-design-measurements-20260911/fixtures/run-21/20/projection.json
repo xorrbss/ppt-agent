@@ -1,0 +1,209 @@
+{
+ "source-slide:21:text:3": {
+  "text": "3주차 PART 3 | 전화영업 기본 구조",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "3주차 PART 3",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "전화영업 기본 구조",
+    "begin": 13,
+    "end": 23,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:21:text:4": {
+  "text": "21",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "21",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:21:text:5": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:21:text:6": {
+  "text": "① 인사",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "① ",
+    "body": "인사",
+    "begin": 0,
+    "end": 4,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:21:text:7": {
+  "text": "② 왜 연락했는지",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "② ",
+    "body": "왜 연락했는지",
+    "begin": 0,
+    "end": 9,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:21:text:8": {
+  "text": "③ 어떤 도움을 줄 수 있는지",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "③ ",
+    "body": "어떤 도움을 줄 수 있는지",
+    "begin": 0,
+    "end": 16,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:21:text:9": {
+  "text": "④ 다음 행동 제안",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "④ ",
+    "body": "다음 행동 제안",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:21:text:12": {
+  "text": "연습 포인트",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "연습 포인트",
+    "begin": 0,
+    "end": 6,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:21:text:13": {
+  "text": "길게 설명하지 않는다. ‘관심 있으면 자료/샘플을 보내드리겠다’는 다음 단계까지 연결하는 것이 목표.",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "길게 설명하지 않는다. ‘관심 있으면 자료/샘플을 보내드리겠다’는 다음 단계까지 연결하는 것이 목표.",
+    "begin": 0,
+    "end": 56,
+    "order_free_before": false
+   }
+  ]
+ }
+}

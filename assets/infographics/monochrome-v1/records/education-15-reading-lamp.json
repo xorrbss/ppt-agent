@@ -1,0 +1,55 @@
+{
+  "id": "education-15-reading-lamp",
+  "category": "education",
+  "tags": {
+    "ko": [
+      "교육",
+      "독서등"
+    ],
+    "en": [
+      "education",
+      "reading",
+      "lamp"
+    ]
+  },
+  "alt": {
+    "ko": "독서등 단색 벡터 인포그래픽",
+    "en": "reading lamp monochrome vector infographic"
+  },
+  "path": "originals/education-15-reading-lamp.svg",
+  "thumbnail": "thumbnails/education-15-reading-lamp.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 417,
+  "sha256": "a17a72507237b51d30907d612adeaf22a89bf021b2c069a05a5105d39c26f8e2",
+  "geometry_sha256": "0db3a0ae279562ad0adbc85489c686de533d2809f887fdb7a94420455d64d02b",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54983,
+    "preview_opaque_pixels": 9159,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "LampDesk"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

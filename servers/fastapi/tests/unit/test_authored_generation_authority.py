@@ -12,6 +12,10 @@ from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services import authored_checkpoint_service as checkpoints
 from services.authored_checkpoint_state import provider_attempt_count_in_epoch
+from services.authored_provider_attempt_ledger import (
+    reserve_provider_overload_retry,
+    take_provider_attempt_reservations,
+)
 from utils.llm_calls.author_deck import author_correction_from_stored_failure
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.authored_composition_policy import (
@@ -33,7 +37,12 @@ from utils.llm_calls.author_slide import Brand, authored_provider_semantic_slot
 
 def test_pre_author_planner_freezes_known_closing_text_and_call_budget(monkeypatch) -> None:
     monkeypatch.setenv("AUTHORED_COMPOSITION_ENVELOPE_ENABLED", "true")
-    content = "최종 실행 원칙\n" + ("검증 가능한 운영 근거를 유지합니다. " * 20)
+    # Commit c7b6383c1 ("author ordinary decks by free composition again")
+    # raised the envelope's visible-text target from 350 to 460 chars but did
+    # not raise this fixture's repeat count to match, so the content stopped
+    # exceeding the (correctly updated) target it exists to overflow. 24
+    # repeats clears the new 460-char target with headroom.
+    content = "최종 실행 원칙\n" + ("검증 가능한 운영 근거를 유지합니다. " * 24)
     profile = CompositionProfile("ordinary", "authored", True, True, 1)
     capacity_plan = build_authored_capacity_plan((content,), ("CLOSING",), profile)
 
@@ -42,7 +51,10 @@ def test_pre_author_planner_freezes_known_closing_text_and_call_budget(monkeypat
     assert planned.input_title_chars == len("최종 실행 원칙")
     assert planned.input_body_chars > planned.body_target_chars == 380
     assert planned.input_visible_chars > planned.visible_target_chars == 460
-    assert planned.semantic_target_limit == 20
+    # The same commit raised CLOSING's qid ceiling 20 -> 36
+    # (_ROLE_BUDGETS["CLOSING"] in services/authored_composition_policy.py)
+    # without updating this assertion to match.
+    assert planned.semantic_target_limit == 36
     assert planned.condensation_required is True
     assert planned.condensation_allowed is True
     assert planned.provider_initial_call_limit == 1
@@ -98,7 +110,15 @@ def test_attempt_receipt_keeps_non_null_stages_and_operational_causes(
     monkeypatch.setenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path))
     recorder = GenerationTimingRecorder()
     recorder.record_stage_ms("author", 9)
-    stages = recorder.snapshot_stage_timings_ms()
+    # ``snapshot_stage_timings_ms`` only ever reports stages actually recorded
+    # (it has never zero-filled; see services/authored_generation_timing_receipt.py
+    # GenerationTimingRecorder, unchanged since its introduction in 4e7221520).
+    # The one production caller (services/authored_presentation_generation.py,
+    # ``stage_timings_ms = {stage: 0 for stage in _PERFORMANCE_STAGE_NAMES}``)
+    # owns zero-filling itself before merging in recorded values; this test
+    # does the same to build a receipt-ready, fully-keyed stage map.
+    stages = {stage: 0 for stage in GENERATION_TIMING_STAGES}
+    stages.update(recorder.snapshot_stage_timings_ms())
 
     assert all(stage in stages for stage in GENERATION_TIMING_STAGES)
     assert stages["outline"] == 0
@@ -180,6 +200,56 @@ def test_a_retry_carries_the_reason_the_slide_was_rejected() -> None:
     assert author_correction_from_stored_failure({}) is None
 
 
+def test_stored_source_rejection_prefers_actionable_detail_and_exact_block() -> None:
+    expected = "‘영상’이 아니라 ‘콘텐츠 운영’을 판다"
+    hint = author_correction_from_stored_failure({
+        "code": "authored_provider_attempt_budget_exhausted",
+        "cause": "Authored slide author failed",
+        "prior_failure": {
+            "code": "authored_slide_author_failed",
+            "cause": "source_content_browser_readback_failed",
+            "detail": f"source block text has no unique DOM element (run 0: expected {expected!r})",
+            "message": "Authored slide author failed",
+            "block_ids": ["source-slide:7:text:10"],
+        },
+    })
+    assert hint is not None
+    assert expected in hint
+    assert "source-slide:7:text:10" in hint
+    assert "authored_provider_attempt_budget_exhausted" not in hint
+    assert "source_content_browser_readback_failed" not in hint
+    assert len(hint) <= 460
+
+
+def test_prior_source_rejection_preserves_sanitized_message_across_attempts() -> None:
+    expected = "‘영상’이 아니라 ‘콘텐츠 운영’을 판다"
+    message = f"source-slide:7:text:10: expected {expected!r}; Bearer sensitivecredential"
+    stage_error = AuthoredStageError(
+        slide_index=6,
+        stage="author",
+        code="authored_provider_attempt_budget_exhausted",
+        prior_failure={
+            "code": "source_content_browser_readback_failed",
+            "cause": "source_content_browser_readback_failed",
+            "message": message,
+            "detail": "Authored slide author failed",
+            "block_ids": ["source-slide:7:text:10"],
+            "untrusted_payload": "must not survive",
+        },
+    )
+    stored = stage_error.as_safe_dict()
+    prior = stored["prior_failure"]
+    assert expected in prior["message"]
+    assert "sensitivecredential" not in prior["message"]
+    assert "[redacted]" in prior["message"]
+    assert prior["block_ids"] == ["source-slide:7:text:10"]
+    assert "untrusted_payload" not in prior
+    hint = author_correction_from_stored_failure(stored)
+    assert expected in hint
+    assert "source-slide:7:text:10" in hint
+    assert "sensitivecredential" not in hint
+
+
 def test_a_later_operation_attempt_gives_a_failed_slide_its_calls_back(
     tmp_path, monkeypatch
 ) -> None:
@@ -237,8 +307,13 @@ def test_a_later_operation_attempt_gives_a_failed_slide_its_calls_back(
                 ordinal=ordinal,
                 fencing_token=1,
             )
+        await reserve_provider_overload_retry(
+            take_provider_attempt_reservations(),
+            physical_ordinal=2,
+        )
         exhausted = await checkpoints.get_checkpoint(job.id, 0)
         spent_in_first = provider_attempt_count_in_epoch(exhausted.error, 1)
+        physical_in_first = exhausted.error["provider_physical_attempts"]
 
         # The operation is retried: a new lease, a new fencing token, the same
         # durable checkpoint carrying the slides that already succeeded.
@@ -265,16 +340,20 @@ def test_a_later_operation_attempt_gives_a_failed_slide_its_calls_back(
         await engine.dispose()
         return {
             "spent_in_first": spent_in_first,
+            "physical_in_first": physical_in_first,
             "remaining": remaining,
             "in_second": provider_attempt_count_in_epoch(retried.error, 2),
             "total": int(retried.error["provider_attempt_total"]),
+            "physical_total": int(retried.error["provider_physical_attempt_total"]),
         }
 
     assert asyncio.run(scenario()) == {
         "spent_in_first": 2,
+        "physical_in_first": {"1": 1, "2": 2},
         "remaining": 0,
         "in_second": 1,
         "total": 2,
+        "physical_total": 3,
     }
 
 
@@ -376,12 +455,15 @@ def test_provider_attempt_reservation_survives_crash_and_fences_stale_worker(
     assert asyncio.run(scenario()) == (1, 2)
 
 
-def test_initial_and_recovery_use_distinct_stable_public_logical_slots() -> None:
+def test_initial_recovery_and_rescue_use_distinct_stable_public_logical_slots() -> None:
     initial = authored_provider_semantic_slot(
         receipt_retry_class="initial", receipt_attempt_ordinal=1
     )
     recovery = authored_provider_semantic_slot(
         receipt_retry_class="recovery", receipt_attempt_ordinal=2
+    )
+    rescue = authored_provider_semantic_slot(
+        receipt_retry_class="recovery", receipt_attempt_ordinal=3
     )
     first_scope = ProviderUsageScope(
         job_id=uuid.uuid4(),
@@ -398,13 +480,23 @@ def test_initial_and_recovery_use_distinct_stable_public_logical_slots() -> None
         slide_index=2,
     )
 
-    assert (initial, recovery) == ("author.initial", "author.recovery")
+    assert (initial, recovery, rescue) == (
+        "author.initial",
+        "author.recovery",
+        "author.rescue",
+    )
     assert first_scope.public_logical_call_ordinal(initial) != (
         first_scope.public_logical_call_ordinal(recovery)
     )
     assert first_scope.public_logical_call_ordinal(recovery) == (
         resumed_scope.public_logical_call_ordinal(recovery)
     )
+    assert len(
+        {
+            first_scope.public_logical_call_ordinal(slot)
+            for slot in (initial, recovery, rescue)
+        }
+    ) == 3
 
 
 def test_deck_level_stage_gives_every_remade_slide_its_own_logical_call():

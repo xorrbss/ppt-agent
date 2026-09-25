@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from models.sql.presentation_version import PresentationVersionModel
+from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from templates.v2.persistence import canonicalize_slide_dump
 from utils.datetime_utils import get_current_utc_datetime
@@ -98,7 +99,19 @@ async def snapshot_slides(
     if not slides_dumps:
         return None
 
-    canonical_slides = [canonicalize_slide_dump(dump) for dump in slides_dumps]
+    canonical_slides = [canonicalize_slide_dump({key: value for key, value in dump.items()
+                                                 if key not in {"_documentCanvas", "_canvasDigest"}})
+                        for dump in slides_dumps]
+    presentation = await session.get(PresentationModel, presentation_id)
+    if presentation is not None and isinstance(presentation.theme, dict) and "documentCanvas" in presentation.theme:
+        from services.authored_canvas import presentation_canvas_metadata
+        from services.document_canvas import canvas_digest
+
+        frozen_canvas = presentation_canvas_metadata(presentation.theme)
+        # Reserved snapshot-only metadata on the first slide keeps the existing
+        # JSON-list storage/count contract without adding a database column.
+        canonical_slides[0]["_documentCanvas"] = frozen_canvas
+        canonical_slides[0]["_canvasDigest"] = canvas_digest(frozen_canvas)
 
     if not force:
         latest = await _latest_version(session, presentation_id)
@@ -133,7 +146,8 @@ async def list_versions(
 
 
 def _slide_from_dump(presentation_id: uuid.UUID, dump: dict) -> SlideModel:
-    canonical = canonicalize_slide_dump(dump)
+    canonical = canonicalize_slide_dump({key: value for key, value in dump.items()
+                                         if key not in {"_documentCanvas", "_canvasDigest"}})
     return SlideModel(
         id=uuid.uuid4(),
         presentation=presentation_id,
@@ -142,6 +156,8 @@ def _slide_from_dump(presentation_id: uuid.UUID, dump: dict) -> SlideModel:
         index=canonical.get("index"),
         content=deepcopy(canonical.get("content") or {}),
         html_content=canonical.get("html_content"),
+        svg_content=canonical.get("svg_content"),
+        source_format=canonical.get("source_format"),
         ui=deepcopy(canonical.get("ui")),
         speaker_note=canonical.get("speaker_note"),
         properties=deepcopy(canonical.get("properties")),
@@ -162,6 +178,21 @@ async def restore_version(
     version = result.first()
     if version is None or version.presentation_id != presentation_id:
         return None
+
+    presentation = await session.get(PresentationModel, presentation_id)
+    first_slide = (version.slides or [{}])[0]
+    frozen_canvas = first_slide.get("_documentCanvas")
+    if frozen_canvas is not None:
+        from services.document_canvas import DocumentCanvasMetadata, canvas_digest
+
+        DocumentCanvasMetadata.model_validate(frozen_canvas)
+        if first_slide.get("_canvasDigest") != canvas_digest(frozen_canvas):
+            raise ValueError("document_canvas_digest_mismatch")
+        if presentation is None:
+            raise ValueError("document_canvas_presentation_missing")
+    elif presentation is not None and isinstance(presentation.theme, dict) and "documentCanvas" in presentation.theme:
+        # An old snapshot has no physical contract; never assume it is A4.
+        raise ValueError("document_canvas_version_contract_missing")
 
     # Validate the complete target before checkpointing or deleting live state.
     restored = [
@@ -191,4 +222,15 @@ async def restore_version(
         delete(SlideModel).where(SlideModel.presentation == presentation_id)
     )
     session.add_all(restored)
+    if frozen_canvas is not None:
+        restored_theme = dict(presentation.theme or {})
+        projection = dict(restored_theme.get("authored_vnext") or {})
+        projection.pop("canvas", None)
+        if projection:
+            restored_theme["authored_vnext"] = projection
+        else:
+            restored_theme.pop("authored_vnext", None)
+        restored_theme["documentCanvas"] = deepcopy(frozen_canvas)
+        presentation.theme = restored_theme
+        session.add(presentation)
     return restored

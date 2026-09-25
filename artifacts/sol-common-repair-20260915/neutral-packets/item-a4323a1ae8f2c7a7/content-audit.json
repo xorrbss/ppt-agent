@@ -1,0 +1,59 @@
+{
+  "schema": "sol-neutral-content-audit/v1",
+  "reviewer": "independent-content",
+  "hashVerification": {
+    "html": true,
+    "png": true
+  },
+  "contentVerdict": "fail",
+  "passed": false,
+  "evidenceBasis": [
+    "packet.json sourceContent and requiredImages",
+    "hash-verified slide.html",
+    "hash-verified render.png visual inspection"
+  ],
+  "requiredImageCount": 0,
+  "requiredImagesVerdict": "not-applicable",
+  "propositions": [
+    {
+      "index": 1,
+      "verdict": "pass",
+      "evidence": "Three requirement identifiers and all four domain headings are visible."
+    },
+    {
+      "index": 2,
+      "verdict": "pass",
+      "evidence": "Nine core functions, four business types, five distributed work items, analysis and common-workflow goal are visible across upper strip and first card."
+    },
+    {
+      "index": 3,
+      "verdict": "pass",
+      "evidence": "Six strategies and function/data/quality/operations goal linkage are visible."
+    },
+    {
+      "index": 4,
+      "verdict": "fail",
+      "evidence": "Third card's contractor row overflows into the dark takeaway band. Contractor responsibility text is occluded/unreadable; DOM presence does not establish preservation. Full named entity 탄소중립지원센터 is shortened to 지원센터 without a visible full-name definition. Eight-stage procedure and deliverables statement, including start and end, remain visible."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "type": "occluded-required-role",
+      "location": "governance card bottom / takeaway band",
+      "detail": "수행사 responsibility row is not visibly preserved."
+    },
+    {
+      "severity": "moderate",
+      "type": "named-entity-shortening",
+      "location": "governance card first role",
+      "detail": "Only 지원센터 is shown; source explicitly names 탄소중립지원센터."
+    }
+  ],
+  "uncertainties": [],
+  "notes": [
+    "Both assigned packets have identical verified HTML and PNG hashes; the same visual evidence and verdict apply.",
+    "Additional stage labels and role specifics are not source-grounded by this packet; no external claims were consulted."
+  ],
+  "packetId": "item-a4323a1ae8f2c7a7"
+}

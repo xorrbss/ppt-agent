@@ -41,7 +41,19 @@ PUBLIC_WORKER_PROFILES = MappingProxyType(
         ),
         "generation": PublicWorkerProfile(
             role="generation",
-            operation_kinds=("presentation.generate", "quality.review"),
+            operation_kinds=(
+                "presentation.generate",
+                "raster.analysis",
+                "quality.review",
+                "slide.regenerate.preview",
+                "slide.regenerate",
+                "template.apply",
+                "design.apply",
+                # Local, DB-only mutation (no provider calls, no browser/
+                # converter), but still a fenced workspace command like every
+                # other mutation, so it needs an external-controller home.
+                "presentation.slides.reorder",
+            ),
             canonical_database_access=True,
             provider_network_access=True,
             artifact_access="metadata-authority",

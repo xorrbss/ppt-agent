@@ -13,6 +13,8 @@ import tempfile
 from typing import Any
 from unittest.mock import patch
 
+from pydantic import BaseModel
+
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 FASTAPI_ROOT = REPOSITORY_ROOT / "servers" / "fastapi"
@@ -74,10 +76,15 @@ def _request_model(route: Any) -> str | None:
     models = {
         _model_name(parameter.field_info.annotation)
         for parameter in route.dependant.body_params
-        if _model_name(parameter.field_info.annotation) is not None
+        if isinstance(parameter.field_info.annotation, type)
+        and issubclass(parameter.field_info.annotation, BaseModel)
     }
     if not models:
-        return None
+        raw_names = {
+            _model_name(parameter.field_info.annotation)
+            for parameter in route.dependant.body_params
+        }
+        return "UploadFile" if raw_names == {"UploadFile"} else None
     if len(models) != 1:
         raise RuntimeError(f"route {route.path} has an ambiguous request body")
     return models.pop()

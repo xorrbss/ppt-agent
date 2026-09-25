@@ -1,0 +1,55 @@
+{
+  "id": "infrastructure-07-cell-tower",
+  "category": "infrastructure",
+  "tags": {
+    "ko": [
+      "인프라",
+      "기지국"
+    ],
+    "en": [
+      "infrastructure",
+      "cell",
+      "tower"
+    ]
+  },
+  "alt": {
+    "ko": "기지국 단색 벡터 인포그래픽",
+    "en": "cell tower monochrome vector infographic"
+  },
+  "path": "originals/infrastructure-07-cell-tower.svg",
+  "thumbnail": "thumbnails/infrastructure-07-cell-tower.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 534,
+  "sha256": "3b6aa7c870b793e6a4c81913237e34af68f0594eb8ffd67e27816d1f7613513a",
+  "geometry_sha256": "fb04209c11167672b8a3c287da158a95a1c4c9859a14ac9d83bf90e798470731",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 52562,
+    "preview_opaque_pixels": 10996,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "RadioTower"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

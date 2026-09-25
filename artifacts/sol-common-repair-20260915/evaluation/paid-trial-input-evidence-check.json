@@ -1,0 +1,242 @@
+[
+  {
+    "itemId": "item-d00701e9b59f3856",
+    "sampleId": "sol-p02",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 0,
+    "assignmentCount": 0,
+    "candidateCount": 0,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-a4323a1ae8f2c7a7",
+    "sampleId": "sol-p02",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 0,
+    "assignmentCount": 0,
+    "candidateCount": 0,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-148ee64e4f396b1f",
+    "sampleId": "sol-p02",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 0,
+    "assignmentCount": 0,
+    "candidateCount": 0,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-66db4c95086c862d",
+    "sampleId": "sol-p02",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 0,
+    "assignmentCount": 0,
+    "candidateCount": 0,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-825a6941de14452e",
+    "sampleId": "sol-p28",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 0,
+    "assignmentCount": 0,
+    "candidateCount": 0,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-7db973b111215619",
+    "sampleId": "sol-p28",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 0,
+    "assignmentCount": 0,
+    "candidateCount": 0,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-175ac57e206d89d7",
+    "sampleId": "sol-p28",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 0,
+    "assignmentCount": 0,
+    "candidateCount": 0,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-92b14042c47f574a",
+    "sampleId": "sol-p28",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 0,
+    "assignmentCount": 0,
+    "candidateCount": 0,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-591e72c73855feb6",
+    "sampleId": "astra-p17",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 1,
+    "assignmentCount": 1,
+    "candidateCount": 1,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-e6cd0a057eb523e9",
+    "sampleId": "astra-p17",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 1,
+    "assignmentCount": 1,
+    "candidateCount": 1,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-c9576f15589c5dc8",
+    "sampleId": "astra-p17",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 1,
+    "assignmentCount": 1,
+    "candidateCount": 1,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-81537176ef073791",
+    "sampleId": "astra-p17",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 1,
+    "assignmentCount": 1,
+    "candidateCount": 1,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-f8038519deae7011",
+    "sampleId": "astra-p25",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 1,
+    "assignmentCount": 1,
+    "candidateCount": 1,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-3ede756b0e86115e",
+    "sampleId": "astra-p25",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 1,
+    "assignmentCount": 1,
+    "candidateCount": 1,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-5a8e3056758faaff",
+    "sampleId": "astra-p25",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 1,
+    "assignmentCount": 1,
+    "candidateCount": 1,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-cab45fbfb95eda1a",
+    "sampleId": "astra-p25",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 1,
+    "assignmentCount": 1,
+    "candidateCount": 1,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-8fe457a49e8d0495",
+    "sampleId": "sol-p06",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 0,
+    "assignmentCount": 0,
+    "candidateCount": 0,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-f2ce48f0f2bb5432",
+    "sampleId": "sol-p06",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 0,
+    "assignmentCount": 0,
+    "candidateCount": 0,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-feb71834829d14e4",
+    "sampleId": "sol-p06",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 0,
+    "assignmentCount": 0,
+    "candidateCount": 0,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-6c19853836071365",
+    "sampleId": "sol-p06",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 0,
+    "assignmentCount": 0,
+    "candidateCount": 0,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-478e476951d46117",
+    "sampleId": "astra-p19",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 1,
+    "assignmentCount": 1,
+    "candidateCount": 1,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-62523bbb604d974a",
+    "sampleId": "astra-p19",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 1,
+    "assignmentCount": 1,
+    "candidateCount": 1,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-9442f27d8f02a394",
+    "sampleId": "astra-p19",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 1,
+    "assignmentCount": 1,
+    "candidateCount": 1,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  },
+  {
+    "itemId": "item-a55827947aa35926",
+    "sampleId": "astra-p19",
+    "sourceHashMatchesFrozen": true,
+    "requiredCount": 1,
+    "assignmentCount": 1,
+    "candidateCount": 1,
+    "requiredEvidencePresent": true,
+    "sourceImagesHashVerified": true
+  }
+]

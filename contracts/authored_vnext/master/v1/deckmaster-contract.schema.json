@@ -669,7 +669,8 @@
           "enum": [
             "always",
             "exceptCover",
-            "coverOnly"
+            "coverOnly",
+            "hidden"
           ],
           "title": "Visibility",
           "type": "string"

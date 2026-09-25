@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.editable-export-font-and-ownership",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Preserve omitted font embedding defaults and declared text ownership; discontinuous parent text must not collapse across independent inline children.",
+  "scope": [
+    "authored",
+    "export"
+  ],
+  "invariants": [
+    "Explicit fontEmbedding=false remains an opt-out.",
+    "Declared independent text is emitted once.",
+    "Unsupported discontinuous parent text remains truthful raster fallback."
+  ],
+  "forbidden": [
+    "Normalizing an omitted font embedding option to false.",
+    "Claiming raster text as editable."
+  ],
+  "evidence": [
+    "servers/nextjs/lib/public-export-admission.ts",
+    "servers/nextjs/lib/authored-hybrid/browser-source.ts",
+    "artifacts/editable-export-focused-20260915/desktop-final/independent-edit-check.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-14T16:02:27.0240193+00:00"
+}

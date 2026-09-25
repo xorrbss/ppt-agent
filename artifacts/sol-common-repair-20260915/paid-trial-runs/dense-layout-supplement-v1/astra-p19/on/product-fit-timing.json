@@ -1,0 +1,3065 @@
+{
+  "fitRenderMs": 4264.3353,
+  "verifyRenderMs": 0.0018,
+  "fitReport": {
+    "version": "authored-local-fit/v1.5",
+    "policy_id": "",
+    "policy_revision": "authored-local-fit/v1.5",
+    "requested": true,
+    "fit_state": "final",
+    "status": "unresolved",
+    "changed": false,
+    "partial": false,
+    "error": null,
+    "unresolved_reasons": [
+      "font_unverifiable"
+    ],
+    "operations": [],
+    "edits": [],
+    "baseline": {
+      "author_revision": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5",
+      "original_html_digest": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5",
+      "runs": [
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-eyebrow:0:0:10",
+          "owner_qid": "s18-eyebrow",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 10,
+          "ancestor_qids": [
+            "s18-eyebrow",
+            "q-div-76f0d626b7f0",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:59036096",
+          "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:9cfc0d1c",
+          "role": "supporting",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-title:0:0:19",
+          "owner_qid": "s18-title",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 19,
+          "ancestor_qids": [
+            "s18-title",
+            "q-div-76f0d626b7f0",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:429645d5",
+          "group_id": "q-div-75dcf98740c9|title|fnv1a32:e391f74b",
+          "role": "title",
+          "original_pt": 24,
+          "font_px": 32,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-requirements:0:0:26",
+          "owner_qid": "s18-requirements",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 26,
+          "ancestor_qids": [
+            "s18-requirements",
+            "q-div-73774be43d12",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:e337ca59",
+          "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:6278f52a",
+          "role": "supporting",
+          "original_pt": 10.5,
+          "font_px": 14,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-header-note:0:0:9",
+          "owner_qid": "s18-header-note",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 9,
+          "ancestor_qids": [
+            "s18-header-note",
+            "q-div-73774be43d12",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:07e720c2",
+          "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:a392319d",
+          "role": "supporting",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-claim:0:0:18",
+          "owner_qid": "s18-claim",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 18,
+          "ancestor_qids": [
+            "s18-claim",
+            "q-div-75b3498fbbe1",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:697fcc98",
+          "group_id": "s18-claim|body|fnv1a32:68985f26",
+          "role": "body",
+          "original_pt": 18.75,
+          "font_px": 25,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-strong-663977331dde:0:0:15",
+          "owner_qid": "q-strong-663977331dde",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 15,
+          "ancestor_qids": [
+            "q-strong-663977331dde",
+            "s18-claim",
+            "q-div-75b3498fbbe1",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:8bdcd500",
+          "group_id": "q-strong-663977331dde|unknown|fnv1a32:f3504048",
+          "role": "unknown",
+          "original_pt": 18.75,
+          "font_px": 25,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-claim:1:0:8",
+          "owner_qid": "s18-claim",
+          "text_node_ordinal": 1,
+          "start_offset": 0,
+          "end_offset": 8,
+          "ancestor_qids": [
+            "s18-claim",
+            "q-div-75b3498fbbe1",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:9367e18a",
+          "group_id": "s18-claim|body|fnv1a32:68985f26",
+          "role": "body",
+          "original_pt": 18.75,
+          "font_px": 25,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-claim-key:0:0:8",
+          "owner_qid": "s18-claim-key",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 8,
+          "ancestor_qids": [
+            "s18-claim-key",
+            "q-div-75b3498fbbe1",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:8acbd597",
+          "group_id": "s18-claim-key|supporting|fnv1a32:0d6ffc24",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-roadmap-label:0:0:10",
+          "owner_qid": "s18-roadmap-label",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 10,
+          "ancestor_qids": [
+            "s18-roadmap-label",
+            "q-div-6ce2e5d31511",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:2f20f817",
+          "group_id": "q-div-2d8fd3599d50|supporting|fnv1a32:f0006fff",
+          "role": "supporting",
+          "original_pt": 15,
+          "font_px": 20,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-roadmap-caption:0:0:26",
+          "owner_qid": "s18-roadmap-caption",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 26,
+          "ancestor_qids": [
+            "s18-roadmap-caption",
+            "q-div-6ce2e5d31511",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:85e63701",
+          "group_id": "q-div-2d8fd3599d50|supporting|fnv1a32:040d403d",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-01:0:0:2",
+          "owner_qid": "s18-node-01",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s18-node-01",
+            "q-div-8c29659176f9",
+            "q-div-e3c8af0f08be",
+            "q-div-18cdfb79b256",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:20ed70ba",
+          "group_id": "s18-node-01|supporting|fnv1a32:9b8b5597",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-02:0:0:2",
+          "owner_qid": "s18-node-02",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s18-node-02",
+            "q-div-7c5d9191b6a1",
+            "q-div-e3c8af0f08be",
+            "q-div-18cdfb79b256",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:1fed6f27",
+          "group_id": "s18-node-02|supporting|fnv1a32:9b8b5597",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-03:0:0:2",
+          "owner_qid": "s18-node-03",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s18-node-03",
+            "q-div-7f4997407f40",
+            "q-div-e3c8af0f08be",
+            "q-div-18cdfb79b256",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:1eed6d94",
+          "group_id": "s18-node-03|supporting|fnv1a32:9b8b5597",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-04:0:0:2",
+          "owner_qid": "s18-node-04",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s18-node-04",
+            "q-div-e93d01719cde",
+            "q-div-e3c8af0f08be",
+            "q-div-18cdfb79b256",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:1ded6c01",
+          "group_id": "s18-node-04|supporting|fnv1a32:9b8b5597",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-05:0:0:2",
+          "owner_qid": "s18-node-05",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s18-node-05",
+            "q-div-70d6fc6705bb",
+            "q-div-e3c8af0f08be",
+            "q-div-18cdfb79b256",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:1ced6a6e",
+          "group_id": "s18-node-05|supporting|fnv1a32:9b8b5597",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-f32986c526a1:0:0:3",
+          "owner_qid": "q-span-f32986c526a1",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 3,
+          "ancestor_qids": [
+            "q-span-f32986c526a1",
+            "s18-domain-convenience",
+            "s18-card-convenience",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:d5b1d962",
+          "group_id": "s18-card-convenience|unknown|fnv1a32:f5517715",
+          "role": "unknown",
+          "original_pt": 14.25,
+          "font_px": 19,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-convenience:0:0:3",
+          "owner_qid": "s18-domain-convenience",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 3,
+          "ancestor_qids": [
+            "s18-domain-convenience",
+            "s18-card-convenience",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:33002ba7",
+          "group_id": "s18-card-convenience|supporting|fnv1a32:f5517715",
+          "role": "supporting",
+          "original_pt": 14.25,
+          "font_px": 19,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-completion:0:0:6",
+          "owner_qid": "s18-metric-completion",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 6,
+          "ancestor_qids": [
+            "s18-metric-completion",
+            "q-div-a2e2659ffa74",
+            "s18-card-convenience",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:832f68b6",
+          "group_id": "s18-card-convenience|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-supplement:0:0:5",
+          "owner_qid": "s18-metric-supplement",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s18-metric-supplement",
+            "q-div-a2e2659ffa74",
+            "s18-card-convenience",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:a417988b",
+          "group_id": "s18-card-convenience|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-dropoff:0:0:6",
+          "owner_qid": "s18-metric-dropoff",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 6,
+          "ancestor_qids": [
+            "s18-metric-dropoff",
+            "q-div-a2e2659ffa74",
+            "s18-card-convenience",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:9f612061",
+          "group_id": "s18-card-convenience|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-complaint:0:0:5",
+          "owner_qid": "s18-metric-complaint",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s18-metric-complaint",
+            "q-div-a2e2659ffa74",
+            "s18-card-convenience",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:d4c04164",
+          "group_id": "s18-card-convenience|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-c83eac29f2ad:0:0:2",
+          "owner_qid": "q-span-c83eac29f2ad",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "q-span-c83eac29f2ad",
+            "s18-domain-productivity",
+            "s18-card-productivity",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:5a0a9adc",
+          "group_id": "s18-card-productivity|unknown|fnv1a32:f5517715",
+          "role": "unknown",
+          "original_pt": 14.25,
+          "font_px": 19,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-productivity:0:0:4",
+          "owner_qid": "s18-domain-productivity",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 4,
+          "ancestor_qids": [
+            "s18-domain-productivity",
+            "s18-card-productivity",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:2ec122c9",
+          "group_id": "s18-card-productivity|supporting|fnv1a32:f5517715",
+          "role": "supporting",
+          "original_pt": 14.25,
+          "font_px": 19,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-leadtime:0:0:7",
+          "owner_qid": "s18-metric-leadtime",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 7,
+          "ancestor_qids": [
+            "s18-metric-leadtime",
+            "q-div-f0227c17e5d3",
+            "s18-card-productivity",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:1e53f017",
+          "group_id": "s18-card-productivity|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-incomplete:0:0:6",
+          "owner_qid": "s18-metric-incomplete",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 6,
+          "ancestor_qids": [
+            "s18-metric-incomplete",
+            "q-div-f0227c17e5d3",
+            "s18-card-productivity",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:fb5ef3b4",
+          "group_id": "s18-card-productivity|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-batch:0:0:7",
+          "owner_qid": "s18-metric-batch",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 7,
+          "ancestor_qids": [
+            "s18-metric-batch",
+            "q-div-f0227c17e5d3",
+            "s18-card-productivity",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:ff45cb8b",
+          "group_id": "s18-card-productivity|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-download:0:0:11",
+          "owner_qid": "s18-metric-download",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 11,
+          "ancestor_qids": [
+            "s18-metric-download",
+            "q-div-f0227c17e5d3",
+            "s18-card-productivity",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:73a80dba",
+          "group_id": "s18-card-productivity|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-eedec0ea8962:0:0:3",
+          "owner_qid": "q-span-eedec0ea8962",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 3,
+          "ancestor_qids": [
+            "q-span-eedec0ea8962",
+            "s18-domain-data",
+            "s18-card-data",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:61366f23",
+          "group_id": "s18-card-data|unknown|fnv1a32:f5517715",
+          "role": "unknown",
+          "original_pt": 14.25,
+          "font_px": 19,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-data:0:0:3",
+          "owner_qid": "s18-domain-data",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 3,
+          "ancestor_qids": [
+            "s18-domain-data",
+            "s18-card-data",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:903a1110",
+          "group_id": "s18-card-data|supporting|fnv1a32:f5517715",
+          "role": "supporting",
+          "original_pt": 14.25,
+          "font_px": 19,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-reuse:0:0:9",
+          "owner_qid": "s18-metric-reuse",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 9,
+          "ancestor_qids": [
+            "s18-metric-reuse",
+            "q-div-a683db5cf97a",
+            "s18-card-data",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:36176918",
+          "group_id": "s18-card-data|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-evidence:0:0:11",
+          "owner_qid": "s18-metric-evidence",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 11,
+          "ancestor_qids": [
+            "s18-metric-evidence",
+            "q-div-a683db5cf97a",
+            "s18-card-data",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:510c7b13",
+          "group_id": "s18-card-data|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-2af01d53a93e:0:0:2",
+          "owner_qid": "q-span-2af01d53a93e",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "q-span-2af01d53a93e",
+            "s18-domain-quality",
+            "s18-card-quality",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:3896e86d",
+          "group_id": "s18-card-quality|unknown|fnv1a32:f5517715",
+          "role": "unknown",
+          "original_pt": 14.25,
+          "font_px": 19,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-quality:0:0:3",
+          "owner_qid": "s18-domain-quality",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 3,
+          "ancestor_qids": [
+            "s18-domain-quality",
+            "s18-card-quality",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:33a48678",
+          "group_id": "s18-card-quality|supporting|fnv1a32:f5517715",
+          "role": "supporting",
+          "original_pt": 14.25,
+          "font_px": 19,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-req:0:0:8",
+          "owner_qid": "s18-quality-req",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 8,
+          "ancestor_qids": [
+            "s18-quality-req",
+            "q-div-fada4d2ecc4c",
+            "s18-card-quality",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:7d766544",
+          "group_id": "s18-card-quality|body|fnv1a32:89a2e46c",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-first:0:0:10",
+          "owner_qid": "s18-quality-first",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 10,
+          "ancestor_qids": [
+            "s18-quality-first",
+            "q-div-fada4d2ecc4c",
+            "s18-card-quality",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:5eae1236",
+          "group_id": "s18-card-quality|body|fnv1a32:89a2e46c",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-critical:0:0:5",
+          "owner_qid": "s18-quality-critical",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s18-quality-critical",
+            "q-div-fada4d2ecc4c",
+            "s18-card-quality",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:544cd164",
+          "group_id": "s18-card-quality|body|fnv1a32:89a2e46c",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-regression:0:0:5",
+          "owner_qid": "s18-quality-regression",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s18-quality-regression",
+            "q-div-fada4d2ecc4c",
+            "s18-card-quality",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:f3e37433",
+          "group_id": "s18-card-quality|body|fnv1a32:89a2e46c",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-response:0:0:7",
+          "owner_qid": "s18-quality-response",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 7,
+          "ancestor_qids": [
+            "s18-quality-response",
+            "q-div-fada4d2ecc4c",
+            "s18-card-quality",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:49ab561c",
+          "group_id": "s18-card-quality|body|fnv1a32:89a2e46c",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-load:0:0:16",
+          "owner_qid": "s18-quality-load",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 16,
+          "ancestor_qids": [
+            "s18-quality-load",
+            "q-div-fada4d2ecc4c",
+            "s18-card-quality",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:b38cf5e4",
+          "group_id": "s18-card-quality|body|fnv1a32:89a2e46c",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-0856754b8eb9:0:0:2",
+          "owner_qid": "q-span-0856754b8eb9",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "q-span-0856754b8eb9",
+            "s18-domain-control",
+            "s18-card-control",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:f2ec3fc6",
+          "group_id": "s18-card-control|unknown|fnv1a32:f5517715",
+          "role": "unknown",
+          "original_pt": 14.25,
+          "font_px": 19,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-control:0:0:3",
+          "owner_qid": "s18-domain-control",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 3,
+          "ancestor_qids": [
+            "s18-domain-control",
+            "s18-card-control",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:b60dd0c6",
+          "group_id": "s18-card-control|supporting|fnv1a32:f5517715",
+          "role": "supporting",
+          "original_pt": 14.25,
+          "font_px": 19,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-trace:0:0:10",
+          "owner_qid": "s18-metric-trace",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 10,
+          "ancestor_qids": [
+            "s18-metric-trace",
+            "q-div-90caff42c6df",
+            "s18-card-control",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:e692935d",
+          "group_id": "s18-card-control|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-rework:0:0:7",
+          "owner_qid": "s18-metric-rework",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 7,
+          "ancestor_qids": [
+            "s18-metric-rework",
+            "q-div-90caff42c6df",
+            "s18-card-control",
+            "q-div-db39f82b1410",
+            "q-div-2d8fd3599d50",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:f338cb6f",
+          "group_id": "s18-card-control|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-evidence-title:0:0:16",
+          "owner_qid": "s18-evidence-title",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 16,
+          "ancestor_qids": [
+            "s18-evidence-title",
+            "q-div-90bdb3a375d8",
+            "s18-evidence-panel",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:3432b640",
+          "group_id": "s18-evidence-panel|supporting|fnv1a32:e7745f3c",
+          "role": "supporting",
+          "original_pt": 15,
+          "font_px": 20,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-strong-f213b54d7db8:0:0:36",
+          "owner_qid": "q-strong-f213b54d7db8",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 36,
+          "ancestor_qids": [
+            "q-strong-f213b54d7db8",
+            "s18-evidence-text",
+            "q-div-90bdb3a375d8",
+            "s18-evidence-panel",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:c4f7ab66",
+          "group_id": "s18-evidence-panel|unknown|fnv1a32:a7129701",
+          "role": "unknown",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-evidence-text:0:0:20",
+          "owner_qid": "s18-evidence-text",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 20,
+          "ancestor_qids": [
+            "s18-evidence-text",
+            "q-div-90bdb3a375d8",
+            "s18-evidence-panel",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:34e92689",
+          "group_id": "s18-evidence-panel|body|fnv1a32:a5835b08",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-guardrail-label:0:0:8",
+          "owner_qid": "s18-guardrail-label",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 8,
+          "ancestor_qids": [
+            "s18-guardrail-label",
+            "s18-guardrail",
+            "s18-evidence-panel",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:b0df8e5a",
+          "group_id": "s18-guardrail|supporting|fnv1a32:970b3c9e",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-guardrail-text:0:0:27",
+          "owner_qid": "s18-guardrail-text",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 27,
+          "ancestor_qids": [
+            "s18-guardrail-text",
+            "s18-guardrail",
+            "s18-evidence-panel",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:fd46566b",
+          "group_id": "s18-guardrail|body|fnv1a32:13589e0f",
+          "role": "body",
+          "original_pt": 12.75,
+          "font_px": 17,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:9cfc0d1c",
+          "role": "supporting",
+          "card_qid": "q-div-75dcf98740c9",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-eyebrow:0:0:10"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "q-div-75dcf98740c9|title|fnv1a32:e391f74b",
+          "role": "title",
+          "card_qid": "q-div-75dcf98740c9",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-title:0:0:19"
+          ],
+          "original_pt": 24
+        },
+        {
+          "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:6278f52a",
+          "role": "supporting",
+          "card_qid": "q-div-75dcf98740c9",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-requirements:0:0:26"
+          ],
+          "original_pt": 10.5
+        },
+        {
+          "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:a392319d",
+          "role": "supporting",
+          "card_qid": "q-div-75dcf98740c9",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-header-note:0:0:9"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s18-claim|body|fnv1a32:68985f26",
+          "role": "body",
+          "card_qid": null,
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-claim:0:0:18",
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-claim:1:0:8"
+          ],
+          "original_pt": 18.75
+        },
+        {
+          "group_id": "q-strong-663977331dde|unknown|fnv1a32:f3504048",
+          "role": "unknown",
+          "card_qid": null,
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-strong-663977331dde:0:0:15"
+          ],
+          "original_pt": 18.75
+        },
+        {
+          "group_id": "s18-claim-key|supporting|fnv1a32:0d6ffc24",
+          "role": "supporting",
+          "card_qid": null,
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-claim-key:0:0:8"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "q-div-2d8fd3599d50|supporting|fnv1a32:f0006fff",
+          "role": "supporting",
+          "card_qid": "q-div-2d8fd3599d50",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-roadmap-label:0:0:10"
+          ],
+          "original_pt": 15
+        },
+        {
+          "group_id": "q-div-2d8fd3599d50|supporting|fnv1a32:040d403d",
+          "role": "supporting",
+          "card_qid": "q-div-2d8fd3599d50",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-roadmap-caption:0:0:26"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "s18-node-01|supporting|fnv1a32:9b8b5597",
+          "role": "supporting",
+          "card_qid": "s18-node-01",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-01:0:0:2"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "s18-node-02|supporting|fnv1a32:9b8b5597",
+          "role": "supporting",
+          "card_qid": "s18-node-02",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-02:0:0:2"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "s18-node-03|supporting|fnv1a32:9b8b5597",
+          "role": "supporting",
+          "card_qid": "s18-node-03",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-03:0:0:2"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "s18-node-04|supporting|fnv1a32:9b8b5597",
+          "role": "supporting",
+          "card_qid": "s18-node-04",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-04:0:0:2"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "s18-node-05|supporting|fnv1a32:9b8b5597",
+          "role": "supporting",
+          "card_qid": "s18-node-05",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-05:0:0:2"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "s18-card-convenience|unknown|fnv1a32:f5517715",
+          "role": "unknown",
+          "card_qid": "s18-card-convenience",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-f32986c526a1:0:0:3"
+          ],
+          "original_pt": 14.25
+        },
+        {
+          "group_id": "s18-card-convenience|supporting|fnv1a32:f5517715",
+          "role": "supporting",
+          "card_qid": "s18-card-convenience",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-convenience:0:0:3"
+          ],
+          "original_pt": 14.25
+        },
+        {
+          "group_id": "s18-card-convenience|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "card_qid": "s18-card-convenience",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-completion:0:0:6",
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-supplement:0:0:5",
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-dropoff:0:0:6",
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-complaint:0:0:5"
+          ],
+          "original_pt": 13.5
+        },
+        {
+          "group_id": "s18-card-productivity|unknown|fnv1a32:f5517715",
+          "role": "unknown",
+          "card_qid": "s18-card-productivity",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-c83eac29f2ad:0:0:2"
+          ],
+          "original_pt": 14.25
+        },
+        {
+          "group_id": "s18-card-productivity|supporting|fnv1a32:f5517715",
+          "role": "supporting",
+          "card_qid": "s18-card-productivity",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-productivity:0:0:4"
+          ],
+          "original_pt": 14.25
+        },
+        {
+          "group_id": "s18-card-productivity|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "card_qid": "s18-card-productivity",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-leadtime:0:0:7",
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-incomplete:0:0:6",
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-batch:0:0:7",
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-download:0:0:11"
+          ],
+          "original_pt": 13.5
+        },
+        {
+          "group_id": "s18-card-data|unknown|fnv1a32:f5517715",
+          "role": "unknown",
+          "card_qid": "s18-card-data",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-eedec0ea8962:0:0:3"
+          ],
+          "original_pt": 14.25
+        },
+        {
+          "group_id": "s18-card-data|supporting|fnv1a32:f5517715",
+          "role": "supporting",
+          "card_qid": "s18-card-data",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-data:0:0:3"
+          ],
+          "original_pt": 14.25
+        },
+        {
+          "group_id": "s18-card-data|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "card_qid": "s18-card-data",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-reuse:0:0:9",
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-evidence:0:0:11"
+          ],
+          "original_pt": 13.5
+        },
+        {
+          "group_id": "s18-card-quality|unknown|fnv1a32:f5517715",
+          "role": "unknown",
+          "card_qid": "s18-card-quality",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-2af01d53a93e:0:0:2"
+          ],
+          "original_pt": 14.25
+        },
+        {
+          "group_id": "s18-card-quality|supporting|fnv1a32:f5517715",
+          "role": "supporting",
+          "card_qid": "s18-card-quality",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-quality:0:0:3"
+          ],
+          "original_pt": 14.25
+        },
+        {
+          "group_id": "s18-card-quality|body|fnv1a32:89a2e46c",
+          "role": "body",
+          "card_qid": "s18-card-quality",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-req:0:0:8",
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-first:0:0:10",
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-critical:0:0:5",
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-regression:0:0:5",
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-response:0:0:7",
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-load:0:0:16"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s18-card-control|unknown|fnv1a32:f5517715",
+          "role": "unknown",
+          "card_qid": "s18-card-control",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-0856754b8eb9:0:0:2"
+          ],
+          "original_pt": 14.25
+        },
+        {
+          "group_id": "s18-card-control|supporting|fnv1a32:f5517715",
+          "role": "supporting",
+          "card_qid": "s18-card-control",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-control:0:0:3"
+          ],
+          "original_pt": 14.25
+        },
+        {
+          "group_id": "s18-card-control|body|fnv1a32:e0d3a79d",
+          "role": "body",
+          "card_qid": "s18-card-control",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-trace:0:0:10",
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-rework:0:0:7"
+          ],
+          "original_pt": 13.5
+        },
+        {
+          "group_id": "s18-evidence-panel|supporting|fnv1a32:e7745f3c",
+          "role": "supporting",
+          "card_qid": "s18-evidence-panel",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-evidence-title:0:0:16"
+          ],
+          "original_pt": 15
+        },
+        {
+          "group_id": "s18-evidence-panel|unknown|fnv1a32:a7129701",
+          "role": "unknown",
+          "card_qid": "s18-evidence-panel",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-strong-f213b54d7db8:0:0:36"
+          ],
+          "original_pt": 13.5
+        },
+        {
+          "group_id": "s18-evidence-panel|body|fnv1a32:a5835b08",
+          "role": "body",
+          "card_qid": "s18-evidence-panel",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-evidence-text:0:0:20"
+          ],
+          "original_pt": 13.5
+        },
+        {
+          "group_id": "s18-guardrail|supporting|fnv1a32:970b3c9e",
+          "role": "supporting",
+          "card_qid": "s18-guardrail",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-guardrail-label:0:0:8"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "s18-guardrail|body|fnv1a32:13589e0f",
+          "role": "body",
+          "card_qid": "s18-guardrail",
+          "run_ids": [
+            "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-guardrail-text:0:0:27"
+          ],
+          "original_pt": 12.75
+        }
+      ],
+      "unowned_text_count": 0,
+      "generated_text_count": 0,
+      "measurement_identity": "fnv1a32:ed4d321f",
+      "complete": true
+    },
+    "runs": [
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-eyebrow:0:0:10",
+        "owner_qid": "s18-eyebrow",
+        "content_digest": "fnv1a32:59036096",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 10,
+        "ancestor_qids": [
+          "s18-eyebrow",
+          "q-div-76f0d626b7f0",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:9cfc0d1c",
+        "role": "supporting",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-title:0:0:19",
+        "owner_qid": "s18-title",
+        "content_digest": "fnv1a32:429645d5",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 19,
+        "ancestor_qids": [
+          "s18-title",
+          "q-div-76f0d626b7f0",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "q-div-75dcf98740c9|title|fnv1a32:e391f74b",
+        "role": "title",
+        "original_pt": 24,
+        "final_pt": 24,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 21.6,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-requirements:0:0:26",
+        "owner_qid": "s18-requirements",
+        "content_digest": "fnv1a32:e337ca59",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 26,
+        "ancestor_qids": [
+          "s18-requirements",
+          "q-div-73774be43d12",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:6278f52a",
+        "role": "supporting",
+        "original_pt": 10.5,
+        "final_pt": 10.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9.450000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-header-note:0:0:9",
+        "owner_qid": "s18-header-note",
+        "content_digest": "fnv1a32:07e720c2",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 9,
+        "ancestor_qids": [
+          "s18-header-note",
+          "q-div-73774be43d12",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:a392319d",
+        "role": "supporting",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-claim:0:0:18",
+        "owner_qid": "s18-claim",
+        "content_digest": "fnv1a32:697fcc98",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 18,
+        "ancestor_qids": [
+          "s18-claim",
+          "q-div-75b3498fbbe1",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-claim|body|fnv1a32:68985f26",
+        "role": "body",
+        "original_pt": 18.75,
+        "final_pt": 18.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 16.875,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-strong-663977331dde:0:0:15",
+        "owner_qid": "q-strong-663977331dde",
+        "content_digest": "fnv1a32:8bdcd500",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 15,
+        "ancestor_qids": [
+          "q-strong-663977331dde",
+          "s18-claim",
+          "q-div-75b3498fbbe1",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-strong-663977331dde|unknown|fnv1a32:f3504048",
+        "role": "unknown",
+        "original_pt": 18.75,
+        "final_pt": 18.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 16.875,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-claim:1:0:8",
+        "owner_qid": "s18-claim",
+        "content_digest": "fnv1a32:9367e18a",
+        "text_node_ordinal": 1,
+        "start_offset": 0,
+        "end_offset": 8,
+        "ancestor_qids": [
+          "s18-claim",
+          "q-div-75b3498fbbe1",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-claim|body|fnv1a32:68985f26",
+        "role": "body",
+        "original_pt": 18.75,
+        "final_pt": 18.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 16.875,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-claim-key:0:0:8",
+        "owner_qid": "s18-claim-key",
+        "content_digest": "fnv1a32:8acbd597",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 8,
+        "ancestor_qids": [
+          "s18-claim-key",
+          "q-div-75b3498fbbe1",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-claim-key|supporting|fnv1a32:0d6ffc24",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-roadmap-label:0:0:10",
+        "owner_qid": "s18-roadmap-label",
+        "content_digest": "fnv1a32:2f20f817",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 10,
+        "ancestor_qids": [
+          "s18-roadmap-label",
+          "q-div-6ce2e5d31511",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-2d8fd3599d50|supporting|fnv1a32:f0006fff",
+        "role": "supporting",
+        "original_pt": 15,
+        "final_pt": 15,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 13.5,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-roadmap-caption:0:0:26",
+        "owner_qid": "s18-roadmap-caption",
+        "content_digest": "fnv1a32:85e63701",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 26,
+        "ancestor_qids": [
+          "s18-roadmap-caption",
+          "q-div-6ce2e5d31511",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-2d8fd3599d50|supporting|fnv1a32:040d403d",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-01:0:0:2",
+        "owner_qid": "s18-node-01",
+        "content_digest": "fnv1a32:20ed70ba",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s18-node-01",
+          "q-div-8c29659176f9",
+          "q-div-e3c8af0f08be",
+          "q-div-18cdfb79b256",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-node-01|supporting|fnv1a32:9b8b5597",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-02:0:0:2",
+        "owner_qid": "s18-node-02",
+        "content_digest": "fnv1a32:1fed6f27",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s18-node-02",
+          "q-div-7c5d9191b6a1",
+          "q-div-e3c8af0f08be",
+          "q-div-18cdfb79b256",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-node-02|supporting|fnv1a32:9b8b5597",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-03:0:0:2",
+        "owner_qid": "s18-node-03",
+        "content_digest": "fnv1a32:1eed6d94",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s18-node-03",
+          "q-div-7f4997407f40",
+          "q-div-e3c8af0f08be",
+          "q-div-18cdfb79b256",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-node-03|supporting|fnv1a32:9b8b5597",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-04:0:0:2",
+        "owner_qid": "s18-node-04",
+        "content_digest": "fnv1a32:1ded6c01",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s18-node-04",
+          "q-div-e93d01719cde",
+          "q-div-e3c8af0f08be",
+          "q-div-18cdfb79b256",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-node-04|supporting|fnv1a32:9b8b5597",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-05:0:0:2",
+        "owner_qid": "s18-node-05",
+        "content_digest": "fnv1a32:1ced6a6e",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s18-node-05",
+          "q-div-70d6fc6705bb",
+          "q-div-e3c8af0f08be",
+          "q-div-18cdfb79b256",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-node-05|supporting|fnv1a32:9b8b5597",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-f32986c526a1:0:0:3",
+        "owner_qid": "q-span-f32986c526a1",
+        "content_digest": "fnv1a32:d5b1d962",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 3,
+        "ancestor_qids": [
+          "q-span-f32986c526a1",
+          "s18-domain-convenience",
+          "s18-card-convenience",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-convenience|unknown|fnv1a32:f5517715",
+        "role": "unknown",
+        "original_pt": 14.25,
+        "final_pt": 14.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.825000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-convenience:0:0:3",
+        "owner_qid": "s18-domain-convenience",
+        "content_digest": "fnv1a32:33002ba7",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 3,
+        "ancestor_qids": [
+          "s18-domain-convenience",
+          "s18-card-convenience",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-convenience|supporting|fnv1a32:f5517715",
+        "role": "supporting",
+        "original_pt": 14.25,
+        "final_pt": 14.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.825000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-completion:0:0:6",
+        "owner_qid": "s18-metric-completion",
+        "content_digest": "fnv1a32:832f68b6",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 6,
+        "ancestor_qids": [
+          "s18-metric-completion",
+          "q-div-a2e2659ffa74",
+          "s18-card-convenience",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-convenience|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-supplement:0:0:5",
+        "owner_qid": "s18-metric-supplement",
+        "content_digest": "fnv1a32:a417988b",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s18-metric-supplement",
+          "q-div-a2e2659ffa74",
+          "s18-card-convenience",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-convenience|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-dropoff:0:0:6",
+        "owner_qid": "s18-metric-dropoff",
+        "content_digest": "fnv1a32:9f612061",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 6,
+        "ancestor_qids": [
+          "s18-metric-dropoff",
+          "q-div-a2e2659ffa74",
+          "s18-card-convenience",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-convenience|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-complaint:0:0:5",
+        "owner_qid": "s18-metric-complaint",
+        "content_digest": "fnv1a32:d4c04164",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s18-metric-complaint",
+          "q-div-a2e2659ffa74",
+          "s18-card-convenience",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-convenience|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-c83eac29f2ad:0:0:2",
+        "owner_qid": "q-span-c83eac29f2ad",
+        "content_digest": "fnv1a32:5a0a9adc",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "q-span-c83eac29f2ad",
+          "s18-domain-productivity",
+          "s18-card-productivity",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-productivity|unknown|fnv1a32:f5517715",
+        "role": "unknown",
+        "original_pt": 14.25,
+        "final_pt": 14.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.825000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-productivity:0:0:4",
+        "owner_qid": "s18-domain-productivity",
+        "content_digest": "fnv1a32:2ec122c9",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 4,
+        "ancestor_qids": [
+          "s18-domain-productivity",
+          "s18-card-productivity",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-productivity|supporting|fnv1a32:f5517715",
+        "role": "supporting",
+        "original_pt": 14.25,
+        "final_pt": 14.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.825000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-leadtime:0:0:7",
+        "owner_qid": "s18-metric-leadtime",
+        "content_digest": "fnv1a32:1e53f017",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 7,
+        "ancestor_qids": [
+          "s18-metric-leadtime",
+          "q-div-f0227c17e5d3",
+          "s18-card-productivity",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-productivity|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-incomplete:0:0:6",
+        "owner_qid": "s18-metric-incomplete",
+        "content_digest": "fnv1a32:fb5ef3b4",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 6,
+        "ancestor_qids": [
+          "s18-metric-incomplete",
+          "q-div-f0227c17e5d3",
+          "s18-card-productivity",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-productivity|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-batch:0:0:7",
+        "owner_qid": "s18-metric-batch",
+        "content_digest": "fnv1a32:ff45cb8b",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 7,
+        "ancestor_qids": [
+          "s18-metric-batch",
+          "q-div-f0227c17e5d3",
+          "s18-card-productivity",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-productivity|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-download:0:0:11",
+        "owner_qid": "s18-metric-download",
+        "content_digest": "fnv1a32:73a80dba",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 11,
+        "ancestor_qids": [
+          "s18-metric-download",
+          "q-div-f0227c17e5d3",
+          "s18-card-productivity",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-productivity|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-eedec0ea8962:0:0:3",
+        "owner_qid": "q-span-eedec0ea8962",
+        "content_digest": "fnv1a32:61366f23",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 3,
+        "ancestor_qids": [
+          "q-span-eedec0ea8962",
+          "s18-domain-data",
+          "s18-card-data",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-data|unknown|fnv1a32:f5517715",
+        "role": "unknown",
+        "original_pt": 14.25,
+        "final_pt": 14.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.825000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-data:0:0:3",
+        "owner_qid": "s18-domain-data",
+        "content_digest": "fnv1a32:903a1110",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 3,
+        "ancestor_qids": [
+          "s18-domain-data",
+          "s18-card-data",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-data|supporting|fnv1a32:f5517715",
+        "role": "supporting",
+        "original_pt": 14.25,
+        "final_pt": 14.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.825000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-reuse:0:0:9",
+        "owner_qid": "s18-metric-reuse",
+        "content_digest": "fnv1a32:36176918",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 9,
+        "ancestor_qids": [
+          "s18-metric-reuse",
+          "q-div-a683db5cf97a",
+          "s18-card-data",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-data|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-evidence:0:0:11",
+        "owner_qid": "s18-metric-evidence",
+        "content_digest": "fnv1a32:510c7b13",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 11,
+        "ancestor_qids": [
+          "s18-metric-evidence",
+          "q-div-a683db5cf97a",
+          "s18-card-data",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-data|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-2af01d53a93e:0:0:2",
+        "owner_qid": "q-span-2af01d53a93e",
+        "content_digest": "fnv1a32:3896e86d",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "q-span-2af01d53a93e",
+          "s18-domain-quality",
+          "s18-card-quality",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-quality|unknown|fnv1a32:f5517715",
+        "role": "unknown",
+        "original_pt": 14.25,
+        "final_pt": 14.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.825000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-quality:0:0:3",
+        "owner_qid": "s18-domain-quality",
+        "content_digest": "fnv1a32:33a48678",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 3,
+        "ancestor_qids": [
+          "s18-domain-quality",
+          "s18-card-quality",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-quality|supporting|fnv1a32:f5517715",
+        "role": "supporting",
+        "original_pt": 14.25,
+        "final_pt": 14.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.825000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-req:0:0:8",
+        "owner_qid": "s18-quality-req",
+        "content_digest": "fnv1a32:7d766544",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 8,
+        "ancestor_qids": [
+          "s18-quality-req",
+          "q-div-fada4d2ecc4c",
+          "s18-card-quality",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-quality|body|fnv1a32:89a2e46c",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-first:0:0:10",
+        "owner_qid": "s18-quality-first",
+        "content_digest": "fnv1a32:5eae1236",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 10,
+        "ancestor_qids": [
+          "s18-quality-first",
+          "q-div-fada4d2ecc4c",
+          "s18-card-quality",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-quality|body|fnv1a32:89a2e46c",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-critical:0:0:5",
+        "owner_qid": "s18-quality-critical",
+        "content_digest": "fnv1a32:544cd164",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s18-quality-critical",
+          "q-div-fada4d2ecc4c",
+          "s18-card-quality",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-quality|body|fnv1a32:89a2e46c",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-regression:0:0:5",
+        "owner_qid": "s18-quality-regression",
+        "content_digest": "fnv1a32:f3e37433",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s18-quality-regression",
+          "q-div-fada4d2ecc4c",
+          "s18-card-quality",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-quality|body|fnv1a32:89a2e46c",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-response:0:0:7",
+        "owner_qid": "s18-quality-response",
+        "content_digest": "fnv1a32:49ab561c",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 7,
+        "ancestor_qids": [
+          "s18-quality-response",
+          "q-div-fada4d2ecc4c",
+          "s18-card-quality",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-quality|body|fnv1a32:89a2e46c",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-load:0:0:16",
+        "owner_qid": "s18-quality-load",
+        "content_digest": "fnv1a32:b38cf5e4",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 16,
+        "ancestor_qids": [
+          "s18-quality-load",
+          "q-div-fada4d2ecc4c",
+          "s18-card-quality",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-quality|body|fnv1a32:89a2e46c",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-0856754b8eb9:0:0:2",
+        "owner_qid": "q-span-0856754b8eb9",
+        "content_digest": "fnv1a32:f2ec3fc6",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "q-span-0856754b8eb9",
+          "s18-domain-control",
+          "s18-card-control",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-control|unknown|fnv1a32:f5517715",
+        "role": "unknown",
+        "original_pt": 14.25,
+        "final_pt": 14.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.825000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-control:0:0:3",
+        "owner_qid": "s18-domain-control",
+        "content_digest": "fnv1a32:b60dd0c6",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 3,
+        "ancestor_qids": [
+          "s18-domain-control",
+          "s18-card-control",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-control|supporting|fnv1a32:f5517715",
+        "role": "supporting",
+        "original_pt": 14.25,
+        "final_pt": 14.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.825000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-trace:0:0:10",
+        "owner_qid": "s18-metric-trace",
+        "content_digest": "fnv1a32:e692935d",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 10,
+        "ancestor_qids": [
+          "s18-metric-trace",
+          "q-div-90caff42c6df",
+          "s18-card-control",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-control|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-rework:0:0:7",
+        "owner_qid": "s18-metric-rework",
+        "content_digest": "fnv1a32:f338cb6f",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 7,
+        "ancestor_qids": [
+          "s18-metric-rework",
+          "q-div-90caff42c6df",
+          "s18-card-control",
+          "q-div-db39f82b1410",
+          "q-div-2d8fd3599d50",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-card-control|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-evidence-title:0:0:16",
+        "owner_qid": "s18-evidence-title",
+        "content_digest": "fnv1a32:3432b640",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 16,
+        "ancestor_qids": [
+          "s18-evidence-title",
+          "q-div-90bdb3a375d8",
+          "s18-evidence-panel",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-evidence-panel|supporting|fnv1a32:e7745f3c",
+        "role": "supporting",
+        "original_pt": 15,
+        "final_pt": 15,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 13.5,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-strong-f213b54d7db8:0:0:36",
+        "owner_qid": "q-strong-f213b54d7db8",
+        "content_digest": "fnv1a32:c4f7ab66",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 36,
+        "ancestor_qids": [
+          "q-strong-f213b54d7db8",
+          "s18-evidence-text",
+          "q-div-90bdb3a375d8",
+          "s18-evidence-panel",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-evidence-panel|unknown|fnv1a32:a7129701",
+        "role": "unknown",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-evidence-text:0:0:20",
+        "owner_qid": "s18-evidence-text",
+        "content_digest": "fnv1a32:34e92689",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 20,
+        "ancestor_qids": [
+          "s18-evidence-text",
+          "q-div-90bdb3a375d8",
+          "s18-evidence-panel",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-evidence-panel|body|fnv1a32:a5835b08",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-guardrail-label:0:0:8",
+        "owner_qid": "s18-guardrail-label",
+        "content_digest": "fnv1a32:b0df8e5a",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 8,
+        "ancestor_qids": [
+          "s18-guardrail-label",
+          "s18-guardrail",
+          "s18-evidence-panel",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-guardrail|supporting|fnv1a32:970b3c9e",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-guardrail-text:0:0:27",
+        "owner_qid": "s18-guardrail-text",
+        "content_digest": "fnv1a32:fd46566b",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 27,
+        "ancestor_qids": [
+          "s18-guardrail-text",
+          "s18-guardrail",
+          "s18-evidence-panel",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s18-guardrail|body|fnv1a32:13589e0f",
+        "role": "body",
+        "original_pt": 12.75,
+        "final_pt": 12.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 11.475,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      }
+    ],
+    "groups": [
+      {
+        "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:9cfc0d1c",
+        "role": "supporting",
+        "card_qid": "q-div-75dcf98740c9",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-eyebrow:0:0:10"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "q-div-75dcf98740c9|title|fnv1a32:e391f74b",
+        "role": "title",
+        "card_qid": "q-div-75dcf98740c9",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-title:0:0:19"
+        ],
+        "original_pt": 24
+      },
+      {
+        "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:6278f52a",
+        "role": "supporting",
+        "card_qid": "q-div-75dcf98740c9",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-requirements:0:0:26"
+        ],
+        "original_pt": 10.5
+      },
+      {
+        "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:a392319d",
+        "role": "supporting",
+        "card_qid": "q-div-75dcf98740c9",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-header-note:0:0:9"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s18-claim|body|fnv1a32:68985f26",
+        "role": "body",
+        "card_qid": null,
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-claim:0:0:18",
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-claim:1:0:8"
+        ],
+        "original_pt": 18.75
+      },
+      {
+        "group_id": "q-strong-663977331dde|unknown|fnv1a32:f3504048",
+        "role": "unknown",
+        "card_qid": null,
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-strong-663977331dde:0:0:15"
+        ],
+        "original_pt": 18.75
+      },
+      {
+        "group_id": "s18-claim-key|supporting|fnv1a32:0d6ffc24",
+        "role": "supporting",
+        "card_qid": null,
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-claim-key:0:0:8"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "q-div-2d8fd3599d50|supporting|fnv1a32:f0006fff",
+        "role": "supporting",
+        "card_qid": "q-div-2d8fd3599d50",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-roadmap-label:0:0:10"
+        ],
+        "original_pt": 15
+      },
+      {
+        "group_id": "q-div-2d8fd3599d50|supporting|fnv1a32:040d403d",
+        "role": "supporting",
+        "card_qid": "q-div-2d8fd3599d50",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-roadmap-caption:0:0:26"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "s18-node-01|supporting|fnv1a32:9b8b5597",
+        "role": "supporting",
+        "card_qid": "s18-node-01",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-01:0:0:2"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "s18-node-02|supporting|fnv1a32:9b8b5597",
+        "role": "supporting",
+        "card_qid": "s18-node-02",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-02:0:0:2"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "s18-node-03|supporting|fnv1a32:9b8b5597",
+        "role": "supporting",
+        "card_qid": "s18-node-03",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-03:0:0:2"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "s18-node-04|supporting|fnv1a32:9b8b5597",
+        "role": "supporting",
+        "card_qid": "s18-node-04",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-04:0:0:2"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "s18-node-05|supporting|fnv1a32:9b8b5597",
+        "role": "supporting",
+        "card_qid": "s18-node-05",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-node-05:0:0:2"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "s18-card-convenience|unknown|fnv1a32:f5517715",
+        "role": "unknown",
+        "card_qid": "s18-card-convenience",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-f32986c526a1:0:0:3"
+        ],
+        "original_pt": 14.25
+      },
+      {
+        "group_id": "s18-card-convenience|supporting|fnv1a32:f5517715",
+        "role": "supporting",
+        "card_qid": "s18-card-convenience",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-convenience:0:0:3"
+        ],
+        "original_pt": 14.25
+      },
+      {
+        "group_id": "s18-card-convenience|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "card_qid": "s18-card-convenience",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-completion:0:0:6",
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-supplement:0:0:5",
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-dropoff:0:0:6",
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-complaint:0:0:5"
+        ],
+        "original_pt": 13.5
+      },
+      {
+        "group_id": "s18-card-productivity|unknown|fnv1a32:f5517715",
+        "role": "unknown",
+        "card_qid": "s18-card-productivity",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-c83eac29f2ad:0:0:2"
+        ],
+        "original_pt": 14.25
+      },
+      {
+        "group_id": "s18-card-productivity|supporting|fnv1a32:f5517715",
+        "role": "supporting",
+        "card_qid": "s18-card-productivity",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-productivity:0:0:4"
+        ],
+        "original_pt": 14.25
+      },
+      {
+        "group_id": "s18-card-productivity|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "card_qid": "s18-card-productivity",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-leadtime:0:0:7",
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-incomplete:0:0:6",
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-batch:0:0:7",
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-download:0:0:11"
+        ],
+        "original_pt": 13.5
+      },
+      {
+        "group_id": "s18-card-data|unknown|fnv1a32:f5517715",
+        "role": "unknown",
+        "card_qid": "s18-card-data",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-eedec0ea8962:0:0:3"
+        ],
+        "original_pt": 14.25
+      },
+      {
+        "group_id": "s18-card-data|supporting|fnv1a32:f5517715",
+        "role": "supporting",
+        "card_qid": "s18-card-data",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-data:0:0:3"
+        ],
+        "original_pt": 14.25
+      },
+      {
+        "group_id": "s18-card-data|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "card_qid": "s18-card-data",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-reuse:0:0:9",
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-evidence:0:0:11"
+        ],
+        "original_pt": 13.5
+      },
+      {
+        "group_id": "s18-card-quality|unknown|fnv1a32:f5517715",
+        "role": "unknown",
+        "card_qid": "s18-card-quality",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-2af01d53a93e:0:0:2"
+        ],
+        "original_pt": 14.25
+      },
+      {
+        "group_id": "s18-card-quality|supporting|fnv1a32:f5517715",
+        "role": "supporting",
+        "card_qid": "s18-card-quality",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-quality:0:0:3"
+        ],
+        "original_pt": 14.25
+      },
+      {
+        "group_id": "s18-card-quality|body|fnv1a32:89a2e46c",
+        "role": "body",
+        "card_qid": "s18-card-quality",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-req:0:0:8",
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-first:0:0:10",
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-critical:0:0:5",
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-regression:0:0:5",
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-response:0:0:7",
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-quality-load:0:0:16"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s18-card-control|unknown|fnv1a32:f5517715",
+        "role": "unknown",
+        "card_qid": "s18-card-control",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-span-0856754b8eb9:0:0:2"
+        ],
+        "original_pt": 14.25
+      },
+      {
+        "group_id": "s18-card-control|supporting|fnv1a32:f5517715",
+        "role": "supporting",
+        "card_qid": "s18-card-control",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-domain-control:0:0:3"
+        ],
+        "original_pt": 14.25
+      },
+      {
+        "group_id": "s18-card-control|body|fnv1a32:e0d3a79d",
+        "role": "body",
+        "card_qid": "s18-card-control",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-trace:0:0:10",
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-metric-rework:0:0:7"
+        ],
+        "original_pt": 13.5
+      },
+      {
+        "group_id": "s18-evidence-panel|supporting|fnv1a32:e7745f3c",
+        "role": "supporting",
+        "card_qid": "s18-evidence-panel",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-evidence-title:0:0:16"
+        ],
+        "original_pt": 15
+      },
+      {
+        "group_id": "s18-evidence-panel|unknown|fnv1a32:a7129701",
+        "role": "unknown",
+        "card_qid": "s18-evidence-panel",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:q-strong-f213b54d7db8:0:0:36"
+        ],
+        "original_pt": 13.5
+      },
+      {
+        "group_id": "s18-evidence-panel|body|fnv1a32:a5835b08",
+        "role": "body",
+        "card_qid": "s18-evidence-panel",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-evidence-text:0:0:20"
+        ],
+        "original_pt": 13.5
+      },
+      {
+        "group_id": "s18-guardrail|supporting|fnv1a32:970b3c9e",
+        "role": "supporting",
+        "card_qid": "s18-guardrail",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-guardrail-label:0:0:8"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "s18-guardrail|body|fnv1a32:13589e0f",
+        "role": "body",
+        "card_qid": "s18-guardrail",
+        "run_ids": [
+          "sha256:6fc9453b949ba67e11ab6927fc079b02c4298a7c9d08b2db0f0320179f6e9ec5:s18-guardrail-text:0:0:27"
+        ],
+        "original_pt": 12.75
+      }
+    ],
+    "image_text": [
+      {
+        "qid": "s18-target-image",
+        "asset_identity": "fnv1a32:16e75696",
+        "verified": false,
+        "scope": "unverifiable"
+      }
+    ],
+    "cards": [],
+    "candidates": [],
+    "scopes": [],
+    "search_termination": [],
+    "geometry_seeds": [],
+    "parent_exclusions": [],
+    "telemetry": {
+      "candidate_total": 0,
+      "evaluated": 0,
+      "policy_removed": 0,
+      "duplicates": 0,
+      "pruned": 0,
+      "measurements": 0,
+      "fit_search_ms": 367.7
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "id": "growth-03-rocket",
+  "category": "growth",
+  "tags": {
+    "ko": [
+      "성장",
+      "로켓"
+    ],
+    "en": [
+      "growth",
+      "rocket"
+    ]
+  },
+  "alt": {
+    "ko": "로켓 단색 벡터 인포그래픽",
+    "en": "rocket monochrome vector infographic"
+  },
+  "path": "originals/growth-03-rocket.svg",
+  "thumbnail": "thumbnails/growth-03-rocket.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 574,
+  "sha256": "eda4133fc5fca4689fb52058117cfded5c3e3eedbfe6de6670488e558cc9d4ac",
+  "geometry_sha256": "da58f72c6c4c2a9f2bacd94acf424c99cd4549f927ecb5c7ec98955ec2fc752b",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 53989,
+    "preview_opaque_pixels": 9961,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Rocket"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

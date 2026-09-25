@@ -24,7 +24,7 @@ ALLOWED_TAGS = {
     "table", "caption", "colgroup", "col", "thead", "tbody", "tfoot", "tr",
     "th", "td", "strong", "b", "em", "i", "small", "sub", "sup", "br",
     "hr", "img", "figure", "figcaption", "blockquote", "style", "svg", "g", "path",
-    "rect", "circle", "ellipse", "line", "polyline", "polygon", "text", "tspan",
+    "rect", "circle", "ellipse", "line", "polyline", "polygon", "text", "tspan", "image",
     "defs", "lineargradient", "radialgradient", "stop", "clippath", "mask",
 }
 VOID_TAGS = {"meta", "br", "hr", "img", "col"}
@@ -36,7 +36,13 @@ DROP_TAGS = {
 }
 GLOBAL_ATTRIBUTES = {
     "id", "class", "role", "aria-label", "aria-hidden", "lang", "dir", "style",
-    "title", "data-qid", "data-qid-ignore", "data-allow-overlap",
+    "title", "data-qid",
+    "data-source-fit-policy",
+    "data-composer-canvas-width",
+    "data-composer-canvas-height",
+    "data-document-canvas-contain", "data-document-canvas-coordinate-space",
+    "data-composer-style-profile",
+    "data-composer-style-role", "data-source-font-floor-px", "data-source-row", "data-source-column", "data-source-paragraph", "data-source-run", "data-qid-ignore", "data-allow-overlap",
     # Inert browser-readback classification. Capacity and receipt gates validate
     # the value; admitting the attribute keeps model-declared and deterministic
     # post-processed semantic roles on the same renderer-safe path.
@@ -112,6 +118,7 @@ TAG_ATTRIBUTES: Mapping[str, set[str]] = {
         "focusable", "xmlns", "overflow",
     ),
     "g": _svg(),
+    "image": _svg("x", "y", "width", "height", "href", "preserveaspectratio"),
     "path": _svg("d", "fill-rule", "clip-rule"),
     "rect": _svg("x", "y", "width", "height", "rx", "ry"),
     "circle": _svg("cx", "cy", "r"),
@@ -137,10 +144,22 @@ TAG_ATTRIBUTES: Mapping[str, set[str]] = {
 }
 
 
+# Origin inventory, not permission for model output. GLOBAL_ATTRIBUTES remains
+# the renderer-facing allowlist, including these identities where already allowed.
+SERVER_STAMPED_ATTRIBUTES: Mapping[str, str] = {
+    "data-source-block-id": "services/source_content/text_stamping.py",
+    "data-qid": "services/source_content/source_stamp_dom.py",
+    "data-semantic-role": "services/source_content/source_stamp_dom.py",
+    "data-source-image-kind": "services/authored_vnext/source_native_generation.py",
+    "data-source-image-aspect-ratio": "services/authored_vnext/source_native_generation.py",
+}
+
+
 __all__ = [
     "ALLOWED_TAGS",
     "DROP_TAGS",
     "GLOBAL_ATTRIBUTES",
+    "SERVER_STAMPED_ATTRIBUTES",
     "TAG_ATTRIBUTES",
     "VOID_TAGS",
 ]

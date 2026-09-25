@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:117px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:28px;width:960px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B;max-width:960px}
+.body-wrap{position:absolute;left:0;right:0;top:141px;height:507px}
+.content-shell{margin-left:64px;width:1152px;height:475px;display:grid;grid-template-columns:350px 778px;gap:24px}
+.identity-card{height:475px;padding:28px;background:#00140E;border-radius:12px;display:flex;flex-direction:column;justify-content:space-between}
+.identity-kicker{font-size:15px;line-height:24px;font-weight:700;letter-spacing:.15em;color:#6ED1BA}
+.identity-name{font-size:30px;line-height:1.5;font-weight:700;color:#FFFFFF}
+.identity-line{width:54px;height:5px;background:#08916E;border-radius:12px}
+.identity-note{font-size:18px;line-height:1.6;color:#CFE9E0}
+.fields-panel{height:475px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.fields-title{display:flex;align-items:center;justify-content:space-between;height:38px;margin-bottom:18px}
+.fields-title-main{font-size:24px;line-height:34px;font-weight:700;color:#002060}
+.fields-title-mark{width:44px;height:6px;background:#219F88;border-radius:12px}
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px 20px}
+.field-card{height:137px;padding:22px 24px;background:#F9F9F9;border:1px solid #E2E8F0;border-radius:12px}
+.field-card:nth-child(1){border-top:5px solid #08916E}
+.field-card:nth-child(2){border-top:5px solid #219F88}
+.field-card:nth-child(3){border-top:5px solid #00828E}
+.field-card:nth-child(4){border-top:5px solid #1B469C}
+.field-text{font-size:20px;line-height:1.7;font-weight:700;color:#1D1D1B}
+.check-row{height:86px;margin-top:20px;padding:18px 22px;background:#E0F3FF;border-radius:12px;display:flex;align-items:center;gap:18px}
+.check-label{font-size:18px;line-height:30px;font-weight:700;color:#002060;white-space:nowrap}
+.check-items{font-size:17px;line-height:30px;color:#1D1D1B}
+.footer-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="117" class="header-band" style="height:117px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" data-semantic-role="supporting" class="eyebrow" data-qid="q-eyebrow-9a31">사업 정리 실습</div>
+    <div data-header-part="title" data-semantic-role="title" class="title" data-qid="source-block-f510e59bd30d1f24" data-source-block-id="source-slide:10:text:3">1주차 실습 | 내 사업 한 장으로 정리</div>
+  </div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:141px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-shell" data-qid="q-div-29a60069cb9f" data-semantic-role="decoration">
+    <div class="identity-card" data-qid="q-card-identity-9c53" data-semantic-role="decoration">
+      <div data-semantic-role="supporting" class="identity-kicker" data-qid="q-kicker-9d64">1주차 실습</div>
+      <div data-semantic-role="body" class="identity-name" data-qid="source-block-5d1d31da2869c1c1" data-source-block-id="source-slide:10:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      <div data-semantic-role="decoration" class="identity-line" data-qid="q-div-a56a1047eb63"></div>
+      <div data-semantic-role="body" class="identity-note" data-qid="q-note-9f86">내 사업의 핵심을 한 장에 담아<br>실행 기준을 세웁니다.</div>
+    </div>
+
+    <div class="fields-panel" data-qid="q-card-fields-a187" data-semantic-role="decoration">
+      <div class="fields-title" data-qid="q-div-ae94b5c81aa0" data-semantic-role="decoration">
+        <div data-semantic-role="supporting" class="fields-title-main" data-qid="q-fields-title-b298">내 사업 핵심 요소</div>
+        <div data-semantic-role="decoration" class="fields-title-mark" data-qid="q-div-ee9d92e59dc7"></div>
+      </div>
+
+      <div class="field-grid" data-qid="q-div-6d2061aa5461" data-semantic-role="decoration">
+        <div class="field-card" data-qid="source-block-5a9628e2fa6cc085" data-semantic-role="decoration" data-source-block-id="source-slide:10:text:7">
+          <div data-semantic-role="body" class="field-text" data-qid="source-block-3f00417bd48c7668" data-source-block-id="source-slide:10:text:6">타깃 업종<br>______________________________</div>
+        </div>
+        <div class="field-card" data-qid="source-block-669369122b4aa2a8" data-semantic-role="decoration" data-source-block-id="source-slide:10:text:9">
+          <div data-semantic-role="body" class="field-text" data-qid="source-block-c3370afa72895052" data-source-block-id="source-slide:10:text:8">서비스<br>______________________________</div>
+        </div>
+        <div class="field-card" data-qid="source-block-9f269f39aad030f5" data-semantic-role="decoration" data-source-block-id="source-slide:10:text:11">
+          <div data-semantic-role="body" class="field-text" data-qid="source-block-fd509e8d70477383" data-source-block-id="source-slide:10:text:10">가격<br>______________________________</div>
+        </div>
+        <div class="field-card" data-qid="source-block-625ae8ac20dd9be1" data-semantic-role="decoration" data-source-block-id="source-slide:10:text:13">
+          <div data-semantic-role="body" class="field-text" data-qid="source-block-13a718856d44bca1" data-source-block-id="source-slide:10:text:12">한 줄 소개<br>______________________________</div>
+        </div>
+      </div>
+
+      <div class="check-row" data-qid="q-card-check-k287" data-semantic-role="decoration">
+        <div data-semantic-role="supporting" class="check-label" data-qid="source-block-d0e09424ddc39590" data-source-block-id="source-slide:10:text:16">체크</div>
+        <div data-semantic-role="body" class="check-items" data-qid="source-block-3e464ca90148cc93" data-source-block-id="source-slide:10:text:17">□ 인스타 프로필  □ 블로그 방향  □ 상품  □ 가격  □ 타깃</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div data-semantic-role="supporting" class="footer-number" data-qid="source-block-c8160e59d0d88d5b" data-source-block-id="source-slide:10:text:4">10</div>
+</body>
+</html>

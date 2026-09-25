@@ -1,4 +1,7 @@
+import { fragmentRasterBand, RASTER_FRAGMENT_LIMIT, RASTER_FRAGMENT_BYTES } from "./raster-fragments.ts";
 import { createHash } from "node:crypto";
+import { LEGACY_AUTHORED_CANVAS, type AuthoredCanvasContract } from "../authored-canvas.ts";
+import { localFitImageEvidence } from "./local-fit-export-evidence.ts";
 
 import {
   extractDeclaredAuthoredSlideDom,
@@ -24,7 +27,6 @@ import {
 import type { AuthoredEmbeddedTypefaceFaceEvidence } from "./font-policy.ts";
 import {
   isCanvasBackgroundShape,
-  isOpaqueRgbPng,
   preparedNativeElementExpectedReadbackBounds,
   type AuthoredHybridSlideLayer,
 } from "./pptx-assembler.ts";
@@ -92,56 +94,17 @@ export interface PreparedSlideOutcome {
   };
 }
 
-export interface AuthoredSemanticSlideContext {
-  readonly exportAttemptId: string;
-  readonly inputBundleDigest: string;
-  readonly rendererSourceDigest: string;
-  readonly fontSetDigest: string;
-  readonly declaredElementIds: readonly string[];
-  readonly declaredElements: readonly DeclaredSemanticElementForObservation[];
-}
-
-function canonical(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  const record = value as Record<string, unknown>;
-  return `{${Object.keys(record).sort().map((key) =>
-    `${JSON.stringify(key)}:${canonical(record[key])}`
-  ).join(",")}}`;
-}
-
-function semanticDigest(value: unknown): string {
-  return `sha256:${createHash("sha256").update(canonical(value), "utf8").digest("hex")}`;
-}
-
-function normalizeDigest(value: string): string {
-  return value.startsWith("sha256:") ? value : `sha256:${value}`;
-}
-
-export function semanticRasterDegradationDigest(
-  context: Pick<AuthoredSemanticSlideContext, "inputBundleDigest" | "rendererSourceDigest">,
-  slideNumber: number,
-  reason: string,
-): string {
-  return semanticDigest({
-    schemaVersion: "hybrid-raster-degradation-receipt/browser-v1",
-    inputBundleDigest: context.inputBundleDigest,
-    rendererSourceDigest: normalizeDigest(context.rendererSourceDigest),
-    slideNumber,
-    state: "degradedFidelityOnly",
-    reason,
-  });
-}
-
-export function semanticRasterOwnerQids(
-  fallbackElements: readonly Pick<PresentationExportFallbackElement, "elementId">[],
-  nativeElementIds: ReadonlySet<string>,
-): string[] {
-  return fallbackElements
-    .map((element) => element.elementId)
-    .filter((elementId) => !nativeElementIds.has(elementId))
-    .sort();
-}
+import {
+  normalizeDigest,
+  semanticDigest,
+  semanticRasterOwnerQids,
+  type AuthoredSemanticSlideContext,
+} from "./slide-layer-semantics.ts";
+export {
+  semanticRasterDegradationDigest,
+  semanticRasterOwnerQids,
+  type AuthoredSemanticSlideContext,
+} from "./slide-layer-semantics.ts";
 
 export interface PreparedFidelitySlideOutcome {
   layer: AuthoredHybridSlideLayer | null;
@@ -300,6 +263,7 @@ export async function prepareSlideLayer(
     face: AuthoredEmbeddedTypefaceFaceEvidence["face"],
     codePoint: number,
   ) => boolean,
+  canvas?: AuthoredCanvasContract,
 ): Promise<PreparedSlideOutcome> {
   // Network access is permitted only in this validated server-side collector.
   // The resulting document is self-contained before isolated Chrome receives it.
@@ -327,6 +291,7 @@ export async function prepareSlideLayer(
   }
   const collectedHtml = fontCollection.htmlForChrome;
   const extractionOptions = {
+    ...(canvas ? { canvas } : {}),
     chromeExecutable,
     timeoutMs: HYBRID_BROWSER_PASS_TIMEOUT_MS,
     ...(semanticContext
@@ -394,6 +359,7 @@ export async function prepareSlideLayer(
     );
   }
   const typographyPreflight = preflightNativeTypography(nativeLayoutElements, {
+    canvas,
     embeddedTypefaceFaces,
     embeddedGlyphAvailable,
     backplateElements: contract.elements,
@@ -434,6 +400,7 @@ export async function prepareSlideLayer(
     [
       ...(
         await prepareNativeElements(nativeLayoutElements, {
+          canvas,
           includeRasterText: true,
           includeRasterShapes: true,
         })
@@ -455,6 +422,7 @@ export async function prepareSlideLayer(
           )
           .map((element) => element.elementId) ?? [],
       ),
+      canvas,
     )
   );
   const connectorClearanceViolations = connectorTextClearanceViolations(
@@ -594,53 +562,6 @@ export async function prepareSlideLayer(
     selected = finalSelected;
   }
 
-  // An opaque residual is serialized as the PowerPoint slide background. A
-  // full-canvas page-colour shape cannot sit beneath that background, so the
-  // assembler intentionally omits it. Keep the coverage contract honest by
-  // leaving that shape in the raster residual instead of claiming a native
-  // object that PowerPoint cannot read back.
-  if (
-    layerSafetyPlan.strategy === "single-backplate-fixed-point" &&
-    isOpaqueRgbPng(backplate.backplatePng)
-  ) {
-    const withoutCanvasBackground = selected.filter(
-      (element) => !isCanvasBackgroundShape(element)
-    );
-    if (withoutCanvasBackground.length !== selected.length) {
-      selected = closeStructuralGroups(withoutCanvasBackground);
-      if (!selected.length) {
-        return {
-          layer: null,
-          quality: imageFallbackSlide(slideNumber, "opaque-backplate-collision"),
-          fontRendering,
-          paintPlan: slideRasterPaintPlan(
-            layerSafetyPlan,
-            "opaque-backplate-collision",
-          ),
-        };
-      }
-      backplate = await renderAuthoredBackplate(
-        collectedHtml,
-        withAdmittedSemanticChartEligibility(contract, selected, semanticContext, observedTableIds),
-        backplatePromotedElementIds(selected),
-        extractionOptions
-      );
-      if (!sameIds(
-        selected.filter((element) => element.kind !== "group"),
-        backplate.appliedPromotedElementIds,
-      )) {
-        return {
-          layer: null,
-          quality: imageFallbackSlide(slideNumber, "backplate-identity-mismatch"),
-          fontRendering,
-          paintPlan: slideRasterPaintPlan(
-            layerSafetyPlan,
-            "backplate-identity-mismatch",
-          ),
-        };
-      }
-    }
-  }
   const selectedIds = new Set(
     selected.map((element) => element.source.id)
   );
@@ -660,6 +581,7 @@ export async function prepareSlideLayer(
               rasterPng: capture.rasterPng,
               elementIds: band.elementIds,
               artifactDigest: capture.capturePngSha256,
+              localFitObservation: capture.localFitObservation,
             };
           }),
       )
@@ -797,29 +719,42 @@ export async function prepareSlideLayer(
       })()
     : undefined;
 
+  // Divide the finite page budget across bands; overflow retains the admitted source PNG.
+  const bandInputs = rasterPaintBands.length ? rasterPaintBands.map(band => ({
+    zBand: band.zBand, rasterPng: band.rasterPng,
+    semanticOwnerQids: band.elementIds.filter(id => !selectedIds.has(id)),
+    backgroundEligible: band.zBand === 0 && band.elementIds.length === 0,
+  })) : [{ zBand: 0, rasterPng: backplate.backplatePng,
+    semanticOwnerQids: semanticRasterOwnerQids(fallbackElements, selectedIds), backgroundEligible: false }];
+  const fragmentBands = [];
+  for (const input of bandInputs) fragmentBands.push(await fragmentRasterBand(input, input.backgroundEligible,
+    Math.max(1, Math.floor(RASTER_FRAGMENT_LIMIT / bandInputs.length)), Math.floor(RASTER_FRAGMENT_BYTES / bandInputs.length)));
+  const selectionObstructions: { zBand: number; elementId: string; reason: string }[] = [];
+  for (const band of fragmentBands) for (const element of selected) {
+    if (band.zBand <= (zBandByElementId.get(element.source.id) ?? 1)) continue;
+    const b = element.source.bounds.px;
+    const overlaps = band.fragments.some(f => {
+      const r = f.rect, sx = (canvas ?? LEGACY_AUTHORED_CANVAS).widthPx / band.captureWidthPx, sy = (canvas ?? LEGACY_AUTHORED_CANVAS).heightPx / band.captureHeightPx;
+      return r.x*sx < b.x+b.width && b.x < (r.x+r.width)*sx && r.y*sy < b.y+b.height && b.y < (r.y+r.height)*sy;
+    });
+    if (overlaps) selectionObstructions.push({ zBand: band.zBand, elementId: element.source.id, reason: band.warnings[0] ?? "raster-over-native-selection" });
+  }
   return {
     layer: {
       slideNumber,
       backplatePng: backplate.backplatePng,
+      localFitCapture: {
+        observation: backplate.localFitObservation,
+        localImages: localFitImageEvidence(contract, selected, canvas),
+        rasterObservations: [{ pngDigest: `sha256:${createHash("sha256").update(backplate.backplatePng).digest("hex")}`,
+          observation: backplate.localFitObservation }, ...rasterPaintBands.map((band) => ({
+          pngDigest: band.artifactDigest, observation: band.localFitObservation,
+        }))],
+      },
       elements: nestPreparedNativeGroups(selected),
-      ...(rasterPaintBands.length
-        ? {
-            rasterBands: rasterPaintBands.map((band) => ({
-              zBand: band.zBand,
-              rasterPng: band.rasterPng,
-              semanticOwnerQids: band.elementIds.filter(
-                (elementId) => !selectedIds.has(elementId),
-              ),
-            })),
-            nativeZBandByElementId: Object.fromEntries(
-              layerSafetyPlan.paintBands
-                .filter((band) => band.paintOwner === "native")
-                .flatMap((band) =>
-                  band.elementIds.map((elementId) => [elementId, band.zBand] as const)
-                ),
-            ),
-          }
-        : {}),
+      rasterBands: fragmentBands,
+      selectionObstructions,
+      nativeZBandByElementId: Object.fromEntries(selected.map(element => [element.source.id, zBandByElementId.get(element.source.id) ?? 1])),
       ...(semanticContext
         ? {
             // The residual raster owns only demoted semantic owners. Admitted
@@ -906,7 +841,7 @@ export async function prepareSlideLayer(
           // Seal the exact assembler bounds, including the bounded standalone
           // text slack, so OOXML readback checks the emitted line-height and
           // overflow contract rather than a pre-serialization DOM box.
-          const bounds = preparedNativeElementExpectedReadbackBounds(element);
+          const bounds = preparedNativeElementExpectedReadbackBounds(element, canvas);
           return {
             elementId: element.source.id,
             kind: element.kind === "group" ? "shape" as const : element.kind,
@@ -961,7 +896,8 @@ export async function prepareSlideLayer(
 export async function prepareFidelitySlideLayer(
   html: string,
   slideNumber: number,
-  chromeExecutable: string
+  chromeExecutable: string,
+  canvas?: AuthoredCanvasContract,
 ): Promise<PreparedFidelitySlideOutcome> {
   const fontCollection = await collectSlideFonts(html);
   const fontRendering = {
@@ -976,6 +912,7 @@ export async function prepareFidelitySlideLayer(
   const extractionOptions = {
     chromeExecutable,
     timeoutMs: HYBRID_BROWSER_PASS_TIMEOUT_MS,
+    ...(canvas ? { canvas } : {}),
   };
   const backplate = await renderAuthoredFidelityBackplate(
     fontCollection.htmlForChrome,
@@ -985,7 +922,10 @@ export async function prepareFidelitySlideLayer(
     throw new Error("authored_fidelity_backplate_identity_mismatch");
   }
   return {
-    layer: { slideNumber, backplatePng: backplate.backplatePng, elements: [] },
+    layer: { slideNumber, backplatePng: backplate.backplatePng, elements: [],
+      localFitCapture: { observation: backplate.localFitObservation,
+        rasterObservations: [{ pngDigest: `sha256:${createHash("sha256").update(backplate.backplatePng).digest("hex")}`,
+          observation: backplate.localFitObservation }] } },
     fontRendering,
   };
 }

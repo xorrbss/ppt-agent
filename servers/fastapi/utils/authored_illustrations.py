@@ -636,13 +636,11 @@ async def _generate_slot_image(
     if not scene:
         return None
     content = clean_slide_content(slide_content)
+    prompt = build_illustration_prompt(scene, content, image_service)
     try:
         async with _get_illustration_sem():
             asset = await image_service.generate_image(
-                ImagePrompt(
-                    prompt=build_illustration_prompt(scene, content, image_service),
-                    theme_prompt=style_prompt,
-                )
+                ImagePrompt(prompt=prompt, theme_prompt=style_prompt)
             )
         data_uri = _data_uri_from_asset(asset)
     except Exception as exc:  # degrade, never break the deck
@@ -656,6 +654,8 @@ async def _generate_slot_image(
         return None
     if data_uri is None and raise_on_failure:
         raise RuntimeError("illustration provider returned no durable local image")
+    from services.authored_illustration_reviews import record_generated_illustration
+    await record_generated_illustration(data_uri, prompt=prompt, content=content, image_service=image_service)
     return data_uri
 
 

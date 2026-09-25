@@ -238,6 +238,7 @@ export function LayeredSlideCanvas({
                     selected ? "ring-2 ring-blue-500 ring-offset-1" : "hover:ring-1 hover:ring-blue-300"
                   }`}
                   data-element-id={element.id}
+                  data-semantic-role={element.semanticRole}
                   key={element.id}
                   onPointerDown={() => onSelectElement(element.id)}
                   style={percentBounds(element.bounds)}

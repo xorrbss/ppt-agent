@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;height:108px;background:#08916E}
+.header-left{position:absolute;left:64px;top:24px;width:760px}
+.eyebrow{height:20px;font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:8px;font-size:32px;line-height:38px;font-weight:700;color:#FFFFFF;max-width:760px}
+.header-right{position:absolute;left:916px;top:24px;width:300px;text-align:right;font-size:15px;line-height:20px;color:#FFFFFF}
+.header-tag{position:absolute;right:0;bottom:0;width:300px;height:28px;padding:4px 64px 4px 20px;background:#00140E;font-size:15px;line-height:20px;color:#FFFFFF;text-align:right}
+.body-wrap{position:absolute;left:0;right:0;top:132px;height:516px}
+.body-inner{width:1152px;margin-left:64px}
+.intro{display:flex;align-items:flex-start;justify-content:space-between;height:54px}
+.intro-question{font-size:26px;line-height:36px;font-weight:700;color:#1D1D1B}
+.intro-answer{width:650px;padding-top:2px;border-left:4px solid #08916E;padding-left:18px;font-size:18px;line-height:28px;color:#1D1D1B}
+.pillars{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:106px 106px;gap:16px 24px;margin-top:16px;width:760px}
+.card{position:relative;padding:28px 20px 16px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-tab{position:absolute;left:16px;top:-12px;height:28px;padding:3px 12px;background:#002060;border-radius:12px;font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:22px;font-weight:700;color:#FFFFFF}
+.card-text{font-size:18px;line-height:27px;font-weight:700;color:#1D1D1B}
+.side-panel{position:absolute;left:784px;top:70px;width:368px;height:228px;padding:24px 24px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px}
+.side-label{font-size:15px;line-height:23px;font-weight:700;letter-spacing:.08em;color:#002060}
+.side-title{margin-top:12px;font-size:25px;line-height:35px;font-weight:700;color:#08916E}
+.side-copy{margin-top:12px;font-size:18px;line-height:29px;color:#1D1D1B}
+.goal-panel{display:flex;align-items:center;justify-content:space-between;margin-top:22px;width:1152px;height:92px;padding:18px 24px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.goal-label{font-size:15px;line-height:23px;font-weight:700;letter-spacing:.08em;color:#002060}
+.goal-value{font-size:25px;line-height:35px;font-weight:700;color:#08916E}
+.goal-mark{width:8px;height:38px;border-radius:12px;background:#E5A93D}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="108" class="header-band" style="height:108px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div data-header-part="eyebrow" class="header-left eyebrow" data-qid="source-block-bd601c892ae13f2e" data-semantic-role="supporting" data-source-block-id="source-slide:17:text:3:run:0" style="color: rgb(0, 0, 0)">2주차 PART 5</div>
+  <div data-header-part="title" class="header-left title" data-qid="source-block-6b03ef8b1e53f9ac" data-semantic-role="title" data-source-block-id="source-slide:17:text:3:run:1" style="top: 40px">캡컷은 딱 이것만</div>
+  <div data-header-part="right" class="header-right" data-qid="source-block-184fc346dad447d4" data-semantic-role="body" data-source-block-id="source-slide:17:text:5" style="color: rgb(0, 0, 0)">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  <div class="header-tag" data-qid="q-tag-16" data-semantic-role="body">캡컷</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:132px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="body-inner" data-qid="q-div-b79d9d1fba65" data-semantic-role="decoration">
+    <div class="intro" data-qid="q-div-2ec4c83af859" data-semantic-role="decoration">
+      <div class="intro-question" data-semantic-role="body" data-qid="source-block-de57255eb2aae5a2" data-source-block-id="source-slide:17:text:9">고급 기능은?</div>
+      <div class="intro-answer" data-semantic-role="body" data-qid="source-block-6483e9fd81ad3f38" data-source-block-id="source-slide:17:text:10">필요한 만큼만.<br>처음부터 모든 기능을 외우지 않습니다.</div>
+    </div>
+
+    <div class="pillars" data-qid="q-div-31ba150fc76b" data-semantic-role="decoration">
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-16-1">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-16-1">01</div>
+        <div class="card-text" data-semantic-role="body" data-qid="source-block-ffebb2e5e799aa50" data-source-block-id="source-slide:17:text:6:run:0">자르기 / 분할</div>
+      </div>
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-16-2">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-16-2">02</div>
+        <div class="card-text" data-semantic-role="body" data-qid="source-block-1e5090674912b1ca" data-source-block-id="source-slide:17:text:6:run:1">자동자막 / 자막 스타일</div>
+      </div>
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-16-3">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-16-3">03</div>
+        <div class="card-text" data-semantic-role="body" data-qid="source-block-4c715793c07ed261" data-source-block-id="source-slide:17:text:6:run:2">음악 / 기본 효과</div>
+      </div>
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-16-4">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-16-4">04</div>
+        <div class="card-text" data-semantic-role="body" data-qid="source-block-9bd91b0163b56f59" data-source-block-id="source-slide:17:text:6:run:3">화면 확대·축소</div>
+      </div>
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-16-5">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-16-5">05</div>
+        <div class="card-text" data-semantic-role="body" data-qid="source-block-d535e0d6e92e5747" data-source-block-id="source-slide:17:text:6:run:4">기본 키프레임</div>
+      </div>
+      <div class="card" data-semantic-role="decoration" data-qid="q-card-16-6">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-16-6">06</div>
+        <div class="card-text" data-semantic-role="body" data-qid="source-block-218ecd16dc76ce91" data-source-block-id="source-slide:17:text:6:run:5">최종 저장과 납품</div>
+      </div>
+    </div>
+
+    <div class="side-panel" data-qid="q-side-16" data-semantic-role="decoration" style="left: 848px">
+      <div class="side-label" data-semantic-role="supporting" data-qid="source-block-f67d8c2c0cf8f503" data-source-block-id="source-slide:17:text:13">실습 목표</div>
+      <div class="side-title" data-semantic-role="body" data-qid="source-block-c15e81177b2c6741" data-source-block-id="source-slide:17:text:14">10~15초 영상 1개 완성</div>
+      <div class="side-copy" data-semantic-role="body" data-qid="q-side-copy-16">처음부터 모든 기능을 외우지 않습니다.</div>
+    </div>
+
+    <div class="goal-panel" data-qid="q-goal-16" data-semantic-role="decoration">
+      <div class="goal-label" data-semantic-role="supporting" data-qid="q-goal-label-16">고급 기능은?</div>
+      <div class="goal-value" data-semantic-role="body" data-qid="q-goal-value-16">필요한 만큼만.</div>
+      <div class="goal-mark" data-semantic-role="decoration" data-qid="q-div-28715032f7b1"></div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-70b9afd0608bb3cd" data-source-block-id="source-slide:17:text:4" style="color: rgb(29, 29, 27); top: 672px">17</div>
+</body>
+</html>

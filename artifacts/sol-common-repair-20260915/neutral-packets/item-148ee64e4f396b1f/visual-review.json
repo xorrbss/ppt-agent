@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "item_id": "item-148ee64e4f396b1f",
+  "method": "Independent direct PNG inspection with this packet sourceContent and requiredImages; no automated diagnostics or other reviews read",
+  "hash_verification": {
+    "html_sha256": "c883ff4dc987e8a7a00e152a20efe49695d217eccf6f47dd730654d2a3fb51ca",
+    "png_sha256": "a40ded62efbb855a92e8d7d93f464fd250d4612140d4e0368b45346482aaafed",
+    "matches_packet_after_sha256_prefix_normalization": true
+  },
+  "verdict": "visual_pass",
+  "geometry": {
+    "pass": true,
+    "findings": [
+      "Upper right and lower procedural rows are compact. All labels remain readable without visible occlusion or overlap."
+    ]
+  },
+  "readability": {
+    "pass": true,
+    "findings": [
+      "Visible text remains readable; no obscured text established."
+    ],
+    "score": 1
+  },
+  "required_images": {
+    "candidate_count": 0,
+    "require_all": false,
+    "verdict": "not_applicable",
+    "visible_raster_images": false
+  },
+  "style": {
+    "verdict": "coherent",
+    "observation": "Consistent teal and mint accents, dark green emphasis, white cards, and legible heading hierarchy.",
+    "score": 2
+  },
+  "content_visibility": {
+    "observation": "Visual legibility checked against supplied source. This review does not certify exact verbatim preservation."
+  },
+  "readability_score": 1,
+  "style_score": 2
+}

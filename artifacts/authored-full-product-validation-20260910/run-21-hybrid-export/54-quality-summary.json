@@ -1,0 +1,73 @@
+{
+  "schema": "authored-hybrid-quality-summary-20260912/v1",
+  "presentationId": "75cf9f7b-0a1c-45f5-842c-9c019565434c",
+  "operationId": "1a00e102-49b1-45d3-8873-a2be8554f23d",
+  "note": "Lifted from public_export_worker_evidence.quality and .structural in 51-timeline.json so the regression note in ../run-11-hybrid-export/49-regression-20260912.md can be read without re-parsing a 100-item timeline.",
+  "quality": {
+    "schemaVersion": "public-hybrid-quality-summary/v1",
+    "status": "partially-editable",
+    "editableSlides": 7,
+    "imageFallbackSlides": 28,
+    "rasterFallbackElements": 68,
+    "slidesNotAttempted": 0,
+    "deckBudgetMillis": 1495562,
+    "fallbackReasonTally": {
+      "chrome-teardown-timeout": 28,
+      "unsupported-shape": 5,
+      "typography-embedding-face-missing": 4,
+      "typography-font-substitution": 4,
+      "invalid-bounds": 2,
+      "native-preparation-or-layer-safety-rejected": 2
+    }
+  },
+  "structural": {
+    "slideCount": 35,
+    "declaredGraphSlides": 35,
+    "nativeLayerSlides": 7,
+    "fullSlideRasterSlides": 34,
+    "readbackFailedSlides": 0,
+    "nativeShapeElements": 148,
+    "nativeTextElements": 123,
+    "nativeGroupElements": 31,
+    "nativeImageElements": 0,
+    "nativeChartElements": 0,
+    "nativeTableElements": 0
+  },
+  "fontEmbedding": {
+    "requested": true,
+    "applied": true,
+    "embeddedTypefaces": 1,
+    "reason": "embedded"
+  },
+  "executionReceipt": {
+    "slideCount": 35,
+    "operationWallMillis": 924090,
+    "exportWorkerMillis": 834126,
+    "exportSchedulerQueueWaitMillis": 833235,
+    "renderWallMillis": 68392,
+    "renderWorkerCumulativeMillis": 47681,
+    "artifactStageMillis": 31219,
+    "htmlPersistMillis": 1672,
+    "renderExecutionCount": 35,
+    "renderBatchExecutionCount": 5,
+    "chromiumProcessLaunchCount": 5,
+    "browserReuseCount": 30,
+    "renderCheckpointReuseCount": 0,
+    "renderSingleflightJoinCount": 0,
+    "renderConcurrencyLimit": 2,
+    "renderConcurrencyPeak": 1,
+    "renderGateWaitMillis": 0
+  },
+  "workerDispatchMillis": [14767.4216, 2947.9705, 12325.5808, 3631.9355, 11441.7521, 831638.0873],
+  "workerExecutionCount": 6,
+  "workerRecycleFailureCount": 0,
+  "renderAuthorityModes": ["postgresql-advisory-xact"],
+  "priorArtifactForThisDeck": {
+    "path": "../run-21/518557be-0177-4097-845b-bbba5f60e87f.pptx",
+    "slides": 35,
+    "nativeLayerSlides": 0,
+    "pSp": 0,
+    "pPic": 35,
+    "note": "Pure raster, which is why the canonical hybrid export identity was a genuine miss and this run executed the lane from scratch."
+  }
+}

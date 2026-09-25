@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:20px;width:820px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:6px;font-size:32px;line-height:39px;font-weight:800;color:#1D1D1B}
+.header-right{position:absolute;left:956px;top:20px;width:260px;text-align:right;font-size:15px;line-height:18px;color:#FFFFFF}
+.header-right:empty{display:none}
+.body-wrap{position:absolute;left:0;right:0;top:125px;height:523px;padding:0 64px}
+.claim{height:44px;display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.claim-text{font-size:24px;line-height:34px;font-weight:800;letter-spacing:-.02em}
+.claim-text strong{color:#08916E}
+.claim-note{font-size:15px;line-height:23px;color:#4B5563;font-weight:700}
+.content-grid{display:grid;grid-template-columns:342px 1fr;gap:24px;height:431px}
+.anchor-card{height:431px;padding:28px;background:#00140E;border-radius:12px;position:relative;display:flex;flex-direction:column;justify-content:space-between}
+.anchor-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:54px;line-height:62px;font-weight:700;color:#08916E}
+.anchor-rule{width:56px;height:4px;background:#219F88;margin-top:18px}
+.anchor-name{font-size:25px;line-height:1.55;font-weight:800;color:#FFFFFF}
+.anchor-caption{font-size:16px;line-height:1.6;color:#B9E5D9}
+.pillar-grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,1fr);gap:16px}
+.pillar-card{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:20px 22px;position:relative;display:flex;flex-direction:column;justify-content:space-between}
+.pillar-card:nth-child(2n){background:#E0F3FF}
+.pillar-top{display:flex;align-items:center;justify-content:space-between}
+.pillar-label{font-size:22px;line-height:30px;font-weight:800;color:#002060}
+.pillar-index{font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:22px;font-weight:700;color:#219F88}
+.pillar-copy{font-size:18px;line-height:1.55;color:#1D1D1B;font-weight:600}
+.pillar-emphasis{height:5px;width:48px;background:#08916E;border-radius:12px}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="101" style="height:101px" data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-4a7f2c">수료 기준</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-a3763b0aa70af9bd" data-source-block-id="source-slide:5:text:3">최종 수료 기준</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-qid="q-div-73774be43d12" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:125px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+    <div class="claim-text" data-semantic-role="body" data-qid="source-block-fd37e1ef6b67dc1c" data-source-block-id="source-slide:5:text:4">수강생 손에 아래 결과물이 남으면 <strong data-semantic-role="body" data-qid="q-claim-emphasis-7c1b3e">성공입니다.</strong></div>
+    <div class="claim-note" data-semantic-role="supporting" data-qid="q-claim-note-4f6a92">실행 가능한 결과물 6종</div>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="anchor-card" data-semantic-role="decoration" data-qid="q-anchor-card-1e83bc">
+      <div data-qid="q-div-621f91553489" data-semantic-role="decoration">
+        <div class="anchor-number" data-semantic-role="supporting" data-qid="source-block-47f9076800800ab3" data-source-block-id="source-slide:5:text:5">05</div>
+        <div class="anchor-rule" data-qid="q-div-ead863327e36" data-semantic-role="decoration"></div>
+      </div>
+      <div class="anchor-name" data-semantic-role="body" data-qid="source-block-86b6ad34f0cf6687" data-source-block-id="source-slide:5:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      <div class="anchor-caption" data-semantic-role="supporting" data-qid="q-anchor-caption-82de10">수료 후 바로 꺼내 쓰는 사업 운영의 기본 단위</div>
+    </div>
+
+    <div class="pillar-grid" data-qid="q-div-9e7d76e9d4f1" data-semantic-role="decoration">
+      <div class="pillar-card" data-semantic-role="decoration" data-qid="q-pillar-product-0a91cd">
+        <div class="pillar-top" data-qid="q-div-5fab060db15e" data-semantic-role="decoration">
+          <div class="pillar-label" data-semantic-role="supporting" data-qid="source-block-6db4b480e8960a2b" data-source-block-id="source-slide:5:text:9">상품</div>
+          <div class="pillar-index" data-semantic-role="supporting" data-qid="q-index-product-01">01</div>
+        </div>
+        <div class="pillar-copy" data-semantic-role="body" data-qid="source-block-c76fcf3c4602fe70" data-source-block-id="source-slide:5:text:10">서비스 구성 · 가격</div>
+        <div class="pillar-emphasis" data-qid="q-div-5dfe97558788" data-semantic-role="decoration"></div>
+      </div>
+
+      <div class="pillar-card" data-semantic-role="decoration" data-qid="q-pillar-profile-6d20fa">
+        <div class="pillar-top" data-qid="q-div-04573649d4e4" data-semantic-role="decoration">
+          <div class="pillar-label" data-semantic-role="supporting" data-qid="source-block-219e22c83b228664" data-source-block-id="source-slide:5:text:13">프로필</div>
+          <div class="pillar-index" data-semantic-role="supporting" data-qid="q-index-profile-02">02</div>
+        </div>
+        <div class="pillar-copy" data-semantic-role="body" data-qid="source-block-b64e9a3c67480712" data-source-block-id="source-slide:5:text:14">인스타 · 블로그</div>
+        <div class="pillar-emphasis" data-qid="q-div-b240d4bff096" data-semantic-role="decoration"></div>
+      </div>
+
+      <div class="pillar-card" data-semantic-role="decoration" data-qid="q-pillar-portfolio-0f44c2">
+        <div class="pillar-top" data-qid="q-div-e5a7a1886745" data-semantic-role="decoration">
+          <div class="pillar-label" data-semantic-role="supporting" data-qid="source-block-8673caf9239aef3d" data-source-block-id="source-slide:5:text:17">포트폴리오</div>
+          <div class="pillar-index" data-semantic-role="supporting" data-qid="q-index-portfolio-03">03</div>
+        </div>
+        <div class="pillar-copy" data-semantic-role="body" data-qid="source-block-1004f7c821448b56" data-source-block-id="source-slide:5:text:18">숏폼 1~2개</div>
+        <div class="pillar-emphasis" data-qid="q-div-52da7170266f" data-semantic-role="decoration"></div>
+      </div>
+
+      <div class="pillar-card" data-semantic-role="decoration" data-qid="q-pillar-sales-b61f09">
+        <div class="pillar-top" data-qid="q-div-c2177a2dd6d4" data-semantic-role="decoration">
+          <div class="pillar-label" data-semantic-role="supporting" data-qid="source-block-7d1d0f0b94a32132" data-source-block-id="source-slide:5:text:21">영업</div>
+          <div class="pillar-index" data-semantic-role="supporting" data-qid="q-index-sales-04">04</div>
+        </div>
+        <div class="pillar-copy" data-semantic-role="body" data-qid="source-block-df5429495f919660" data-source-block-id="source-slide:5:text:22">대본 · 리스트</div>
+        <div class="pillar-emphasis" data-qid="q-div-ee5f6ef0518c" data-semantic-role="decoration"></div>
+      </div>
+
+      <div class="pillar-card" data-semantic-role="decoration" data-qid="q-pillar-proposal-2e5b70">
+        <div class="pillar-top" data-qid="q-div-716dc3ae8999" data-semantic-role="decoration">
+          <div class="pillar-label" data-semantic-role="supporting" data-qid="source-block-92b5337fa1bc41a5" data-source-block-id="source-slide:5:text:25">제안</div>
+          <div class="pillar-index" data-semantic-role="supporting" data-qid="q-index-proposal-05">05</div>
+        </div>
+        <div class="pillar-copy" data-semantic-role="body" data-qid="source-block-a53b605ded64d9a1" data-source-block-id="source-slide:5:text:26">제안서 · 무료샘플</div>
+        <div class="pillar-emphasis" data-qid="q-div-df68afa2bbe5" data-semantic-role="decoration"></div>
+      </div>
+
+      <div class="pillar-card" data-semantic-role="decoration" data-qid="q-pillar-operation-a82ce4">
+        <div class="pillar-top" data-qid="q-div-dcea242a2510" data-semantic-role="decoration">
+          <div class="pillar-label" data-semantic-role="supporting" data-qid="source-block-18046bf209096eb1" data-source-block-id="source-slide:5:text:29">운영</div>
+          <div class="pillar-index" data-semantic-role="supporting" data-qid="q-index-operation-06">06</div>
+        </div>
+        <div class="pillar-copy" data-semantic-role="body" data-qid="source-block-6b5b568c5220167a" data-source-block-id="source-slide:5:text:30">상담 · 계약 · 납품</div>
+        <div class="pillar-emphasis" data-qid="q-div-beb38fae0b98" data-semantic-role="decoration"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="q-page-05">05</div>
+</body>
+</html>

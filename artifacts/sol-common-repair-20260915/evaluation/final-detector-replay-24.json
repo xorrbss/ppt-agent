@@ -1,0 +1,1445 @@
+{
+  "schemaVersion": "sol-common-repair-final-detector-replay/v1",
+  "count": 24,
+  "providerCalls": 0,
+  "detectorSha256": "3a2b14b9bb2e5c135e9333537e9d058caca9950e2f91f2052586825438e9c87f",
+  "geometrySha256": "f1c8630cb77b70ec020cf1cfc8cf4d29badeb09d1023ec741705af6652e968ec",
+  "allArtifactsUnchanged": true,
+  "allPacketAndRenderHashesMatch": true,
+  "automaticPassChanges": 0,
+  "blockingSignatureChanges": 0,
+  "rows": [
+    {
+      "itemId": "item-d00701e9b59f3856",
+      "arm": "baseline",
+      "sampleId": "sol-p02",
+      "branch": "off",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [
+        {
+          "category": "clipping",
+          "severity": "medium",
+          "detail": "browser reports clipped visible content",
+          "qids": [
+            "s1-problem-title"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "hidden_fraction": 0.071,
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "overlap",
+          "severity": "medium",
+          "detail": "browser pixel-area probe reports a continuous occluding layer",
+          "qids": [
+            "s1-takeaway-copy"
+          ],
+          "policy": "style_reference"
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-role-3 prints 24px below the bottom of its card s1-card-governance",
+          "qids": [
+            "s1-role-3"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0822,
+            "excess_px_x": 0.0,
+            "excess_px_y": 24.0,
+            "card_qid": "s1-card-governance",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-role-desc-3 prints 24px below the bottom of its card s1-card-governance",
+          "qids": [
+            "s1-role-desc-3"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0839,
+            "excess_px_x": 0.0,
+            "excess_px_y": 24.5,
+            "card_qid": "s1-card-governance",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-5 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-5"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-6 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-6"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-7 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-7"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-8 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-8"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-5 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-5"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-6 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-6"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-7 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-7"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-8 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-8"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        }
+      ],
+      "afterBlockingIssues": [
+        {
+          "category": "clipping",
+          "severity": "medium",
+          "detail": "browser reports clipped visible content",
+          "qids": [
+            "s1-problem-title"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "hidden_fraction": 0.071,
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "overlap",
+          "severity": "medium",
+          "detail": "browser pixel-area probe reports a continuous occluding layer",
+          "qids": [
+            "s1-takeaway-copy"
+          ],
+          "policy": "style_reference"
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-role-3 prints 24px below the bottom of its card s1-card-governance",
+          "qids": [
+            "s1-role-3"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0822,
+            "excess_px_x": 0.0,
+            "excess_px_y": 24.0,
+            "card_qid": "s1-card-governance",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-role-desc-3 prints 24px below the bottom of its card s1-card-governance",
+          "qids": [
+            "s1-role-desc-3"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0839,
+            "excess_px_x": 0.0,
+            "excess_px_y": 24.5,
+            "card_qid": "s1-card-governance",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-5 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-5"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-6 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-6"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-7 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-7"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-8 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-8"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-5 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-5"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-6 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-6"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-7 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-7"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-8 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-8"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        }
+      ],
+      "beforeAutomaticPass": false,
+      "afterAutomaticPass": false,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-a4323a1ae8f2c7a7",
+      "arm": "baseline",
+      "sampleId": "sol-p02",
+      "branch": "on",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [
+        {
+          "category": "clipping",
+          "severity": "medium",
+          "detail": "browser reports clipped visible content",
+          "qids": [
+            "s1-problem-title"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "hidden_fraction": 0.071,
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "overlap",
+          "severity": "medium",
+          "detail": "browser pixel-area probe reports a continuous occluding layer",
+          "qids": [
+            "s1-takeaway-copy"
+          ],
+          "policy": "style_reference"
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-role-3 prints 24px below the bottom of its card s1-card-governance",
+          "qids": [
+            "s1-role-3"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0822,
+            "excess_px_x": 0.0,
+            "excess_px_y": 24.0,
+            "card_qid": "s1-card-governance",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-role-desc-3 prints 24px below the bottom of its card s1-card-governance",
+          "qids": [
+            "s1-role-desc-3"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0839,
+            "excess_px_x": 0.0,
+            "excess_px_y": 24.5,
+            "card_qid": "s1-card-governance",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-5 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-5"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-6 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-6"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-7 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-7"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-8 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-8"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-5 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-5"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-6 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-6"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-7 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-7"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-8 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-8"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        }
+      ],
+      "afterBlockingIssues": [
+        {
+          "category": "clipping",
+          "severity": "medium",
+          "detail": "browser reports clipped visible content",
+          "qids": [
+            "s1-problem-title"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "hidden_fraction": 0.071,
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "overlap",
+          "severity": "medium",
+          "detail": "browser pixel-area probe reports a continuous occluding layer",
+          "qids": [
+            "s1-takeaway-copy"
+          ],
+          "policy": "style_reference"
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-role-3 prints 24px below the bottom of its card s1-card-governance",
+          "qids": [
+            "s1-role-3"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0822,
+            "excess_px_x": 0.0,
+            "excess_px_y": 24.0,
+            "card_qid": "s1-card-governance",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-role-desc-3 prints 24px below the bottom of its card s1-card-governance",
+          "qids": [
+            "s1-role-desc-3"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0839,
+            "excess_px_x": 0.0,
+            "excess_px_y": 24.5,
+            "card_qid": "s1-card-governance",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-5 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-5"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-6 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-6"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-7 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-7"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-8 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-8"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-5 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-5"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-6 prints 13px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-6"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0445,
+            "excess_px_x": 0.0,
+            "excess_px_y": 13.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-7 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-7"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-step-num-8 prints 54px below the bottom of its card s1-card-method",
+          "qids": [
+            "s1-step-num-8"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1849,
+            "excess_px_x": 0.0,
+            "excess_px_y": 54.0,
+            "card_qid": "s1-card-method",
+            "element_kind": "text"
+          }
+        }
+      ],
+      "beforeAutomaticPass": false,
+      "afterAutomaticPass": false,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-148ee64e4f396b1f",
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "sol-p02",
+      "branch": "off",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-66db4c95086c862d",
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "sol-p02",
+      "branch": "on",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-825a6941de14452e",
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "sol-p28",
+      "branch": "off",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s27-action-developer prints 5px below the bottom of its card s27-step-developer",
+          "qids": [
+            "s27-action-developer"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0758,
+            "excess_px_x": 0.0,
+            "excess_px_y": 5.0,
+            "card_qid": "s27-step-developer",
+            "element_kind": "text"
+          }
+        }
+      ],
+      "afterBlockingIssues": [
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s27-action-developer prints 5px below the bottom of its card s27-step-developer",
+          "qids": [
+            "s27-action-developer"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0758,
+            "excess_px_x": 0.0,
+            "excess_px_y": 5.0,
+            "card_qid": "s27-step-developer",
+            "element_kind": "text"
+          }
+        }
+      ],
+      "beforeAutomaticPass": false,
+      "afterAutomaticPass": false,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-7db973b111215619",
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "sol-p28",
+      "branch": "on",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-175ac57e206d89d7",
+      "arm": "baseline",
+      "sampleId": "sol-p28",
+      "branch": "off",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [
+        {
+          "category": "off_canvas",
+          "severity": "high",
+          "detail": "element extends outside the slide canvas",
+          "qids": [
+            "s27-main-card"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "overshoot_px_left": 0.0,
+            "overshoot_px_top": 0.0,
+            "overshoot_px_right": 0.0,
+            "overshoot_px_bottom": 24.0,
+            "element_kind": "container"
+          }
+        },
+        {
+          "category": "off_canvas",
+          "severity": "high",
+          "detail": "element extends outside the slide canvas",
+          "qids": [
+            "s27-side-card"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "overshoot_px_left": 0.0,
+            "overshoot_px_top": 0.0,
+            "overshoot_px_right": 0.0,
+            "overshoot_px_bottom": 24.0,
+            "element_kind": "container"
+          }
+        },
+        {
+          "category": "overlap",
+          "severity": "medium",
+          "detail": "browser pixel-area probe reports a continuous occluding layer",
+          "qids": [
+            "s27-main-title"
+          ],
+          "policy": "style_reference"
+        }
+      ],
+      "afterBlockingIssues": [
+        {
+          "category": "off_canvas",
+          "severity": "high",
+          "detail": "element extends outside the slide canvas",
+          "qids": [
+            "s27-main-card"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "overshoot_px_left": 0.0,
+            "overshoot_px_top": 0.0,
+            "overshoot_px_right": 0.0,
+            "overshoot_px_bottom": 24.0,
+            "element_kind": "container"
+          }
+        },
+        {
+          "category": "off_canvas",
+          "severity": "high",
+          "detail": "element extends outside the slide canvas",
+          "qids": [
+            "s27-side-card"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "overshoot_px_left": 0.0,
+            "overshoot_px_top": 0.0,
+            "overshoot_px_right": 0.0,
+            "overshoot_px_bottom": 24.0,
+            "element_kind": "container"
+          }
+        },
+        {
+          "category": "overlap",
+          "severity": "medium",
+          "detail": "browser pixel-area probe reports a continuous occluding layer",
+          "qids": [
+            "s27-main-title"
+          ],
+          "policy": "style_reference"
+        }
+      ],
+      "beforeAutomaticPass": false,
+      "afterAutomaticPass": false,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-92b14042c47f574a",
+      "arm": "baseline",
+      "sampleId": "sol-p28",
+      "branch": "on",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [
+        {
+          "category": "off_canvas",
+          "severity": "high",
+          "detail": "element extends outside the slide canvas",
+          "qids": [
+            "s27-main-card"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "overshoot_px_left": 0.0,
+            "overshoot_px_top": 0.0,
+            "overshoot_px_right": 0.0,
+            "overshoot_px_bottom": 24.0,
+            "element_kind": "container"
+          }
+        },
+        {
+          "category": "off_canvas",
+          "severity": "high",
+          "detail": "element extends outside the slide canvas",
+          "qids": [
+            "s27-side-card"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "overshoot_px_left": 0.0,
+            "overshoot_px_top": 0.0,
+            "overshoot_px_right": 0.0,
+            "overshoot_px_bottom": 24.0,
+            "element_kind": "container"
+          }
+        },
+        {
+          "category": "overlap",
+          "severity": "medium",
+          "detail": "browser pixel-area probe reports a continuous occluding layer",
+          "qids": [
+            "s27-main-title"
+          ],
+          "policy": "style_reference"
+        }
+      ],
+      "afterBlockingIssues": [
+        {
+          "category": "off_canvas",
+          "severity": "high",
+          "detail": "element extends outside the slide canvas",
+          "qids": [
+            "s27-main-card"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "overshoot_px_left": 0.0,
+            "overshoot_px_top": 0.0,
+            "overshoot_px_right": 0.0,
+            "overshoot_px_bottom": 24.0,
+            "element_kind": "container"
+          }
+        },
+        {
+          "category": "off_canvas",
+          "severity": "high",
+          "detail": "element extends outside the slide canvas",
+          "qids": [
+            "s27-side-card"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "overshoot_px_left": 0.0,
+            "overshoot_px_top": 0.0,
+            "overshoot_px_right": 0.0,
+            "overshoot_px_bottom": 24.0,
+            "element_kind": "container"
+          }
+        },
+        {
+          "category": "overlap",
+          "severity": "medium",
+          "detail": "browser pixel-area probe reports a continuous occluding layer",
+          "qids": [
+            "s27-main-title"
+          ],
+          "policy": "style_reference"
+        }
+      ],
+      "beforeAutomaticPass": false,
+      "afterAutomaticPass": false,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-591e72c73855feb6",
+      "arm": "baseline",
+      "sampleId": "astra-p17",
+      "branch": "off",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-e6cd0a057eb523e9",
+      "arm": "baseline",
+      "sampleId": "astra-p17",
+      "branch": "on",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-c9576f15589c5dc8",
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "astra-p17",
+      "branch": "off",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-81537176ef073791",
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "astra-p17",
+      "branch": "on",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-f8038519deae7011",
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "astra-p25",
+      "branch": "off",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-3ede756b0e86115e",
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "astra-p25",
+      "branch": "on",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-5a8e3056758faaff",
+      "arm": "baseline",
+      "sampleId": "astra-p25",
+      "branch": "off",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-cab45fbfb95eda1a",
+      "arm": "baseline",
+      "sampleId": "astra-p25",
+      "branch": "on",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-8fe457a49e8d0495",
+      "arm": "baseline",
+      "sampleId": "sol-p06",
+      "branch": "off",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-f2ce48f0f2bb5432",
+      "arm": "baseline",
+      "sampleId": "sol-p06",
+      "branch": "on",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-feb71834829d14e4",
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "sol-p06",
+      "branch": "off",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-6c19853836071365",
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "sol-p06",
+      "branch": "on",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-478e476951d46117",
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "astra-p19",
+      "branch": "off",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s18-quality-load prints 12px below the bottom of its card s18-card-quality",
+          "qids": [
+            "s18-quality-load"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.055,
+            "excess_px_x": 0.0,
+            "excess_px_y": 12.0,
+            "card_qid": "s18-card-quality",
+            "element_kind": "text"
+          }
+        }
+      ],
+      "afterBlockingIssues": [
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s18-quality-load prints 12px below the bottom of its card s18-card-quality",
+          "qids": [
+            "s18-quality-load"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.055,
+            "excess_px_x": 0.0,
+            "excess_px_y": 12.0,
+            "card_qid": "s18-card-quality",
+            "element_kind": "text"
+          }
+        }
+      ],
+      "beforeAutomaticPass": false,
+      "afterAutomaticPass": false,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-62523bbb604d974a",
+      "arm": "dense-layout-supplement-v1",
+      "sampleId": "astra-p19",
+      "branch": "on",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s18-quality-load prints 12px below the bottom of its card s18-card-quality",
+          "qids": [
+            "s18-quality-load"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.055,
+            "excess_px_x": 0.0,
+            "excess_px_y": 12.0,
+            "card_qid": "s18-card-quality",
+            "element_kind": "text"
+          }
+        }
+      ],
+      "afterBlockingIssues": [
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s18-quality-load prints 12px below the bottom of its card s18-card-quality",
+          "qids": [
+            "s18-quality-load"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.055,
+            "excess_px_x": 0.0,
+            "excess_px_y": 12.0,
+            "card_qid": "s18-card-quality",
+            "element_kind": "text"
+          }
+        }
+      ],
+      "beforeAutomaticPass": false,
+      "afterAutomaticPass": false,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-9442f27d8f02a394",
+      "arm": "baseline",
+      "sampleId": "astra-p19",
+      "branch": "off",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    },
+    {
+      "itemId": "item-a55827947aa35926",
+      "arm": "baseline",
+      "sampleId": "astra-p19",
+      "branch": "on",
+      "htmlMatchesPacket": true,
+      "pngMatchesPacket": true,
+      "htmlMatchesRenderEvidence": true,
+      "artifactsUnchanged": true,
+      "telemetryStatus": "available",
+      "beforeBlockingIssues": [],
+      "afterBlockingIssues": [],
+      "beforeAutomaticPass": true,
+      "afterAutomaticPass": true,
+      "blockingSignatureChanged": false
+    }
+  ]
+}

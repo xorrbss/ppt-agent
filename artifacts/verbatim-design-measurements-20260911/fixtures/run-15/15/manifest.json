@@ -1,0 +1,362 @@
+{
+ "sourceUnitId": "source-slide:16",
+ "sourceIndex": 15,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:16:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:16:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "2주차 PART 4 | 자영업자 꽁트",
+    "paragraphs": [
+     {
+      "runs": [
+       "2주차 PART 4 | 자영업자 꽁트"
+      ],
+      "text": "2주차 PART 4 | 자영업자 꽁트"
+     }
+    ],
+    "runs": [
+     "2주차 PART 4 | 자영업자 꽁트"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:198c439aabcd1d2d34b490f229bcea543c6fab977c15c8f56a9e5682178dc111",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:16:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "16",
+    "paragraphs": [
+     {
+      "runs": [
+       "16"
+      ],
+      "text": "16"
+     }
+    ],
+    "runs": [
+     "16"
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:5b98fe363ac0e2c28777ab03e38b1ff42addd4424362bb8bc89c210e38a25df8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:16:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:74f52ea3fedff52018a6c922ae9f9a5650ace6385c0dd96cc4f477c74504ce90",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:16:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "요즘 자영업자 숏폼의 기회",
+    "paragraphs": [
+     {
+      "runs": [
+       "요즘 자영업자 숏폼의 기회"
+      ],
+      "text": "요즘 자영업자 숏폼의 기회"
+     }
+    ],
+    "runs": [
+     "요즘 자영업자 숏폼의 기회"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 822960,
+     "y": 1417320,
+     "cx": 5943600,
+     "cy": 411480
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:53aea041a1b6b48c12c0296557777a46f63dc5de1bf5c7f6ab915d68d253da99",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:16:text:7",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 5,
+   "payload": {
+    "text": "사장님 + 직원",
+    "paragraphs": [
+     {
+      "runs": [
+       "사장님 + 직원"
+      ],
+      "text": "사장님 + 직원"
+     }
+    ],
+    "runs": [
+     "사장님 + 직원"
+    ],
+    "shapeName": "TextBox 6",
+    "geometry": {
+     "x": 822960,
+     "y": 1965960,
+     "cx": 5029200,
+     "cy": 685800
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:37a5aa0736ffb148eb59bc1fe1eb04dd262aa3e69792af1187833b8e87521cd5",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:16:text:8",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 6,
+   "payload": {
+    "text": "• 사장님은 아이디어가 부족하다\n• 직원에게 무엇을 시킬지 모른다\n• 촬영할 장면과 대사를 정하기 어렵다\n• 대행사는 ‘촬영 가이드’까지 제공할 수 있다",
+    "paragraphs": [
+     {
+      "runs": [
+       "• 사장님은 아이디어가 부족하다"
+      ],
+      "text": "• 사장님은 아이디어가 부족하다"
+     },
+     {
+      "runs": [
+       "• 직원에게 무엇을 시킬지 모른다"
+      ],
+      "text": "• 직원에게 무엇을 시킬지 모른다"
+     },
+     {
+      "runs": [
+       "• 촬영할 장면과 대사를 정하기 어렵다"
+      ],
+      "text": "• 촬영할 장면과 대사를 정하기 어렵다"
+     },
+     {
+      "runs": [
+       "• 대행사는 ‘촬영 가이드’까지 제공할 수 있다"
+      ],
+      "text": "• 대행사는 ‘촬영 가이드’까지 제공할 수 있다"
+     }
+    ],
+    "runs": [
+     "• 사장님은 아이디어가 부족하다",
+     "\n",
+     "• 직원에게 무엇을 시킬지 모른다",
+     "\n",
+     "• 촬영할 장면과 대사를 정하기 어렵다",
+     "\n",
+     "• 대행사는 ‘촬영 가이드’까지 제공할 수 있다"
+    ],
+    "shapeName": "TextBox 7",
+    "geometry": {
+     "x": 5760720,
+     "y": 1645920,
+     "cx": 5120640,
+     "cy": 3474720
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:5fd2404d67145c8044658055ee260c52d5a804240d89d9cdcc5cf0c6902efa9a",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:16:shape:9",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 7,
+   "payload": {
+    "shapeName": "Rounded Rectangle 8",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 822960,
+     "y": 4434840,
+     "cx": 10149840,
+     "cy": 822960
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:d12fc3ab29f209e2dfc16ed182e71ec48b9a74d8be7f8a61437c3a45d5559d33",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:16:shape:10",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 8,
+   "payload": {
+    "shapeName": "Rectangle 9",
+    "preset": "rect",
+    "geometry": {
+     "x": 822960,
+     "y": 4434840,
+     "cx": 73152,
+     "cy": 822960
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2267b713f0689f6bebb069a90a2ee0d033987b86e8eb1ebe2d4513b3cb396781",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:16:text:11",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 9,
+   "payload": {
+    "text": "핵심 포지션",
+    "paragraphs": [
+     {
+      "runs": [
+       "핵심 포지션"
+      ],
+      "text": "핵심 포지션"
+     }
+    ],
+    "runs": [
+     "핵심 포지션"
+    ],
+    "shapeName": "TextBox 10",
+    "geometry": {
+     "x": 1024128,
+     "y": 4572000,
+     "cx": 9784080,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:4035a5a159b0738a9ddca4d08158787f9f223b0879b34fef6ea569a0686d8747",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:16:text:12",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 10,
+   "payload": {
+    "text": "‘편집자’가 아니라 기획 + 촬영가이드 + 제작 파트너",
+    "paragraphs": [
+     {
+      "runs": [
+       "‘편집자’가 아니라 기획 + 촬영가이드 + 제작 파트너"
+      ],
+      "text": "‘편집자’가 아니라 기획 + 촬영가이드 + 제작 파트너"
+     }
+    ],
+    "runs": [
+     "‘편집자’가 아니라 기획 + 촬영가이드 + 제작 파트너"
+    ],
+    "shapeName": "TextBox 11",
+    "geometry": {
+     "x": 1024128,
+     "y": 5001768,
+     "cx": 9784080,
+     "cy": 137160
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:c7361112e0912a20cf28dcd36dbd40aaec6006012e1c03d6d02359bc3c625b02",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

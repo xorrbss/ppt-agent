@@ -43,6 +43,8 @@
 [CmdletBinding()]
 param(
     [switch]$Stop,
+    [ValidateSet("api", "worker-generation", "worker-export")]
+    [string[]]$RestartComponent,
     [switch]$Status,
     [switch]$Adopt,
     [string]$ImportEnvironment,
@@ -86,6 +88,23 @@ function Read-State {
 
 function Write-State([hashtable]$State) {
     $State | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $statePath -Encoding utf8
+}
+
+function Assert-PostgreSqlRuntime([hashtable]$Environments) {
+    foreach ($component in @("api", "worker-generation", "worker-export")) {
+        if (-not $Environments.ContainsKey($component)) {
+            throw "local stack: missing environment for $component"
+        }
+        $componentEnvironment = $Environments[$component]
+        $databaseUrl = if ($componentEnvironment.ContainsKey("DATABASE_URL")) {
+            [string]$componentEnvironment["DATABASE_URL"]
+        } else {
+            ""
+        }
+        if ($databaseUrl -notmatch '^postgresql(?:\+[^:]+)?://') {
+            throw "local stack: $component DATABASE_URL must use PostgreSQL; SQLite fallback is forbidden"
+        }
+    }
 }
 
 function Import-EnvironmentDirectory([string]$Directory) {
@@ -342,8 +361,56 @@ function Invoke-Stop {
     Write-Host "local stack stopped."
 }
 
+function Invoke-RestartComponents {
+    $environments = Read-StackEnvironment $environmentStore
+    Assert-PostgreSqlRuntime $environments
+    $state = Read-State
+    $targets = @($RestartComponent | Select-Object -Unique)
+    $owned = @{}
+    $creationTimes = @{}
+    foreach ($component in $targets) {
+        if (-not $state.ContainsKey($component)) { throw "local stack: component owner is not recorded" }
+        $recorded = [int]$state[$component]
+        if ($recorded -le 0) { throw "local stack: invalid component owner" }
+        $process = Get-CimInstance Win32_Process -Filter "ProcessId=$recorded" -ErrorAction Stop
+        if ($component -eq "api" -and $null -eq $process -and $null -eq (Get-PortOwner $ApiPort)) {
+            $owned[$component] = 0
+            $creationTimes[$component] = $null
+            continue
+        }
+        if ($null -eq $process -or -not [string]::Equals($process.ExecutablePath, $python, [StringComparison]::OrdinalIgnoreCase)) { throw "local stack: executable ownership mismatch" }
+        $expected = if ($component -eq "api") { 'server\.py\s+--port\s+' + $ApiPort + '(?:\s|$)' } else { '-m\s+services\.workspace_operation_worker(?:\s|$)' }
+        if ($process.CommandLine -notmatch $expected) { throw "local stack: command ownership mismatch" }
+        $tree = @(Get-DescendantPids @($recorded))
+        foreach ($other in $state.Keys) {
+            if ($other -ne $component -and [int]$state[$other] -in $tree) { throw "local stack: component ownership overlaps another component" }
+        }
+        if ($component -eq "api") {
+            $listener = Get-PortOwner $ApiPort
+            if ($null -eq $listener -or [int]$listener -notin $tree) { throw "local stack: API listener ownership mismatch" }
+        }
+        $owned[$component] = $recorded
+        $creationTimes[$component] = $process.CreationDate
+    }
+    $stamp = Get-Date -Format "yyyyMMdd-HHmmss-fff"
+    foreach ($component in $targets) {
+        if ([int]$owned[$component] -gt 0) {
+            $process = Get-CimInstance Win32_Process -Filter "ProcessId=$($owned[$component])" -ErrorAction Stop
+            if ($null -eq $process -or $process.CreationDate -ne $creationTimes[$component]) { throw "local stack: component ownership changed before restart" }
+            Stop-ProcessTree @([int]$owned[$component])
+        }
+        $arguments = if ($component -eq "api") { @("server.py", "--port", "$ApiPort", "--reload", "false") } else { @("-m", "services.workspace_operation_worker") }
+        $restarted = Start-LoggedProcess -FilePath $python -ArgumentList $arguments -WorkingDirectory $fastApi -Environment $environments[$component] -StdoutPath (Join-Path $logs "$component-$stamp.stdout.log") -StderrPath (Join-Path $logs "$component-$stamp.stderr.log")
+        $state[$component] = $restarted.Id
+        Write-State $state
+        if ($component -eq "api") { Wait-ForHttp200 "http://127.0.0.1:$ApiPort/api/v1/auth/status" }
+        Write-Host "  $component restarted (PID $($restarted.Id))"
+    }
+}
+
 function Invoke-Start {
     $environments = Read-StackEnvironment $environmentStore
+    Assert-PostgreSqlRuntime $environments
     if (-not (Test-Path -LiteralPath $logs)) { New-Item -ItemType Directory -Path $logs -Force | Out-Null }
 
     foreach ($port in @($ApiPort, $NextPort, $ProxyPort)) {
@@ -353,6 +420,16 @@ function Invoke-Start {
 
     $state = @{}
     $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+
+    # Record what is running even when a later component fails to come up.
+    # The state file used to be written only after every component was ready,
+    # so a failure part-way through (an API that refuses to start on a schema
+    # mismatch, a port that never listens) left everything already started as
+    # an untracked orphan: -Stop could not see it, the next -Start refused the
+    # port it was holding, and two worker sets could end up claiming the same
+    # jobs. Observed twice on 2026-09-12. The finally below makes the file
+    # describe reality at every exit, including the failing ones.
+    try {
 
     Write-Host "starting local stack..."
     $postgres = Start-PersistentPostgres
@@ -389,12 +466,25 @@ function Invoke-Start {
     [void](Wait-ForListener $ProxyPort 60)
     Write-Host "  proxy: ready on $ProxyPort"
 
-    Write-State $state
     Write-Host ""
     Write-Host "local stack is up: http://localhost:$ProxyPort"
     Write-Host "stop it with: .\scripts\start-local-stack.ps1 -Stop"
+
+    }
+    finally {
+        # Always, so a partial start is still stoppable by name.
+        Write-State $state
+        if ($state.Count -gt 0 -and -not (Get-PortOwner $ProxyPort)) {
+            Write-Warning ("start did not complete; {0} component(s) recorded in {1}. Run -Stop to clear them before starting again." -f $state.Count, $statePath)
+        }
+    }
 }
 
+if ($RestartComponent) {
+    if ($Stop -or $Status -or $Adopt -or $ImportEnvironment) { throw "local stack: RestartComponent cannot combine lifecycle actions" }
+    Invoke-RestartComponents
+    return
+}
 if ($ImportEnvironment) { Import-EnvironmentDirectory $ImportEnvironment; return }
 if ($Status) { Invoke-Status; return }
 if ($Adopt) { Invoke-Adopt; return }

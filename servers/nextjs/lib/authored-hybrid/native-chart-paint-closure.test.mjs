@@ -18,6 +18,12 @@ import {
 } from "./pptx-quality-inspection.ts";
 import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
 
+// Native chart admission is product-default-off (see native-chart.ts:
+// nativeChartAdmissionEnabled) until a fresh PowerPoint Desktop reopen seal
+// passes. The source comment explicitly names this env var as the way to
+// exercise the admitted path in tests without changing the product default.
+process.env.AUTHORED_HYBRID_NATIVE_CHARTS = "1";
+
 const { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT } = backplatePixelSize();
 
 const bounds = (x, y, width, height) => ({
@@ -176,13 +182,24 @@ test("bounded semantic chart becomes native OOXML with data, axes, legend, and f
   assert.equal(readback[0].kind, "chart");
   assert.deepEqual(readback[0].chart, {
     chartType: "column",
+    chartStyle: 2,
     title: "분기별 성과",
     titleLatinTypefaces: ["Aptos"],
     titleEastAsianTypefaces: ["Aptos"],
     categories: ["Q1", "Q2", "Q3"],
     series: [
-      { name: "Revenue", values: [12, 18, 27] },
-      { name: "Margin", values: [7, 11, 16] },
+      {
+        name: "Revenue",
+        values: [12, 18, 27],
+        color: "#2457D6",
+        pointColors: ["#2457D6", "#2457D6", "#2457D6"],
+      },
+      {
+        name: "Margin",
+        values: [7, 11, 16],
+        color: "#19A974",
+        pointColors: ["#19A974", "#19A974", "#19A974"],
+      },
     ],
     categoryAxis: {
       present: true,

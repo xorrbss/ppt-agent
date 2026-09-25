@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:96px;background:#08916E}
+.header-left{position:absolute;left:64px;top:20px;width:820px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:6px;font-size:32px;line-height:39px;font-weight:800;color:#FFFFFF}
+.header-right{position:absolute;left:956px;top:20px;width:260px;min-height:39px;padding:8px 12px;background:#00140E;color:#FFFFFF;text-align:right;font-size:15px;line-height:18px;font-weight:700;border-radius:12px}
+.body-wrap{position:absolute;left:0;right:0;top:120px;width:1152px;margin-left:64px}
+.claim{height:58px;display:flex;align-items:flex-start;justify-content:space-between}
+.claim-text{font-size:26px;line-height:38px;font-weight:800;color:#1D1D1B}
+.claim-text strong{color:#08916E}
+.claim-mark{margin-top:8px;width:280px;padding-left:16px;border-left:5px solid #08916E;font-size:18px;line-height:28px;font-weight:700;color:#00140E}
+.content-grid{display:grid;grid-template-columns:760px 368px;gap:24px;height:350px}
+.map-panel{height:350px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.map-head{display:flex;align-items:center;justify-content:space-between;height:32px;margin-bottom:22px}
+.map-label{font-size:18px;line-height:28px;font-weight:800;color:#002060}
+.map-rule{width:290px;height:6px;background:#E0F3FF;border-radius:12px}
+.map-rule-fill{width:100%;height:100%;background:#00828E;border-radius:12px}
+.roadmap{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;position:relative}
+.roadmap:after{;position:absolute;left:42px;right:42px;top:30px;height:3px;background:#00828E;z-index:0}
+.week-card{position:relative;height:226px;padding:22px 18px 18px;background:#F9F9F9;border:1px solid #DCE5EA;border-radius:12px;z-index:1}
+.week-index{width:56px;height:38px;display:flex;align-items:center;justify-content:center;background:#002060;color:#FFFFFF;border-radius:12px;font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:22px;font-weight:700}
+.week-title{margin-top:16px;font-size:21px;line-height:29px;font-weight:800;color:#08916E}
+.week-copy{margin-top:11px;font-size:18px;line-height:29px;font-weight:600;color:#1D1D1B}
+.milestone{position:absolute;left:50%;top:22px;width:16px;height:16px;background:#E5A93D;border:4px solid #FFFFFF;border-radius:12px;transform:translateX(-50%);z-index:2}
+.image-panel{height:350px;padding:22px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.image-frame{width:324px;height:188px;display:flex;align-items:center;justify-content:center;background:#E0F3FF;border-radius:12px}
+.image-frame img{display:block;width:312px;height:176px;object-fit:cover;border-radius:12px}
+.image-caption{margin-top:20px;padding-top:17px;border-top:1px solid #E2E8F0;font-size:20px;line-height:31px;font-weight:800;color:#002060}
+.takeaway{height:70px;margin-top:22px;padding:17px 24px;background:#EAF7F4;border-left:7px solid #08916E;border-radius:12px;font-size:20px;line-height:34px;font-weight:800;color:#00140E}
+.footer-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="96" class="header-band" style="height:96px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-roadmap" style="color: rgb(0, 20, 14)">실행 로드맵</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-f8737eca1e180d55" data-source-block-id="source-slide:3:text:3">4주 전체 로드맵</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-d4f607d686375d21" data-source-block-id="source-slide:3:text:6" style="line-height: 20px; height: 56px">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:64px;right:auto;top:120px;width:1152px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+    <div class="claim-text" data-semantic-role="body" data-qid="source-block-a3820e020b92952b" data-source-block-id="source-slide:3:text:4">매주 ‘배운 것’보다 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">‘완성한 것’</strong>을 남깁니다.</div>
+    <div class="claim-mark" data-semantic-role="supporting" data-qid="q-claim-mark">4주 실행 구조</div>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="map-panel" data-semantic-role="decoration" data-qid="q-map-panel">
+      <div class="map-head" data-qid="q-div-9336527ef6f7" data-semantic-role="decoration">
+        <div class="map-label" data-semantic-role="supporting" data-qid="q-map-label">4주 전체 로드맵</div>
+        <div class="map-rule" data-qid="q-div-37a51272ab99" data-semantic-role="decoration"><div class="map-rule-fill" data-qid="q-div-f0e5a3d67a6a" data-semantic-role="decoration"></div></div>
+      </div>
+      <div class="roadmap" data-qid="q-div-2d8fd3599d50" data-semantic-role="decoration">
+        <div class="week-card" data-semantic-role="decoration" data-qid="q-week-1-card">
+          <div class="milestone" data-qid="q-div-3b08502df1bd" data-semantic-role="decoration"></div>
+          <div class="week-index" data-semantic-role="supporting" data-qid="source-block-08ed6e21ae1287a5" data-source-block-id="source-slide:3:text:9">1주차</div>
+          <div class="week-title" data-semantic-role="body" data-qid="source-block-a97c1c2951725590" data-source-block-id="source-slide:3:text:10" style="color: rgb(0, 32, 96)">사업 구조 + 상품 + 인스타/블로그 세팅</div>
+        </div>
+        <div class="week-card" data-semantic-role="decoration" data-qid="q-week-2-card">
+          <div class="milestone" data-qid="q-div-ad1eb49b3fcd" data-semantic-role="decoration"></div>
+          <div class="week-index" data-semantic-role="supporting" data-qid="source-block-c53d1f4747aeff31" data-source-block-id="source-slide:3:text:13">2주차</div>
+          <div class="week-title" data-semantic-role="body" data-qid="source-block-e9087b315009aadc" data-source-block-id="source-slide:3:text:14" style="color: rgb(0, 32, 96)">기획 + 촬영 + AI + 캡컷 + 영상 완성</div>
+        </div>
+        <div class="week-card" data-semantic-role="decoration" data-qid="q-week-3-card">
+          <div class="milestone" data-qid="q-div-87d254d4b510" data-semantic-role="decoration"></div>
+          <div class="week-index" data-semantic-role="supporting" data-qid="source-block-c8164ca49e878134" data-source-block-id="source-slide:3:text:17">3주차</div>
+          <div class="week-title" data-semantic-role="body" data-qid="source-block-24660404e0f8b06a" data-source-block-id="source-slide:3:text:18" style="color: rgb(0, 32, 96)">첫 고객 + 무료 샘플 + 영업 실전</div>
+        </div>
+        <div class="week-card" data-semantic-role="decoration" data-qid="q-week-4-card">
+          <div class="milestone" data-qid="q-div-135a889fda65" data-semantic-role="decoration"></div>
+          <div class="week-index" data-semantic-role="supporting" data-qid="source-block-b952d4eaa184d728" data-source-block-id="source-slide:3:text:21">4주차</div>
+          <div class="week-title" data-semantic-role="body" data-qid="source-block-bd0d6a7bf06ae078" data-source-block-id="source-slide:3:text:22" style="color: rgb(0, 32, 96)">제안서 + 상담 + 계약 + 장기고객</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="image-panel" data-semantic-role="decoration" data-qid="q-image-panel">
+      <div class="image-frame" data-qid="q-div-8f65eb62c07f" data-semantic-role="decoration" style="height: 100px">
+        
+      </div>
+      <div class="image-caption" data-semantic-role="supporting" data-qid="q-image-caption">완성물을 기준으로 이어지는 실행 흐름</div>
+    </div>
+  </div>
+
+  <div class="takeaway" data-semantic-role="body" data-qid="q-takeaway">사업 구조에서 장기고객까지, 매주 다음 단계로 연결되는 완성물을 만듭니다.</div>
+</div>
+
+<div class="footer-number" data-semantic-role="supporting" data-qid="source-block-295cda5fd63eda2c" data-source-block-id="source-slide:3:text:5" style="color: rgb(0, 32, 96); top: 672px">03</div>
+</body>
+</html>

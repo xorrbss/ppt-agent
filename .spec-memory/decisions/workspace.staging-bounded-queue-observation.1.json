@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "workspace.staging-bounded-queue-observation",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Staging pauses automatic observation after prolonged queueing, supports bounded manual refresh, and renders durable terminal states without endless loading.",
+  "scope": [
+    "workspace",
+    "frontend",
+    "generation"
+  ],
+  "invariants": [
+    "Queued waiting is not reported as generation failure solely by elapsed time.",
+    "Manual refresh observes existing work without creating another generation request.",
+    "Transient slide refresh errors preserve the staging view."
+  ],
+  "forbidden": [
+    "Treating elapsed running time alone as a terminal failure."
+  ],
+  "evidence": [
+    "servers/nextjs/app/(presentation-generator)/presentation/hooks/useWorkspaceStaging.ts",
+    "artifacts/popup-recovery-20260914"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-13T23:27:04.8035938+00:00"
+}

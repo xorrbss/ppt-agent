@@ -1,0 +1,155 @@
+<!DOCTYPE html><html lang="ko"><head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:18px;width:840px}
+.eyebrow{height:21px;font-size:15px;line-height:21px;font-weight:700;color:#08916E}
+.slide-title{margin-top:6px;width:840px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:924px;top:18px;width:300px;height:27px;display:flex;justify-content:flex-end;align-items:center}
+.requirements{display:flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap}
+.req-label{font-size:13px;line-height:27px;font-weight:700;color:#00140E}
+.req-chip{height:27px;padding:0 9px;border:1px solid #08916E;border-radius:12px;background:#EAEDF2;font-family:"IBM Plex Mono","Consolas",monospace;font-size:13px;line-height:25px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{width:1152px;height:559px;margin-left:64px}
+.claim-row{height:48px;display:flex;align-items:center;justify-content:space-between}
+.claim{font-size:25px;line-height:34px;font-weight:700;letter-spacing:-0.02em;color:#00140E}
+.claim strong{color:#08916E}
+.claim-meta{display:flex;align-items:center;gap:9px;font-size:15px;line-height:22px;font-weight:700;color:#3B4A45}
+.claim-mark{width:10px;height:10px;border-radius:12px;background:#08916E}
+.main-grid{display:grid;grid-template-rows:162px 300px;gap:16px;margin-top:14px}
+.gate-panel{height:162px;padding:20px 24px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;box-shadow:0 8px 22px rgba(0,20,14,.05)}
+.panel-head{display:flex;align-items:center;justify-content:space-between;height:27px}
+.panel-title{font-size:20px;line-height:27px;font-weight:700;color:#00140E}
+.panel-note{font-size:15px;line-height:22px;font-weight:700;color:#08765B}
+.gate-flow{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:15px;height:78px}
+.gate{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:9px 5px;border:1px solid #9BD6C8;border-radius:12px;background:#ECF8F5;text-align:center}
+.gate-num{font-family:"IBM Plex Mono","Consolas",monospace;font-size:13px;line-height:17px;font-weight:700;color:#08916E}
+.gate-name{margin-top:3px;font-size:18px;line-height:24px;font-weight:700;color:#00140E}
+.gate-state{border:2px solid #08916E;background:#FFFFFF}
+.lower-grid{display:grid;grid-template-columns:430px 698px;gap:24px;height:300px}
+.exception-card{height:300px;padding:22px 24px;background:#00140E;border-radius:12px;color:#FFFFFF}
+.card-kicker{font-size:15px;line-height:21px;font-weight:700;color:#6FD1B7}
+.card-title-dark{margin-top:4px;font-size:22px;line-height:30px;font-weight:700;color:#FFFFFF}
+.exception-flow{display:grid;grid-template-columns:1fr 52px 1fr;align-items:center;margin-top:17px}
+.state-box{height:74px;display:flex;align-items:center;justify-content:center;padding:10px;border:1px solid #4B786C;border-radius:12px;background:#0D2A22;text-align:center;font-size:18px;line-height:26px;font-weight:700;color:#FFFFFF}
+.flow-arrow{display:flex;align-items:center;justify-content:center}
+.arrow-line{width:30px;height:2px;background:#6FD1B7}
+.arrow-head{width:0;height:0;border-top:6px solid transparent;border-bottom:6px solid transparent;border-left:8px solid #6FD1B7}
+.exception-fields{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:15px}
+.field{height:32px;display:flex;align-items:center;justify-content:center;border:1px solid #48796C;border-radius:12px;background:#17372E;font-size:14px;line-height:20px;font-weight:700;color:#FFFFFF}
+.expiry{grid-column:2 / 4;border-color:#6FD1B7;background:#174C3D;color:#FFFFFF}
+.expiry-label{grid-column:1;height:32px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:#08916E;font-size:14px;line-height:20px;font-weight:700;color:#FFFFFF}
+.right-stack{display:grid;grid-template-rows:142px 142px;gap:16px;height:300px}
+.approval-card,.evidence-card{height:142px;padding:18px 22px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;box-shadow:0 8px 22px rgba(0,20,14,.04)}
+.mini-head{display:flex;align-items:center;justify-content:space-between}
+.mini-title{font-size:20px;line-height:27px;font-weight:700;color:#00140E}
+.mini-badge{height:26px;padding:2px 10px;border-radius:12px;background:#DDF3ED;font-size:14px;line-height:22px;font-weight:700;color:#08765B}
+.approval-flow{display:grid;grid-template-columns:1fr 34px 1fr 34px 1fr;align-items:center;margin-top:13px}
+.approval-step{height:66px;padding:8px 9px;border:1px solid #B9DCD3;border-radius:12px;background:#F1F9F7;text-align:center}
+.step-owner{font-size:14px;line-height:19px;font-weight:700;color:#08916E}
+.step-action{margin-top:2px;font-size:16px;line-height:22px;font-weight:700;color:#00140E}
+.connector{display:flex;align-items:center}
+.connector-line{width:25px;height:2px;background:#08916E}
+.connector-node{width:7px;height:7px;background:#08916E}
+.evidence-layout{display:grid;grid-template-columns:250px 1fr;gap:18px;margin-top:11px}
+.link-list{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.link-item{height:48px;display:flex;align-items:center;justify-content:center;padding:6px;border:1px solid #9BD6C8;border-radius:12px;background:#ECF8F5;text-align:center;font-size:15px;line-height:20px;font-weight:700;color:#00140E}
+.reuse-copy{height:48px;display:flex;align-items:center;padding:7px 13px;border-left:4px solid #08916E;background:#F1F9F7;font-size:16px;line-height:23px;font-weight:700;color:#17372E}
+</style>
+</head>
+<body>
+<div class="header-band" data-header-band="101" data-header-part="band" style="height:101px" data-qid="q-div-75dcf98740c9">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0">
+    <div class="eyebrow" data-header-part="eyebrow" data-qid="s27-eyebrow" data-semantic-role="supporting">품질관리</div>
+    <div class="slide-title" data-header-part="title" data-qid="s27-title" data-semantic-role="title">자동 품질게이트와 승인</div>
+  </div>
+  <div class="header-right" data-header-part="right" data-qid="q-div-73774be43d12">
+    <div class="requirements" data-header-part="requirements" data-qid="s27-requirements" data-requirement-ids="TER-001~005,SER-007,PER-001~002,QUR-003">
+      <span class="req-label" data-qid="s27-req-label" data-semantic-role="supporting">요구사항 번호</span>
+      <span class="req-chip" data-qid="s27-req-1" data-semantic-role="supporting">TER-001~005</span>
+      <span class="req-chip" data-qid="s27-req-2" data-semantic-role="supporting">SER-007</span>
+      <span class="req-chip" data-qid="s27-req-more" data-semantic-role="supporting">+2</span>
+    </div>
+  </div>
+  <div class="divider" data-header-part="divider" data-qid="q-div-59f86380b966"></div>
+</div>
+
+<div class="body-wrap" data-header-part="body" style="margin-top:14px" data-qid="q-div-66757db28fba">
+  <div class="claim-row" data-qid="q-div-75b3498fbbe1">
+    <div class="claim" data-qid="s27-claim" data-semantic-role="body">완료 전 검증과 사람의 승인을 결합해 <strong data-qid="q-strong-663977331dde">품질 예외의 누적</strong>을 차단합니다.</div>
+    <div class="claim-meta" data-qid="s27-claim-meta" data-semantic-role="supporting"><span class="claim-mark" data-qid="q-span-05fa3191c699"></span>완료 상태 전환 조건</div>
+  </div>
+
+  <div class="main-grid" data-qid="q-div-948c49f110fb">
+    <section class="gate-panel" data-qid="s27-gate-card">
+      <div class="panel-head" data-qid="q-div-e25ca81e908c">
+        <div class="panel-title" data-qid="s27-gate-title" data-semantic-role="supporting">자동 품질게이트</div>
+        <div class="panel-note" data-qid="s27-gate-note" data-semantic-role="supporting">전 항목 통과 후에만 완료 전환</div>
+      </div>
+      <div class="gate-flow" data-qid="q-div-848b08a8d873">
+        <div class="gate" data-qid="s27-gate-build"><div class="gate-num" data-qid="s27-gate-num1" data-semantic-role="supporting">01</div><div class="gate-name" data-qid="s27-gate-name1" data-semantic-role="body">빌드</div></div>
+        <div class="gate" data-qid="s27-gate-static"><div class="gate-num" data-qid="s27-gate-num2" data-semantic-role="supporting">02</div><div class="gate-name" data-qid="s27-gate-name2" data-semantic-role="body">정적분석</div></div>
+        <div class="gate" data-qid="s27-gate-unit"><div class="gate-num" data-qid="s27-gate-num3" data-semantic-role="supporting">03</div><div class="gate-name" data-qid="s27-gate-name3" data-semantic-role="body">단위</div></div>
+        <div class="gate" data-qid="s27-gate-integration"><div class="gate-num" data-qid="s27-gate-num4" data-semantic-role="supporting">04</div><div class="gate-name" data-qid="s27-gate-name4" data-semantic-role="body">통합</div></div>
+        <div class="gate" data-qid="s27-gate-security"><div class="gate-num" data-qid="s27-gate-num5" data-semantic-role="supporting">05</div><div class="gate-name" data-qid="s27-gate-name5" data-semantic-role="body">보안</div></div>
+        <div class="gate" data-qid="s27-gate-performance"><div class="gate-num" data-qid="s27-gate-num6" data-semantic-role="supporting">06</div><div class="gate-name" data-qid="s27-gate-name6" data-semantic-role="body">성능</div></div>
+        <div class="gate gate-state" data-qid="s27-gate-accessibility"><div class="gate-num" data-qid="s27-gate-num7" data-semantic-role="supporting">07</div><div class="gate-name" data-qid="s27-gate-name7" data-semantic-role="body">접근성</div></div>
+      </div>
+    </section>
+
+    <div class="lower-grid" data-qid="q-div-91292a76f13a">
+      <section class="exception-card" data-qid="s27-exception-card">
+        <div class="card-kicker" data-qid="s27-exception-kicker" data-semantic-role="supporting">실패·예외 통제</div>
+        <div class="card-title-dark" data-qid="s27-exception-title" data-semantic-role="body">실패는 재작업으로, 예외는 만료 가능한 기록으로 관리</div>
+        <div class="exception-flow" data-qid="q-div-2919d6547713">
+          <div class="state-box" data-qid="s27-state-fail" data-semantic-role="body">자동 검사 실패</div>
+          <div class="flow-arrow" data-qid="q-div-502df5a3ff33"><div class="arrow-line" data-qid="q-div-f57dc2f0d3b8"></div><div class="arrow-head" data-qid="q-div-b44138273104"></div></div>
+          <div class="state-box" data-qid="s27-state-rework" data-semantic-role="body">재작업 상태 전환</div>
+        </div>
+        <div class="exception-fields" data-qid="q-div-f2d04ca04bcd">
+          <div class="field" data-qid="s27-field-reason" data-semantic-role="supporting">사유</div>
+          <div class="field" data-qid="s27-field-impact" data-semantic-role="supporting">영향</div>
+          <div class="field" data-qid="s27-field-approver" data-semantic-role="supporting">승인자</div>
+          <div class="expiry-label" data-qid="s27-field-action" data-semantic-role="supporting">보완조치</div>
+          <div class="field expiry" data-qid="s27-field-expiry" data-semantic-role="body">만료일 필수 기록 · 무기한 예외 방지</div>
+        </div>
+      </section>
+
+      <div class="right-stack" data-qid="q-div-785cae1d733a">
+        <section class="approval-card" data-qid="s27-approval-card">
+          <div class="mini-head" data-qid="q-div-22dee743943e">
+            <div class="mini-title" data-qid="s27-approval-title" data-semantic-role="supporting">수정 제안 승인 책임선</div>
+            <div class="mini-badge" data-qid="s27-approval-badge" data-semantic-role="supporting">사람 중심 최종 판단</div>
+          </div>
+          <div class="approval-flow" data-qid="q-div-21986879c9cf">
+            <div class="approval-step" data-qid="s27-step-devax"><div class="step-owner" data-qid="s27-owner-devax" data-semantic-role="supporting">DevAX</div><div class="step-action" data-qid="s27-action-devax" data-semantic-role="body">수정 제안</div></div>
+            <div class="connector" data-qid="q-div-1bfec761b021"><div class="connector-line" data-qid="q-div-b74025c79c7a"></div><div class="connector-node" data-qid="q-div-8b813e36675c"></div></div>
+            <div class="approval-step" data-qid="s27-step-developer" style="height:auto;flex-shrink:0"><div class="step-owner" data-qid="s27-owner-developer" data-semantic-role="supporting">개발자</div><div class="step-action" data-qid="s27-action-developer" data-semantic-role="body">코드·데이터·권한 영향 검토</div></div>
+            <div class="connector" data-qid="q-div-f954d062b2c8"><div class="connector-line" data-qid="q-div-9640accc6886"></div><div class="connector-node" data-qid="q-div-8a31b39488c8"></div></div>
+            <div class="approval-step" data-qid="s27-step-quality"><div class="step-owner" data-qid="s27-owner-quality" data-semantic-role="supporting">품질담당자</div><div class="step-action" data-qid="s27-action-quality" data-semantic-role="body">재시험 확인 후 최종 승인</div></div>
+          </div>
+        </section>
+
+        <section class="evidence-card" data-qid="s27-evidence-card">
+          <div class="mini-head" data-qid="q-div-be409439d65d">
+            <div class="mini-title" data-qid="s27-evidence-title" data-semantic-role="supporting">추적 가능한 품질 증적</div>
+            <div class="mini-badge" data-qid="s27-evidence-badge" data-semantic-role="supporting">검사 결과·수정 이력 연결</div>
+          </div>
+          <div class="evidence-layout" data-qid="q-div-472193667a77">
+            <div class="link-list" data-qid="q-div-5ee5b7b472b2">
+              <div class="link-item" data-qid="s27-link-requirement" data-semantic-role="body">요구사항</div>
+              <div class="link-item" data-qid="s27-link-change" data-semantic-role="body">변경</div>
+              <div class="link-item" data-qid="s27-link-release" data-semantic-role="body">배포 버전</div>
+            </div>
+            <div class="reuse-copy" data-qid="s27-reuse-copy" data-semantic-role="body">보안성 검토, 검사·검수와 향후 유지관리에서 재사용 가능한 증적으로 제공</div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body></html>

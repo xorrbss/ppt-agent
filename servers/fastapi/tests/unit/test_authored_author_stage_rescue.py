@@ -30,11 +30,19 @@ from services import authored_presentation_pipeline as pipeline_mod
 from services import authored_presentation_service as authored_service
 from services import authored_terminal_slide_fallback as terminal_mod
 from services.authored_composition_policy import CompositionProfile
+from services.authored_generation_observability import (
+    log_authored_slide_failure_observation,
+)
 from services.authored_generation_timing_receipt_e4 import flagged_slide_entries
+from services.authored_local_fit_policy import POLICY_REVISION, html_digest
 from services.authored_presentation_contracts import (
     AuthoredGenerationPipelineResult,
 )
+from services.source_content.browser_readback import (
+    BrowserSourceReadbackResult,
+)
 from utils.authored_header_validation import validate_header_contract
+from utils.authored_semantic_role_repair import canonicalize_authored_roles
 from utils.llm_calls.author_deck import (
     AuthoredDeckResult,
     AuthoredProviderBudgetExhausted,
@@ -45,6 +53,7 @@ from utils.llm_calls.author_slide import (
     validate_authored_slide_html,
 )
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
+from utils.provider_idempotency import ProviderOutcomeError
 from tests.unit.test_authored_terminal_slide_fallback import _pop_slide_ids
 
 _ORDINARY = CompositionProfile("ordinary", "authored", True, True, 1)
@@ -54,6 +63,28 @@ _RESCUED_HTML = (
     "<body><h1>RESCUED</h1></body></html>"
 )
 _OUTLINE_TEXT = "분기 실적 요약\n매출 120억 원\n영업이익 18억 원"
+
+
+def _fit_receipts(htmls):
+    """One local-fit receipt per slide, as the real pipeline always returns.
+
+    A pipeline that renders a deck also fits it, so generation requires one
+    receipt per slide (``local_fit_applies`` in
+    ``services/authored_presentation_generation.py``); a stub that returns none
+    fails the deck with ``authored_local_fit_evidence_incomplete`` before the
+    behaviour under test is reached.
+    """
+
+    return tuple(
+        {
+            "policy_revision": POLICY_REVISION,
+            "finalHtmlDigest": html_digest(canonicalize_authored_roles(html)),
+            "qualityStatus": "passed",
+            "unresolvedReasons": [],
+            "changed": False,
+        }
+        for html in htmls
+    )
 
 
 def _run(coro):
@@ -108,6 +139,25 @@ def _install_pipeline_stubs(monkeypatch):
         ),
     )
     monkeypatch.setattr(pipeline_mod, "blocking_safety_issues", lambda _report: ())
+
+
+def _capture_cooldown_waits(monkeypatch):
+    waits: list[float] = []
+    now = [100.0]
+    schedule_type = pipeline_mod.AuthoredWaveSchedule
+
+    async def sleep(seconds: float) -> None:
+        waits.append(seconds)
+        now[0] += seconds
+
+    monkeypatch.setattr(
+        pipeline_mod,
+        "AuthoredWaveSchedule",
+        lambda policy: schedule_type(
+            policy, clock=lambda: now[0], sleep=sleep
+        ),
+    )
+    return waits
 
 
 def _run_pipeline(monkeypatch, *, plan, first_pass, rescue, slides=1, **kwargs):
@@ -234,7 +284,7 @@ def test_third_attempt_uses_the_simplified_brief_and_publishes_unflagged(monkeyp
         seen["plan"] = rescue_plan
         seen["kwargs"] = kwargs
         if attempt_observer is not None:
-            attempt_observer(1)
+            attempt_observer(3)
         return _RESCUED_HTML
 
     result = _run_pipeline(
@@ -251,7 +301,8 @@ def test_third_attempt_uses_the_simplified_brief_and_publishes_unflagged(monkeyp
     # A recovered slide is not a flagged slide.
     assert result.author_flagged_slides == ()
     # One more call, not a second two-call budget.
-    assert seen["kwargs"]["provider_attempt_offset"] == 1
+    assert seen["kwargs"]["provider_attempt_offset"] == 2
+    assert seen["kwargs"]["provider_attempt_limit"] == 3
     hint = seen["kwargs"]["prior_failure_hint"]
     assert hint == rescue_mod.simplified_author_brief(role="CLOSING", contract=contract)
     # The deck's visual ambitions are withheld; everything else is the deck's.
@@ -261,6 +312,85 @@ def test_third_attempt_uses_the_simplified_brief_and_publishes_unflagged(monkeyp
     assert simplified.illustration_slots == ()
     assert simplified.contents is plan.contents
     assert simplified.header_contract_at(0) is contract
+
+
+def test_rescue_overload_replay_is_owned_by_the_bounded_provider_layer(
+    monkeypatch,
+):
+    waits = _capture_cooldown_waits(monkeypatch)
+    calls: list[tuple[int, int]] = []
+    observed: list[int] = []
+
+    async def overloaded_once(
+        _plan,
+        _index,
+        *,
+        attempt_observer=None,
+        provider_attempt_offset=0,
+        provider_attempt_limit=2,
+        **_kwargs,
+    ):
+        calls.append((provider_attempt_offset, provider_attempt_limit))
+        if attempt_observer is not None:
+            attempt_observer(provider_attempt_offset + 1)
+            observed.append(provider_attempt_offset + 1)
+        raise ProviderOutcomeError(
+            "public_provider_overload", recovery_allowed=True, overload=True
+        )
+
+    with pytest.raises(pipeline_mod.AuthoredStageError) as caught:
+        _run_pipeline(
+            monkeypatch,
+            plan=_stub_plan(contract=default_header_contract()),
+            first_pass=_first_pass_that_spends_its_budget([]),
+            rescue=overloaded_once,
+            source_images_locked_to_source_slide=True,
+        )
+
+    assert calls == [(2, 3)]
+    assert observed == [3]
+    assert waits == []
+    assert caught.value.code == "public_provider_overload"
+    assert caught.value.provider_attempt_count == 3
+
+
+@pytest.mark.parametrize(
+    "code", ("public_provider_overload", "public_provider_call_timeout")
+)
+def test_rescue_overload_past_bound_keeps_coded_terminal_failure(monkeypatch, code):
+    waits = _capture_cooldown_waits(monkeypatch)
+    calls = 0
+
+    async def always_overloaded(
+        _plan, _index, *, attempt_observer=None, provider_attempt_offset=0, **_kwargs
+    ):
+        nonlocal calls
+        calls += 1
+        if attempt_observer is not None:
+            attempt_observer(provider_attempt_offset + 1)
+        raise ProviderOutcomeError(code, recovery_allowed=True, overload=True)
+
+    with pytest.raises(pipeline_mod.AuthoredStageError) as caught:
+        _run_pipeline(
+            monkeypatch,
+            plan=_stub_plan(contract=default_header_contract()),
+            first_pass=_first_pass_that_spends_its_budget([]),
+            rescue=always_overloaded,
+            source_images_locked_to_source_slide=True,
+        )
+
+    assert calls == 1
+    assert waits == []
+    assert caught.value.code == code
+    assert caught.value.provider_attempt_count == 3
+    event = log_authored_slide_failure_observation(
+        stage="author",
+        code=caught.value.code,
+        slide_number=1,
+        retryable=False,
+        provider_attempt_count=3,
+    )
+    assert event["code"] == code
 
 
 def test_third_attempt_failure_publishes_a_flagged_placeholder(monkeypatch):
@@ -294,7 +424,12 @@ def test_third_attempt_failure_publishes_a_flagged_placeholder(monkeypatch):
 
 
 def test_a_provider_crash_in_the_third_attempt_still_publishes_flagged(monkeypatch):
+    waits = _capture_cooldown_waits(monkeypatch)
+    calls = 0
+
     async def fake_rescue(_plan, _index, **_kwargs):
+        nonlocal calls
+        calls += 1
         raise RuntimeError("provider transport died")
 
     result = _run_pipeline(
@@ -307,6 +442,8 @@ def test_a_provider_crash_in_the_third_attempt_still_publishes_flagged(monkeypat
     assert [entry["remakeOutcome"] for entry in result.author_flagged_slides] == [
         "author_rescue_failed"
     ]
+    assert calls == 1
+    assert waits == []
 
 
 def test_only_the_failed_slide_spends_a_rescue_call(monkeypatch):
@@ -360,20 +497,156 @@ def test_knob_off_keeps_todays_failed_deck(monkeypatch):
     assert caught.value.stage == "author"
 
 
-def test_a_source_reflow_deck_stays_fail_closed(monkeypatch):
-    async def forbidden_rescue(*_args, **_kwargs):
-        raise AssertionError("a verbatim deck may not gain a placeholder")
+def test_a_source_reflow_deck_gets_one_strict_third_call_without_placeholder(
+    monkeypatch,
+):
+    seen = {}
 
+    async def strict_rescue(_plan, _index, **kwargs):
+        seen.update(kwargs)
+        return _RESCUED_HTML
+
+    result = _run_pipeline(
+        monkeypatch,
+        plan=_stub_plan(contract=default_header_contract()),
+        first_pass=_first_pass_that_spends_its_budget([]),
+        rescue=strict_rescue,
+        source_images_locked_to_source_slide=True,
+    )
+
+    assert len(result.pngs) == 1
+    assert result.author_flagged_slides == ()
+    assert result.author_provider_attempt_counts == (3,)
+    assert seen["provider_attempt_offset"] == 2
+    assert seen["provider_attempt_limit"] == 3
+    hint = seen["prior_failure_hint"]
+    assert "source-locked correction" in hint
+    assert "do not summarize, shorten, merge" in hint
+
+
+def _readback_result(**overrides):
+    values = {
+        "checked_slide_count": 1,
+        "checked_block_count": 1,
+        "failed_slide_indices": (0,),
+    }
+    values.update(overrides)
+    return BrowserSourceReadbackResult(**values)
+
+
+def test_source_reflow_rescue_visibility_is_predeclared_verbatim_flag_only(
+    monkeypatch,
+):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
+    monkeypatch.setattr(
+        rescue_mod,
+        "inspect_browser_source_readback",
+        lambda **_kwargs: _readback_result(visibility_failures=("b1",)),
+    )
+
+    entry = rescue_mod.source_reflow_rescue_readback(
+        index=0,
+        html=_RESCUED_HTML,
+        metrics={},
+        bindings=(("b1", "RESCUED"),),
+        profile=_ORDINARY,
+        reference_mode="style_reference",
+        prior_failure={"code": "authored_header_contract_rejected"},
+    )
+
+    assert entry == {
+        "index": 0,
+        "reason": "source_readback:visibility",
+        "remakeAttempted": False,
+        "remakeOutcome": "verbatim_flag_only",
+        "reasons": [
+            "source_readback:visibility",
+            "author_prior:authored_header_contract_rejected",
+        ],
+    }
+    assert flagged_slide_entries([entry]) == (entry,)
+
+
+def test_recovered_source_slide_routes_visibility_to_the_pipeline_flag(monkeypatch):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
+
+    async def strict_rescue(_plan, _index, **_kwargs):
+        return _RESCUED_HTML
+
+    monkeypatch.setattr(
+        rescue_mod,
+        "inspect_browser_source_readback",
+        lambda **_kwargs: _readback_result(visibility_failures=("b1",)),
+    )
+    result = _run_pipeline(
+        monkeypatch,
+        plan=_stub_plan(contract=default_header_contract()),
+        first_pass=_first_pass_that_spends_its_budget([]),
+        rescue=strict_rescue,
+        source_block_bindings=((('b1', "RESCUED"),),),
+    )
+
+    assert result.author_flagged_slides[0]["remakeOutcome"] == "verbatim_flag_only"
+
+
+@pytest.mark.parametrize(
+    "result",
+    (
+        _readback_result(missing_block_ids=("b1",)),
+        _readback_result(integrity_failures=("b1",)),
+    ),
+)
+def test_source_reflow_rescue_hard_readback_uses_a_coded_terminal_failure(
+    monkeypatch, result,
+):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
+    monkeypatch.setattr(
+        rescue_mod, "inspect_browser_source_readback", lambda **_kwargs: result
+    )
+
+    with pytest.raises(pipeline_mod.AuthoredStageError) as caught:
+        rescue_mod.source_reflow_rescue_readback(
+            index=0,
+            html=_RESCUED_HTML,
+            metrics={},
+            bindings=(("b1", "RESCUED"),),
+            profile=_ORDINARY,
+            reference_mode="style_reference",
+        )
+
+    assert caught.value.code == "source_content_browser_readback_failed"
+    assert caught.value.cause.block_ids == ("b1",)
+    event = log_authored_slide_failure_observation(
+        stage="author",
+        code=caught.value.code,
+        slide_number=1,
+        retryable=False,
+        provider_attempt_count=3,
+    )
+    assert event["code"] == "source_content_browser_readback_failed"
+
+
+def test_recovered_source_slide_hard_readback_is_never_unexpected(monkeypatch):
+    async def strict_rescue(_plan, _index, **_kwargs):
+        return _RESCUED_HTML
+
+    monkeypatch.setattr(
+        rescue_mod,
+        "inspect_browser_source_readback",
+        lambda **_kwargs: _readback_result(integrity_failures=("b1",)),
+    )
     with pytest.raises(pipeline_mod.AuthoredStageError) as caught:
         _run_pipeline(
             monkeypatch,
             plan=_stub_plan(contract=default_header_contract()),
             first_pass=_first_pass_that_spends_its_budget([]),
-            rescue=forbidden_rescue,
-            source_images_locked_to_source_slide=True,
+            rescue=strict_rescue,
+            source_block_bindings=((('b1', "RESCUED"),),),
         )
 
-    assert caught.value.code == "authored_slide_author_failed"
+    assert caught.value.code == "source_content_browser_readback_failed"
+    assert "integrity=[b1]" in caught.value.safe_message
+    assert caught.value.provider_attempt_count == 3
 
 
 def test_a_retryable_transport_failure_is_not_rescued(monkeypatch):
@@ -442,6 +715,7 @@ def test_the_author_flag_reaches_the_published_quality_gate(monkeypatch, tmp_pat
             illustration_work=0.0,
             render_work=0.1,
             author_flagged_slides=(flag,),
+            local_fit_receipts=_fit_receipts([_RESCUED_HTML]),
         )
 
     async def fake_header_contract(
@@ -477,7 +751,7 @@ def test_the_author_flag_reaches_the_published_quality_gate(monkeypatch, tmp_pat
     monkeypatch.setattr(
         authored_service,
         "_build_authored_export",
-        lambda request, presentation_id, pngs, title: "deck.pptx",
+        lambda request, presentation_id, pngs, title, **kwargs: "deck.pptx",
     )
     monkeypatch.setattr(
         llm_provider, "get_llm_provider", lambda: SimpleNamespace(value="stub")

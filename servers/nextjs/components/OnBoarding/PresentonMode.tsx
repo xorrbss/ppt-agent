@@ -17,11 +17,12 @@ import { usePathname } from 'next/navigation';
 import { getLLMConfigValidationError, handleSaveLLMConfig } from '@/utils/storeHelpers';
 import { checkIfSelectedOllamaModelIsPulled, pullOllamaModel } from '@/utils/providerUtils';
 import { getApiUrl } from '@/utils/api';
-import CodexConfig, { CHATGPT_MODELS } from '@/components/codex-config';
+import CodexConfig, { CODEX_GENERATION_PRESETS } from '@/components/codex-config';
 import VertexAzureManualFields from '@/components/VertexAzureManualFields';
 import BedrockManualFields from '@/components/BedrockManualFields';
 import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields';
 import Image from 'next/image';
+import { getSelectedImageQuality, getSelectedTextModel } from './llmConfigSelectors';
 
 const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep: (step: number) => void }) => {
     const pathname = usePathname();
@@ -107,51 +108,6 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                 : llmConfig.LLM === 'lmstudio'
                                     ? 'LM Studio API 키 (선택 사항)'
                                 : `${llmConfig.LLM} API 키`;
-
-    const getSelectedTextModel = (config: LLMConfig): string => {
-        switch (config.LLM) {
-            case 'openai':
-                return config.OPENAI_MODEL || '';
-            case 'google':
-                return config.GOOGLE_MODEL || '';
-            case 'vertex':
-                return config.VERTEX_MODEL || '';
-            case 'azure':
-                return config.AZURE_OPENAI_MODEL || '';
-            case 'bedrock':
-                return config.BEDROCK_MODEL || '';
-            case 'openrouter':
-                return config.OPENROUTER_MODEL || '';
-            case 'fireworks':
-                return config.FIREWORKS_MODEL || '';
-            case 'together':
-                return config.TOGETHER_MODEL || '';
-            case 'cerebras':
-                return config.CEREBRAS_MODEL || '';
-            case 'anthropic':
-                return config.ANTHROPIC_MODEL || '';
-            case 'ollama':
-                return config.OLLAMA_MODEL || '';
-            case 'custom':
-                return config.CUSTOM_MODEL || '';
-            case 'litellm':
-                return config.LITELLM_MODEL || '';
-            case 'lmstudio':
-                return config.LMSTUDIO_MODEL || '';
-            case 'chatgpt':
-            case 'codex':
-                return config.CODEX_MODEL || '';
-            default:
-                return '';
-        }
-    };
-
-    const getSelectedImageQuality = (config: LLMConfig): string => {
-        if (config.IMAGE_PROVIDER === 'dall-e-3') return config.DALL_E_3_QUALITY || '';
-        if (config.IMAGE_PROVIDER === 'gpt-image-1.5') return config.GPT_IMAGE_1_5_QUALITY || '';
-        if (config.IMAGE_PROVIDER === 'gpt-image-2') return config.GPT_IMAGE_2_QUALITY || '';
-        return '';
-    };
 
     const fetchAvailableModels = useCallback(async () => {
         if (isManualModelProvider) return;
@@ -326,25 +282,26 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             );
         }
 
-        if (llmConfig.IMAGE_PROVIDER === "gpt-image-2") {
+        if (llmConfig.IMAGE_PROVIDER === "gpt-image-2" || llmConfig.IMAGE_PROVIDER === "gpt-image-2.5-flare" || llmConfig.IMAGE_PROVIDER === "gpt-image-2.5-sunburst" || llmConfig.IMAGE_PROVIDER === "codex_image") {
+            const qualityKey = llmConfig.IMAGE_PROVIDER === "gpt-image-2" ? "GPT_IMAGE_2_QUALITY" : "GPT_IMAGE_2_5_QUALITY";
             return (
                 <div className="w-full">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        GPT Image 2 품질
+                        {IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER].label} 품질
                     </label>
                     <div className="">
                         <Select
-                            value={llmConfig.GPT_IMAGE_2_QUALITY || 'medium'}
+                            value={llmConfig[qualityKey] || 'medium'}
                             onValueChange={(value) => setLlmConfig((prev) => ({
                                 ...prev,
-                                GPT_IMAGE_2_QUALITY: value
+                                [qualityKey]: value
                             }))}
                         >
                             <SelectTrigger className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
                                 <SelectValue placeholder="품질 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                                {IMAGE_QUALITY_OPTIONS["gpt-image-2"].map((option) => (
+                                {IMAGE_QUALITY_OPTIONS[llmConfig.IMAGE_PROVIDER === "codex_image" ? "gpt-image-2.5-sunburst" : llmConfig.IMAGE_PROVIDER].map((option) => (
                                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -486,8 +443,13 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 </div>
                 <CodexConfig
                     codexModel={llmConfig.CODEX_MODEL || ''}
+                    codexReasoningEffort={llmConfig.CODEX_REASONING_EFFORT || ''}
                     onInputChange={(value, field) => {
-                        const normalizedField = field === 'codex_model' ? 'CODEX_MODEL' : field;
+                        const normalizedField = field === 'codex_model'
+                            ? 'CODEX_MODEL'
+                            : field === 'codex_reasoning_effort'
+                                ? 'CODEX_REASONING_EFFORT'
+                                : field;
                         setLlmConfig(prev => ({
                             ...prev,
                             [normalizedField]: value
@@ -623,7 +585,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             ) : llmConfig.LLM === 'chatgpt' || llmConfig.LLM === 'codex' ? (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        GPT 모델 선택
+                                        PPT 생성 모델 · 추론 강도
                                     </label>
                                     <Popover open={openModelSelect} onOpenChange={setOpenModelSelect}>
                                         <PopoverTrigger asChild>
@@ -635,7 +597,10 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                             >
                                                 <span className="text-sm text-gray-900">
                                                     {llmConfig.CODEX_MODEL
-                                                        ? (CHATGPT_MODELS.find((m) => m.id === llmConfig.CODEX_MODEL)?.name ?? llmConfig.CODEX_MODEL)
+                                                        ? (CODEX_GENERATION_PRESETS.find((preset) =>
+                                                            preset.modelId === llmConfig.CODEX_MODEL
+                                                            && preset.effort === llmConfig.CODEX_REASONING_EFFORT
+                                                        )?.name ?? `${llmConfig.CODEX_MODEL}${llmConfig.CODEX_REASONING_EFFORT ? ` · ${llmConfig.CODEX_REASONING_EFFORT}` : ''}`)
                                                         : "모델 선택"}
                                                 </span>
                                                 <ChevronUp className="w-4 h-4 text-gray-400" />
@@ -651,14 +616,15 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                                 <CommandList>
                                                     <CommandEmpty>모델을 찾을 수 없습니다.</CommandEmpty>
                                                     <CommandGroup>
-                                                        {CHATGPT_MODELS.map((model) => (
+                                                        {CODEX_GENERATION_PRESETS.map((preset) => (
                                                             <CommandItem
-                                                                key={model.id}
-                                                                value={model.id}
-                                                                onSelect={(value) => {
+                                                                key={`${preset.modelId}:${preset.effort}`}
+                                                                value={`${preset.modelId} ${preset.effort}`}
+                                                                onSelect={() => {
                                                                     setLlmConfig(prev => ({
                                                                         ...prev,
-                                                                        CODEX_MODEL: value
+                                                                        CODEX_MODEL: preset.modelId,
+                                                                        CODEX_REASONING_EFFORT: preset.effort
                                                                     }));
                                                                     setOpenModelSelect(false);
                                                                 }}
@@ -666,11 +632,14 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                                                 <Check
                                                                     className={cn(
                                                                         "mr-2 h-4 w-4",
-                                                                        llmConfig.CODEX_MODEL === model.id ? "opacity-100" : "opacity-0"
+                                                                        llmConfig.CODEX_MODEL === preset.modelId
+                                                                            && llmConfig.CODEX_REASONING_EFFORT === preset.effort
+                                                                            ? "opacity-100"
+                                                                            : "opacity-0"
                                                                     )}
                                                                 />
                                                                 <span className="text-sm text-gray-900">
-                                                                    {model.name}
+                                                                    {preset.name}
                                                                 </span>
                                                             </CommandItem>
                                                         ))}
@@ -1065,6 +1034,10 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER] &&
                             (() => {
                                 const provider = IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER];
+                                            if (provider.value === "codex_image") {
+                                                return <p className="text-sm text-gray-600">기존 Codex 로그인을 사용하며 Codex 사용 한도가 적용됩니다. GPT Image 2.5 Sunburst를 요청하지만 실제 적용 모델은 서버가 공개하지 않습니다. 로그인은 ChatGPT 제공자 설정에서 관리합니다.</p>;
+                                            }
+
 
                                 if (provider.value === "openai_compatible") {
                                     return (
@@ -1211,39 +1184,39 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             </div>
             {/* Download Progress Modal */}
             {showDownloadModal && downloadingModel && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-2xl max-w-md w-full p-6 relative">
+                <div className="fixed inset-0 bg-slate-950/35 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
+                    <div className="rounded-2xl border border-gray-200/80 bg-white shadow-[0_12px_40px_-16px_rgba(15,23,42,0.18)] max-w-[400px] max-h-[calc(100dvh-2rem)] overflow-y-auto w-full px-6 py-8 sm:px-8 relative">
                         {/* Modal Content */}
                         <div className="text-center">
                             {/* Icon */}
-                            <div className="mb-4">
+                            <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50">
                                 {downloadingModel.done ? (
-                                    <CheckCircle className="w-12 h-12 text-green-600 mx-auto" />
+                                    <CheckCircle className="w-6 h-6 text-green-600 mx-auto" />
                                 ) : (
-                                    <Download className="w-12 h-12 text-blue-600 mx-auto animate-pulse" />
+                                    <Download className="w-6 h-6 text-[#5141e5] mx-auto" />
                                 )}
                             </div>
 
                             {/* Title */}
-                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                            <h3 className="break-keep text-xl font-semibold leading-7 tracking-tight text-gray-900 mb-2">
                                 {downloadingModel.done ? "다운로드 완료!" : "모델 다운로드 중"}
                             </h3>
 
                             {/* Model Name */}
-                            <p className="text-sm text-gray-600 mb-6">
+                            <p className="break-words text-sm leading-6 text-gray-500 mb-6">
                                 {llmConfig.OLLAMA_MODEL}
                             </p>
 
                             {/* Progress Bar */}
                             {downloadProgress > 0 && (
                                 <div className="mb-4">
-                                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                                    <div className="w-full bg-gray-100 rounded-full h-1 overflow-hidden">
                                         <div
-                                            className="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
+                                            className="bg-[#5141e5]/80 h-1 rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none"
                                             style={{ width: `${downloadProgress}%` }}
                                         />
                                     </div>
-                                    <p className="text-sm text-gray-600 mt-2">
+                                    <p className="text-xs tabular-nums text-gray-500 mt-2">
                                         {downloadProgress}% 완료
                                     </p>
                                 </div>

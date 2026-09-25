@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:117px;background:#FFFFFF;box-sizing:border-box}
+.header-strip{position:absolute;left:0;top:0;width:1280px;height:8px;background:#08916E}
+.header-left{position:absolute;left:64px;top:28px;width:960px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.body-wrap{position:absolute;left:0;right:0;top:141px;height:507px}
+.body-inner{width:1152px;margin-left:64px}
+.identity-row{height:64px;display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.identity{display:flex;align-items:center;gap:16px}
+.identity-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:28px;line-height:34px;font-weight:700;color:#08916E}
+.identity-name{font-size:24px;line-height:34px;font-weight:700;color:#002060}
+.claim{padding:15px 22px;border-left:6px solid #08916E;background:#EAF7F4;border-radius:12px;font-size:20px;line-height:30px;font-weight:700;color:#164F43}
+.main-grid{display:grid;grid-template-columns:364px 1fr;gap:24px;height:356px}
+.left-panel,.right-panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.left-panel{padding:26px 28px}
+.right-panel{padding:24px 28px}
+.panel-label{display:flex;align-items:center;gap:10px;margin-bottom:20px;font-size:20px;line-height:28px;font-weight:700;color:#002060}
+.label-bar{width:7px;height:25px;border-radius:12px;background:#219F88}
+.role-box{padding:20px 18px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px}
+.role-title{font-size:20px;line-height:29px;font-weight:700;color:#002060}
+.role-copy{margin-top:12px;font-size:18px;line-height:29px;color:#1D1D1B}
+.role-line{height:1px;margin:18px 0;background:#B8D8E6}
+.guide{font-size:18px;line-height:29px;color:#1D1D1B}
+.problem-list{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+.problem{min-height:88px;padding:17px 18px;border:1px solid #E2E8F0;border-radius:12px;background:#F9F9F9;display:flex;gap:13px;align-items:flex-start}
+.problem-index{flex:none;width:28px;height:28px;border-radius:12px;background:#219F88;color:#FFFFFF;text-align:center;font-family:"IBM Plex Mono","Consolas",monospace;font-size:16px;line-height:28px;font-weight:700}
+.problem-text{font-size:18px;line-height:28px;color:#1D1D1B}
+.position{margin-top:18px;padding:18px 20px;background:#002060;border-radius:12px}
+.position-label{font-size:18px;line-height:27px;font-weight:700;color:#CCECFF}
+.position-copy{margin-top:6px;font-size:21px;line-height:32px;font-weight:700;color:#FFFFFF}
+.position-copy strong{color:#7AD8BF}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="117" class="header-band" style="height:117px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-strip" data-qid="q-div-25dca9cbce45" data-semantic-role="decoration"></div>
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-15">자영업자 꽁트</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-2b8861da34543a8d" data-source-block-id="source-slide:16:text:3">2주차 PART 4 | 자영업자 꽁트</div>
+  </div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:141px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="body-inner" data-qid="q-div-b79d9d1fba65" data-semantic-role="decoration">
+    <div class="identity-row" data-qid="q-div-96ea316caf7d" data-semantic-role="decoration">
+      <div class="identity" data-qid="q-div-ca97991e836c" data-semantic-role="decoration">
+        <div class="identity-number" data-semantic-role="supporting" data-qid="source-block-7240bc536b1ffb64" data-source-block-id="source-slide:16:text:4">16</div>
+        <div class="identity-name" data-semantic-role="body" data-qid="source-block-37399f8f319f4882" data-source-block-id="source-slide:16:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      </div>
+      <div class="claim" data-semantic-role="body" data-qid="source-block-819d68ef86ea0559" data-source-block-id="source-slide:16:text:6">요즘 자영업자 숏폼의 기회</div>
+    </div>
+
+    <div class="main-grid" data-qid="q-div-948c49f110fb" data-semantic-role="decoration">
+      <div class="left-panel" data-qid="q-left-panel-15" data-semantic-role="decoration">
+        <div class="panel-label" data-semantic-role="supporting" data-qid="source-block-11276ae48abc015b" data-source-block-id="source-slide:16:text:7"><span class="label-bar" data-qid="q-span-99183b9f64c0" data-semantic-role="supporting"></span>사장님 + 직원</div>
+        <div class="role-box" data-qid="q-role-box-15" data-semantic-role="decoration">
+          <div class="role-title" data-semantic-role="body" data-qid="q-role-title-15">사장님 + 직원</div>
+          <div class="role-copy" data-semantic-role="body" data-qid="source-block-917341c9b452afad" data-source-block-id="source-slide:16:text:8:run:0">사장님은 아이디어가 부족하다</div>
+          <div class="role-line" data-qid="q-div-1aa8a45e7be9" data-semantic-role="decoration"></div>
+          <div class="guide" data-semantic-role="body" data-qid="q-guide-15">대행사는 ‘촬영 가이드’까지 제공할 수 있다</div>
+        </div>
+      </div>
+
+      <div class="right-panel" data-qid="q-right-panel-15" data-semantic-role="decoration">
+        <div class="panel-label" data-semantic-role="supporting" data-qid="q-right-label-15"><span class="label-bar" data-qid="q-span-87c4f955ddcb" data-semantic-role="supporting"></span>사장님 + 직원</div>
+        <div class="problem-list" data-qid="q-div-e9c8da7ce76a" data-semantic-role="decoration">
+          <div class="problem" data-qid="q-problem-1-15" data-semantic-role="decoration">
+            <div class="problem-index" data-semantic-role="supporting" data-qid="q-problem-index-1-15">01</div>
+            <div class="problem-text" data-semantic-role="body" data-qid="q-problem-text-1-15">사장님은 아이디어가 부족하다</div>
+          </div>
+          <div class="problem" data-qid="q-problem-2-15" data-semantic-role="decoration">
+            <div class="problem-index" data-semantic-role="supporting" data-qid="q-problem-index-2-15">02</div>
+            <div class="problem-text" data-semantic-role="body" data-qid="source-block-82ef6dfc5d58d8fb" data-source-block-id="source-slide:16:text:8:run:1">직원에게 무엇을 시킬지 모른다</div>
+          </div>
+          <div class="problem" data-qid="q-problem-3-15" data-semantic-role="decoration">
+            <div class="problem-index" data-semantic-role="supporting" data-qid="q-problem-index-3-15">03</div>
+            <div class="problem-text" data-semantic-role="body" data-qid="source-block-ab16c0d52a28cd7d" data-source-block-id="source-slide:16:text:8:run:2">촬영할 장면과 대사를 정하기 어렵다</div>
+          </div>
+          <div class="problem" data-qid="q-problem-4-15" data-semantic-role="decoration">
+            <div class="problem-index" data-semantic-role="supporting" data-qid="q-problem-index-4-15">04</div>
+            <div class="problem-text" data-semantic-role="body" data-qid="source-block-4c1e77e988a81bc5" data-source-block-id="source-slide:16:text:8:run:3">대행사는 ‘촬영 가이드’까지 제공할 수 있다</div>
+          </div>
+        </div>
+        <div class="position" data-qid="q-position-15" data-semantic-role="decoration">
+          <div class="position-label" data-semantic-role="supporting" data-qid="source-block-d4506884aaf33c49" data-source-block-id="source-slide:16:text:11">핵심 포지션</div>
+          <div class="position-copy" data-semantic-role="body" data-qid="source-block-3ee08a8d487c2e74" data-source-block-id="source-slide:16:text:12">‘편집자’가 아니라 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">기획 + 촬영가이드 + 제작 파트너</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="q-page-15">16</div>
+</body>
+</html>

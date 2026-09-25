@@ -1,0 +1,55 @@
+{
+  "id": "process-04-conveyor",
+  "category": "process",
+  "tags": {
+    "ko": [
+      "프로세스",
+      "컨베이어"
+    ],
+    "en": [
+      "process",
+      "conveyor"
+    ]
+  },
+  "alt": {
+    "ko": "컨베이어 단색 벡터 인포그래픽",
+    "en": "conveyor monochrome vector infographic"
+  },
+  "path": "originals/process-04-conveyor.svg",
+  "thumbnail": "thumbnails/process-04-conveyor.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 600,
+  "sha256": "e8e75a49db36a0ac8118fc3f2b61269b450e4bd587f619f9479f2ddc061e1e5f",
+  "geometry_sha256": "9a260fc8f2fe5469cc5ef30e523a8ba85b8bac8906a695d5af1a74353eb68578",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 59265,
+    "preview_opaque_pixels": 4803,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ArrowRightToLine",
+      "Package"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

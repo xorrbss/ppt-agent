@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "item_id": "item-e6cd0a057eb523e9",
+  "method": "Direct inspection of this packet PNG, sourceContent, and requiredImages; no content-audit, private metadata, or automated diagnostics read",
+  "hash_verification": {
+    "html_sha256": "e48e4b4aebc629147c55ccc7a00e07cdcf969c06ce1d6d9fbfa8854120f66820",
+    "png_sha256": "942d1a59bbd1c283ce91c8a62dc428c37d38519e2ddbcd85cd48eea4e340e7f3",
+    "matches_packet_after_sha256_prefix_normalization": true
+  },
+  "verdict": "partial",
+  "geometry": {
+    "pass": true,
+    "findings": [
+      "No visible card escape, overlapping text, or off-canvas content. Four callouts sit outside the screenshot."
+    ]
+  },
+  "readability": {
+    "pass": false,
+    "findings": [
+      "Slide-authored headings and body text are readable.",
+      "The required screenshot is reduced substantially from 1440x1036. Fine dates, identifiers, and interface labels are not reliably readable at the supplied slide render size; the packet explicitly requests sufficient size for these details."
+    ],
+    "score": 1
+  },
+  "required_images": {
+    "candidate_count": 1,
+    "require_all": false,
+    "verdict": "visible_complete_but_detail_readability_limited",
+    "visible_raster_images": true,
+    "observation": "Navigation, sidebar, summary cards, featured-project tracker/action area, other projects, and notifications are all visibly represented. No overlaid callout or obvious crop hides these regions. Exact source-pixel identity was not separately established."
+  },
+  "style": {
+    "verdict": "coherent",
+    "observation": "Teal accents, pale cards, dark text, and a clear screenshot-plus-explanation hierarchy.",
+    "score": 2
+  },
+  "content_visibility": {
+    "observation": "The screenshot is visibly presented as a corporate-member example; administrator behavior is separately described as implementation scope. Geometry passes, but fine image-detail readability prevents an unqualified full visual pass."
+  },
+  "criteria_basis": {
+    "location": "packet.json requiredImages.candidates[0].semantic_description, final sentence",
+    "summary": "Explicitly requires sufficient display size for small Korean labels, dates, identifiers, and status text. These details are not reliably readable in the supplied render; this existing requirement is the basis for partial, not a newly introduced criterion."
+  },
+  "readability_score": 1,
+  "style_score": 2
+}

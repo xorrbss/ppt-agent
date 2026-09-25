@@ -1,0 +1,55 @@
+{
+  "id": "ai-09-recommendation",
+  "category": "ai",
+  "tags": {
+    "ko": [
+      "인공지능",
+      "추천"
+    ],
+    "en": [
+      "ai",
+      "recommendation"
+    ]
+  },
+  "alt": {
+    "ko": "추천 단색 벡터 인포그래픽",
+    "en": "recommendation monochrome vector infographic"
+  },
+  "path": "originals/ai-09-recommendation.svg",
+  "thumbnail": "thumbnails/ai-09-recommendation.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 602,
+  "sha256": "5dc0ab44f68ec4910804217bf9478cfb55ccf17910c8964040adc0a93f02c001",
+  "geometry_sha256": "7e346cb78d5b4911029213db3415f77480f1bc66214995d5a482f0e548d413d4",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57312,
+    "preview_opaque_pixels": 6551,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ThumbsUp",
+      "Star"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

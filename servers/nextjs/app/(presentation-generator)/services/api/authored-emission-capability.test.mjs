@@ -29,11 +29,30 @@ async function loadCapabilityClient() {
 
 async function loadCapabilityStatus() {
   const source = await readFile(statusSourcePath, "utf8");
-  const compiled = await transform(source, { format: "esm", loader: "tsx", target: "esnext" });
+  // The module is imported as a data: URL, which cannot resolve the component's
+  // own relative imports. Compile the one it has alongside it so the deck-side
+  // block reason is the real implementation rather than a stand-in.
+  const helperPath = path.resolve(directory, "../../presentation/utils/masterPresentation.ts");
+  const helper = await transform(await readFile(helperPath, "utf8"), {
+    format: "esm",
+    loader: "ts",
+    target: "esnext",
+  });
+  const compiled = await transform(
+    source.replace('from "../../utils/masterPresentation"', `from "${dataModule(helper.code)}"`),
+    { format: "esm", loader: "tsx", target: "esnext" },
+  );
   return import(dataModule(compiled.code));
 }
 
 const digest = (character) => `sha256:${character.repeat(64)}`;
+
+// Freshness is checked against the wall clock, so these have to move with it.
+// They were pinned to 2026-08-23/24 and every fixture silently expired on
+// 2026-08-24, turning the whole file red for a reason no assertion was about.
+// Tests that mean "stale" still say so with their own explicit past date.
+const EVALUATED_AT = new Date(Date.now() - 60 * 60_000).toISOString();
+const EXPIRES_AT = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
 
 const capabilityMatrix = () => [
   "shape.gradient",
@@ -83,8 +102,8 @@ function readinessV2(overrides = {}) {
       schemaVersion: "authored-release-profile/v2",
       profileId: "profile:staging",
       platformScope: { platform: "windows", renderer: "external-worker", archetypes: ["title"] },
-      evaluatedAt: "2026-08-23T00:00:00Z",
-      expiresAt: "2026-08-24T00:00:00Z",
+      evaluatedAt: EVALUATED_AT,
+      expiresAt: EXPIRES_AT,
       promotionReady: false,
       boundedNativeParityReady: false,
       independentGenerationReady: false,
@@ -105,7 +124,7 @@ function readinessV2(overrides = {}) {
       scope: { platform: "windows", renderer: "external-worker", archetypes: ["title"] },
       serializerId: "presenton-authored-hybrid",
       serializerVersion: "v2",
-      expiresAt: capabilityId === "receipt.cjk" ? "2026-08-24T00:00:00Z" : null,
+      expiresAt: capabilityId === "receipt.cjk" ? EXPIRES_AT : null,
     })),
     rendererAttestation: {
       state: "unattested",
@@ -133,8 +152,8 @@ function readinessV3(overrides = {}) {
       schemaVersion: "authored-bounded-hybrid-release-readiness/v3",
       profileId: "profile:bounded-hybrid",
       platformScope: { platform: "windows", renderer: "external-worker", archetypes: ["title"] },
-      evaluatedAt: "2026-08-23T00:00:00Z",
-      expiresAt: "2026-08-24T00:00:00Z",
+      evaluatedAt: EVALUATED_AT,
+      expiresAt: EXPIRES_AT,
       deckEvidenceReady: false,
       serializerProfileReady: false,
       nativeSubsetReady: false,
@@ -166,7 +185,7 @@ function readinessV3(overrides = {}) {
       scope: { platform: "windows", renderer: "external-worker", archetypes: ["title"] },
       serializerId: "presenton-authored-hybrid",
       serializerVersion: "v3",
-      expiresAt: "2026-08-24T00:00:00Z",
+      expiresAt: EXPIRES_AT,
     })),
     ...overrides,
   };
@@ -342,7 +361,7 @@ test("v3 displays only server-issued bounded release readiness and rejects profi
       reasonCode: "renderer_attestation_verified",
       attestationDigest: digest("a"),
       environment: { os: "windows", boundary: "external-worker" },
-      expiresAt: "2026-08-24T00:00:00Z",
+      expiresAt: EXPIRES_AT,
     },
     releaseAuthorityReceiptDigests: [digest("1"), digest("2"), digest("3"), digest("4")],
     releaseProjectionDigest: digest("5"),

@@ -186,6 +186,10 @@ async def test_persisted_asset_is_uploaded_and_carries_source_metadata(
         "source_slide_index": 4,
         "source_heading": "Revenue",
         "source_text": None,
+        "original_name": None,
+        "ocr_text": None,
+        "source_locator": None,
+        "source_occurrence_id": None,
     }
     # The asset id is the identifier later stages resolve.
     assert candidates[0].asset_id == str(asset.id)

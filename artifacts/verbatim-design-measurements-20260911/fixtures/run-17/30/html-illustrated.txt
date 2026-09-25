@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#08916E}
+.header-left{position:absolute;left:64px;top:20px;width:820px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:6px;font-size:32px;line-height:39px;font-weight:800;color:#FFFFFF}
+.header-right{position:absolute;left:956px;top:20px;width:260px;text-align:right;font-size:15px;line-height:18px;color:#FFFFFF}
+.body-wrap{position:absolute;left:0;right:0;top:120px;margin:0 64px;width:1152px}
+.claim{display:flex;align-items:flex-start;justify-content:space-between;height:58px;margin-bottom:18px}
+.claim-text{font-size:24px;line-height:36px;font-weight:700;color:#1D1D1B}
+.claim-text strong{color:#08916E}
+.claim-index{font-family:"IBM Plex Mono","Consolas",monospace;font-size:22px;line-height:30px;font-weight:700;color:#08916E}
+.content-grid{display:grid;grid-template-columns:392px 736px;gap:24px;height:432px}
+.left-column{display:flex;flex-direction:column;gap:16px}
+.pillar-card{position:relative;padding:22px 24px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.pillar-card.main{height:176px;background:#00140E;color:#FFFFFF}
+.pillar-card.secondary{height:240px}
+.card-tab{position:absolute;top:-12px;left:20px;padding:4px 12px;border-radius:12px;background:#002060;color:#FFFFFF;font-size:15px;line-height:22px;font-weight:700}
+.card-title{margin-top:18px;font-size:21px;line-height:30px;font-weight:800}
+.card-copy{margin-top:12px;font-size:18px;line-height:29px;color:#E0F3FF}
+.secondary .card-title{color:#002060}
+.secondary .card-copy{color:#1D1D1B}
+.execution-rail{display:flex;align-items:center;gap:12px;margin-top:18px}
+.rail-step{height:10px;flex:1;border-radius:12px;background:#219F88}
+.rail-step.light{background:#CCECFF}
+.rail-caption{font-size:15px;line-height:22px;font-weight:700;color:#08916E}
+.right-panel{height:432px;padding:22px 24px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.panel-heading{font-size:21px;line-height:30px;font-weight:800;color:#002060}
+.panel-sub{margin-top:4px;font-size:18px;line-height:28px;color:#1D1D1B}
+.resource-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:24px;row-gap:0;margin-top:18px}
+.resource-item{display:flex;align-items:center;min-height:56px;border-top:1px solid #E2E8F0;font-size:18px;line-height:27px;font-weight:700;color:#1D1D1B}
+.resource-item:nth-last-child(-n+2){border-bottom:1px solid #E2E8F0}
+.resource-num{width:28px;flex:none;font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:22px;color:#08916E}
+.image-panel{position:absolute;right:24px;bottom:20px;width:330px;height:126px;padding:6px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px}
+.image-panel img{display:block;width:316px;height:112px;border-radius:12px;object-fit:cover;background:#E0F3FF}
+.takeaway{position:absolute;left:24px;bottom:26px;width:360px;font-size:18px;line-height:28px;font-weight:700;color:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="96" class="header-band" style="height:96px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-0c7c9fd2a1601fb1" data-source-block-id="source-slide:31:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-710a8a51d9d348e4" data-source-block-id="source-slide:31:text:3">꿀벌쌤 보너스 자료</div>
+  <div data-header-part="right" class="header-right" data-qid="q-div-73774be43d12" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:120px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+    <div class="claim-text" data-semantic-role="body" data-qid="source-block-ea971747b7377c6d" data-source-block-id="source-slide:31:text:4">수업 시간을 줄이고 실행력을 높이기 위해 <strong data-semantic-role="body" data-qid="q-claim-emphasis-30">자료로 제공합니다.</strong></div>
+    <div class="claim-index" data-semantic-role="supporting" data-qid="source-block-c00adf51311ddb71" data-source-block-id="source-slide:31:text:5">31</div>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="left-column" data-qid="q-div-1d730edd387a" data-semantic-role="decoration">
+      <div class="pillar-card main" data-qid="q-div-a87f8ab62c2d" data-semantic-role="decoration">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-30">보너스 자료</div>
+        <div class="card-title" data-semantic-role="body" data-qid="q-card-title-30">실행에 바로 쓰는 핵심 도구</div>
+        <div class="card-copy" data-semantic-role="body" data-qid="q-card-copy-30">수업 이후의 제작·영업·제안 과정을 하나의 흐름으로 연결합니다.</div>
+        <div class="execution-rail" data-qid="q-div-07186e7b759b" data-semantic-role="decoration">
+          <span class="rail-step" data-qid="q-span-23f3056bfb80" data-semantic-role="decoration"></span><span class="rail-step" data-qid="q-span-2bcda7f77181" data-semantic-role="decoration"></span><span class="rail-step light" data-qid="q-span-c9e378c624d6" data-semantic-role="decoration"></span>
+          <span class="rail-caption" data-semantic-role="supporting" data-qid="q-rail-caption-30">실행력</span>
+        </div>
+      </div>
+
+      <div class="pillar-card secondary" data-qid="q-div-9b46112d9d60" data-semantic-role="decoration">
+        <div class="card-title" data-semantic-role="body" data-qid="q-secondary-title-30">제작부터 영업까지</div>
+        <div class="card-copy" data-semantic-role="body" data-qid="q-secondary-copy-30">짧은 시간 안에 바로 꺼내 쓰도록 기능 가이드, 문구, 템플릿을 함께 제공합니다.</div>
+        <div class="takeaway" data-semantic-role="body" data-qid="q-takeaway-30">준비 시간을 줄이고 실행을 앞당깁니다.</div>
+      </div>
+    </div>
+
+    <div class="right-panel" data-qid="q-resource-panel-30" data-semantic-role="decoration">
+      <div class="panel-heading" data-semantic-role="body" data-qid="q-panel-heading-30">꿀벌쌤 보너스 자료</div>
+      <div class="panel-sub" data-semantic-role="body" data-qid="q-panel-sub-30">수업 시간을 줄이고 실행력을 높이기 위해 자료로 제공합니다.</div>
+      <div class="resource-grid" data-qid="source-block-e0c2f103e3a0af3b" data-semantic-role="decoration" data-source-block-id="source-slide:31:text:7">
+        <div class="resource-item" data-semantic-role="body" data-qid="q-resource-01-30"><span class="resource-num" data-semantic-role="supporting" data-qid="q-resource-num-01-30">01</span>캡컷 기능 가이드</div>
+        <div class="resource-item" data-semantic-role="body" data-qid="q-resource-02-30"><span class="resource-num" data-semantic-role="supporting" data-qid="q-resource-num-02-30">02</span>스냅챗 활용법 / 얼굴 노출 최소화</div>
+        <div class="resource-item" data-semantic-role="body" data-qid="q-resource-03-30"><span class="resource-num" data-semantic-role="supporting" data-qid="q-resource-num-03-30">03</span>후킹 문구 모음</div>
+        <div class="resource-item" data-semantic-role="body" data-qid="q-resource-04-30"><span class="resource-num" data-semantic-role="supporting" data-qid="q-resource-num-04-30">04</span>업종별 콘텐츠 아이디어</div>
+        <div class="resource-item" data-semantic-role="body" data-qid="q-resource-05-30"><span class="resource-num" data-semantic-role="supporting" data-qid="q-resource-num-05-30">05</span>전화영업 대본</div>
+        <div class="resource-item" data-semantic-role="body" data-qid="q-resource-06-30"><span class="resource-num" data-semantic-role="supporting" data-qid="q-resource-num-06-30">06</span>DM / 문자 / 카카오톡 문구</div>
+        <div class="resource-item" data-semantic-role="body" data-qid="q-resource-07-30"><span class="resource-num" data-semantic-role="supporting" data-qid="q-resource-num-07-30">07</span>당근마켓 활용 가이드</div>
+        <div class="resource-item" data-semantic-role="body" data-qid="q-resource-08-30"><span class="resource-num" data-semantic-role="supporting" data-qid="q-resource-num-08-30">08</span>제안서 · 견적서 템플릿</div>
+        <div class="resource-item" data-semantic-role="body" data-qid="q-resource-09-30"><span class="resource-num" data-semantic-role="supporting" data-qid="q-resource-num-09-30">09</span>촬영 가이드</div>
+        <div class="resource-item" data-semantic-role="body" data-qid="q-resource-10-30"><span class="resource-num" data-semantic-role="supporting" data-qid="q-resource-num-10-30">10</span>콘텐츠 기획표.</div>
+      </div>
+      <div class="image-panel" data-qid="q-div-5e0d969fd99d" data-semantic-role="decoration">
+        
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="q-page-30">31</div>
+</body>
+</html>

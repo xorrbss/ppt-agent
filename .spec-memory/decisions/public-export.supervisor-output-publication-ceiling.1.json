@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "key": "public-export.supervisor-output-publication-ceiling",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "The Windows supervisor rejects oversized output and bundle children before artifact publication, independently of worker-side output limits.",
+  "scope": [
+    "public-export",
+    "worker"
+  ],
+  "invariants": [
+    "Worker result claims do not replace supervisor file-size validation.",
+    "Existing ownership, checksum and raster readback gates remain required."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "servers/fastapi/services/trusted_executor/wire_transport.py",
+    "servers/fastapi/tests/unit/test_trusted_executor_windows_transport.py",
+    "artifacts/codex-parallel-20260912/export/report.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T04:35:14.5221291+00:00"
+}

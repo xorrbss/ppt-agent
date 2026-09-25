@@ -47,12 +47,13 @@ from utils.authored_illustrations import (
 )
 from utils.llm_calls.author_slide import validate_authored_slide_html
 from utils.renderer_isolation import RendererPolicyError
+from services.authored_admission_producers import illustrate_html
 
 
 def _finalize(html: str, index: int) -> str:
     """Admit the finished slide, mapping a policy rejection onto the stage."""
     try:
-        return validate_authored_slide_html(html, finalized=True)
+        return illustrate_html(html, index=index, validate=validate_authored_slide_html)
     except RendererPolicyError as exc:
         raise AuthoredStageError(
             slide_index=index,
@@ -196,10 +197,12 @@ async def illustrate_slide(
                     **illustration_kwargs,
                 )
             except Exception as exc:
-                if generating and not substituting:
+                if generating and not source_images:
                     # Generated artwork is an optional enhancement. A provider
                     # outage must not discard an otherwise valid authored
-                    # slide; remove the unresolved slot and publish the
+                    # slide. An empty offer still enables source-slot cleanup,
+                    # but carries no caller-owned image to preserve. Remove the
+                    # unresolved slot and publish the
                     # text/diagram composition. Source-image substitution is
                     # intentionally excluded because its validation is part of
                     # the caller-owned source contract and must stay fail-closed.

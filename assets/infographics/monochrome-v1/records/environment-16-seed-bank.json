@@ -1,0 +1,56 @@
+{
+  "id": "environment-16-seed-bank",
+  "category": "environment",
+  "tags": {
+    "ko": [
+      "환경",
+      "종자보존"
+    ],
+    "en": [
+      "environment",
+      "seed",
+      "bank"
+    ]
+  },
+  "alt": {
+    "ko": "종자보존 단색 벡터 인포그래픽",
+    "en": "seed bank monochrome vector infographic"
+  },
+  "path": "originals/environment-16-seed-bank.svg",
+  "thumbnail": "thumbnails/environment-16-seed-bank.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 621,
+  "sha256": "76465aaec2ec3094c5bdaed53a58c7ef230b274d335307ed5f46ab1c7e5d64a8",
+  "geometry_sha256": "77e282ada6e084475dc418453bf047c567dd90baf9140bec4a08d6a1e9db27c8",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56913,
+    "preview_opaque_pixels": 6791,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Bean",
+      "Archive"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

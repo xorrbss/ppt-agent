@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#00140E}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#FFFFFF;word-break:keep-all;overflow-wrap:break-word}
+.slide{position:relative;width:1280px;height:720px;background:linear-gradient(135deg,#00140E 0%,#00281D 58%,#00140E 100%)}
+.frame{position:absolute;left:64px;right:64px;top:52px;bottom:72px;border:1px solid rgba(33,159,136,.34);border-radius:12px}
+.marker{position:absolute;left:92px;top:82px;width:10px;height:10px;background:#219F88;border-radius:2px}
+.brand{position:absolute;left:120px;top:76px;font-size:18px;line-height:28px;font-weight:700;letter-spacing:.04em;color:#FFFFFF}
+.center{position:absolute;left:160px;right:160px;top:174px;text-align:center}
+.title{margin:0;font-size:44px;line-height:1.35;font-weight:700;letter-spacing:-.04em;color:#FFFFFF}
+.title-line{display:block}
+.title-line:last-child{color:#08916E}
+.rule{width:72px;height:2px;margin:32px auto 28px;background:#08916E}
+.subtitle{font-size:20px;line-height:32px;font-weight:500;color:#FFFFFF}
+.process{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:54px}
+.step{width:168px;height:64px;padding:16px 18px;border:1px solid rgba(33,159,136,.6);border-radius:12px;background:rgba(0,20,14,.5);font-size:19px;line-height:30px;font-weight:700;color:#FFFFFF}
+.arrow{width:28px;height:2px;background:#219F88;position:relative}
+.arrow-node{position:absolute;right:-1px;top:-5px;width:12px;height:12px;background:#219F88;border-radius:2px}
+.author{position:absolute;left:0;right:0;bottom:92px;text-align:center;font-size:16px;line-height:24px;color:#A7ACB3;letter-spacing:.06em}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div class="slide" data-qid="q-div-f18d7f4bae9b" data-semantic-role="decoration">
+  <div class="frame" data-qid="q-div-8a2568219d64" data-semantic-role="decoration"></div>
+  <div class="marker" data-qid="q-div-493a8921fa80" data-semantic-role="decoration"></div>
+  <div class="brand" data-semantic-role="title" data-qid="source-block-5137d489be601f9d" data-source-block-id="source-slide:35:text:3">🐝 꿀벌쌤</div>
+
+  <div class="center" data-qid="q-div-bcf77d2d5d34" data-semantic-role="decoration">
+    <div class="title" data-semantic-role="decoration" data-qid="source-block-396ed15ac83e4af0" data-source-block-id="source-slide:35:text:4">
+      <span class="title-line" data-qid="q-span-3fa79da04575" data-semantic-role="body">이제,</span>
+      <span class="title-line" data-qid="q-span-3b692f16ec0b" data-semantic-role="body">홀로서기 시작입니다.</span>
+    </div>
+    <div class="rule" data-qid="q-div-cbd8ff350888" data-semantic-role="decoration"></div>
+    <div class="subtitle" data-semantic-role="body" data-qid="source-block-776ff9a28e9acf4f" data-source-block-id="source-slide:35:text:5">숏폼대행 1인사업자 홀로서기 · 4주 8시간</div>
+
+    <div class="process" data-qid="q-process-34" data-semantic-role="decoration">
+      <div class="step" data-semantic-role="body" data-qid="source-block-c13f14acad4dde72" data-source-block-id="source-slide:35:text:6:run:0">실행</div>
+      <div class="arrow" data-qid="q-div-f2e763bf438c" data-semantic-role="decoration"><div class="arrow-node" data-qid="q-div-ee3f8ebbe45e" data-semantic-role="decoration"></div></div>
+      <div class="step" data-semantic-role="body" data-qid="source-block-73d0b44bcd0f588f" data-source-block-id="source-slide:35:text:6:run:1">경험</div>
+      <div class="arrow" data-qid="q-div-d3cb923b1c37" data-semantic-role="decoration"><div class="arrow-node" data-qid="q-div-814151ff1cc8" data-semantic-role="decoration"></div></div>
+      <div class="step" data-semantic-role="body" data-qid="source-block-44d6f33ea1bf68d7" data-source-block-id="source-slide:35:text:6:run:2">고객</div>
+      <div class="arrow" data-qid="q-div-6221deea81c6" data-semantic-role="decoration"><div class="arrow-node" data-qid="q-div-f0b81a8b3c00" data-semantic-role="decoration"></div></div>
+      <div class="step" data-semantic-role="body" data-qid="source-block-a23adb9942fc9fba" data-source-block-id="source-slide:35:text:6:run:3">성장</div>
+    </div>
+  </div>
+
+  <div class="author" data-semantic-role="supporting" data-qid="source-block-c8d33f4e1c121d7a" data-source-block-id="source-slide:35:text:7">꿀벌쌤 강의용 마스터 PPT</div>
+  <div class="page-number" data-semantic-role="supporting" data-qid="q-page-34">35</div>
+</div>
+</body>
+</html>

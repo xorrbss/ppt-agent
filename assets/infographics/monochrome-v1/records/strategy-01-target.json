@@ -1,0 +1,54 @@
+{
+  "id": "strategy-01-target",
+  "category": "strategy",
+  "tags": {
+    "ko": [
+      "전략",
+      "목표"
+    ],
+    "en": [
+      "strategy",
+      "target"
+    ]
+  },
+  "alt": {
+    "ko": "목표 단색 벡터 인포그래픽",
+    "en": "target monochrome vector infographic"
+  },
+  "path": "originals/strategy-01-target.svg",
+  "thumbnail": "thumbnails/strategy-01-target.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 359,
+  "sha256": "c82af5742aa401a271b52b05b2be776b8050418d77dfa5a433e7cd429464194f",
+  "geometry_sha256": "43d0cb28563ca080d826fcb1ecaeed3d4a8ce1246d54c18ebce1c9e9da4aa1fa",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 49481,
+    "preview_opaque_pixels": 13725,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Target"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

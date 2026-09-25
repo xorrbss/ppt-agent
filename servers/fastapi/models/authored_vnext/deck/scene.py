@@ -16,7 +16,7 @@ import re
 import unicodedata
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from ..master.base import DeckId, Digest, SlideId, StrictCamelModel
 from ..master.contract import Rect
@@ -61,34 +61,7 @@ SCENE_OWNER_CAPABILITY_KINDS: dict[str, frozenset[str]] = {
 }
 
 
-def _canonical_value(value: Any) -> Any:
-    if isinstance(value, str):
-        return unicodedata.normalize("NFC", value)
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            raise ValueError("scene canonical JSON does not permit non-finite numbers")
-        if value.is_integer():
-            return int(value)
-        return float(format(value, ".15g"))
-    if isinstance(value, list):
-        return [_canonical_value(item) for item in value]
-    if isinstance(value, dict):
-        return {
-            unicodedata.normalize("NFC", str(key)): _canonical_value(item)
-            for key, item in value.items()
-        }
-    return value
-
-
-def scene_digest(payload: dict[str, Any]) -> str:
-    encoded = json.dumps(
-        _canonical_value(payload),
-        ensure_ascii=False,
-        allow_nan=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+from .scene_digest import _canonical_value, scene_digest
 
 
 class SceneEditability(StrictCamelModel):
@@ -109,9 +82,9 @@ class SceneTextStyle(StrictCamelModel):
     text_align: Literal["left", "center", "right", "justify"] | None = None
     vertical_align: Literal["top", "middle", "bottom"] | None = None
     auto_fit: Literal["none", "shrink"] = "none"
-    # Scene font and text-frame inset values use PowerPoint points. Browser CSS
-    # pixels are converted at the semantic boundary before these fields are
-    # sealed, so the OOXML exporter must not apply a second 0.75 factor.
+    # Canonical font/inset values are CSS points (0.75 per logical CSS pixel).
+    # Physical typography intent is normalized before sealing. Export converts
+    # CSS points / 0.75 * document pointPerUnit; legacy pointPerUnit is 0.75.
     line_height: float | None = Field(
         default=None, ge=0.5, le=5, exclude_if=lambda value: value is None
     )
@@ -739,6 +712,18 @@ class DeckSceneIR(StrictCamelModel):
     composition_digest: Digest
     source_digest: Digest
     scene_digest: Digest
+    document_canvas: dict[str, Any] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+    @field_validator("document_canvas", mode="before")
+    @classmethod
+    def _validate_document_canvas(cls, value):
+        if value is None:
+            return None
+        from services.document_canvas import DocumentCanvasMetadata
+
+        return DocumentCanvasMetadata.model_validate(value).model_dump(mode="json", by_alias=True)
     hybrid_profile_id: Literal[
         "authored-editable-hybrid-ko-en-basic-v1"
     ] | None = Field(default=None, exclude_if=lambda value: value is None)
@@ -902,6 +887,7 @@ def seal_deck_scene(
     revision: int,
     composition_digest: str,
     source_digest: str,
+    document_canvas: dict[str, Any] | None = None,
     hybrid_profile_id: Literal["authored-editable-hybrid-ko-en-basic-v1"] | None = None,
     slides: list[SlideSceneIR],
     asset_manifest: list[SceneAssetManifestEntry] | None = None,
@@ -927,6 +913,10 @@ def seal_deck_scene(
             item.model_dump(mode="json", by_alias=True) for item in capabilities
         ],
     }
+    if document_canvas is not None:
+        from services.document_canvas import DocumentCanvasMetadata
+
+        payload["documentCanvas"] = DocumentCanvasMetadata.model_validate(document_canvas).model_dump(mode="json", by_alias=True)
     if hybrid_profile_id is not None:
         payload["hybridProfileId"] = hybrid_profile_id
     return DeckSceneIR(**payload, sceneDigest=scene_digest(payload))

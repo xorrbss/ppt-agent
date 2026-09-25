@@ -1,0 +1,268 @@
+{
+  "schema": "authored-hybrid-export-regression-20260912/v1",
+  "request": {
+    "presentationId": "bc843f70-a28e-45f6-a87f-8a4b6c017928",
+    "operationId": "1a98be14-e176-4dd3-a42f-f75863a4665d",
+    "idempotencyKey": "run11-hybrid-export-regression-20260912032300",
+    "fontEmbedding": true,
+    "pptxMode": "hybrid"
+  },
+  "operation": {
+    "status": "succeeded",
+    "requestedExportMode": "editable-hybrid",
+    "deliveredExportMode": "editable-hybrid",
+    "hybridDegradedReason": null,
+    "operationWallMillis": 58242,
+    "exportWorkerMillis": 0,
+    "clientObservedWallSeconds": 65.0,
+    "workerDispatchMillisUsed": null,
+    "workerExecutionCount": 0,
+    "qualityStatus": null,
+    "slideFallbacks": null
+  },
+  "artifact": {
+    "artifactId": "afffb13e-d341-402c-99f9-e79f00c10b91",
+    "bytes": 7807484,
+    "sha256": "f11eb80e3b1a436669bee356289b6c159c9f7fc38577d0d665dae63bea7beeab",
+    "receiptSha256": "f11eb80e3b1a436669bee356289b6c159c9f7fc38577d0d665dae63bea7beeab",
+    "digestMatches": true,
+    "path": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\authored-full-product-validation-20260910\\run-11-hybrid-export\\53-hybrid-export.pptx"
+  },
+  "inspection": {
+    "slideCount": 35,
+    "nativeLayerSlides": 35,
+    "totalPSp": 1384,
+    "totalPPic": 233,
+    "totalATRuns": 872,
+    "sourceTextStringCount": 289,
+    "sourceTextStringsMatchedVerbatimInATRuns": 137,
+    "matchMethod": "Each sourceReadback renderedText value counted when it exactly equaled at least one complete a:t node; duplicate source occurrences counted independently.",
+    "slides": [
+      {
+        "slideNumber": 1,
+        "pSp": 18,
+        "pPic": 5,
+        "aTRuns": 18
+      },
+      {
+        "slideNumber": 2,
+        "pSp": 36,
+        "pPic": 3,
+        "aTRuns": 28
+      },
+      {
+        "slideNumber": 3,
+        "pSp": 35,
+        "pPic": 12,
+        "aTRuns": 18
+      },
+      {
+        "slideNumber": 4,
+        "pSp": 38,
+        "pPic": 9,
+        "aTRuns": 29
+      },
+      {
+        "slideNumber": 5,
+        "pSp": 40,
+        "pPic": 8,
+        "aTRuns": 22
+      },
+      {
+        "slideNumber": 6,
+        "pSp": 40,
+        "pPic": 8,
+        "aTRuns": 24
+      },
+      {
+        "slideNumber": 7,
+        "pSp": 32,
+        "pPic": 3,
+        "aTRuns": 20
+      },
+      {
+        "slideNumber": 8,
+        "pSp": 41,
+        "pPic": 6,
+        "aTRuns": 25
+      },
+      {
+        "slideNumber": 9,
+        "pSp": 42,
+        "pPic": 4,
+        "aTRuns": 29
+      },
+      {
+        "slideNumber": 10,
+        "pSp": 32,
+        "pPic": 7,
+        "aTRuns": 19
+      },
+      {
+        "slideNumber": 11,
+        "pSp": 26,
+        "pPic": 7,
+        "aTRuns": 20
+      },
+      {
+        "slideNumber": 12,
+        "pSp": 43,
+        "pPic": 3,
+        "aTRuns": 29
+      },
+      {
+        "slideNumber": 13,
+        "pSp": 38,
+        "pPic": 4,
+        "aTRuns": 24
+      },
+      {
+        "slideNumber": 14,
+        "pSp": 40,
+        "pPic": 11,
+        "aTRuns": 22
+      },
+      {
+        "slideNumber": 15,
+        "pSp": 39,
+        "pPic": 3,
+        "aTRuns": 20
+      },
+      {
+        "slideNumber": 16,
+        "pSp": 37,
+        "pPic": 3,
+        "aTRuns": 24
+      },
+      {
+        "slideNumber": 17,
+        "pSp": 39,
+        "pPic": 9,
+        "aTRuns": 24
+      },
+      {
+        "slideNumber": 18,
+        "pSp": 36,
+        "pPic": 6,
+        "aTRuns": 20
+      },
+      {
+        "slideNumber": 19,
+        "pSp": 51,
+        "pPic": 12,
+        "aTRuns": 32
+      },
+      {
+        "slideNumber": 20,
+        "pSp": 63,
+        "pPic": 3,
+        "aTRuns": 54
+      },
+      {
+        "slideNumber": 21,
+        "pSp": 35,
+        "pPic": 7,
+        "aTRuns": 21
+      },
+      {
+        "slideNumber": 22,
+        "pSp": 35,
+        "pPic": 11,
+        "aTRuns": 13
+      },
+      {
+        "slideNumber": 23,
+        "pSp": 24,
+        "pPic": 7,
+        "aTRuns": 22
+      },
+      {
+        "slideNumber": 24,
+        "pSp": 53,
+        "pPic": 7,
+        "aTRuns": 26
+      },
+      {
+        "slideNumber": 25,
+        "pSp": 38,
+        "pPic": 4,
+        "aTRuns": 23
+      },
+      {
+        "slideNumber": 26,
+        "pSp": 52,
+        "pPic": 8,
+        "aTRuns": 30
+      },
+      {
+        "slideNumber": 27,
+        "pSp": 62,
+        "pPic": 3,
+        "aTRuns": 46
+      },
+      {
+        "slideNumber": 28,
+        "pSp": 36,
+        "pPic": 3,
+        "aTRuns": 27
+      },
+      {
+        "slideNumber": 29,
+        "pSp": 34,
+        "pPic": 8,
+        "aTRuns": 22
+      },
+      {
+        "slideNumber": 30,
+        "pSp": 59,
+        "pPic": 16,
+        "aTRuns": 30
+      },
+      {
+        "slideNumber": 31,
+        "pSp": 46,
+        "pPic": 11,
+        "aTRuns": 26
+      },
+      {
+        "slideNumber": 32,
+        "pSp": 30,
+        "pPic": 5,
+        "aTRuns": 16
+      },
+      {
+        "slideNumber": 33,
+        "pSp": 37,
+        "pPic": 1,
+        "aTRuns": 17
+      },
+      {
+        "slideNumber": 34,
+        "pSp": 48,
+        "pPic": 11,
+        "aTRuns": 31
+      },
+      {
+        "slideNumber": 35,
+        "pSp": 29,
+        "pPic": 5,
+        "aTRuns": 21
+      }
+    ]
+  },
+  "acceptance": {
+    "deliveredEditableHybrid": true,
+    "nativeLayerOnEverySlide": true,
+    "slideFallbacksEmpty": false,
+    "digestMatches": true
+  },
+  "baselineComparison": {
+    "baselinePath": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\authored-full-product-validation-20260910\\run-11-hybrid-export\\47-evidence.json",
+    "baselineOperationWallMillis": 925391,
+    "baselineExportWorkerMillis": 896192,
+    "operationWallDeltaMillis": -867149,
+    "exportWorkerDeltaMillis": -896192,
+    "baselineArtifactSha256": "f11eb80e3b1a436669bee356289b6c159c9f7fc38577d0d665dae63bea7beeab",
+    "artifactSha256Identical": true
+  }
+}

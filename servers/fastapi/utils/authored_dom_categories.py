@@ -31,6 +31,7 @@ from collections.abc import Mapping
 
 from utils.authored_dom_footer_zone import FOOTER_ZONE_CATEGORY
 from utils.authored_dom_text_escape import TEXT_ESCAPE_CATEGORY
+from utils.authored_empty_media import EMPTY_MEDIA_CATEGORY
 
 #: Every value ``utils.authored_dom_quality.DomQualityIssue.category`` accepts,
 #: in the order its ``Literal`` declares them.  The contract test asserts the
@@ -47,6 +48,7 @@ DOM_QUALITY_CATEGORIES: tuple[str, ...] = (
     "image",
     "content",
     "contrast",
+    EMPTY_MEDIA_CATEGORY,
 )
 
 #: Every geometry category a detector reports.  Membership here is what makes a
@@ -60,8 +62,13 @@ DETECTED_GEOMETRY_CATEGORIES = frozenset(
         "overlap",
         TEXT_ESCAPE_CATEGORY,
         FOOTER_ZONE_CATEGORY,
+        EMPTY_MEDIA_CATEGORY,
     }
 )
+
+# Empty media is a measured composition defect, not an admission exception.
+# This registry has no per-profile classification: ordinary decks spend their
+# bounded remake budget; terminal verbatim source-reflow slides carry a flag.
 
 #: Detected, recorded, briefed -- but never a reason on its own to flag a
 #: slide, spend a remake or hold a deck back.
@@ -98,6 +105,39 @@ BLOCKING_SAFETY_CATEGORIES = frozenset(
     DETECTED_GEOMETRY_CATEGORIES - ADVISORY_ONLY_CATEGORIES
 )
 
+#: Categories whose presence lets the cheap deterministic critique stand in for
+#: the vision-QA model call in ``utils.llm_calls.author_vision_qa``.
+#:
+#: The repair round asks the model to look at a slide only when the measured DOM
+#: has nothing actionable to say.  That cascade is sound for a measured geometry
+#: miss -- the browser already knows more about a clipped box than a model
+#: looking at a picture of it -- but it is wrong for a category that is not a
+#: reason to spend a repair in the first place.  Replayed offline over 905
+#: stored bench slides (41 runs under ``artifacts/``), ``contrast`` fired on
+#: 97.79% of them, so the deterministic critique was never empty and the model
+#: call was unreachable: on the 24-slide run 48 deck, 0 of 24 slides could reach
+#: it and 20 of the 24 were held by ``contrast`` alone.
+#:
+#: ``contrast`` is not in ``DETECTED_GEOMETRY_CATEGORIES``, so no other consumer
+#: treats it as a blocker, and ``ADVISORY_ONLY_CATEGORIES`` is already declared
+#: as "never a reason on its own to flag a slide, spend a remake or hold a deck
+#: back".  Neither may consume the repair budget or veto the model either: they
+#: travel to the model as briefing material instead.  An unregistered category
+#: supersedes, which keeps a new detector fail-closed exactly as today.
+VQA_SUPPRESSING_CATEGORIES = frozenset(
+    set(DOM_QUALITY_CATEGORIES) - ADVISORY_ONLY_CATEGORIES - {"contrast"}
+)
+
+
+def deterministic_findings_supersede_vqa(categories: object) -> bool:
+    """Whether these DOM categories make the vision-QA model call redundant."""
+
+    return any(
+        str(category) not in (set(DOM_QUALITY_CATEGORIES) - VQA_SUPPRESSING_CATEGORIES)
+        for category in categories or ()
+    )
+
+
 #: What an unknown category degrades to.  A detector that raised an issue at
 #: all measured a geometry miss, and ``overflow`` is the critique type whose
 #: brief tells the model to make the content fit the box it was given -- the
@@ -120,6 +160,7 @@ CRITIQUE_TYPE_BY_CATEGORY: Mapping[str, str] = {
     "content": "other",
     TEXT_ESCAPE_CATEGORY: "overflow",
     FOOTER_ZONE_CATEGORY: "overflow",
+    EMPTY_MEDIA_CATEGORY: "other",
 }
 
 
@@ -189,6 +230,8 @@ __all__ = [
     "RESIDUAL_BLOCKING_CATEGORIES",
     "TEXT_SCALE_SHRINKABLE_CATEGORIES",
     "TEXT_SCALE_UNFIXABLE_CATEGORIES",
+    "VQA_SUPPRESSING_CATEGORIES",
     "blocking_categories_in_order",
     "critique_type_for_category",
+    "deterministic_findings_supersede_vqa",
 ]

@@ -1,0 +1,302 @@
+{
+ "sourceUnitId": "source-slide:19",
+ "sourceIndex": 18,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:19:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:19:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "3주차 PART 1 | 무료 샘플 전략",
+    "paragraphs": [
+     {
+      "runs": [
+       "3주차 PART 1 | 무료 샘플 전략"
+      ],
+      "text": "3주차 PART 1 | 무료 샘플 전략"
+     }
+    ],
+    "runs": [
+     "3주차 PART 1 | 무료 샘플 전략"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:2e5d899868cf78c7eaf63d06c32f20e66e7083d7480086397769eef905cb1f97",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:19:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "19",
+    "paragraphs": [
+     {
+      "runs": [
+       "19"
+      ],
+      "text": "19"
+     }
+    ],
+    "runs": [
+     "19"
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:a65737ab6709e2fc906f155dc6231034fdd017a2ee0e595cbcc0ae01cf3c14d0",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:19:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:74f52ea3fedff52018a6c922ae9f9a5650ace6385c0dd96cc4f477c74504ce90",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:19:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "• 첫 고객에게 무작정 가격부터 말하지 않는다\n• 가능하면 가게 특성에 맞는 샘플을 준비\n• 한 가게에 4개 소재를 기획해보기\n• 무료 제공 범위와 기간을 명확히\n• 목표는 ‘공짜 노동’이 아니라 유료 전환",
+    "paragraphs": [
+     {
+      "runs": [
+       "• 첫 고객에게 무작정 가격부터 말하지 않는다"
+      ],
+      "text": "• 첫 고객에게 무작정 가격부터 말하지 않는다"
+     },
+     {
+      "runs": [
+       "• 가능하면 가게 특성에 맞는 샘플을 준비"
+      ],
+      "text": "• 가능하면 가게 특성에 맞는 샘플을 준비"
+     },
+     {
+      "runs": [
+       "• 한 가게에 4개 소재를 기획해보기"
+      ],
+      "text": "• 한 가게에 4개 소재를 기획해보기"
+     },
+     {
+      "runs": [
+       "• 무료 제공 범위와 기간을 명확히"
+      ],
+      "text": "• 무료 제공 범위와 기간을 명확히"
+     },
+     {
+      "runs": [
+       "• 목표는 ‘공짜 노동’이 아니라 유료 전환"
+      ],
+      "text": "• 목표는 ‘공짜 노동’이 아니라 유료 전환"
+     }
+    ],
+    "runs": [
+     "• 첫 고객에게 무작정 가격부터 말하지 않는다",
+     "\n",
+     "• 가능하면 가게 특성에 맞는 샘플을 준비",
+     "\n",
+     "• 한 가게에 4개 소재를 기획해보기",
+     "\n",
+     "• 무료 제공 범위와 기간을 명확히",
+     "\n",
+     "• 목표는 ‘공짜 노동’이 아니라 유료 전환"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 822960,
+     "y": 1463040,
+     "cx": 6766560,
+     "cy": 4297680
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:290a730a17ce8b14a1d18a07cd4cfb0ef82ec0811d9c3c94dca27c7314031818",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:19:shape:7",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 5,
+   "payload": {
+    "shapeName": "Rounded Rectangle 6",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 7955279,
+     "y": 1600200,
+     "cx": 3108960,
+     "cy": 3291840
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:133efb6f0d86962e8c6ca5739ec0637f731ccfd4d537c1b5003c044ffe6d0f20",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:19:shape:8",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 6,
+   "payload": {
+    "shapeName": "Rectangle 7",
+    "preset": "rect",
+    "geometry": {
+     "x": 7955279,
+     "y": 1600200,
+     "cx": 73152,
+     "cy": 3291840
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:73dbd82134ecfc01cae1713c18b55d4b5bd5292ba8e54db8ed27c4e8a62917c6",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:19:text:9",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 7,
+   "payload": {
+    "text": "샘플 구조",
+    "paragraphs": [
+     {
+      "runs": [
+       "샘플 구조"
+      ],
+      "text": "샘플 구조"
+     }
+    ],
+    "runs": [
+     "샘플 구조"
+    ],
+    "shapeName": "TextBox 8",
+    "geometry": {
+     "x": 8156448,
+     "y": 1737360,
+     "cx": 2743200,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:8f326bb20d808f931033f9afd8c7a7b6c9d9f34cf9d0a3d762cb665b00132201",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:19:text:10",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 8,
+   "payload": {
+    "text": "가게 분석\n→ 4개 기획\n→ 1~4개 제작\n→ 반응 확인\n→ 유료 제안",
+    "paragraphs": [
+     {
+      "runs": [
+       "가게 분석\n→ 4개 기획\n→ 1~4개 제작\n→ 반응 확인\n→ 유료 제안"
+      ],
+      "text": "가게 분석\n→ 4개 기획\n→ 1~4개 제작\n→ 반응 확인\n→ 유료 제안"
+     }
+    ],
+    "runs": [
+     "가게 분석\n→ 4개 기획\n→ 1~4개 제작\n→ 반응 확인\n→ 유료 제안"
+    ],
+    "shapeName": "TextBox 9",
+    "geometry": {
+     "x": 8156448,
+     "y": 2167128,
+     "cx": 2743200,
+     "cy": 2606040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:36843c48b272c24e84055e4c49812e93321fac7ab4d8aa0e5634074b23ad9510",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

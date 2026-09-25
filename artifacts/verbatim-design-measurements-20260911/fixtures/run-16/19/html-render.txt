@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:24px;width:1000px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.04em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px}
+.claim{height:56px;display:flex;align-items:center;margin-bottom:24px}
+.claim-text{font-size:26px;line-height:38px;font-weight:700;color:#1D1D1B}
+.claim-text strong{color:#08916E}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;height:410px}
+.card{height:410px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;position:relative}
+.card-head{display:flex;align-items:center;gap:12px;padding-bottom:22px;border-bottom:2px solid #219F88}
+.card-icon{font-size:30px;line-height:34px}
+.card-title{font-size:24px;line-height:34px;font-weight:700;color:#002060}
+.flow{display:flex;flex-direction:column;gap:0;margin-top:22px}
+.step{min-height:50px;padding:10px 14px;background:#E0F3FF;border-left:5px solid #08916E;border-radius:12px;font-size:18px;line-height:28px;font-weight:700;color:#1D1D1B}
+.arrow{height:20px;display:flex;align-items:center;justify-content:center;font-size:21px;line-height:20px;color:#00828E;font-weight:700}
+.card-number{position:absolute;right:28px;bottom:24px;font-family:"IBM Plex Mono","Consolas",monospace;font-size:20px;line-height:26px;font-weight:700;color:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" style="height:104px" class="header-band" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div data-header-part="eyebrow" class="header-left eyebrow" data-qid="source-block-69c116e93defbdc5" data-semantic-role="supporting" data-source-block-id="source-slide:20:text:3">3주차 PART 2 | 핵심 영업 3종</div>
+  <div data-header-part="title" class="header-left title" style="top:54px" data-qid="source-block-52f3ff5b7504ce76" data-semantic-role="title" data-source-block-id="source-slide:20:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:28px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-claim-19" data-semantic-role="decoration">
+    <div class="claim-text" data-qid="q-claim-text-19" data-semantic-role="body">핵심 영업 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">3종</strong>을 상황에 맞게 실행합니다</div>
+  </div>
+
+  <div class="cards" data-qid="q-div-beb8611456c7" data-semantic-role="decoration">
+    <div class="card" data-qid="q-card-phone-19" data-semantic-role="decoration">
+      <div class="card-head" data-qid="source-block-86b3b5d52d2f7fe6" data-semantic-role="decoration" data-source-block-id="source-slide:20:text:8">
+        <div class="card-icon" data-qid="q-phone-icon-19" data-semantic-role="body">📞</div>
+        <div class="card-title" data-qid="q-phone-title-19" data-semantic-role="body">전화</div>
+      </div>
+      <div class="flow" data-qid="source-block-0d298484b20206a0" data-semantic-role="decoration" data-source-block-id="source-slide:20:text:9">
+        <div class="step" data-qid="q-phone-step1-19" data-semantic-role="body">짧게 소개</div>
+        <div class="arrow" data-qid="q-phone-arrow1-19" data-semantic-role="body">→</div>
+        <div class="step" data-qid="q-phone-step2-19" data-semantic-role="body">문제 제시</div>
+        <div class="arrow" data-qid="q-phone-arrow2-19" data-semantic-role="body">→</div>
+        <div class="step" data-qid="q-phone-step3-19" data-semantic-role="body">샘플 제안</div>
+        <div class="arrow" data-qid="q-phone-arrow3-19" data-semantic-role="body">→</div>
+        <div class="step" data-qid="q-phone-step4-19" data-semantic-role="body">상담 약속</div>
+      </div>
+      <div class="card-number" data-qid="q-phone-number-19" data-semantic-role="supporting">01</div>
+    </div>
+
+    <div class="card" data-qid="q-card-dm-19" data-semantic-role="decoration">
+      <div class="card-head" data-qid="source-block-bc9b99a313aeef8f" data-semantic-role="decoration" data-source-block-id="source-slide:20:text:12">
+        <div class="card-icon" data-qid="q-dm-icon-19" data-semantic-role="body">💬</div>
+        <div class="card-title" data-qid="q-dm-title-19" data-semantic-role="body">인스타 DM</div>
+      </div>
+      <div class="flow" data-qid="source-block-cf8e278cddd926e4" data-semantic-role="decoration" data-source-block-id="source-slide:20:text:13">
+        <div class="step" data-qid="q-dm-step1-19" data-semantic-role="body">가게 관찰</div>
+        <div class="arrow" data-qid="q-dm-arrow1-19" data-semantic-role="body">→</div>
+        <div class="step" data-qid="q-dm-step2-19" data-semantic-role="body">맞춤 제안</div>
+        <div class="arrow" data-qid="q-dm-arrow2-19" data-semantic-role="body">→</div>
+        <div class="step" data-qid="q-dm-step3-19" data-semantic-role="body">샘플/포트폴리오</div>
+        <div class="arrow" data-qid="q-dm-arrow3-19" data-semantic-role="body">→</div>
+        <div class="step" data-qid="q-dm-step4-19" data-semantic-role="body">답변 유도</div>
+      </div>
+      <div class="card-number" data-qid="q-dm-number-19" data-semantic-role="supporting">02</div>
+    </div>
+
+    <div class="card" data-qid="q-card-visit-19" data-semantic-role="decoration">
+      <div class="card-head" data-qid="source-block-1e10c5bb5e08300c" data-semantic-role="decoration" data-source-block-id="source-slide:20:text:16">
+        <div class="card-icon" data-qid="q-visit-icon-19" data-semantic-role="body">🏃</div>
+        <div class="card-title" data-qid="q-visit-title-19" data-semantic-role="body">직접 방문</div>
+      </div>
+      <div class="flow" data-qid="source-block-0b50ad5119aedc7f" data-semantic-role="decoration" data-source-block-id="source-slide:20:text:17">
+        <div class="step" data-qid="q-visit-step1-19" data-semantic-role="body">짧게 인사</div>
+        <div class="arrow" data-qid="q-visit-arrow1-19" data-semantic-role="body">→</div>
+        <div class="step" data-qid="q-visit-step2-19" data-semantic-role="body">포트폴리오 보여주기</div>
+        <div class="arrow" data-qid="q-visit-arrow2-19" data-semantic-role="body">→</div>
+        <div class="step" data-qid="q-visit-step3-19" data-semantic-role="body">담당자 확인</div>
+        <div class="arrow" data-qid="q-visit-arrow3-19" data-semantic-role="body">→</div>
+        <div class="step" data-qid="q-visit-step4-19" data-semantic-role="body">후속 연락</div>
+      </div>
+      <div class="card-number" data-qid="q-visit-number-19" data-semantic-role="supporting">03</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-qid="source-block-c78ed5381f160ce0" data-semantic-role="supporting" data-source-block-id="source-slide:20:text:4">20</div>
+</body>
+</html>

@@ -1,12 +1,15 @@
 import asyncio
+import hashlib
 import io
+import json
 import logging
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
 
 from services import authored_quality_review_service as quality_service
-from utils.authored_dom_quality import STYLE_REFERENCE, DomQualityReport
+from utils.authored_dom_quality import STYLE_REFERENCE, DomQualityIssue, DomQualityReport
 from utils.llm_calls import author_vision_qa
 from utils.llm_calls.author_slide import Brand
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
@@ -255,7 +258,8 @@ def test_forced_full_reauthor_is_bounded_and_reports_success(monkeypatch):
         )
     )
 
-    assert author_calls == ["high"]
+    # The request-scoped durable generation preset owns reasoning effort.
+    assert author_calls == [None]
     assert fixed == [0]
     assert "Improved" in htmls[0]
     assert pngs == [b"fallback-png"]
@@ -451,3 +455,267 @@ def test_forced_full_reauthor_failure_is_logged_and_machine_readable(
         "error_type": "RuntimeError",
     }
     assert "slide_index=0 stage=full_reauthor" in caplog.text
+
+
+def _structural_repair_double(monkeypatch, *, final_decision="admitted", duplicate=False):
+    from services.authored_structural_repair import RepairAssessment
+
+    original = _VALID_HTML
+    provisional = original.replace("data-qid='q-title'", "data-qid='q-title' style='padding:2px'")
+    final = original.replace("data-qid='q-title'", "data-qid='q-title' style='padding:1px'")
+    captures, proposals, assessed, inputs, advances = [], [], [], [], []
+    metrics = {"elements": []}
+
+    async def evaluator(slide_index, html, browser_metrics):
+        assessed.append((slide_index, html))
+        decision = "reject" if html == original else "provisional" if html == provisional else final_decision
+        return RepairAssessment(
+            decision=decision, reasons=("still_clipped",) if decision != "admitted" else (),
+            evidence={
+                "html_digest": "sha256:" + hashlib.sha256(html.encode()).hexdigest(),
+                "metrics_digest": "sha256:" + hashlib.sha256(json.dumps(
+                    browser_metrics, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+                ).encode()).hexdigest(),
+            },
+        )
+
+    evaluator.selected_digest = "sha256:" + hashlib.sha256(original.encode()).hexdigest()
+
+    def advance(expected, assessment, html, browser_metrics, *, context=None):
+        assert expected == evaluator.selected_digest
+        advances.append((assessment.decision, html, context))
+        evaluator.selected_digest = "sha256:" + hashlib.sha256(html.encode()).hexdigest()
+
+    evaluator.advance = advance
+
+    async def proposal(_png, _dom, _critique, **kwargs):
+        proposals.append(kwargs)
+        return SimpleNamespace(ok=True, plan=object())
+
+    def apply(html, _plan, **_kwargs):
+        inputs.append(html)
+        candidate = provisional if html == original or duplicate else final
+        return SimpleNamespace(ok=True, html=candidate, changes=[])
+
+    async def capture(html, index):
+        captures.append((html, index))
+        return html, html.encode(), metrics
+
+    async def unexpected(*_args, **_kwargs):
+        raise AssertionError("Structural repair must not request critique, reauthor, or extra capture")
+
+    monkeypatch.setattr(author_vision_qa, "propose_authored_slide_patch", proposal)
+    monkeypatch.setattr(author_vision_qa, "apply_authored_patch", apply)
+    monkeypatch.setattr(author_vision_qa, "critique_authored", unexpected)
+    monkeypatch.setattr(author_vision_qa, "author_slide_html", unexpected)
+    monkeypatch.setattr(author_vision_qa, "ensure_browser_metrics", unexpected)
+    monkeypatch.setattr(author_vision_qa, "_structural_compact_dom", lambda *_args: [])
+    monkeypatch.setattr(author_vision_qa, "build_structural_repair_scopes", lambda *_args, **_kwargs: (SimpleNamespace(
+        layout_owner_qid="q-title", affected_qids=("q-title",), protected_qids=(),
+    ),))
+    monkeypatch.setattr(author_vision_qa, "inspect_authored_dom", lambda *_args, **_kwargs: DomQualityReport(
+        STYLE_REFERENCE,
+        (DomQualityIssue("clipping", "high", "title clipped", ("q-title",)),), (), 1,
+    ))
+    return SimpleNamespace(
+        original=original, provisional=provisional, final=final,
+        evaluator=evaluator, capture=capture, metrics=metrics,
+        captures=captures, proposals=proposals, assessed=assessed, inputs=inputs,
+        advances=advances,
+    )
+
+
+def test_structural_proposal_uses_per_slide_repair_patch_scope(monkeypatch):
+    import uuid
+
+    from services.provider_usage_instrumentation import (
+        active_usage_scope_slide_index,
+        provider_usage_scope,
+    )
+    from utils.llm_calls import author_structural_repair_loop
+
+    double = _structural_repair_double(monkeypatch)
+    seen_slide_indices = []
+    opened_scopes = []
+    original_proposal = author_vision_qa.propose_authored_slide_patch
+    original_scope = author_structural_repair_loop.provider_usage_scope
+
+    async def observing_proposal(*args, **kwargs):
+        seen_slide_indices.append(active_usage_scope_slide_index())
+        return await original_proposal(*args, **kwargs)
+
+    def observing_scope(**kwargs):
+        opened_scopes.append(kwargs)
+        return original_scope(**kwargs)
+
+    monkeypatch.setattr(
+        author_vision_qa, "propose_authored_slide_patch", observing_proposal
+    )
+    monkeypatch.setattr(
+        author_structural_repair_loop, "provider_usage_scope", observing_scope
+    )
+    job_id = uuid.uuid4()
+
+    async def run():
+        with provider_usage_scope(
+            job_id=job_id,
+            operation="authored_generation",
+            stage="repair",
+            attempt_number=4,
+        ):
+            return await author_vision_qa.revise_authored_deck(
+                [double.original], [b"original"], ["content"], ["CONTENT"],
+                Brand(topic="topic"), "design", max_cycles=1,
+                slide_indices=[33], total_slides=35,
+                candidate_evaluator=double.evaluator,
+                initial_browser_metrics=[double.metrics],
+                structural_candidate_capture=double.capture,
+            )
+
+    asyncio.run(run())
+
+    assert seen_slide_indices == [33]
+    assert opened_scopes == [{
+        "job_id": job_id,
+        "operation": "authored_generation",
+        "stage": "repair_patch",
+        "attempt_number": 4,
+        "slide_index": 33,
+    }]
+
+
+@pytest.mark.parametrize("final_decision", ["admitted", "provisional", "reject"])
+def test_structural_repair_accumulates_only_in_memory_until_admitted(monkeypatch, final_decision):
+    double = _structural_repair_double(monkeypatch, final_decision=final_decision)
+    results, stats = [], {}
+
+    async def run():
+        return await author_vision_qa.revise_authored_deck(
+            [double.original], [b"original"], ["content"], ["CONTENT"],
+            Brand(topic="topic"), "design", max_cycles=9, slide_indices=[33],
+            total_slides=35, candidate_evaluator=double.evaluator,
+            initial_browser_metrics=[double.metrics],
+            structural_candidate_capture=double.capture,
+            structural_results_sink=results, review_stats_sink=stats,
+            fail_on_residual_dom_issues=True, return_details=True,
+        )
+
+    if final_decision == "admitted":
+        htmls, pngs, fixed, details = asyncio.run(run())
+        assert htmls == [double.final]
+        assert pngs == [double.final.encode()]
+        assert fixed == [0]
+        assert details[0]["succeeded"] is True
+    else:
+        with pytest.raises(author_vision_qa.AuthoredVqaResidualDomIssuesError) as caught:
+            asyncio.run(run())
+        assert caught.value.htmls == [double.original]
+        assert caught.value.pngs == [b"original"]
+        assert caught.value.fixed == []
+        assert caught.value.repair_results == results
+        assert caught.value.repair_details[0]["succeeded"] is False
+    assert double.inputs == [double.original, double.provisional]
+    assert len(double.proposals) == len(double.captures) == 2
+    assert all(proposal["retry_invalid_model_patch"] is False for proposal in double.proposals)
+    assert all(proposal["allow_source_reflow_safe_styles"] is True for proposal in double.proposals)
+    assert all(index == 33 for index, _html in double.assessed)
+    assert [decision for decision, _html, _context in double.advances] == {
+        "admitted": ["provisional", "admitted"],
+        "provisional": ["provisional", "provisional"],
+        "reject": ["provisional"],
+    }[final_decision]
+    assert results[0].slide_index == 33 and results[0].local_index == 0
+    assert stats == {"vqaReviewedSlideCount": 0, "deterministicOnlySlideCount": 1}
+
+
+def test_structural_repair_duplicate_digest_stops_before_second_capture(monkeypatch):
+    double = _structural_repair_double(monkeypatch, duplicate=True)
+    results = []
+    htmls, pngs, fixed = asyncio.run(author_vision_qa.revise_authored_deck(
+        [double.original], [b"original"], ["content"], ["CONTENT"],
+        Brand(topic="topic"), "design", max_cycles=2,
+        candidate_evaluator=double.evaluator, initial_browser_metrics=[double.metrics],
+        structural_candidate_capture=double.capture, structural_results_sink=results,
+    ))
+    assert htmls == [double.original] and pngs == [b"original"] and fixed == []
+    assert len(double.proposals) == 2 and len(double.captures) == 1
+    assert results[0].cycle_history[-1]["stop_reason"] == "duplicate_candidate_digest"
+
+
+def test_structural_repair_checks_shared_capture_budget_before_second_provider_call(monkeypatch):
+    double = _structural_repair_double(monkeypatch)
+    results = []
+    budget = author_vision_qa.StructuralRepairBudget(
+        max_candidate_captures=1, max_provider_transmissions=2,
+    )
+    htmls, pngs, fixed = asyncio.run(author_vision_qa.revise_authored_deck(
+        [double.original], [b"original"], ["content"], ["CONTENT"],
+        Brand(topic="topic"), "design", max_cycles=2,
+        candidate_evaluator=double.evaluator, initial_browser_metrics=[double.metrics],
+        structural_candidate_capture=double.capture, structural_results_sink=results,
+        structural_budgets={0: budget},
+    ))
+    assert htmls == [double.original] and pngs == [b"original"] and fixed == []
+    assert len(double.proposals) == len(double.captures) == 1
+    assert budget.receipt() == {
+        "candidate_capture_limit": 1,
+        "candidate_captures": 1,
+        "candidate_captures_remaining": 0,
+        "provider_transmission_limit": 2,
+        "provider_transmissions": 1,
+        "provider_transmissions_remaining": 1,
+    }
+    assert results[0].cycle_history[-1]["stop_reason"] == "candidate_capture_budget_exhausted"
+
+
+def test_structural_evaluator_and_legacy_validator_are_mutually_exclusive():
+    async def validate(*_args):
+        raise AssertionError("No candidate work is allowed for an ambiguous contract")
+
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        asyncio.run(author_vision_qa.revise_authored_deck(
+            [_VALID_HTML], [b"png"], ["content"], ["CONTENT"],
+            Brand(topic="topic"), "design", candidate_validator=validate,
+            candidate_evaluator=validate,
+        ))
+
+
+def test_structural_admitted_initial_candidate_uses_original_checkpoint_digest(monkeypatch):
+    from dataclasses import replace
+
+    double = _structural_repair_double(monkeypatch)
+    results = []
+
+    async def evaluator(index, html, metrics):
+        assessment = await double.evaluator(index, html, metrics)
+        return replace(assessment, evidence={
+            **assessment.evidence,
+            "baseline_html_digest": "sha256:" + hashlib.sha256(double.original.encode()).hexdigest(),
+        })
+
+    htmls, pngs, fixed = asyncio.run(author_vision_qa.revise_authored_deck(
+        [double.final], [b"already-rendered"], ["content"], ["CONTENT"],
+        Brand(topic="topic"), "design", candidate_evaluator=evaluator,
+        initial_browser_metrics=[double.metrics], structural_results_sink=results,
+        structural_candidate_capture=double.capture,
+    ))
+    assert htmls == [double.final] and pngs == [b"already-rendered"] and fixed == [0]
+    assert results[0].changed is True
+    assert double.proposals == [] and double.captures == []
+
+
+def test_structural_scope_rejection_does_not_advance_evaluator_history(monkeypatch):
+    double = _structural_repair_double(monkeypatch)
+    monkeypatch.setattr(author_vision_qa, "protected_scope_violations", lambda *_args: (
+        "repair_protected_geometry_changed:q-footer",
+    ))
+    htmls, pngs, fixed = asyncio.run(author_vision_qa.revise_authored_deck(
+        [double.original], [b"original"], ["content"], ["CONTENT"],
+        Brand(topic="topic"), "design", max_cycles=2,
+        candidate_evaluator=double.evaluator, initial_browser_metrics=[double.metrics],
+        structural_candidate_capture=double.capture,
+    ))
+    assert htmls == [double.original] and pngs == [b"original"] and fixed == []
+    assert double.assessed == [(0, double.original)]
+    assert double.inputs == [double.original, double.original]
+    assert len(double.captures) == 1

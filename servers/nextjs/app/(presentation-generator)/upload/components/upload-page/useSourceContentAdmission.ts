@@ -28,6 +28,7 @@ import {
 } from "../../../services/api/source-content/contract";
 import { sourceContentLosses } from "./sourceContentLosses";
 import { LoadingState } from "./types";
+import { parseDocumentCanvas } from "@/lib/document-canvas";
 
 export type SourceContentAdmission = {
   analysis: SourceContentAnalysisResponseV1;
@@ -75,6 +76,7 @@ export const useSourceContentAdmission = ({
    */
   const analyze = async (
     selectedFiles: File[],
+    options: { forceFresh?: boolean } = {},
   ): Promise<SourceContentAdmission | null> => {
     const validation = validateSourceContentFiles(selectedFiles);
     if (validation) {
@@ -95,15 +97,24 @@ export const useSourceContentAdmission = ({
       extra_info: "분석이 끝나면 선택한 템플릿으로 바로 재구성합니다.",
     });
     setIsAnalyzing(true);
-    let documentAdmission: DocumentUploadAdmission | null = null;
+    const selectedFileIdentity = fileIdentityOf(selectedFiles);
+    let documentAdmission: DocumentUploadAdmission | null =
+      options.forceFresh && admission?.fileIdentity === selectedFileIdentity
+        ? admission.documentAdmission
+        : null;
+    const uploadedForThisAnalysis = documentAdmission === null;
     try {
-      documentAdmission = await PresentationGenerationApi.uploadDoc(
-        selectedFiles,
-        pendingPresentationId,
-      );
+      if (!documentAdmission) {
+        documentAdmission = await PresentationGenerationApi.uploadDoc(
+          selectedFiles,
+          pendingPresentationId,
+        );
+      }
       const analysis = await SourceContentApiV1.analyze({
         referenceSnapshotId: documentAdmission.referenceSnapshotId,
-        idempotencyKey: `source-content-analyze:${pendingPresentationId}:${documentAdmission.referenceSnapshotId}`,
+        idempotencyKey: options.forceFresh
+          ? `source-content-reanalyze:${pendingPresentationId}:${documentAdmission.referenceSnapshotId}:${crypto.randomUUID()}`
+          : `source-content-analyze:${pendingPresentationId}:${documentAdmission.referenceSnapshotId}`,
       });
       if (
         analysis.status !== "ready" ||
@@ -116,16 +127,19 @@ export const useSourceContentAdmission = ({
       ) {
         throw new Error("source_content_manifest_invalid");
       }
+      if (analysis.documentCanvas !== null) {
+        parseDocumentCanvas(analysis.documentCanvas);
+      }
       const admitted: SourceContentAdmission = {
         analysis,
         documentAdmission,
-        fileIdentity: fileIdentityOf(selectedFiles),
+        fileIdentity: selectedFileIdentity,
       };
       setAdmission(admitted);
       setSummary(analysis.summary);
       return admitted;
     } catch (error) {
-      if (documentAdmission) {
+      if (documentAdmission && uploadedForThisAnalysis) {
         await PresentationGenerationApi.cleanupDocumentAdmission({
           referenceSnapshotId: documentAdmission.referenceSnapshotId,
           assetIds: documentAdmission.assetIds,

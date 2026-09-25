@@ -1,0 +1,55 @@
+{
+  "id": "education-10-online-course",
+  "category": "education",
+  "tags": {
+    "ko": [
+      "교육",
+      "온라인강의"
+    ],
+    "en": [
+      "education",
+      "online",
+      "course"
+    ]
+  },
+  "alt": {
+    "ko": "온라인강의 단색 벡터 인포그래픽",
+    "en": "online course monochrome vector infographic"
+  },
+  "path": "originals/education-10-online-course.svg",
+  "thumbnail": "thumbnails/education-10-online-course.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 466,
+  "sha256": "b4f0e619b20308d2e1c427882669c309a14410606846ee67232a5ca87e340518",
+  "geometry_sha256": "a40fa8ef510f61dcd89f3e10b7e75afb2fe027f99a61cf7c2d107dd1d8073bb8",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 52416,
+    "preview_opaque_pixels": 11390,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "MonitorPlay"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

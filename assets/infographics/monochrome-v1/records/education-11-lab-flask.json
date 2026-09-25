@@ -1,0 +1,55 @@
+{
+  "id": "education-11-lab-flask",
+  "category": "education",
+  "tags": {
+    "ko": [
+      "교육",
+      "실험플라스크"
+    ],
+    "en": [
+      "education",
+      "lab",
+      "flask"
+    ]
+  },
+  "alt": {
+    "ko": "실험플라스크 단색 벡터 인포그래픽",
+    "en": "lab flask monochrome vector infographic"
+  },
+  "path": "originals/education-11-lab-flask.svg",
+  "thumbnail": "thumbnails/education-11-lab-flask.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 429,
+  "sha256": "86c8e049b0e379817a5fdf91b5bf78c01261d900d2c552dc8a07b8a037ef29af",
+  "geometry_sha256": "e33e4f0231edc2ac61488727d44f3f9c478742b66e0ed16a8e32b07e245bcdfa",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55646,
+    "preview_opaque_pixels": 8685,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "FlaskConical"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#00140E;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:20px;width:816px}
+.eyebrow{height:22px;font-size:16px;line-height:22px;font-weight:700;letter-spacing:0;color:#08916E}
+.slide-title{margin-top:8px;max-width:816px;font-size:32px;line-height:42px;font-weight:700;color:#00140E}
+.header-right{position:absolute;left:880px;top:20px;width:360px;text-align:right}
+.requirements{font-size:14px;line-height:24px;font-weight:600;color:#00140E}
+.header-note{margin-top:6px;font-size:16px;line-height:22px;font-weight:600;color:rgba(0,20,14,.68)}
+.divider{position:absolute;left:40px;right:40px;bottom:0;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;width:1280px;height:556px}
+.body-grid{display:grid;grid-template-rows:48px 424px 60px;row-gap:12px;width:1152px;height:556px;margin-left:64px}
+.claim-row{display:flex;align-items:center;justify-content:space-between}
+.claim{font-size:25px;line-height:34px;font-weight:700;letter-spacing:-.02em;color:#00140E}
+.claim strong{color:#08916E}
+.scope{display:flex;align-items:center;gap:10px;font-size:16px;line-height:22px;font-weight:700;color:rgba(0,20,14,.68);white-space:nowrap}
+.scope-mark{width:10px;height:10px;border-radius:12px;background:#08916E}
+.main-grid{display:grid;grid-template-columns:704px 424px;column-gap:24px;height:424px}
+.evidence-card{height:424px;padding:12px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;box-shadow:0 8px 22px rgba(0,20,14,.06)}
+.evidence-card img{display:block;width:678px;height:344px;object-fit:contain;background:#F9F9F9;border-radius:12px}
+.evidence-caption{display:grid;grid-template-columns:88px 1fr;column-gap:12px;align-items:start;height:54px;padding-top:10px}
+.caption-tag{font-size:15px;line-height:22px;font-weight:700;color:#08916E}
+.caption-copy{font-size:16px;line-height:22px;color:rgba(0,20,14,.72)}
+.right-stack{display:grid;grid-template-rows:236px 172px;row-gap:16px;height:424px}
+.trace-card,.baseline-card{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;box-shadow:0 8px 22px rgba(0,20,14,.05)}
+.trace-card{height:236px;padding:18px 20px}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between}
+.card-title{font-size:22px;line-height:29px;font-weight:700;color:#00140E}
+.card-badge{padding:4px 9px;border:1px solid rgba(8,145,110,.30);border-radius:12px;background:rgba(8,145,110,.08);font-size:14px;line-height:20px;font-weight:700;color:#08916E}
+.card-sub{margin-top:2px;font-size:15px;line-height:21px;font-weight:600;color:rgba(0,20,14,.62)}
+.trace-grid{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,40px);gap:8px;margin-top:12px}
+.trace-node{display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid rgba(8,145,110,.24);border-radius:12px;background:rgba(8,145,110,.06);font-size:16px;line-height:20px;font-weight:700;color:#00140E}
+.trace-node:nth-child(4),.trace-node:nth-child(5),.trace-node:nth-child(6){background:rgba(0,20,14,.045);border-color:#E2E8F0}
+.trace-node:nth-child(7),.trace-node:nth-child(8),.trace-node:nth-child(9){background:rgba(8,145,110,.12)}
+.node-num{font-family:"IBM Plex Mono","Consolas",monospace;font-size:13px;line-height:18px;font-weight:700;color:#08916E}
+.baseline-card{height:172px;padding:16px 20px}
+.baseline-title{font-size:21px;line-height:28px;font-weight:700;color:#00140E}
+.unit-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.unit-chip{padding:4px 9px;border-radius:12px;background:rgba(8,145,110,.09);font-size:15px;line-height:21px;font-weight:700;color:#00140E}
+.change-copy{margin-top:10px;padding-top:9px;border-top:1px solid #E2E8F0;font-size:16px;line-height:23px;color:rgba(0,20,14,.78)}
+.takeaway{display:grid;grid-template-columns:142px 1fr;align-items:center;height:60px;padding:0 22px;border-radius:12px;background:rgba(8,145,110,.10);border:1px solid rgba(8,145,110,.22)}
+.takeaway-label{font-size:17px;line-height:24px;font-weight:700;color:#08916E}
+.takeaway-copy{font-size:18px;line-height:26px;font-weight:700;color:#00140E}
+</style>
+</head>
+<body>
+  <div data-header-part="band" data-header-band="108" class="header-band" style="height:108px">
+    <div class="header-left">
+      <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="s24-eyebrow">품질·변경관리</div>
+      <div data-header-part="title" class="slide-title" data-semantic-role="title" data-qid="s24-title">요구사항 추적과 기준선 관리</div>
+    </div>
+    <div data-header-part="right" class="header-right">
+      <div data-header-part="requirements" data-requirement-ids="QUR-001,QUR-003,PMR-006" class="requirements" data-semantic-role="supporting" data-qid="s24-requirements">요구사항 QUR-001 · QUR-003 · PMR-006</div>
+      <div class="header-note" data-semantic-role="supporting" data-qid="s24-header-note">정확성·추적성·변경관리</div>
+    </div>
+    <div data-header-part="divider" class="divider" data-semantic-role="decoration"></div>
+  </div>
+
+  <div data-header-part="body" class="body-wrap" style="top:124px">
+    <div class="body-grid">
+      <div class="claim-row">
+        <div class="claim" data-semantic-role="body" data-qid="s24-claim">RFP 70개 상세 요구사항과 추가 협의사항을 <strong data-semantic-role="body" data-qid="s24-claim-key">고유 ID</strong>로 통제합니다.</div>
+        <div class="scope" data-semantic-role="supporting" data-qid="s24-scope"><span class="scope-mark" data-semantic-role="decoration"></span>등록부터 검수까지 단일 추적 기준</div>
+      </div>
+
+      <div class="main-grid">
+        <div class="evidence-card" data-qid="s24-evidence-card">
+          <img data-source-slot-id="source-slot-c7a0e6fdaf981c383c0f" alt="요구사항과 코드 인벤토리를 검토하는 스프레드시트 및 AI 패널 예시" style="width:678px;height:344px" data-semantic-role="image" data-qid="s24-source-image">
+          <div class="evidence-caption">
+            <div class="caption-tag" data-semantic-role="supporting" data-qid="s24-caption-tag">작업 화면 예시</div>
+            <div class="caption-copy" data-semantic-role="supporting" data-qid="s24-caption-copy">요구사항·코드 인벤토리와 AI 검토 패널의 작업 형태를 보여주는 예시이며, 전체 양방향 자동 추적을 입증하는 자료는 아닙니다.</div>
+          </div>
+        </div>
+
+        <div class="right-stack">
+          <div class="trace-card" data-qid="s24-trace-card">
+            <div class="card-head">
+              <div>
+                <div class="card-title" data-semantic-role="supporting" data-qid="s24-trace-title">양방향 추적 사슬</div>
+                <div class="card-sub" data-semantic-role="supporting" data-qid="s24-trace-sub">누락·미시험 항목 자동 식별</div>
+              </div>
+              <div class="card-badge" data-semantic-role="supporting" data-qid="s24-trace-badge">정방향 ⇄ 역방향</div>
+            </div>
+            <div class="trace-grid">
+              <div class="trace-node" data-qid="s24-node-1"><span class="node-num" data-semantic-role="supporting" data-qid="s24-num-1">01</span><span data-semantic-role="body" data-qid="s24-node-text-1">요구사항</span></div>
+              <div class="trace-node" data-qid="s24-node-2"><span class="node-num" data-semantic-role="supporting" data-qid="s24-num-2">02</span><span data-semantic-role="body" data-qid="s24-node-text-2">업무규칙</span></div>
+              <div class="trace-node" data-qid="s24-node-3"><span class="node-num" data-semantic-role="supporting" data-qid="s24-num-3">03</span><span data-semantic-role="body" data-qid="s24-node-text-3">화면</span></div>
+              <div class="trace-node" data-qid="s24-node-4"><span class="node-num" data-semantic-role="supporting" data-qid="s24-num-4">04</span><span data-semantic-role="body" data-qid="s24-node-text-4">프로그램</span></div>
+              <div class="trace-node" data-qid="s24-node-5"><span class="node-num" data-semantic-role="supporting" data-qid="s24-num-5">05</span><span data-semantic-role="body" data-qid="s24-node-text-5">DB</span></div>
+              <div class="trace-node" data-qid="s24-node-6"><span class="node-num" data-semantic-role="supporting" data-qid="s24-num-6">06</span><span data-semantic-role="body" data-qid="s24-node-text-6">인터페이스</span></div>
+              <div class="trace-node" data-qid="s24-node-7"><span class="node-num" data-semantic-role="supporting" data-qid="s24-num-7">07</span><span data-semantic-role="body" data-qid="s24-node-text-7">테스트케이스</span></div>
+              <div class="trace-node" data-qid="s24-node-8"><span class="node-num" data-semantic-role="supporting" data-qid="s24-num-8">08</span><span data-semantic-role="body" data-qid="s24-node-text-8">결함</span></div>
+              <div class="trace-node" data-qid="s24-node-9"><span class="node-num" data-semantic-role="supporting" data-qid="s24-num-9">09</span><span data-semantic-role="body" data-qid="s24-node-text-9">검수결과</span></div>
+            </div>
+          </div>
+
+          <div class="baseline-card" data-qid="s24-baseline-card">
+            <div class="baseline-title" data-semantic-role="supporting" data-qid="s24-baseline-title">승인 기준선과 변경 통제</div>
+            <div class="unit-row">
+              <div class="unit-chip" data-semantic-role="body" data-qid="s24-unit-1">요구</div>
+              <div class="unit-chip" data-semantic-role="body" data-qid="s24-unit-2">화면</div>
+              <div class="unit-chip" data-semantic-role="body" data-qid="s24-unit-3">DB</div>
+              <div class="unit-chip" data-semantic-role="body" data-qid="s24-unit-4">인터페이스</div>
+              <div class="unit-chip" data-semantic-role="body" data-qid="s24-unit-5">테스트</div>
+            </div>
+            <div class="change-copy" data-semantic-role="body" data-qid="s24-change-copy">승인 후 변경은 요청 사유와 영향도·공수·일정·보안·대안을 검토한 뒤 반영합니다.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="takeaway" data-qid="s24-takeaway">
+        <div class="takeaway-label" data-semantic-role="supporting" data-qid="s24-takeaway-label">완료 증빙 산출물</div>
+        <div class="takeaway-copy" data-semantic-role="body" data-qid="s24-takeaway-copy">요구사항 조견표와 추적 매트릭스로 각 RFP 요구의 구현 위치, 시험 결과, 검수 확인을 객관적으로 증명합니다.</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,55 @@
+{
+  "id": "technology-11-circuit-board",
+  "category": "technology",
+  "tags": {
+    "ko": [
+      "기술",
+      "회로기판"
+    ],
+    "en": [
+      "technology",
+      "circuit",
+      "board"
+    ]
+  },
+  "alt": {
+    "ko": "회로기판 단색 벡터 인포그래픽",
+    "en": "circuit board monochrome vector infographic"
+  },
+  "path": "originals/technology-11-circuit-board.svg",
+  "thumbnail": "thumbnails/technology-11-circuit-board.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 455,
+  "sha256": "0cbf2a7851db01704ab347d2548e15abf728a2d7d63edfd5eecac678559e106e",
+  "geometry_sha256": "5aaa8ff82492a2aedb8bbd8508a273f88a4aadb80356e3be73114d62345f5da8",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 49816,
+    "preview_opaque_pixels": 13654,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "CircuitBoard"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

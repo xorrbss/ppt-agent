@@ -50,8 +50,13 @@ def test_append_treats_an_empty_style_attribute_as_no_original():
 
 def test_single_quoted_and_valueless_style_attributes_are_handled():
     single = '<div data-qid="card" style=\'color:red\'>x</div>'
+    # A quoted style keeps its quoting: the append is byte-preserving.
     assert apply_fit_edits(single, [{"qid": "card", "declarations": "top:1px"}]) == (
-        '<div data-qid="card" style="color:red;top:1px">x</div>'
+        '<div data-qid="card" style=\'color:red;top:1px\'>x</div>'
+    )
+    unquoted = '<div data-qid="card" style=color:red>x</div>'
+    assert apply_fit_edits(unquoted, [{"qid": "card", "declarations": 'font-family:"A B"'}]) == (
+        '<div data-qid="card" style="color:red;font-family:&quot;A B&quot;">x</div>'
     )
     valueless = '<div data-qid="card" style>x</div>'
     assert apply_fit_edits(valueless, [{"qid": "card", "declarations": "top:1px"}]) == (

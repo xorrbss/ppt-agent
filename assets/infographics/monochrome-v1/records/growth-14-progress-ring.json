@@ -1,0 +1,56 @@
+{
+  "id": "growth-14-progress-ring",
+  "category": "growth",
+  "tags": {
+    "ko": [
+      "성장",
+      "진척"
+    ],
+    "en": [
+      "growth",
+      "progress",
+      "ring"
+    ]
+  },
+  "alt": {
+    "ko": "진척 단색 벡터 인포그래픽",
+    "en": "progress ring monochrome vector infographic"
+  },
+  "path": "originals/growth-14-progress-ring.svg",
+  "thumbnail": "thumbnails/growth-14-progress-ring.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 786,
+  "sha256": "ba3bf39f96d40e991c81caff7f3fa40a8c8cf490de9b36a5bbc38ee5d8e741a9",
+  "geometry_sha256": "d1738b7159a27c67c9b3c5b9419888513391b45001c453c7abcd6e8e29f5b2d8",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 61032,
+    "preview_opaque_pixels": 3322,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "CircleDashed",
+      "TrendingUp"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

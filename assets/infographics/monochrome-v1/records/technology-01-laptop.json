@@ -1,0 +1,54 @@
+{
+  "id": "technology-01-laptop",
+  "category": "technology",
+  "tags": {
+    "ko": [
+      "기술",
+      "노트북"
+    ],
+    "en": [
+      "technology",
+      "laptop"
+    ]
+  },
+  "alt": {
+    "ko": "노트북 단색 벡터 인포그래픽",
+    "en": "laptop monochrome vector infographic"
+  },
+  "path": "originals/technology-01-laptop.svg",
+  "thumbnail": "thumbnails/technology-01-laptop.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 367,
+  "sha256": "2d8e920cf4215a4a4e3aacc926da2e63569de11bfb392bb418eb17d8c033611e",
+  "geometry_sha256": "3343655aafca71f1d93f50aca0daf9c57416c8e4703bd5fe987cfb0878547b20",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54819,
+    "preview_opaque_pixels": 9380,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Laptop"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

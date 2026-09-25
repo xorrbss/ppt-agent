@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:104px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:28px;width:980px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:6px;font-size:28px;line-height:35px;font-weight:700;color:#1D1D1B;max-width:980px}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:3px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:126px;width:100%;height:522px}
+.content-grid{display:grid;grid-template-columns:730px 398px;gap:24px;margin-left:64px;width:1152px;height:492px}
+.map-panel,.image-panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.map-panel{height:492px;padding:28px}
+.panel-label{font-size:15px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#219F88}
+.panel-title{margin-top:8px;font-size:24px;line-height:34px;font-weight:700;color:#00140E}
+.flow{display:flex;align-items:center;margin-top:30px;height:106px}
+.step{position:relative;display:flex;flex-direction:column;justify-content:center;width:116px;height:106px;padding:16px 12px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px;text-align:center}
+.step:nth-child(3){background:#CCECFF;border-color:#219F88}
+.step-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:20px;font-weight:700;color:#1B469C}
+.step-text{margin-top:8px;font-size:18px;line-height:27px;font-weight:700;color:#002060}
+.connector{width:22px;height:2px;background:#00828E;position:relative;flex:none;margin:0 5px}
+.connector span{position:absolute;right:-1px;top:-4px;width:9px;height:9px;border-top:2px solid #00828E;border-right:2px solid #00828E;transform:rotate(45deg)}
+.evidence{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:32px}
+.evidence-card{min-height:92px;padding:16px 18px;background:#F9F9F9;border:1px solid #E2E8F0;border-radius:12px}
+.evidence-head{font-size:17px;line-height:25px;font-weight:700;color:#08916E}
+.evidence-body{margin-top:6px;font-size:16px;line-height:24px;color:#1D1D1B}
+.image-panel{height:492px;padding:14px}
+.image-panel img{display:block;width:368px;height:238px;object-fit:cover;border-radius:12px;background:linear-gradient(135deg,#E0F3FF,#EAEDF2)}
+.image-caption{margin:22px 14px 0;padding-left:16px;border-left:4px solid #08916E}
+.caption-title{font-size:22px;line-height:31px;font-weight:700;color:#002060}
+.caption-body{margin-top:10px;font-size:17px;line-height:28px;color:#1D1D1B}
+.priority{display:flex;align-items:center;gap:10px;margin:28px 14px 0;padding:13px 14px;background:#F9F9F9;border:1px solid #E2E8F0;border-radius:12px}
+.priority-mark{width:8px;height:8px;background:#E5A93D;flex:none}
+.priority-text{font-size:16px;line-height:24px;font-weight:700;color:#00140E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" class="header-band" style="height:104px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-0af096b13b18e735" data-source-block-id="source-slide:19:text:3" style="color: #006b52">3주차 PART 1 | 무료 샘플 전략</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-a219155582a20462" data-source-block-id="source-slide:19:text:5">19 꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:126px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <section class="map-panel" data-semantic-role="decoration" data-qid="q-card-map-18">
+      <div class="panel-label" data-semantic-role="supporting" data-qid="source-block-07640de12403b83a" data-source-block-id="source-slide:19:text:9" style="color: #006b52">샘플 구조</div>
+      <div class="panel-title" data-semantic-role="body" data-qid="q-title-structure-18">무료 샘플은 단계별 검증으로 유료 전환을 만듭니다.</div>
+      <div class="flow" data-qid="q-div-7fd902b74613" data-semantic-role="decoration">
+        <div class="step" data-semantic-role="decoration" data-qid="q-step-1-18">
+          <div class="step-number" data-semantic-role="supporting" data-qid="q-num-1-18">01</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-a11a65f3b9145fb3" data-source-block-id="source-slide:19:text:10:run:0">가게 분석</div>
+        </div>
+        <div class="connector" data-qid="q-div-1bfec761b021" data-semantic-role="decoration"><span data-qid="q-span-f32986c526a1" data-semantic-role="decoration"></span></div>
+        <div class="step" data-semantic-role="decoration" data-qid="q-step-2-18">
+          <div class="step-number" data-semantic-role="supporting" data-qid="q-num-2-18">02</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-d9e9c28b5cd9f168" data-source-block-id="source-slide:19:text:10:run:1">4개 기획</div>
+        </div>
+        <div class="connector" data-qid="q-div-f954d062b2c8" data-semantic-role="decoration"><span data-qid="q-span-c83eac29f2ad" data-semantic-role="decoration"></span></div>
+        <div class="step" data-semantic-role="decoration" data-qid="q-step-3-18">
+          <div class="step-number" data-semantic-role="supporting" data-qid="q-num-3-18">03</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-2398587430512a02" data-source-block-id="source-slide:19:text:10:run:2">1~4개 제작</div>
+        </div>
+        <div class="connector" data-qid="q-div-d70e41e2467e" data-semantic-role="decoration"><span data-qid="q-span-eedec0ea8962" data-semantic-role="decoration"></span></div>
+        <div class="step" data-semantic-role="decoration" data-qid="q-step-4-18">
+          <div class="step-number" data-semantic-role="supporting" data-qid="q-num-4-18">04</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-5b66a2541e102aba" data-source-block-id="source-slide:19:text:10:run:3">반응 확인</div>
+        </div>
+        <div class="connector" data-qid="q-div-44f8a0ccb367" data-semantic-role="decoration"><span data-qid="q-span-2af01d53a93e" data-semantic-role="decoration"></span></div>
+        <div class="step" data-semantic-role="decoration" data-qid="q-step-5-18">
+          <div class="step-number" data-semantic-role="supporting" data-qid="q-num-5-18">05</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-b9f3835789dcc417" data-source-block-id="source-slide:19:text:10:run:4">유료 제안</div>
+        </div>
+      </div>
+      <div class="evidence" data-qid="q-div-7dc181aa03bf" data-semantic-role="decoration">
+        <div class="evidence-card" data-semantic-role="decoration" data-qid="q-evidence-1-18">
+          <div class="evidence-head" data-semantic-role="supporting" data-qid="q-evidence-head-1-18" style="color: #006b52">첫 고객</div>
+          <div class="evidence-body" data-semantic-role="body" data-qid="source-block-e02d960ceebeda77" data-source-block-id="source-slide:19:text:6:run:0">첫 고객에게 무작정 가격부터 말하지 않는다</div>
+        </div>
+        <div class="evidence-card" data-semantic-role="decoration" data-qid="q-evidence-2-18">
+          <div class="evidence-head" data-semantic-role="supporting" data-qid="q-evidence-head-2-18" style="color: #006b52">준비</div>
+          <div class="evidence-body" data-semantic-role="body" data-qid="source-block-84b7944dbf4cfd3d" data-source-block-id="source-slide:19:text:6:run:1">가능하면 가게 특성에 맞는 샘플을 준비</div>
+        </div>
+        <div class="evidence-card" data-semantic-role="decoration" data-qid="q-evidence-3-18">
+          <div class="evidence-head" data-semantic-role="supporting" data-qid="q-evidence-head-3-18" style="color: #006b52">기획</div>
+          <div class="evidence-body" data-semantic-role="body" data-qid="source-block-4d1c12468a948af9" data-source-block-id="source-slide:19:text:6:run:2">한 가게에 4개 소재를 기획해보기</div>
+        </div>
+        <div class="evidence-card" data-semantic-role="decoration" data-qid="q-evidence-4-18">
+          <div class="evidence-head" data-semantic-role="supporting" data-qid="q-evidence-head-4-18" style="color: #006b52">범위와 기간</div>
+          <div class="evidence-body" data-semantic-role="body" data-qid="source-block-de09f6324020debd" data-source-block-id="source-slide:19:text:6:run:3">무료 제공 범위와 기간을 명확히</div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="image-panel" data-qid="q-aside-9afd62f40051" data-semantic-role="decoration" style="height: 186px">
+      
+      <div class="image-caption" data-qid="q-div-7db014dad3ff" data-semantic-role="supporting">
+        <div class="caption-title" data-semantic-role="supporting" data-qid="q-caption-title-18">무료 제공의 목적</div>
+        <div class="caption-body" data-semantic-role="supporting" data-qid="source-block-61cad05b020a74c3" data-source-block-id="source-slide:19:text:6:run:4">목표는 ‘공짜 노동’이 아니라 유료 전환</div>
+      </div>
+      <div class="priority" data-qid="q-div-c20a4bd03027" data-semantic-role="decoration">
+        <div class="priority-mark" data-qid="q-div-155b740343df" data-semantic-role="decoration"></div>
+        <div class="priority-text" data-semantic-role="body" data-qid="q-priority-18">무료 제공 범위와 기간을 명확히</div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-0835442ac46726d4" data-source-block-id="source-slide:19:text:4" style="color: #5f6368">19</div>
+</body>
+</html>

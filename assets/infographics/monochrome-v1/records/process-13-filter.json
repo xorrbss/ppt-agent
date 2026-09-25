@@ -1,0 +1,55 @@
+{
+  "id": "process-13-filter",
+  "category": "process",
+  "tags": {
+    "ko": [
+      "프로세스",
+      "필터"
+    ],
+    "en": [
+      "process",
+      "filter"
+    ]
+  },
+  "alt": {
+    "ko": "필터 단색 벡터 인포그래픽",
+    "en": "filter monochrome vector infographic"
+  },
+  "path": "originals/process-13-filter.svg",
+  "thumbnail": "thumbnails/process-13-filter.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 555,
+  "sha256": "74fa4c60040b453747d3458fb09b2839b6284d0ed0dac1caf9c964134f5b0011",
+  "geometry_sha256": "1686f353de67b484ad3992b5942e63a4a7d0f29914aadd92d293622ca4368e50",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 60925,
+    "preview_opaque_pixels": 3527,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ListFilter",
+      "ListRestart"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

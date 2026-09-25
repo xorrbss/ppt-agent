@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:28px;width:960px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.body-wrap{width:1152px;margin-left:64px}
+.claim{height:76px;display:flex;align-items:flex-start;justify-content:space-between;padding-top:2px}
+.claim-text{font-size:25px;line-height:38px;font-weight:700;letter-spacing:-.02em}
+.claim-text strong{color:#08916E}
+.brand-line{padding-top:7px;font-size:18px;line-height:28px;font-weight:700;color:#4B5563;text-align:right}
+.process-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:18px}
+.process-card{height:332px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;position:relative}
+.card-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:16px;line-height:22px;color:#08916E;font-weight:700}
+.card-title{margin-top:12px;font-size:27px;line-height:36px;font-weight:700;color:#00140E}
+.card-divider{width:42px;height:3px;margin-top:18px;background:#08916E;border-radius:12px}
+.card-copy{margin-top:25px;font-size:19px;line-height:1.65;font-weight:500;color:#1D1D1B}
+.card-copy span{display:block}
+.card-rule{position:absolute;left:28px;right:28px;bottom:24px;height:5px;border-radius:12px;background:#D9F1EA}
+.card-rule.medium{background:#A9DFD1}
+.card-rule.strong{background:#08916E}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="117" class="header-band" style="height:117px" data-qid="q-band-01" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-header-left-01" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-qid="q-eyebrow-01" data-semantic-role="supporting">문제 정의</div>
+    <div data-header-part="title" class="title" data-qid="source-block-a99fd406b3cf3f99" data-semantic-role="title" data-source-block-id="source-slide:2:text:3">이 강의는 무엇을 만드는가</div>
+  </div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:141px" data-qid="q-body-01" data-semantic-role="decoration">
+  <div class="claim" data-qid="q-claim-01" data-semantic-role="decoration">
+    <div class="claim-text" data-qid="source-block-ee5f25f990986195" data-semantic-role="body" data-source-block-id="source-slide:2:text:4">기술보다 <strong data-qid="q-claim-strong-01" data-semantic-role="body">‘사업이 굴러가는 구조’</strong>를 먼저 만듭니다.</div>
+    <div class="brand-line" data-qid="source-block-f787baca4e55bd5e" data-semantic-role="body" data-source-block-id="source-slide:2:text:6">02<br>꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  </div>
+
+  <div class="process-grid" data-qid="q-process-grid-01" data-semantic-role="decoration">
+    <div class="process-card" data-qid="q-card-01" data-semantic-role="decoration">
+      <div class="card-number" data-qid="q-card-number-01" data-semantic-role="supporting">①</div>
+      <div class="card-title" data-qid="source-block-5c1f7a5876140413" data-semantic-role="body" data-source-block-id="source-slide:2:text:9">세팅</div>
+      <div class="card-divider" data-qid="q-card-divider-01" data-semantic-role="decoration"></div>
+      <div class="card-copy" data-qid="source-block-f12723bf6027239a" data-semantic-role="decoration" data-source-block-id="source-slide:2:text:10">
+        <span data-qid="q-card-copy-01-a" data-semantic-role="body">인스타 · 블로그 · 영업기지</span>
+        <span data-qid="q-card-copy-01-b" data-semantic-role="body">내가 누구인지 보여주는 공간</span>
+      </div>
+      <div class="card-rule" data-qid="q-card-rule-01" data-semantic-role="decoration"></div>
+    </div>
+
+    <div class="process-card" data-qid="q-card-02" data-semantic-role="decoration">
+      <div class="card-number" data-qid="q-card-number-02" data-semantic-role="supporting">②</div>
+      <div class="card-title" data-qid="source-block-bae0376122a5d678" data-semantic-role="body" data-source-block-id="source-slide:2:text:13">제작</div>
+      <div class="card-divider" data-qid="q-card-divider-02" data-semantic-role="decoration"></div>
+      <div class="card-copy" data-qid="source-block-39a3b24f5c92daa8" data-semantic-role="decoration" data-source-block-id="source-slide:2:text:14">
+        <span data-qid="q-card-copy-02-a" data-semantic-role="body">기획 · 촬영 · AI · 캡컷</span>
+        <span data-qid="q-card-copy-02-b" data-semantic-role="body">팔 수 있는 숏폼을 만든다</span>
+      </div>
+      <div class="card-rule medium" data-qid="q-card-rule-02" data-semantic-role="decoration"></div>
+    </div>
+
+    <div class="process-card" data-qid="q-card-03" data-semantic-role="decoration">
+      <div class="card-number" data-qid="q-card-number-03" data-semantic-role="supporting">③</div>
+      <div class="card-title" data-qid="source-block-7c12033348e2d8e7" data-semantic-role="body" data-source-block-id="source-slide:2:text:17">영업</div>
+      <div class="card-divider" data-qid="q-card-divider-03" data-semantic-role="decoration"></div>
+      <div class="card-copy" data-qid="source-block-57d63ab1feb3b3d1" data-semantic-role="decoration" data-source-block-id="source-slide:2:text:18">
+        <span data-qid="q-card-copy-03-a" data-semantic-role="body">무료 샘플 · 전화 · DM</span>
+        <span data-qid="q-card-copy-03-b" data-semantic-role="body">첫 고객을 만난다</span>
+      </div>
+      <div class="card-rule strong" data-qid="q-card-rule-03" data-semantic-role="decoration"></div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-page" data-qid="source-block-b35bf22c1531c396" data-semantic-role="supporting" data-source-block-id="source-slide:2:text:5">02</div>
+</body>
+</html>

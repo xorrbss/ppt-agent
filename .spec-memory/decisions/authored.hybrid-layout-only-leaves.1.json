@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.hybrid-layout-only-leaves",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Hybrid paint separation preserves nonpainting layout leaves and authored line breaks while retaining editable descendant text.",
+  "scope": [
+    "authored-hybrid",
+    "public-export"
+  ],
+  "invariants": [
+    "BR and other verified nonpainting layout leaves do not require independent paint ownership.",
+    "Do not remove line breaks or mutate saved source HTML.",
+    "Separate eligible ancestor CSS paint while preserving descendant order and editable body text.",
+    "Painted or effectful unobserved descendants keep the existing guard."
+  ],
+  "forbidden": [
+    "Page-number-specific exemptions.",
+    "Treating title-only editability as body-editability proof."
+  ],
+  "evidence": [
+    "servers/nextjs/lib/authored-hybrid/browser-source.ts",
+    "artifacts/hybrid-complex-1417-20260914/body-readback-v2.json",
+    "artifacts/hybrid-complex-1417-20260914/powerpoint-readback.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-14T08:19:38.8040171+00:00"
+}

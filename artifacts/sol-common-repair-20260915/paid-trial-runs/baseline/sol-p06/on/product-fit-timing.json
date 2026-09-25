@@ -1,0 +1,3051 @@
+{
+  "fitRenderMs": 5821.5598,
+  "verifyRenderMs": 0.0011,
+  "fitReport": {
+    "version": "authored-local-fit/v1.5",
+    "policy_id": "",
+    "policy_revision": "authored-local-fit/v1.5",
+    "requested": true,
+    "fit_state": "final",
+    "status": "unchanged",
+    "changed": false,
+    "partial": false,
+    "error": null,
+    "unresolved_reasons": [],
+    "operations": [],
+    "edits": [],
+    "baseline": {
+      "author_revision": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb",
+      "original_html_digest": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb",
+      "runs": [
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-eyebrow:0:0:6",
+          "owner_qid": "s5-eyebrow",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 6,
+          "ancestor_qids": [
+            "s5-eyebrow",
+            "q-div-76f0d626b7f0",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:6f75feee",
+          "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:79d3f3cb",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-title:0:0:13",
+          "owner_qid": "s5-title",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 13,
+          "ancestor_qids": [
+            "s5-title",
+            "q-div-76f0d626b7f0",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:6719269f",
+          "group_id": "q-div-75dcf98740c9|title|fnv1a32:241d4532",
+          "role": "title",
+          "original_pt": 25.5,
+          "font_px": 34,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-label:0:0:7",
+          "owner_qid": "s5-req-label",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 7,
+          "ancestor_qids": [
+            "s5-req-label",
+            "q-div-4809de7a0f2d",
+            "q-div-73774be43d12",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:4b53330e",
+          "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:22b9f0dd",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-1:0:0:7",
+          "owner_qid": "s5-req-1",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 7,
+          "ancestor_qids": [
+            "s5-req-1",
+            "q-div-4809de7a0f2d",
+            "q-div-73774be43d12",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:fb90f57d",
+          "group_id": "s5-req-1|supporting|fnv1a32:cf89d3c8",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-2:0:0:7",
+          "owner_qid": "s5-req-2",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 7,
+          "ancestor_qids": [
+            "s5-req-2",
+            "q-div-4809de7a0f2d",
+            "q-div-73774be43d12",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:a99727de",
+          "group_id": "s5-req-2|supporting|fnv1a32:cf89d3c8",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-3:0:0:7",
+          "owner_qid": "s5-req-3",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 7,
+          "ancestor_qids": [
+            "s5-req-3",
+            "q-div-4809de7a0f2d",
+            "q-div-73774be43d12",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:aa972971",
+          "group_id": "s5-req-3|supporting|fnv1a32:cf89d3c8",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-more:0:0:2",
+          "owner_qid": "s5-req-more",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s5-req-more",
+            "q-div-4809de7a0f2d",
+            "q-div-73774be43d12",
+            "q-div-75dcf98740c9"
+          ],
+          "content_digest": "fnv1a32:18dc1b01",
+          "group_id": "s5-req-more|supporting|fnv1a32:cf89d3c8",
+          "role": "supporting",
+          "original_pt": 9.75,
+          "font_px": 13,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-claim:0:0:29",
+          "owner_qid": "s5-claim",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 29,
+          "ancestor_qids": [
+            "s5-claim",
+            "q-div-602277a791e7",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:9e4261f6",
+          "group_id": "s5-claim|body|fnv1a32:c2312941",
+          "role": "body",
+          "original_pt": 18,
+          "font_px": 24,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:q-strong-663977331dde:0:0:11",
+          "owner_qid": "q-strong-663977331dde",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 11,
+          "ancestor_qids": [
+            "q-strong-663977331dde",
+            "s5-claim",
+            "q-div-602277a791e7",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:a4a1a7cc",
+          "group_id": "q-strong-663977331dde|unknown|fnv1a32:ad21f4af",
+          "role": "unknown",
+          "original_pt": 18,
+          "font_px": 24,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-claim:1:0:8",
+          "owner_qid": "s5-claim",
+          "text_node_ordinal": 1,
+          "start_offset": 0,
+          "end_offset": 8,
+          "ancestor_qids": [
+            "s5-claim",
+            "q-div-602277a791e7",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:776afed6",
+          "group_id": "s5-claim|body|fnv1a32:c2312941",
+          "role": "body",
+          "original_pt": 18,
+          "font_px": 24,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-scope:0:0:15",
+          "owner_qid": "s5-scope",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 15,
+          "ancestor_qids": [
+            "s5-scope",
+            "q-div-602277a791e7",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:dca66ece",
+          "group_id": "s5-scope|supporting|fnv1a32:0d6ffc24",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-label:0:0:6",
+          "owner_qid": "s5-stage-label",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 6,
+          "ancestor_qids": [
+            "s5-stage-label",
+            "q-div-77ef708ad0e2",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:4ed2a131",
+          "group_id": "q-div-77ef708ad0e2|supporting|fnv1a32:970b3c9e",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-1:0:0:2",
+          "owner_qid": "s5-stage-1",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s5-stage-1",
+            "q-div-77ef708ad0e2",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:c6d1b0a2",
+          "group_id": "q-div-77ef708ad0e2|supporting|fnv1a32:970b3c9e",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-2:0:0:5",
+          "owner_qid": "s5-stage-2",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s5-stage-2",
+            "q-div-77ef708ad0e2",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:e696c8a0",
+          "group_id": "q-div-77ef708ad0e2|supporting|fnv1a32:970b3c9e",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-3:0:0:5",
+          "owner_qid": "s5-stage-3",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s5-stage-3",
+            "q-div-77ef708ad0e2",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:082c0c32",
+          "group_id": "q-div-77ef708ad0e2|supporting|fnv1a32:970b3c9e",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-4:0:0:5",
+          "owner_qid": "s5-stage-4",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s5-stage-4",
+            "q-div-77ef708ad0e2",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:38d206b6",
+          "group_id": "q-div-77ef708ad0e2|supporting|fnv1a32:970b3c9e",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-5:0:0:5",
+          "owner_qid": "s5-stage-5",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s5-stage-5",
+            "q-div-77ef708ad0e2",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:a348d505",
+          "group_id": "q-div-77ef708ad0e2|supporting|fnv1a32:970b3c9e",
+          "role": "supporting",
+          "original_pt": 11.25,
+          "font_px": 15,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-1:0:0:2",
+          "owner_qid": "s5-role-index-1",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s5-role-index-1",
+            "q-div-702464247897",
+            "q-div-b77fe8bbfd8a",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:20ed70ba",
+          "group_id": "q-div-702464247897|supporting|fnv1a32:04cae42e",
+          "role": "supporting",
+          "original_pt": 10.5,
+          "font_px": 14,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-1:0:0:4",
+          "owner_qid": "s5-role-1",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 4,
+          "ancestor_qids": [
+            "s5-role-1",
+            "q-div-702464247897",
+            "q-div-b77fe8bbfd8a",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:7a6cccd6",
+          "group_id": "q-div-702464247897|body|fnv1a32:f5517715",
+          "role": "body",
+          "original_pt": 14.25,
+          "font_px": 19,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-1:0:0:5",
+          "owner_qid": "s5-step-1-1",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s5-step-1-1",
+            "q-div-d890e9912ecd",
+            "q-div-b77fe8bbfd8a",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:e280562f",
+          "group_id": "s5-step-1-1|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-2:0:0:4",
+          "owner_qid": "s5-step-1-2",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 4,
+          "ancestor_qids": [
+            "s5-step-1-2",
+            "q-div-d890e9912ecd",
+            "q-div-b77fe8bbfd8a",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:85953e26",
+          "group_id": "s5-step-1-2|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-3:0:0:9",
+          "owner_qid": "s5-step-1-3",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 9,
+          "ancestor_qids": [
+            "s5-step-1-3",
+            "q-div-d890e9912ecd",
+            "q-div-b77fe8bbfd8a",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:b111054b",
+          "group_id": "s5-step-1-3|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-4:0:0:8",
+          "owner_qid": "s5-step-1-4",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 8,
+          "ancestor_qids": [
+            "s5-step-1-4",
+            "q-div-d890e9912ecd",
+            "q-div-b77fe8bbfd8a",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:367be68b",
+          "group_id": "s5-step-1-4|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-5:0:0:10",
+          "owner_qid": "s5-step-1-5",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 10,
+          "ancestor_qids": [
+            "s5-step-1-5",
+            "q-div-d890e9912ecd",
+            "q-div-b77fe8bbfd8a",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:7c5c30f0",
+          "group_id": "s5-step-1-5|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-2:0:0:2",
+          "owner_qid": "s5-role-index-2",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s5-role-index-2",
+            "q-div-097698816149",
+            "q-div-fdee9a177503",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:1fed6f27",
+          "group_id": "q-div-097698816149|supporting|fnv1a32:04cae42e",
+          "role": "supporting",
+          "original_pt": 10.5,
+          "font_px": 14,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-2:0:0:4",
+          "owner_qid": "s5-role-2",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 4,
+          "ancestor_qids": [
+            "s5-role-2",
+            "q-div-097698816149",
+            "q-div-fdee9a177503",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:cde98f38",
+          "group_id": "q-div-097698816149|body|fnv1a32:f5517715",
+          "role": "body",
+          "original_pt": 14.25,
+          "font_px": 19,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Malgun Gothic",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-1:0:0:11",
+          "owner_qid": "s5-step-2-1",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 11,
+          "ancestor_qids": [
+            "s5-step-2-1",
+            "q-div-b07aa9330180",
+            "q-div-fdee9a177503",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:3ce6f9e2",
+          "group_id": "s5-step-2-1|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-2:0:0:8",
+          "owner_qid": "s5-step-2-2",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 8,
+          "ancestor_qids": [
+            "s5-step-2-2",
+            "q-div-b07aa9330180",
+            "q-div-fdee9a177503",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:32e6068e",
+          "group_id": "s5-step-2-2|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-3:0:0:5",
+          "owner_qid": "s5-step-2-3",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s5-step-2-3",
+            "q-div-b07aa9330180",
+            "q-div-fdee9a177503",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:e00815c0",
+          "group_id": "s5-step-2-3|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-4:0:0:5",
+          "owner_qid": "s5-step-2-4",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s5-step-2-4",
+            "q-div-b07aa9330180",
+            "q-div-fdee9a177503",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:52524a97",
+          "group_id": "s5-step-2-4|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-5:0:0:10",
+          "owner_qid": "s5-step-2-5",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 10,
+          "ancestor_qids": [
+            "s5-step-2-5",
+            "q-div-b07aa9330180",
+            "q-div-fdee9a177503",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:91a34114",
+          "group_id": "s5-step-2-5|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-3:0:0:2",
+          "owner_qid": "s5-role-index-3",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s5-role-index-3",
+            "q-div-cff3d043ef4f",
+            "q-div-625a04b6bbf4",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:1eed6d94",
+          "group_id": "q-div-cff3d043ef4f|supporting|fnv1a32:04cae42e",
+          "role": "supporting",
+          "original_pt": 10.5,
+          "font_px": 14,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-3:0:0:7",
+          "owner_qid": "s5-role-3",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 7,
+          "ancestor_qids": [
+            "s5-role-3",
+            "q-div-cff3d043ef4f",
+            "q-div-625a04b6bbf4",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:35a76398",
+          "group_id": "q-div-cff3d043ef4f|body|fnv1a32:f5517715",
+          "role": "body",
+          "original_pt": 14.25,
+          "font_px": 19,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-1:0:0:9",
+          "owner_qid": "s5-step-3-1",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 9,
+          "ancestor_qids": [
+            "s5-step-3-1",
+            "q-div-6dba531384da",
+            "q-div-625a04b6bbf4",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:2d417360",
+          "group_id": "s5-step-3-1|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-2:0:0:6",
+          "owner_qid": "s5-step-3-2",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 6,
+          "ancestor_qids": [
+            "s5-step-3-2",
+            "q-div-6dba531384da",
+            "q-div-625a04b6bbf4",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:516c0175",
+          "group_id": "s5-step-3-2|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-3:0:0:6",
+          "owner_qid": "s5-step-3-3",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 6,
+          "ancestor_qids": [
+            "s5-step-3-3",
+            "q-div-6dba531384da",
+            "q-div-625a04b6bbf4",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:02def899",
+          "group_id": "s5-step-3-3|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-4:0:0:8",
+          "owner_qid": "s5-step-3-4",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 8,
+          "ancestor_qids": [
+            "s5-step-3-4",
+            "q-div-6dba531384da",
+            "q-div-625a04b6bbf4",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:828259c8",
+          "group_id": "s5-step-3-4|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-5:0:0:7",
+          "owner_qid": "s5-step-3-5",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 7,
+          "ancestor_qids": [
+            "s5-step-3-5",
+            "q-div-6dba531384da",
+            "q-div-625a04b6bbf4",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:e55223a4",
+          "group_id": "s5-step-3-5|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-4:0:0:2",
+          "owner_qid": "s5-role-index-4",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 2,
+          "ancestor_qids": [
+            "s5-role-index-4",
+            "q-div-1508fa7e68d6",
+            "q-div-4c06b2b3481c",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:1ded6c01",
+          "group_id": "q-div-1508fa7e68d6|supporting|fnv1a32:04cae42e",
+          "role": "supporting",
+          "original_pt": 10.5,
+          "font_px": 14,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Consolas",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-4:0:0:9",
+          "owner_qid": "s5-role-4",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 9,
+          "ancestor_qids": [
+            "s5-role-4",
+            "q-div-1508fa7e68d6",
+            "q-div-4c06b2b3481c",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:f26f7d7a",
+          "group_id": "q-div-1508fa7e68d6|body|fnv1a32:f5517715",
+          "role": "body",
+          "original_pt": 14.25,
+          "font_px": 19,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-1:0:0:12",
+          "owner_qid": "s5-step-4-1",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 12,
+          "ancestor_qids": [
+            "s5-step-4-1",
+            "q-div-06d9606aaa40",
+            "q-div-4c06b2b3481c",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:ee08c892",
+          "group_id": "s5-step-4-1|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-2:0:0:11",
+          "owner_qid": "s5-step-4-2",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 11,
+          "ancestor_qids": [
+            "s5-step-4-2",
+            "q-div-06d9606aaa40",
+            "q-div-4c06b2b3481c",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:a3499d5b",
+          "group_id": "s5-step-4-2|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-3:0:0:8",
+          "owner_qid": "s5-step-4-3",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 8,
+          "ancestor_qids": [
+            "s5-step-4-3",
+            "q-div-06d9606aaa40",
+            "q-div-4c06b2b3481c",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:042295af",
+          "group_id": "s5-step-4-3|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-4:0:0:9",
+          "owner_qid": "s5-step-4-4",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 9,
+          "ancestor_qids": [
+            "s5-step-4-4",
+            "q-div-06d9606aaa40",
+            "q-div-4c06b2b3481c",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:cb8e12ca",
+          "group_id": "s5-step-4-4|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-5:0:0:11",
+          "owner_qid": "s5-step-4-5",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 11,
+          "ancestor_qids": [
+            "s5-step-4-5",
+            "q-div-06d9606aaa40",
+            "q-div-4c06b2b3481c",
+            "s5-roadmap",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:c41d959c",
+          "group_id": "s5-step-4-5|body|fnv1a32:2535b963",
+          "role": "body",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-takeaway-label:0:0:5",
+          "owner_qid": "s5-takeaway-label",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 5,
+          "ancestor_qids": [
+            "s5-takeaway-label",
+            "s5-takeaway",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:430eca9f",
+          "group_id": "s5-takeaway|supporting|fnv1a32:9cfc0d1c",
+          "role": "supporting",
+          "original_pt": 12,
+          "font_px": 16,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        },
+        {
+          "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-takeaway-copy:0:0:66",
+          "owner_qid": "s5-takeaway-copy",
+          "text_node_ordinal": 0,
+          "start_offset": 0,
+          "end_offset": 66,
+          "ancestor_qids": [
+            "s5-takeaway-copy",
+            "s5-takeaway",
+            "q-div-66757db28fba"
+          ],
+          "content_digest": "fnv1a32:d872857e",
+          "group_id": "s5-takeaway|body|fnv1a32:4128ceb3",
+          "role": "body",
+          "original_pt": 13.5,
+          "font_px": 18,
+          "effective_text_scale": 1,
+          "font_loaded": true,
+          "resolved_font_family": "Noto Sans KR",
+          "font_resolution_source": "installed-local-font"
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:79d3f3cb",
+          "role": "supporting",
+          "card_qid": "q-div-75dcf98740c9",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-eyebrow:0:0:6"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "q-div-75dcf98740c9|title|fnv1a32:241d4532",
+          "role": "title",
+          "card_qid": "q-div-75dcf98740c9",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-title:0:0:13"
+          ],
+          "original_pt": 25.5
+        },
+        {
+          "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:22b9f0dd",
+          "role": "supporting",
+          "card_qid": "q-div-75dcf98740c9",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-label:0:0:7"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s5-req-1|supporting|fnv1a32:cf89d3c8",
+          "role": "supporting",
+          "card_qid": "s5-req-1",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-1:0:0:7"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s5-req-2|supporting|fnv1a32:cf89d3c8",
+          "role": "supporting",
+          "card_qid": "s5-req-2",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-2:0:0:7"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s5-req-3|supporting|fnv1a32:cf89d3c8",
+          "role": "supporting",
+          "card_qid": "s5-req-3",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-3:0:0:7"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s5-req-more|supporting|fnv1a32:cf89d3c8",
+          "role": "supporting",
+          "card_qid": "s5-req-more",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-more:0:0:2"
+          ],
+          "original_pt": 9.75
+        },
+        {
+          "group_id": "s5-claim|body|fnv1a32:c2312941",
+          "role": "body",
+          "card_qid": null,
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-claim:0:0:29",
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-claim:1:0:8"
+          ],
+          "original_pt": 18
+        },
+        {
+          "group_id": "q-strong-663977331dde|unknown|fnv1a32:ad21f4af",
+          "role": "unknown",
+          "card_qid": null,
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:q-strong-663977331dde:0:0:11"
+          ],
+          "original_pt": 18
+        },
+        {
+          "group_id": "s5-scope|supporting|fnv1a32:0d6ffc24",
+          "role": "supporting",
+          "card_qid": null,
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-scope:0:0:15"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "q-div-77ef708ad0e2|supporting|fnv1a32:970b3c9e",
+          "role": "supporting",
+          "card_qid": "q-div-77ef708ad0e2",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-label:0:0:6",
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-1:0:0:2",
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-2:0:0:5",
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-3:0:0:5",
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-4:0:0:5",
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-5:0:0:5"
+          ],
+          "original_pt": 11.25
+        },
+        {
+          "group_id": "q-div-702464247897|supporting|fnv1a32:04cae42e",
+          "role": "supporting",
+          "card_qid": "q-div-702464247897",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-1:0:0:2"
+          ],
+          "original_pt": 10.5
+        },
+        {
+          "group_id": "q-div-702464247897|body|fnv1a32:f5517715",
+          "role": "body",
+          "card_qid": "q-div-702464247897",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-1:0:0:4"
+          ],
+          "original_pt": 14.25
+        },
+        {
+          "group_id": "s5-step-1-1|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-1-1",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-1:0:0:5"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-1-2|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-1-2",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-2:0:0:4"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-1-3|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-1-3",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-3:0:0:9"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-1-4|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-1-4",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-4:0:0:8"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-1-5|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-1-5",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-5:0:0:10"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "q-div-097698816149|supporting|fnv1a32:04cae42e",
+          "role": "supporting",
+          "card_qid": "q-div-097698816149",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-2:0:0:2"
+          ],
+          "original_pt": 10.5
+        },
+        {
+          "group_id": "q-div-097698816149|body|fnv1a32:f5517715",
+          "role": "body",
+          "card_qid": "q-div-097698816149",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-2:0:0:4"
+          ],
+          "original_pt": 14.25
+        },
+        {
+          "group_id": "s5-step-2-1|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-2-1",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-1:0:0:11"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-2-2|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-2-2",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-2:0:0:8"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-2-3|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-2-3",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-3:0:0:5"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-2-4|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-2-4",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-4:0:0:5"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-2-5|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-2-5",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-5:0:0:10"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "q-div-cff3d043ef4f|supporting|fnv1a32:04cae42e",
+          "role": "supporting",
+          "card_qid": "q-div-cff3d043ef4f",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-3:0:0:2"
+          ],
+          "original_pt": 10.5
+        },
+        {
+          "group_id": "q-div-cff3d043ef4f|body|fnv1a32:f5517715",
+          "role": "body",
+          "card_qid": "q-div-cff3d043ef4f",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-3:0:0:7"
+          ],
+          "original_pt": 14.25
+        },
+        {
+          "group_id": "s5-step-3-1|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-3-1",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-1:0:0:9"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-3-2|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-3-2",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-2:0:0:6"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-3-3|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-3-3",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-3:0:0:6"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-3-4|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-3-4",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-4:0:0:8"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-3-5|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-3-5",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-5:0:0:7"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "q-div-1508fa7e68d6|supporting|fnv1a32:04cae42e",
+          "role": "supporting",
+          "card_qid": "q-div-1508fa7e68d6",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-4:0:0:2"
+          ],
+          "original_pt": 10.5
+        },
+        {
+          "group_id": "q-div-1508fa7e68d6|body|fnv1a32:f5517715",
+          "role": "body",
+          "card_qid": "q-div-1508fa7e68d6",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-4:0:0:9"
+          ],
+          "original_pt": 14.25
+        },
+        {
+          "group_id": "s5-step-4-1|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-4-1",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-1:0:0:12"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-4-2|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-4-2",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-2:0:0:11"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-4-3|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-4-3",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-3:0:0:8"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-4-4|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-4-4",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-4:0:0:9"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-step-4-5|body|fnv1a32:2535b963",
+          "role": "body",
+          "card_qid": "s5-step-4-5",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-5:0:0:11"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-takeaway|supporting|fnv1a32:9cfc0d1c",
+          "role": "supporting",
+          "card_qid": "s5-takeaway",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-takeaway-label:0:0:5"
+          ],
+          "original_pt": 12
+        },
+        {
+          "group_id": "s5-takeaway|body|fnv1a32:4128ceb3",
+          "role": "body",
+          "card_qid": "s5-takeaway",
+          "run_ids": [
+            "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-takeaway-copy:0:0:66"
+          ],
+          "original_pt": 13.5
+        }
+      ],
+      "unowned_text_count": 0,
+      "generated_text_count": 0,
+      "measurement_identity": "fnv1a32:2e22eda7",
+      "complete": true
+    },
+    "runs": [
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-eyebrow:0:0:6",
+        "owner_qid": "s5-eyebrow",
+        "content_digest": "fnv1a32:6f75feee",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 6,
+        "ancestor_qids": [
+          "s5-eyebrow",
+          "q-div-76f0d626b7f0",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:79d3f3cb",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-title:0:0:13",
+        "owner_qid": "s5-title",
+        "content_digest": "fnv1a32:6719269f",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 13,
+        "ancestor_qids": [
+          "s5-title",
+          "q-div-76f0d626b7f0",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "q-div-75dcf98740c9|title|fnv1a32:241d4532",
+        "role": "title",
+        "original_pt": 25.5,
+        "final_pt": 25.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 22.95,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-label:0:0:7",
+        "owner_qid": "s5-req-label",
+        "content_digest": "fnv1a32:4b53330e",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 7,
+        "ancestor_qids": [
+          "s5-req-label",
+          "q-div-4809de7a0f2d",
+          "q-div-73774be43d12",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:22b9f0dd",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-1:0:0:7",
+        "owner_qid": "s5-req-1",
+        "content_digest": "fnv1a32:fb90f57d",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 7,
+        "ancestor_qids": [
+          "s5-req-1",
+          "q-div-4809de7a0f2d",
+          "q-div-73774be43d12",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "s5-req-1|supporting|fnv1a32:cf89d3c8",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-2:0:0:7",
+        "owner_qid": "s5-req-2",
+        "content_digest": "fnv1a32:a99727de",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 7,
+        "ancestor_qids": [
+          "s5-req-2",
+          "q-div-4809de7a0f2d",
+          "q-div-73774be43d12",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "s5-req-2|supporting|fnv1a32:cf89d3c8",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-3:0:0:7",
+        "owner_qid": "s5-req-3",
+        "content_digest": "fnv1a32:aa972971",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 7,
+        "ancestor_qids": [
+          "s5-req-3",
+          "q-div-4809de7a0f2d",
+          "q-div-73774be43d12",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "s5-req-3|supporting|fnv1a32:cf89d3c8",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-more:0:0:2",
+        "owner_qid": "s5-req-more",
+        "content_digest": "fnv1a32:18dc1b01",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s5-req-more",
+          "q-div-4809de7a0f2d",
+          "q-div-73774be43d12",
+          "q-div-75dcf98740c9"
+        ],
+        "group_id": "s5-req-more|supporting|fnv1a32:cf89d3c8",
+        "role": "supporting",
+        "original_pt": 9.75,
+        "final_pt": 9.75,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-claim:0:0:29",
+        "owner_qid": "s5-claim",
+        "content_digest": "fnv1a32:9e4261f6",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 29,
+        "ancestor_qids": [
+          "s5-claim",
+          "q-div-602277a791e7",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-claim|body|fnv1a32:c2312941",
+        "role": "body",
+        "original_pt": 18,
+        "final_pt": 18,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 16.2,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:q-strong-663977331dde:0:0:11",
+        "owner_qid": "q-strong-663977331dde",
+        "content_digest": "fnv1a32:a4a1a7cc",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 11,
+        "ancestor_qids": [
+          "q-strong-663977331dde",
+          "s5-claim",
+          "q-div-602277a791e7",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-strong-663977331dde|unknown|fnv1a32:ad21f4af",
+        "role": "unknown",
+        "original_pt": 18,
+        "final_pt": 18,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 16.2,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-claim:1:0:8",
+        "owner_qid": "s5-claim",
+        "content_digest": "fnv1a32:776afed6",
+        "text_node_ordinal": 1,
+        "start_offset": 0,
+        "end_offset": 8,
+        "ancestor_qids": [
+          "s5-claim",
+          "q-div-602277a791e7",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-claim|body|fnv1a32:c2312941",
+        "role": "body",
+        "original_pt": 18,
+        "final_pt": 18,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 16.2,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-scope:0:0:15",
+        "owner_qid": "s5-scope",
+        "content_digest": "fnv1a32:dca66ece",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 15,
+        "ancestor_qids": [
+          "s5-scope",
+          "q-div-602277a791e7",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-scope|supporting|fnv1a32:0d6ffc24",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-label:0:0:6",
+        "owner_qid": "s5-stage-label",
+        "content_digest": "fnv1a32:4ed2a131",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 6,
+        "ancestor_qids": [
+          "s5-stage-label",
+          "q-div-77ef708ad0e2",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-77ef708ad0e2|supporting|fnv1a32:970b3c9e",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-1:0:0:2",
+        "owner_qid": "s5-stage-1",
+        "content_digest": "fnv1a32:c6d1b0a2",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s5-stage-1",
+          "q-div-77ef708ad0e2",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-77ef708ad0e2|supporting|fnv1a32:970b3c9e",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-2:0:0:5",
+        "owner_qid": "s5-stage-2",
+        "content_digest": "fnv1a32:e696c8a0",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s5-stage-2",
+          "q-div-77ef708ad0e2",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-77ef708ad0e2|supporting|fnv1a32:970b3c9e",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-3:0:0:5",
+        "owner_qid": "s5-stage-3",
+        "content_digest": "fnv1a32:082c0c32",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s5-stage-3",
+          "q-div-77ef708ad0e2",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-77ef708ad0e2|supporting|fnv1a32:970b3c9e",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-4:0:0:5",
+        "owner_qid": "s5-stage-4",
+        "content_digest": "fnv1a32:38d206b6",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s5-stage-4",
+          "q-div-77ef708ad0e2",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-77ef708ad0e2|supporting|fnv1a32:970b3c9e",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-5:0:0:5",
+        "owner_qid": "s5-stage-5",
+        "content_digest": "fnv1a32:a348d505",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s5-stage-5",
+          "q-div-77ef708ad0e2",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-77ef708ad0e2|supporting|fnv1a32:970b3c9e",
+        "role": "supporting",
+        "original_pt": 11.25,
+        "final_pt": 11.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.125,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-1:0:0:2",
+        "owner_qid": "s5-role-index-1",
+        "content_digest": "fnv1a32:20ed70ba",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s5-role-index-1",
+          "q-div-702464247897",
+          "q-div-b77fe8bbfd8a",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-702464247897|supporting|fnv1a32:04cae42e",
+        "role": "supporting",
+        "original_pt": 10.5,
+        "final_pt": 10.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9.450000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-1:0:0:4",
+        "owner_qid": "s5-role-1",
+        "content_digest": "fnv1a32:7a6cccd6",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 4,
+        "ancestor_qids": [
+          "s5-role-1",
+          "q-div-702464247897",
+          "q-div-b77fe8bbfd8a",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-702464247897|body|fnv1a32:f5517715",
+        "role": "body",
+        "original_pt": 14.25,
+        "final_pt": 14.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.825000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-1:0:0:5",
+        "owner_qid": "s5-step-1-1",
+        "content_digest": "fnv1a32:e280562f",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s5-step-1-1",
+          "q-div-d890e9912ecd",
+          "q-div-b77fe8bbfd8a",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-1-1|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-2:0:0:4",
+        "owner_qid": "s5-step-1-2",
+        "content_digest": "fnv1a32:85953e26",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 4,
+        "ancestor_qids": [
+          "s5-step-1-2",
+          "q-div-d890e9912ecd",
+          "q-div-b77fe8bbfd8a",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-1-2|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-3:0:0:9",
+        "owner_qid": "s5-step-1-3",
+        "content_digest": "fnv1a32:b111054b",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 9,
+        "ancestor_qids": [
+          "s5-step-1-3",
+          "q-div-d890e9912ecd",
+          "q-div-b77fe8bbfd8a",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-1-3|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-4:0:0:8",
+        "owner_qid": "s5-step-1-4",
+        "content_digest": "fnv1a32:367be68b",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 8,
+        "ancestor_qids": [
+          "s5-step-1-4",
+          "q-div-d890e9912ecd",
+          "q-div-b77fe8bbfd8a",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-1-4|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-5:0:0:10",
+        "owner_qid": "s5-step-1-5",
+        "content_digest": "fnv1a32:7c5c30f0",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 10,
+        "ancestor_qids": [
+          "s5-step-1-5",
+          "q-div-d890e9912ecd",
+          "q-div-b77fe8bbfd8a",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-1-5|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-2:0:0:2",
+        "owner_qid": "s5-role-index-2",
+        "content_digest": "fnv1a32:1fed6f27",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s5-role-index-2",
+          "q-div-097698816149",
+          "q-div-fdee9a177503",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-097698816149|supporting|fnv1a32:04cae42e",
+        "role": "supporting",
+        "original_pt": 10.5,
+        "final_pt": 10.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9.450000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-2:0:0:4",
+        "owner_qid": "s5-role-2",
+        "content_digest": "fnv1a32:cde98f38",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 4,
+        "ancestor_qids": [
+          "s5-role-2",
+          "q-div-097698816149",
+          "q-div-fdee9a177503",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-097698816149|body|fnv1a32:f5517715",
+        "role": "body",
+        "original_pt": 14.25,
+        "final_pt": 14.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.825000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Malgun Gothic",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-1:0:0:11",
+        "owner_qid": "s5-step-2-1",
+        "content_digest": "fnv1a32:3ce6f9e2",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 11,
+        "ancestor_qids": [
+          "s5-step-2-1",
+          "q-div-b07aa9330180",
+          "q-div-fdee9a177503",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-2-1|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-2:0:0:8",
+        "owner_qid": "s5-step-2-2",
+        "content_digest": "fnv1a32:32e6068e",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 8,
+        "ancestor_qids": [
+          "s5-step-2-2",
+          "q-div-b07aa9330180",
+          "q-div-fdee9a177503",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-2-2|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-3:0:0:5",
+        "owner_qid": "s5-step-2-3",
+        "content_digest": "fnv1a32:e00815c0",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s5-step-2-3",
+          "q-div-b07aa9330180",
+          "q-div-fdee9a177503",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-2-3|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-4:0:0:5",
+        "owner_qid": "s5-step-2-4",
+        "content_digest": "fnv1a32:52524a97",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s5-step-2-4",
+          "q-div-b07aa9330180",
+          "q-div-fdee9a177503",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-2-4|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-5:0:0:10",
+        "owner_qid": "s5-step-2-5",
+        "content_digest": "fnv1a32:91a34114",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 10,
+        "ancestor_qids": [
+          "s5-step-2-5",
+          "q-div-b07aa9330180",
+          "q-div-fdee9a177503",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-2-5|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-3:0:0:2",
+        "owner_qid": "s5-role-index-3",
+        "content_digest": "fnv1a32:1eed6d94",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s5-role-index-3",
+          "q-div-cff3d043ef4f",
+          "q-div-625a04b6bbf4",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-cff3d043ef4f|supporting|fnv1a32:04cae42e",
+        "role": "supporting",
+        "original_pt": 10.5,
+        "final_pt": 10.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9.450000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-3:0:0:7",
+        "owner_qid": "s5-role-3",
+        "content_digest": "fnv1a32:35a76398",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 7,
+        "ancestor_qids": [
+          "s5-role-3",
+          "q-div-cff3d043ef4f",
+          "q-div-625a04b6bbf4",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-cff3d043ef4f|body|fnv1a32:f5517715",
+        "role": "body",
+        "original_pt": 14.25,
+        "final_pt": 14.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.825000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-1:0:0:9",
+        "owner_qid": "s5-step-3-1",
+        "content_digest": "fnv1a32:2d417360",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 9,
+        "ancestor_qids": [
+          "s5-step-3-1",
+          "q-div-6dba531384da",
+          "q-div-625a04b6bbf4",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-3-1|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-2:0:0:6",
+        "owner_qid": "s5-step-3-2",
+        "content_digest": "fnv1a32:516c0175",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 6,
+        "ancestor_qids": [
+          "s5-step-3-2",
+          "q-div-6dba531384da",
+          "q-div-625a04b6bbf4",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-3-2|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-3:0:0:6",
+        "owner_qid": "s5-step-3-3",
+        "content_digest": "fnv1a32:02def899",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 6,
+        "ancestor_qids": [
+          "s5-step-3-3",
+          "q-div-6dba531384da",
+          "q-div-625a04b6bbf4",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-3-3|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-4:0:0:8",
+        "owner_qid": "s5-step-3-4",
+        "content_digest": "fnv1a32:828259c8",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 8,
+        "ancestor_qids": [
+          "s5-step-3-4",
+          "q-div-6dba531384da",
+          "q-div-625a04b6bbf4",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-3-4|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-5:0:0:7",
+        "owner_qid": "s5-step-3-5",
+        "content_digest": "fnv1a32:e55223a4",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 7,
+        "ancestor_qids": [
+          "s5-step-3-5",
+          "q-div-6dba531384da",
+          "q-div-625a04b6bbf4",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-3-5|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-4:0:0:2",
+        "owner_qid": "s5-role-index-4",
+        "content_digest": "fnv1a32:1ded6c01",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 2,
+        "ancestor_qids": [
+          "s5-role-index-4",
+          "q-div-1508fa7e68d6",
+          "q-div-4c06b2b3481c",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-1508fa7e68d6|supporting|fnv1a32:04cae42e",
+        "role": "supporting",
+        "original_pt": 10.5,
+        "final_pt": 10.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 9.450000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Consolas",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-4:0:0:9",
+        "owner_qid": "s5-role-4",
+        "content_digest": "fnv1a32:f26f7d7a",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 9,
+        "ancestor_qids": [
+          "s5-role-4",
+          "q-div-1508fa7e68d6",
+          "q-div-4c06b2b3481c",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "q-div-1508fa7e68d6|body|fnv1a32:f5517715",
+        "role": "body",
+        "original_pt": 14.25,
+        "final_pt": 14.25,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.825000000000001,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-1:0:0:12",
+        "owner_qid": "s5-step-4-1",
+        "content_digest": "fnv1a32:ee08c892",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 12,
+        "ancestor_qids": [
+          "s5-step-4-1",
+          "q-div-06d9606aaa40",
+          "q-div-4c06b2b3481c",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-4-1|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-2:0:0:11",
+        "owner_qid": "s5-step-4-2",
+        "content_digest": "fnv1a32:a3499d5b",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 11,
+        "ancestor_qids": [
+          "s5-step-4-2",
+          "q-div-06d9606aaa40",
+          "q-div-4c06b2b3481c",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-4-2|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-3:0:0:8",
+        "owner_qid": "s5-step-4-3",
+        "content_digest": "fnv1a32:042295af",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 8,
+        "ancestor_qids": [
+          "s5-step-4-3",
+          "q-div-06d9606aaa40",
+          "q-div-4c06b2b3481c",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-4-3|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-4:0:0:9",
+        "owner_qid": "s5-step-4-4",
+        "content_digest": "fnv1a32:cb8e12ca",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 9,
+        "ancestor_qids": [
+          "s5-step-4-4",
+          "q-div-06d9606aaa40",
+          "q-div-4c06b2b3481c",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-4-4|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-5:0:0:11",
+        "owner_qid": "s5-step-4-5",
+        "content_digest": "fnv1a32:c41d959c",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 11,
+        "ancestor_qids": [
+          "s5-step-4-5",
+          "q-div-06d9606aaa40",
+          "q-div-4c06b2b3481c",
+          "s5-roadmap",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-step-4-5|body|fnv1a32:2535b963",
+        "role": "body",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-takeaway-label:0:0:5",
+        "owner_qid": "s5-takeaway-label",
+        "content_digest": "fnv1a32:430eca9f",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 5,
+        "ancestor_qids": [
+          "s5-takeaway-label",
+          "s5-takeaway",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-takeaway|supporting|fnv1a32:9cfc0d1c",
+        "role": "supporting",
+        "original_pt": 12,
+        "final_pt": 12,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 10.8,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      },
+      {
+        "run_id": "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-takeaway-copy:0:0:66",
+        "owner_qid": "s5-takeaway-copy",
+        "content_digest": "fnv1a32:d872857e",
+        "text_node_ordinal": 0,
+        "start_offset": 0,
+        "end_offset": 66,
+        "ancestor_qids": [
+          "s5-takeaway-copy",
+          "s5-takeaway",
+          "q-div-66757db28fba"
+        ],
+        "group_id": "s5-takeaway|body|fnv1a32:4128ceb3",
+        "role": "body",
+        "original_pt": 13.5,
+        "final_pt": 13.5,
+        "minimum_allowed_pt": 9,
+        "preferred_minimum_pt": 12.15,
+        "exceeds_preferred_shrink": false,
+        "shrink_ratio": 0,
+        "font_loaded": true,
+        "resolved_font_family": "Noto Sans KR",
+        "font_resolution_source": "installed-local-font"
+      }
+    ],
+    "groups": [
+      {
+        "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:79d3f3cb",
+        "role": "supporting",
+        "card_qid": "q-div-75dcf98740c9",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-eyebrow:0:0:6"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "q-div-75dcf98740c9|title|fnv1a32:241d4532",
+        "role": "title",
+        "card_qid": "q-div-75dcf98740c9",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-title:0:0:13"
+        ],
+        "original_pt": 25.5
+      },
+      {
+        "group_id": "q-div-75dcf98740c9|supporting|fnv1a32:22b9f0dd",
+        "role": "supporting",
+        "card_qid": "q-div-75dcf98740c9",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-label:0:0:7"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s5-req-1|supporting|fnv1a32:cf89d3c8",
+        "role": "supporting",
+        "card_qid": "s5-req-1",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-1:0:0:7"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s5-req-2|supporting|fnv1a32:cf89d3c8",
+        "role": "supporting",
+        "card_qid": "s5-req-2",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-2:0:0:7"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s5-req-3|supporting|fnv1a32:cf89d3c8",
+        "role": "supporting",
+        "card_qid": "s5-req-3",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-3:0:0:7"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s5-req-more|supporting|fnv1a32:cf89d3c8",
+        "role": "supporting",
+        "card_qid": "s5-req-more",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-req-more:0:0:2"
+        ],
+        "original_pt": 9.75
+      },
+      {
+        "group_id": "s5-claim|body|fnv1a32:c2312941",
+        "role": "body",
+        "card_qid": null,
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-claim:0:0:29",
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-claim:1:0:8"
+        ],
+        "original_pt": 18
+      },
+      {
+        "group_id": "q-strong-663977331dde|unknown|fnv1a32:ad21f4af",
+        "role": "unknown",
+        "card_qid": null,
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:q-strong-663977331dde:0:0:11"
+        ],
+        "original_pt": 18
+      },
+      {
+        "group_id": "s5-scope|supporting|fnv1a32:0d6ffc24",
+        "role": "supporting",
+        "card_qid": null,
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-scope:0:0:15"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "q-div-77ef708ad0e2|supporting|fnv1a32:970b3c9e",
+        "role": "supporting",
+        "card_qid": "q-div-77ef708ad0e2",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-label:0:0:6",
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-1:0:0:2",
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-2:0:0:5",
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-3:0:0:5",
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-4:0:0:5",
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-stage-5:0:0:5"
+        ],
+        "original_pt": 11.25
+      },
+      {
+        "group_id": "q-div-702464247897|supporting|fnv1a32:04cae42e",
+        "role": "supporting",
+        "card_qid": "q-div-702464247897",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-1:0:0:2"
+        ],
+        "original_pt": 10.5
+      },
+      {
+        "group_id": "q-div-702464247897|body|fnv1a32:f5517715",
+        "role": "body",
+        "card_qid": "q-div-702464247897",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-1:0:0:4"
+        ],
+        "original_pt": 14.25
+      },
+      {
+        "group_id": "s5-step-1-1|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-1-1",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-1:0:0:5"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-1-2|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-1-2",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-2:0:0:4"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-1-3|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-1-3",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-3:0:0:9"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-1-4|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-1-4",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-4:0:0:8"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-1-5|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-1-5",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-1-5:0:0:10"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "q-div-097698816149|supporting|fnv1a32:04cae42e",
+        "role": "supporting",
+        "card_qid": "q-div-097698816149",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-2:0:0:2"
+        ],
+        "original_pt": 10.5
+      },
+      {
+        "group_id": "q-div-097698816149|body|fnv1a32:f5517715",
+        "role": "body",
+        "card_qid": "q-div-097698816149",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-2:0:0:4"
+        ],
+        "original_pt": 14.25
+      },
+      {
+        "group_id": "s5-step-2-1|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-2-1",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-1:0:0:11"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-2-2|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-2-2",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-2:0:0:8"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-2-3|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-2-3",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-3:0:0:5"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-2-4|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-2-4",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-4:0:0:5"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-2-5|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-2-5",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-2-5:0:0:10"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "q-div-cff3d043ef4f|supporting|fnv1a32:04cae42e",
+        "role": "supporting",
+        "card_qid": "q-div-cff3d043ef4f",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-3:0:0:2"
+        ],
+        "original_pt": 10.5
+      },
+      {
+        "group_id": "q-div-cff3d043ef4f|body|fnv1a32:f5517715",
+        "role": "body",
+        "card_qid": "q-div-cff3d043ef4f",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-3:0:0:7"
+        ],
+        "original_pt": 14.25
+      },
+      {
+        "group_id": "s5-step-3-1|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-3-1",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-1:0:0:9"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-3-2|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-3-2",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-2:0:0:6"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-3-3|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-3-3",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-3:0:0:6"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-3-4|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-3-4",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-4:0:0:8"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-3-5|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-3-5",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-3-5:0:0:7"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "q-div-1508fa7e68d6|supporting|fnv1a32:04cae42e",
+        "role": "supporting",
+        "card_qid": "q-div-1508fa7e68d6",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-index-4:0:0:2"
+        ],
+        "original_pt": 10.5
+      },
+      {
+        "group_id": "q-div-1508fa7e68d6|body|fnv1a32:f5517715",
+        "role": "body",
+        "card_qid": "q-div-1508fa7e68d6",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-role-4:0:0:9"
+        ],
+        "original_pt": 14.25
+      },
+      {
+        "group_id": "s5-step-4-1|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-4-1",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-1:0:0:12"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-4-2|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-4-2",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-2:0:0:11"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-4-3|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-4-3",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-3:0:0:8"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-4-4|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-4-4",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-4:0:0:9"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-step-4-5|body|fnv1a32:2535b963",
+        "role": "body",
+        "card_qid": "s5-step-4-5",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-step-4-5:0:0:11"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-takeaway|supporting|fnv1a32:9cfc0d1c",
+        "role": "supporting",
+        "card_qid": "s5-takeaway",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-takeaway-label:0:0:5"
+        ],
+        "original_pt": 12
+      },
+      {
+        "group_id": "s5-takeaway|body|fnv1a32:4128ceb3",
+        "role": "body",
+        "card_qid": "s5-takeaway",
+        "run_ids": [
+          "sha256:2324a87498d352257b68c0eb151869f43dcfccd9c246f357819a92fa67bd10bb:s5-takeaway-copy:0:0:66"
+        ],
+        "original_pt": 13.5
+      }
+    ],
+    "image_text": [],
+    "cards": [],
+    "candidates": [],
+    "scopes": [],
+    "search_termination": [],
+    "geometry_seeds": [],
+    "parent_exclusions": [],
+    "telemetry": {
+      "candidate_total": 0,
+      "evaluated": 0,
+      "policy_removed": 0,
+      "duplicates": 0,
+      "pruned": 0,
+      "measurements": 38,
+      "fit_search_ms": 320.7
+    }
+  }
+}

@@ -2,42 +2,27 @@
   "schemaVersion": 2,
   "active": true,
   "projectName": "ppt-agent",
-  "activeTask": "PPT 생성·Fidelity 익스포트·웹 서비스의 확인된 P0/P1 문제를 구현으로 해결하고 최신 코드 기준 실제 제품 경로와 필요한 릴리스 증거를 확보한다",
+  "activeTask": "Composer source preservation and 7px fit implementation",
   "taskContext": {
     "paths": [
-      "servers/nextjs/lib/authored-hybrid/export.ts",
-      "servers/fastapi/services/public_operation_admission.py",
-      "servers/fastapi/services/authored_presentation_generation.py",
-      "servers/fastapi/services/trusted_executor",
-      "servers/fastapi/services/artifact_store.py",
-      "servers/fastapi/api"
+      "servers/fastapi/services/composer",
+      "servers/fastapi/services/source_content",
+      "servers/nextjs/lib/authored-hybrid"
     ],
     "scopes": [
-      "public-v2",
-      "authored-generation",
-      "fidelity-export",
-      "trusted-execution",
-      "database-authority",
-      "retention",
-      "observability"
+      "composer",
+      "source-content"
     ],
     "includeKeys": [
-      "authored.author-provider-call-budget",
-      "public-v2.fidelity-only-browser-export",
-      "public-v2.browser-operation-lifecycle",
-      "public-export.runtime.no-docker",
-      "public-db.controller-authority",
-      "public-export.fidelity-performance-contract"
+      "composer.dense-source-font-floor-px",
+      "authored.capture-final-html-immutable"
     ]
   },
   "bindingPolicy": {
     "maxContextChars": 3200,
     "maxBoundDecisions": 16,
     "coreKeys": [
-      "source-locked.owner-scoped-durable-generation",
-      "source-content.template-restyle-contract",
-      "presentation.company-standard-optional",
-      "authored.quality-composition-first"
+      "workflow.spec-memory-task-scoped-reconciliation"
     ],
     "rules": []
   },
@@ -141,10 +126,75 @@
     "authored.repair-preflight-separates-source-from-decoration": "decisions/authored.repair-preflight-separates-source-from-decoration.1.json",
     "authored.offcanvas-width-is-repaired-deterministically": "decisions/authored.offcanvas-width-is-repaired-deterministically.1.json",
     "source-content.verbatim-same-page-fit-ladder": "decisions/source-content.verbatim-same-page-fit-ladder.1.json",
-    "public-export.hybrid-in-isolated-lane": "decisions/public-export.hybrid-in-isolated-lane.1.json"
+    "public-export.hybrid-in-isolated-lane": "decisions/public-export.hybrid-in-isolated-lane.1.json",
+    "public-export.published-flagged-hybrid": "decisions/public-export.published-flagged-hybrid.2.json",
+    "authored.structural-repair-v3": "decisions/authored.structural-repair-v3.1.json",
+    "authored.verbatim-flagged-publish": "decisions/authored.verbatim-flagged-publish.2.json",
+    "authored.empty-media-composition-flag": "decisions/authored.empty-media-composition-flag.1.json",
+    "public-export.identity-includes-worker-bundle": "decisions/public-export.identity-includes-worker-bundle.1.json",
+    "workflow.spec-memory-task-scoped-reconciliation": "decisions/workflow.spec-memory-task-scoped-reconciliation.1.json",
+    "workflow.output.no-source-dumps": "decisions/workflow.output.no-source-dumps.1.json",
+    "public-export.queue-wait-admission-only": "decisions/public-export.queue-wait-admission-only.1.json",
+    "public-export.supervisor-output-publication-ceiling": "decisions/public-export.supervisor-output-publication-ceiling.1.json",
+    "storage.checkpoint-artifactref-authority": "decisions/storage.checkpoint-artifactref-authority.1.json",
+    "image-generation.gpt-image-2-5-support": "decisions/image-generation.gpt-image-2-5-support.1.json",
+    "image-generation.codex-oauth-requested-model": "decisions/image-generation.codex-oauth-requested-model.1.json",
+    "ui.genspark-inspired-workspace": "decisions/ui.genspark-inspired-workspace.1.json",
+    "ui.sidebar-single-scroll": "decisions/ui.sidebar-single-scroll.1.json",
+    "authored.style-catalogue-structure": "decisions/authored.style-catalogue-structure.1.json",
+    "authored.catalogue-consolidation-compatibility": "decisions/authored.catalogue-consolidation-compatibility.1.json",
+    "authored.capture-final-html-immutable": "decisions/authored.capture-final-html-immutable.1.json",
+    "authored.portrait-generation-v1": "decisions/authored.portrait-generation-v1.1.json",
+    "authored.portrait-reuse-existing-pipeline": "decisions/authored.portrait-reuse-existing-pipeline.1.json",
+    "authored.fit-source-replayable-edits": "decisions/authored.fit-source-replayable-edits.1.json",
+    "authored.osb-density-aware-typography": "decisions/authored.osb-density-aware-typography.1.json",
+    "authored.portrait-v3-implementation-design": "decisions/authored.portrait-v3-implementation-design.1.json",
+    "authored.local-fit-boundary-owned-text": "decisions/authored.local-fit-boundary-owned-text.1.json",
+    "authored.portrait-canvas-end-to-end": "decisions/authored.portrait-canvas-end-to-end.1.json",
+    "composer.dense-source-font-floor-px": "decisions/composer.dense-source-font-floor-px.1.json",
+    "composer.source-preservation-v2": "decisions/composer.source-preservation-v2.1.json",
+    "composer.portrait-template-priority": "decisions/composer.portrait-template-priority.1.json",
+    "ui.popup-visual-style": "decisions/ui.popup-visual-style.1.json",
+    "workspace.external-generation-design-apply": "decisions/workspace.external-generation-design-apply.1.json",
+    "workspace.staging-bounded-queue-observation": "decisions/workspace.staging-bounded-queue-observation.1.json",
+    "authored.checkpoint-accepted-fit-hydration": "decisions/authored.checkpoint-accepted-fit-hydration.1.json",
+    "authored.staging-retry-prepared-scene-binding": "decisions/authored.staging-retry-prepared-scene-binding.1.json",
+    "ui.template-kbs-company-proposal": "decisions/ui.template-kbs-company-proposal.2.json",
+    "authored.hybrid-original-canvas-export": "decisions/authored.hybrid-original-canvas-export.1.json",
+    "public-export.quality-advisory": "decisions/public-export.quality-advisory.1.json",
+    "public-export.fidelity-visual-review-pending": "decisions/public-export.fidelity-visual-review-pending.1.json",
+    "public-export.hybrid-page-recovery": "decisions/public-export.hybrid-page-recovery.2.json",
+    "authored.user-design-instruction-priority": "decisions/authored.user-design-instruction-priority.1.json",
+    "public-export.editable-preservation": "decisions/public-export.editable-preservation.1.json",
+    "quality-review.flagged-pages-selection": "decisions/quality-review.flagged-pages-selection.1.json",
+    "authored.hybrid-layout-only-leaves": "decisions/authored.hybrid-layout-only-leaves.1.json",
+    "public-export.editable-delivery-contract": "decisions/public-export.editable-delivery-contract.1.json",
+    "authored.upload-image-semantic-placement": "decisions/authored.upload-image-semantic-placement.1.json",
+    "authored.editable-export-font-and-ownership": "decisions/authored.editable-export-font-and-ownership.1.json",
+    "authored.original-first-local-fit": "decisions/authored.original-first-local-fit.1.json",
+    "export.current-worker-source-identity": "decisions/export.current-worker-source-identity.1.json",
+    "authored.local-fit-nested-card-containment": "decisions/authored.local-fit-nested-card-containment.1.json",
+    "generation.svg-mode-shared-authored-styles": "decisions/generation.svg-mode-shared-authored-styles.2.json",
+    "generation.svg-image-asset-derivatives": "decisions/generation.svg-image-asset-derivatives.1.json",
+    "dashboard.list-detail-payload-separation": "decisions/dashboard.list-detail-payload-separation.2.json",
+    "presentation.conversation-first-generation-ui": "decisions/presentation.conversation-first-generation-ui.2.json",
+    "presentation.conversation-workspace-contracts": "decisions/presentation.conversation-workspace-contracts.1.json",
+    "presentation.workspace-capability-refresh": "decisions/presentation.workspace-capability-refresh.1.json",
+    "svg.source-preserving-layout-contract": "decisions/svg.source-preserving-layout-contract.2.json",
+    "svg.source-preserving-publication": "decisions/svg.source-preserving-publication.1.json",
+    "svg.template-layout-admission": "decisions/svg.template-layout-admission.1.json",
+    "svg.source-layout-v2-runtime": "decisions/svg.source-layout-v2-runtime.1.json",
+    "presentation.conversation-ui-action-contracts": "decisions/presentation.conversation-ui-action-contracts.1.json",
+    "authored.screenshot-blue-purpose": "decisions/authored.screenshot-blue-purpose.1.json",
+    "authored.screenshot-blue-svg": "decisions/authored.screenshot-blue-svg.1.json",
+    "document-canvas.upload-default-a4": "decisions/document-canvas.upload-default-a4.1.json",
+    "svg.raster-reconstruction-direction": "decisions/svg.raster-reconstruction-direction.1.json",
+    "svg.raster-reconstruction-validation-order": "decisions/svg.raster-reconstruction-validation-order.1.json",
+    "raster-pptx.generic-a4-svg-template": "decisions/raster-pptx.generic-a4-svg-template.1.json",
+    "raster-pptx.full-page-preserve-approval": "decisions/raster-pptx.full-page-preserve-approval.3.json"
   },
   "readFirst": [
-    "AGENTS.md"
+    "docs/composer-source-preservation-and-7px-fit-design-20260913.md"
   ],
-  "updatedAt": "2026-09-04T12:00:00.0000000+00:00"
+  "updatedAt": "2026-09-24T12:50:19.3357514+00:00"
 }

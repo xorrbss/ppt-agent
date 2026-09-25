@@ -228,7 +228,7 @@ def test_repeated_image_is_reported_once_per_slide(tmp_path: Path) -> None:
     assert [image.source_slide_index for image in images] == [0, 1, 2]
 
 
-def test_same_image_placed_twice_on_one_slide_counts_once(tmp_path: Path) -> None:
+def test_same_image_placed_twice_on_one_slide_retains_both_occurrences(tmp_path: Path) -> None:
     payload = _png_bytes(400, 400, "purple")
     path = _deck(
         tmp_path / "twice.pptx",
@@ -243,8 +243,9 @@ def test_same_image_placed_twice_on_one_slide_counts_once(tmp_path: Path) -> Non
 
     images = extract_pptx_images(path)
 
-    assert len(images) == 1
-    assert images[0].source_slide_index == 0
+    assert len(images) == 2
+    assert [image.source_slide_index for image in images] == [0, 0]
+    assert [image.digest for image in images] == [hashlib.sha256(payload).hexdigest()] * 2
 
 
 def test_slide_order_follows_the_slide_id_list(tmp_path: Path) -> None:
@@ -540,3 +541,43 @@ def test_a_picture_without_a_stated_extent_reports_no_coverage(tmp_path: Path) -
     images = extract_pptx_images(deck)
 
     assert images[0].slide_coverage is None
+
+
+def test_docx_collection_preserves_repeated_media_occurrences(tmp_path):
+    from services.source_images.extract_documents import extract_document_images
+    path = tmp_path / "pictures.docx"
+    paragraph = '<w:p><w:r><w:drawing><a:blip r:embed="rId1"/></w:drawing></w:r></w:p>'
+    main = f'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:a="{DRAWING_NS}" xmlns:r="{OFFICE_RELATIONSHIP_NS}"><w:body>{paragraph}{paragraph}</w:body></w:document>'
+    rels = f'<Relationships xmlns="{RELATIONSHIP_NS}"><Relationship Id="rId1" Type="{OFFICE_RELATIONSHIP_NS}/image" Target="media/picture.png"/></Relationships>'
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("word/document.xml", main)
+        archive.writestr("word/_rels/document.xml.rels", rels)
+        archive.writestr("word/media/picture.png", _png_bytes(30, 30))
+    result = extract_document_images(path)
+    assert result.status == "complete"
+    assert len(result.assets) == 1
+    assert len(result.occurrences) == 2
+    assert len({i.occurrence_id for i in result.occurrences}) == 2
+    assert all(i.locator["pageIndex"] is None for i in result.occurrences)
+
+
+def test_document_collection_reports_corrupt_input(tmp_path):
+    from services.source_images.extract_documents import extract_document_images
+    path = tmp_path / "broken.docx"
+    path.write_bytes(b"not a document")
+    result = extract_document_images(path)
+    assert result.status == "failed"
+    assert result.coverage == "partial"
+    assert result.diagnostics
+
+
+def test_pdf_scan_collection_preserves_page(tmp_path):
+    from services.source_images.extract_documents import extract_document_images
+    path = tmp_path / "scan.pdf"
+    Image.new("RGB", (300, 400), "red").save(path, format="PDF")
+    result = extract_document_images(path)
+    assert result.status == "complete"
+    assert result.coverage == "page_only"
+    assert len(result.occurrences) == 1
+    assert result.occurrences[0].locator["extractionKind"] == "scanned_page"
+    assert result.occurrences[0].locator["pageIndex"] == 0

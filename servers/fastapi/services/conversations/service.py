@@ -59,7 +59,9 @@ def derive_presentation_capability(
     """Derive runtime/tool capability exclusively from persisted presentation data."""
 
     profile, capabilities, _ = resolve_presentation_driver(presentation)
-    if profile.driver_id == "authored":
+    if profile.driver_id == "svg-v1":
+        presentation_mode = "svg"
+    elif profile.driver_id == "authored":
         presentation_mode = "authored"
     else:
         presentation_mode = "template"
@@ -70,7 +72,7 @@ def derive_presentation_capability(
         generation_mode=profile.generation_mode,
         presentation_mode=presentation_mode,
         tool_profile=profile.driver_id,
-        can_edit=presentation.lifecycle_status != PRESENTATION_LIFECYCLE_DELETED,
+        can_edit=(profile.driver_id != "svg-v1" and presentation.lifecycle_status != PRESENTATION_LIFECYCLE_DELETED),
     )
 
 

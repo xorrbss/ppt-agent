@@ -21,6 +21,7 @@ import yaml
 
 # Re-exported: the loader lives apart only because this file is past the ratchet.
 from utils.authored_style_exemplars import load_style_exemplar  # noqa: F401
+from utils.authored_style_catalogue import canonical_authored_style_id
 
 
 LOGGER = logging.getLogger(__name__)
@@ -114,6 +115,8 @@ class AuthoredStyle:
     assets_root: Optional[Path] = None
     # Positional mapping is explicit even when scalar entries use list position.
     slide_reference_indices: tuple[int, ...] = ()
+    composer_profile: Mapping[str, Any] | None = None
+    svg_overrides: Mapping[str, Any] | None = None
 
     def public_dict(self) -> dict[str, Any]:
         """Return only the fields safe and useful for style selection clients."""
@@ -491,6 +494,18 @@ def _parse_style(
         preview_image = _asset_path(preview["image"], source, assets_directory)
 
     reference_images = _reference_images(data, source, assets_directory)
+    composer_profile = data.get("composer_profile")
+    svg_overrides = data.get("svg_overrides")
+    if svg_overrides is not None:
+        if not isinstance(svg_overrides, Mapping) or set(svg_overrides) - {"layout_hints", "common_guidance", "resolved_sections"}:
+            raise ValueError(f"{source.name}: invalid svg_overrides")
+        for key, value in svg_overrides.items():
+            if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+                raise ValueError(f"{source.name}: svg_overrides.{key} must be a string list")
+    if composer_profile is not None:
+        from utils.authored_style_chrome import StyleChromeProfile
+
+        composer_profile = StyleChromeProfile.model_validate(composer_profile).model_dump(mode="json")
     reference_mode = _reference_mode(data, source)
     slide_reference_images, slide_reference_indices = _slide_reference_images(
         data,
@@ -530,6 +545,8 @@ def _parse_style(
         reference_mode=reference_mode,
         assets_root=assets_directory.resolve(),
         slide_reference_indices=slide_reference_indices,
+        composer_profile=composer_profile,
+        svg_overrides=svg_overrides,
     )
 
 
@@ -677,6 +694,7 @@ def resolve_authored_style(
     styles = load_authored_styles(styles_directory)
     by_id = {style.id: style for style in styles}
     requested_id = (style_id or "").strip() or DEFAULT_AUTHORED_STYLE_ID
+    requested_id = canonical_authored_style_id(requested_id, by_id)
     resolved = by_id.get(requested_id)
     if resolved is not None:
         return resolved

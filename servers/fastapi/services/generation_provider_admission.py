@@ -37,6 +37,8 @@ def requested_generation_driver(
     # entry. The driver itself survives in identity_by_driver below, because
     # a deck generated before that retirement still carries it in its
     # persisted profile.
+    if request.strategy == "svg":
+        return "svg-v1"
     if request.strategy == "authored" or request.template == "authored":
         return "authored"
     raise PresentationProfileError("generation_strategy_not_supported")
@@ -63,6 +65,10 @@ def server_generation_profile_identity(
             return persisted
 
     identity_by_driver: dict[PresentationDriverId, Mapping[str, Any]] = {
+        "svg-v1": {
+            "generation_mode": "standard", "mode": "svg", "version": "v1-standard",
+            "theme": {"mode": "svg"}, "profile_driver_id": "svg-v1", "profile_schema_version": 1,
+        },
         "template-v2": {
             "generation_mode": "standard",
             "mode": "template",
@@ -88,7 +94,7 @@ def generation_provider_capabilities(
         required.append("webSearch")
     if request.vision_qa:
         required.append("vision")
-    if driver_id == "authored" and not disable_thinking():
+    if driver_id in {"authored", "svg-v1"} and not disable_thinking():
         required.append("thinking")
     return tuple(required)
 

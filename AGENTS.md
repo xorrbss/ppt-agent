@@ -46,6 +46,11 @@ changes against the official Presenton project and follow
 
 Run commands from the indicated directory.
 
+For the daily multi-user local stack, always use `scripts/start-local-stack.ps1`.
+Do not launch `servers/fastapi/server.py` by hand: that path can silently fall
+back to SQLite when `DATABASE_URL` is absent. The managed stack must fail closed
+unless the API and both operation controllers use PostgreSQL.
+
 When a code change requires a running local server to reload before it takes
 effect, reload or restart only the affected server automatically. Prefer HMR,
 preserve the existing ports and launch environment, and leave unaffected

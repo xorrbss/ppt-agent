@@ -1,0 +1,227 @@
+{
+ "source-slide:6:text:3": {
+  "text": "1주차 | 숏폼 대행사업 시작하기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "1주차",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼 대행사업 시작하기",
+    "begin": 6,
+    "end": 18,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:6:text:4": {
+  "text": "목표: 내가 무엇을 누구에게 얼마에 팔지 결정",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "목표: 내가 무엇을 누구에게 얼마에 팔지 결정",
+    "begin": 0,
+    "end": 25,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:6:text:5": {
+  "text": "06",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "06",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:6:text:6": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:6:text:7": {
+  "text": "120분",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "120분",
+    "begin": 0,
+    "end": 4,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:6:text:8": {
+  "text": "• 숏폼 대행사업의 구조 이해 • 타깃 업종과 상품 정하기 • 가격과 작업 범위 정하기 • 인스타·블로그 기본 세팅",
+  "run_count": 4,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "• ",
+    "body": "숏폼 대행사업의 구조 이해",
+    "begin": 0,
+    "end": 16,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "• ",
+    "body": "타깃 업종과 상품 정하기",
+    "begin": 17,
+    "end": 32,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "• ",
+    "body": "가격과 작업 범위 정하기",
+    "begin": 33,
+    "end": 48,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "• ",
+    "body": "인스타·블로그 기본 세팅",
+    "begin": 49,
+    "end": 64,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:6:text:11": {
+  "text": "오늘의 결과물",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "오늘의 결과물",
+    "begin": 0,
+    "end": 7,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:6:text:12": {
+  "text": "내 서비스 한 줄 소개 + 기본 상품 1개",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "내 서비스 한 줄 소개 + 기본 상품 1개",
+    "begin": 0,
+    "end": 23,
+    "order_free_before": false
+   }
+  ]
+ }
+}

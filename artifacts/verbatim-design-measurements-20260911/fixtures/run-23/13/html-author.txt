@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:32px;width:780px}
+.eyebrow{font-size:13px;line-height:18px;font-weight:700;letter-spacing:.06em;color:#08916E}
+.title{margin-top:12px;font-size:34px;line-height:45px;font-weight:800;color:#0F172A}
+.divider{position:absolute;left:64px;right:64px;bottom:0;height:1px;background:#E2E8F0}
+.body-wrap{position:absolute;left:0;right:0;top:155px;height:493px}
+.inner{margin-left:64px;width:1152px}
+.subject{height:43px;font-size:25px;line-height:34px;font-weight:800;color:#00140E}
+.subject-mark{display:inline-block;width:8px;height:28px;margin-right:12px;vertical-align:-5px;background:#08916E;border-radius:12px}
+.content-grid{display:grid;grid-template-columns:760px 368px;gap:24px;margin-top:20px;height:370px}
+.flow-panel{height:370px;padding:20px 24px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.flow-head{height:30px;margin-bottom:14px;font-size:18px;line-height:28px;font-weight:800;color:#08916E}
+.flow-list{position:relative;height:286px;padding-left:24px;border-left:2px solid #219F88}
+.flow-item{position:relative;height:47px;margin-bottom:11px;padding:9px 16px 8px 22px;background:#F0FAF7;border:1px solid #B7E3D5;border-radius:12px;color:#1D1D1B;font-size:18px;line-height:28px;font-weight:600}
+.flow-item:last-child{margin-bottom:0;background:#E4F5F0;border-color:#08916E}
+.node{position:absolute;left:-31px;top:17px;width:12px;height:12px;background:#08916E;border:3px solid #F9F9F9;border-radius:12px}
+.caution{height:370px;padding:24px;background:#00140E;border-radius:12px;color:#FFFFFF}
+.caution-label{display:inline-block;padding:5px 12px;background:#08916E;border-radius:12px;font-size:16px;line-height:24px;font-weight:800;color:#FFFFFF}
+.caution-rule{height:1px;margin:24px 0 22px;background:#219F88}
+.caution-copy{font-size:22px;line-height:1.6;font-weight:700;color:#FFFFFF}
+.caution-copy strong{color:#7BE0C4;font-weight:800}
+.caution-note{margin-top:22px;padding-top:18px;border-top:1px solid #28574D;font-size:17px;line-height:1.6;color:#D7EEE8}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="135" style="height:135px" data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-a06dc0eefb7c740e" data-source-block-id="source-slide:14:text:3:run:0">2주차 PART 2</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-1db0d020b80ce461" data-source-block-id="source-slide:14:text:3:run:1">벤치마킹</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:155px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="inner" data-qid="q-div-c9c4d24a38ca" data-semantic-role="decoration">
+    <div class="subject" data-semantic-role="body" data-qid="source-block-f66130067a843124" data-source-block-id="source-slide:14:text:5"><span class="subject-mark" data-qid="q-span-a6083bf3695d" data-semantic-role="decoration"></span>꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+
+    <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+      <div class="flow-panel" data-semantic-role="decoration" data-qid="q-flow-card-13">
+        <div class="flow-head" data-semantic-role="supporting" data-qid="q-flow-head-13">분석 순서</div>
+        <div class="flow-list" data-qid="source-block-d8585be2127f3499" data-semantic-role="decoration" data-source-block-id="source-slide:14:text:6">
+          <div class="flow-item" data-semantic-role="body" data-qid="q-flow-1-13"><span class="node" data-qid="q-span-fe7e6bfeb16a" data-semantic-role="decoration"></span>조회수 높은 영상 찾기</div>
+          <div class="flow-item" data-semantic-role="body" data-qid="q-flow-2-13"><span class="node" data-qid="q-span-d3833b9d86e5" data-semantic-role="decoration"></span>첫 3초를 분리해서 보기</div>
+          <div class="flow-item" data-semantic-role="body" data-qid="q-flow-3-13"><span class="node" data-qid="q-span-f0bd9a27e2e1" data-semantic-role="decoration"></span>카메라 움직임과 구도 보기</div>
+          <div class="flow-item" data-semantic-role="body" data-qid="q-flow-4-13"><span class="node" data-qid="q-span-51ad756a24b4" data-semantic-role="decoration"></span>자막과 편집 리듬 보기</div>
+          <div class="flow-item" data-semantic-role="body" data-qid="q-flow-5-13"><span class="node" data-qid="q-span-07f2cf240daf" data-semantic-role="decoration"></span>같은 구조를 내 업종에 맞게 재구성</div>
+        </div>
+      </div>
+
+      <div class="caution" data-semantic-role="decoration" data-qid="q-caution-card-13">
+        <div class="caution-label" data-semantic-role="supporting" data-qid="source-block-497ffd6a2015763a" data-source-block-id="source-slide:14:text:9">주의</div>
+        <div class="caution-rule" data-qid="q-div-e76cc2f8cf74" data-semantic-role="decoration"></div>
+        <div class="caution-copy" data-semantic-role="body" data-qid="source-block-5c91764e406daced" data-source-block-id="source-slide:14:text:10">영상 자체를 복제하는 것이 아니라<br><strong data-qid="q-strong-663977331dde" data-semantic-role="body">‘구조와 아이디어’</strong>를 분석합니다.</div>
+        <div class="caution-note" data-semantic-role="supporting" data-qid="q-caution-note-13">분석한 구조를 내 업종에 맞게 재구성</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-c239ae4678509f14" data-source-block-id="source-slide:14:text:4">14</div>
+</body>
+</html>

@@ -21,8 +21,10 @@ def _append_probe_style(html: str, css: str) -> str:
     return style + html
 
 
-def _pixel_probe_document(html: str) -> str:
-    """Build paired 1280x720 Chrome frames for background and glyph evidence.
+def _pixel_probe_document(
+    html: str, *, width_px: int = SLIDE_W, height_px: int = SLIDE_H
+) -> str:
+    """Build paired Chrome frames for background and glyph evidence.
 
     The first frame preserves every painted layer but removes text ink.  The
     second preserves layout/transforms/filters/masks while rendering text as a
@@ -66,8 +68,8 @@ def _pixel_probe_document(html: str) -> str:
     first = html_lib.escape(background, quote=True)
     second = html_lib.escape(mask, quote=True)
     return f"""<!doctype html><html><head><meta charset=\"utf-8\"><style>
-      html,body{{margin:0;width:{SLIDE_W}px;height:{SLIDE_H * 2}px;overflow:hidden;background:#000}}
-      iframe{{display:block;border:0;width:{SLIDE_W}px;height:{SLIDE_H}px}}
+      html,body{{margin:0;width:{width_px}px;height:{height_px * 2}px;overflow:hidden;background:#000}}
+      iframe{{display:block;border:0;width:{width_px}px;height:{height_px}px}}
     </style></head><body><iframe srcdoc=\"{first}\"></iframe><iframe srcdoc=\"{second}\"></iframe></body></html>"""
 
 
@@ -100,9 +102,12 @@ def _enrich_pixel_contrast(
     based on its best-looking letters.
     """
     result = json.loads(json.dumps(metrics))
-    background = probe.crop((0, 0, SLIDE_W, SLIDE_H)).convert("RGB")
-    glyph_mask = probe.crop((0, SLIDE_H, SLIDE_W, SLIDE_H * 2)).convert("L")
     foreground = rendered.convert("RGB")
+    width_px, height_px = foreground.size
+    background = probe.crop((0, 0, width_px, height_px)).convert("RGB")
+    glyph_mask = probe.crop(
+        (0, height_px, width_px, height_px * 2)
+    ).convert("L")
     elements = result.get("elements")
     if not isinstance(elements, list):
         return result
@@ -136,14 +141,14 @@ def _enrich_pixel_contrast(
                 left = max(0, math.floor(float(fragment.get("x", 0))))
                 top = max(0, math.floor(float(fragment.get("y", 0))))
                 right = min(
-                    SLIDE_W,
+                    width_px,
                     math.ceil(
                         float(fragment.get("x", 0))
                         + float(fragment.get("width", 0))
                     ),
                 )
                 bottom = min(
-                    SLIDE_H,
+                    height_px,
                     math.ceil(
                         float(fragment.get("y", 0))
                         + float(fragment.get("height", 0))

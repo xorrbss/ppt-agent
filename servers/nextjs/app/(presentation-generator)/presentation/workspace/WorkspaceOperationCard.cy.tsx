@@ -3,6 +3,8 @@ import { NextIntlClientProvider } from "next-intl";
 import koMessages from "@/i18n/messages/ko.json";
 
 import { WorkspaceOperationCard } from "./WorkspaceOperationCard";
+import { WorkspaceMessage } from "./WorkspaceMessage";
+import type { WorkspaceOperationAnchor } from "./types";
 
 const mountCard = (card: React.ReactElement) =>
   cy.mount(
@@ -12,6 +14,149 @@ const mountCard = (card: React.ReactElement) =>
   );
 
 describe("WorkspaceOperationCard quality review", () => {
+  const generation: WorkspaceOperationAnchor = {
+    anchorType: "operation", id: "generation-v3", operationId: "generation-v3",
+    position: 0, operationType: "presentation.generate", title: "프레젠테이션 생성",
+    status: "running", progress: 35, events: [], allowedActions: [],
+  };
+
+  it("shows one Korean failure without terminal animation, a main percentage or forbidden retry", () => {
+    mountCard(<WorkspaceOperationCard operation={{ ...generation, status: "failed", error: "Generation failed", retryable: false,
+      events: [{ id: "failure", operationId: generation.operationId, sequence: 2, type: "operation.failed", message: "Generation failed" }],
+      allowedActions: [{ id: "retry", label: "다시 시도", enabled: false, variant: "primary" }],
+    }} onAction={() => undefined} />);
+    cy.get('[role="alert"]').should("have.length", 1).and("contain.text", "생성을 완료하지 못했어요");
+    cy.contains("Generation failed").should("not.exist");
+    cy.get('[role="progressbar"], .animate-pulse, [data-testid="operation-retry"]').should("not.exist");
+    cy.get('[data-testid="operation-retry-unavailable"]').should("not.exist");
+  });
+
+  it("uses actual stage counts and keeps generation cancel in the composer while export retains cancel", () => {
+    const cancel = { id: "cancel" as const, label: "취소", enabled: true, variant: "secondary" as const };
+    mountCard(<WorkspaceOperationCard operation={{ ...generation, allowedActions: [cancel],
+      events: [{ id: "progress", operationId: generation.operationId, sequence: 1, type: "operation.progress", stage: "authored_render", current: 3, total: 30 }],
+    }} composerCancelOperationId={generation.operationId} onAction={() => undefined} />);
+    cy.get('[data-testid="generation-progress-response"]').should("contain.text", "3/30장");
+    cy.get('[data-testid="operation-cancel"], [role="progressbar"]').should("not.exist");
+    mountCard(<WorkspaceOperationCard operation={{ ...generation, operationType: "export.pptx", allowedActions: [cancel] }} onAction={() => undefined} />);
+    cy.get('[data-testid="operation-cancel"]').should("be.enabled");
+  });
+
+  it("does not treat a percent heartbeat as real progress after sixty seconds", () => {
+    const now = Date.parse("2026-09-23T10:00:00Z");
+    cy.clock(now);
+    mountCard(<WorkspaceOperationCard operation={{ ...generation,
+      events: [
+        { id: "one", operationId: generation.operationId, sequence: 1, type: "operation.progress", stage: "authored_render", current: 3, total: 30, progress: 61, createdAt: new Date(now - 70_000).toISOString() },
+        { id: "heartbeat", operationId: generation.operationId, sequence: 2, type: "operation.progress", stage: "authored_render", current: 3, total: 30, progress: 64, createdAt: new Date(now).toISOString() },
+      ],
+    }} observation={{ lastConfirmedAt: new Date(now).toISOString(), connection: "confirmed" }} onAction={() => undefined} />);
+    cy.get('[data-testid="generation-observation"]').should("contain.text", "진행 변화는 아직 없습니다").and("contain.text", "마지막 서버 확인").and("contain.text", "마지막 진행 변화");
+  });
+
+  it("keeps attachment metadata compact and settings collapsed", () => {
+    mountCard(<WorkspaceMessage message={{ anchorType: "message", id: "request", position: 0, role: "user", content: "",
+      generationSettings: { language: "한국어", api_key: "do-not-show" },
+      attachments: [{ id: "file", name: "발표.pdf", status: "ready", mimeType: "application/pdf", size: 1024, stateAtTime: "ready", currentState: "ready" }],
+    }} />);
+    cy.contains("첨부 파일로 시작한 요청입니다").should("be.visible");
+    cy.contains("발표.pdf").should("be.visible");
+    cy.contains("application/pdf").should("not.exist");
+    cy.contains("do-not-show").should("not.exist");
+    cy.get("details").should("not.have.attr", "open");
+  });
+
+  it("labels PPTX completion from editability evidence and lists image fallback pages", () => {
+    const exportOperation = (result: Record<string, unknown>) => ({
+      anchorType: "operation" as const,
+      id: "export-editability",
+      operationId: "export-editability",
+      position: 0,
+      operationType: "export.pptx" as const,
+      title: "PPTX 내보내기",
+      status: "succeeded" as const,
+      events: [],
+      allowedActions: [],
+      result: {
+        artifact_id: "artifact-editability",
+        format: "pptx",
+        ...result,
+      },
+    });
+
+    mountCard(
+      <WorkspaceOperationCard
+        operation={exportOperation({
+          public_export_worker_evidence: {
+            editability: {
+              verdict: "partially-editable",
+              imageOnlyPages: [9],
+              slides: [],
+            },
+            quality: {
+              status: "partially-editable",
+              imageFallbackSlides: 4,
+              slideFallbacks: [
+                { n: 45, code: "raster_fragment_missing" },
+                { n: 65, code: "raster_fragment_digest_mismatch" },
+                { n: 89, code: "raster_fragment_placement_mismatch" },
+              ],
+            },
+            producerTiming: {
+              slides: [
+                { n: 45, recovery: { cleanupFailure: true } },
+              ],
+            },
+          },
+        })}
+        onAction={() => undefined}
+      />,
+    );
+
+    cy.get('[data-testid="export-editability-verdict"]')
+      .should("contain.text", "내보내기 완료 · 일부 편집 가능")
+      .and("not.contain.text", "완전 편집형");
+    cy.get('[data-testid="export-image-fallback-pages"]')
+      .should("contain.text", "이미지로 대체된 페이지")
+      .should("contain.text", "9페이지")
+      .and("contain.text", "45페이지")
+      .and("contain.text", "65페이지")
+      .and("contain.text", "89페이지");
+    cy.get('[data-testid="export-image-fallback-reasons"]')
+      .should("contain.text", "그림 조각이 없어")
+      .and("contain.text", "식별값이 원본과 일치하지 않아")
+      .and("contain.text", "위치 측정값이 일치하지 않아")
+      .and("not.contain.text", "raster_fragment_");
+    cy.get('[data-testid="export-cleanup-status"]')
+      .should("contain.text", "내보내기 종료 정리")
+      .and("contain.text", "45페이지")
+      .and("contain.text", "결과 파일과 페이지 측정 판정은 유지됩니다");
+
+    mountCard(
+      <WorkspaceOperationCard
+        operation={exportOperation({
+          public_export_worker_evidence: {
+            editability: {
+              verdict: "fully-editable",
+              imageOnlyPages: [],
+              slides: [],
+            },
+            quality: {
+              status: "fully-editable",
+              imageFallbackSlides: 0,
+              slideFallbacks: [],
+            },
+          },
+        })}
+        onAction={() => undefined}
+      />,
+    );
+
+    cy.get('[data-testid="export-editability-verdict"]')
+      .should("contain.text", "내보내기 완료 · 완전 편집형 PPTX");
+    cy.get('[data-testid="export-image-fallback-pages"]').should("not.exist");
+  });
+
   it("does not present a design application as complete without retained-layout fidelity evidence", () => {
     mountCard(
       <WorkspaceOperationCard

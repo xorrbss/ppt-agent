@@ -35,7 +35,7 @@ const UploadPageStateHarness = () => {
   const filesRef = useRef<File[]>(files);
   filesRef.current = files;
 
-  const { loadingState, handleGeneratePresentation } = useUploadPageState({
+  const { config, loadingState, handleGeneratePresentation } = useUploadPageState({
     files,
     filesRef,
     selectedThemeId: null,
@@ -55,17 +55,25 @@ const UploadPageStateHarness = () => {
       </button>
       <span data-testid="harness-is-loading">{String(loadingState.isLoading)}</span>
       <span data-testid="harness-message">{loadingState.message}</span>
+      <span data-testid="harness-page-size">{config.pageSize}</span>
+      <span data-testid="harness-orientation">{config.orientation}</span>
     </>
   );
 };
 
-const mountHarness = () => {
+const mountHarness = ({
+  generationStrategy = "authored",
+  authoredStyle = "brand-report",
+}: {
+  generationStrategy?: "authored" | "svg";
+  authoredStyle?: string;
+} = {}) => {
   const reduxStore = makeStore();
   reduxStore.dispatch(setSourceContentMode(true));
   // "brand-report" is never part of the mocked style catalog below, so
   // `ensureSourceContentAuthoredStyle` fails deterministically after a
   // successful analysis -- the exact shape of the shipped regression.
-  reduxStore.dispatch(setPptGenUploadState({ authoredStyle: "brand-report" }));
+  reduxStore.dispatch(setPptGenUploadState({ authoredStyle, generationStrategy }));
 
   cy.mount(
     <AppRouterContext.Provider
@@ -112,6 +120,12 @@ describe("useUploadPageState source-content abort paths", () => {
       referenceSnapshotId: "snapshot-source-content-1",
       providerId: "uploaded_document",
       sourceRevision: "1",
+    },
+    documentCanvas: {
+      contractVersion: "document-canvas/v1",
+      logicalSize: { width: 1188, height: 840 },
+      physicalSize: { widthEmu: 10691813, heightEmu: 7559675 },
+      safeArea: { x: 60, y: 60, width: 1068, height: 720 },
     },
     // Zero tables/charts/rasterFallbackBlocks means `sourceContentLosses`
     // reports nothing -- `confirmLosses` resolves without ever opening the
@@ -170,7 +184,8 @@ describe("useUploadPageState source-content abort paths", () => {
     // never came back down because the give-up path only cleared
     // `startInFlightRef`, not `loadingState`.
     cy.get('[data-testid="harness-is-loading"]').should("have.text", "false");
-    cy.get('[data-testid="harness-message"]').should("have.text", "");
+    cy.get('[data-testid="harness-message"]').should("not.contain", "분석하는 중");
+    cy.get('[data-testid="harness-message"]').should("contain", "스타일을 다시 선택");
 
     // The other half of the bug: `startInFlightRef` must actually be
     // released. A second click reuses the cached admission (same file
@@ -184,4 +199,70 @@ describe("useUploadPageState source-content abort paths", () => {
 
     cy.get('[data-testid="harness-is-loading"]').should("have.text", "false");
   });
+
+  it("rejects an unavailable source SVG combination before uploading or analysing the deck", () => {
+    cy.intercept("GET", "**/api/v1/ppt/authored/canvas-capabilities*", {
+      statusCode: 200,
+      body: {
+        a4: { enabled: false, reason: "document_canvas_a4_not_available" },
+        sourceContentSvg: {
+          enabled: false,
+          reason: "svg_source_content_not_supported",
+          canvasSource: "source-manifest",
+          inputFormats: ["pptx"],
+          productVerified: false,
+        },
+      },
+    }).as("canvasCapabilities");
+    mountHarness({ generationStrategy: "svg", authoredStyle: "default" });
+
+    cy.get('[data-testid="harness-generate"]').click();
+    cy.wait("@canvasCapabilities");
+
+    cy.get("@uploadAsset.all").should("have.length", 0);
+    cy.get("@analyzeSourceContent.all").should("have.length", 0);
+    cy.get('[data-testid="harness-is-loading"]').should("have.text", "false");
+  });
+
+  for (const blocker of ["chart", "source-canvas"] as const) {
+  it(`accepts default A4, preserves the ${blocker} reason and reanalyses the owned source SVG snapshot`, () => {
+    cy.intercept("GET", "**/api/v1/ppt/authored/canvas-capabilities*", {
+      statusCode: 200,
+      body: {
+        a4: { enabled: false, reason: "document_canvas_a4_not_available" },
+        sourceContentSvg: {
+          enabled: true,
+          reason: null,
+          canvasSource: "source-manifest",
+          inputFormats: ["pptx"],
+          productVerified: false,
+        },
+      },
+    }).as("canvasCapabilities");
+    cy.intercept("POST", "**/api/v1/ppt/source-content/v1/analyze", {
+      statusCode: 200,
+      body: {
+        ...analysisResponse,
+        documentCanvas: blocker === "source-canvas" ? null : analysisResponse.documentCanvas,
+        summary: { ...analysisResponse.summary, charts: blocker === "chart" ? 1 : 0 },
+      },
+    }).as("freshAnalyzeSourceContent");
+    mountHarness({ generationStrategy: "svg", authoredStyle: "default" });
+
+    cy.get('[data-testid="harness-page-size"]').should("have.text", "A4");
+    cy.get('[data-testid="harness-orientation"]').should("have.text", "landscape");
+    cy.get('[data-testid="harness-generate"]').click();
+    cy.wait("@freshAnalyzeSourceContent");
+    cy.get('[data-testid="harness-is-loading"]').should("have.text", "false");
+    cy.get('[data-testid="harness-message"]').should("contain", blocker === "chart" ? "원본에 차트" : "A4 가로 원본만 지원");
+    cy.get('[data-testid="harness-message"]').should("not.contain", "설정을 확인한 뒤 다시 진행");
+
+    cy.get('[data-testid="harness-generate"]').click();
+    cy.wait("@freshAnalyzeSourceContent");
+
+    cy.get("@uploadAsset.all").should("have.length", 1);
+    cy.get("@freshAnalyzeSourceContent.all").should("have.length", 2);
+    cy.get("@createSnapshot.all").should("have.length", 1);
+  });
+  }
 });

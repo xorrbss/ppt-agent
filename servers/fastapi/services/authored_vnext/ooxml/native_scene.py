@@ -27,7 +27,12 @@ from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE, MSO_SHAPE_TYPE
 from pptx.enum.text import MSO_AUTO_SIZE, PP_ALIGN, MSO_VERTICAL_ANCHOR
 from pptx.parts.image import Image as PptxImage
-from pptx.util import Inches, Pt
+from services.authored_vnext.ooxml.scene_canvas import (
+    canvas_identity, intended_font_points, logical_canvas, master_for_canvas, physical_border_points,
+    scene_font, scene_points, scene_px, shape_bounds_px as _shape_bounds_px,
+    picture_crop as _picture_crop,
+    validate_page_size, with_scene_canvas,
+)
 
 from services.authored_vnext.capability_registry import (
     CapabilityRegistryMismatchError,
@@ -172,6 +177,8 @@ def _normalized_scene(scene_value: object) -> dict[str, Any]:
 def _canvas(
     scene: dict[str, Any], master: dict[str, Any] | None = None
 ) -> tuple[float, float]:
+    if (canonical := logical_canvas(scene)) is not None:
+        return canonical
     value = _scene_value(scene, "canvas", "slideSizePx", "size")
     if value is None and master is not None:
         value = master.get("slideSizePx")
@@ -732,7 +739,7 @@ def _add_furniture(
         furniture_id = _string(item.get("id"), "authored_vnext_master_furniture_invalid")
         kind = _string(item.get("kind"), "authored_vnext_master_furniture_invalid")
         x, y, width, height = _bounds(item, canvas)
-        geometry = tuple(Inches(value / 96) for value in (x, y, width, height))
+        geometry = tuple(scene_px(value) for value in (x, y, width, height))
         if kind == "logo":
             asset_id = item.get("assetId")
             if isinstance(asset_id, str):
@@ -757,7 +764,7 @@ def _add_furniture(
                 {
                     "text": str(text or ""),
                     "textStyle": {
-                        "fontPt": 10,
+                        "fontPt": 10 * master.get("_documentCanvasFurnitureScale", 1),
                         "fontFamily": text_style["fontFamily"],
                         "color": text_style["effectiveColor"],
                     },
@@ -880,10 +887,10 @@ def _intended_text_style_projection(element: dict[str, Any]) -> list[dict[str, A
                     None
                     if font_size is None
                     else round(
-                        _number(
+                        intended_font_points(_number(
                             font_size,
                             "authored_vnext_scene_text_style_invalid",
-                        ),
+                        )),
                         6,
                     )
                 ),
@@ -981,10 +988,10 @@ def _apply_text(shape: Any, element: dict[str, Any]) -> None:
         if auto_fit == "shrink"
         else MSO_AUTO_SIZE.NONE
     )
-    frame.margin_left = Pt(_text_frame_margin(style, "marginLeftPt"))
-    frame.margin_right = Pt(_text_frame_margin(style, "marginRightPt"))
-    frame.margin_top = Pt(_text_frame_margin(style, "marginTopPt"))
-    frame.margin_bottom = Pt(_text_frame_margin(style, "marginBottomPt"))
+    frame.margin_left = scene_points(_text_frame_margin(style, "marginLeftPt"))
+    frame.margin_right = scene_points(_text_frame_margin(style, "marginRightPt"))
+    frame.margin_top = scene_points(_text_frame_margin(style, "marginTopPt"))
+    frame.margin_bottom = scene_points(_text_frame_margin(style, "marginBottomPt"))
     vertical_align = style.get("verticalAlign")
     frame.vertical_anchor = {
         "top": MSO_VERTICAL_ANCHOR.TOP,
@@ -999,8 +1006,8 @@ def _apply_text(shape: Any, element: dict[str, Any]) -> None:
         "right": PP_ALIGN.RIGHT,
         "justify": PP_ALIGN.JUSTIFY,
     }.get(style.get("textAlign"), PP_ALIGN.LEFT)
-    paragraph.space_before = Pt(0)
-    paragraph.space_after = Pt(0)
+    paragraph.space_before = scene_points(0)
+    paragraph.space_after = scene_points(0)
     line_height = style.get("lineHeight")
     if line_height is not None:
         spacing = _number(
@@ -1030,7 +1037,7 @@ def _apply_text(shape: Any, element: dict[str, Any]) -> None:
             size = _number(font_size, "authored_vnext_scene_text_style_invalid")
             if size <= 0 or size > 400:
                 raise NativeSceneError("authored_vnext_scene_text_style_invalid")
-            run.font.size = Pt(size)
+            run.font.size = scene_font(size)
         font_weight = item.get("fontWeight", style.get("fontWeight"))
         run.font.bold = bool(
             item.get("bold", style.get("bold", False))
@@ -1175,7 +1182,7 @@ def _table_row_heights(payload: dict[str, Any], *, rows: int) -> list[int] | Non
         )
     ):
         raise NativeSceneError("authored_vnext_scene_table_row_heights_invalid")
-    return [int(Pt(float(height))) for height in value]
+    return [int(scene_points(float(height))) for height in value]
 
 
 def _table_merged_cells(
@@ -1238,8 +1245,8 @@ def _table_column_widths(
         )
     ):
         raise NativeSceneError("authored_vnext_scene_table_column_widths_invalid")
-    widths = [int(Pt(float(width))) for width in value]
-    if abs(sum(widths) - total_width_emu) > int(Pt(0.25)):
+    widths = [int(scene_points(float(width))) for width in value]
+    if abs(sum(widths) - total_width_emu) > int(scene_points(0.25)):
         raise NativeSceneError("authored_vnext_scene_table_column_widths_invalid")
     widths[-1] += total_width_emu - sum(widths)
     return widths
@@ -1261,7 +1268,7 @@ def _set_cell_border(cell: Any, side: str, value: object) -> None:
     tag = f"{{{_DRAWING_NS}}}ln{side}"
     for existing in properties.findall(tag):
         properties.remove(existing)
-    line = etree.SubElement(properties, tag, w=str(int(Pt(width))))
+    line = etree.SubElement(properties, tag, w=str(int(scene_points(width))))
     solid = etree.SubElement(line, f"{{{_DRAWING_NS}}}solidFill")
     etree.SubElement(solid, f"{{{_DRAWING_NS}}}srgbClr", val=color)
     etree.SubElement(line, f"{{{_DRAWING_NS}}}prstDash", val="solid")
@@ -1350,10 +1357,10 @@ def _resolved_table_style_projection(
                     )
                     projected_borders[side] = {
                         "color": _hex_color(border.get("color"), "64748B"),
-                        "widthPt": _number(
+                        "widthPt": physical_border_points(_number(
                             border.get("widthPt"),
                             "authored_vnext_scene_table_cell_style_invalid",
-                        ),
+                        )),
                     }
                 if projected_borders:
                     projected["borders"] = projected_borders
@@ -1555,24 +1562,6 @@ def _chart_style_projection(
     return {"chartStyle": chart_style, "seriesColors": colors, "legend": legend}
 
 
-def _shape_bounds_px(shape: Any) -> dict[str, float]:
-    return {
-        "x": round(shape.left / 914400 * 96, 6),
-        "y": round(shape.top / 914400 * 96, 6),
-        "width": round(shape.width / 914400 * 96, 6),
-        "height": round(shape.height / 914400 * 96, 6),
-    }
-
-
-def _picture_crop(shape: Any) -> dict[str, float]:
-    return {
-        "left": round(float(shape.crop_left), 6),
-        "top": round(float(shape.crop_top), 6),
-        "right": round(float(shape.crop_right), 6),
-        "bottom": round(float(shape.crop_bottom), 6),
-    }
-
-
 def _add_scene_picture(
     slide: Any,
     content: bytes,
@@ -1597,10 +1586,10 @@ def _add_scene_picture(
             raise NativeSceneError("authored_vnext_scene_image_crop_invalid")
         shape = slide.shapes.add_picture(
             BytesIO(content),
-            Inches(x / 96),
-            Inches(y / 96),
-            Inches(width / 96),
-            Inches(height / 96),
+            scene_px(x),
+            scene_px(y),
+            scene_px(width),
+            scene_px(height),
         )
         shape.crop_left = insets["left"]
         shape.crop_top = insets["top"]
@@ -1622,19 +1611,19 @@ def _add_scene_picture(
             rendered_width = height * image_ratio
         return slide.shapes.add_picture(
             BytesIO(content),
-            Inches((x + (width - rendered_width) / 2) / 96),
-            Inches((y + (height - rendered_height) / 2) / 96),
-            Inches(rendered_width / 96),
-            Inches(rendered_height / 96),
+            scene_px((x + (width - rendered_width) / 2)),
+            scene_px((y + (height - rendered_height) / 2)),
+            scene_px(rendered_width),
+            scene_px(rendered_height),
         )
     if crop_mode != "cover":
         raise NativeSceneError("authored_vnext_scene_image_crop_invalid")
     shape = slide.shapes.add_picture(
         BytesIO(content),
-        Inches(x / 96),
-        Inches(y / 96),
-        Inches(width / 96),
-        Inches(height / 96),
+        scene_px(x),
+        scene_px(y),
+        scene_px(width),
+        scene_px(height),
     )
     if image_ratio > frame_ratio:
         horizontal = (1 - frame_ratio / image_ratio) / 2
@@ -1696,10 +1685,10 @@ def _add_scene_table(
         for column_index, value in enumerate(row):
             cell = table.cell(row_index, column_index)
             cell.text = value
-            cell.margin_left = Pt(6)
-            cell.margin_right = Pt(6)
-            cell.margin_top = Pt(4)
-            cell.margin_bottom = Pt(4)
+            cell.margin_left = scene_points(6)
+            cell.margin_right = scene_points(6)
+            cell.margin_top = scene_points(4)
+            cell.margin_bottom = scene_points(4)
             cell.vertical_anchor = MSO_VERTICAL_ANCHOR.MIDDLE
             cell.fill.solid()
             cell.fill.fore_color.rgb = RGBColor.from_string(
@@ -1765,7 +1754,7 @@ def _add_scene_table(
                 )
                 for run in paragraph.runs:
                     run.font.name = theme["fontFamily"]
-                    run.font.size = Pt(13 if row_index == 0 else 12)
+                    run.font.size = scene_font(13 if row_index == 0 else 12)
                     run.font.bold = row_index == 0 or column_index == 0
                     run.font.color.rgb = RGBColor.from_string(
                         (
@@ -1831,7 +1820,7 @@ def _add_scene_chart(
     if chart.has_legend:
         chart.legend.include_in_layout = False
         chart.legend.font.name = theme["fontFamily"]
-        chart.legend.font.size = Pt(11)
+        chart.legend.font.size = scene_font(11)
         chart.legend.font.color.rgb = RGBColor.from_string(
             theme["text"].removeprefix("#")
         )
@@ -1840,7 +1829,7 @@ def _add_scene_chart(
         color = style["seriesColors"][index].removeprefix("#")
         if chart_type == "line":
             native_series.format.line.color.rgb = RGBColor.from_string(color)
-            native_series.format.line.width = Pt(2.5)
+            native_series.format.line.width = scene_points(2.5)
         else:
             native_series.format.fill.solid()
             native_series.format.fill.fore_color.rgb = RGBColor.from_string(color)
@@ -1851,12 +1840,12 @@ def _add_scene_chart(
             theme["divider"].removeprefix("#")
         )
         chart.value_axis.tick_labels.font.name = theme["fontFamily"]
-        chart.value_axis.tick_labels.font.size = Pt(11)
+        chart.value_axis.tick_labels.font.size = scene_font(11)
         chart.value_axis.tick_labels.font.color.rgb = RGBColor.from_string(
             theme["text"].removeprefix("#")
         )
         chart.category_axis.tick_labels.font.name = theme["fontFamily"]
-        chart.category_axis.tick_labels.font.size = Pt(11)
+        chart.category_axis.tick_labels.font.size = scene_font(11)
         chart.category_axis.tick_labels.font.color.rgb = RGBColor.from_string(
             theme["text"].removeprefix("#")
         )
@@ -2323,6 +2312,7 @@ def _hybrid_plan_for_slide(
     }
 
 
+@with_scene_canvas("scene")
 def materialize_scene_pptx(
     scene_value: object,
     assets_value: object,
@@ -2331,15 +2321,15 @@ def materialize_scene_pptx(
     """Materialize and reopen a canonical Scene IR as native PowerPoint objects."""
 
     scene = _normalized_scene(scene_value)
-    master = _mapping(master_value, "authored_vnext_master_required")
+    master = master_for_canvas(_mapping(master_value, "authored_vnext_master_required"))
     canvas = _canvas(scene, master)
     assets = _asset_lookup(assets_value)
     data_manifest = _data_lookup(scene)
     background_furniture = _master_background(master)
     background_color = background_furniture["fill"]
     presentation = Presentation()
-    presentation.slide_width = Inches(canvas[0] / 96)
-    presentation.slide_height = Inches(canvas[1] / 96)
+    presentation.slide_width = scene_px(canvas[0])
+    presentation.slide_height = scene_px(canvas[1])
     presentation.core_properties.created = datetime(2000, 1, 1, tzinfo=timezone.utc)
     presentation.core_properties.modified = datetime(2000, 1, 1, tzinfo=timezone.utc)
     while presentation.slides:
@@ -2418,10 +2408,10 @@ def materialize_scene_pptx(
             record = island["assetRecord"]
             shape = slide.shapes.add_picture(
                 BytesIO(record[1]),
-                Inches(x / 96),
-                Inches(y / 96),
-                Inches(width / 96),
-                Inches(height / 96),
+                scene_px(x),
+                scene_px(y),
+                scene_px(width),
+                scene_px(height),
             )
             raster_metadata = {
                 "islandId": island["islandId"],
@@ -2447,7 +2437,7 @@ def materialize_scene_pptx(
             )
         for z_order, element, element_id, kind in ordered_elements:
             x, y, width, height = _bounds(element, canvas)
-            geometry = tuple(Inches(value / 96) for value in (x, y, width, height))
+            geometry = tuple(scene_px(value) for value in (x, y, width, height))
             native_metadata: dict[str, Any] = {
                 "frameBounds": {"x": x, "y": y, "width": width, "height": height}
             }
@@ -2504,7 +2494,7 @@ def materialize_scene_pptx(
                             raise NativeSceneError(
                                 "authored_vnext_scene_shape_stroke_invalid"
                             )
-                        shape.line.width = Pt(width_value)
+                        shape.line.width = scene_points(width_value)
                 if "text" in element or isinstance(element.get("content"), Mapping):
                     content = element.get("content")
                     if "text" in element or (isinstance(content, Mapping) and ("text" in content or "runs" in content)):
@@ -2688,6 +2678,7 @@ def materialize_scene_pptx(
     if not isinstance(composition_digest, str) or _DIGEST.fullmatch(composition_digest) is None:
         raise NativeSceneError("authored_vnext_scene_composition_required")
     identity = {
+        **canvas_identity(),
         "sceneDigest": scene["sceneDigest"],
         "compositionDigest": composition_digest,
         "compositionPin": dict(composition) if isinstance(composition, Mapping) else None,
@@ -2736,6 +2727,7 @@ def materialize_scene_pptx(
     return content, receipt
 
 
+@with_scene_canvas("pptx")
 def readback_scene_pptx(content: bytes) -> dict[str, Any]:
     """Read stable Scene identities and object capabilities from saved PPTX bytes."""
 
@@ -2748,6 +2740,7 @@ def readback_scene_pptx(content: bytes) -> dict[str, Any]:
     except (KeyError, TypeError, ValueError) as error:
         raise NativeSceneError("authored_vnext_scene_metadata_invalid") from error
     presentation = Presentation(BytesIO(content))
+    validate_page_size(presentation)
     hybrid_profile_id = properties.get("AuthoredHybridProfileId")
     expected_capabilities = (
         {
@@ -3109,6 +3102,7 @@ def readback_scene_pptx(content: bytes) -> dict[str, Any]:
             }
         )
     actual_identity = {
+        **canvas_identity(),
         "sceneDigest": properties.get("AuthoredSceneDigest"),
         "compositionDigest": properties.get("AuthoredCompositionDigest"),
         "compositionPin": composition_pin,

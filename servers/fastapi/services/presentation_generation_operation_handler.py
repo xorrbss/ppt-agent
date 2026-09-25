@@ -61,6 +61,9 @@ from services.presentation_generation_attempt_timing import (
     _safe_failure,
 )
 from services.public_operation_deadline_scope import public_operation_deadline_scope
+from services.authored_local_fit_deadline import (
+    authored_local_fit_deadline_scope,
+)
 from services.provider_usage_instrumentation import provider_operation_usage_scope
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
@@ -185,6 +188,11 @@ class PresentationGenerationOperationHandler:
                 context.claim.fencing_token,
             )
             request = _request_from_durable_payload(job.request_payload)
+            if getattr(request, "source_mode", None) == "raster_reconstruction":
+                from services.svg_generation_assets import publication_context
+
+                raster_publication, _ = await publication_context(session, job)
+                request._raster_tenant_id = raster_publication.tenant_id
             object.__setattr__(
                 request,
                 "_workspace_operation_attempt_token",
@@ -236,16 +244,20 @@ class PresentationGenerationOperationHandler:
                     public_operation_scope,
                 )
                 from services.source_content.pipeline import (
+                    RASTER_SOURCE_MODE,
                     SOURCE_MODE as SOURCE_CONTENT_RESTYLE_MODE,
                     admit_source_content_request,
                 )
                 from utils.llm_provider import generation_provider_policy
 
-                if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+                if request.source_mode in {SOURCE_CONTENT_RESTYLE_MODE, RASTER_SOURCE_MODE}:
+                    from utils.owner_context import get_current_tenant_id
+
                     await admit_source_content_request(
                         request,
                         sql_session=session,
                         owner_id=str(context.claim.owner_id),
+                        tenant_id=(request._raster_tenant_id if request.source_mode == RASTER_SOURCE_MODE else get_current_tenant_id()),
                     )
 
                 status_error = _snapshot_status_error(status)
@@ -717,7 +729,9 @@ class PresentationGenerationOperationHandler:
             # Publish the pinned instant so stages below can size their own
             # sub-budget against what is left; asyncio.timeout does not expose
             # its deadline to the code it wraps.
-            with public_operation_deadline_scope(deadline):
+            with public_operation_deadline_scope(
+                deadline
+            ), authored_local_fit_deadline_scope(remaining_seconds):
                 async with asyncio.timeout(remaining_seconds):
                     return await self._execute_without_deadline(context)
         except TimeoutError:
@@ -733,7 +747,7 @@ class PresentationGenerationOperationHandler:
     ) -> WorkspaceOperationResult:
         claim = context.claim
         await context.raise_if_cancelled()
-        await self._linked_job(claim.operation_id)
+        linked_job = await self._linked_job(claim.operation_id)
 
         # Public generation workers are sessionless.  Export is submitted as a
         # principal-bound durable operation and must never inherit a browser or
@@ -799,9 +813,17 @@ class PresentationGenerationOperationHandler:
                 raise WorkspaceOperationLeaseLost(
                     "presentation_generation_lifecycle_fenced"
                 )
-            result = await self._pipeline(
-                job_id, task_id, export_cookie_header, context
+            from utils.generation_model import generation_model_context
+
+            preset = (
+                linked_job.request_payload.get("codex_generation_preset")
+                if isinstance(linked_job.request_payload, Mapping)
+                else None
             )
+            with generation_model_context(preset):
+                result = await self._pipeline(
+                    job_id, task_id, export_cookie_header, context
+                )
             return result
         except asyncio.CancelledError:
             raise

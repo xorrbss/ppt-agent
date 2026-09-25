@@ -19,6 +19,7 @@ WORKSPACE_OPERATION_TITLES_KO: Mapping[str, str] = MappingProxyType(
         "slide.regenerate.batch": "선택 페이지 다시 만들기",
         "slide.regenerate.batch.preview": "선택 페이지 다시 만들기 미리보기",
         "slide.delete": "슬라이드 삭제",
+        "presentation.slides.reorder": "슬라이드 순서 변경",
         "version.restore": "버전 복원",
         "template.apply": "AI 저작 템플릿 변경",
         "design.apply": "디자인 변경",

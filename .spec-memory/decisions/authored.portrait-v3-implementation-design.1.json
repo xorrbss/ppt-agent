@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.portrait-v3-implementation-design",
+  "revision": 1,
+  "status": "candidate",
+  "authority": "agent",
+  "summary": "세로 v3 설계안: 기존 theme.authored_vnext.canvas에 저장하고 일반 Authored에 캔버스 해석을 연결한다. default부터 지원하고 fidelity 번들 및 PDF 경로를 확장한다.",
+  "scope": [
+    "portrait-generation"
+  ],
+  "invariants": [
+    "일반 Authored에 회사 마스터를 필수화하지 않는다.",
+    "기존 요청 직렬화와 문서 복원 경로를 확장한다.",
+    "저장 위치와 초기 스타일 선택은 설계안이며 구현 확인 사실이 아니다."
+  ],
+  "forbidden": [
+    "hybrid 조립기를 공개 fidelity PPTX의 필수 경로로 단정하지 않는다."
+  ],
+  "evidence": [
+    "docs/authored-portrait-generation-design-20260912.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T19:42:04.7106038+00:00"
+}

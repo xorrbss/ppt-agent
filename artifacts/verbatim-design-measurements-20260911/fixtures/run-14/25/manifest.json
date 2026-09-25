@@ -1,0 +1,344 @@
+{
+ "sourceUnitId": "source-slide:26",
+ "sourceIndex": 25,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:26:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:26:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "4주차 PART 2 | 상담과 가격 제시",
+    "paragraphs": [
+     {
+      "runs": [
+       "4주차 PART 2 | 상담과 가격 제시"
+      ],
+      "text": "4주차 PART 2 | 상담과 가격 제시"
+     }
+    ],
+    "runs": [
+     "4주차 PART 2 | 상담과 가격 제시"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:5837c210d4f0bb19507bfcf5bf22d88d6b69369185509d78d5a52b058a217cfc",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:26:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "26",
+    "paragraphs": [
+     {
+      "runs": [
+       "26"
+      ],
+      "text": "26"
+     }
+    ],
+    "runs": [
+     "26"
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:418c3b06f2cfe09e43caba3efe9065015d6e7299917ba338412c9aa0012ac5ed",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:26:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:74f52ea3fedff52018a6c922ae9f9a5650ace6385c0dd96cc4f477c74504ce90",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:26:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "상담 순서",
+    "paragraphs": [
+     {
+      "runs": [
+       "상담 순서"
+      ],
+      "text": "상담 순서"
+     }
+    ],
+    "runs": [
+     "상담 순서"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 822960,
+     "y": 1417320,
+     "cx": 2011680,
+     "cy": 365760
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:f542975432509f2725dd8ef3f19b26d5e44da3a15b670c1435d31692b2bf163f",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:26:text:7",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 5,
+   "payload": {
+    "text": "• 현재 SNS 운영 상황\n• 가장 알리고 싶은 상품/서비스\n• 촬영 가능 여부\n• 원하는 콘텐츠 스타일\n• 예산/업로드 빈도\n• 내 서비스 제안",
+    "paragraphs": [
+     {
+      "runs": [
+       "• 현재 SNS 운영 상황"
+      ],
+      "text": "• 현재 SNS 운영 상황"
+     },
+     {
+      "runs": [
+       "• 가장 알리고 싶은 상품/서비스"
+      ],
+      "text": "• 가장 알리고 싶은 상품/서비스"
+     },
+     {
+      "runs": [
+       "• 촬영 가능 여부"
+      ],
+      "text": "• 촬영 가능 여부"
+     },
+     {
+      "runs": [
+       "• 원하는 콘텐츠 스타일"
+      ],
+      "text": "• 원하는 콘텐츠 스타일"
+     },
+     {
+      "runs": [
+       "• 예산/업로드 빈도"
+      ],
+      "text": "• 예산/업로드 빈도"
+     },
+     {
+      "runs": [
+       "• 내 서비스 제안"
+      ],
+      "text": "• 내 서비스 제안"
+     }
+    ],
+    "runs": [
+     "• 현재 SNS 운영 상황",
+     "\n",
+     "• 가장 알리고 싶은 상품/서비스",
+     "\n",
+     "• 촬영 가능 여부",
+     "\n",
+     "• 원하는 콘텐츠 스타일",
+     "\n",
+     "• 예산/업로드 빈도",
+     "\n",
+     "• 내 서비스 제안"
+    ],
+    "shapeName": "TextBox 6",
+    "geometry": {
+     "x": 822960,
+     "y": 1874519,
+     "cx": 5852160,
+     "cy": 4023360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:29625d6a11859a7242a5ce8b3f39d9453cc9fb8429c647bfa158dc2080ea21ca",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:26:shape:8",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 6,
+   "payload": {
+    "shapeName": "Rounded Rectangle 7",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 7315200,
+     "y": 1554480,
+     "cx": 3657600,
+     "cy": 3383280
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:b27d5487bd64a3d94b34273ae75f08c9e586c2958391bb7910c29ec68cc554e9",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:26:shape:9",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 7,
+   "payload": {
+    "shapeName": "Rectangle 8",
+    "preset": "rect",
+    "geometry": {
+     "x": 7315200,
+     "y": 1554480,
+     "cx": 73152,
+     "cy": 3383280
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:ba658ef8cd6146a91ab4a9821fe6aca567cc92c43fe57d846705daef9035c0f0",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:26:text:10",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 8,
+   "payload": {
+    "text": "가격을 말할 때",
+    "paragraphs": [
+     {
+      "runs": [
+       "가격을 말할 때"
+      ],
+      "text": "가격을 말할 때"
+     }
+    ],
+    "runs": [
+     "가격을 말할 때"
+    ],
+    "shapeName": "TextBox 9",
+    "geometry": {
+     "x": 7516368,
+     "y": 1691639,
+     "cx": 3291840,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:79559267ab69ede1c002715d49ceee341fe6e5dc458911702b081e5c30631f68",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:26:text:11",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 9,
+   "payload": {
+    "text": "‘영상 1개 얼마’보다\n패키지와 관리 범위를 보여준다.\n\n수정 횟수 · 촬영 · 납품일을 함께 명확히.",
+    "paragraphs": [
+     {
+      "runs": [
+       "‘영상 1개 얼마’보다\n패키지와 관리 범위를 보여준다.\n\n수정 횟수 · 촬영 · 납품일을 함께 명확히."
+      ],
+      "text": "‘영상 1개 얼마’보다\n패키지와 관리 범위를 보여준다.\n\n수정 횟수 · 촬영 · 납품일을 함께 명확히."
+     }
+    ],
+    "runs": [
+     "‘영상 1개 얼마’보다\n패키지와 관리 범위를 보여준다.\n\n수정 횟수 · 촬영 · 납품일을 함께 명확히."
+    ],
+    "shapeName": "TextBox 10",
+    "geometry": {
+     "x": 7516368,
+     "y": 2121408,
+     "cx": 3291840,
+     "cy": 2697480
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:359bae4f4eaf488c0b96b7b8ef6b596abef93d2ce5d07b28e95a328eae8a2b04",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

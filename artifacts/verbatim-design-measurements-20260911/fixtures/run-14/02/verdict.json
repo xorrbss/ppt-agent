@@ -1,0 +1,72 @@
+{
+ "run": "run-14",
+ "slide_index": 2,
+ "fixture_role": "failing_slide",
+ "is_failing_slide": true,
+ "authoring_passed": false,
+ "job_id": "2661e54f-5898-48ff-8781-a37704e1f1f3",
+ "job_id_basis": "05-admission.json operation_id -> presentation_generation_jobs.workspace_operation_id (authoritative join; agrees with the created_at ordering it replaces for all 11 runs)",
+ "job_id_basis_note": "repeatability-20260911.md",
+ "workspace_operation_id": "8b55257f-9b08-4b68-9319-acdf405275c1",
+ "job_state": "failed",
+ "presentation_id": "88416190-fae8-419b-86bd-9af6c23b3e93",
+ "completed_slides": 34,
+ "created_at": "2026-09-11 12:39:56.365474+09:00",
+ "checkpoint": {
+  "render_sha256": null,
+  "failed_stage": "author",
+  "error": {
+   "status_code": 500,
+   "code": "source_content_browser_readback_failed",
+   "detail": "Authored slide author failed",
+   "message": "Authored slide author failed",
+   "stage": "author",
+   "slide_index": 2,
+   "slide_number": 3,
+   "exception_type": "BrowserSourceReadbackError",
+   "cause": "source_content_browser_readback_failed",
+   "fingerprint": "d65ea58c83437dfa",
+   "retryable": false,
+   "block_ids": [
+    "source-slide:3:text:10"
+   ],
+   "request_id": "b4e4df21-9c80-4b73-906e-6d949fa1560b",
+   "attempt_number": 1,
+   "provider_attempt_count": 3
+  },
+  "author_status": "failed",
+  "render_status": "pending"
+ },
+ "run_artifacts": {
+  "files": [
+   "01-upload.json",
+   "02-snapshot.json",
+   "03-analysis.json",
+   "04-generate-request.json",
+   "05-admission.json",
+   "06-final-status.json",
+   "08-audit.json",
+   "09-readback-failure.json"
+  ],
+  "06-final-status.json": {
+   "code": "source_content_browser_readback_failed",
+   "detail": "Presentation generation failed",
+   "block_ids": [
+    "source-slide:3:text:10"
+   ]
+  },
+  "08-audit.json": {
+   "visibilityFailures": 1,
+   "missingBlockIds": 1,
+   "orderViolations": null,
+   "flaggedSlides": "unavailable"
+  },
+  "09-readback-failure.json": {}
+ },
+ "absent": [
+  "html-render.txt: deck did not publish, no slides row",
+  "html-author.txt: checkpoint author_html is null (cleared after publication on published decks)",
+  "html-illustrated.txt: checkpoint illustrated_html is null",
+  "metrics.json: browser metrics are not persisted anywhere (authored_slide_checkpoints has no metrics column, artifact_refs is null, authored_evidence_*_v3 are empty)"
+ ]
+}

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:960px}
+.eyebrow{font-size:14px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:38px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:128px}
+.content-field{margin-left:64px;width:1152px}
+.claim{height:65px;display:flex;align-items:flex-start;justify-content:space-between}
+.claim-text{font-size:26px;line-height:36px;font-weight:700;color:#1D1D1B}
+.claim-text strong{color:#08916E}
+.identity{padding-top:7px;font-size:18px;line-height:28px;font-weight:700;color:#08916E;text-align:right}
+.main-grid{display:grid;grid-template-columns:398px 730px;gap:24px;height:418px}
+.left-panel,.right-panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.left-panel{padding:28px}
+.panel-kicker{font-size:15px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#219F88}
+.panel-title{margin-top:10px;font-size:25px;line-height:34px;font-weight:700;color:#00140E}
+.panel-rule{height:2px;background:#E2E8F0;margin:20px 0 8px}
+.point-row{min-height:54px;padding:12px 0;border-bottom:1px solid #E2E8F0;font-size:18px;line-height:29px;color:#1D1D1B}
+.point-row:last-child{border-bottom:0}
+.right-panel{padding:28px}
+.position-top{display:flex;align-items:flex-start;justify-content:space-between}
+.position-title{font-size:25px;line-height:34px;font-weight:700;color:#00140E}
+.position-mark{width:42px;height:42px;background:#08916E;border-radius:12px;position:relative}
+.position-mark span{position:absolute;left:12px;top:18px;width:18px;height:6px;background:#FFFFFF}
+.position-zone{margin-top:32px;padding:28px 30px 30px;background:#E0F3FF;border-radius:12px;border-left:8px solid #219F88}
+.position-quote{font-size:30px;line-height:45px;font-weight:700;color:#00140E}
+.position-quote strong{color:#08916E}
+.position-note{margin-top:24px;padding-top:20px;border-top:1px solid #8FCFC1;font-size:18px;line-height:30px;color:#1D1D1B}
+.takeaway{height:58px;margin-top:18px;padding:14px 20px;background:#00140E;border-radius:12px;color:#FFFFFF;font-size:18px;line-height:30px;font-weight:700}
+.takeaway strong{color:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="106" class="header-band" style="height:106px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" data-semantic-role="supporting" class="eyebrow" data-qid="source-block-2b8861da34543a8d" data-source-block-id="source-slide:16:text:3">2주차 PART 4 | 자영업자 꽁트</div>
+    <div data-header-part="title" data-semantic-role="title" class="title" data-qid="source-block-37399f8f319f4882" data-source-block-id="source-slide:16:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position: absolute; left: 0; right: 0; top: 134px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-field" data-qid="q-div-f437b86905e0" data-semantic-role="decoration">
+    <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+      <div class="claim-text" data-semantic-role="body" data-qid="source-block-819d68ef86ea0559" data-source-block-id="source-slide:16:text:6">요즘 자영업자 숏폼의 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">기회</strong></div>
+      <div class="identity" data-semantic-role="supporting" data-qid="q-identity-15">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    </div>
+
+    <div class="main-grid" data-qid="q-div-948c49f110fb" data-semantic-role="decoration">
+      <div class="left-panel" data-semantic-role="decoration" data-qid="q-card-15-left">
+        <div class="panel-kicker" data-semantic-role="supporting" data-qid="q-kicker-15">요즘 자영업자 숏폼의 기회</div>
+        <div class="panel-title" data-semantic-role="body" data-qid="source-block-11276ae48abc015b" data-source-block-id="source-slide:16:text:7">사장님 + 직원</div>
+        <div class="panel-rule" data-qid="q-div-c88a994d1cb5" data-semantic-role="decoration"></div>
+        <div class="point-row" data-semantic-role="body" data-qid="source-block-917341c9b452afad" data-source-block-id="source-slide:16:text:8:run:0">• 사장님은 아이디어가 부족하다</div>
+        <div class="point-row" data-semantic-role="body" data-qid="source-block-82ef6dfc5d58d8fb" data-source-block-id="source-slide:16:text:8:run:1">• 직원에게 무엇을 시킬지 모른다</div>
+        <div class="point-row" data-semantic-role="body" data-qid="source-block-ab16c0d52a28cd7d" data-source-block-id="source-slide:16:text:8:run:2">• 촬영할 장면과 대사를 정하기 어렵다</div>
+        <div class="point-row" data-semantic-role="body" data-qid="source-block-4c1e77e988a81bc5" data-source-block-id="source-slide:16:text:8:run:3">• 대행사는 ‘촬영 가이드’까지 제공할 수 있다</div>
+      </div>
+
+      <div class="right-panel" data-semantic-role="decoration" data-qid="q-card-15-right">
+        <div class="position-top" data-qid="q-div-b3973311c751" data-semantic-role="decoration">
+          <div class="position-title" data-semantic-role="body" data-qid="source-block-d4506884aaf33c49" data-source-block-id="source-slide:16:text:11">핵심 포지션</div>
+          <div class="position-mark" data-qid="q-div-189d16c4afc3" data-semantic-role="decoration"><span data-qid="q-span-f32986c526a1" data-semantic-role="decoration"></span></div>
+        </div>
+        <div class="position-zone" data-qid="q-div-9471d972ac3f" data-semantic-role="decoration">
+          <div class="position-quote" data-semantic-role="body" data-qid="source-block-3ee08a8d487c2e74" data-source-block-id="source-slide:16:text:12">‘편집자’가 아니라<br><strong data-qid="q-strong-f213b54d7db8" data-semantic-role="body">기획 + 촬영가이드 + 제작 파트너</strong></div>
+          <div class="position-note" data-semantic-role="body" data-qid="q-position-note-15">• 대행사는 ‘촬영 가이드’까지 제공할 수 있다</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="takeaway" data-semantic-role="body" data-qid="q-takeaway-15">‘편집자’가 아니라 <strong data-qid="q-strong-f2342e01f838" data-semantic-role="body">기획 + 촬영가이드 + 제작 파트너.</strong></div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-7240bc536b1ffb64" data-source-block-id="source-slide:16:text:4">16</div>
+</body>
+</html>

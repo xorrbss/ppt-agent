@@ -23,6 +23,10 @@ from services.authored_checkpoint_artifacts import (
 )
 from services.artifact_store import configured_public_artifact_service
 from services.authored_checkpoint_errors import AuthoredStageError
+from services.authored_admission_checkpoint import (
+    admit_checkpoint_write, checkpoint_receipt_metadata, enforce_receipts,
+)
+from services.authored_admission_receipt import AdmissionReceipt
 from services.authored_checkpoint_fence import (
     checkpoint_mutation_session as _checkpoint_mutation_session,
     completed_count as _completed_count,
@@ -30,6 +34,14 @@ from services.authored_checkpoint_fence import (
     owned_job as _owned_job,
     public_checkpoint_binding as _public_checkpoint_binding,
     retained_provider_attempt_fence,
+)
+from services.authored_provider_attempt_ledger import (
+    current_provider_attempt_reservations as current_provider_attempt_reservations,
+    provider_attempt_count_in_epoch as provider_attempt_count_in_epoch,
+    provider_attempt_epoch as provider_attempt_epoch,
+    reserve_provider_attempt as reserve_provider_attempt,
+    reserve_provider_overload_retry as reserve_provider_overload_retry,
+    take_provider_attempt_reservations as take_provider_attempt_reservations,
 )
 from services.authored_checkpoint_stage_batch import (
     begin_author_stage,  # noqa: F401 -- re-exported entry point for callers
@@ -98,7 +110,7 @@ async def get_checkpoint(
     async with async_session_maker() as session:
         job = await session.get(PresentationGenerationJob, job_id)
         checkpoint = await _checkpoint(session, job_id, slide_index)
-        recovered = recover_unreferenced_evidence(checkpoint)
+        recovered = None if enforce_receipts() else recover_unreferenced_evidence(checkpoint)
         if recovered is not None and job is not None and job.workspace_operation_id is not None:
             # A crash-orphaned render belongs to the attempt that wrote its
             # checkpoint.  Reads remain available without authority, but only
@@ -164,126 +176,6 @@ async def start_stage(
         return checkpoint
 
 
-def provider_attempt_epoch(metadata: Mapping[str, Any] | None) -> int:
-    """Return the operation attempt the stored provider ordinals belong to."""
-
-    if not isinstance(metadata, Mapping):
-        return 0
-    raw = metadata.get("provider_attempt_epoch")
-    if isinstance(raw, int) and not isinstance(raw, bool) and raw >= 0:
-        return raw
-    return 0
-
-
-def provider_attempt_count_in_epoch(
-    metadata: Mapping[str, Any] | None, epoch: int | None
-) -> int:
-    """Ordinals this slide has spent inside ``epoch``.
-
-    The ordinal pair is a crash fence for one operation attempt: it stops a
-    resumed worker from paying twice for the same call. It is not a lifetime
-    cap on the slide, so a later attempt of the operation -- a new lease, a new
-    fencing token -- starts the slide with its two calls again. Without this
-    the retry that exists to redo one failed slide could not call the provider
-    at all and failed the whole deck in under a second.
-    """
-
-    if not isinstance(metadata, Mapping):
-        return 0
-    raw = metadata.get("provider_attempt_count", 0)
-    current = raw if isinstance(raw, int) and not isinstance(raw, bool) else 0
-    current = min(2, max(0, current))
-    if epoch is None:
-        return current
-    return current if provider_attempt_epoch(metadata) >= int(epoch) else 0
-
-
-async def reserve_provider_attempt(
-    *,
-    job_id: uuid.UUID,
-    slide_index: int,
-    attempt_token: str,
-    ordinal: int,
-    fencing_token: int | None = None,
-    session: AsyncSession | None = None,
-) -> AuthoredSlideCheckpoint:
-    """Durably consume one slide-local provider ordinal before call admission.
-
-    The job-row fence prevents a stale worker from advancing the counter after
-    lease takeover. Replaying the same ordinal is idempotent; skipping or
-    decreasing an ordinal fails closed. The counter lives in the existing JSON
-    checkpoint seam so this crash fence needs no schema migration.
-
-    The ordinals are scoped to one operation attempt: when the fencing token
-    advances the slide's counter restarts at zero and the calls it already paid
-    for are added to ``provider_attempt_total`` for cost accounting.
-
-    Three ordinals, not two: authoring's own budget is two calls, and the third
-    belongs to the author-stage rescue
-    (``services/authored_author_stage_rescue.py``), which spends one simplified
-    attempt before publishing a flagged placeholder. It is fenced here like the
-    other two so a crash mid-rescue cannot buy the call again.
-    """
-
-    if isinstance(ordinal, bool) or ordinal not in {1, 2, 3}:
-        raise ValueError("authored_provider_attempt_ordinal_invalid")
-    async with _checkpoint_mutation_session(session) as (mutation_session, owns_session):
-        job = await _owned_job(
-            mutation_session, job_id, attempt_token, fencing_token=fencing_token
-        )
-        checkpoint = await _checkpoint(mutation_session, job_id, slide_index)
-        metadata = dict(checkpoint.error) if isinstance(checkpoint.error, Mapping) else {}
-        raw_current = metadata.get("provider_attempt_count", 0)
-        current = (
-            raw_current
-            if isinstance(raw_current, int) and not isinstance(raw_current, bool)
-            else 0
-        )
-        epoch = None if fencing_token is None else int(fencing_token)
-        if epoch is not None and provider_attempt_epoch(metadata) < epoch:
-            # A later attempt of the operation: keep what this slide already
-            # cost, and give it its ordinals back so the retry can run.
-            raw_total = metadata.get("provider_attempt_total", 0)
-            total = (
-                raw_total
-                if isinstance(raw_total, int) and not isinstance(raw_total, bool)
-                else 0
-            )
-            metadata["provider_attempt_total"] = max(0, total) + max(0, current)
-            metadata["provider_attempt_epoch"] = epoch
-            current = 0
-        if current not in {0, 1, 2, 3}:
-            await mutation_session.rollback()
-            raise AuthoredStageError(
-                slide_index=slide_index,
-                stage="author",
-                code="authored_provider_attempt_checkpoint_invalid",
-                retryable=False,
-            )
-        if ordinal < current or ordinal > current + 1:
-            await mutation_session.rollback()
-            raise AuthoredStageError(
-                slide_index=slide_index,
-                stage="author",
-                code="authored_provider_attempt_checkpoint_conflict",
-                retryable=False,
-                provider_attempt_count=current,
-            )
-        if ordinal == current:
-            return checkpoint
-        metadata["provider_attempt_count"] = ordinal
-        metadata["provider_attempt_state"] = "reserved"
-        if epoch is not None:
-            metadata["provider_attempt_epoch"] = epoch
-        checkpoint.error = metadata
-        checkpoint.attempt_token = attempt_token
-        checkpoint.updated_at = get_current_utc_datetime()
-        job.current_stage = "author"
-        job.updated_at = checkpoint.updated_at
-        mutation_session.add_all((checkpoint, job))
-        if owns_session:
-            await mutation_session.commit()
-        return checkpoint
 
 
 async def complete_stage(
@@ -296,11 +188,17 @@ async def complete_stage(
     png: bytes | None = None,
     browser_metrics: Mapping[str, object] | None = None,
     checkpoint_revision: int | None = None,
+    admission_receipt: AdmissionReceipt | None = None,
     skipped: bool = False,
     fencing_token: int | None = None,
     session: AsyncSession | None = None,
 ) -> AuthoredSlideCheckpoint:
     _require_stage(stage)
+    html, admission_receipt = admit_checkpoint_write(
+        admission_receipt=admission_receipt, html=html, stage=stage,
+        slide_index=slide_index, attempt_token=attempt_token, fencing_token=fencing_token,
+        browser_metrics=browser_metrics, png=png,
+    )
     render_path: str | None = None
     render_sha256: str | None = None
     expected_render_path: str | None = None
@@ -322,6 +220,7 @@ async def complete_stage(
             png=png,
             browser_metrics=browser_metrics,
             checkpoint_revision=checkpoint_revision,
+            admission_receipt=admission_receipt,
             skipped=skipped,
             fencing_token=fencing_token,
             session=session,
@@ -337,7 +236,11 @@ async def complete_stage(
             )
             expected_render_path = previous.render_path
             expected_artifact_refs = previous.artifact_refs
-            prior = await read_valid_evidence_artifact(previous)
+            # During render replacement, author/illustrate may already hold the
+            # next HTML while the pointer still names the last valid revision.
+            prior = await read_valid_evidence_artifact(
+                previous, require_current_html_match=False
+            )
             if checkpoint_revision is None:
                 checkpoint_revision = (prior.revision + 1) if prior else 0
             elif prior is not None and checkpoint_revision <= prior.revision:
@@ -444,7 +347,9 @@ async def complete_stage(
         # provider ordinal it has bought: an extra call on an already
         # complete stage -- the style anchor's one remake -- must follow the
         # stored count rather than restart under it.
-        checkpoint.error = retained_provider_attempt_fence(checkpoint.error)
+        checkpoint.error = checkpoint_receipt_metadata(
+            checkpoint.error, retained_provider_attempt_fence(checkpoint.error), admission_receipt,
+        )
         checkpoint.attempt_token = attempt_token
         checkpoint.updated_at = get_current_utc_datetime()
         if stage == "persist":

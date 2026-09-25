@@ -1,0 +1,84 @@
+id: screenshot-blue
+name: 화면 캡처 블루
+description: 큰 화면 캡처와 번호 주석, 전후 비교, 단계별 화면 흐름으로 제품 시연과 업무 개선안을 설명하는 화이트·블루 스타일
+category: technology
+tags:
+  - 화면 캡처
+  - 스크린샷
+  - 사용 매뉴얼
+  - 제품 시연
+  - AX 제안
+use_cases:
+  - 화면 캡처 중심의 기능 소개와 사용자 가이드
+  - 기존 화면과 개선 화면의 전후 비교
+  - 신청·검토·승인 등 단계별 업무 흐름 설명
+  - 시스템 도입 제안과 근거가 있는 효과 정리
+preview:
+  bg: "#FFFFFF"
+  accent: "#0866FF"
+  palette: ["#FFFFFF", "#081D49", "#0866FF", "#EEF7FF", "#009FAE", "#6740DB"]
+  variant: screenshot-blue
+  image: screenshot-blue/workflow.png
+design_tokens:
+  primary: "#0866FF"
+  background: "#FFFFFF"
+  heading_font: Noto Sans KR
+  body_font: Noto Sans KR
+reference_images:
+  cover: [screenshot-blue/cover.png]
+  section: [screenshot-blue/cover.png]
+  content: [screenshot-blue/hero.png, screenshot-blue/comparison.png]
+  timeline: [screenshot-blue/workflow.png]
+  data: [screenshot-blue/data.png]
+  closing: [screenshot-blue/cover.png]
+svg_overrides:
+  resolved_sections: [MOOD, TYPOGRAPHY, LAYOUT SYSTEM, DATA VISUALIZATION]
+  common_guidance:
+    - "Create a Korean enterprise screen-explanation deck with white #FFFFFF, navy #081D49 headings, cobalt #0866FF emphasis, ice blue #EEF7FF surfaces and restrained teal #009FAE or violet #6740DB. References show illustrative composition only; use the current user's project identity, facts and screenshot assets. Never copy sample screens, records or branding."
+    - "Use explicit SVG text and tspan elements for editable titles, captions and observations. Use Noto Sans KR; scale the 34-42 title, 20-24 body and 16-18 caption design targets to the actual canvas while respecting the runtime physical font floor and source-preservation policy. Do not shrink screenshots to make room for oversized titles."
+    - "Use only the SVG renderer's permitted solid-color primitives and straight-segment paths. Replace the decorative curved corner with a shallow pale-blue polygon or omit it; do not use curves, gradients, shadows, stylesheets, clipping, masks, rotation, filters or foreignObject. The system owns page numbering."
+    - "Screenshots remain the original raster evidence inside SVG image elements. Use only offered source-slot identifiers, explicit integer width/height and preserveAspectRatio=xMidYMid meet. Do not crop, stretch, recolor, redraw or invent screens; never paste a reference slide as the page background. Preserve required occurrences and attach captions to the correct screen."
+    - "Explain visible controls with separate numbered circles and text outside the image. Do not cover screen labels. An optional detail uses the same authorized source asset and never replaces required original evidence; if cropping is unavailable, retain the full image and describe the detail beside it."
+    - "Build tables as explicit rect, line and text primitives, using slate #435D80 headers with white text and cobalt emphasis. Use only supplied values, units and periods; retain screenshot-only charts as images and never infer their data. Without measured values, use a clearly labeled qualitative comparison."
+  layout_hints:
+    - "The pinned canvas width and height are authoritative. A4 landscape is 1188 by 840 and A4 portrait is 840 by 1188 logical units; never output the 1280 by 720 preview size when the request pins A4. Compute margins, title and evidence areas from the selected canvas, preserving the safe area and system footer."
+    - "For one screen, devote most of the evidence area to the image with a narrow explanation rail. For two screens, compare equivalent views at equal scale with labels and concise observations. When the after-screen is absent, describe the proposal as text instead of inventing one."
+    - "For three or four steps, use numbered screen-and-caption groups only when the actual image ratios remain readable. Wide desktop captures use fewer columns or stacked rows. Portrait pages normally stack one or two large screen groups vertically. Preserve the active page-count and source-order contracts."
+    - "Reserve about 12-18 percent of the page for the title and 65-75 percent for evidence, adapting to the source. Keep screen edges aligned and keep every caption inside the canvas. Do not treat the landscape references as fixed coordinates or shrink a complete landscape composition onto portrait paper."
+brief: |-
+  MOOD
+  Design a Korean enterprise presentation for explaining real software through screenshots. The visual reference is a white-and-blue AX proposal: bold navy titles with a cobalt keyword, pale blue sweeping corner arcs, small numbered markers, generous screen evidence and compact supporting explanations. Preserve that calm, precise identity while composing freely for the supplied content. Screenshots are the main evidence on screen-oriented pages, not decoration beside large paragraphs. Reference images and the HTML exemplar use explicitly illustrative sample screens; they teach composition only. Never reuse their text, sample records, project identity, figures or screens as evidence for a new deck. Use only the current user's project names and branding; do not add Samsung branding.
+
+  PALETTE
+  Use white #FFFFFF for the canvas, deep navy #081D49 for headlines, cobalt #0866FF for the primary emphasis and numbered steps, and ice blue #EEF7FF for shallow screen surroundings. Use slate #536785 for secondary text and #CBDFF4 for fine rules. Teal #009FAE and violet #6740DB distinguish at most two supporting categories, always with text labels. Pale blue may form one restrained upper-right arc and a bottom conclusion band. The colorful UI inside the screenshot keeps its original colors; never recolor the application to match the deck.
+
+  TYPOGRAPHY
+  Use "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif. At 1280x720, start with 34-42px titles, 20-24px supporting explanations and 16-18px captions; use bold navy or cobalt for emphasis. A title should normally fit on one or two lines. Wrap Korean at natural phrase boundaries, keep units with values, and widen or simplify the explanation region before reducing text. Follow the active runtime typography policy and source-preservation contract; this style never lowers or overrides them. Text embedded in an uploaded screenshot is immutable image evidence, not editable caption text. Keep new titles, step labels, captions, tables and callouts as editable HTML or SVG.
+
+  LAYOUT SYSTEM
+  Author free HTML/CSS, choosing the composition from screenshot count, aspect ratio and reading purpose. These are flexible directions, not fixed slots or a mandatory grid. Keep the selected document canvas and orientation; use 1280x720 as the landscape design reference, not a forced output size. On a landscape screen page reserve approximately 12-18% for the header, 65-75% for the screen evidence and 8-12% for a concise takeaway. Use 32-48px safe margins and compact panel padding so decoration never steals readable screen area. Align screen edges and captions; preserve native image aspect ratios with object-fit: contain and no clipping.
+  One screen: use a dominant 70-80% width screen beside a narrow explanation rail, or one full-width image with a caption below. Two screens: use balanced before/after fields with equal display scale for comparable content; label each explicitly and explain only supported changes. Three or four steps: arrange ordered screen panels only when the supplied crops remain readable; each has one numbered heading, its screen and one short caption. Do not force wide desktop screenshots into four narrow columns. Prefer two rows, an overview plus a focused view, or more slides when the requested page contract permits. In a portrait canvas, stack evidence vertically and reduce simultaneous screens; never rotate or squeeze the original images. Preserve source page count and order when the active source contract requires it.
+
+  SIGNATURE ELEMENTS
+  Place a small project or section label above the headline when supplied, with a cobalt keyword within an otherwise navy title. Keep the upper-right corner clear for optional supplied branding. Draw a subtle pale-blue arc as native SVG behind the header; it must not cross a screenshot or body text. Use thin pale-blue borders, almost square corners and minimal shadows around screenshots. Put numbered cobalt circles outside the screen, linked to short observations. Existing application chrome remains inside the image; do not wrap it in a second decorative browser window. Use a thin footer rule and page number only when the deck contract permits. Teal and violet can identify secondary benefits, not decorate every label.
+
+  DATA VISUALIZATION
+  Build real HTML tables and editable charts only from supplied structured values. Use a slate or navy table header, white rows with fine blue rules, consistent units, and cobalt emphasis on the decisive figures. An optional pale-blue total band must use an explicitly supplied or reproducibly derived total, with its period and basis. Distinguish existing state, proposed state and estimates. If a chart or table exists only inside a screenshot, retain that screenshot; never guess its data or redraw it with invented values. Without quantitative evidence, show a qualitative before/after comparison instead of improvement percentages or savings. Keep captions beside the evidence they describe.
+
+  IMAGE DIRECTION
+  Use the user-provided screenshot assets and their bound asset identifiers exactly. Retain every required image occurrence and its source association. Do not synthesize, redraw, retouch, relabel, fabricate or replace application screens. Never use the full sample slide as the background of a generated slide. Screens remain raster assets, while surrounding explanations and annotations remain editable. Use contain, not cover; do not stretch, tile, skew or mask the screen. Preserve menus, axes, legends and relevant notices when they support the explanation. A focused detail view may accompany the complete source screen when permitted, clearly labeled as an enlargement and taken from the same supplied asset; it must not replace required original evidence. Do not add a callout to a control that is not visible or supported by the source. A long page may use a full overview with a readable detail inset. If only one screen is supplied, show one screen, not duplicate it to imply different workflow states. If no screenshots are supplied, use a clearly labeled conceptual flow from the text rather than inventing a product UI. Do not request generated images to simulate evidence.
+
+  SLIDE ARCHETYPES
+  cover: Use a spacious white cover with a large navy title, one cobalt phrase and a restrained pale-blue arc. If a relevant supplied screen exists, place it in the right half without cropping. Use only supplied project, client and date details. Keep the screenshot optional instead of fabricating one for symmetry.
+  agenda: List the supplied product areas or workflow stages with cobalt numerals and one short description each. Keep the structure open and aligned; avoid miniature screen collages that cannot be read.
+  section: Use the same cover geometry with one chapter title and a brief supported purpose. Reduce ornaments and give the next group of screen-heavy slides a quiet transition.
+  content: Choose a large single screen with an explanation rail, a screen-and-detail pairing, or a readable three/four-step sequence. Match captions to the supplied screenshots and maintain their logical order. A sequence uses one number and one concise action per step, with connectors only where a real progression is described. A screen count is not a layout quota.
+  image: Give one supplied screen nearly the whole content field. Place its title above and its caption below. A small numbered observation rail can explain selected visible controls without covering them. For a tall screen, use a wider explanation field beside its full height instead of stretching it.
+  comparison: Place supplied existing and proposed screens at comparable scale under clearly labeled headings. Align corresponding content where possible and put the supported differences in a short strip below. If a proposed screen is unavailable, describe the proposal in editable text and label it as a proposal; do not invent an after screenshot.
+  architecture: Relate a dominant supplied application screen to a compact editable system-context diagram only when the source describes those relationships. Label real integration boundaries and supported data directions. Otherwise use an annotated screen, without imagined services or dependencies.
+  data: Use a readable evidence table, a directly labeled chart or a few supported outcome measures. Carry the same navy/cobalt heading and restrained teal/violet accents. Place the source, measurement period and estimate status where provided. Do not inherit sample numbers from reference images.
+  timeline: Explain a supplied workflow with ordered numbered screens and captions. Distinguish workflow sequence from calendar time; show dates only when supplied. Use two or three columns for wide screens, and four only for readable tall screens or supplied focused views. A dense screenshot remains large, even if that requires a different composition.
+  closing: Return to spacious white-and-blue cover geometry with one supported conclusion or next step. Reference the demonstrated screens briefly; introduce no new claims, metrics, logos or application screens.
+
+  AVOID
+  Avoid invented product screenshots, screenshot-shaped decorative cards without evidence, tiny four-column desktop screens, cropped controls, distorted image ratios, repeated copies that imply different states, heavy device frames, large empty ornaments, UI redraws, generic stock photography, fictional before/after claims and copied reference text or branding. Avoid obscuring screen content with caption overlays or floating badges. Do not use a reference slide as a full-page raster output. A style brief guides authoring; it does not prove generation, readability or export acceptance.

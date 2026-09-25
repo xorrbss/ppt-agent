@@ -15,7 +15,8 @@
     "idempotency_key": "action-demo-0001",
     "action_id": "act-demo-approve-0001",
     "expected_operation_version": 3,
-    "expected_revision": 4
+    "expected_revision": 4,
+    "recovery_revision": null
   },
   "action_response": {
     "schema_version": 1,
@@ -40,6 +41,12 @@
           "error": null,
           "error_message": null,
           "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": null,
+          "recoveryReason": null,
+          "recoveryStatus": "unavailable",
+          "capacity_waiting": false,
+          "queue_position": null,
           "result": {
             "revision": 5,
             "slide_id": "slide-demo-0001"
@@ -96,6 +103,12 @@
         "error": null,
         "error_message": null,
         "retryable": null,
+        "providerAttemptCount": null,
+        "retryCount": null,
+        "recoveryReason": null,
+        "recoveryStatus": "unavailable",
+        "capacity_waiting": false,
+        "queue_position": null,
         "result": {
           "revision": 5,
           "slide_id": "slide-demo-0001"
@@ -160,6 +173,12 @@
           "error": null,
           "error_message": null,
           "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": null,
+          "recoveryReason": null,
+          "recoveryStatus": "unavailable",
+          "capacity_waiting": false,
+          "queue_position": null,
           "result": {
             "revision": 5,
             "slide_id": "slide-demo-0001"
@@ -216,6 +235,12 @@
         "error": null,
         "error_message": null,
         "retryable": null,
+        "providerAttemptCount": null,
+        "retryCount": null,
+        "recoveryReason": null,
+        "recoveryStatus": "unavailable",
+        "capacity_waiting": false,
+        "queue_position": null,
         "result": {
           "revision": 5,
           "slide_id": "slide-demo-0001"

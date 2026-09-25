@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:105px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:56px;top:24px;width:900px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:984px;top:24px;width:240px;text-align:right}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:129px;height:519px}
+.content-inner{margin-left:56px;width:1168px}
+.content-grid{display:grid;grid-template-columns:352px 1fr;gap:24px;height:471px}
+.goal-panel{height:471px;padding:28px;background:#00140E;border-radius:12px;color:#FFFFFF;display:flex;flex-direction:column;justify-content:space-between}
+.goal-label{font-size:22px;line-height:32px;font-weight:700;color:#8ADBC7}
+.goal-rule{height:2px;background:#08795E;margin-top:22px}
+.goal-main{display:flex;flex-direction:column;gap:4px}
+.goal-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:76px;line-height:82px;font-weight:700;color:#08916E;letter-spacing:-.04em}
+.goal-word{font-size:32px;line-height:42px;font-weight:700;color:#FFFFFF}
+.goal-arrow{height:1px;background:#219F88;margin:28px 0 22px}
+.goal-next{font-size:30px;line-height:42px;font-weight:700;color:#FFFFFF}
+.goal-next strong{color:#8ADBC7}
+.goal-footer{font-size:16px;line-height:25px;font-weight:500;color:#A7ACB3}
+.list-panel{height:471px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.list-head{height:52px;display:flex;align-items:flex-start;justify-content:space-between}
+.list-title{font-size:26px;line-height:36px;font-weight:700;color:#1D1D1B}
+.list-mark{font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:22px;font-weight:700;color:#08916E;padding-top:4px}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
+.field-card{height:143px;padding:20px;background:#F9F9F9;border:1px solid #E2E8F0;border-radius:12px}
+.field-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:22px;font-weight:700;color:#08916E}
+.field-label{margin-top:13px;font-size:24px;line-height:34px;font-weight:700;color:#1D1D1B}
+.field-line{height:2px;margin-top:16px;background:#219F88}
+.connect-row{height:88px;margin-top:18px;display:grid;grid-template-columns:1fr 32px 1fr;gap:14px;align-items:center}
+.connect-box{height:64px;padding:14px;background:#EAF7F4;border-radius:12px;font-size:19px;line-height:28px;font-weight:700;color:#08795E}
+.connect-node{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:#08916E;color:#FFFFFF;font-size:20px;line-height:24px;font-weight:700}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="105" class="header-band" style="height:105px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-293777d6592e370c" data-source-block-id="source-slide:22:text:5" style="color: rgb(8, 121, 94)">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-62ef8a6e9d934480" data-source-block-id="source-slide:22:text:3">3주차 실습 | 영업 리스트 만들기</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-qid="q-div-73774be43d12" data-semantic-role="decoration"></div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:129px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-inner" data-qid="q-div-a985ffc51e86" data-semantic-role="decoration">
+    <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+      <div class="goal-panel" data-semantic-role="decoration" data-qid="q-card-goal-21">
+        <div data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+          <div class="goal-label" data-semantic-role="supporting" data-qid="source-block-c8fc727f852631c3" data-source-block-id="source-slide:22:text:32">오늘 목표</div>
+          <div class="goal-rule" data-qid="q-div-7cce56367dc6" data-semantic-role="decoration"></div>
+        </div>
+        <div class="goal-main" data-qid="source-block-5c24da57470ad386" data-semantic-role="decoration" data-source-block-id="source-slide:22:text:33">
+          <div class="goal-number" data-semantic-role="supporting" data-qid="q-goal-number-21">10곳</div>
+          <div class="goal-word" data-semantic-role="body" data-qid="q-goal-find-21">찾기</div>
+          <div class="goal-arrow" data-qid="q-div-c9f0a37974af" data-semantic-role="decoration"></div>
+          <div class="goal-next" data-semantic-role="body" data-qid="q-goal-contact-21">→ 3곳<br><strong data-qid="q-strong-663977331dde" data-semantic-role="body">연락</strong></div>
+        </div>
+        <div class="goal-footer" data-semantic-role="supporting" data-qid="source-block-25a71ea0cc222d83" data-source-block-id="source-slide:22:text:4">22</div>
+      </div>
+
+      <div class="list-panel" data-semantic-role="decoration" data-qid="q-card-list-21">
+        <div class="list-head" data-qid="q-div-80a92c618a45" data-semantic-role="decoration">
+          <div class="list-title" data-semantic-role="body" data-qid="source-block-6919fa9967aee553" data-source-block-id="source-slide:22:text:6">업종</div>
+          <div class="list-mark" data-semantic-role="supporting" data-qid="source-block-09c900aca5bbfe57" data-source-block-id="source-slide:22:text:7" style="color: rgb(8, 121, 94)">가게/업체명</div>
+        </div>
+        <div class="fields" data-qid="q-div-9eee448963ed" data-semantic-role="decoration">
+          <div class="field-card" data-semantic-role="decoration" data-qid="q-field-industry-21">
+            <div class="field-number" data-semantic-role="supporting" data-qid="q-field-number-1-21" style="color: rgb(8, 121, 94)">01</div>
+            <div class="field-label" data-semantic-role="supporting" data-qid="q-field-label-1-21">업종</div>
+            <div class="field-line" data-qid="q-div-09ae621a534a" data-semantic-role="decoration"></div>
+          </div>
+          <div class="field-card" data-semantic-role="decoration" data-qid="q-field-business-21">
+            <div class="field-number" data-semantic-role="supporting" data-qid="q-field-number-2-21" style="color: rgb(8, 121, 94)">02</div>
+            <div class="field-label" data-semantic-role="supporting" data-qid="q-field-label-2-21">가게/업체명</div>
+            <div class="field-line" data-qid="q-div-a6826d9af00c" data-semantic-role="decoration"></div>
+          </div>
+          <div class="field-card" data-semantic-role="decoration" data-qid="q-field-channel-21">
+            <div class="field-number" data-semantic-role="supporting" data-qid="q-field-number-3-21" style="color: rgb(8, 121, 94)">03</div>
+            <div class="field-label" data-semantic-role="supporting" data-qid="source-block-1f55142d959f0dbb" data-source-block-id="source-slide:22:text:8">접촉 채널</div>
+            <div class="field-line" data-qid="q-div-f9e4b88e0600" data-semantic-role="decoration"></div>
+          </div>
+          <div class="field-card" data-semantic-role="decoration" data-qid="q-field-status-21">
+            <div class="field-number" data-semantic-role="supporting" data-qid="q-field-number-4-21" style="color: rgb(8, 121, 94)">04</div>
+            <div class="field-label" data-semantic-role="supporting" data-qid="source-block-8ee9010f2da32c32" data-source-block-id="source-slide:22:text:9">상태</div>
+            <div class="field-line" data-qid="q-div-1f686b373902" data-semantic-role="decoration"></div>
+          </div>
+        </div>
+        <div class="connect-row" data-qid="q-div-00b4218e31f3" data-semantic-role="decoration" style="height: 44px">
+          <div class="connect-box" data-semantic-role="body" data-qid="q-connect-find-21">10곳<br>찾기</div>
+          <div class="connect-node" data-semantic-role="supporting" data-qid="q-connect-node-21" style="background-color: rgb(8, 121, 94)">→</div>
+          <div class="connect-box" data-semantic-role="body" data-qid="q-connect-contact-21">3곳<br>연락.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="page-number" data-semantic-role="supporting" data-qid="q-page-21" style="color: rgb(90, 90, 90); top: 672px">22</div>
+</body>
+</html>

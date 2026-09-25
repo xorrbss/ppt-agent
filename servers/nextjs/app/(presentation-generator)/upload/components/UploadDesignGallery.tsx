@@ -9,9 +9,11 @@ import { Loader2, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { notify } from "@/components/ui/sonner";
 import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { DashboardApi, type PresentationResponse } from "../../services/api/dashboard";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { PresentationGrid } from "../../(dashboard)/dashboard/components/PresentationGrid";
+import SelectedStyleSummary from "./SelectedStyleSummary";
 
 function RecentPresentations() {
   const t = useTranslations("slideWorkspace");
@@ -54,7 +56,7 @@ function RecentPresentations() {
         emptyTitle={t("recentEmpty")}
         emptyDescription={t("recentEmptyDescription")}
       />
-      <Link href="/dashboard" className="mt-5 inline-flex text-sm text-[#366FCF] hover:underline">
+      <Link href="/dashboard" className="mt-5 inline-flex text-sm font-medium text-slate-600 underline-offset-4 hover:text-violet-700 hover:underline">
         {t("allPresentations")}
       </Link>
     </div>
@@ -65,6 +67,7 @@ export default function UploadDesignGallery({ children }: { children: React.Reac
   const t = useTranslations("slideWorkspace");
   const router = useRouter();
   const [tab, setTab] = useState("styles");
+  const [styleCatalogOpen, setStyleCatalogOpen] = useState(true);
   const [creating, setCreating] = useState(false);
   const createInFlight = useRef(false);
 
@@ -84,9 +87,9 @@ export default function UploadDesignGallery({ children }: { children: React.Reac
   };
 
   return (
-    <Tabs value={tab} onValueChange={setTab} className="mx-auto mt-14 max-w-[1180px]">
-      <div className="flex items-center justify-between border-b border-[#EBEBEC]">
-        <TabsList className="devax-gallery-tabs" aria-label={t("galleryLabel")}>
+    <Tabs value={tab} onValueChange={setTab} className="mx-auto mt-12 max-w-[1080px]">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200">
+        <TabsList className="devax-gallery-tabs max-w-full flex-wrap" aria-label={t("galleryLabel")}>
           <TabsTrigger value="styles">{t("styles")}</TabsTrigger>
           <TabsTrigger value="recent">{t("recent")}</TabsTrigger>
         </TabsList>
@@ -101,7 +104,20 @@ export default function UploadDesignGallery({ children }: { children: React.Reac
         </button>
       </div>
       <TabsContent value="styles" forceMount className="mt-6 data-[state=inactive]:hidden">
-        {children}
+        <SelectedStyleSummary
+          expanded={styleCatalogOpen}
+          onChange={() => setStyleCatalogOpen((open) => !open)}
+        />
+        <div
+          id="authored-style-catalog"
+          className={cn(
+            "min-w-0",
+            !styleCatalogOpen && "[&_[data-testid='authored-style-section']]:hidden",
+          )}
+          data-testid="upload-design-gallery-content"
+        >
+          {children}
+        </div>
       </TabsContent>
       <TabsContent value="recent" className="mt-6">
         {tab === "recent" ? <RecentPresentations /> : null}

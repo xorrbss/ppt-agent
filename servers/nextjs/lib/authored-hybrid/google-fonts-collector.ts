@@ -66,6 +66,12 @@ export interface PreparedGoogleFontsHtml {
    */
   trustedFamilies: string[];
   failures: GoogleFontsCollectionFailure[];
+  /**
+   * Families the document requested from Google that the bundled manifest
+   * serves instead. No request was made for them; the bundled collector
+   * delivers them under the same family name (never a substitute).
+   */
+  localFamilies?: readonly string[];
 }
 
 interface TrustedFontFace {
@@ -167,6 +173,7 @@ export class GoogleFontsCollector {
         fontFiles: 0,
         trustedFamilies: [],
         failures: [],
+        localFamilies: extracted.bundledFamilies,
       };
     }
 
@@ -186,6 +193,7 @@ export class GoogleFontsCollector {
         fontFiles: 0,
         trustedFamilies: [],
         failures: [],
+        localFamilies: extracted.bundledFamilies,
       };
     }
 
@@ -279,6 +287,7 @@ export class GoogleFontsCollector {
       fontFiles,
       trustedFamilies: [...trustedFamilies],
       failures,
+      localFamilies: extracted.bundledFamilies,
     };
   }
 }

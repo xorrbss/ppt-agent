@@ -1,20 +1,18 @@
 import base64
 import hashlib
 import hmac
-import secrets
 from typing import Optional
 
+from api.v1.auth.secret_store import get_or_create_auth_secret, rotate_auth_secret
 from utils.get_env import get_user_config_path_env
 from utils.user_config_store import read_user_config_file, update_user_config_file
 
 
 SESSION_COOKIE_NAME = "presenton_session"
 SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
-AUTH_CONFIG_FIELDS = ("AUTH_USERNAME", "AUTH_PASSWORD_HASH", "AUTH_SECRET_KEY")
-
-
-def _base64url_encode(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("utf-8")
+# The signing secret is owned by `api.v1.auth.secret_store`; only the
+# rollback/recovery credential copy is written from here.
+AUTH_CONFIG_FIELDS = ("AUTH_USERNAME", "AUTH_PASSWORD_HASH")
 
 
 def _base64url_decode(value: str) -> bytes:
@@ -68,19 +66,6 @@ def verify_legacy_password_hash(password: str, encoded_hash: str) -> bool:
         return False
 
 
-def get_or_create_auth_secret() -> str:
-    """Return the deployment signing secret used by database-backed JWT auth."""
-    config = _load_user_config()
-    secret = config.get("AUTH_SECRET_KEY")
-    if isinstance(secret, str) and secret:
-        return secret
-
-    secret = _base64url_encode(secrets.token_bytes(32))
-    config["AUTH_SECRET_KEY"] = secret
-    _save_auth_config(config)
-    return secret
-
-
 def get_legacy_admin_credentials() -> tuple[Optional[str], Optional[str]]:
     """Return the pre-multi-user username and encoded password hash, if present."""
     config = _load_user_config()
@@ -102,6 +87,8 @@ def persist_admin_credentials(
     config = _load_user_config()
     config["AUTH_USERNAME"] = username.strip()
     config["AUTH_PASSWORD_HASH"] = password_hash
-    if rotate_secret or not config.get("AUTH_SECRET_KEY"):
-        config["AUTH_SECRET_KEY"] = _base64url_encode(secrets.token_bytes(32))
     _save_auth_config(config)
+    if rotate_secret:
+        rotate_auth_secret()
+    else:
+        get_or_create_auth_secret()

@@ -58,6 +58,20 @@ SEMANTIC_ROLE_RULES = """\
     rules are `decoration`."""
 
 
+#: The sentence every slide prompt ends on, under every prompt profile. August's
+#: wording differed only by a comma splice, and the ``data-qid`` sentence is a
+#: contract rather than guidance -- ``data-qid`` is the sole edit-identity marker
+#: the projection, the repair passes and the hybrid export all key off -- so
+#: there is no earlier version of this text a profile could usefully restore.
+SLIDE_OUTPUT_CONTRACT = (
+    "Design THIS slide bespoke and premium within the shared system, vary the layout to "
+    "suit the role. Give a unique stable data-qid to every element that owns text, and to "
+    "every image, table, chart, and card that carries text; a plain decorative shape or a "
+    "pure wrapper does not need one. Output ONLY the complete self-contained HTML "
+    "document."
+)
+
+
 def composition_intent_block() -> str:
     """G1 — what the page is FOR, stated before any of the fit constraints.
 
@@ -358,6 +372,7 @@ __all__ = [
     "SECTION_STRUCTURE_BRIEF",
     "SEMANTIC_ROLE_RULES",
     "SHARED_UNIVERSALS",
+    "SLIDE_OUTPUT_CONTRACT",
     "SOURCE_IMAGE_RULES",
     "STORY_RULES",
     "TYPE_SCALES",

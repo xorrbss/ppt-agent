@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;height:135px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:32px;width:780px}
+.eyebrow{font-size:13px;line-height:18px;font-weight:700;letter-spacing:.06em;color:#08916E}
+.title{margin-top:12px;font-size:34px;line-height:45px;font-weight:800;color:#0F172A}
+.divider{position:absolute;left:64px;right:64px;bottom:0;height:1px;background:#E2E8F0}
+.body-wrap{position:absolute;left:0;right:0;top:155px;width:100%;height:493px}
+.inner{margin:0 64px;height:493px}
+.claim-row{height:58px;display:flex;align-items:flex-start;justify-content:space-between}
+.claim{font-size:24px;line-height:34px;font-weight:800;color:#00140E}
+.claim strong{color:#08916E}
+.meta{display:flex;align-items:center;gap:24px;padding-top:5px}
+.meta-card{height:38px;padding:7px 14px;border:1px solid #E2E8F0;border-radius:12px;background:#FFFFFF;font-size:17px;line-height:24px;font-weight:700;color:#002060}
+.meta-card span{font-family:"IBM Plex Mono","Consolas",monospace;color:#08916E}
+.arch-grid{display:grid;grid-template-columns:310px 1fr 250px;gap:24px;height:403px}
+.side-panel{height:403px;padding:24px;background:#00140E;border-radius:12px;color:#FFFFFF}
+.side-kicker{font-size:15px;line-height:22px;font-weight:700;letter-spacing:.06em;color:#219F88}
+.side-title{margin-top:22px;font-size:25px;line-height:36px;font-weight:800;color:#FFFFFF}
+.side-rule{height:1px;margin:22px 0;background:#219F88}
+.side-copy{font-size:19px;line-height:31px;font-weight:700;color:#FFFFFF}
+.side-mark{margin-top:30px;font-family:"IBM Plex Mono","Consolas",monospace;font-size:39px;line-height:46px;font-weight:700;color:#08916E}
+.flow-panel{height:403px;padding:20px 22px;border:1px solid #E2E8F0;border-radius:12px;background:#FFFFFF}
+.flow-head{height:34px;font-size:18px;line-height:26px;font-weight:800;color:#002060}
+.flow-stack{display:flex;flex-direction:column;gap:12px;margin-top:16px}
+.flow-node{position:relative;min-height:65px;padding:16px 18px 16px 58px;border:1px solid #B9E5D9;border-radius:12px;background:#EAF7F4;font-size:18px;line-height:28px;font-weight:700;color:#1D1D1B}
+.flow-node:nth-child(2),.flow-node:nth-child(4){background:#E0F3FF;border-color:#CCECFF}
+.node-number{position:absolute;left:18px;top:17px;width:25px;height:25px;border-radius:12px;background:#002060;color:#FFFFFF;text-align:center;font-family:"IBM Plex Mono","Consolas",monospace;font-size:14px;line-height:25px;font-weight:700}
+.connector{height:12px;margin-left:30px;border-left:2px solid #00828E}
+.output-panel{height:403px;padding:24px;background:#FFFFFF;border:1px solid #B9E5D9;border-radius:12px}
+.output-label{font-size:15px;line-height:22px;font-weight:800;letter-spacing:.06em;color:#08916E}
+.output-title{margin-top:22px;font-size:24px;line-height:35px;font-weight:800;color:#002060}
+.output-rule{height:5px;margin-top:22px;border-radius:12px;background:#00828E}
+.output-copy{margin-top:24px;font-size:20px;line-height:34px;font-weight:700;color:#1D1D1B}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="135" class="header-band" style="height:135px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-5">1주차 학습 설계</div>
+  <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-07e96953a5114377" data-source-block-id="source-slide:6:text:3">1주차 | 숏폼 대행사업 시작하기</div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:155px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="inner" data-qid="q-div-c9c4d24a38ca" data-semantic-role="decoration">
+    <div class="claim-row" data-qid="q-div-75b3498fbbe1" data-semantic-role="decoration">
+      <div class="claim" data-semantic-role="body" data-qid="source-block-159a6af902a66574" data-source-block-id="source-slide:6:text:4">목표: 내가 무엇을 누구에게 얼마에 팔지 <strong data-semantic-role="body" data-qid="q-keyword-5">결정</strong></div>
+      <div class="meta" data-qid="q-div-c282b5ebf7f6" data-semantic-role="supporting">
+        <div class="meta-card" data-semantic-role="supporting" data-qid="source-block-3249496b5d212ba2" data-source-block-id="source-slide:6:text:7">120분</div>
+        <div class="meta-card" data-semantic-role="supporting" data-qid="source-block-3665c00af2a3ff55" data-source-block-id="source-slide:6:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      </div>
+    </div>
+
+    <div class="arch-grid" data-qid="q-div-58500264fd31" data-semantic-role="decoration">
+      <div class="side-panel" data-qid="q-side-card-5" data-semantic-role="decoration">
+        <div class="side-kicker" data-semantic-role="supporting" data-qid="source-block-c7af960e0b3ca87d" data-source-block-id="source-slide:6:text:5">06</div>
+        <div class="side-title" data-semantic-role="body" data-qid="q-side-title-5">숏폼 대행사업 시작하기</div>
+        <div class="side-rule" data-qid="q-div-168737fd0490" data-semantic-role="decoration"></div>
+        <div class="side-copy" data-semantic-role="body" data-qid="q-side-copy-5">내가 무엇을 누구에게 얼마에 팔지 결정</div>
+        <div class="side-mark" data-semantic-role="supporting" data-qid="q-side-mark-5">120분</div>
+      </div>
+
+      <div class="flow-panel" data-qid="q-flow-card-5" data-semantic-role="decoration">
+        <div class="flow-head" data-semantic-role="supporting" data-qid="q-flow-head-5">오늘의 학습 흐름</div>
+        <div class="flow-stack" data-qid="q-div-ef4e34c2e13f" data-semantic-role="decoration">
+          <div class="flow-node" data-qid="q-flow-node-1-5" data-semantic-role="decoration"><span class="node-number" data-semantic-role="supporting" data-qid="q-node-number-1-5">1</span><span data-semantic-role="body" data-qid="source-block-d31e95c95ec45d04" data-source-block-id="source-slide:6:text:8:run:0">숏폼 대행사업의 구조 이해</span></div>
+          <div class="connector" data-qid="q-div-1bfec761b021" data-semantic-role="decoration"></div>
+          <div class="flow-node" data-qid="q-flow-node-2-5" data-semantic-role="decoration"><span class="node-number" data-semantic-role="supporting" data-qid="q-node-number-2-5">2</span><span data-semantic-role="body" data-qid="source-block-2c4e88cecd913260" data-source-block-id="source-slide:6:text:8:run:1">타깃 업종과 상품 정하기</span></div>
+          <div class="connector" data-qid="q-div-f954d062b2c8" data-semantic-role="decoration"></div>
+          <div class="flow-node" data-qid="q-flow-node-3-5" data-semantic-role="decoration"><span class="node-number" data-semantic-role="supporting" data-qid="q-node-number-3-5">3</span><span data-semantic-role="body" data-qid="source-block-755be68b1c616066" data-source-block-id="source-slide:6:text:8:run:2">가격과 작업 범위 정하기</span></div>
+          <div class="connector" data-qid="q-div-d70e41e2467e" data-semantic-role="decoration"></div>
+          <div class="flow-node" data-qid="q-flow-node-4-5" data-semantic-role="decoration"><span class="node-number" data-semantic-role="supporting" data-qid="q-node-number-4-5">4</span><span data-semantic-role="body" data-qid="source-block-0fe56ca467d038bf" data-source-block-id="source-slide:6:text:8:run:3">인스타·블로그 기본 세팅</span></div>
+        </div>
+      </div>
+
+      <div class="output-panel" data-qid="q-output-card-5" data-semantic-role="decoration">
+        <div class="output-label" data-semantic-role="supporting" data-qid="source-block-361d54eef27a5102" data-source-block-id="source-slide:6:text:11">오늘의 결과물</div>
+        <div class="output-title" data-semantic-role="body" data-qid="source-block-0ee117f64c0eeb67" data-source-block-id="source-slide:6:text:12">내 서비스 한 줄 소개 + 기본 상품 1개</div>
+        <div class="output-rule" data-qid="q-div-78ceda01943a" data-semantic-role="decoration"></div>
+        <div class="output-copy" data-semantic-role="body" data-qid="q-output-copy-5">무엇을 누구에게 얼마에 팔지 결정</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="q-page-5">06</div>
+</body>
+</html>

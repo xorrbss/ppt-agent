@@ -100,6 +100,35 @@ const IDEMPOTENCY_ERROR_MESSAGES: Record<string, string> = {
     "재개 시도 횟수를 초과하여 이어서 생성할 수 없습니다. 생성을 다시 실행하면 새 작업으로 처음부터 생성됩니다.",
 };
 
+const SOURCE_SVG_ERROR_MESSAGES: Record<string, string> = {
+  svg_source_chart_unsupported:
+    "차트가 포함된 페이지는 현재 원본 보존 SVG로 재배치할 수 없습니다. 차트를 이미지로 바꾼 PPTX를 사용해 주세요.",
+  svg_source_image_appearance_unsupported:
+    "일부 이미지의 자르기·회전 또는 표시 효과를 그대로 보존할 수 없습니다. 해당 이미지를 일반 그림으로 바꾼 뒤 다시 시도해 주세요.",
+  svg_source_picture_bullet_unsupported:
+    "그림 글머리표는 현재 원본 보존 SVG에서 지원하지 않습니다. 일반 글머리표로 바꾼 뒤 다시 시도해 주세요.",
+  svg_source_image_only_page_not_supported:
+    "이미지만 있는 페이지는 현재 원본 보존 SVG로 재배치할 수 없습니다. 페이지에 편집 가능한 텍스트를 추가하거나 일반 SVG 생성을 사용해 주세요.",
+  svg_source_template_selection_required:
+    "적용할 템플릿을 다시 선택해 주세요. 원본 보존 SVG는 선택한 템플릿 ID를 그대로 사용합니다.",
+  svg_source_template_unsupported:
+    "선택한 템플릿은 현재 원본 크기 SVG 재구성을 지원하지 않습니다. 지원되는 템플릿을 선택해 주세요.",
+  svg_source_template_unavailable:
+    "선택한 템플릿 자산을 확인할 수 없습니다. 템플릿을 다시 선택해 주세요.",
+  svg_source_canvas_not_supported:
+    "현재는 A4 가로 PPTX의 원본 물리 크기만 그대로 유지해 SVG로 재구성할 수 있습니다.",
+  svg_source_text_box_unfit:
+    "원문을 같은 페이지와 선택한 템플릿 영역 안에 모두 배치할 수 없습니다. 원문을 줄이지 않고 생성이 중단되었습니다.",
+  svg_source_content_boxes_overlap:
+    "원본 콘텐츠를 선택한 템플릿의 간격 규칙 안에서 겹치지 않게 배치할 수 없습니다.",
+  svg_source_plan_input_mismatch:
+    "원본 페이지와 배치 계획의 콘텐츠 연결이 일치하지 않아 생성이 중단되었습니다.",
+  svg_source_plan_coverage_mismatch:
+    "원본 콘텐츠 일부가 배치 계획에 정확히 연결되지 않아 생성이 중단되었습니다.",
+  svg_source_plan_canvas_mismatch:
+    "배치 계획의 캔버스가 분석된 원본 물리 크기와 일치하지 않습니다.",
+};
+
 const GENERATION_STAGE_LABELS: Record<string, string> = {
   author: "작성",
   illustrate: "이미지 생성",
@@ -166,7 +195,8 @@ export function getApiErrorDisplayMessage(
   const message =
     (apiError.code &&
       (TEMPLATE_V2_ERROR_MESSAGES[apiError.code] ||
-        IDEMPOTENCY_ERROR_MESSAGES[apiError.code])) ||
+        IDEMPOTENCY_ERROR_MESSAGES[apiError.code] ||
+        SOURCE_SVG_ERROR_MESSAGES[apiError.code.split(":", 1)[0]])) ||
     apiError.message ||
     fallbackMessage;
   const failureContext = getGenerationFailureContext(apiError);

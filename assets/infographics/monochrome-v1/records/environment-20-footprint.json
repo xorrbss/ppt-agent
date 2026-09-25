@@ -1,0 +1,55 @@
+{
+  "id": "environment-20-footprint",
+  "category": "environment",
+  "tags": {
+    "ko": [
+      "환경",
+      "환경발자국"
+    ],
+    "en": [
+      "environment",
+      "footprint"
+    ]
+  },
+  "alt": {
+    "ko": "환경발자국 단색 벡터 인포그래픽",
+    "en": "footprint monochrome vector infographic"
+  },
+  "path": "originals/environment-20-footprint.svg",
+  "thumbnail": "thumbnails/environment-20-footprint.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 767,
+  "sha256": "21f8d16ae3dd8ce2e04d34bd04a8a017ceb42763b6e5ac11cef88cd83dbf9c92",
+  "geometry_sha256": "5f670541b4260d440b37c98bdbdd07843fb123e0272d3500607bed205d3b3f3c",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57181,
+    "preview_opaque_pixels": 6637,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Footprints",
+      "Leaf"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

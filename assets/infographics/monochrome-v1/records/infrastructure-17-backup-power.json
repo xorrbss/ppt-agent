@@ -1,0 +1,56 @@
+{
+  "id": "infrastructure-17-backup-power",
+  "category": "infrastructure",
+  "tags": {
+    "ko": [
+      "인프라",
+      "비상전원"
+    ],
+    "en": [
+      "infrastructure",
+      "backup",
+      "power"
+    ]
+  },
+  "alt": {
+    "ko": "비상전원 단색 벡터 인포그래픽",
+    "en": "backup power monochrome vector infographic"
+  },
+  "path": "originals/infrastructure-17-backup-power.svg",
+  "thumbnail": "thumbnails/infrastructure-17-backup-power.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 611,
+  "sha256": "cea90a338b728b32f38e8230e2f2990eb6cbcb18f88e9a3b102c860334d64d25",
+  "geometry_sha256": "d4c0329ed1dda28cc8850b0aabbb1c9754bad5a78e56a2e1c3729148d519dd34",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 59768,
+    "preview_opaque_pixels": 4526,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "BatteryCharging",
+      "Plug"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

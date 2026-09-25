@@ -1,0 +1,56 @@
+{
+  "id": "strategy-02-knight",
+  "category": "strategy",
+  "tags": {
+    "ko": [
+      "전략",
+      "체스전략"
+    ],
+    "en": [
+      "strategy",
+      "knight"
+    ]
+  },
+  "alt": {
+    "ko": "체스전략 단색 벡터 인포그래픽",
+    "en": "knight monochrome vector infographic"
+  },
+  "path": "originals/strategy-02-knight.svg",
+  "thumbnail": "thumbnails/strategy-02-knight.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 377,
+  "sha256": "147ace65302409468451b69762657976bf200ca05d5fcbef2bea87b7b4be8aa8",
+  "geometry_sha256": "e53bd5790bf178ad635ddb39c0f441ef29cd2b0d4afac5cf8f424ebd5f29e4f8",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 53921,
+    "preview_opaque_pixels": 10004,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ChessKnight"
+    ],
+    "custom_symbols": [
+      "ChessKnight"
+    ],
+    "parallel_jobs": 10
+  }
+}

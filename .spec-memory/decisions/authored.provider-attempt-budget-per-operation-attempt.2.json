@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.provider-attempt-budget-per-operation-attempt",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "A slide has three content-attempt ordinals per operation attempt: initial authoring, one corrected authoring attempt, and the final simplified author attempt owned by author-stage rescue. Classified overload replay is a separately recorded physical attempt and does not advance the content ordinal.",
+  "scope": [
+    "authored-generation",
+    "public-v2"
+  ],
+  "invariants": [
+    "Within one operation attempt a slide admits at most three content ordinals, and ordinal three is reserved for the last author attempt.",
+    "Every physical provider request is reserved before I/O; a classified overload replay increments physical-attempt accounting without consuming another content ordinal.",
+    "Replaying the same content ordinal stays idempotent, while skipping or decreasing an ordinal fails closed.",
+    "A stale worker holding an old attempt token cannot advance either content or physical attempt accounting.",
+    "Calls spent in earlier operation attempts remain preserved in provider_attempt_total and provider_physical_attempt_total.",
+    "A whole-account usage_limit_reached response pauses the deck until its persisted reset boundary instead of failing one slide."
+  ],
+  "forbidden": [
+    "Treat overload replay as a fourth content attempt.",
+    "Retry a physical request without a durable reservation or beyond the operation deadline.",
+    "Replay inside one admission when the provider transport has no confirmed idempotency support.",
+    "Treat every generic provider bridge exception as transient."
+  ],
+  "rationale": [
+    "The accepted placeholder-authoring design aligns the ledger to the current three-ordinal author budget and reserves the third ordinal for the last author attempt.",
+    "Separating content ordinals from physical overload retries preserves the model-repair budget while keeping provider spend bounded and auditable.",
+    "Durable quota pause lets the coordinator resume after the provider reset without converting account exhaustion into a slide defect."
+  ],
+  "evidence": [
+    "docs/authored-verbatim-placeholder-authoring-design-20260911.md section 2.4",
+    ".spec-memory/decisions/authored.verbatim-placeholder-authoring.1.json",
+    "app_data/logs/worker-generation-20260911-172315.stderr.log lines 567-618",
+    "servers/fastapi/services/authored_provider_attempt_ledger.py",
+    "servers/fastapi/utils/provider_idempotency.py"
+  ],
+  "supersedes": "authored.provider-attempt-budget-per-operation-attempt@1",
+  "recordedAt": "2026-09-11T20:00:00+09:00"
+}

@@ -145,7 +145,7 @@ def test_render_collects_dom_metrics_in_the_same_browser_invocation(monkeypatch)
     numeric_digest = hashlib.sha256(numeric.encode()).hexdigest()
     png, metrics = asyncio.run(slide_capture.render_html_to_png_with_metrics(numeric))
     assert hashlib.sha256(numeric.encode()).hexdigest() == numeric_digest
-    assert metrics["dom_metrics_version"] == "authored-dom-metrics-v25-polygon-normal-hit"
+    assert metrics["dom_metrics_version"] == "authored-dom-metrics-v26-font-stack-fallback"
     owners = {item["qid"]: item for item in metrics["elements"]}
     visible, clipped = owners["false.metric"], owners["true.metric"]
     assert visible["range_clip_suspect"] is True

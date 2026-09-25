@@ -64,6 +64,7 @@ def _candidate_bytes_match_digest(candidate: SourceImageCandidate) -> bool:
 async def _uploaded_source_paths(
     request: GeneratePresentationRequest,
     session: AsyncSession,
+    upload_metadata: dict[str, dict] | None = None,
 ) -> list[Path]:
     """Server-local paths of everything the caller uploaded for this deck.
 
@@ -78,6 +79,9 @@ async def _uploaded_source_paths(
     paths = [Path(path) for path in (request.files or [])]
     gateway = AssetGateway()
     for snapshot in request._reference_snapshots:
+        documents = snapshot.payload().get("documents", []) if upload_metadata is not None else []
+        names = {str(item.get("assetId")): str(item.get("name") or "")
+                 for item in documents if isinstance(item, dict)}
         for binding in snapshot.asset_bindings:
             _confirmed, private_path = await gateway.resolve_for_processing(
                 session,
@@ -86,6 +90,11 @@ async def _uploaded_source_paths(
                 conversation_id=snapshot.conversation_id,
             )
             paths.append(private_path)
+            if upload_metadata is not None:
+                # Image reference text is an availability descriptor, NOT OCR.
+                upload_metadata[str(private_path)] = {
+                    "original_name": names.get(str(binding.asset_id), ""),
+                }
     return paths
 
 
@@ -189,11 +198,14 @@ async def collect_source_image_candidates(
     style,
     presentation_id: uuid.UUID,
     session: AsyncSession,
+    *,
+    registration_report: list[dict] | None = None,
+    include_document_images: bool = False,
 ) -> list[SourceImageCandidate]:
-    """Register the pictures this deck may reuse, or decide it may reuse none.
+    """Register reusable pictures and preserve explicit filtering diagnostics.
 
-    Two cases never gain one. The feature is opt-in, so an unset gate has to
-    leave generation exactly as it was. Exact reconstruction reproduces a
+    Ordinary Authored image reuse stays opt-in; SVG includes source images
+    as part of its product contract. Exact reconstruction reproduces a
     source slide-for-slide, where adding an image the source does not have is
     the one thing that mode forbids.
 
@@ -201,11 +213,10 @@ async def collect_source_image_candidates(
     authored-template body images, so master-owned authored-vNext requests use
     this same verified registry and deterministic selection path.
 
-    Never raises: a deck is worth more than its source images, so an unreadable
-    upload, a storage failure, or a filtered-out candidate set all degrade to
-    ordinary illustration rather than losing the generation.
+    Storage, resolution and integrity failures raise instead of masquerading as
+    a relevance exclusion. Admission filters are recorded in registration_report.
     """
-    if request._source_content_authored_reflow:
+    if request._source_content_authored_reflow or getattr(request, "_source_content_svg_reflow", False):
         # Source-content admission already selected and sealed the image set.
         # It is a preservation contract, not the optional ordinary-authored
         # image-reuse feature, so feature gates and best-effort degradation do
@@ -215,20 +226,24 @@ async def collect_source_image_candidates(
             presentation_id,
             session,
         )
-    if not is_authored_source_images_enabled():
+    if getattr(request, "strategy", None) != "svg" and not is_authored_source_images_enabled():
         return []
     if normalize_reference_mode(
         getattr(style, "reference_mode", STYLE_REFERENCE)
     ) == EXACT_RECONSTRUCTION:
         return []
     try:
-        upload_paths = await _uploaded_source_paths(request, session)
+        metadata: dict[str, dict] = {}
+        upload_paths = await _uploaded_source_paths(request, session, metadata)
         if not upload_paths:
             return []
         candidates = await register_source_images(
             session,
             presentation_id=presentation_id,
             upload_paths=upload_paths,
+            upload_metadata=metadata,
+            registration_report=registration_report,
+            include_document_images=include_document_images,
         )
         if any(not _candidate_bytes_match_digest(candidate) for candidate in candidates):
             raise RuntimeError("authored_source_image_digest_mismatch")
@@ -239,8 +254,7 @@ async def collect_source_image_candidates(
         return candidates
     except Exception:
         LOGGER.warning(
-            "[authored] source image registration failed for %s; "
-            "continuing without source images",
+            "[authored] source image registration failed for %s",
             presentation_id,
             exc_info=True,
         )
@@ -248,7 +262,7 @@ async def collect_source_image_candidates(
             await session.rollback()
         except Exception:
             LOGGER.debug("[authored] source image rollback failed", exc_info=True)
-        return []
+        raise RuntimeError("authored_source_image_registration_failed") from None
 
 
 def plan_slide_source_images(

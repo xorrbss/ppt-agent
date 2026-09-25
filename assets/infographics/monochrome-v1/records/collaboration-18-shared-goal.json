@@ -1,0 +1,56 @@
+{
+  "id": "collaboration-18-shared-goal",
+  "category": "collaboration",
+  "tags": {
+    "ko": [
+      "협업",
+      "공동목표"
+    ],
+    "en": [
+      "collaboration",
+      "shared",
+      "goal"
+    ]
+  },
+  "alt": {
+    "ko": "공동목표 단색 벡터 인포그래픽",
+    "en": "shared goal monochrome vector infographic"
+  },
+  "path": "originals/collaboration-18-shared-goal.svg",
+  "thumbnail": "thumbnails/collaboration-18-shared-goal.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 537,
+  "sha256": "7bc9899176315bc11bd116c6cbdcf0c032c67d8cd1c6963b007d12318397b206",
+  "geometry_sha256": "85e4d955578f50d14c9469f12aeff80122afc490e633410eb90a6d32e9d344ec",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54466,
+    "preview_opaque_pixels": 8690,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Target",
+      "UsersRound"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

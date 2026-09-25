@@ -91,6 +91,9 @@ async def _render_one_slide(tmp_path, monkeypatch, *, capture):
         pipeline, "render_html_to_png_with_metrics", fake_render_with_metrics
     )
     monkeypatch.setattr(pipeline, "record_local_stage", no_recording)
+    # The in-render fit is the non-local-fit render path; local fit (on by
+    # default for an ordinary deck) would route around this seam.
+    monkeypatch.setattr(pipeline, "local_fit_applies", lambda **_kwargs: False)
 
     try:
         job = await _completed_author_job(maker)
@@ -177,8 +180,9 @@ def test_a_capture_missing_the_new_fields_leaves_the_html_untouched(
 
 
 def test_the_knob_off_path_is_byte_identical_to_before(tmp_path, monkeypatch):
-    """With the knob off, the render call must go through the pre-fit pair,
-    not through ``render_html_to_png_with_metrics`` at all."""
+    """With the knob off, the render call must never request a fit: the
+    non-local-fit path captures through ``render_html_to_png_with_metrics``
+    with ``fit=False`` (the merged capture owner's single render seam)."""
 
     monkeypatch.setenv("AUTHORED_IN_RENDER_FIT_ENABLED", "false")
     rendered: list[str] = []
@@ -196,22 +200,36 @@ def test_the_knob_off_path_is_byte_identical_to_before(tmp_path, monkeypatch):
         async def unexpected_author(*_args, **_kwargs):
             raise AssertionError("a completed author checkpoint must be resumed")
 
-        async def fake_render(html):
-            rendered.append(html)
-            return b"plain-png"
+        async def unexpected_plain_render(_html):
+            raise AssertionError("the capture owner renders through the metrics seam")
 
-        async def unexpected_fit_call(*_args, **_kwargs):
-            raise AssertionError("the knob-off path must not request a fit render")
+        async def fake_capture(html, *, fit=False, **_kwargs):
+            from services.authored_local_fit_policy import html_digest
+            from utils.slide_capture_result import RenderCapture
+
+            if fit:
+                raise AssertionError("the knob-off path must not request a fit render")
+            rendered.append(html)
+            return RenderCapture.from_payload(
+                html_digest=html_digest(html),
+                png=b"plain-png",
+                browser_metrics={},
+                runtime_counters={},
+                prepared_html=html,
+            )
 
         async def no_recording(**_kwargs):
             return None
 
         monkeypatch.setattr(pipeline, "author_planned_slide", unexpected_author)
-        monkeypatch.setattr(pipeline, "render_html_to_png", fake_render)
+        monkeypatch.setattr(pipeline, "render_html_to_png", unexpected_plain_render)
         monkeypatch.setattr(
-            pipeline, "render_html_to_png_with_metrics", unexpected_fit_call
+            pipeline, "render_html_to_png_with_metrics", fake_capture
         )
         monkeypatch.setattr(pipeline, "record_local_stage", no_recording)
+        # The in-render fit is the non-local-fit render path; local fit (on by
+        # default for an ordinary deck) would route around this seam.
+        monkeypatch.setattr(pipeline, "local_fit_applies", lambda **_kwargs: False)
 
         try:
             job = await _completed_author_job(maker)
@@ -228,10 +246,8 @@ def test_the_knob_off_path_is_byte_identical_to_before(tmp_path, monkeypatch):
 
     result = asyncio.run(scenario())
 
-    # The knob-off path is exactly the pre-fit pair: one render_html_to_png
-    # call (proven by the single recorded entry) and no fit report at all --
-    # ``unexpected_fit_call`` above proves render_html_to_png_with_metrics was
-    # never reached.
+    # The knob-off path renders once, never with ``fit=True`` (``fake_capture``
+    # above raises on it), and records no fit report at all.
     assert len(rendered) == 1
     assert result.deck.htmls == rendered
     assert result.pngs == [b"plain-png"]

@@ -33,6 +33,10 @@ from services.isolated_worker_process import install_trusted_worker_dispatcher
 from services.presentation_deletion_operation_handler import (
     register_presentation_deletion_operation_handler,
 )
+from services.raster_analysis_operation_handler import (
+    RASTER_ANALYSIS_OPERATION_KIND,
+    register_raster_analysis_operation_handler,
+)
 from services.presentation_generation_operation_handler import (
     PRESENTATION_GENERATION_OPERATION_KIND,
     register_presentation_generation_operation_handler,
@@ -75,18 +79,28 @@ from services.workspace_quality_operation_handler import (
     WorkspaceQualityReviewOperationHandler,
 )
 from services.workspace_page_remake_operation_handler import (
+    OPERATION_KIND as PAGE_REMAKE_OPERATION_KIND,
+    WorkspacePageRemakeOperationHandler,
     register_workspace_page_remake_operation_handler,
 )
 from services.workspace_batch_remake_operation_handler import (
     register_workspace_batch_remake_operation_handler,
 )
+from services.workspace_slide_order_operation_handler import (
+    OPERATION_KIND as SLIDE_ORDER_OPERATION_KIND,
+    register_workspace_slide_order_operation_handler,
+)
 from services.workspace_operation_handler_registry import (
     workspace_operation_handler_registry,
 )
 from services.workspace_authored_preview_operation_handlers import (
+    PAGE_PREVIEW_OPERATION_KIND,
+    WorkspacePageRemakePreviewOperationHandler,
     register_workspace_authored_preview_operation_handlers,
 )
 from services.workspace_authored_template_operation_handler import (
+    DESIGN_APPLY_OPERATION_KIND,
+    TEMPLATE_APPLY_OPERATION_KIND,
     register_workspace_authored_template_operation_handler,
 )
 from services.workspace_runtime_profile import require_supported_workspace_runtime
@@ -154,7 +168,21 @@ def external_workspace_operation_kinds(profile_role: str) -> tuple[str, ...]:
             raise RuntimeError("workspace_operation_external_controller_invalid")
         # Release review owns bounded provider critique/repair calls and is
         # admitted as generation work, not as sessionless export conversion.
-        return (PRESENTATION_GENERATION_OPERATION_KIND, QUALITY_REVIEW_OPERATION_KIND)
+        # Slide reorder is a local, DB-only mutation (no provider calls, no
+        # Chrome/export machinery) but it still runs behind the fenced
+        # workspace command path like every other mutation, so it needs an
+        # external-controller home too; generation is the metadata-authority
+        # role, and this claims in well under a second there.
+        return (
+            PRESENTATION_GENERATION_OPERATION_KIND,
+        RASTER_ANALYSIS_OPERATION_KIND,
+            QUALITY_REVIEW_OPERATION_KIND,
+            PAGE_PREVIEW_OPERATION_KIND,
+            PAGE_REMAKE_OPERATION_KIND,
+            TEMPLATE_APPLY_OPERATION_KIND,
+            DESIGN_APPLY_OPERATION_KIND,
+            SLIDE_ORDER_OPERATION_KIND,
+        )
     if profile_role == "ppt-core" and controller == EXPORT_CONTROLLER:
         return EXPORT_OPERATION_KINDS
     raise RuntimeError("workspace_operation_external_controller_required")
@@ -170,10 +198,12 @@ def create_external_export_controller_runtime() -> TrustedWorkerExecutorRuntime:
 
 def register_workspace_operation_handlers() -> None:
     register_presentation_generation_operation_handler(replace=True)
+    register_raster_analysis_operation_handler(replace=True)
     register_presentation_deletion_operation_handler(replace=True)
     register_presentation_chat_operation_handlers(replace=True)
     register_workspace_page_remake_operation_handler(replace=True)
     register_workspace_batch_remake_operation_handler(replace=True)
+    register_workspace_slide_order_operation_handler(replace=True)
     register_workspace_authored_preview_operation_handlers(replace=True)
     register_workspace_quality_export_operation_handlers(replace=True)
     register_workspace_authored_template_operation_handler(replace=True)
@@ -210,11 +240,32 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
     try:
         if profile.role == "generation":
             register_presentation_generation_operation_handler(replace=True)
+            register_raster_analysis_operation_handler(replace=True)
+            register_workspace_authored_template_operation_handler(
+                registry=workspace_operation_handler_registry,
+                replace=True,
+            )
             workspace_operation_handler_registry.register(
                 QUALITY_REVIEW_OPERATION_KIND,
                 WorkspaceQualityReviewOperationHandler(),
                 replace=True,
                 recovery_policy="automatic",
+            )
+            workspace_operation_handler_registry.register(
+                PAGE_PREVIEW_OPERATION_KIND,
+                WorkspacePageRemakePreviewOperationHandler(),
+                replace=True,
+                recovery_policy="automatic",
+            )
+            workspace_operation_handler_registry.register(
+                PAGE_REMAKE_OPERATION_KIND,
+                WorkspacePageRemakeOperationHandler(),
+                replace=True,
+                recovery_policy="automatic",
+            )
+            register_workspace_slide_order_operation_handler(
+                registry=workspace_operation_handler_registry,
+                replace=True,
             )
         else:
             register_workspace_quality_export_operation_handlers(replace=True)

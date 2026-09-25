@@ -2,9 +2,10 @@
 // ppt-agent.mjs — zero-dependency CLI to drive Presenton presentation generation.
 //
 // Calls POST <base>/api/v1/ppt/presentation/generate (synchronous: blocks until
-// generation + export finish) and prints presentation_id, the editor URL, and the
-// server-side export 'path'. Optionally downloads the produced file over the
-// auth-protected GET <base>/app_data/exports/<basename> static mount.
+// generation finishes) and prints presentation_id, the editor URL, and the deck
+// artifact path. When the request carried --export, the server chains an
+// `export.pptx`/`export.pdf` workspace command; --out follows that operation to
+// completion and downloads its artifact.
 //
 // With --async it instead POSTs to .../generate/async and polls
 // GET <base>/api/v1/ppt/presentation/status/<task-id> until the task completes
@@ -34,7 +35,7 @@
 //   --ui-base <url>          UI origin for the printed edit URL (default: --base origin).
 //                            Useful for web/Docker where the UI origin differs from the API --base
 //   --user <u> --password <p>  HTTP Basic creds for web/Docker (omit for DISABLE_AUTH)
-//   --out <dir>              download the produced file into <dir>
+//   --out <dir>              follow the chained export operation and save its file into <dir>
 //   --async                  use the async generate endpoint and poll status to completion
 //   --timeout <sec>          per-request / overall poll timeout in seconds (default 600)
 //   -h, --help               show this help
@@ -53,8 +54,8 @@
 //   # Authored mode with a style preset:
 //   node scripts/ppt-agent.mjs --content "2026 AI strategy" --mode authored --style strategic-navy --async --out ./out
 
-import { writeFile, mkdir, readFile } from "node:fs/promises";
-import path from "node:path";
+import { readFile } from "node:fs/promises";
+import { followExportToArtifact } from "./lib/ppt-agent-export-follow.mjs";
 
 const TONES = ["default", "casual", "professional", "funny", "educational", "sales_pitch"];
 const VERBOSITIES = ["concise", "standard", "text-heavy"];
@@ -105,6 +106,15 @@ function die(msg, code = 1) {
   process.exit(code);
 }
 
+// Same exit status as die(), but without tearing the process down mid-flight.
+// After any HTTP work, process.exit() can abort on an open keep-alive socket
+// (Node 24 on Windows asserts in libuv); letting the loop drain is equivalent
+// and safe. Reserve die() for failures raised before the first request.
+function fail(msg, code = 1) {
+  console.error(`error: ${msg}`);
+  process.exitCode = code;
+}
+
 function printHelpAndExit() {
   // The top-of-file comment is the canonical help; echo a compact form here.
   console.log(
@@ -136,7 +146,7 @@ function printHelpAndExit() {
       "  --base <url>            API base URL, default http://127.0.0.1:8000",
       "  --ui-base <url>         UI origin for edit URL (default: --base origin)",
       "  --user <u> --password <p>  HTTP Basic (omit for DISABLE_AUTH)",
-      "  --out <dir>             download produced file into <dir>",
+      "  --out <dir>             save the chained export's file into <dir>",
       "  --async                 use async endpoint + poll status",
       "  --timeout <sec>         per-request / overall poll timeout, default 600",
       "  -h, --help              this help",
@@ -391,14 +401,6 @@ async function generateOneAsync(content, opts) {
 
 // ---------- download ----------
 
-function baseName(p) {
-  // result.path is a SERVER-side filesystem path; the server may be Windows
-  // (backslashes) or POSIX. Split on both separators so the client OS variant
-  // of path.basename() can't mangle it.
-  const parts = String(p).split(/[\\/]+/).filter(Boolean);
-  return parts.length ? parts[parts.length - 1] : String(p);
-}
-
 function originOf(base) {
   try {
     const u = new URL(base);
@@ -408,34 +410,19 @@ function originOf(base) {
   }
 }
 
+// The export is a durable workspace operation now, not a path in the response.
+// scripts/lib/ppt-agent-export-follow.mjs owns the polling and the download;
+// it borrows the transport helpers above so there is one auth/timeout policy.
 async function downloadExport(result, opts) {
-  // The API 'path' is a server-side filesystem path; the downloadable URL is the
-  // basename mounted under /app_data/exports/ (auth-protected, same creds).
-  if (typeof result.path !== "string" || result.path.trim() === "") {
-    throw new Error(
-      `cannot download: server response had no 'path' (got ${JSON.stringify(result.path)})`
-    );
-  }
-  const basename = baseName(result.path);
-  const url = `${opts.base}/app_data/exports/${encodeURIComponent(basename)}`;
-
-  const res = await abortableFetch(
-    url,
-    { method: "GET", headers: { ...authHeader(opts.user, opts.password) } },
-    opts.timeoutMs,
-    "download"
-  );
-
-  if (!res.ok) {
-    const { json, text } = await readJsonSafely(res);
-    throw new Error(`download failed HTTP ${res.status}: ${extractDetail(json, text)}`);
-  }
-
-  await mkdir(opts.outDir, { recursive: true });
-  const dest = path.join(opts.outDir, basename);
-  const buf = Buffer.from(await res.arrayBuffer());
-  await writeFile(dest, buf);
-  return dest;
+  return followExportToArtifact(result, opts, {
+    abortableFetch,
+    authHeader,
+    extractDetail,
+    fetchWithTimeout,
+    readJsonSafely,
+    remaining: () => opts.deadline - Date.now(),
+    throwForStatus,
+  });
 }
 
 // ---------- orchestration ----------
@@ -450,11 +437,15 @@ function reportResult(content, result, opts, savedTo) {
   console.log(`  topic:           ${content}`);
   console.log(`  presentation_id: ${result.presentation_id}`);
   console.log(`  edit URL:        ${editUrl}`);
-  console.log(`  export path:     ${result.path}`);
+  console.log(`  deck artifact:   ${result.path}`);
+  console.log(
+    `  export op:       ${result.export_operation_id || `(none: ${result.export_error || "not requested"})`}`
+  );
   if (savedTo) console.log(`  downloaded to:   ${savedTo}`);
 }
 
 async function processTopic(content, opts) {
+  opts.deadline = Date.now() + opts.timeoutMs;
   const result = opts.asyncMode
     ? await generateOneAsync(content, opts)
     : await generateOne(content, opts);
@@ -588,7 +579,8 @@ async function main() {
       console.log("");
     }
     console.log(`Summary: ${ok} ok, ${failed} failed (of ${topics.length}).`);
-    process.exit(failed > 0 ? 1 : 0);
+    process.exitCode = failed > 0 ? 1 : 0;
+    return;
   }
 
   if (!args.content) {
@@ -598,10 +590,10 @@ async function main() {
   try {
     await processTopic(args.content, opts);
   } catch (err) {
-    die(err && err.message ? err.message : String(err));
+    fail(err && err.message ? err.message : String(err));
   }
 }
 
 main().catch((err) => {
-  die(err && err.message ? err.message : String(err));
+  fail(err && err.message ? err.message : String(err));
 });

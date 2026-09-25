@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "case_id": "case-01",
+  "method": "Independent direct visual comparison of original and spacing-candidate render.png; no diagnostics, result files, or HTML read",
+  "original": "artifacts/sol-speed-quality-20260915/runs/stage1/case-01/C/render.png",
+  "candidate": "artifacts/sol-common-repair-20260915/spacing-candidate/case-01/render.png",
+  "card_escape_resolved": true,
+  "panel_occlusion_resolved": true,
+  "observation": "Both top-left internal panels now end around y=397 inside the parent ending around y=414. Clear space remains before the next card starts around y=439. Previously the panels extended below their parent and their bottom edges were covered by the next card.",
+  "new_overlap": false,
+  "new_text_occlusion": false,
+  "readability": "Top-left text is vertically more compact, but all visible lines remain readable without overlap. Other three cards and page header show no visible regression.",
+  "font_size": "Not measured; no claim about unchanged computed font size",
+  "verdict": "Visual pass for this page: observed card overflow and panel occlusion resolved without visible new overlap or readability failure"
+}

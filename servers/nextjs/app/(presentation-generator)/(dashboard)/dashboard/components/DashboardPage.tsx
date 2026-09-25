@@ -12,9 +12,13 @@ import type { PresentationResponse } from "@/app/(presentation-generator)/servic
 import { PresentationGrid } from "@/app/(presentation-generator)/(dashboard)/dashboard/components/PresentationGrid";
 import { PresentationGenerationApi } from "@/app/(presentation-generator)/services/api/presentation-generation";
 import Link from "next/link";
-import Image from "next/image";
+import { useTranslations } from "next-intl";
 import {
+  ArrowUp,
   ArrowUpDown,
+  FilePlus2,
+  Paperclip,
+  Sparkles,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -25,63 +29,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { notify } from "@/components/ui/sonner";
 import { sanitizeAnalyticsError } from "@/utils/analytics";
 
-const actionCardBase =
-  "absolute aspect-[16/9] h-[46.238px] w-[82.201px] rounded-[4.474px] border border-white/50 bg-cover bg-center bg-no-repeat shadow-[0_8px_18px_rgba(16,24,40,0.18)] transition-all duration-500 ease-out opacity-100 translate-y-0 scale-100";
 const PRESENTATIONS_PER_PAGE = 24;
-
-const FloatingActionCards = () => (
-  <div className="pointer-events-none absolute right-[14px] top-[-36px] z-0 block h-[64px] w-[158px]">
-    <div
-      className={`${actionCardBase} left-0 top-0 border-none group-hover/action:-translate-x-2 group-hover/action:-rotate-3 group-focus-visible/action:-translate-x-2 group-focus-visible/action:-rotate-3`}
-      style={{
-        backgroundImage: "url('/create_presentation_card_3.png')",
-      }}
-    />
-    <div
-      className={`${actionCardBase} left-[39px] top-1 z-10 border-none group-hover/action:-translate-y-1 group-hover/action:scale-105 group-focus-visible/action:-translate-y-1 group-focus-visible/action:scale-105`}
-      style={{
-        backgroundImage: "url('/create_presentation_card_2.png')",
-      }}
-    />
-    <div
-      className={`${actionCardBase} left-[76px] top-0 border-none group-hover/action:translate-x-2 group-hover/action:rotate-3 group-focus-visible/action:translate-x-2 group-focus-visible/action:rotate-3`}
-      style={{
-        backgroundImage: "url('/create_presentation_card_1.png')",
-      }}
-    />
-  </div>
-);
-
-const BlankPresentationGraphic = ({ loading }: { loading: boolean }) => (
-  <span
-    className="relative ml-auto block h-[90px] w-[90px] shrink-0"
-    aria-hidden="true"
-  >
-    {loading ? (
-      <span className="absolute inset-0 flex items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-[#7A5AF8]" />
-      </span>
-    ) : (
-      <span className="absolute left-1/2 top-1/2 h-[90px] w-[90px] -translate-x-1/2 -translate-y-1/2 transition-transform duration-300 group-hover:-translate-y-[52%] group-hover:scale-105">
-        <span className="absolute left-[22.312px] top-[20.46px] h-[52.514px] w-[48.892px] -rotate-[5.81deg] bg-[rgba(0,0,0,0.14)]" />
-        <span className="absolute left-[21.452px] top-[19.94px] h-[52.514px] w-[48.892px] -rotate-[5.81deg] bg-[#ECEEEE]" />
-        <span className="absolute left-[23.57px] top-[21.78px] h-[50.53px] w-[47.045px] bg-[rgba(0,0,0,0.14)]" />
-        <span className="absolute left-[22.79px] top-[21.2px] h-[50.53px] w-[47.045px] bg-[#FEFEFF]" />
-        <Image
-          src="/dashboard/blank-presentation-clip.svg"
-          alt=""
-          width={9}
-          height={15}
-          className="absolute left-[25.05px] top-[15.66px] h-[14.283px] w-[8.282px]"
-        />
-      </span>
-    )}
-  </span>
-);
 
 const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
   publicV2CanaryEnabled = false,
 }) => {
+  const t = useTranslations("dashboardHome");
   const pathname = usePathname();
   const router = useRouter();
   const [presentations, setPresentations] = useState<
@@ -90,6 +43,7 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
   const [presentationTotal, setPresentationTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [draftPrompt, setDraftPrompt] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isCreatingBlankPresentation, setIsCreatingBlankPresentation] =
@@ -140,7 +94,7 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
       // recoverable error so the grid shows its retry UI instead of the
       // "no presentations yet" empty state, which reads as account-wide data loss.
       hasError = true;
-      setError("발표자료를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      setError(t("loadError"));
       setPresentationTotal(0);
     } finally {
       if (requestSequence === listRequestSequence.current) {
@@ -155,7 +109,7 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
         }
       }
     }
-  }, [debouncedSearchQuery, deckSortDirection, page, pathname]);
+  }, [debouncedSearchQuery, deckSortDirection, page, pathname, t]);
 
   useEffect(() => {
     void fetchPresentations();
@@ -213,100 +167,87 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
   );
 
   return (
-    <div className="min-h-screen w-full px-3 pb-10 sm:px-6 relative">
-      <div className="sticky top-0 right-0 z-50 py-[28px] backdrop-blur mb-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-[28px] tracking-[-0.84px] font-syne font-normal text-[#101828] flex items-center gap-2">
-            슬라이드 발표자료
-          </h3>
-        </div>
-      </div>
-      <section className="relative z-10 overflow-visible  ">
-        <h2 className="font-syne text-base bg-transparent font-medium pb-3.5  text-[#333333] ">
-          작업
-        </h2>
-        <div className="mt-2 flex flex-wrap gap-4">
-          <Link
-            href="/upload"
-            onClick={() =>
-              trackEvent(MixpanelEvent.Dashboard_New_Presentation_Clicked, {
-                pathname,
-                source: "dashboard_actions_card",
-              })
+    <div className="relative mx-auto min-h-screen w-full max-w-[1280px] px-5 pb-12 pt-8 sm:px-8 lg:px-12">
+      <section className="mx-auto flex max-w-[820px] flex-col items-center pb-12 pt-8 sm:pb-16 sm:pt-14" aria-labelledby="dashboard-create-title">
+        <span className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-100 bg-violet-50 text-violet-500">
+          <Sparkles aria-hidden="true" className="h-5 w-5" strokeWidth={1.6} />
+        </span>
+        <h1 id="dashboard-create-title" className="text-center text-[28px] font-semibold leading-tight tracking-[-0.04em] text-zinc-900 sm:text-[36px]">
+          {t("heroTitle")}
+        </h1>
+        <p className="mt-3 text-center text-sm leading-6 text-zinc-500 sm:text-base">
+          {t("heroDescription")}
+        </p>
+        <form
+          className="mt-8 w-full rounded-3xl border border-zinc-200 bg-white p-4 shadow-[0_8px_32px_-12px_rgba(24,24,27,0.14)] transition focus-within:border-zinc-400 focus-within:shadow-[0_8px_32px_-12px_rgba(24,24,27,0.2)] sm:p-5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const prompt = draftPrompt.trim();
+            if (prompt) {
+              try {
+                window.sessionStorage.setItem("devax:dashboard-prompt", prompt);
+              } catch {
+                notify.error(t("handoffError"), t("handoffErrorDescription"));
+                return;
+              }
             }
-            className="group/action relative z-50 block w-[304px] max-w-full cursor-pointer overflow-visible rounded-[10.8px] bg-white outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-4"
-            aria-label="발표자료 만들기"
-          >
-            <FloatingActionCards />
-
-            <Image
-              src="/create_presentation_bg.png"
-              alt="Background of the create presentation card"
-              width={304}
-              height={90}
-              className="relative z-10 h-[89.983px] w-[304px] max-w-full rounded-[10.8px] bg-white object-cover"
-            />
-            <span className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-center font-syne text-sm font-medium text-[#191919]">
-              발표자료 만들기
-            </span>
-          </Link>
-
-          <button
-            type="button"
-            onClick={() => void createBlankPresentation()}
-            disabled={isCreatingBlankPresentation}
-            aria-busy={isCreatingBlankPresentation}
-            className="group relative z-50 flex h-[89.983px] w-[304px] max-w-full items-center overflow-hidden rounded-[10.8px] border border-[#EDEEEF] bg-[linear-gradient(135deg,#FAFAFF_0%,#F3F0FF_100%)] px-5 text-left outline-none transition hover:border-[#CFC7FF] hover:shadow-[0_8px_22px_rgba(81,70,229,0.12)] focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-4 disabled:cursor-not-allowed disabled:opacity-70"
-            aria-label="빈 발표자료 만들기"
-          >
-            <span className="flex min-w-0 flex-col pr-3">
-              <span className="font-syne text-sm font-medium text-[#191919]">
-                {isCreatingBlankPresentation
-                  ? "발표자료 생성 중"
-                  : "빈 발표자료"}
-              </span>
-              <span className="mt-1 text-[11px] leading-[14px] text-[#777387]">
-                {isCreatingBlankPresentation
-                  ? "캔버스를 준비하고 있습니다"
-                  : "빈 캔버스에서 시작하기"}
-              </span>
-            </span>
-            <BlankPresentationGraphic loading={isCreatingBlankPresentation} />
+            trackEvent(MixpanelEvent.Dashboard_New_Presentation_Clicked, {
+              pathname,
+              source: "dashboard_actions_card",
+            });
+            router.push("/upload");
+          }}
+        >
+          <label htmlFor="dashboard-create-prompt" className="sr-only">{t("promptLabel")}</label>
+          <textarea
+            id="dashboard-create-prompt"
+            value={draftPrompt}
+            onChange={(event) => setDraftPrompt(event.target.value)}
+            placeholder={t("promptPlaceholder")}
+            className="min-h-[112px] w-full resize-none border-0 bg-transparent px-1 py-2 text-[15px] leading-7 text-zinc-800 outline-none placeholder:text-zinc-400 sm:min-h-[128px]"
+          />
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <button type="submit" className="inline-flex h-10 items-center gap-2 rounded-full border border-zinc-200 px-3.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400">
+              <Paperclip aria-hidden="true" className="h-4 w-4" />
+              {t("documentStart")}
+            </button>
+            <button type="submit" aria-label={t("createPresentation")} className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-zinc-900 px-5 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2">
+              {t("start")}
+              <ArrowUp aria-hidden="true" className="h-4 w-4" />
+            </button>
+          </div>
+        </form>
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
+          <button type="button" onClick={() => void createBlankPresentation()} disabled={isCreatingBlankPresentation} aria-busy={isCreatingBlankPresentation} aria-label={t("createBlank")} className="inline-flex h-10 items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 text-xs font-medium text-zinc-600 transition hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:cursor-wait disabled:opacity-60">
+            {isCreatingBlankPresentation ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <FilePlus2 aria-hidden="true" className="h-4 w-4" />}
+            {isCreatingBlankPresentation ? t("creating") : t("blank")}
           </button>
+          <Link href="/templates" className="inline-flex h-10 items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 text-xs font-medium text-zinc-600 transition hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400">
+            {t("browseTemplates")}
+          </Link>
           {publicV2CanaryEnabled && (
-            <Link
-              href="/public-v2"
-              data-testid="public-v2-canary-cta"
-              className="relative z-50 flex h-[89.983px] w-[304px] max-w-full items-center rounded-[10.8px] border border-indigo-200 bg-indigo-50 px-5 text-left outline-none transition hover:border-indigo-400 hover:bg-indigo-100 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-4"
-              aria-label="Public v2 시험 운영으로 발표자료 만들기"
-            >
-              <span className="flex min-w-0 flex-col">
-                <span className="font-syne text-sm font-medium text-indigo-950">
-                  Public v2 시험 운영
-                </span>
-                <span className="mt-1 text-[11px] leading-[14px] text-indigo-700">
-                  자동 복구 · 품질 확인 · Fidelity 다운로드
-                </span>
-              </span>
+            <Link href="/public-v2" data-testid="public-v2-canary-cta" aria-label={t("publicV2Label")} className="inline-flex h-10 items-center gap-2 rounded-full border border-violet-100 bg-violet-50 px-4 text-xs font-medium text-violet-700 transition hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400">
+              {t("publicV2")}
             </Link>
           )}
         </div>
       </section>
-      <section className="relative z-10 mt-12">
+
+      <section className="relative z-10 border-t border-zinc-200/70 pt-8">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-baseline gap-2">
-            <h2 className="font-syne text-base font-medium text-[#333333]">
-              발표자료
+            <h2 className="text-base font-semibold tracking-tight text-zinc-800">
+              {t("presentations")}
             </h2>
             {!isLoading && (
-              <span className="text-xs text-[#808080]" aria-live="polite">
-                {presentationTotal}개
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500" aria-live="polite">
+                {t("presentationCount", { count: presentationTotal })}
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
             <label className="relative block min-w-0 flex-1 sm:w-[280px]">
-              <span className="sr-only">발표자료 검색</span>
+              <span className="sr-only">{t("searchLabel")}</span>
               <Search
                 aria-hidden="true"
                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#808080]"
@@ -315,16 +256,16 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
                 type="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="제목 또는 내용 검색"
+                placeholder={t("searchPlaceholder")}
                 data-testid="dashboard-presentation-search"
-                className="h-9 w-full rounded-lg border border-[#D9D9DF] bg-white pl-9 pr-3 text-sm text-[#191919] outline-none transition focus:border-[#7A5AF8] focus:ring-2 focus:ring-[#7A5AF8]/20"
+                className="h-10 w-full rounded-xl border border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-800 outline-none transition placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-200"
               />
             </label>
             <button
               type="button"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#D9D9DF] bg-white text-[#2F3033] transition-colors hover:bg-[#F3F3F6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8]"
-              title="정렬 순서 전환"
-              aria-label="정렬 순서 전환"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+              title={t("toggleSort")}
+              aria-label={t("toggleSort")}
               onClick={() => {
                 setPage(1);
                 setDeckSortDirection((current) =>
@@ -346,24 +287,24 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
           error={error}
           onPresentationDeleted={removePresentation}
           emptyTitle={
-            debouncedSearchQuery ? "검색 결과가 없습니다." : undefined
+            debouncedSearchQuery ? t("noResults") : undefined
           }
           emptyDescription={
             debouncedSearchQuery
-              ? "다른 검색어로 다시 시도해 보세요."
+              ? t("tryAnotherSearch")
               : undefined
           }
         />
         {!isLoading && !error && presentationTotal > 0 && totalPages > 1 && (
           <nav
             className="mt-8 flex items-center justify-center gap-3"
-            aria-label="발표자료 페이지"
+            aria-label={t("pagination")}
           >
             <button
               type="button"
               onClick={() => setPage((current) => Math.max(1, current - 1))}
               disabled={page <= 1}
-              aria-label="이전 페이지"
+              aria-label={t("previousPage")}
               className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#D9D9DF] bg-white text-[#333] disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -377,7 +318,7 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
                 setPage((current) => Math.min(totalPages, current + 1))
               }
               disabled={page >= totalPages}
-              aria-label="다음 페이지"
+              aria-label={t("nextPage")}
               className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#D9D9DF] bg-white text-[#333] disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronRight className="h-4 w-4" />

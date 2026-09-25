@@ -1,0 +1,55 @@
+{
+  "id": "technology-07-vr-headset",
+  "category": "technology",
+  "tags": {
+    "ko": [
+      "기술",
+      "가상현실"
+    ],
+    "en": [
+      "technology",
+      "vr",
+      "headset"
+    ]
+  },
+  "alt": {
+    "ko": "가상현실 단색 벡터 인포그래픽",
+    "en": "vr headset monochrome vector infographic"
+  },
+  "path": "originals/technology-07-vr-headset.svg",
+  "thumbnail": "thumbnails/technology-07-vr-headset.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 465,
+  "sha256": "ad7df5295d31f99c428e9164f63e43d95412696dad3514cb3c148e3d5dbac4d6",
+  "geometry_sha256": "fa8e983e316fda44a6534fb4208e2b44823da9051aa2d66099b6e4d9323703a0",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55474,
+    "preview_opaque_pixels": 8640,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Glasses"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

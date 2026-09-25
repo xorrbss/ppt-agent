@@ -1,6 +1,6 @@
 import type { InspectorModel, RegenerationCandidate as RegenerationCandidateView } from "@/components/authored-vnext";
 import type { RegenerationCandidate, VisualDirection as FlowVisualDirection } from "@/lib/authored-vnext/flow";
-import type { DeckMasterContractV1, VisualDirection as MasterVisualDirection } from "@/lib/authored-vnext/master/contracts";
+import type { VisualDirection as MasterVisualDirection } from "@/lib/authored-vnext/master/contracts";
 import type { BodyNode, SlideDocument, WorkbenchState } from "@/lib/authored-vnext/workbench";
 
 export function inspectorView(
@@ -114,16 +114,7 @@ export function downloadArtifact(url: string): void {
   anchor.remove();
 }
 
-export function masterAssetDigests(
-  contract: DeckMasterContractV1 | undefined,
-): string[] {
-  if (!contract) return [];
-  return [...new Set(
-    [contract.brandAssets.logo, contract.brandAssets.wordmark]
-      .filter((asset) => asset !== null)
-      .map((asset) => asset.digest),
-  )];
-}
+export { masterAssetDigests } from "./export-asset-digests";
 
 export function regenerationCandidateView(
   candidate: RegenerationCandidate | null,

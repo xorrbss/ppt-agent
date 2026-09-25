@@ -16,13 +16,13 @@ export default function UserAccountSettings({
   const t = useTranslations("userSettings");
 
   return (
-    <div className="relative flex h-screen flex-col overflow-hidden font-syne">
-      <main className="mx-auto flex w-full gap-6 overflow-hidden">
+    <div className="relative flex min-h-screen flex-col bg-[#FAFAFA] font-syne">
+      <main className="mx-auto flex w-full min-w-0 flex-col gap-6 p-4 sm:p-6 lg:flex-row lg:gap-8 lg:p-8">
         <aside
-          className="flex h-screen w-full max-w-[230px] flex-col bg-[#F9FAFB] px-3 pt-[22px]"
+          className="flex w-full shrink-0 flex-col rounded-2xl border border-zinc-200/80 bg-white p-4 lg:sticky lg:top-6 lg:h-fit lg:w-[220px]"
           aria-label={t("title")}
         >
-          <p className="mt-[3.15rem] border-b border-[#E1E1E5] pb-3.5 text-xs font-medium text-black">
+          <p className="border-b border-zinc-100 pb-4 text-xs font-semibold text-zinc-500">
             {t("eyebrow")}
           </p>
           <div className="mt-6">
@@ -30,7 +30,7 @@ export default function UserAccountSettings({
               {t("account")}
             </p>
             <div
-              className="flex w-full items-center gap-1.5 rounded-[6px] border border-[#D9D6FE] bg-[#F4F3FF] px-3 py-4"
+              className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-100 px-3 py-3"
               aria-current="page"
             >
               <div className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-[#EDEEEF] bg-white">
@@ -44,10 +44,10 @@ export default function UserAccountSettings({
           </div>
         </aside>
 
-        <div className="w-full overflow-y-auto pb-20 pr-6">
-          <div className="sticky right-0 top-0 z-50 mb-4 py-[28px] backdrop-blur">
+        <div className="min-w-0 flex-1 pb-8">
+          <div className="mb-6 flex min-h-12 items-center py-2">
             <div className="flex items-center justify-between gap-4">
-              <h1 className="font-unbounded text-[28px] font-normal tracking-[-0.84px] text-black">
+              <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
                 {t("title")}
               </h1>
               <UiLocaleSwitcher />
@@ -55,7 +55,7 @@ export default function UserAccountSettings({
           </div>
 
           <section
-            className="max-w-3xl rounded-[12px] bg-[#F9F8F8] p-7"
+            className="max-w-3xl rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm sm:p-7"
             aria-labelledby="account-heading"
           >
             <h2
@@ -70,7 +70,7 @@ export default function UserAccountSettings({
 
             <div className="mt-6 rounded-[12px] border border-[#EDEEEF] bg-white p-6">
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[4px] bg-[#F4F3FF]">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-50">
                   <UserRound
                     className="h-5 w-5 text-[#5146E5]"
                     aria-hidden="true"
@@ -95,7 +95,7 @@ export default function UserAccountSettings({
                 </p>
                 <LogoutButton
                   label={t("signOut")}
-                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-[58px] border border-[#EDEEEF] bg-[#7C51F8] px-5 py-3 text-xs font-semibold text-white transition hover:bg-[#6d46e6] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#EDEEEF] bg-zinc-900 px-5 py-3 text-xs font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                 />
               </div>
             </div>

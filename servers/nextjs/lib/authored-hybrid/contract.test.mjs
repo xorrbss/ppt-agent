@@ -108,6 +108,8 @@ test("browser observations become a versioned JSON-safe H2 contract", () => {
     elements: [
       {
         id: "h1-0002",
+        identityAuthority: "compatibility-ordinal",
+        parentElementId: null,
         domPath: "body > div:nth-of-type(1)",
         tagName: "div",
         sourceIndex: 4,
@@ -127,6 +129,8 @@ test("browser observations become a versioned JSON-safe H2 contract", () => {
       },
       {
         id: "h1-0001",
+        identityAuthority: "compatibility-ordinal",
+        parentElementId: null,
         domPath: "body > p:nth-of-type(1)",
         tagName: "p",
         sourceIndex: 2,
@@ -312,7 +316,7 @@ test("contract construction rejects a viewport that would corrupt geometry", () 
       buildAuthoredHybridSlide(
         "<p>x</p>",
         {
-          viewport: { widthPx: 1024, heightPx: 768, devicePixelRatio: BACKPLATE_SCALE },
+          viewport: { widthPx: 319, heightPx: 768, devicePixelRatio: BACKPLATE_SCALE },
           appliedPromotedElementIds: [],
           rejectedPromotedElementIds: [],
           warnings: [],
@@ -320,7 +324,7 @@ test("contract construction rejects a viewport that would corrupt geometry", () 
         },
         undefined
       ),
-    /expected 1280x720 viewport/
+    /unsupported authored viewport 319x768/
   );
 });
 

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:117px;background:#FFFFFF}
+.header-band-mark{position:absolute;left:0;top:0;width:1280px;height:8px;background:#08916E}
+.header-left{position:absolute;left:64px;top:28px;width:960px}
+.eyebrow{height:22px;font-size:16px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.body-wrap{position:absolute;left:0;right:0;top:141px;height:507px}
+.content-inner{width:1152px;margin-left:64px}
+.claim-row{height:54px;display:flex;align-items:center;margin-bottom:20px}
+.claim{font-size:25px;line-height:38px;font-weight:700;letter-spacing:-.02em;color:#1D1D1B}
+.claim strong{color:#08916E}
+.content-grid{display:grid;grid-template-columns:348px 780px;gap:24px;height:397px}
+.intro-panel{height:397px;padding:28px;background:#00140E;border-radius:12px;display:flex;align-items:flex-end;position:relative}
+.intro-panel-mark{position:absolute;left:28px;top:28px;width:42px;height:6px;background:#219F88;border-radius:12px}
+.intro-copy{font-size:23px;line-height:1.6;font-weight:700;color:#FFFFFF}
+.evidence-list{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.evidence-card{height:190px;padding:24px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;display:flex;align-items:flex-start;position:relative}
+.evidence-card:nth-child(2){background:#E0F3FF}
+.evidence-card:nth-child(3){background:#FFFFFF}
+.evidence-card:nth-child(4){background:#E0F3FF}
+.card-bar{position:absolute;left:24px;top:24px;width:7px;height:42px;background:#08916E;border-radius:12px}
+.evidence-text{padding-left:25px;font-size:19px;line-height:1.65;font-weight:700;color:#1D1D1B}
+.priority-mark{position:absolute;right:24px;bottom:24px;width:10px;height:10px;background:#E5A93D;border-radius:12px}
+.page-number{position:absolute;left:0;right:0;bottom:14px;height:16px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+[data-semantic-role]{word-break:keep-all;overflow-wrap:break-word}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="117" style="height:117px" data-qid="q-div-header-band-3" data-semantic-role="decoration">
+  <div class="header-band-mark" data-qid="q-div-6c35bbf987dc" data-semantic-role="decoration"></div>
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" data-semantic-role="supporting" class="eyebrow" data-qid="source-block-4cfe6d7e66337a56" data-source-block-id="source-slide:4:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    <div data-header-part="title" data-semantic-role="title" class="title" data-qid="source-block-51d6a43c463aba5a" data-source-block-id="source-slide:4:text:3">8시간의 원칙</div>
+  </div>
+</div>
+
+<div data-header-part="body" style="position:absolute;left:0;right:0;top:141px" data-qid="q-div-body-3" data-semantic-role="decoration">
+  <div class="content-inner" data-qid="source-block-9ea436f3c989a513" data-semantic-role="decoration" data-source-block-id="source-slide:4:text:4">
+    <div class="claim-row" data-qid="q-div-75b3498fbbe1" data-semantic-role="decoration">
+      <div class="claim" data-semantic-role="body" data-qid="q-div-claim-3">본 수업은 ‘<strong data-qid="q-strong-663977331dde" data-semantic-role="body">필수</strong>’만.</div>
+    </div>
+
+    <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+      <div class="intro-panel" data-semantic-role="decoration" data-qid="q-div-intro-panel-3">
+        <div class="intro-panel-mark" data-qid="q-div-47673a30c0e0" data-semantic-role="decoration"></div>
+        <div class="intro-copy" data-semantic-role="body" data-qid="q-div-intro-copy-3">나머지는 템플릿과 보너스 자료로 제공합니다.</div>
+      </div>
+
+      <div class="evidence-list" data-qid="source-block-cd3574df46d379e7" data-semantic-role="decoration" data-source-block-id="source-slide:4:text:7">
+        <div class="evidence-card" data-semantic-role="decoration" data-qid="q-div-card-3-1">
+          <div class="card-bar" data-qid="q-div-4119793ca674" data-semantic-role="decoration"></div>
+          <div class="evidence-text" data-semantic-role="body" data-qid="q-div-card-text-3-1">기능을 많이 배우는 것보다 실제 영상 1개를 완성한다.</div>
+        </div>
+        <div class="evidence-card" data-semantic-role="decoration" data-qid="q-div-card-3-2">
+          <div class="card-bar" data-qid="q-div-36a43a8f580c" data-semantic-role="decoration"></div>
+          <div class="evidence-text" data-semantic-role="body" data-qid="q-div-card-text-3-2">영업 방법을 전부 외우기보다 핵심 3개를 실제로 해본다.</div>
+        </div>
+        <div class="evidence-card" data-semantic-role="decoration" data-qid="q-div-card-3-3">
+          <div class="card-bar" data-qid="q-div-255f5d6b6754" data-semantic-role="decoration"></div>
+          <div class="evidence-text" data-semantic-role="body" data-qid="q-div-card-text-3-3">강의가 끝날 때 ‘무엇을 누구에게 팔지’가 명확해야 한다.</div>
+        </div>
+        <div class="evidence-card" data-semantic-role="decoration" data-qid="q-div-card-3-4">
+          <div class="card-bar" data-qid="q-div-2434e958e418" data-semantic-role="decoration"></div>
+          <div class="evidence-text" data-semantic-role="body" data-qid="q-div-card-text-3-4">수강생이 집에 가서 바로 실행할 수 있는 자료를 남긴다.</div>
+          <div class="priority-mark" data-qid="q-div-155b740343df" data-semantic-role="decoration"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-b37b36733c3c1adb" data-source-block-id="source-slide:4:text:5">04</div>
+</body>
+</html>

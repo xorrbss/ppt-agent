@@ -41,6 +41,7 @@ from utils.provider_idempotency import (
     provider_generate_call,
     supports_provider_idempotency,
 )
+from utils.provider_overload import provider_status_code
 from utils.structured_call_budget import (
     PUBLIC_STRUCTURED_MAX_PHYSICAL_CALLS,  # noqa: F401  (re-exported)
     StructuredProviderCallBudget,
@@ -217,16 +218,15 @@ async def _generate_structured_content(
 
 
 def _exception_status_code(error: Exception) -> Optional[int]:
-    """Return an HTTP-like status code from provider and normalized LLM errors."""
-    status_code = getattr(error, "status_code", None)
-    if isinstance(status_code, int):
-        return status_code
+    """Return an HTTP-like status code from provider and normalized LLM errors.
 
-    response = getattr(error, "response", None)
-    response_status_code = getattr(response, "status_code", None)
-    if isinstance(response_status_code, int):
-        return response_status_code
-    return None
+    One reader for every provider path: the same structured status decides a
+    transient retry here and whether an authored overload may be replayed
+    (``utils/provider_overload.py``), so neither can drift into reading a
+    number out of a message the other does not.
+    """
+
+    return provider_status_code(error)
 
 
 async def _generate_structured_content_with_transient_retries(

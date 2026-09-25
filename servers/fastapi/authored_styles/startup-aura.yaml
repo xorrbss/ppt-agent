@@ -20,34 +20,58 @@ preview:
     - "#FFCA7A"
     - "#B8E7D1"
   variant: warm-editorial
+  image: catalogue-previews/startup-aura.png
+reference_images:
+  content: [catalogue-previews/startup-aura.png]
 brief: |-
   MOOD
   낙관적이고 인간적이며 빠르게 움직이는 초기 팀의 에너지. 과장된 미래주의 대신 믿을 수 있는 자신감을 만든다.
 
+  Express a warm, human startup proposition through a visible customer need, a focused product response and a small honest proof point.
+
   PALETTE
   크림 배경 #FFF8F1을 기본으로 하고 잉크 네이비 #1D2433로 본문을 읽기 쉽게 유지한다. 코랄 #FF6B4A는 하나의 결론과 행동 유도에만, 살구 #FFCA7A와 민트 #B8E7D1은 보조 색면에 사용한다.
 
+  Keep cream, coral, apricot and mint with deep ink. Use warm accents as surfaces and dark text over them; coral cannot be the only evidence-state cue.
+
   TYPOGRAPHY
-  제목은 굵은 산세리프를 짧게 2줄 이하로 배치하고, 본문은 중간 굵기의 산세리프로 편안하게 읽힌다. 핵심 숫자는 본문보다 훨씬 크게 두고 문장 끝의 마침표처럼 보이게 한다.
+  제목과 본문은 한글을 지원하는 산세리프를 사용하고 긴 제목은 의미 단위로 나눈다. 중간 굵기의 본문은 편안한 행간을 유지한다. 핵심 숫자를 강조해도 단위·기간·분모를 함께 읽을 수 있게 붙인다. 문장이 길면 사진과 본문의 비율을 조정하고 런타임 글자 크기 하한을 지킨다.
+
+  Use a friendly modern sans-serif with a short confident headline and open body spacing. Small rounded labels need full readable type, not microcopy. All Korean text must resolve through a local stack including "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif. At a 1280x720 canvas, target body 22-28px and labels at least 16px; 9.5pt (12.667px) is the hard floor for every text run, including SVG, captions and sources. If text cannot fit, shorten with evidence intact or split the slide; never shrink below the floor.
 
   LAYOUT SYSTEM
-  12열의 느슨한 정렬을 사용하되 모든 요소를 상자에 가두지 않는다. 좌측의 큰 주장과 우측의 사진 또는 증거를 짝지으며, 넓은 여백과 둥근 색면으로 리듬을 만든다.
+  12열의 느슨한 정렬을 사용하되 모든 요소를 상자에 가두지 않는다. 좌측 주장과 우측 사진·증거 사이에 명확한 거터를 두고 외곽 안전 여백과 출처 공간을 확보한다. 둥근 색면과 하이라이트는 글자와 수치를 가리지 않게 뒤로 물리며 긴 증거는 넓은 텍스트 열에 배치한다.
+
+  Use generous cream space with one soft geometric illustration and a grounded evidence area. Alternate a customer observation, a mechanism page and a light experiment comparison. Keep a maximum of three short evidence statements; separate product promises from source-backed outcomes. These are flexible compositional directions for freely authored HTML/CSS, not fixed layouts, slots, Deck IR or a layout engine.
 
   SIGNATURE ELEMENTS
   코랄 점, 부드러운 반원, 손으로 붙인 듯한 작은 라벨, 한 단어를 감싸는 반투명 하이라이트를 사용한다. 검은 격자, 산성 라임, 날카로운 모서리는 사용하지 않는다.
 
+  Use a restrained peach or mint halo, rounded cut-paper forms and a friendly oversized numeral when it has a stated meaning. Halo effects stay behind the illustration rather than every text block.
+
   DATA VISUALIZATION
-  큰 단일 수치, 둥근 막대, 간결한 성장 곡선, 세 단계의 비교를 선호한다. 축과 범례는 필요할 때만 얇게 표시하고 코랄은 가장 중요한 값 하나에만 쓴다.
+  큰 단일 수치에는 단위·기간·출처를 붙이고 비교 막대는 공통 기준선과 척도를 유지한다. 둥근 끝은 값의 끝점을 바꾸지 않는 미세한 처리로 제한한다. 성장선은 제공된 관측값을 그대로 연결하며 임의로 매끈하게 보간하지 않는다. 전망은 실적과 라벨·선 모양으로 구분하고 코랄은 중요한 값 하나에만 쓴다. 비교에 필요한 축과 범례는 유지한다.
+
+  Use simple paired bars, a short interview-observation ledger or a need/response/test comparison. Keep sample size, period and source visible; distinguish qualitative feedback from measured adoption and label illustrative data.
 
   IMAGE DIRECTION
   실제 팀의 작업 장면, 손에 든 제품, 자연광의 인물, 질감 있는 제품 클로즈업을 사용한다. 인물은 편안하고 진짜처럼 보이며 과도하게 연출된 사무실 스톡 사진은 피한다.
 
+  Draw original warm abstract product or customer-journey art, avoiding invented testimonials and fake user portraits. Use a sourced image only with its existing attribution and a content-relevant caption.
+
   SLIDE ARCHETYPES
   cover: 크림 배경 위에 짧은 비전 문장, 코랄 점, 작은 회사 표기를 둔다.
   content: 큰 주장과 한 장의 사진 또는 두 개의 증거 카드로 한 메시지만 설명한다.
-  data: 하나의 핵심 지표를 크게 두고 보조 추세를 둥근 막대나 부드러운 선으로 붙인다.
-  timeline: 살구와 민트 라벨을 번갈아 둔 느슨한 3~5단계 여정으로 표현한다.
-  closing: 감사 문구와 다음 대화로 이어지는 한 문장, 코랄 연락처 표기를 남긴다.
+  section: 크림 여백 위에 짧은 전환 제목과 작은 코랄 반원을 둔다.
+  agenda: 실제 피치 주제를 느슨한 정렬의 목록으로 두고 살구·민트 표식은 주제 구분에만 쓴다.
+  architecture: 제품과 사용자 접점을 넓은 레인에 배치하고 실제 연결만 간결한 선으로 나타낸다. 긴 한글 라벨 주변에 여백을 두고 선은 텍스트를 우회한다.
+  data: 하나의 핵심 지표를 강조하고 원자료에 충실한 막대나 선으로 보조 추세를 붙인다.
+  timeline: 제공된 단계에 맞춘 여정으로 표현하고 날짜와 달성 상태는 근거가 있을 때만 표기한다.
+  closing: 다음 대화로 이어지는 한 문장과 제공된 연락처를 코랄로 강조한다.
+
+  Explore — customer need and observation; product response mechanism; two-experiment comparison; three-step first-use journey; evidence-and-open-question ledger; business assumption with proposed test; warm closing next step.
 
   AVOID
   촘촘한 표, 기업 보고서 같은 회색 카드 벽, 네온 글로우, 복잡한 아이콘 묶음, 한 슬라이드에 여러 개의 주장.
+
+  Do not invent claims, measurements, quotations, citations or provenance. Keep illustrative data visibly labeled and supplied evidence traceable. Avoid repeating the same composition throughout a deck; alternate the narrative scenes above while retaining this style's visual identity. Keep all original reference images and their provenance intact.

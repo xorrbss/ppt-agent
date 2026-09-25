@@ -1,6 +1,15 @@
+import { assertFragmentBand, isFragmentBand, validateFragmentBand, RASTER_FRAGMENT_LIMIT, RASTER_FRAGMENT_BYTES, type RasterBand } from "./raster-fragments.ts";
 import { createHash } from "node:crypto";
+import {
+  authoredCanvasPhysicalSize,
+  canvasEmuPerUnit,
+  LEGACY_AUTHORED_CANVAS,
+  type AuthoredCanvasContract,
+} from "../authored-canvas.ts";
+import type { LocalFitCaptureEvidence } from "./local-fit-export-evidence.ts";
 
 import {
+  AUTHORED_NATIVE_OWNER_ALTERNATIVE_TEXT_PREFIX,
   flattenPreparedNativeElements,
   preparedNativeElementNonVisualIdCount,
   preparedNativeElementUnderlayNonVisualIdCount,
@@ -12,6 +21,10 @@ import {
 } from "./native-plan.ts";
 import { serializeNativeChartPart } from "./native-chart.ts";
 import { backplatePixelSize } from "./capture-scale.ts";
+import {
+  assertSerializedTextBreakIntegrity,
+  authoredHardBreakCount,
+} from "./pptx-text-integrity.ts";
 import {
   addChartContentType,
   addPngContentType,
@@ -37,10 +50,9 @@ import {
 
 const SLIDE_WIDTH_EMU = 12_192_000;
 const SLIDE_HEIGHT_EMU = 6_858_000;
-const SLIDE_WIDTH_PX = 1_280;
-const SLIDE_HEIGHT_PX = 720;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 export interface AuthoredHybridSlideLayer {
+  localFitCapture?: LocalFitCaptureEvidence;
   /** One-based OOXML slide number. */
   slideNumber: number;
   backplatePng: Buffer;
@@ -49,13 +61,35 @@ export interface AuthoredHybridSlideLayer {
   /** Ordered semantic QIDs represented by native objects or this slide's raster. */
   semanticOwnerQids?: readonly string[];
   /** Transparent Chromium raster bands in audited paint order. */
-  rasterBands?: readonly {
-    readonly zBand: number;
-    readonly rasterPng: Buffer;
-    readonly semanticOwnerQids: readonly string[];
-  }[];
+  rasterBands?: readonly RasterBand[];
+  selectionObstructions?: readonly { zBand: number; elementId: string; reason: string }[];
   /** Exact band assignment for each top-level native owner. */
   nativeZBandByElementId?: Readonly<Record<string, number>>;
+  /** Scene-authoritative ownership supplied only for native objects on this slide. */
+  nativeOwnership?: {
+    readonly slideId: string;
+    readonly owners: readonly {
+      readonly elementId: string;
+      readonly kind: string;
+      readonly capabilityId: string;
+      readonly advancedText?: {
+        readonly schemaVersion: string;
+        readonly text: string;
+        readonly autoFit: "none" | "shrink";
+        readonly style: {
+          readonly fontFamily: string; readonly fontSizePt: number;
+          readonly fontWeight: number; readonly color: string;
+          readonly italic: boolean; readonly underline: boolean;
+        };
+        readonly runs: readonly {
+          readonly runId: string; readonly text: string;
+          readonly fontFamily: string | null; readonly fontSizePt: number | null;
+          readonly fontWeight: number | null; readonly color: string | null;
+          readonly italic: boolean | null; readonly underline: boolean | null;
+        }[];
+      };
+    }[];
+  };
 }
 export interface AuthoredHybridPptxProvenance {
   readonly exportAttemptId?: string; readonly presentationRevision?: number;
@@ -64,6 +98,7 @@ export interface AuthoredHybridPptxProvenance {
 }
 export interface AuthoredHybridAssemblerOptions extends PowerPointTypefaceSerializationOptions {
   readonly provenance?: AuthoredHybridPptxProvenance;
+  readonly canvas?: AuthoredCanvasContract;
 }
 
 function xmlAttribute(xml: string, element: string, attribute: string): number | null {
@@ -72,25 +107,46 @@ function xmlAttribute(xml: string, element: string, attribute: string): number |
   return value === undefined ? null : Number(value);
 }
 
-function assertPresentationSize(entries: ReadonlyMap<string, Buffer>): void {
+function setPresentationSize(
+  entries: Map<string, Buffer>,
+  canvas: AuthoredCanvasContract,
+): void {
   const presentation = entries.get("ppt/presentation.xml")?.toString("utf8");
   if (!presentation) throw new Error("PPTX presentation.xml is missing.");
-  if (
-    xmlAttribute(presentation, "p:sldSz", "cx") !== SLIDE_WIDTH_EMU ||
-    xmlAttribute(presentation, "p:sldSz", "cy") !== SLIDE_HEIGHT_EMU
-  ) {
-    throw new Error("Hybrid export requires the fixed 16:9 authored slide size.");
+  const width = xmlAttribute(presentation, "p:sldSz", "cx");
+  const height = xmlAttribute(presentation, "p:sldSz", "cy");
+  const target = authoredCanvasPhysicalSize(canvas);
+  if (!(
+    (width === SLIDE_WIDTH_EMU && height === SLIDE_HEIGHT_EMU) ||
+    (width === target.widthEmu && height === target.heightEmu)
+  )) {
+    throw new Error("Hybrid export source has an unsupported authored slide size.");
   }
+  const next = presentation.replace(
+    /<p:sldSz\b[^>]*>/i,
+    (opening) => opening
+      .replace(/\bcx=["']\d+["']/i, `cx="${target.widthEmu}"`)
+      .replace(/\bcy=["']\d+["']/i, `cy="${target.heightEmu}"`),
+  );
+  if (next === presentation &&
+      (width !== target.widthEmu || height !== target.heightEmu)) {
+    throw new Error("PPTX presentation slide size could not be updated.");
+  }
+  entries.set("ppt/presentation.xml", Buffer.from(next, "utf8"));
 }
 
-function assertBackplatePng(png: Buffer): void {
+function assertBackplatePng(
+  png: Buffer,
+  canvas: AuthoredCanvasContract,
+): void {
+  const expected = backplatePixelSize(canvas);
   if (
     png.length < 24 ||
     !png.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE) ||
-    png.readUInt32BE(16) !== backplatePixelSize().width ||
-    png.readUInt32BE(20) !== backplatePixelSize().height
+    png.readUInt32BE(16) !== expected.width ||
+    png.readUInt32BE(20) !== expected.height
   ) {
-    throw new Error(`Hybrid backplate must be a ${backplatePixelSize().width}x${backplatePixelSize().height} PNG.`);
+    throw new Error(`Hybrid backplate must be a ${expected.width}x${expected.height} PNG.`);
   }
 }
 
@@ -100,7 +156,7 @@ function assertBackplatePng(png: Buffer): void {
  * below the residual raster; otherwise it hides raster-only illustrations
  * while later text and small shapes still appear correctly.
  */
-export function isCanvasBackgroundShape(item: PreparedNativeElement): boolean {
+export function isCanvasBackgroundShape(item: PreparedNativeElement, canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS): boolean {
   if (item.kind !== "shape") return false;
   const { x, y, width, height } = item.source.bounds.px;
   const shape = item.source.shape;
@@ -118,8 +174,8 @@ export function isCanvasBackgroundShape(item: PreparedNativeElement): boolean {
     Math.abs(item.source.rotationDeg) < 0.001 &&
     x <= 0.5 &&
     y <= 0.5 &&
-    x + width >= SLIDE_WIDTH_PX - 0.5 &&
-    y + height >= SLIDE_HEIGHT_PX - 0.5
+    x + width >= canvas.widthPx - 0.5 &&
+    y + height >= canvas.heightPx - 0.5
   );
 }
 
@@ -184,6 +240,8 @@ function backplatePictureXml(
   _qids: readonly string[],
   nonVisualId = 2,
   bandIndex = 0,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS,
+  placement?: { x: number; y: number; width: number; height: number; captureWidth: number; captureHeight: number },
 ): string {
   // Semantic QIDs live only on the hidden exact-owner carriers. Repeating the
   // set on a raster picture would create a second logical owner in readback.
@@ -191,7 +249,12 @@ function backplatePictureXml(
   const name = bandIndex === 0
     ? "DevAX hybrid backplate"
     : `DevAX hybrid raster z-band ${bandIndex}`;
-  return `<p:pic><p:nvPicPr><p:cNvPr id="${nonVisualId}" name="${name}"${description}/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${SLIDE_WIDTH_EMU}" cy="${SLIDE_HEIGHT_EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
+  const size = authoredCanvasPhysicalSize(canvas);
+  const x = placement ? Math.round(placement.x / placement.captureWidth * size.widthEmu) : 0;
+  const y = placement ? Math.round(placement.y / placement.captureHeight * size.heightEmu) : 0;
+  const width = placement ? Math.round((placement.x+placement.width) / placement.captureWidth * size.widthEmu)-x : size.widthEmu;
+  const height = placement ? Math.round((placement.y+placement.height) / placement.captureHeight * size.heightEmu)-y : size.heightEmu;
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${nonVisualId}" name="${name}"${description}/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${width}" cy="${height}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
 }
 
 function semanticOwnershipShapeXml(
@@ -285,30 +348,126 @@ function escapeXmlAttribute(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
 }
 
-function authoredBreakCount(item: Extract<PreparedNativeElement, { kind: "text" }>): number {
-  const explicit = item.source.text.runs.reduce(
-    (count, run) => count + (
-      run.breakKind === "line" || run.breakKind === "paragraph"
-        ? (run.text.match(/\n/g) ?? []).length
-        : 0
-    ),
-    0
-  );
-  return Math.max(explicit, Math.max(0, item.source.text.paragraphs.length - 1));
+function canonicalOwnerJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalOwnerJson).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) =>
+    `${JSON.stringify(key)}:${canonicalOwnerJson(record[key])}`
+  ).join(",")}}`;
+}
+
+function ownerDigest(value: unknown): string {
+  return `sha256:${createHash("sha256").update(canonicalOwnerJson(value), "utf8").digest("hex")}`;
+}
+
+function serializeAdvancedTextOverlay(
+  xml: string,
+  item: Extract<PreparedNativeElement, { kind: "text" }>,
+  slideNumber: number,
+  ownership: NonNullable<AuthoredHybridSlideLayer["nativeOwnership"]>,
+  owner: NonNullable<AuthoredHybridSlideLayer["nativeOwnership"]>["owners"][number],
+): string {
+  const advanced = owner.advancedText;
+  if (!advanced || owner.kind !== "text" || owner.capabilityId !== "editable.text.advanced.v1" ||
+    advanced.schemaVersion !== "authored-advanced-text-owner/v1" ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(ownership.slideId) ||
+    !/^s\d{2,3}-[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(owner.elementId) ||
+    !owner.elementId.startsWith(`s${String(slideNumber).padStart(2, "0")}-`) ||
+    owner.elementId !== item.source.id ||
+    !["none", "shrink"].includes(advanced.autoFit) ||
+    typeof advanced.text !== "string" || advanced.text !== item.source.text.plainText ||
+    !Array.isArray(advanced.runs) || advanced.runs.length < 1 || advanced.runs.length > 512 ||
+    advanced.runs.map((run) => run.text).join("") !== advanced.text ||
+    /[\r\n]/.test(advanced.text)) {
+    throw new Error(`Hybrid advanced text ${item.source.id} has an invalid Scene owner.`);
+  }
+  const base = advanced.style;
+  const validFamily = (value: unknown): value is string =>
+    typeof value === "string" && value.trim().length > 0 && value.length <= 128 && !/[\x00-\x1f]/.test(value);
+  const validSize = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 400;
+  const validWeight = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value >= 1 && value <= 1000;
+  const validColor = (value: unknown): value is string =>
+    typeof value === "string" && /^#[0-9A-F]{6}$/.test(value);
+  if (!base || !validFamily(base.fontFamily) || !validSize(base.fontSizePt) ||
+    !validWeight(base.fontWeight) || !validColor(base.color) ||
+    typeof base.italic !== "boolean" || typeof base.underline !== "boolean") {
+    throw new Error(`Hybrid advanced text ${item.source.id} has an invalid base style.`);
+  }
+  let utf16Start = 0;
+  const runIds = new Set<string>();
+  const textRunMap: { runIndex: number; runId: string; utf16Start: number; utf16Length: number; textDigest: string }[] = [];
+  const textRunStyles: { runIndex: number; runId: string; fontFamily: string; eastAsianTypeface: string; fontSizePt: number; bold: boolean; italic: boolean; underline: boolean; color: string }[] = [];
+  const runXml = advanced.runs.map((run, runIndex) => {
+    if (!run || !/^[A-Za-z][A-Za-z0-9._:-]{0,127}$/.test(run.runId) ||
+      runIds.has(run.runId) || typeof run.text !== "string" ||
+      (run.fontFamily !== null && !validFamily(run.fontFamily)) ||
+      (run.fontSizePt !== null && !validSize(run.fontSizePt)) ||
+      (run.fontWeight !== null && !validWeight(run.fontWeight)) ||
+      (run.color !== null && !validColor(run.color)) ||
+      (run.italic !== null && typeof run.italic !== "boolean") ||
+      (run.underline !== null && typeof run.underline !== "boolean")) {
+      throw new Error(`Hybrid advanced text ${item.source.id} has an invalid run.`);
+    }
+    runIds.add(run.runId);
+    const style = {
+      runIndex, runId: run.runId,
+      fontFamily: run.fontFamily ?? base.fontFamily,
+      eastAsianTypeface: run.fontFamily ?? base.fontFamily,
+      fontSizePt: run.fontSizePt ?? base.fontSizePt,
+      bold: (run.fontWeight ?? base.fontWeight) >= 600,
+      italic: run.italic ?? base.italic,
+      underline: run.underline ?? base.underline,
+      color: run.color ?? base.color,
+    };
+    textRunStyles.push(style);
+    textRunMap.push({
+      runIndex, utf16Start,
+      utf16Length: run.text.length,
+      textDigest: ownerDigest({ text: run.text }),
+      runId: run.runId,
+    });
+    utf16Start += run.text.length;
+    const family = escapeXmlAttribute(style.fontFamily);
+    const color = style.color.slice(1);
+    return `<a:r><a:rPr lang="ko-KR" sz="${Math.round(style.fontSizePt * 100)}" b="${style.bold ? 1 : 0}" i="${style.italic ? 1 : 0}" u="${style.underline ? "sng" : "none"}"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${family}"/><a:ea typeface="${family}"/><a:extLst><a:ext uri="{3F05D0C5-A5DB-4B2C-9A89-38F8A106124A}"><pt:runIdentity xmlns:pt="urn:presenton:authored:advanced-text:v1" runId="${escapeXmlAttribute(run.runId)}"/></a:ext></a:extLst></a:rPr><a:t xml:space="preserve">${escapeXmlAttribute(run.text)}</a:t></a:r>`;
+  }).join("");
+  const advancedCore = { autoFit: advanced.autoFit, textRunMap, textRunStyles };
+  const advancedTextDigest = ownerDigest(advancedCore);
+  const ownerCore = {
+    schemaVersion: "authored-vnext-owner/v1", slideNumber,
+    slideId: ownership.slideId, elementId: owner.elementId,
+    kind: "text", capabilityId: owner.capabilityId,
+    textRunMap, textRunStyles, autoFit: advanced.autoFit, advancedTextDigest,
+  };
+  const receipt = JSON.stringify({ ...ownerCore, ownerDigest: ownerDigest(ownerCore) });
+  const payload = Buffer.from(canonicalOwnerJson({ textRunMap, textRunStyles, autoFit: advanced.autoFit }), "utf8").toString("base64url");
+  const paragraph = xml.match(/<a:p>(<a:pPr\b[\s\S]*?<\/a:pPr>)[\s\S]*?<\/a:p>/)?.[0];
+  if (!paragraph || (xml.match(/<a:p>/g) ?? []).length !== 1) {
+    throw new Error(`Hybrid advanced text ${item.source.id} requires one editable paragraph.`);
+  }
+  return xml
+    .replace(paragraph, `<a:p>${paragraph.match(/<a:pPr\b[\s\S]*?<\/a:pPr>/)?.[0]}${runXml}<a:endParaRPr lang="ko-KR" b="0"/></a:p>`)
+    .replace(/<p:cNvPr\b[^>]*\/>/, (tag) => tag.replace(/\/>$/, ` descr="${escapeXmlAttribute(`${AUTHORED_NATIVE_OWNER_ALTERNATIVE_TEXT_PREFIX}${receipt}`)}"/>`))
+    .replace(/<a:(?:normAutofit|noAutofit)\/>/, advanced.autoFit === "shrink" ? "<a:normAutofit/>" : "<a:noAutofit/>")
+    .replace("</p:spPr>", `<a:extLst><a:ext uri="{3F05D0C5-A5DB-4B2C-9A89-38F8A106124A}"><pt:advancedText xmlns:pt="urn:presenton:authored:advanced-text:v1" digest="${advancedTextDigest}" payload="${payload}"/></a:ext></a:extLst></p:spPr>`);
 }
 
 /** Exact geometry the assembler will expose to OOXML readback. */
 export function preparedNativeElementExpectedReadbackBounds(
   item: PreparedNativeElement,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS,
 ): { x: number; y: number; width: number; height: number } {
   const sourceBounds = item.kind === "text"
     ? item.source.text.containerShape?.bounds.px ??
-      powerPointTextBoundsForPreflight(item.source) ??
+      powerPointTextBoundsForPreflight(item.source, canvas) ??
       item.source.bounds.px
     : item.source.bounds.px;
-  const toEmu = (value: number) => Math.round(value * 9_525);
+  const toEmu = (value: number) => Math.round(value * canvasEmuPerUnit(canvas));
   const toPx = (value: number) =>
-    Math.round((value / 9_525) * 1_000_000) / 1_000_000;
+    Math.round((value / canvasEmuPerUnit(canvas)) * 1_000_000) / 1_000_000;
   let x = toEmu(sourceBounds.x);
   let y = toEmu(sourceBounds.y);
   let width = Math.max(1, toEmu(sourceBounds.width));
@@ -322,13 +481,13 @@ export function preparedNativeElementExpectedReadbackBounds(
       Math.max(
         8,
         Math.min(16, item.source.text.style.fontSizePt * 0.4 + 4),
-      ) * 9_525,
+      ) * canvasEmuPerUnit(canvas),
     );
     const verticalSlack = Math.round(
       Math.max(
         4,
-        Math.min(12, authoredBreakCount(item) > 0 ? 10 : 4),
-      ) * 9_525,
+        Math.min(12, authoredHardBreakCount(item.source.text) > 0 ? 10 : 4),
+      ) * canvasEmuPerUnit(canvas),
     );
     const horizontal = item.source.text.style.horizontalAlignment;
     const vertical = item.source.text.style.verticalAlignment;
@@ -354,8 +513,8 @@ export function preparedNativeElementExpectedReadbackBounds(
         : 0;
     const nextX = Math.max(0, Math.round(x - left));
     const nextY = Math.max(0, Math.round(y - top));
-    const nextRight = Math.min(SLIDE_WIDTH_EMU, Math.round(x + width + right));
-    const nextBottom = Math.min(SLIDE_HEIGHT_EMU, Math.round(y + height + bottom));
+    const nextRight = Math.min(authoredCanvasPhysicalSize(canvas).widthEmu, Math.round(x + width + right));
+    const nextBottom = Math.min(authoredCanvasPhysicalSize(canvas).heightEmu, Math.round(y + height + bottom));
     x = nextX;
     y = nextY;
     width = Math.max(1, nextRight - nextX);
@@ -366,7 +525,8 @@ export function preparedNativeElementExpectedReadbackBounds(
 
 function expandStandaloneTextBounds(
   xml: string,
-  item: Extract<PreparedNativeElement, { kind: "text" }>
+  item: Extract<PreparedNativeElement, { kind: "text" }>,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS
 ): string {
   if (item.source.text.containerShape || Math.abs(item.source.rotationDeg) >= 0.001) return xml;
   const match = xml.match(
@@ -375,10 +535,10 @@ function expandStandaloneTextBounds(
   if (!match) throw new Error(`Hybrid text ${item.source.id} has no bounded transform.`);
   const [x, y, width, height] = match.slice(1).map(Number);
   const horizontalSlack = Math.round(
-    Math.max(8, Math.min(16, item.source.text.style.fontSizePt * 0.4 + 4)) * 9_525
+    Math.max(8, Math.min(16, item.source.text.style.fontSizePt * 0.4 + 4)) * canvasEmuPerUnit(canvas)
   );
   const verticalSlack = Math.round(
-    Math.max(4, Math.min(12, authoredBreakCount(item) > 0 ? 10 : 4)) * 9_525
+    Math.max(4, Math.min(12, authoredHardBreakCount(item.source.text) > 0 ? 10 : 4)) * canvasEmuPerUnit(canvas)
   );
   const horizontal = item.source.text.style.horizontalAlignment;
   const vertical = item.source.text.style.verticalAlignment;
@@ -388,8 +548,8 @@ function expandStandaloneTextBounds(
   const bottom = vertical === "top" ? verticalSlack : vertical === "middle" ? verticalSlack / 2 : 0;
   const nextX = Math.max(0, Math.round(x - left));
   const nextY = Math.max(0, Math.round(y - top));
-  const nextRight = Math.min(SLIDE_WIDTH_EMU, Math.round(x + width + right));
-  const nextBottom = Math.min(SLIDE_HEIGHT_EMU, Math.round(y + height + bottom));
+  const nextRight = Math.min(authoredCanvasPhysicalSize(canvas).widthEmu, Math.round(x + width + right));
+  const nextBottom = Math.min(authoredCanvasPhysicalSize(canvas).heightEmu, Math.round(y + height + bottom));
   return xml.replace(
     match[0],
     `<a:xfrm><a:off x="${nextX}" y="${nextY}"/><a:ext cx="${Math.max(1, nextRight - nextX)}" cy="${Math.max(1, nextBottom - nextY)}"/></a:xfrm>`
@@ -398,7 +558,8 @@ function expandStandaloneTextBounds(
 function hardenTextOverlay(
   xml: string,
   item: Extract<PreparedNativeElement, { kind: "text" }>,
-  options: AuthoredHybridAssemblerOptions
+  options: AuthoredHybridAssemblerOptions,
+  slideNumber: number,
 ): string {
   const fallback = options.embeddedTypefaceFamilies?.find((family) => CJK_TYPEFACE.test(family)) ??
     "Malgun Gothic";
@@ -411,17 +572,17 @@ function hardenTextOverlay(
       )
       : runXml
   );
-  const expectedBreaks = authoredBreakCount(item);
-  const serializedBreaks = (hardened.match(/<a:br\/>/g) ?? []).length +
-    Math.max(0, (hardened.match(/<a:p>/g) ?? []).length - 1);
-  if (serializedBreaks < expectedBreaks) {
-    throw new Error(`Hybrid text ${item.source.id} lost an authored line break.`);
-  }
+  assertSerializedTextBreakIntegrity(
+    hardened,
+    item.source.text,
+    slideNumber,
+    item.source.id,
+  );
   hardened = hardened
     .replace(/\bhorzOverflow="(?:overflow|clip)"/, 'horzOverflow="clip"')
     .replace(/\bvertOverflow="(?:overflow|clip)"/, 'vertOverflow="clip"')
     .replace(/<a:(?:normAutofit|noAutofit)\/>/, "<a:noAutofit/>");
-  return expandStandaloneTextBounds(hardened, item);
+  return expandStandaloneTextBounds(hardened, item, options.canvas);
 }
 function provenanceProperties(
   provenance?: AuthoredHybridPptxProvenance,
@@ -471,10 +632,22 @@ function assembleSlide(
   layer: AuthoredHybridSlideLayer,
   options: AuthoredHybridAssemblerOptions
 ): ReadonlySet<string> {
+  const canvas = options.canvas ?? LEGACY_AUTHORED_CANVAS;
   if (!Number.isInteger(layer.slideNumber) || layer.slideNumber < 1) {
     throw new Error("Hybrid slide number is invalid.");
   }
-  assertBackplatePng(layer.backplatePng);
+  assertBackplatePng(layer.backplatePng, canvas);
+  if (layer.nativeOwnership) {
+    const nativeIds = new Set(flattenPreparedNativeElements(layer.elements).map((item) => item.source.id));
+    const declaredIds = new Set<string>();
+    for (const owner of layer.nativeOwnership.owners) {
+      if (declaredIds.has(owner.elementId) || !nativeIds.has(owner.elementId) ||
+        owner.kind !== "text" || owner.capabilityId !== "editable.text.advanced.v1") {
+        throw new Error(`Hybrid slide ${layer.slideNumber} has an unsupported native ownership declaration.`);
+      }
+      declaredIds.add(owner.elementId);
+    }
+  }
   const rasterBands = layer.rasterBands?.length
     ? [...layer.rasterBands].sort((left, right) => left.zBand - right.zBand)
     : [{ zBand: 0, rasterPng: layer.backplatePng, semanticOwnerQids: layer.semanticOwnerQids ?? [] }];
@@ -486,7 +659,20 @@ function assembleSlide(
   ) {
     throw new Error("Hybrid raster z-bands must be unique ascending integers.");
   }
-  rasterBands.forEach((band) => assertBackplatePng(band.rasterPng));
+  if (rasterBands.length > RASTER_FRAGMENT_LIMIT) throw new Error("Hybrid raster band count exceeds page limit.");
+  rasterBands.forEach((band) => { if ("schemaVersion" in band && !isFragmentBand(band)) throw new Error("Hybrid raster band schema version unsupported."); if (isFragmentBand(band)) assertFragmentBand(band); else assertBackplatePng(band.rasterPng, canvas); });
+  const fragments: { zBand: number; rasterPng: Buffer; semanticOwnerQids: readonly string[]; fragmentId: string;
+    placement?: { x: number; y: number; width: number; height: number; captureWidth: number; captureHeight: number } }[] = [];
+  for (const band of rasterBands) {
+    if (isFragmentBand(band)) for (const fragment of band.fragments) fragments.push({
+      zBand: band.zBand, semanticOwnerQids: band.semanticOwnerQids, rasterPng: fragment.png,
+      placement: { ...fragment.rect, captureWidth: band.captureWidthPx, captureHeight: band.captureHeightPx }, fragmentId: fragment.id,
+    });
+    else fragments.push({ ...band, fragmentId: "legacy" });
+  }
+  if (fragments.length > RASTER_FRAGMENT_LIMIT) throw new Error("Hybrid raster page fragment limit exceeded.");
+  const croppedBytes = rasterBands.flatMap(band => isFragmentBand(band) ? band.fragments.filter(f => !f.png.equals(band.rasterPng)) : []).reduce((sum,f)=>sum+f.png.length,0);
+  if (croppedBytes > RASTER_FRAGMENT_BYTES) throw new Error("Hybrid raster page crop byte limit exceeded.");
   const slidePath = `ppt/slides/slide${layer.slideNumber}.xml`;
   const relsPath = `ppt/slides/_rels/slide${layer.slideNumber}.xml.rels`;
   const slideXml = entries.get(slidePath)?.toString("utf8");
@@ -499,11 +685,11 @@ function assembleSlide(
   if (!spTree) throw new Error("PPTX slide shape tree is malformed.");
 
   let relationshipNumber = nextRelationshipNumber(relationshipsXml);
-  const rasterBandParts = rasterBands.map((band, index) => {
+  const rasterBandParts = fragments.map((band, index) => {
     const mediaName = allocateMediaName(
       entries,
       layer.slideNumber,
-      `raster-band-${band.zBand}`,
+      band.fragmentId === "legacy" ? `raster-band-${band.zBand}` : `raster-band-${band.zBand}-${band.fragmentId}`,
       band.rasterPng,
     );
     const relationshipId = `rId${relationshipNumber}`;
@@ -516,10 +702,11 @@ function assembleSlide(
     entries.set(`ppt/media/${mediaName}`, Buffer.from(band.rasterPng));
     return { ...band, relationshipId, mediaName, nonVisualId: index + 2 };
   });
-  const useSlideBackground =
-    rasterBandParts.length === 1 &&
-    rasterBandParts[0].zBand === 0 &&
-    isOpaqueRgbPng(rasterBandParts[0].rasterPng);
+  const bottom = rasterBands[0];
+  const useSlideBackground = bottom && isFragmentBand(bottom) && bottom.backgroundEligible && bottom.opaque && bottom.zBand === 0 &&
+    !layer.elements.some(item => isCanvasBackgroundShape(item, canvas)) &&
+    bottom.fragments.length === 1 && bottom.fragments[0].rect.x === 0 && bottom.fragments[0].rect.y === 0 &&
+    bottom.fragments[0].rect.width === bottom.captureWidthPx && bottom.fragments[0].rect.height === bottom.captureHeightPx;
   const ownershipQids = semanticOwnerQids(layer);
   const flatNativeElements = flattenPreparedNativeElements(layer.elements);
   const nativeOwnerQids = new Set(flatNativeElements.map((item) => item.source.id));
@@ -551,10 +738,10 @@ function assembleSlide(
       const groupId = nextNonVisualId;
       nextNonVisualId += 1;
       const bounds = item.source.bounds.px;
-      const x = Math.round(bounds.x * 9_525);
-      const y = Math.round(bounds.y * 9_525);
-      const width = Math.max(1, Math.round(bounds.width * 9_525));
-      const height = Math.max(1, Math.round(bounds.height * 9_525));
+      const x = Math.round(bounds.x * canvasEmuPerUnit(canvas));
+      const y = Math.round(bounds.y * canvasEmuPerUnit(canvas));
+      const width = Math.max(1, Math.round(bounds.width * canvasEmuPerUnit(canvas)));
+      const height = Math.max(1, Math.round(bounds.height * canvasEmuPerUnit(canvas)));
       const children = [...item.children]
         .sort((left, right) =>
           left.source.zOrder - right.source.zOrder ||
@@ -600,7 +787,7 @@ function assembleSlide(
       );
       entries.set(
         chartPath,
-        Buffer.from(serializeNativeChartPart(item.source), "utf8"),
+        Buffer.from(serializeNativeChartPart(item.source, canvas), "utf8"),
       );
       addChartContentType(entries, chartPath);
     }
@@ -616,9 +803,17 @@ function assembleSlide(
       relationshipId,
       options
     );
-    if (overlay && item.kind === "text") overlay = hardenTextOverlay(overlay, item, options);
+    if (overlay && item.kind === "text") {
+      overlay = hardenTextOverlay(overlay, item, options, layer.slideNumber);
+      const owner = layer.nativeOwnership?.owners.find((candidate) => candidate.elementId === item.source.id);
+      if (owner) {
+        overlay = serializeAdvancedTextOverlay(
+          overlay, item, layer.slideNumber, layer.nativeOwnership!, owner,
+        );
+      }
+    }
     if (underlay) {
-      if (isCanvasBackgroundShape(item)) {
+      if (isCanvasBackgroundShape(item, canvas)) {
         if (insideGroup) {
           throw new Error("Hybrid canvas background cannot be nested in a native group.");
         }
@@ -626,7 +821,7 @@ function assembleSlide(
       }
     }
     nextNonVisualId += preparedNativeElementNonVisualIdCount(item);
-    return `${isCanvasBackgroundShape(item) ? "" : underlay}${overlay}`;
+    return `${isCanvasBackgroundShape(item, canvas) ? "" : underlay}${overlay}`;
   };
   ordered.forEach((item) => {
     const xml = serializeTreeItem(item);
@@ -644,7 +839,7 @@ function assembleSlide(
     ...rasterBandParts.map((band, index) => ({
       zBand: band.zBand,
       ownerOrder: 0,
-      xml: useSlideBackground
+      xml: useSlideBackground && index === 0
         ? ""
         : backplatePictureXml(
             band.relationshipId,
@@ -652,6 +847,8 @@ function assembleSlide(
             band.semanticOwnerQids,
             band.nonVisualId,
             index,
+            canvas,
+            band.placement,
           ),
     })),
     ...orderedNativeXml.map((item) => ({ ...item, ownerOrder: 1 })),
@@ -707,7 +904,7 @@ function assembleAuthoredHybridEntries(
   const entries = readPptxArchive(fidelityPptx);
   const removedMediaPaths = new Set<string>();
   if (layers.length) {
-    assertPresentationSize(entries);
+    setPresentationSize(entries, options.canvas ?? LEGACY_AUTHORED_CANVAS);
     addPngContentType(entries);
     for (const layer of layers) {
       for (const mediaPath of assembleSlide(entries, layer, options)) {
@@ -742,6 +939,7 @@ export async function assembleAuthoredHybridPptxAsync(
   layers: readonly AuthoredHybridSlideLayer[],
   options: AuthoredHybridAssemblerOptions = {}
 ): Promise<Buffer> {
+  for (const layer of layers) for (const band of layer.rasterBands ?? []) if (isFragmentBand(band)) await validateFragmentBand(band);
   const entries = assembleAuthoredHybridEntries(fidelityPptx, layers, options);
   return entries === null
     ? Buffer.from(fidelityPptx)

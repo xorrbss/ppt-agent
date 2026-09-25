@@ -18,9 +18,7 @@ def test_owner_scope_is_stable_private_and_separated_by_identity(
 ) -> None:
     monkeypatch.setattr(simple_auth, "is_disable_auth_enabled", lambda: False)
     monkeypatch.setattr(
-        simple_auth,
-        "_load_user_config",
-        lambda: {"AUTH_SECRET_KEY": "private-signing-secret"},
+        simple_auth, "peek_auth_secret", lambda: "private-signing-secret"
     )
 
     alice = simple_auth.get_request_owner_scope(_request("alice@example.test"))
@@ -38,11 +36,11 @@ def test_owner_scope_is_stable_private_and_separated_by_identity(
 
 def test_owner_scope_rotates_with_auth_secret(monkeypatch) -> None:
     monkeypatch.setattr(simple_auth, "is_disable_auth_enabled", lambda: False)
-    config = {"AUTH_SECRET_KEY": "secret-a"}
-    monkeypatch.setattr(simple_auth, "_load_user_config", lambda: config)
+    current = {"secret": "secret-a"}
+    monkeypatch.setattr(simple_auth, "peek_auth_secret", lambda: current["secret"])
 
     first = simple_auth.get_request_owner_scope(_request("owner"))
-    config["AUTH_SECRET_KEY"] = "secret-b"
+    current["secret"] = "secret-b"
     second = simple_auth.get_request_owner_scope(_request("owner"))
 
     assert first != second
@@ -52,15 +50,11 @@ def test_owner_scope_requires_authenticated_identity_and_secret(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(simple_auth, "is_disable_auth_enabled", lambda: False)
-    monkeypatch.setattr(
-        simple_auth,
-        "_load_user_config",
-        lambda: {"AUTH_SECRET_KEY": "secret"},
-    )
+    monkeypatch.setattr(simple_auth, "peek_auth_secret", lambda: "secret")
     with pytest.raises(ValueError, match="identity"):
         simple_auth.get_request_owner_scope(_request())
 
-    monkeypatch.setattr(simple_auth, "_load_user_config", lambda: {})
+    monkeypatch.setattr(simple_auth, "peek_auth_secret", lambda: None)
     with pytest.raises(ValueError, match="secret"):
         simple_auth.get_request_owner_scope(_request("owner"))
 
@@ -69,7 +63,7 @@ def test_disabled_auth_uses_one_fixed_local_scope(monkeypatch) -> None:
     monkeypatch.setattr(simple_auth, "is_disable_auth_enabled", lambda: True)
     monkeypatch.setattr(
         simple_auth,
-        "_load_user_config",
+        "peek_auth_secret",
         lambda: pytest.fail("disabled auth must not read a signing secret"),
     )
 

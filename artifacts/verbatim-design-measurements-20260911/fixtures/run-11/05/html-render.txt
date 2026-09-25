@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:104px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:28px;width:980px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:6px;font-size:28px;line-height:35px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:3px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:126px;height:522px}
+.content-shell{width:1152px;height:522px;margin-left:64px}
+.meta-row{height:40px;display:flex;align-items:flex-start;justify-content:space-between}
+.meta-client{font-size:18px;line-height:27px;font-weight:700;color:#00140E}
+.meta-time{font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:27px;font-weight:700;color:#08916E}
+.claim{height:58px;margin-top:8px;padding:14px 20px;border-left:6px solid #08916E;background:#FFFFFF;border:1px solid #E2E8F0;border-left-width:6px;border-radius:12px;font-size:22px;line-height:29px;font-weight:700}
+.architecture{display:grid;grid-template-columns:292px 1fr 292px;gap:24px;height:400px;margin-top:16px}
+.panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:24px}
+.panel-title{font-size:18px;line-height:27px;font-weight:700;color:#08916E;margin-bottom:18px}
+.objective-panel{display:flex;flex-direction:column;justify-content:space-between}
+.objective-copy{font-size:20px;line-height:32px;font-weight:700;color:#00140E}
+.objective-rule{height:1px;background:#E2E8F0;width:100%}
+.center-zone{position:relative;padding:0 8px}
+.zone-title{font-size:18px;line-height:27px;font-weight:700;color:#00140E;margin:0 0 12px 8px}
+.module-stack{position:relative;height:350px;display:flex;flex-direction:column;gap:10px}
+.module{position:relative;height:72px;padding:16px 20px;background:#E0F3FF;border:1px solid #219F88;border-radius:12px;font-size:18px;line-height:27px;font-weight:700;color:#00140E}
+.module:nth-child(2){background:#CCECFF}
+.module:nth-child(3){background:#E0F3FF}
+.module:nth-child(4){background:#CCECFF}
+.module:after{;position:absolute;left:50%;bottom:-11px;width:2px;height:10px;background:#219F88}
+.module:last-child:after{display:none}
+.node{position:absolute;left:50%;top:0;width:9px;height:9px;background:#08916E;border-radius:12px;transform:translateX(-50%)}
+.result-panel{background:#00140E;border-color:#00140E;color:#FFFFFF;display:flex;flex-direction:column;justify-content:space-between}
+.result-title{font-size:18px;line-height:27px;font-weight:700;color:#219F88}
+.result-copy{font-size:25px;line-height:38px;font-weight:700;color:#FFFFFF}
+.result-mark{height:5px;width:64px;background:#08916E;border-radius:12px}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" class="header-band" style="height:104px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-5a71">숏폼 대행사업</div>
+    <div data-header-part="title" data-semantic-role="title" data-qid="source-block-07e96953a5114377" data-source-block-id="source-slide:6:text:3">1주차 | 숏폼 대행사업 시작하기</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:126px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-shell" data-qid="q-div-29a60069cb9f" data-semantic-role="decoration">
+    <div class="meta-row" data-qid="q-div-5565576497bd" data-semantic-role="supporting">
+      <div class="meta-client" data-semantic-role="supporting" data-qid="source-block-3665c00af2a3ff55" data-source-block-id="source-slide:6:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      <div class="meta-time" data-semantic-role="supporting" data-qid="source-block-3249496b5d212ba2" data-source-block-id="source-slide:6:text:7">120분</div>
+    </div>
+
+    <div class="claim" data-semantic-role="body" data-qid="source-block-159a6af902a66574" data-source-block-id="source-slide:6:text:4">목표: 내가 무엇을 누구에게 얼마에 팔지 결정</div>
+
+    <div class="architecture" data-qid="q-div-9eabd7e66260" data-semantic-role="decoration">
+      <div class="panel objective-panel" data-qid="q-objective-panel-5f26" data-semantic-role="decoration">
+        <div data-qid="q-div-855a21273ae4" data-semantic-role="decoration">
+          <div class="panel-title" data-semantic-role="supporting" data-qid="q-panel-title-5g37">목표: 내가 무엇을 누구에게 얼마에 팔지 결정</div>
+          <div class="objective-copy" data-semantic-role="body" data-qid="source-block-361d54eef27a5102" data-source-block-id="source-slide:6:text:11">오늘의 결과물</div>
+        </div>
+        <div class="objective-rule" data-qid="q-div-29c9d7523e6b" data-semantic-role="decoration"></div>
+        <div class="objective-copy" data-semantic-role="body" data-qid="source-block-0ee117f64c0eeb67" data-source-block-id="source-slide:6:text:12">내 서비스 한 줄 소개 + 기본 상품 1개</div>
+      </div>
+
+      <div class="center-zone" data-qid="q-div-14364f11b8f1" data-semantic-role="decoration">
+        <div class="zone-title" data-semantic-role="supporting" data-qid="q-zone-title-5j60">숏폼 대행사업의 구조 이해</div>
+        <div class="module-stack" data-qid="source-block-6f369f3aed2b571f" data-semantic-role="decoration" data-source-block-id="source-slide:6:text:8">
+          <div class="node" data-qid="q-div-956b9abdf526" data-semantic-role="decoration"></div>
+          <div class="module" data-semantic-role="body" data-qid="q-module-5k71">숏폼 대행사업의 구조 이해</div>
+          <div class="module" data-semantic-role="body" data-qid="q-module-5l82">타깃 업종과 상품 정하기</div>
+          <div class="module" data-semantic-role="body" data-qid="q-module-5m93">가격과 작업 범위 정하기</div>
+          <div class="module" data-semantic-role="body" data-qid="q-module-5n04">인스타·블로그 기본 세팅</div>
+        </div>
+      </div>
+
+      <div class="panel result-panel" data-qid="q-result-panel-5o15" data-semantic-role="decoration">
+        <div class="result-title" data-semantic-role="supporting" data-qid="q-result-title-5p26">오늘의 결과물</div>
+        <div class="result-copy" data-semantic-role="body" data-qid="q-result-copy-5q37">내 서비스 한 줄 소개 + 기본 상품 1개.</div>
+        <div class="result-mark" data-qid="q-div-a6df3fa1a0f0" data-semantic-role="decoration"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-c7af960e0b3ca87d" data-source-block-id="source-slide:6:text:5">06</div>
+</body>
+</html>

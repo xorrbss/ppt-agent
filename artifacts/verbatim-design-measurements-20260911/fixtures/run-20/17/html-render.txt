@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:108px;background:#FFFFFF;border-top:8px solid #08916E}
+.header-left{position:absolute;left:64px;top:16px;width:760px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:32px;line-height:38px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:916px;top:16px;width:300px;height:44px;padding:10px 16px;background:#00140E;color:#FFFFFF;text-align:right;font-size:15px;line-height:20px}
+.body-wrap{position:absolute;left:0;right:0;top:132px;height:516px}
+.content-field{margin-left:64px;width:1152px;height:486px;display:grid;grid-template-columns:348px 1fr;gap:24px}
+.objective-panel{height:486px;padding:28px;background:#00140E;border-radius:12px;color:#FFFFFF;display:flex;flex-direction:column;justify-content:space-between}
+.objective-kicker{font-size:15px;line-height:23px;font-weight:700;color:#219F88;letter-spacing:.04em}
+.objective-title{margin-top:22px;font-size:28px;line-height:39px;font-weight:700;color:#FFFFFF}
+.objective-copy{margin-top:18px;font-size:19px;line-height:31px;font-weight:500;color:#FFFFFF}
+.objective-mark{height:8px;width:72px;background:#08916E;border-radius:12px}
+.formula-area{height:486px;display:flex;flex-direction:column}
+.formula-head{height:78px;display:flex;align-items:flex-start;justify-content:space-between}
+.formula-title{font-size:27px;line-height:38px;font-weight:700;color:#1D1D1B}
+.formula-title strong{color:#08916E}
+.formula-label{font-size:15px;line-height:23px;color:#219F88;font-weight:700;letter-spacing:.04em;padding-top:8px}
+.flow-panel{height:138px;padding:24px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;display:flex;align-items:center;gap:12px}
+.flow-box{height:82px;flex:1;min-width:0;padding:17px 12px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px;text-align:center;color:#002060;font-size:20px;line-height:28px;font-weight:700}
+.flow-arrow{width:20px;height:2px;background:#219F88;position:relative;flex:none}
+.flow-arrow span{position:absolute;right:-1px;top:-5px;width:10px;height:10px;border-top:2px solid #219F88;border-right:2px solid #219F88;transform:rotate(45deg)}
+.steps{margin-top:24px;height:246px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.step-card{height:246px;padding:24px 20px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;position:relative}
+.step-tab{display:inline-flex;align-items:center;justify-content:center;width:38px;height:32px;background:#002060;color:#FFFFFF;border-radius:12px;font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:24px;font-weight:700}
+.step-card:nth-child(2) .step-tab{background:#219F88}
+.step-card:nth-child(3) .step-tab{background:#08916E}
+.step-text{margin-top:28px;font-size:20px;line-height:31px;font-weight:700;color:#1D1D1B}
+.step-line{position:absolute;left:20px;right:20px;bottom:24px;height:6px;background:#E2E8F0;border-radius:12px}
+.step-card:nth-child(1) .step-line{background:#CCECFF}
+.step-card:nth-child(2) .step-line{background:#219F88}
+.step-card:nth-child(3) .step-line{background:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="108" class="header-band" style="height:108px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-17">고객 확보 전략</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-33a3b1889548cf0f" data-source-block-id="source-slide:18:text:3">3주차 | 첫 고객 만들기</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-285b277e4b806eb3" data-source-block-id="source-slide:18:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:132px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-field" data-qid="q-div-f437b86905e0" data-semantic-role="decoration">
+    <div class="objective-panel" data-semantic-role="decoration" data-qid="q-card-objective-17">
+      <div data-qid="source-block-5e6d01541e5f27c9" data-semantic-role="decoration" data-source-block-id="source-slide:18:text:4">
+        <div class="objective-kicker" data-semantic-role="supporting" data-qid="q-objective-kicker-17">목표:</div>
+        <div class="objective-title" data-semantic-role="body" data-qid="q-objective-title-17">실제 영업할 대상과 접근 방법을 만든다.</div>
+        <div class="objective-copy" data-semantic-role="body" data-qid="q-objective-copy-17">첫 고객을 얻기 위한 과정을 하나의 실행 흐름으로 연결합니다.</div>
+      </div>
+      <div class="objective-mark" data-semantic-role="decoration" data-qid="q-div-0cd42e555fd9"></div>
+    </div>
+
+    <div class="formula-area" data-qid="q-div-8d980d525a84" data-semantic-role="decoration">
+      <div class="formula-head" data-qid="q-div-4b24c34e3819" data-semantic-role="decoration">
+        <div class="formula-title" data-semantic-role="body" data-qid="source-block-36f232f6ed4b8365" data-source-block-id="source-slide:18:text:7">첫 고객의 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">공식</strong></div>
+        <div class="formula-label" data-semantic-role="supporting" data-qid="q-formula-label-17">실행 흐름</div>
+      </div>
+
+      <div class="flow-panel" data-semantic-role="decoration" data-qid="q-card-flow-17">
+        <div class="flow-box" data-semantic-role="body" data-qid="source-block-980e1ae983e2b346" data-source-block-id="source-slide:18:text:8:run:0">포트폴리오</div>
+        <div class="flow-arrow" data-semantic-role="decoration" data-qid="q-div-502df5a3ff33"><span data-semantic-role="decoration" data-qid="q-span-f32986c526a1"></span></div>
+        <div class="flow-box" data-semantic-role="body" data-qid="source-block-840f7bb97b86d673" data-source-block-id="source-slide:18:text:8:run:1">무료 샘플</div>
+        <div class="flow-arrow" data-semantic-role="decoration" data-qid="q-div-17a2a1bad702"><span data-semantic-role="decoration" data-qid="q-span-c83eac29f2ad"></span></div>
+        <div class="flow-box" data-semantic-role="body" data-qid="source-block-0c084315a632e847" data-source-block-id="source-slide:18:text:8:run:2">영업</div>
+        <div class="flow-arrow" data-semantic-role="decoration" data-qid="q-div-75a8fef0eb0c"><span data-semantic-role="decoration" data-qid="q-span-eedec0ea8962"></span></div>
+        <div class="flow-box" data-semantic-role="body" data-qid="source-block-b8d2b1747e429894" data-source-block-id="source-slide:18:text:8:run:3">상담</div>
+      </div>
+
+      <div class="steps" data-qid="q-div-17e8625ebe5f" data-semantic-role="decoration">
+        <div class="step-card" data-semantic-role="decoration" data-qid="q-card-step1-17">
+          <div class="step-tab" data-semantic-role="supporting" data-qid="source-block-45b2aa014283bf2e" data-source-block-id="source-slide:18:text:11">1</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-c2f1224d2b6ae403" data-source-block-id="source-slide:18:text:12">보여줄 영상 준비</div>
+          <div class="step-line" data-semantic-role="decoration" data-qid="q-div-d6834f1e05e8"></div>
+        </div>
+        <div class="step-card" data-semantic-role="decoration" data-qid="q-card-step2-17">
+          <div class="step-tab" data-semantic-role="supporting" data-qid="source-block-668dddc946364571" data-source-block-id="source-slide:18:text:15">2</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-2a04996e31460b1f" data-source-block-id="source-slide:18:text:16">가게 하나 선정</div>
+          <div class="step-line" data-semantic-role="decoration" data-qid="q-div-77b179085d60"></div>
+        </div>
+        <div class="step-card" data-semantic-role="decoration" data-qid="q-card-step3-17">
+          <div class="step-tab" data-semantic-role="supporting" data-qid="source-block-a174ff1d95299915" data-source-block-id="source-slide:18:text:19">3</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-cc8a8d02d5c9ef57" data-source-block-id="source-slide:18:text:20">직접 제안</div>
+          <div class="step-line" data-semantic-role="decoration" data-qid="q-div-3b8eb528a7e5"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-e1533f01db2c7974" data-source-block-id="source-slide:18:text:5">18</div>
+</body>
+</html>

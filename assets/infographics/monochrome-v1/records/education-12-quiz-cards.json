@@ -1,0 +1,56 @@
+{
+  "id": "education-12-quiz-cards",
+  "category": "education",
+  "tags": {
+    "ko": [
+      "교육",
+      "퀴즈"
+    ],
+    "en": [
+      "education",
+      "quiz",
+      "cards"
+    ]
+  },
+  "alt": {
+    "ko": "퀴즈 단색 벡터 인포그래픽",
+    "en": "quiz cards monochrome vector infographic"
+  },
+  "path": "originals/education-12-quiz-cards.svg",
+  "thumbnail": "thumbnails/education-12-quiz-cards.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 566,
+  "sha256": "9e5463b4d691cfb3ec977b82810e709d2f86b28a34ee4f87644404547427dcee",
+  "geometry_sha256": "17081fd26811a9bc10f92920bb5e2a84569f5260bcd9536678c694dab7fad2a7",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 58625,
+    "preview_opaque_pixels": 5382,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ListTodo",
+      "CircleHelp"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

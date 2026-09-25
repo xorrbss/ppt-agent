@@ -1,0 +1,256 @@
+{
+ "sourceUnitId": "source-slide:1",
+ "sourceIndex": 0,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:1:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:1:shape:3",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 1,
+   "payload": {
+    "shapeName": "Oval 2",
+    "preset": "ellipse",
+    "geometry": {
+     "x": 9052560,
+     "y": 274320,
+     "cx": 2011680,
+     "cy": 2011680
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:0db1218e2e78a9f424554640c76cfbce19659221351e12e1d1bcf4466f9cfaca",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:1:shape:4",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 2,
+   "payload": {
+    "shapeName": "Oval 3",
+    "preset": "ellipse",
+    "geometry": {
+     "x": 10332720,
+     "y": 1371600,
+     "cx": 1097280,
+     "cy": 1097280
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:f0a2c15d6391830ef49172ad822143e26fa82678abb77d2406c98846b739af0b",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:1:shape:5",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 3,
+   "payload": {
+    "shapeName": "Oval 4",
+    "preset": "ellipse",
+    "geometry": {
+     "x": 9326880,
+     "y": 5029200,
+     "cx": 2377440,
+     "cy": 2377440
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:5221c00adaf9128d1772076b0ad33a048dea1eec37b8789da3685230acd0a2b8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:1:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "🐝 꿀벌쌤",
+    "paragraphs": [
+     {
+      "runs": [
+       "🐝 꿀벌쌤"
+      ],
+      "text": "🐝 꿀벌쌤"
+     }
+    ],
+    "runs": [
+     "🐝 꿀벌쌤"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 731520,
+     "y": 731520,
+     "cx": 4572000,
+     "cy": 457200
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:ae6bce59b56f1b13539a8f60ae6e87f1cb9977c7ab5a49c041d24e22ce75e2d7",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:1:text:7",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 5,
+   "payload": {
+    "text": "숏폼대행\n1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "숏폼대행\n1인사업자 홀로서기"
+      ],
+      "text": "숏폼대행\n1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "숏폼대행\n1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 6",
+    "geometry": {
+     "x": 731520,
+     "y": 1417320,
+     "cx": 7772400,
+     "cy": 1828800
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:b9fd754768278ec492f1efa650a5b0c858d0b34ea4589fad9694bb8babf90205",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:1:text:8",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 6,
+   "payload": {
+    "text": "4주 · 총 8시간 · 온라인 실전 창업 과정",
+    "paragraphs": [
+     {
+      "runs": [
+       "4주 · 총 8시간 · 온라인 실전 창업 과정"
+      ],
+      "text": "4주 · 총 8시간 · 온라인 실전 창업 과정"
+     }
+    ],
+    "runs": [
+     "4주 · 총 8시간 · 온라인 실전 창업 과정"
+    ],
+    "shapeName": "TextBox 7",
+    "geometry": {
+     "x": 777240,
+     "y": 3520440,
+     "cx": 6858000,
+     "cy": 457200
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:fdb3bdd146f33425062cda8350c30b9a2df77f63ef2359a5298cb24e4f6f3ed7",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:1:text:9",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 7,
+   "payload": {
+    "text": "영상 하나를 만드는 사람이 아니라\n숏폼으로 돈을 버는 1인사업자가 되는 과정",
+    "paragraphs": [
+     {
+      "runs": [
+       "영상 하나를 만드는 사람이 아니라\n숏폼으로 돈을 버는 1인사업자가 되는 과정"
+      ],
+      "text": "영상 하나를 만드는 사람이 아니라\n숏폼으로 돈을 버는 1인사업자가 되는 과정"
+     }
+    ],
+    "runs": [
+     "영상 하나를 만드는 사람이 아니라\n숏폼으로 돈을 버는 1인사업자가 되는 과정"
+    ],
+    "shapeName": "TextBox 8",
+    "geometry": {
+     "x": 777240,
+     "y": 4160520,
+     "cx": 7132320,
+     "cy": 914400
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:528e9a5092179b8a9ed4fac9020eefeb60eb9bf258d12a481dac5d4d06ffed01",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:1:text:10",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 8,
+   "payload": {
+    "text": "꿀벌쌤 강의용 마스터 PPT",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 강의용 마스터 PPT"
+      ],
+      "text": "꿀벌쌤 강의용 마스터 PPT"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 강의용 마스터 PPT"
+    ],
+    "shapeName": "TextBox 9",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:a1bd78d27f608b9d3b377d1a4874f66bd4a8d577e4d71350f9d2d22c84c1f735",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

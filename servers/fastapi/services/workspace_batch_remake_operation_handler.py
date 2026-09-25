@@ -162,7 +162,10 @@ class WorkspaceBatchRemakeOperationHandler:
                 theme = (
                     presentation.theme if isinstance(presentation.theme, dict) else {}
                 )
-                if theme.get("authored_vnext") is not None:
+                authored_projection = theme.get("authored_vnext")
+                if isinstance(authored_projection, Mapping) and authored_projection.get(
+                    "masterPin"
+                ) is not None:
                     # A pinned master advances the deck revision per page, so a
                     # batch cannot share this operation's single revision bump.
                     raise NonRetryableWorkspaceOperationError(_MASTER_PINNED)
@@ -241,6 +244,9 @@ class WorkspaceBatchRemakeOperationHandler:
                             slide_index=slide_index,
                             preview_task_id=preview_task_id,
                             snapshot=False,
+                            operation_id=claim.operation_id,
+                            attempt_token=claim.attempt_token,
+                            expected_revision=claim.expected_revision,
                         )
                 except AuthoredPageRemakeError as error:
                     slide_results.append(

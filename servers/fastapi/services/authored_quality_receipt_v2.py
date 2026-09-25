@@ -19,6 +19,14 @@ from pathlib import Path
 
 from services.authored_composition_policy import _normalized_capacity_owned_text
 from services.authored_font_signal import body_font_median_px
+from services.authored_quality_receipt_helpers import (
+    append_unique as _append,
+    domain as _domain,
+    domain_status as _domain_status,
+    mapping as _mapping,
+    read as _read,
+    status as _status,
+)
 
 
 def quality_receipt_root() -> Path:
@@ -79,68 +87,6 @@ def public_attempt_id(value: object) -> str:
     if len(candidate) == 32 and all(char in "0123456789abcdefABCDEF" for char in candidate):
         return candidate.lower()
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
-
-
-def _read(value: object, *names: str, default: object = None) -> object:
-    if isinstance(value, Mapping):
-        for name in names:
-            if name in value:
-                return value[name]
-    else:
-        for name in names:
-            if hasattr(value, name):
-                return getattr(value, name)
-    return default
-
-
-def _status(value: object) -> str:
-    if isinstance(value, bool):
-        return "passed" if value else "failed"
-    if value is None:
-        return "pending"
-    text = str(value).strip().lower().replace("-", "_")
-    if text in {"pass", "passed", "ok", "verified", "ready", "publishable", "published", "true"}:
-        return "passed"
-    if text in {"fail", "failed", "error", "invalid", "false"}:
-        return "failed"
-    if text in {"blocked", "rejected", "unsafe"}:
-        return "blocked"
-    if text in {"pending", "unknown", "unverified", "not_run", "not_verified"}:
-        return "pending"
-    return text or "pending"
-
-
-def _domain(evidence: object, key: str) -> object:
-    aliases = {
-        "sourceReadback": ("sourceReadback", "source_readback", "sourceVerbatim", "source_verbatim", "sourceReadbackStatus", "source_readback_status"),
-        "visualReview": ("visualReview", "visual_review", "visualReviewStatus", "visual_review_status"),
-        "nativeCoverage": ("nativeCoverage", "native_coverage", "nativeCoverageStatus", "native_coverage_status"),
-        "fontPreflight": ("fontPreflight", "font_preflight", "fontPreflightStatus", "font_preflight_status"),
-        "powerpointQa": ("powerpointQa", "powerpointQA", "powerpoint_qa"),
-    }.get(key, (key, f"{key}Status", f"{key}_status"))
-    return _read(evidence, *aliases, default=None)
-
-
-def _domain_status(evidence: object, key: str) -> str:
-    value = _domain(evidence, key)
-    if isinstance(value, Mapping) or (value is not None and not isinstance(value, (str, bool, int, float))):
-        value = _read(value, "status", "verdict", "state", "passed", default=None)
-    return _status(value)
-
-
-def _mapping(value: object) -> Mapping[str, object] | None:
-    if isinstance(value, Mapping):
-        return value
-    dump = getattr(value, "model_dump", None)
-    if callable(dump):
-        result = dump(mode="python", by_alias=True)
-        return result if isinstance(result, Mapping) else None
-    return None
-
-
-def _append(blockers: list[str], value: str) -> None:
-    if value not in blockers:
-        blockers.append(value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -543,9 +489,11 @@ def evaluate_unified_gate(
     source = _mapping(_domain(evidence, "sourceReadback"))
     source_required = policy.require_source_readback or not (source and source.get("required") is False)
     if source_required:
+        source_integrity_passed = bool(source and source_readback_integrity_verified(source))
+        if source_integrity_passed and source.get("verified") is False:
+            statuses["sourceReadback"] = "pending"
         source_failed = source is None or (
-            source.get("verified") is not True
-            or source.get("passed") is False
+            not source_integrity_passed
             or bool(source.get("failures"))
             or bool(source.get("failedBlocks"))
             or bool(source.get("clipped"))
@@ -555,7 +503,7 @@ def evaluate_unified_gate(
         if source_failed:
             statuses["sourceReadback"] = "blocked"
             _append(blockers, "sourceReadback.failed")
-        elif source and source.get("verified") is True:
+        elif source_integrity_passed:
             statuses["sourceReadback"] = "passed"
         elif statuses["sourceReadback"] in {"pending", "not_assessed", "not_applicable"}:
             _append(blockers, "sourceReadback.unverified")
@@ -610,6 +558,29 @@ def evaluate_unified_gate(
         raster_fallbacks=raster_fallbacks,
         quality_status=quality_status,
         publication_status=statuses["publication"],
+    )
+
+
+def source_readback_integrity_verified(source: Mapping[str, object]) -> bool:
+    """Accept honest flagged-visibility receipts without relaxing integrity."""
+
+    if source.get("verified") is True and source.get("passed") is not False:
+        return True
+    flagged = source.get("flaggedVisibilityFailures")
+    visible = source.get("visibilityFailures")
+    return bool(
+        source.get("integrityVerified") is True
+        and source.get("verified") is False
+        and source.get("passed") is False
+        and isinstance(flagged, Sequence) and not isinstance(flagged, (str, bytes))
+        and list(flagged)
+        and isinstance(visible, Sequence) and not isinstance(visible, (str, bytes))
+        and list(flagged) == list(visible)
+        and not source.get("missingBlockIds")
+        and not source.get("orderViolations")
+        and not source.get("integrityFailures")
+        and not source.get("telemetryFailures")
+        and not source.get("diagnosticError")
     )
 
 
@@ -1966,9 +1937,13 @@ def _v3_provider_call_blockers(evidence: Mapping[str, object]) -> tuple[str, ...
             _append(blockers, f"providerCalls.slide_duplicate:{slide_index}")
             continue
         observed_indices.add(slide_index)
-        initial, recovery, declared_total = call.get("initial"), call.get("recovery"), call.get("total")
+        initial = call.get("initial")
+        recovery = call.get("recovery")
+        rescue = call.get("rescue", 0)
+        declared_total = call.get("total")
         expected_initial = 0 if provider_free_allowed else 1
         allowed_recovery = (0,) if provider_free_allowed else (0, 1)
+        allowed_rescue = (0,) if provider_free_allowed else (0, 1)
         if (
             not isinstance(initial, int)
             or isinstance(initial, bool)
@@ -1976,6 +1951,9 @@ def _v3_provider_call_blockers(evidence: Mapping[str, object]) -> tuple[str, ...
             or not isinstance(recovery, int)
             or isinstance(recovery, bool)
             or recovery not in allowed_recovery
+            or not isinstance(rescue, int)
+            or isinstance(rescue, bool)
+            or rescue not in allowed_rescue
         ):
             _append(blockers, f"providerCalls.slide_budget_invalid:{slide_index}")
         if (
@@ -1983,7 +1961,9 @@ def _v3_provider_call_blockers(evidence: Mapping[str, object]) -> tuple[str, ...
             or isinstance(initial, bool)
             or not isinstance(recovery, int)
             or isinstance(recovery, bool)
-            or declared_total != initial + recovery
+            or not isinstance(rescue, int)
+            or isinstance(rescue, bool)
+            or declared_total != initial + recovery + rescue
         ):
             _append(blockers, f"providerCalls.slide_total_mismatch:{slide_index}")
     for missing in sorted(expected_indices - observed_indices):

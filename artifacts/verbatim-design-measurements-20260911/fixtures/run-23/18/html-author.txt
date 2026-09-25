@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:32px;width:780px}
+.eyebrow{font-size:13px;line-height:18px;font-weight:700;letter-spacing:.06em;color:#08916E}
+.title{margin-top:12px;font-size:34px;line-height:45px;font-weight:800;color:#0F172A}
+.divider{position:absolute;left:64px;right:64px;bottom:0;height:1px;background:#E2E8F0}
+.body-wrap{position:absolute;left:0;right:0;top:143px;height:505px}
+.project-line{margin-left:64px;height:30px;font-size:18px;line-height:27px;font-weight:700;color:#002060}
+.project-line span{color:#08916E}
+.main-grid{display:grid;grid-template-columns:760px 368px;gap:24px;margin:16px 64px 0 64px;height:450px}
+.left-stack{display:flex;flex-direction:column;gap:24px;height:450px}
+.rule-card{height:238px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-tab{display:inline-flex;align-items:center;height:32px;padding:0 14px;background:#002060;border-radius:12px 12px 0 0;color:#FFFFFF;font-size:15px;line-height:22px;font-weight:700}
+.rule-list{display:flex;flex-direction:column;gap:12px;margin-top:18px}
+.rule-row{display:flex;align-items:flex-start;min-height:28px;font-size:18px;line-height:28px;color:#1D1D1B}
+.rule-mark{width:8px;height:8px;margin:10px 14px 0 2px;flex:none;background:#219F88;border-radius:12px}
+.rule-row:last-child .rule-mark{background:#E5A93D}
+.flow-card{height:188px;padding:22px 28px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px}
+.flow-heading{font-size:20px;line-height:29px;font-weight:800;color:#002060}
+.flow-row{display:flex;align-items:center;margin-top:22px;height:76px}
+.flow-step{display:flex;align-items:center;justify-content:center;width:122px;height:58px;padding:10px 12px;text-align:center;background:#FFFFFF;border:1px solid #1B469C;border-radius:12px;color:#002060;font-size:18px;line-height:25px;font-weight:800}
+.flow-step:last-child{background:#08916E;border-color:#08916E;color:#FFFFFF}
+.connector{position:relative;width:25px;height:2px;margin:0 5px;background:#00828E;flex:none}
+.connector span{position:absolute;right:-1px;top:-4px;width:9px;height:9px;background:#00828E;transform:rotate(45deg)}
+.visual-column{height:450px;display:flex;flex-direction:column;gap:24px}
+.image-panel{height:224px;padding:8px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.image-panel img{display:block;width:350px;height:190px;border-radius:12px;background:linear-gradient(135deg,#E0F3FF,#EAEDF2);object-fit:cover}
+.image-caption{margin:7px 2px 0;font-size:15px;line-height:20px;color:#4B5563}
+.takeaway{height:202px;padding:26px 28px;background:#00140E;border-radius:12px;color:#FFFFFF}
+.takeaway-label{font-size:15px;line-height:22px;font-weight:700;letter-spacing:.06em;color:#219F88}
+.takeaway-word{margin-top:15px;font-size:38px;line-height:48px;font-weight:800;color:#08916E}
+.takeaway-copy{margin-top:10px;font-size:18px;line-height:28px;color:#FFFFFF}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="123" class="header-band" style="height:123px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-18">무료 샘플 전략</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-0af096b13b18e735" data-source-block-id="source-slide:19:text:3">3주차 PART 1 | 무료 샘플 전략</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:143px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="project-line" data-semantic-role="supporting" data-qid="source-block-a219155582a20462" data-source-block-id="source-slide:19:text:5"><span data-qid="q-span-f32986c526a1" data-semantic-role="body">꿀벌쌤</span> | 숏폼대행 1인사업자 홀로서기</div>
+
+  <div class="main-grid" data-qid="q-div-948c49f110fb" data-semantic-role="decoration">
+    <div class="left-stack" data-qid="q-div-7a323e1f544c" data-semantic-role="decoration">
+      <div class="rule-card" data-semantic-role="decoration" data-qid="q-card-rules-18">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-rules-18">실행 원칙</div>
+        <div class="rule-list" data-qid="source-block-937edc0fc8d273d6" data-semantic-role="decoration" data-source-block-id="source-slide:19:text:6">
+          <div class="rule-row" data-semantic-role="decoration" data-qid="q-rule-1-18"><span class="rule-mark" data-qid="q-span-c893ea5cb3f8" data-semantic-role="decoration"></span><span data-qid="q-span-c83eac29f2ad" data-semantic-role="body">첫 고객에게 무작정 가격부터 말하지 않는다</span></div>
+          <div class="rule-row" data-semantic-role="decoration" data-qid="q-rule-2-18"><span class="rule-mark" data-qid="q-span-a475b2e13d3f" data-semantic-role="decoration"></span><span data-qid="q-span-eedec0ea8962" data-semantic-role="body">가능하면 가게 특성에 맞는 샘플을 준비</span></div>
+          <div class="rule-row" data-semantic-role="decoration" data-qid="q-rule-3-18"><span class="rule-mark" data-qid="q-span-463f2fbea7e3" data-semantic-role="decoration"></span><span data-qid="q-span-2af01d53a93e" data-semantic-role="body">한 가게에 4개 소재를 기획해보기</span></div>
+          <div class="rule-row" data-semantic-role="decoration" data-qid="q-rule-4-18"><span class="rule-mark" data-qid="q-span-6626e8c76671" data-semantic-role="decoration"></span><span data-qid="q-span-0856754b8eb9" data-semantic-role="body">무료 제공 범위와 기간을 명확히</span></div>
+          <div class="rule-row" data-semantic-role="decoration" data-qid="q-rule-5-18"><span class="rule-mark" data-qid="q-span-e06f1f66365c" data-semantic-role="decoration"></span><span data-qid="q-span-ff27a5abbc91" data-semantic-role="body">목표는 ‘공짜 노동’이 아니라 유료 전환</span></div>
+        </div>
+      </div>
+
+      <div class="flow-card" data-semantic-role="decoration" data-qid="q-card-flow-18">
+        <div class="flow-heading" data-semantic-role="supporting" data-qid="source-block-07640de12403b83a" data-source-block-id="source-slide:19:text:9">샘플 구조</div>
+        <div class="flow-row" data-qid="source-block-2528122476d8e673" data-semantic-role="decoration" data-source-block-id="source-slide:19:text:10">
+          <div class="flow-step" data-semantic-role="body" data-qid="q-flow-1-18">가게 분석</div>
+          <div class="connector" data-qid="q-div-1bfec761b021" data-semantic-role="decoration"><span data-qid="q-span-5fba4a1b38e4" data-semantic-role="decoration"></span></div>
+          <div class="flow-step" data-semantic-role="body" data-qid="q-flow-2-18">4개 기획</div>
+          <div class="connector" data-qid="q-div-f954d062b2c8" data-semantic-role="decoration"><span data-qid="q-span-d7940611100c" data-semantic-role="decoration"></span></div>
+          <div class="flow-step" data-semantic-role="body" data-qid="q-flow-3-18">1~4개 제작</div>
+          <div class="connector" data-qid="q-div-d70e41e2467e" data-semantic-role="decoration"><span data-qid="q-span-ea628152fecd" data-semantic-role="decoration"></span></div>
+          <div class="flow-step" data-semantic-role="body" data-qid="q-flow-4-18">반응 확인</div>
+          <div class="connector" data-qid="q-div-44f8a0ccb367" data-semantic-role="decoration"><span data-qid="q-span-5ecaffe7eb14" data-semantic-role="decoration"></span></div>
+          <div class="flow-step" data-semantic-role="body" data-qid="q-flow-5-18">유료 제안</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="visual-column" data-qid="q-div-fc832d4bf783" data-semantic-role="decoration">
+      <div class="image-panel" data-semantic-role="image" data-qid="q-image-18">
+        <img data-illust-prompt="A restrained vector-like landscape view of a small retail storefront being assessed for short-form content, with four neatly arranged content concept cards, a compact smartphone filming setup, a response-check dashboard, and a paid proposal document arranged from left to right as one connected workflow. No people, no logos, no decorative text. labels: &quot;가게 분석&quot;, &quot;4개 기획&quot;, &quot;1~4개 제작&quot;, &quot;반응 확인&quot;, &quot;유료 제안.&quot;" alt="">
+        <div class="image-caption" data-semantic-role="supporting" data-qid="q-image-caption-18">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      </div>
+
+      <div class="takeaway" data-semantic-role="decoration" data-qid="q-takeaway-18">
+        <div class="takeaway-label" data-semantic-role="supporting" data-qid="q-takeaway-label-18">전환의 기준</div>
+        <div class="takeaway-word" data-semantic-role="body" data-qid="q-takeaway-word-18">유료 전환</div>
+        <div class="takeaway-copy" data-semantic-role="body" data-qid="q-takeaway-copy-18">무료 제공 범위와 기간을 명확히</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-0835442ac46726d4" data-source-block-id="source-slide:19:text:4">19</div>
+</body>
+</html>

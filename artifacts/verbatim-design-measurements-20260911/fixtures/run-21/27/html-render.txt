@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#08916E;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:880px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#FFFFFF;max-width:880px}
+.header-right{position:absolute;left:956px;top:24px;width:260px;min-height:36px;padding:8px 12px;background:#00140E;text-align:right;font-size:15px;line-height:20px;color:#FFFFFF}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px}
+.main-grid{display:grid;grid-template-columns:360px 768px;gap:24px;margin-top:24px;height:450px}
+.core-panel{height:450px;padding:28px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px;display:flex;flex-direction:column;justify-content:space-between}
+.core-label{font-size:26px;line-height:34px;font-weight:700;color:#002060}
+.core-topic{margin-top:10px;font-size:18px;line-height:27px;font-weight:700;color:#08916E}
+.core-rule{width:64px;height:4px;background:#08916E;border-radius:12px;margin-top:20px}
+.core-copy{font-size:25px;line-height:1.6;font-weight:700;color:#00140E}
+.core-bottom{font-size:16px;line-height:1.6;color:#1D1D1B}
+.list-panel{height:450px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.list-title{font-size:20px;line-height:30px;font-weight:700;color:#002060;margin-bottom:12px}
+.list-body{position:relative}
+.list-rail{position:absolute;left:10px;top:22px;width:2px;height:314px;background:#CCECFF}
+.list-row{position:relative;display:flex;align-items:center;min-height:66px;border-bottom:1px solid #E2E8F0;padding:10px 0 10px 42px}
+.list-row:last-child{border-bottom:0}
+.list-node{position:absolute;left:4px;top:27px;width:14px;height:14px;border-radius:12px;background:#08916E;border:3px solid #E0F3FF}
+.list-text{font-size:19px;line-height:1.55;font-weight:500;color:#1D1D1B}
+.priority{display:inline-block;width:8px;height:8px;margin-right:10px;background:#D39A32;border-radius:12px;vertical-align:2px}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="105" class="header-band" style="height:105px" data-qid="q27-band" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q27-header-left" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-14fd79b6a57b9539" data-source-block-id="source-slide:28:text:3:run:0">4주차 PART 4</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-4944da184a3e0b54" data-source-block-id="source-slide:28:text:6">한 번의 계약을 ‘월 관리’로</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-f46666d065b161ca" data-source-block-id="source-slide:28:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  <div data-header-part="divider" class="divider" data-qid="q27-divider" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q27-body-wrap" data-semantic-role="decoration">
+  <div class="main-grid" data-qid="q27-main-grid" data-semantic-role="decoration">
+    <div class="core-panel" data-semantic-role="decoration" data-qid="q27-core-panel">
+      <div data-qid="q27-core-top" data-semantic-role="decoration">
+        <div class="core-label" data-semantic-role="supporting" data-qid="source-block-03913a405febe2a7" data-source-block-id="source-slide:28:text:10">핵심</div>
+        <div class="core-topic" data-semantic-role="supporting" data-qid="source-block-24be042c482920c1" data-source-block-id="source-slide:28:text:3:run:1">장기고객 만들기</div>
+        <div class="core-rule" data-qid="q27-core-rule" data-semantic-role="decoration"></div>
+      </div>
+      <div class="core-copy" data-semantic-role="body" data-qid="source-block-33096d52fdad8a75" data-source-block-id="source-slide:28:text:11">고객이 ‘내가 계속 아이디어를 내야 하나?’라고 느끼지 않게 한다.</div>
+      <div class="core-bottom" data-semantic-role="supporting" data-qid="q27-core-note">한 번의 계약을 ‘월 관리’로</div>
+    </div>
+
+    <div class="list-panel" data-semantic-role="decoration" data-qid="q27-list-panel">
+      <div class="list-title" data-semantic-role="supporting" data-qid="q27-list-title">한 번의 계약을 ‘월 관리’로</div>
+      <div class="list-body" data-qid="source-block-59f6dcdb8edf9d34" data-semantic-role="decoration" data-source-block-id="source-slide:28:text:7">
+        <div class="list-rail" data-qid="q27-list-rail" data-semantic-role="decoration"></div>
+        <div class="list-row" data-semantic-role="decoration" data-qid="q27-item-1">
+          <span class="list-node" data-qid="q27-node-1" data-semantic-role="decoration"></span>
+          <span class="list-text" data-semantic-role="body" data-qid="q27-text-1"><span class="priority" data-qid="q27-priority-1" data-semantic-role="decoration"></span>다음 달 콘텐츠를 먼저 제안</span>
+        </div>
+        <div class="list-row" data-semantic-role="decoration" data-qid="q27-item-2">
+          <span class="list-node" data-qid="q27-node-2" data-semantic-role="decoration"></span>
+          <span class="list-text" data-semantic-role="body" data-qid="q27-text-2">월간 콘텐츠 캘린더 제공</span>
+        </div>
+        <div class="list-row" data-semantic-role="decoration" data-qid="q27-item-3">
+          <span class="list-node" data-qid="q27-node-3" data-semantic-role="decoration"></span>
+          <span class="list-text" data-semantic-role="body" data-qid="q27-text-3">고객 업종에 맞는 소재를 지속 발굴</span>
+        </div>
+        <div class="list-row" data-semantic-role="decoration" data-qid="q27-item-4">
+          <span class="list-node" data-qid="q27-node-4" data-semantic-role="decoration"></span>
+          <span class="list-text" data-semantic-role="body" data-qid="q27-text-4">성과와 개선점을 간단히 공유</span>
+        </div>
+        <div class="list-row" data-semantic-role="decoration" data-qid="q27-item-5">
+          <span class="list-node" data-qid="q27-node-5" data-semantic-role="decoration"></span>
+          <span class="list-text" data-semantic-role="body" data-qid="q27-text-5">소개받을 수 있는 만족 경험 만들기</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="source-block-ac0696b54813061d" data-source-block-id="source-slide:28:text:4">28</div>
+</body>
+</html>

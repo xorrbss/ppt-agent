@@ -1,0 +1,54 @@
+{
+  "id": "process-05-checklist",
+  "category": "process",
+  "tags": {
+    "ko": [
+      "프로세스",
+      "체크리스트"
+    ],
+    "en": [
+      "process",
+      "checklist"
+    ]
+  },
+  "alt": {
+    "ko": "체크리스트 단색 벡터 인포그래픽",
+    "en": "checklist monochrome vector infographic"
+  },
+  "path": "originals/process-05-checklist.svg",
+  "thumbnail": "thumbnails/process-05-checklist.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 379,
+  "sha256": "bad002c554f0ca0229821ec3de55d0443cb72104857bd4ebd4c3947bb204cc22",
+  "geometry_sha256": "c3ee8a3f5f4b8606c3340313c4ccc134418652059ea6dcbeedb6c4b7e2d4cac0",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 58803,
+    "preview_opaque_pixels": 5702,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ListChecks"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

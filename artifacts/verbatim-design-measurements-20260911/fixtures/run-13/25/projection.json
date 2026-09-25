@@ -1,0 +1,258 @@
+{
+ "source-slide:26:text:3": {
+  "text": "4주차 PART 2 | 상담과 가격 제시",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "4주차 PART 2",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "상담과 가격 제시",
+    "begin": 13,
+    "end": 22,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:26:text:4": {
+  "text": "26",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "26",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:26:text:5": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:26:text:6": {
+  "text": "상담 순서",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "상담 순서",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:26:text:7": {
+  "text": "• 현재 SNS 운영 상황 • 가장 알리고 싶은 상품/서비스 • 촬영 가능 여부 • 원하는 콘텐츠 스타일 • 예산/업로드 빈도 • 내 서비스 제안",
+  "run_count": 6,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    4,
+    4
+   ],
+   [
+    5,
+    5
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "• ",
+    "body": "현재 SNS 운영 상황",
+    "begin": 0,
+    "end": 14,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "• ",
+    "body": "가장 알리고 싶은 상품/서비스",
+    "begin": 15,
+    "end": 33,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "• ",
+    "body": "촬영 가능 여부",
+    "begin": 34,
+    "end": 44,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "• ",
+    "body": "원하는 콘텐츠 스타일",
+    "begin": 45,
+    "end": 58,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 4,
+    "marker": "• ",
+    "body": "예산/업로드 빈도",
+    "begin": 59,
+    "end": 70,
+    "order_free_before": false
+   },
+   {
+    "index": 5,
+    "line": 5,
+    "marker": "• ",
+    "body": "내 서비스 제안",
+    "begin": 71,
+    "end": 81,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:26:text:10": {
+  "text": "가격을 말할 때",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "가격을 말할 때",
+    "begin": 0,
+    "end": 8,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:26:text:11": {
+  "text": "‘영상 1개 얼마’보다 패키지와 관리 범위를 보여준다. 수정 횟수 · 촬영 · 납품일을 함께 명확히.",
+  "run_count": 3,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "‘영상 1개 얼마’보다",
+    "begin": 0,
+    "end": 12,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "패키지와 관리 범위를 보여준다.",
+    "begin": 13,
+    "end": 30,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "",
+    "body": "수정 횟수 · 촬영 · 납품일을 함께 명확히.",
+    "begin": 31,
+    "end": 56,
+    "order_free_before": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,54 @@
+{
+  "id": "collaboration-01-handshake",
+  "category": "collaboration",
+  "tags": {
+    "ko": [
+      "협업",
+      "악수"
+    ],
+    "en": [
+      "collaboration",
+      "handshake"
+    ]
+  },
+  "alt": {
+    "ko": "악수 단색 벡터 인포그래픽",
+    "en": "handshake monochrome vector infographic"
+  },
+  "path": "originals/collaboration-01-handshake.svg",
+  "thumbnail": "thumbnails/collaboration-01-handshake.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 548,
+  "sha256": "3f854b7f986fada87d331d5bb699eeb9baf1f6db5537e1249cfc885e8bb9e635",
+  "geometry_sha256": "f3e92a6ecc1243cb5daa10236bdc8f06ce3f0400648a0fc4819f08fe9915a7a5",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 51986,
+    "preview_opaque_pixels": 11607,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Handshake"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

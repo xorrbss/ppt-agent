@@ -1,0 +1,56 @@
+{
+  "id": "innovation-17-mvp-box",
+  "category": "innovation",
+  "tags": {
+    "ko": [
+      "혁신",
+      "최소제품"
+    ],
+    "en": [
+      "innovation",
+      "mvp",
+      "box"
+    ]
+  },
+  "alt": {
+    "ko": "최소제품 단색 벡터 인포그래픽",
+    "en": "mvp box monochrome vector infographic"
+  },
+  "path": "originals/innovation-17-mvp-box.svg",
+  "thumbnail": "thumbnails/innovation-17-mvp-box.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 903,
+  "sha256": "3c6f8e81d30eb7b509b4edf38f799d994c24525d32f3a4b119ba40b73853c33f",
+  "geometry_sha256": "34d7ca2e46162bcb5f5d492e9e29ec6595e3e72e7713cb9633d1168cbf0860da",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55887,
+    "preview_opaque_pixels": 7650,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "PackageCheck",
+      "Rocket"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

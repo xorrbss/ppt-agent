@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "item_id": "item-7db973b111215619",
+  "method": "Independent direct PNG inspection with this packet sourceContent and requiredImages; no automated diagnostics or other reviews read",
+  "hash_verification": {
+    "html_sha256": "3a6fe393b958725a04659b1587c678670298042fb6c858b85f7976c66a90a3e1",
+    "png_sha256": "0eaad6fe8612a8ac96bce95be76386cbeedd174f88e6485ced8fb5707fad77fe",
+    "matches_packet_after_sha256_prefix_normalization": true
+  },
+  "verdict": "visual_pass",
+  "geometry": {
+    "pass": true,
+    "findings": [
+      "Developer approval text is inside its taller inner panel. The panel reaches the outer card bottom with little clearance, but text is readable and no visible clipping, overlap, or off-canvas content is established."
+    ]
+  },
+  "readability": {
+    "pass": true,
+    "findings": [
+      "Visible text remains readable; no obscured text established."
+    ],
+    "score": 1
+  },
+  "required_images": {
+    "candidate_count": 0,
+    "require_all": false,
+    "verdict": "not_applicable",
+    "visible_raster_images": false
+  },
+  "style": {
+    "verdict": "coherent",
+    "observation": "Consistent teal and mint accents, dark green emphasis, white cards, and legible heading hierarchy.",
+    "score": 2
+  },
+  "content_visibility": {
+    "observation": "Visual legibility checked against supplied source. This review does not certify exact verbatim preservation."
+  },
+  "readability_score": 1,
+  "style_score": 2
+}

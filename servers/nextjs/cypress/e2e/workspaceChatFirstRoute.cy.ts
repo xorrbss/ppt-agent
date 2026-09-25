@@ -10,6 +10,14 @@ const enabledCapability = {
   commands: true,
   events: true,
 };
+const disabledCapability = {
+  supported: true,
+  enabled: false,
+  timeline: true,
+  commands: false,
+  events: true,
+  reason: "chat_first_kill_switch_enabled",
+};
 let capabilityResponse: typeof enabledCapability & { reason?: string } =
   enabledCapability;
 let capabilityRequestAlias: string | undefined;
@@ -23,7 +31,8 @@ function waitForWindowSelector(
   {
     present = true,
     timeoutMs = 30_000,
-  }: { present?: boolean; timeoutMs?: number } = {},
+    label = "secondary selector",
+  }: { present?: boolean; timeoutMs?: number; label?: string } = {},
 ): Cypress.Promise<void> {
   const deadline = Date.now() + timeoutMs;
   return new Cypress.Promise<void>((resolve, reject) => {
@@ -31,7 +40,7 @@ function waitForWindowSelector(
       if (window.closed) {
         reject(
           new Error(
-            "The secondary workspace browsing context closed unexpectedly.",
+            `${label}: secondary workspace browsing context closed unexpectedly.`,
           ),
         );
         return;
@@ -42,9 +51,11 @@ function waitForWindowSelector(
         return;
       }
       if (Date.now() >= deadline) {
+        const readyState = window.document.readyState;
+        const bodyMounted = Boolean(window.document.body);
         reject(
           new Error(
-            `Secondary workspace did not reach selector state: ${selector} present=${present}.`,
+            `${label}: timed out waiting for ${selector} present=${present}; actual=${matches}; readyState=${readyState}; bodyMounted=${bodyMounted}; closed=${window.closed}.`,
           ),
         );
         return;
@@ -58,7 +69,10 @@ function waitForWindowSelector(
 function waitForWindowText(
   window: Window,
   expectedText: string,
-  timeoutMs = 30_000,
+  {
+    timeoutMs = 30_000,
+    label = "secondary text",
+  }: { timeoutMs?: number; label?: string } = {},
 ): Cypress.Promise<void> {
   const deadline = Date.now() + timeoutMs;
   return new Cypress.Promise<void>((resolve, reject) => {
@@ -66,7 +80,7 @@ function waitForWindowText(
       if (window.closed) {
         reject(
           new Error(
-            "The secondary workspace browsing context closed unexpectedly.",
+            `${label}: secondary workspace browsing context closed unexpectedly.`,
           ),
         );
         return;
@@ -76,9 +90,11 @@ function waitForWindowText(
         return;
       }
       if (Date.now() >= deadline) {
+        const readyState = window.document.readyState;
+        const bodyMounted = Boolean(window.document.body);
         reject(
           new Error(
-            "Secondary workspace did not restore its additive timeline records.",
+            `${label}: timed out waiting for timeline text; textPresent=false; readyState=${readyState}; bodyMounted=${bodyMounted}; closed=${window.closed}.`,
           ),
         );
         return;
@@ -100,7 +116,7 @@ Cypress.on("uncaught:exception", (error) => {
 const firstUserMessage = {
   schema_version: 1,
   anchor_type: "message",
-  id: "message-first-user",
+  id: "11111111-1111-4111-8111-111111111112",
   position: 10,
   role: "user",
   content: "정보보호 업무 AX 전환 전략을 10장으로 만들어줘",
@@ -118,6 +134,92 @@ const firstUserMessage = {
     tone: "professional",
     api_key: "must-not-be-rendered",
   },
+};
+
+const templateV2Runtime = {
+  profile: {
+    schema_version: 1,
+    driver_id: "template-v2",
+    content_model: "template-v2",
+    generation_strategy: "template",
+    style_source: "imported",
+    generation_mode: "standard",
+  },
+  capabilities: {
+    schema_version: 1,
+    driver_id: "template-v2",
+    renderer_adapter_id: "template-v2",
+    editor_adapter_id: "template-v2",
+    editor: {
+      element_text_edit: true,
+      element_geometry_edit: true,
+      chart_edit: true,
+      theme_apply: true,
+      template_apply: true,
+      slide_image_regenerate: false,
+    },
+    agent_tool_capability: "template-v2",
+    export_adapter_id: "template-v2-general",
+    export_editable_pptx: true,
+  },
+};
+
+const authoredRuntime = {
+  profile: {
+    schema_version: 1,
+    driver_id: "authored",
+    content_model: "authored",
+    generation_strategy: "authored",
+    style_source: "authored",
+    generation_mode: "standard",
+  },
+  capabilities: {
+    schema_version: 1,
+    driver_id: "authored",
+    renderer_adapter_id: "authored",
+    editor_adapter_id: "authored-readonly",
+    editor: {
+      element_text_edit: false,
+      element_geometry_edit: false,
+      chart_edit: false,
+      theme_apply: false,
+      template_apply: true,
+      slide_image_regenerate: true,
+    },
+    agent_tool_capability: "authored",
+    export_adapter_id: "authored-hybrid",
+    export_editable_pptx: true,
+  },
+};
+
+const renderableSlide = {
+  id: "route-slide-1",
+  index: 0,
+  content: {},
+  ui: {
+    id: "__blank_slide__",
+    description: "Empty slide.",
+    background: "#FFFFFF",
+    components: [],
+    elements: [
+      {
+        type: "vector",
+        shape: "polygon",
+        points: [
+          { x: 0, y: 0 },
+          { x: 1280, y: 0 },
+          { x: 1280, y: 720 },
+          { x: 0, y: 720 },
+        ],
+        closed: true,
+        fill: { color: "#FFFFFF" },
+        decorative: true,
+      },
+    ],
+  },
+  layout_group: "template-v2",
+  layout: "__blank_slide__",
+  presentation: PRESENTATION_ID,
 };
 
 const operation = (overrides: Record<string, unknown> = {}) => {
@@ -196,11 +298,60 @@ const presentation = {
   slides: [],
 };
 
+const readyPresentation = {
+  ...presentation,
+  title: "게시된 AX 전환 전략",
+  n_slides: 1,
+  revision: 7,
+  lifecycle_status: "published",
+  mode: "template",
+  version: "v2-standard",
+  layout: { name: "blank", ordered: true, slides: [] },
+  theme: null,
+  ...templateV2Runtime,
+  slides: [renderableSlide],
+};
+
+const readyAuthoredPresentation = {
+  ...presentation,
+  title: "게시된 AI 저작 AX 전환 전략",
+  n_slides: 1,
+  revision: 7,
+  lifecycle_status: "published",
+  source_sha256: "b".repeat(64),
+  mode: "authored",
+  version: "v2-standard",
+  layout: null,
+  theme: { mode: "authored" },
+  ...authoredRuntime,
+  slides: [
+    {
+      id: "route-authored-slide-1",
+      index: 0,
+      ui: null,
+      html_content:
+        '<section style="width:1280px;height:720px;background:#fff"><h1>AX 전환 전략</h1></section>',
+      presentation: PRESENTATION_ID,
+    },
+  ],
+};
+
 function interceptPresentation(): void {
   cy.intercept("GET", `**/api/v1/ppt/presentation/${PRESENTATION_ID}`, {
     statusCode: 200,
     body: presentation,
   }).as("presentation");
+}
+
+function interceptReadyPresentation(
+  body: typeof readyPresentation | typeof readyAuthoredPresentation =
+    readyPresentation,
+  alias = "readyPresentation",
+): void {
+  cy.intercept("GET", `**/api/v1/ppt/presentation/${PRESENTATION_ID}`, {
+    statusCode: 200,
+    body,
+  }).as(alias);
 }
 
 function interceptAuthenticatedShell(): void {
@@ -246,7 +397,27 @@ function interceptAuthenticatedShell(): void {
   });
   cy.intercept("GET", "**/api/v1/ppt/presentation/*/generation-info", {
     statusCode: 200,
-    body: { generation_mode: "authored", style_source: "authored" },
+    body: {
+      prompt: firstUserMessage.content,
+      attachment_file_names: firstUserMessage.attachments.map(
+        ({ file_name }) => file_name,
+      ),
+      settings: {
+        n_slides: 10,
+        language: "ko",
+        tone: "professional",
+        verbosity: null,
+        instructions: null,
+        include_table_of_contents: false,
+        include_title_slide: true,
+        web_search: false,
+        mode: "authored",
+        version: "v2-standard",
+      },
+      conversation_id: "11111111-1111-4111-8111-111111111113",
+      operation_id: "11111111-1111-4111-8111-111111111114",
+      first_user_message_id: firstUserMessage.id,
+    },
   });
   // The legacy chat is mounted immediately after a runtime kill-switch. Keep
   // that rollback path fully isolated instead of allowing its history request
@@ -313,7 +484,7 @@ describe("Chat-first Slides Workbench route", () => {
     secondaryWorkspaceWindow = null;
   });
 
-  it("restores the complete legacy controls when another tab broadcasts the runtime kill switch", () => {
+  it("keeps the timeline and draft mounted when another tab revokes command capability", () => {
     cy.intercept(
       "GET",
       `${WORKSPACE_ROOT}/presentations/${PRESENTATION_ID}/timeline*`,
@@ -355,6 +526,12 @@ describe("Chat-first Slides Workbench route", () => {
     cy.wait(["@presentation", "@workspaceCapability", "@rollbackTimeline"]);
     cy.get('[data-testid="workspace-command-form"]').should("be.visible");
     cy.get('[data-testid="share-popover-trigger"]').should("not.exist");
+    cy.get("#workspace-command").type("중단 이후에도 유지할 초안");
+
+    cy.then(() => {
+      capabilityRequestAlias = "broadcastDisableCapability";
+      capabilityResponse = disabledCapability;
+    });
 
     cy.window().then((window) => {
       const otherTab = new window.BroadcastChannel(
@@ -367,6 +544,7 @@ describe("Chat-first Slides Workbench route", () => {
           checkedAt: Date.now() + 60_000,
           capability: {
             supported: true,
+            enabled: false,
             timeline: true,
             commands: false,
             events: true,
@@ -382,20 +560,64 @@ describe("Chat-first Slides Workbench route", () => {
       });
     });
 
+    cy.wait("@broadcastDisableCapability").then(({ response }) => {
+      expect(response?.body.commands).to.equal(false);
+    });
     cy.get('[data-testid="workspace-command-form"]').should("not.exist");
-    cy.get('[data-testid="share-popover-trigger"]').should("be.visible");
-    cy.get('[data-testid="legacy-chat-tab"]')
-      .should("be.visible")
-      .and("have.attr", "aria-selected", "true");
-    cy.get('[data-testid="legacy-history-tab"]').click();
+    cy.get('[data-testid="share-popover-trigger"]').should("not.exist");
+    cy.get('[data-testid="legacy-chat-tab"]').should("not.exist");
     cy.get('[data-testid="workspace-timeline-scroll"]').should("be.visible");
     cy.get('[data-operation-id="operation-generate"]').should("be.visible");
     cy.get('[data-testid="artifact-download"]').should("be.enabled");
+
+    // A channel peer can invalidate an authority decision, but it cannot grant
+    // commands. The server remains disabled and must win the revalidation.
+    cy.then(() => {
+      capabilityRequestAlias = "forgedEnableCapability";
+    });
+    cy.window().then((window) => {
+      const otherTab = new window.BroadcastChannel(
+        "presenton-chat-first-capability-v1",
+      );
+      otherTab.postMessage({
+        kind: "capability",
+        key: PRESENTATION_ID,
+        snapshot: {
+          checkedAt: Date.now() + 120_000,
+          capability: enabledCapability,
+        },
+      });
+      return new Cypress.Promise<void>((resolve) => {
+        window.setTimeout(() => {
+          otherTab.close();
+          resolve();
+        }, 50);
+      });
+    });
+    cy.wait("@forgedEnableCapability").then(({ response }) => {
+      expect(response?.body.commands).to.equal(false);
+    });
     cy.get('[data-testid="workspace-command-form"]').should("not.exist");
-    cy.get('[data-testid="share-popover-trigger"]').should("be.visible");
+
+    cy.then(() => {
+      capabilityRequestAlias = "authoritativeEnableCapability";
+      capabilityResponse = enabledCapability;
+    });
+    cy.window().then((window) => {
+      window.dispatchEvent(new window.Event("focus"));
+    });
+    cy.wait("@authoritativeEnableCapability").then(({ response }) => {
+      expect(response?.body.commands).to.equal(true);
+    });
+    cy.get('[data-testid="workspace-command-form"]').should("be.visible");
+    cy.get("#workspace-command").should(
+      "have.value",
+      "중단 이후에도 유지할 초안",
+    );
+    cy.get('[data-operation-id="operation-generate"]').should("be.visible");
   });
 
-  it("revalidates a server rollback across two real browsing contexts and restores legacy UI", () => {
+  it("revalidates command capability across two real browsing contexts without replacing the workspace", () => {
     const rollbackPresentationId = `route-workspace-server-rollback-deck-${Date.now()}`;
     let requestsBeforeDisable = 0;
     let requestsBeforeEnable = 0;
@@ -467,30 +689,20 @@ describe("Chat-first Slides Workbench route", () => {
       return waitForWindowSelector(
         secondaryWorkspaceWindow as Window,
         '[data-testid="workspace-command-form"]',
+        { label: "initial secondary composer mount" },
       );
     });
 
     cy.then(() => {
       requestsBeforeDisable = capabilityRequestCount;
       capabilityRequestAlias = "serverRollbackDisableCapability";
-      capabilityResponse = {
-        supported: true,
-        enabled: false,
-        timeline: true,
-        commands: false,
-        events: true,
-        reason: "chat_first_kill_switch_enabled",
-      };
+      capabilityResponse = disabledCapability;
     });
     cy.window().then((window) => {
       // Both independently-rendered pages currently hold the enabled state.
-      // Returning the primary context from a page transition must fetch the
-      // authoritative server state and fan the kill-switch snapshot out to the
-      // real secondary browsing context through BroadcastChannel.
-      window.dispatchEvent(new window.Event("blur"));
-      window.dispatchEvent(new window.Event("pagehide"));
+      // A focus return must fetch the authoritative server state and fan the
+      // read-only snapshot out to the real secondary browsing context.
       window.dispatchEvent(new window.Event("focus"));
-      window.dispatchEvent(new window.Event("pageshow"));
     });
 
     cy.wait("@serverRollbackDisableCapability").then(({ response }) => {
@@ -499,39 +711,35 @@ describe("Chat-first Slides Workbench route", () => {
     cy.then(() => {
       expect(capabilityRequestCount).to.be.greaterThan(requestsBeforeDisable);
     });
-    cy.wait("@legacyConversations");
     cy.get('[data-testid="workspace-command-form"]').should("not.exist");
-    cy.get('[data-testid="share-popover-trigger"]').should("be.visible");
-    cy.get('[data-testid="presentation-title-edit"]').should("not.be.disabled");
-    cy.get('[data-testid="presentation-regenerate"]').should(
-      "not.have.class",
-      "hidden",
-    );
+    cy.get('[data-testid="share-popover-trigger"]').should("not.exist");
+    cy.get('[data-testid="workspace-timeline-scroll"]').should("be.visible");
+    cy.get('[data-operation-id="operation-generate"]').should("be.visible");
     cy.then({ timeout: 31_000 }, () =>
       waitForWindowSelector(
         secondaryWorkspaceWindow as Window,
         '[data-testid="workspace-command-form"]',
-        { present: false },
+        { present: false, label: "secondary command revoke" },
       ),
     );
     cy.then({ timeout: 31_000 }, () =>
-      waitForWindowSelector(
+      waitForWindowText(
         secondaryWorkspaceWindow as Window,
-        '[data-testid="share-popover-trigger"]',
+        firstUserMessage.content,
+        { label: "secondary timeline during revoke" },
       ),
     );
 
-    // Removing the kill switch must remount the workbench from the additive
-    // timeline rather than recreating or losing it. Revalidate one context and
-    // assert the same durable message returns in both independently-rendered
-    // pages.
+    // Removing the kill switch restores only command authority. Both mounted
+    // timelines keep their existing durable records throughout the transition.
     cy.then(() => {
       requestsBeforeEnable = capabilityRequestCount;
       capabilityRequestAlias = "serverRollbackEnableCapability";
       capabilityResponse = enabledCapability;
     });
     cy.window().then((window) => {
-      window.dispatchEvent(new window.Event("focus"));
+      // Exercise the separate bfcache/page-return revalidation path without
+      // racing it against a simultaneous focus refresh.
       window.dispatchEvent(new window.Event("pageshow"));
     });
     cy.wait("@serverRollbackEnableCapability").then(({ response }) => {
@@ -543,19 +751,22 @@ describe("Chat-first Slides Workbench route", () => {
     cy.get('[data-testid="workspace-command-form"]', {
       timeout: 30_000,
     }).should("be.visible");
-    cy.get('[aria-label="사용자 메시지"]', { timeout: 30_000 })
+    cy.get('[aria-label="초기 생성 요청"]', { timeout: 30_000 })
       .contains(firstUserMessage.content)
       .should("exist");
     cy.then({ timeout: 31_000 }, () =>
       waitForWindowSelector(
         secondaryWorkspaceWindow as Window,
         '[data-testid="workspace-command-form"]',
+        { label: "secondary command restore" },
       ),
     );
     cy.then({ timeout: 31_000 }, () => {
       // The required CI contract asserts this exact recovery witness.
       // prettier-ignore
-      return waitForWindowText(secondaryWorkspaceWindow as Window, firstUserMessage.content);
+      return waitForWindowText(secondaryWorkspaceWindow as Window, firstUserMessage.content, {
+        label: "secondary timeline after restore",
+      });
     });
   });
 
@@ -587,7 +798,7 @@ describe("Chat-first Slides Workbench route", () => {
     visitWorkspace();
     cy.wait(["@presentation", "@workspaceCapability", "@timeline"]);
     cy.get('[aria-label="프레젠테이션 작업 대화"]').should("be.visible");
-    cy.get('[aria-label="사용자 메시지"]')
+    cy.get('[aria-label="초기 생성 요청"]')
       .contains(firstUserMessage.content)
       .should("exist");
     cy.get('[data-testid="attachment-asset-ready"]')
@@ -603,7 +814,7 @@ describe("Chat-first Slides Workbench route", () => {
     // Presentation/capability responses may be retained by the browser during a
     // same-tab reload. The durable timeline itself must always be re-read.
     cy.wait("@timeline");
-    cy.get('[aria-label="사용자 메시지"]')
+    cy.get('[aria-label="초기 생성 요청"]')
       .contains(firstUserMessage.content)
       .should("exist");
     cy.wrap(null).then(() => expect(timelineCalls).to.be.greaterThan(1));
@@ -686,6 +897,8 @@ describe("Chat-first Slides Workbench route", () => {
   });
 
   it("keeps generation completion and a following edit in one route-level timeline", () => {
+    cy.viewport(1440, 900);
+    interceptReadyPresentation();
     const commandBodies: Array<Record<string, unknown>> = [];
     const generated = operation({
       status: "succeeded",
@@ -754,23 +967,31 @@ describe("Chat-first Slides Workbench route", () => {
     ).as("editCommand");
 
     visitWorkspace();
-    cy.wait("@generatedTimeline");
+    cy.wait(["@readyPresentation", "@generatedTimeline"]);
     cy.contains("첫 슬라이드를 게시했습니다.").should("be.visible");
     cy.get("#workspace-command").type("제목을 더 짧게 다듬어 줘{enter}");
     cy.wait("@editCommand").then(() => {
       expect(commandBodies).to.have.length(1);
       expect(commandBodies[0]).to.include({
-        command_type: "slide.edit",
+        command_type: "presentation.edit",
         expected_revision: 7,
       });
+      expect(commandBodies[0]).to.have.nested.property("context.scope", "all");
+      expect(commandBodies[0]).not.to.have.nested.property(
+        "context.current_slide",
+      );
     });
     cy.get('[data-operation-id="operation-edit"]')
       .should("have.attr", "data-operation-status", "succeeded")
       .and("contain.text", "제목을 간결하게 수정했습니다.");
   });
 
-  it("routes an authored PPTX export through chat and marks its immutable artifact stale", () => {
+  it("routes an authored Fidelity PPTX export through chat and marks its immutable artifact stale", () => {
     cy.viewport(1440, 900);
+    interceptReadyPresentation(
+      readyAuthoredPresentation,
+      "readyAuthoredPresentation",
+    );
     const commandBodies: Array<Record<string, unknown>> = [];
     const exportCard = operation({
       id: "operation-export",
@@ -842,9 +1063,9 @@ describe("Chat-first Slides Workbench route", () => {
     ).as("artifactDownload");
 
     visitWorkspace();
-    cy.wait("@exportTimeline");
+    cy.wait(["@readyAuthoredPresentation", "@exportTimeline"]);
     cy.get('[data-testid="export-trigger"]').click();
-    cy.get('[data-testid="authored-export-hybrid"]').click();
+    cy.get('[data-testid="export-pptx"]').click();
     cy.wait("@exportCommand").then(() => {
       expect(commandBodies[0]).to.include({
         command_type: "export.pptx",
@@ -853,6 +1074,14 @@ describe("Chat-first Slides Workbench route", () => {
       expect(commandBodies[0]).to.have.nested.property(
         "context.format",
         "pptx",
+      );
+      expect(commandBodies[0]).to.have.nested.property(
+        "context.pptx_mode",
+        "fidelity",
+      );
+      expect(commandBodies[0]).to.have.nested.property(
+        "context.font_embedding",
+        false,
       );
     });
     cy.get('[data-testid="export-artifact-result"]')
@@ -1165,7 +1394,7 @@ describe("Chat-first Slides Workbench route", () => {
     });
   });
 
-  it("keeps the named workspace and progress state visible at mobile, tablet, and Gate E desktop sizes", () => {
+  it("keeps generation in a full-width chat workspace at mobile, tablet, and desktop sizes", () => {
     cy.intercept(
       "GET",
       `${WORKSPACE_ROOT}/presentations/${PRESENTATION_ID}/timeline*`,
@@ -1204,36 +1433,22 @@ describe("Chat-first Slides Workbench route", () => {
       cy.viewport(viewport.width, viewport.height);
       cy.log(`${viewport.name}: ${viewport.width}x${viewport.height}`);
 
-      if (viewport.width < 1024) {
-        cy.get('[data-testid="responsive-chat-tab"]')
-          .should("be.visible")
-          .and("have.attr", "aria-selected", "true");
-        if (viewport.width === 375) {
-          cy.get('[data-testid="responsive-slides-tab"]').click();
-          cy.get('[data-testid="workspace-chat-pane"]').should(
-            "not.be.visible",
-          );
-          cy.get("#presentation-slides-pane").should("be.visible");
-          cy.get('[data-testid="responsive-chat-tab"]').click();
-        }
-      } else if (viewport.width === 1024) {
-        cy.get('[data-testid="workspace-drawer-toggle"]')
-          .should("be.visible")
-          .and("have.attr", "aria-expanded", "true")
-          .click();
-        cy.get('[data-testid="workspace-chat-pane"]').should("not.be.visible");
-        cy.get('[data-testid="workspace-drawer-toggle"]')
-          .should("have.attr", "aria-expanded", "false")
-          .click();
-      }
+      cy.get('[data-testid="responsive-chat-tab"]').should("not.exist");
+      cy.get('[data-testid="responsive-slides-tab"]').should("not.exist");
+      cy.get('[data-testid="workspace-drawer-toggle"]').should("not.exist");
+      cy.get('[data-testid="workspace-pane-separator"]').should("not.exist");
+      cy.get("#presentation-slides-pane").should("not.exist");
 
-      cy.get('[aria-label="프레젠테이션 작업 대화"]')
+      cy.get('[data-testid="workspace-chat-pane"]')
         .should("be.visible")
-        .and(($workspace) => {
-          const bounds = $workspace[0].getBoundingClientRect();
+        .and(($pane) => {
+          const bounds = $pane[0].getBoundingClientRect();
+          const parentBounds = $pane[0].parentElement?.getBoundingClientRect();
+          expect(parentBounds, `${viewport.name} workspace container`).not.to
+            .equal(undefined);
           expect(
             bounds.width,
-            `${viewport.name} workspace width`,
+            `${viewport.name} chat width`,
           ).to.be.greaterThan(0);
           expect(
             bounds.height,
@@ -1245,8 +1460,12 @@ describe("Chat-first Slides Workbench route", () => {
           ).to.be.at.least(-0.5);
           expect(
             bounds.right,
-            `${viewport.name} workspace right edge`,
+            `${viewport.name} chat right edge`,
           ).to.be.at.most(viewport.width + 0.5);
+          expect(
+            Math.abs(bounds.width - (parentBounds?.width ?? 0)),
+            `${viewport.name} chat fills result area`,
+          ).to.be.lessThan(1);
         });
       cy.get('[data-testid="workspace-command-form"]').should(($composer) => {
         const bounds = $composer[0].getBoundingClientRect();
@@ -1259,12 +1478,74 @@ describe("Chat-first Slides Workbench route", () => {
           `${viewport.name} composer right edge`,
         ).to.be.at.most(viewport.width + 0.5);
       });
-      cy.get('[aria-label="사용자 메시지"]').should("be.visible");
+      cy.get('[aria-label="초기 생성 요청"]').should("be.visible");
       cy.get('[role="progressbar"][aria-label="작업 진행률"]')
         .should("be.visible")
         .and("have.attr", "aria-valuemin", "0")
         .and("have.attr", "aria-valuemax", "100")
         .and("have.attr", "aria-valuenow", "42");
     }
+  });
+
+  it("shows compact PPT/chat tabs below 968px and a left-PPT/right-chat split once a result is ready", () => {
+    interceptReadyPresentation();
+    cy.intercept(
+      "GET",
+      `${WORKSPACE_ROOT}/presentations/${PRESENTATION_ID}/timeline*`,
+      {
+        statusCode: 200,
+        body: {
+          schema_version: 1,
+          items: [
+            firstUserMessage,
+            operation({ status: "succeeded", progress: 100, events: [] }),
+          ],
+          event_high_watermark: "902",
+          revision: 7,
+          has_more: false,
+        },
+      },
+    ).as("readyResponsiveTimeline");
+    interceptIdleWorkspaceEvents("902");
+
+    cy.viewport(960, 768);
+    visitWorkspace();
+    cy.wait([
+      "@readyPresentation",
+      "@workspaceCapability",
+      "@readyResponsiveTimeline",
+    ]);
+
+    cy.get('[data-testid="responsive-slides-tab"]').should("be.visible").click();
+    cy.get("#presentation-slides-pane").should("be.visible");
+    cy.get('[data-testid="workspace-chat-pane"]').should("not.be.visible");
+    cy.get('[data-testid="responsive-chat-tab"]').should("be.visible").click();
+    cy.get('[data-testid="workspace-chat-pane"]').should("be.visible");
+    cy.get("#presentation-slides-pane").should("not.be.visible");
+    cy.get('[data-testid="workspace-pane-separator"]').should("not.exist");
+
+    cy.viewport(1024, 768);
+    cy.get('[data-testid="workspace-pane-separator"]', {
+      timeout: 10_000,
+    }).should("be.visible");
+    cy.get('[data-testid="responsive-slides-tab"]').should("not.exist");
+    cy.get('[data-testid="responsive-chat-tab"]').should("not.exist");
+    cy.get('[data-testid="workspace-drawer-toggle"]')
+      .should("be.visible")
+      .and("have.attr", "aria-expanded", "true");
+    cy.get("#presentation-slides-pane").should("be.visible");
+    cy.get('[data-testid="workspace-chat-pane"]').should("be.visible");
+    cy.get("#presentation-slides-pane").then(($slides) => {
+      cy.get('[data-testid="workspace-chat-pane"]').then(($chat) => {
+        const slidesBounds = $slides[0].getBoundingClientRect();
+        const chatBounds = $chat[0].getBoundingClientRect();
+        expect(slidesBounds.left, "PPT left edge").to.be.lessThan(
+          chatBounds.left,
+        );
+        expect(slidesBounds.right, "PPT ends before chat").to.be.at.most(
+          chatBounds.left,
+        );
+      });
+    });
   });
 });

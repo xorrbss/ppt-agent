@@ -69,6 +69,55 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+def test_authored_render_workers_inherit_managed_render_ceiling():
+    assert authored_pipeline_mod._resolve_authored_render_workers(
+        5, {"PUBLIC_RENDER_MAX_CONCURRENCY": "2"}
+    ) == 2
+    assert authored_pipeline_mod._resolve_authored_render_workers(
+        5,
+        {
+            "PUBLIC_RENDER_MAX_CONCURRENCY": "2",
+            "AUTHORED_SLIDE_RENDER_CONCURRENCY": "3",
+        },
+    ) == 3
+
+
+def test_verified_local_fit_checkpoint_rehydrates_the_same_accepted_tuple():
+    html = "<html><body>accepted</body></html>"
+    png = b"immutable-rendered-png"
+    metrics = {"authored_local_fit": {"qualityStatus": "passed"}}
+    receipt = {
+        "qualityStatus": "passed",
+        "qualityPass": True,
+        "unresolvedReasons": [],
+        "png_digest": "sha256:" + hashlib.sha256(png).hexdigest(),
+    }
+
+    resumed = authored_pipeline_mod._rehydrate_accepted_local_fit(
+        receipt,
+        html=html,
+        png=png,
+        metrics=metrics,
+    )
+
+    assert resumed is not None
+    assert (resumed.html, resumed.png, resumed.metrics, resumed.receipt) == (
+        html,
+        png,
+        metrics,
+        receipt,
+    )
+    assert (
+        authored_pipeline_mod._rehydrate_accepted_local_fit(
+            receipt,
+            html=html,
+            png=b"different-png",
+            metrics=metrics,
+        )
+        is None
+    )
+
+
 def test_author_aggregate_capacity_fails_after_two_calls_before_render(monkeypatch):
     calls = []
     candidate = (
@@ -938,6 +987,22 @@ def test_author_retry_correction_names_the_specific_local_repair(
     assert all(fragment in correction for fragment in required_guidance)
 
 
+def test_author_retry_prompt_includes_exact_bounded_renderer_rejection(monkeypatch):
+    calls = []
+
+    async def flaky(content, ds, brand, role, index, n, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise RendererPolicyError("HTML closing tag is unbalanced: section")
+        return _VALID
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", flaky)
+
+    assert _run(author_deck(_outline(1), _brand())).htmls == [_SEALED_VALID]
+    assert "HTML closing tag is unbalanced: section" in calls[1]["correction_hint"]
+    assert len(calls[1]["correction_hint"]) < 500
+
+
 def test_author_deck_retries_local_renderer_failure_with_rejected_html(monkeypatch):
     rejected_html = (
         "<!doctype html><html><head><style>"
@@ -1351,7 +1416,12 @@ def test_author_slide_style_reference_failure_is_one_receipted_provider_outcome(
         )
 
     assert captured.value.code == "public_provider_bridge_exception"
-    assert captured.value.recovery_allowed is True
+    # T4 (commit 5590702f7, "Centralize authored provider overload handling")
+    # narrowed overload/recovery to the accepted status/timeout/quota set and
+    # made every other bridge exception non-recoverable outright: "Generic
+    # bridge exceptions are not overloads" (artifacts/verbatim-design-impl-
+    # 20260911/T4-report.md).
+    assert captured.value.recovery_allowed is False
     assert str(captured.value.__cause__) == "vision unavailable"
     assert len(calls) == 1
     assert isinstance(_author_user_content(calls[0]), list)
@@ -1668,7 +1738,12 @@ def test_vision_qa_reuses_selected_design_system(monkeypatch):
 
     # The full re-author is the slide's one receipted recovery call; it must
     # never downgrade to an unreceipted text-only provider fallback.
-    assert captured == [("SELECTED DESIGN SYSTEM", "high", "recovery", 2, False)]
+    # Commit bd72851e4b ("wip: checkpoint multi-session authored generation
+    # work") stopped forcing reasoning_effort="high" here: the durable
+    # generation preset is request-scoped and remains authoritative during
+    # this optional re-author pass too (see the call site's comment in
+    # utils/llm_calls/author_vision_qa.py).
+    assert captured == [("SELECTED DESIGN SYSTEM", None, "recovery", 2, False)]
     assert htmls == [_VALID]
     assert pngs == [b"revised-png"]
     assert fixed == [0]
@@ -1836,7 +1911,7 @@ def test_source_reflow_checkpoint_profile_uses_retained_metrics_for_local_patch(
     assert all(size > 0 for size in compact_sizes)
 
 
-def test_source_reflow_residual_repairs_are_checkpointed_before_retry(monkeypatch):
+def test_source_reflow_residual_repairs_require_admission_evidence(monkeypatch):
     calls = []
 
     async def fake_complete(**kwargs):
@@ -1859,30 +1934,81 @@ def test_source_reflow_residual_repairs_are_checkpointed_before_retry(monkeypatc
         repair_details=[],
     )
 
-    _run(authored_generation_mod._checkpoint_source_reflow_vqa_repairs(job, error))
+    _run(
+        authored_generation_mod._checkpoint_source_reflow_vqa_repairs(
+            job, error, absolute_indices=[4, 9]
+        )
+    )
 
-    # Every checkpoint write is fenced by the workspace lease token, and an
-    # unavailable browser probe is persisted as explicit empty evidence.
+    # A legacy changed index cannot authorize a completed source checkpoint.
+    assert calls == []
+
+    provisional = SimpleNamespace(slide_index=4, final_status="unresolved", changed=True)
+    admitted = SimpleNamespace(
+        slide_index=9, final_status="admitted", changed=True,
+        html="patched-html", png=b"patched-png", metrics={"verified": True},
+    )
+    validated = []
+
+    def verify_result(result, *, expected_slide_index):
+        assert result is admitted
+        assert expected_slide_index == 9
+        validated.append(expected_slide_index)
+
+    monkeypatch.setattr(authored_generation_mod, "validate_repair_result", verify_result)
+    monkeypatch.setattr(authored_generation_mod, "structural_checkpoint_metrics", lambda result: result.metrics)
+    error.repair_results = [provisional, admitted]
+    scene_updates = []
+
+    def persist_scene(result):
+        assert validated == [9]
+        assert calls == []
+        scene_updates.append(result.slide_index)
+
+    _run(authored_generation_mod._checkpoint_source_reflow_vqa_repairs(
+        job, error, absolute_indices=[4, 9], persist_scene=persist_scene,
+    ))
+    assert validated == [9]
+    assert scene_updates == [9]
     assert calls == [
         {
             "job_id": job_id,
-            "slide_index": 1,
-            "stage": "illustrate",
-            "attempt_token": "attempt-3",
-            "fencing_token": 7,
-            "html": "patched-html",
-        },
-        {
-            "job_id": job_id,
-            "slide_index": 1,
+            "slide_index": 9,
             "stage": "render",
             "attempt_token": "attempt-3",
             "fencing_token": 7,
             "html": "patched-html",
             "png": b"patched-png",
-            "browser_metrics": {},
+            "browser_metrics": {"verified": True},
         },
     ]
+
+
+def test_source_reflow_checkpoint_rejects_mapping_and_unverified_results(monkeypatch):
+    calls = []
+
+    async def fake_complete(**kwargs):
+        calls.append(kwargs)
+
+    def reject_evidence(result, **kwargs):
+        raise ValueError("unbound repair evidence")
+
+    monkeypatch.setattr(authored_generation_mod, "_complete_stage_after_external_success", fake_complete)
+    monkeypatch.setattr(authored_generation_mod, "validate_repair_result", reject_evidence)
+    job = SimpleNamespace(id=uuid.uuid4(), attempt_token="attempt-1")
+    error = author_vision_qa_mod.AuthoredVqaResidualDomIssuesError(
+        "residual", htmls=["a"], pngs=[b"png"], fixed=[0], repair_details=[],
+        repair_results=[SimpleNamespace(slide_index=21, final_status="admitted", changed=True)],
+    )
+    with pytest.raises(ValueError, match="index_mapping_invalid"):
+        _run(authored_generation_mod._checkpoint_source_reflow_vqa_repairs(
+            job, error, absolute_indices=[27],
+        ))
+    with pytest.raises(ValueError, match="unbound repair evidence"):
+        _run(authored_generation_mod._checkpoint_source_reflow_vqa_repairs(
+            job, error, absolute_indices=[21],
+        ))
+    assert calls == []
 
 
 def test_source_reflow_vqa_fails_closed_on_residual_hidden_image(monkeypatch):
@@ -2676,6 +2802,14 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(
     monkeypatch.setattr(
         authored_service, "_author_illustrate_render_pipeline", fake_pipeline
     )
+    # This double's ``AuthoredGenerationPipelineResult`` predates the
+    # requirement (services/authored_local_fit_policy.py) that a deck where
+    # local_fit_applies() carry one local_fit_receipts entry per published
+    # slide; this fixture is about style resolution, not local fit, so local
+    # fit is turned off here rather than faked.
+    monkeypatch.setattr(
+        authored_generation_mod, "local_fit_applies", lambda **_kwargs: False
+    )
 
     async def fake_header_contract(
         outline, brand, style=None, instructions=None, chapter_breadcrumb=False
@@ -2694,7 +2828,7 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(
     monkeypatch.setattr(
         authored_service,
         "_build_authored_export",
-        lambda request, presentation_id, pngs, title: "deck.pptx",
+        lambda request, presentation_id, pngs, title, **_kwargs: "deck.pptx",
     )
 
     from utils import llm_provider
@@ -2771,6 +2905,11 @@ def test_a_design_replay_is_authored_rather_than_dumped_verbatim(
     monkeypatch.setattr(
         authored_service, "_author_illustrate_render_pipeline", fake_pipeline
     )
+    # See the same note in
+    # test_authored_service_resolves_passes_and_persists_canonical_style.
+    monkeypatch.setattr(
+        authored_generation_mod, "local_fit_applies", lambda **_kwargs: False
+    )
 
     async def fake_header_contract(
         outline, brand, style=None, instructions=None, chapter_breadcrumb=False
@@ -2787,7 +2926,7 @@ def test_a_design_replay_is_authored_rather_than_dumped_verbatim(
     monkeypatch.setattr(
         authored_service,
         "_build_authored_export",
-        lambda request, presentation_id, pngs, title: "deck.pptx",
+        lambda request, presentation_id, pngs, title, **_kwargs: "deck.pptx",
     )
 
     from utils import llm_provider
@@ -2878,8 +3017,8 @@ def _patch_slide_render(monkeypatch, module, plain):
     """Patch both render entry points with one behaviour.
 
     The pipeline picks between ``render_html_to_png`` and
-    ``render_html_to_png_with_metrics(fit=True)`` on the in-render fit knob,
-    which defaults on.  A test about authoring order or worker bounds should
+    ``render_html_to_png_with_metrics(fit=True)`` on the in-render fit knob
+    (off by default).  A test about authoring order or worker bounds should
     hold on whichever call the knob selects, so it stubs both on the service
     module and lets ``_sync_runtime_dependencies`` carry them to the pipeline.
     """
@@ -2923,6 +3062,11 @@ def test_slide_pipeline_renders_fast_slide_before_slowest_author_finishes(monkey
         )
         monkeypatch.setattr(authored_service, "author_planned_slide", fake_author)
         _patch_slide_render(monkeypatch, authored_service, fake_render)
+        # This test exercises the mocked-Chrome pipelining contract stated in
+        # the module docstring; local fit's render path bypasses the mocked
+        # ``render_html_to_png`` seam entirely (it renders through
+        # ``render_html_to_png_with_metrics`` instead), so it is turned off here.
+        monkeypatch.setattr(authored_pipeline_mod, "local_fit_applies", lambda **_kwargs: False)
 
         return await asyncio.wait_for(
             authored_service._author_illustrate_render_pipeline(
@@ -3056,6 +3200,11 @@ def test_ninety_slide_pipeline_keeps_worker_concurrency_bounded(monkeypatch):
         )
         monkeypatch.setattr(authored_service, "author_planned_slide", fake_author)
         _patch_slide_render(monkeypatch, authored_service, fake_render)
+        # This test exercises the mocked-Chrome worker-pool contract stated in
+        # the module docstring; local fit's render path bypasses the mocked
+        # ``render_html_to_png`` seam entirely (it renders through
+        # ``render_html_to_png_with_metrics`` instead), so it is turned off here.
+        monkeypatch.setattr(authored_pipeline_mod, "local_fit_applies", lambda **_kwargs: False)
 
         result = await authored_service._author_illustrate_render_pipeline(
             _outline(90),
@@ -3216,7 +3365,10 @@ def test_build_image_pptx_one_fullbleed_picture_per_slide(tmp_path):
     build_image_pptx(pngs, out)
     prs = Presentation(out)
     assert len(prs.slides._sldIdLst) == 3
-    assert prs.slide_width == 12191695 and prs.slide_height == 6858000  # 13.333x7.5"
+    # 960x540pt at 12700 EMU/pt (see build_image_pptx, commit bd72851e4b): an
+    # exact CSS-pixel-to-point page, not the former 13.333x7.5" decimal-inch
+    # approximation that this assertion used to encode.
+    assert prs.slide_width == 12_192_000 and prs.slide_height == 6_858_000
     for s in prs.slides:
         pics = [sh for sh in s.shapes if sh.shape_type == 13]
         assert len(pics) == 1
@@ -3658,3 +3810,51 @@ def test_footer_only_deck_publishes_without_spending_a_remake(monkeypatch):
     assert outcome.text_scaled_slide_indices == ()
     assert outcome.remaining_flagged == []
     assert outcome.scene_envelope == "sealed"
+
+
+def test_source_repair_scene_resume_requires_exact_admitted_durable_tuple(monkeypatch):
+    calls = []
+    original, repaired = "original illustrated source", "admitted repaired source"
+    evidence = SimpleNamespace(html=repaired, png=b"repaired-png", metrics={"admission": "bound"})
+
+    def validate(**kwargs):
+        calls.append(kwargs)
+        return True
+
+    monkeypatch.setattr(authored_pipeline_mod, "validate_structural_checkpoint", validate)
+    assert authored_pipeline_mod._reusable_source_repair_scene(
+        source_reflow=True, durable_evidence=evidence,
+        original_html=original, scene_html=repaired, slide_index=33,
+    ) is True
+    assert calls == [{
+        "html": repaired, "png": evidence.png, "metrics": evidence.metrics,
+        "expected_slide_index": 33,
+        "baseline_html_digest": authored_pipeline_mod.html_digest(original),
+    }]
+
+
+@pytest.mark.parametrize("source_reflow,has_evidence,scene_matches", [
+    (False, True, True), (True, False, True), (True, True, False),
+])
+def test_source_repair_scene_resume_never_trusts_unbound_scene(
+    monkeypatch, source_reflow, has_evidence, scene_matches,
+):
+    def must_not_validate(**_kwargs):
+        raise AssertionError("A mismatched scene must not reach admission reuse")
+
+    monkeypatch.setattr(authored_pipeline_mod, "validate_structural_checkpoint", must_not_validate)
+    evidence = SimpleNamespace(html="repaired", png=b"png", metrics={}) if has_evidence else None
+    assert authored_pipeline_mod._reusable_source_repair_scene(
+        source_reflow=source_reflow, durable_evidence=evidence,
+        original_html="original", scene_html="repaired" if scene_matches else "other",
+        slide_index=21,
+    ) is False
+
+
+def test_source_repair_scene_resume_does_not_promote_rejected_admission(monkeypatch):
+    monkeypatch.setattr(authored_pipeline_mod, "validate_structural_checkpoint", lambda **_kwargs: False)
+    assert authored_pipeline_mod._reusable_source_repair_scene(
+        source_reflow=True,
+        durable_evidence=SimpleNamespace(html="repaired", png=b"png", metrics={}),
+        original_html="original", scene_html="repaired", slide_index=27,
+    ) is False

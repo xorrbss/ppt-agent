@@ -1,0 +1,155 @@
+{
+ "source-slide:4:text:3": {
+  "text": "8시간의 원칙",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "8시간의 원칙",
+    "begin": 0,
+    "end": 7,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:4:text:4": {
+  "text": "본 수업은 ‘필수’만. 나머지는 템플릿과 보너스 자료로 제공합니다.",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "본 수업은 ‘필수’만. 나머지는 템플릿과 보너스 자료로 제공합니다.",
+    "begin": 0,
+    "end": 37,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:4:text:5": {
+  "text": "04",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "04",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:4:text:6": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:4:text:7": {
+  "text": "• 기능을 많이 배우는 것보다 실제 영상 1개를 완성한다. • 영업 방법을 전부 외우기보다 핵심 3개를 실제로 해본다. • 강의가 끝날 때 ‘무엇을 누구에게 팔지’가 명확해야 한다. • 수강생이 집에 가서 바로 실행할 수 있는 자료를 남긴다.",
+  "run_count": 4,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "• ",
+    "body": "기능을 많이 배우는 것보다 실제 영상 1개를 완성한다.",
+    "begin": 0,
+    "end": 32,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "• ",
+    "body": "영업 방법을 전부 외우기보다 핵심 3개를 실제로 해본다.",
+    "begin": 33,
+    "end": 66,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "• ",
+    "body": "강의가 끝날 때 ‘무엇을 누구에게 팔지’가 명확해야 한다.",
+    "begin": 67,
+    "end": 101,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "• ",
+    "body": "수강생이 집에 가서 바로 실행할 수 있는 자료를 남긴다.",
+    "begin": 102,
+    "end": 135,
+    "order_free_before": false
+   }
+  ]
+ }
+}

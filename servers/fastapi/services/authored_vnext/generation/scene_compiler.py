@@ -290,72 +290,11 @@ def _intersect_rect(bounds: Rect, fence: Rect, *, consumer: str) -> Rect:
     return Rect(x=left, y=top, width=right - left, height=bottom - top)
 
 
-def _require_canonical_canvas(contract: DeckMasterContract) -> None:
-    if (
-        abs(contract.canvas.width_px - 1280.0) > 0.01
-        or abs(contract.canvas.height_px - 720.0) > 0.01
-    ):
-        raise ValueError(
-            "authored_vnext_canonical_canvas_unsupported: body Scene requires "
-            "the 1280x720 authored canvas"
-        )
-
-
-def _canonical_safe_area(contract: DeckMasterContract) -> Rect:
-    _require_canonical_canvas(contract)
-    return Rect(x=60.0, y=80.0, width=1160.0, height=560.0)
-
-
-def _safe_title_bounds(
-    title_bounds: Rect,
-    contract: DeckMasterContract,
-    *,
-    slide_role: str,
-) -> Rect:
-    # Validate the source binding, but never let company layout geometry become
-    # authored Scene state. The canonical authored template owns these bounds.
-    _intersect_rect(
-        title_bounds,
-        Rect(x=0, y=0, width=1280, height=720),
-        consumer="authored title source binding",
-    )
-    _require_canonical_canvas(contract)
-    if slide_role == "cover":
-        return Rect(x=92.0, y=176.0, width=1096.0, height=180.0)
-    if slide_role == "section":
-        return Rect(x=92.0, y=146.0, width=1096.0, height=180.0)
-    if slide_role == "longTitle":
-        return Rect(x=92.0, y=84.0, width=1096.0, height=240.0)
-    return Rect(x=92.0, y=84.0, width=1096.0, height=140.0)
-
-
-def _safe_body_bounds(
-    body_bounds: Rect,
-    *,
-    title_bounds: Rect,
-    contract: DeckMasterContract,
-) -> Rect:
-    # Retained-reference body placeholders describe source bindings, not the
-    # authored composition's final canvas.  Some source layouts expose only a
-    # short caption-sized placeholder; clipping the authored composition to
-    # that rectangle made native cards and rows physically unreadable.  The
-    # authored template owns body layout, so use the full safe-area remainder
-    # below the canonical title while retaining the placeholder solely as the
-    # source/content binding.
-    _intersect_rect(
-        body_bounds,
-        Rect(x=0, y=0, width=1280, height=720),
-        consumer="authored body source binding",
-    )
-    safe = _canonical_safe_area(contract)
-    gap = 24.0
-    top = max(safe.y, title_bounds.bottom + gap)
-    if safe.bottom - top < 48:
-        raise ValueError(
-            "authored body has insufficient safeArea below title; "
-            "title/body overlap is not publishable"
-        )
-    return Rect(x=safe.x, y=top, width=safe.width, height=safe.bottom - top)
+from services.document_canvas_scene_layout import (
+    canonical_safe_area as _canonical_safe_area,
+    safe_title_bounds as _safe_title_bounds,
+    safe_body_bounds as _safe_body_bounds,
+)
 
 
 def _normalized_font_name(value: str) -> str:
@@ -2601,10 +2540,10 @@ def compile_slide_scene(
         text_align="left",
         vertical_align="top",
     )
-    # Preserve the planner's explicit CJK/kinsoku line decisions in the Scene.
-    # A one-line title therefore remains one line in preview and native export
-    # instead of being silently reflowed by a different host text engine.
+    # Preserve explicit planner breaks. Legacy uses their exact line count;
+    # target-canvas revisions measure any additional wrapping below.
     title_text = "\n".join(slide.title.lines)
+    target_reflow = (contract.canvas.width_px, contract.canvas.height_px) != (1280, 720)
     title_style = _fit_text_style(
         contract=contract,
         text=title_text,
@@ -2612,7 +2551,10 @@ def compile_slide_scene(
         style=title_style,
         minimum_font_pt=minimum_title_pt,
         consumer="title",
-        maximum_lines=len(slide.title.lines),
+        # The stored planner line count belongs to the original canvas. A
+        # target revision keeps those explicit breaks, while allowing additional
+        # wrapping measured against its own title rectangle at the same floor.
+        maximum_lines=None if target_reflow else len(slide.title.lines),
     )
     elements: list[SceneElement] = [
         SceneTextElement(
@@ -3116,6 +3058,7 @@ def apply_scene_element_mutation(
         revision=scene.revision + 1,
         composition_digest=scene.composition_digest,
         source_digest=scene.source_digest,
+        document_canvas=scene.document_canvas,
         hybrid_profile_id=scene.hybrid_profile_id,
         slides=slides,
         asset_manifest=sorted(asset_manifest, key=lambda item: item.asset_id),

@@ -2,12 +2,12 @@ import asyncio
 import os
 import sys
 
-from services.export_task_service import (
+from services.export_task_contracts import (
     DEFAULT_EXPORT_TASK_TIMEOUT_SECONDS,
     MIN_EXPORT_TASK_TIMEOUT_SECONDS,
-    ExportTaskService,
 )
 from services.liteparse_service import LiteParseService
+from services.pptx_import_conversions import PptxImportConversionsService
 from utils.runtime_limits import BoundedTextBuffer
 
 
@@ -40,7 +40,7 @@ def test_liteparse_plain_bridge_keeps_stdout_and_bounds_stderr(tmp_path):
 
 
 def test_export_child_output_is_bounded(tmp_path):
-    service = ExportTaskService(timeout_seconds=10)
+    service = PptxImportConversionsService(timeout_seconds=10)
 
     result = asyncio.run(
         service._run_bounded_child(
@@ -63,7 +63,7 @@ def test_export_child_output_is_bounded(tmp_path):
 def test_export_timeout_defaults_to_large_deck_budget(monkeypatch):
     monkeypatch.delenv("EXPORT_TASK_TIMEOUT_SECONDS", raising=False)
 
-    service = ExportTaskService()
+    service = PptxImportConversionsService()
 
     assert service.timeout_seconds == DEFAULT_EXPORT_TASK_TIMEOUT_SECONDS
 
@@ -71,7 +71,7 @@ def test_export_timeout_defaults_to_large_deck_budget(monkeypatch):
 def test_export_timeout_can_be_configured_with_a_safe_floor(monkeypatch):
     monkeypatch.setenv("EXPORT_TASK_TIMEOUT_SECONDS", "30")
 
-    service = ExportTaskService()
+    service = PptxImportConversionsService()
 
     assert service.timeout_seconds == MIN_EXPORT_TASK_TIMEOUT_SECONDS
 
@@ -85,7 +85,7 @@ def test_export_runtime_receives_absolute_data_directories(monkeypatch, tmp_path
     monkeypatch.setenv("NEXT_PUBLIC_FAST_API", "http://127.0.0.1:8000")
     monkeypatch.setenv("PUPPETEER_EXECUTABLE_PATH", "test-browser")
 
-    service = ExportTaskService(timeout_seconds=10)
+    service = PptxImportConversionsService(timeout_seconds=10)
     environment = service._build_node_env()
 
     assert environment["APP_DATA_DIRECTORY"] == str(

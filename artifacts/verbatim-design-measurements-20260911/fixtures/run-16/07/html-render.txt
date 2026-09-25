@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:104px;background:#FFFFFF}
+.header-left{position:absolute;left:56px;top:24px;width:1000px}
+.eyebrow{height:22px;font-size:16px;line-height:22px;font-weight:700;letter-spacing:.04em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:132px;height:516px}
+.meta-row{height:34px;margin:0 56px 18px 56px;display:flex;align-items:center;justify-content:space-between}
+.meta{font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:22px;font-weight:600;color:#00828E}
+.business{font-size:18px;line-height:26px;font-weight:700;color:#002060}
+.main-grid{display:grid;grid-template-columns:250px 1fr;gap:24px;margin:0 56px;height:438px}
+.side-panel{height:438px;padding:28px;background:#00140E;border-radius:12px;display:flex;flex-direction:column;justify-content:space-between}
+.side-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:64px;line-height:72px;font-weight:700;color:#08916E}
+.side-rule{width:48px;height:4px;background:#219F88;border-radius:12px}
+.side-copy{font-size:20px;line-height:32px;font-weight:700;color:#FFFFFF}
+.side-note{font-size:16px;line-height:25px;color:#B9E5D9}
+.pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;height:438px}
+.card{position:relative;height:438px;padding:30px 24px 26px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-tab{display:inline-flex;align-items:center;height:34px;padding:0 13px;background:#002060;border-radius:12px;color:#FFFFFF;font-size:17px;line-height:24px;font-weight:700}
+.card-title{margin-top:28px;font-size:24px;line-height:34px;font-weight:700;color:#08916E}
+.card-line{width:40px;height:3px;margin-top:16px;background:#219F88;border-radius:12px}
+.card-copy{margin-top:24px;font-size:18px;line-height:30px;color:#1D1D1B}
+.card-copy strong{font-weight:700;color:#002060}
+.card-footer{position:absolute;left:24px;right:24px;bottom:26px;padding-top:16px;border-top:1px solid #E2E8F0;font-size:15px;line-height:24px;color:#00828E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" style="height:104px" class="header-band" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-7">1주차</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-07171e23249a3600" data-source-block-id="source-slide:8:text:3:run:1">나만의 상품 만들기</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" style="position:absolute;left:0;right:0;top:132px;height:516px" data-qid="q-div-855a21273ae4" data-semantic-role="decoration">
+  <div class="meta-row" data-qid="q-div-5565576497bd" data-semantic-role="supporting">
+    <div class="meta" data-semantic-role="supporting" data-qid="source-block-dafbc6fdbe645b80" data-source-block-id="source-slide:8:text:3:run:0">1주차 PART 2</div>
+    <div class="business" data-semantic-role="body" data-qid="source-block-e464e54f3dceb8cd" data-source-block-id="source-slide:8:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+  </div>
+
+  <div class="main-grid" data-qid="q-div-948c49f110fb" data-semantic-role="decoration">
+    <div class="side-panel" data-qid="q-div-1034e4170a1a" data-semantic-role="decoration">
+      <div data-qid="q-div-9426bb62dc8f" data-semantic-role="decoration">
+        <div class="side-number" data-semantic-role="supporting" data-qid="source-block-faf5e732e24aaba9" data-source-block-id="source-slide:8:text:4">08</div>
+        <div class="side-rule" data-qid="q-div-168737fd0490" data-semantic-role="decoration"></div>
+      </div>
+      <div class="side-copy" data-semantic-role="body" data-qid="q-side-copy-7">나만의 상품은<br>세 가지 질문에서<br>시작됩니다.</div>
+      <div class="side-note" data-semantic-role="supporting" data-qid="q-side-note-7">누구에게 · 무엇을 · 얼마에</div>
+    </div>
+
+    <div class="pillars" data-qid="q-div-31ba150fc76b" data-semantic-role="decoration">
+      <div class="card" data-qid="q-card-who-7" data-semantic-role="decoration">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="source-block-a1f7bcfcd567df57" data-source-block-id="source-slide:8:text:8">① 누구에게</div>
+        <div class="card-title" data-semantic-role="body" data-qid="q-title-who-7">① 누구에게</div>
+        <div class="card-line" data-qid="q-div-2e427aa60b81" data-semantic-role="decoration"></div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-c1c7fc143bd6800e" data-source-block-id="source-slide:8:text:9">식당 / 미용 / 학원 / 쇼핑몰 / 기업 등<br><strong data-qid="q-strong-663977331dde" data-semantic-role="body">처음에는 한두 업종에 집중</strong></div>
+        <div class="card-footer" data-semantic-role="supporting" data-qid="q-footer-who-7">대상을 좁혀 이해도를 높입니다.</div>
+      </div>
+
+      <div class="card" data-qid="q-card-what-7" data-semantic-role="decoration">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="source-block-00069fd52457dad6" data-source-block-id="source-slide:8:text:12">② 무엇을</div>
+        <div class="card-title" data-semantic-role="body" data-qid="q-title-what-7">② 무엇을</div>
+        <div class="card-line" data-qid="q-div-f6ec014e2911" data-semantic-role="decoration"></div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-64c885822e33507c" data-source-block-id="source-slide:8:text:13">월 4개 / 8개 / 12개 등<br><strong data-qid="q-strong-f213b54d7db8" data-semantic-role="body">기획 · 촬영 · 편집 범위 설정</strong></div>
+        <div class="card-footer" data-semantic-role="supporting" data-qid="q-footer-what-7">제공 범위를 선명하게 정합니다.</div>
+      </div>
+
+      <div class="card" data-qid="q-card-price-7" data-semantic-role="decoration">
+        <div class="card-tab" data-semantic-role="supporting" data-qid="source-block-ffdbd2c094d96567" data-source-block-id="source-slide:8:text:16">③ 얼마에</div>
+        <div class="card-title" data-semantic-role="body" data-qid="q-title-price-7">③ 얼마에</div>
+        <div class="card-line" data-qid="q-div-0da7b5a5d0eb" data-semantic-role="decoration"></div>
+        <div class="card-copy" data-semantic-role="body" data-qid="source-block-881c86a9688e81ca" data-source-block-id="source-slide:8:text:17"><strong data-qid="q-strong-f2342e01f838" data-semantic-role="body">초기에는 단순한 패키지</strong><br>수정 횟수와 납품일 명확히</div>
+        <div class="card-footer" data-semantic-role="supporting" data-qid="q-footer-price-7">가격과 운영 기준을 함께 고정합니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="q-page-7">08</div>
+</body>
+</html>

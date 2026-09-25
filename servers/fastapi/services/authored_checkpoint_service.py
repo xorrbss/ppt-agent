@@ -12,6 +12,7 @@ from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from services import authored_checkpoint_artifacts as _artifacts
 from services import authored_checkpoint_fence as _fence
 from services import authored_checkpoint_state as _state
+from services.authored_admission_receipt import AdmissionReceipt
 from services.authored_checkpoint_artifacts import (
     _artifact_sweep_batch_size,
     _artifact_sweep_max_bytes,
@@ -254,6 +255,7 @@ async def complete_stage(
     png: bytes | None = None,
     browser_metrics: Mapping[str, object] | None = None,
     checkpoint_revision: int | None = None,
+    admission_receipt: AdmissionReceipt | None = None,
     skipped: bool = False,
     fencing_token: int | None = None,
 ) -> AuthoredSlideCheckpoint:
@@ -268,6 +270,7 @@ async def complete_stage(
         png=png,
         browser_metrics=browser_metrics,
         checkpoint_revision=checkpoint_revision,
+        admission_receipt=admission_receipt,
         skipped=skipped,
     )
 

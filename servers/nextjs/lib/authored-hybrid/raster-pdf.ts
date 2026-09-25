@@ -1,13 +1,17 @@
 import sharp from "sharp";
 
-const PDF_WIDTH_PT = 960;
-const PDF_HEIGHT_PT = 540;
+const DEFAULT_PDF_PAGE_SIZE = Object.freeze({ widthPt: 960, heightPt: 540 });
 const MAX_RASTER_PDF_BYTES = 512 * 1024 * 1024;
 
 export interface RasterPdfJpegPage {
   readonly jpeg: Buffer;
   readonly width: number;
   readonly height: number;
+}
+
+export interface RasterPdfPageSize {
+  widthPt: number;
+  heightPt: number;
 }
 
 function ascii(value: string): Buffer {
@@ -17,6 +21,7 @@ function ascii(value: string): Buffer {
 /** Build a PDF with exactly one full-canvas JPEG XObject per page. */
 export function buildRasterPdfFromJpegs(
   pages: readonly RasterPdfJpegPage[],
+  pageSize: RasterPdfPageSize = DEFAULT_PDF_PAGE_SIZE,
 ): Buffer {
   if (!pages.length || pages.length > 100) {
     throw new Error("authored_pdf_slide_count_unsupported");
@@ -31,6 +36,12 @@ export function buildRasterPdfFromJpegs(
       page.height < 1
     ) throw new Error("authored_pdf_slide_image_invalid");
   }
+  if (
+    !Number.isFinite(pageSize.widthPt) ||
+    !Number.isFinite(pageSize.heightPt) ||
+    pageSize.widthPt <= 0 ||
+    pageSize.heightPt <= 0
+  ) throw new Error("authored_pdf_page_size_invalid");
 
   const objectCount = 2 + pages.length * 3;
   const offsets = new Array<number>(objectCount + 1).fill(0);
@@ -71,7 +82,7 @@ export function buildRasterPdfFromJpegs(
     object(
       pageId,
       ascii(
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PDF_WIDTH_PT} ${PDF_HEIGHT_PT}] ` +
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageSize.widthPt} ${pageSize.heightPt}] ` +
           `/Resources << /XObject << /${imageName} ${imageId} 0 R >> >> ` +
           `/Contents ${contentId} 0 R >>`,
       ),
@@ -89,7 +100,7 @@ export function buildRasterPdfFromJpegs(
       ]),
     );
     const paint = ascii(
-      `q\n${PDF_WIDTH_PT} 0 0 ${PDF_HEIGHT_PT} 0 0 cm\n/${imageName} Do\nQ\n`,
+      `q\n${pageSize.widthPt} 0 0 ${pageSize.heightPt} 0 0 cm\n/${imageName} Do\nQ\n`,
     );
     object(
       contentId,
@@ -118,6 +129,7 @@ export function buildRasterPdfFromJpegs(
 
 export async function buildRasterPdfFromPngs(
   pngs: readonly Buffer[],
+  pageSize: RasterPdfPageSize = DEFAULT_PDF_PAGE_SIZE,
 ): Promise<Buffer> {
   const pages = await Promise.all(
     pngs.map(async (png) => {
@@ -132,7 +144,7 @@ export async function buildRasterPdfFromPngs(
       };
     }),
   );
-  return buildRasterPdfFromJpegs(pages);
+  return buildRasterPdfFromJpegs(pages, pageSize);
 }
 
 export function rasterPdfPageCount(pdf: Buffer): number {

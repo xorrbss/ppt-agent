@@ -45,9 +45,16 @@ async def publish_presentation_revision(
     result_revision = expected_revision + 1 if advance_revision else expected_revision
     now = get_current_utc_datetime()
     published_operation_version: int | None = None
+    published_operation_fence: int | None = None
 
     owner_id = get_current_owner_id()
+    svg_presentation = await session.get(PresentationModel, presentation_id)
     async with session.begin_nested():
+        if svg_presentation is not None and svg_presentation.is_svg() and advance_revision:
+            from services.svg_document_mutations import refresh_svg_page_numbers
+
+            await refresh_svg_page_numbers(session, svg_presentation, operation_id=operation_id,
+                attempt_token=attempt_token, expected_revision=expected_revision)
         # Validate the attempt fence first. The savepoint guarantees that a
         # caller cannot accidentally commit half of this publication after
         # catching a conflict exception.
@@ -77,6 +84,7 @@ async def publish_presentation_revision(
                 .returning(
                     WorkspaceOperation.id,
                     WorkspaceOperation.version,
+                    WorkspaceOperation.fencing_token,
                 )
             )
             if owner_id is not None:
@@ -89,6 +97,7 @@ async def publish_presentation_revision(
             if completed_operation is None:
                 raise PresentationPublicationConflict("stale_operation_fence")
             published_operation_version = int(completed_operation["version"])
+            published_operation_fence = int(completed_operation["fencing_token"])
 
         presentation_statement = (
             update(PresentationModel)
@@ -144,6 +153,7 @@ async def publish_presentation_revision(
                 expected_version=published_operation_version,
                 projection_values=projection_values,
                 increment_version=True,
+                public_admission_fence=published_operation_fence,
             )
             if terminal_event is None:
                 raise PresentationPublicationConflict("stale_operation_event_fence")
@@ -162,6 +172,7 @@ async def publish_presentation_revision(
                     allowed_states=("succeeded",),
                     expected_version=terminal_version,
                     increment_version=True,
+                    public_admission_fence=published_operation_fence,
                 )
                 if published_event is None:
                     raise PresentationPublicationConflict(
@@ -179,6 +190,7 @@ async def publish_presentation_revision(
                 },
                 allowed_states=("succeeded",),
                 expected_version=terminal_version,
+                public_admission_fence=published_operation_fence,
             )
             if completed_event is None:
                 raise PresentationPublicationConflict(

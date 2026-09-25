@@ -1,0 +1,240 @@
+{
+ "source-slide:7:text:3": {
+  "text": "1주차 PART 1 | 숏폼 대행사업의 구조",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "1주차 PART 1",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼 대행사업의 구조",
+    "begin": 13,
+    "end": 24,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:7:text:4": {
+  "text": "07",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "07",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:7:text:5": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:7:text:6": {
+  "text": "• 숏폼 대행사는 무엇을 돈 받고 해주는가 • 영상 편집자와 대행사의 차이 • 1인이 맡을 수 있는 업무 범위 • 고객이 실제로 원하는 결과 • 월 관리형 대행의 기본 구조",
+  "run_count": 5,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    4,
+    4
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "• ",
+    "body": "숏폼 대행사는 무엇을 돈 받고 해주는가",
+    "begin": 0,
+    "end": 23,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "• ",
+    "body": "영상 편집자와 대행사의 차이",
+    "begin": 24,
+    "end": 41,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "• ",
+    "body": "1인이 맡을 수 있는 업무 범위",
+    "begin": 42,
+    "end": 61,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "• ",
+    "body": "고객이 실제로 원하는 결과",
+    "begin": 62,
+    "end": 78,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 4,
+    "marker": "• ",
+    "body": "월 관리형 대행의 기본 구조",
+    "begin": 79,
+    "end": 96,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:7:text:9": {
+  "text": "핵심",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "핵심",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:7:text:10": {
+  "text": "‘영상’이 아니라 ‘콘텐츠 운영’을 판다",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "‘영상’이 아니라 ‘콘텐츠 운영’을 판다",
+    "begin": 0,
+    "end": 22,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:7:text:13": {
+  "text": "생각할 질문",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "생각할 질문",
+    "begin": 0,
+    "end": 6,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:7:text:14": {
+  "text": "나는 어떤 사장님에게 강한가?",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "나는 어떤 사장님에게 강한가?",
+    "begin": 0,
+    "end": 16,
+    "order_free_before": false
+   }
+  ]
+ }
+}

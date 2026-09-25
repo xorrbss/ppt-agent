@@ -1,0 +1,54 @@
+{
+  "id": "health-15-thermometer",
+  "category": "health",
+  "tags": {
+    "ko": [
+      "건강",
+      "체온계"
+    ],
+    "en": [
+      "health",
+      "thermometer"
+    ]
+  },
+  "alt": {
+    "ko": "체온계 단색 벡터 인포그래픽",
+    "en": "thermometer monochrome vector infographic"
+  },
+  "path": "originals/health-15-thermometer.svg",
+  "thumbnail": "thumbnails/health-15-thermometer.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 301,
+  "sha256": "60e599144c8ac4b32794c1d22ad21531896432c1e55ce7097e61a778cb76c345",
+  "geometry_sha256": "2eb938d68fde21f08f05739c7cbec557228f3059066a0a91f3915e6f6a9ae7d1",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 58745,
+    "preview_opaque_pixels": 5847,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Thermometer"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

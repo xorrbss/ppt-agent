@@ -31,6 +31,7 @@ import type { MasterCatalogSummary } from "@/lib/authored-vnext/master/contracts
 import { companyStandardDisplayName } from "@/lib/authored-vnext/master/selection-storage";
 import AuthoredStylesApi, {
   DEFAULT_AUTHORED_STYLE,
+  canonicalAuthoredStyleId,
 } from "../../services/api/authored";
 import type {
   AuthoredStyleCategory,
@@ -103,11 +104,13 @@ export default function AuthoredTemplateChanger({
   onWorkspaceCommand?: WorkspaceCommandDispatcher;
   navigateToPresentation?: (targetUrl: string) => void;
 }) {
-  const effectiveCurrentStyleId =
-    currentStyleId || DEFAULT_AUTHORED_STYLE.id;
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"template" | "master">("template");
   const [styles, setStyles] = useState<AuthoredStyleSummary[]>([]);
+  const effectiveCurrentStyleId = canonicalAuthoredStyleId(
+    styles,
+    currentStyleId || DEFAULT_AUTHORED_STYLE.id,
+  );
   const [selectedStyleId, setSelectedStyleId] = useState(
     effectiveCurrentStyleId
   );
@@ -138,7 +141,7 @@ export default function AuthoredTemplateChanger({
       .then((nextStyles) => {
         if (cancelled) return;
         setStyles(nextStyles);
-        setSelectedStyleId(effectiveCurrentStyleId);
+        setSelectedStyleId(canonicalAuthoredStyleId(nextStyles, effectiveCurrentStyleId));
       })
       .catch((error) => {
         if (cancelled) return;

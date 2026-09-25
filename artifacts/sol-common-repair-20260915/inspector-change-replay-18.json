@@ -1,0 +1,579 @@
+{
+  "sourceDigest": "ee3cb10183b5905dbf265183f0b94e77168cc8ff6f1e48c32b9a9072c75b6c6d",
+  "count": 18,
+  "changedRows": [
+    {
+      "sourcePath": "runs/stage1/case-01/C",
+      "geometryPass": false,
+      "beforePass": true,
+      "afterPass": false,
+      "blockers": [
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of q-s1-analysis-sub prints 14px below the bottom of its card q-s1-business-card",
+          "qids": [
+            "q-s1-analysis-sub"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0642,
+            "excess_px_x": 0.0,
+            "excess_px_y": 14.0,
+            "card_qid": "q-s1-business-card",
+            "element_kind": "text"
+          }
+        }
+      ]
+    }
+  ],
+  "normalGeometryRegressions": [],
+  "rows": [
+    {
+      "sourcePath": "runs/stage1/case-01/C",
+      "geometryPass": false,
+      "beforePass": true,
+      "afterPass": false,
+      "blockers": [
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of q-s1-analysis-sub prints 14px below the bottom of its card q-s1-business-card",
+          "qids": [
+            "q-s1-analysis-sub"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0642,
+            "excess_px_x": 0.0,
+            "excess_px_y": 14.0,
+            "card_qid": "q-s1-business-card",
+            "element_kind": "text"
+          }
+        }
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-01/A",
+      "geometryPass": false,
+      "beforePass": false,
+      "afterPass": false,
+      "blockers": [
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of q-strong-f2092292903b prints 41px below the bottom of its card s1-area-card-4",
+          "qids": [
+            "q-strong-f2092292903b"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1962,
+            "excess_px_x": 0.0,
+            "excess_px_y": 41.0,
+            "card_qid": "s1-area-card-4",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-after prints 3px below the bottom of its card s1-problem-card",
+          "qids": [
+            "s1-after"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0069,
+            "excess_px_x": 0.0,
+            "excess_px_y": 3.0,
+            "card_qid": "s1-problem-card",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-area-copy-3 prints 16px below the bottom of its card s1-area-card-3",
+          "qids": [
+            "s1-area-copy-3"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0766,
+            "excess_px_x": 0.0,
+            "excess_px_y": 16.0,
+            "card_qid": "s1-area-card-3",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-area-copy-4 prints 41px below the bottom of its card s1-area-card-4",
+          "qids": [
+            "s1-area-copy-4"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1962,
+            "excess_px_x": 0.0,
+            "excess_px_y": 41.0,
+            "card_qid": "s1-area-card-4",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-before prints 3px below the bottom of its card s1-problem-card",
+          "qids": [
+            "s1-before"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0069,
+            "excess_px_x": 0.0,
+            "excess_px_y": 3.0,
+            "card_qid": "s1-problem-card",
+            "element_kind": "text"
+          }
+        }
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-02/C",
+      "geometryPass": true,
+      "beforePass": true,
+      "afterPass": true,
+      "blockers": []
+    },
+    {
+      "sourcePath": "runs/stage1/case-02/B",
+      "geometryPass": false,
+      "beforePass": false,
+      "afterPass": false,
+      "blockers": [
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s27-takeaway-copy prints 11px below the bottom of its card s27-takeaway",
+          "qids": [
+            "s27-takeaway-copy"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1618,
+            "excess_px_x": 0.0,
+            "excess_px_y": 11.0,
+            "card_qid": "s27-takeaway",
+            "element_kind": "text"
+          }
+        }
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-02/A",
+      "geometryPass": false,
+      "beforePass": false,
+      "afterPass": false,
+      "blockers": [
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s27-takeaway-copy prints 11px below the bottom of its card s27-takeaway",
+          "qids": [
+            "s27-takeaway-copy"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1618,
+            "excess_px_x": 0.0,
+            "excess_px_y": 11.0,
+            "card_qid": "s27-takeaway",
+            "element_kind": "text"
+          }
+        }
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-03/B",
+      "geometryPass": false,
+      "beforePass": true,
+      "afterPass": true,
+      "blockers": []
+    },
+    {
+      "sourcePath": "runs/stage1/case-03/A",
+      "geometryPass": false,
+      "beforePass": false,
+      "afterPass": false,
+      "blockers": [
+        {
+          "category": "off_canvas",
+          "severity": "high",
+          "detail": "element extends outside the slide canvas",
+          "qids": [
+            "q-div-651f6847781f"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "overshoot_px_left": 0.0,
+            "overshoot_px_top": 0.0,
+            "overshoot_px_right": 0.0,
+            "overshoot_px_bottom": 181.0,
+            "element_kind": "container"
+          }
+        },
+        {
+          "category": "off_canvas",
+          "severity": "high",
+          "detail": "element extends outside the slide canvas",
+          "qids": [
+            "q-div-d62c5af9c267"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "overshoot_px_left": 0.0,
+            "overshoot_px_top": 0.0,
+            "overshoot_px_right": 0.0,
+            "overshoot_px_bottom": 184.0,
+            "element_kind": "container"
+          }
+        }
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-03/C",
+      "geometryPass": false,
+      "beforePass": false,
+      "afterPass": false,
+      "blockers": [
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of q-strong-f2342e01f838 prints 8px below the bottom of its card s16-user-role",
+          "qids": [
+            "q-strong-f2342e01f838"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1111,
+            "excess_px_x": 0.0,
+            "excess_px_y": 8.0,
+            "card_qid": "s16-user-role",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s16-user-copy prints 8px below the bottom of its card s16-user-role",
+          "qids": [
+            "s16-user-copy"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1111,
+            "excess_px_x": 0.0,
+            "excess_px_y": 8.0,
+            "card_qid": "s16-user-role",
+            "element_kind": "text"
+          }
+        }
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-04/C",
+      "geometryPass": false,
+      "beforePass": false,
+      "afterPass": false,
+      "blockers": [
+        {
+          "category": "clipping",
+          "severity": "medium",
+          "detail": "browser reports clipped visible content",
+          "qids": [
+            "s24-change-note"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "hidden_fraction": 1.0,
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "clipping",
+          "severity": "medium",
+          "detail": "browser reports clipped visible content",
+          "qids": [
+            "s24-flow-copy-3"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "hidden_fraction": 0.825,
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "clipping",
+          "severity": "medium",
+          "detail": "browser reports clipped visible content",
+          "qids": [
+            "s24-flow-num-3"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "hidden_fraction": 0.771,
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "off_canvas",
+          "severity": "high",
+          "detail": "element extends outside the slide canvas",
+          "qids": [
+            "s24-change-note"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "overshoot_px_left": 0.0,
+            "overshoot_px_top": 0.0,
+            "overshoot_px_right": 0.0,
+            "overshoot_px_bottom": 100.0,
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "off_canvas",
+          "severity": "high",
+          "detail": "element extends outside the slide canvas",
+          "qids": [
+            "s24-flow-card-3"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "overshoot_px_left": 0.0,
+            "overshoot_px_top": 0.0,
+            "overshoot_px_right": 0.0,
+            "overshoot_px_bottom": 28.0,
+            "element_kind": "container"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s24-change-note prints 118px below the bottom of its card s24-change-panel",
+          "qids": [
+            "s24-change-note"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.2479,
+            "excess_px_x": 0.0,
+            "excess_px_y": 118.0,
+            "card_qid": "s24-change-panel",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s24-flow-copy-3 prints 46px below the bottom of its card s24-change-panel",
+          "qids": [
+            "s24-flow-copy-3"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0956,
+            "excess_px_x": 0.0,
+            "excess_px_y": 45.5,
+            "card_qid": "s24-change-panel",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s24-flow-num-3 prints 44px below the bottom of its card s24-change-panel",
+          "qids": [
+            "s24-flow-num-3"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0935,
+            "excess_px_x": 0.0,
+            "excess_px_y": 44.5,
+            "card_qid": "s24-change-panel",
+            "element_kind": "text"
+          }
+        }
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-04/A",
+      "geometryPass": true,
+      "beforePass": true,
+      "afterPass": true,
+      "blockers": []
+    },
+    {
+      "sourcePath": "runs/stage1/case-04/B",
+      "geometryPass": true,
+      "beforePass": true,
+      "afterPass": true,
+      "blockers": []
+    },
+    {
+      "sourcePath": "runs/stage1/case-05/A",
+      "geometryPass": false,
+      "beforePass": true,
+      "afterPass": true,
+      "blockers": []
+    },
+    {
+      "sourcePath": "runs/stage1/case-05/C",
+      "geometryPass": true,
+      "beforePass": true,
+      "afterPass": true,
+      "blockers": []
+    },
+    {
+      "sourcePath": "runs/stage1/case-05/B",
+      "geometryPass": false,
+      "beforePass": true,
+      "afterPass": true,
+      "blockers": []
+    },
+    {
+      "sourcePath": "runs/stage1/case-06/B",
+      "geometryPass": true,
+      "beforePass": true,
+      "afterPass": true,
+      "blockers": []
+    },
+    {
+      "sourcePath": "runs/stage1/case-06/C",
+      "geometryPass": false,
+      "beforePass": false,
+      "afterPass": false,
+      "blockers": [
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s18-metric-load prints 38px below the bottom of its card s18-quality-card",
+          "qids": [
+            "s18-metric-load"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.1845,
+            "excess_px_x": 0.0,
+            "excess_px_y": 38.0,
+            "card_qid": "s18-quality-card",
+            "element_kind": "text"
+          }
+        }
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-06/A",
+      "geometryPass": false,
+      "beforePass": false,
+      "afterPass": false,
+      "blockers": [
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s18-quality-6 prints 14px below the bottom of its card s18-card-quality",
+          "qids": [
+            "s18-quality-6"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0642,
+            "excess_px_x": 0.0,
+            "excess_px_y": 14.0,
+            "card_qid": "s18-card-quality",
+            "element_kind": "text"
+          }
+        }
+      ]
+    },
+    {
+      "sourcePath": "runs/stage1/case-01/B",
+      "geometryPass": false,
+      "beforePass": false,
+      "afterPass": false,
+      "blockers": [
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-after prints 3px below the bottom of its card s1-problem-card",
+          "qids": [
+            "s1-after"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0069,
+            "excess_px_x": 0.0,
+            "excess_px_y": 3.0,
+            "card_qid": "s1-problem-card",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-area-copy-3 prints 10px below the bottom of its card s1-area-card-3",
+          "qids": [
+            "s1-area-copy-3"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0478,
+            "excess_px_x": 0.0,
+            "excess_px_y": 10.0,
+            "card_qid": "s1-area-card-3",
+            "element_kind": "text"
+          }
+        },
+        {
+          "category": "text_escapes_card",
+          "severity": "medium",
+          "detail": "text of s1-before prints 3px below the bottom of its card s1-problem-card",
+          "qids": [
+            "s1-before"
+          ],
+          "policy": "style_reference",
+          "magnitude": {
+            "ratio_x": 1.0,
+            "ratio_y": 1.0069,
+            "excess_px_x": 0.0,
+            "excess_px_y": 3.0,
+            "card_qid": "s1-problem-card",
+            "element_kind": "text"
+          }
+        }
+      ]
+    }
+  ]
+}

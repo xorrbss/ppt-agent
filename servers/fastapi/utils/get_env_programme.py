@@ -27,6 +27,62 @@ def _clamped_int(key: str, default: int, low: int, high: int, settings) -> int:
     return max(low, min(high, _int_setting(key, default, settings)))
 
 
+def get_authored_admission_gate_mode(settings: RuntimeSettings | None = None) -> str:
+    """Admission rollout is shadow until same-input parity has been measured."""
+    mode = (get_setting_env("AUTHORED_ADMISSION_GATE_MODE", settings) or "shadow").strip().lower()
+    if mode not in {"shadow", "enforce"}:
+        raise ValueError("authored_admission_gate_mode_invalid")
+    return mode
+
+
+def get_authored_composition_envelope_profile(
+    settings: RuntimeSettings | None = None,
+) -> str:
+    """Which density contract an ordinary authored deck is authored under.
+
+    ``current`` (default) is today's behaviour exactly; ``august`` is the
+    pre-2026-08-28 contract: no server-frozen envelope, no blocking DOM
+    quality gate, no deck-wide figure plan.
+
+    The key is registered as an ``enum``, so the settings snapshot already
+    rejects any value outside the two choices — exactly, including case and
+    surrounding space — before it reaches this function. The guard below is
+    therefore only reached by a caller that bypassed the registry, and it
+    still refuses rather than falling back to ``current``: a silently wrong
+    profile would invalidate the A/B this switch exists to make possible.
+    """
+    name = get_setting_env("AUTHORED_COMPOSITION_ENVELOPE_PROFILE", settings) or "current"
+    if name not in {"current", "august"}:
+        raise ValueError("authored_composition_envelope_profile_invalid")
+    return name
+
+
+def get_authored_author_prompt_profile(settings: RuntimeSettings | None = None) -> str:
+    """Which authoring prompt text an authored slide is written from.
+
+    ``current`` (default) is today's prompt byte for byte; ``august-0819`` is
+    the 2026-08-19 text with every contract the gates now require kept. Like
+    the envelope profile above it is a registry ``enum``, so a misspelled or
+    space-padded value is refused rather than silently read as ``current``:
+    a wrong profile would invalidate the A/B the switch exists for.
+    """
+    name = get_setting_env("AUTHORED_AUTHOR_PROMPT_PROFILE", settings) or "current"
+    if name not in {"current", "august-0819"}:
+        raise ValueError("authored_author_prompt_profile_invalid")
+    return name
+
+
+def get_authored_author_prompt_model(settings: RuntimeSettings | None = None) -> str | None:
+    """Pin the authoring model for the run, or ``None`` to leave it alone.
+
+    Composition follows the model at least as much as the prompt, so a prompt
+    A/B is only a clean comparison at a fixed model. Unset — the default — is
+    not a pin: the provider's own selection stands exactly as it does today.
+    """
+    value = (get_setting_env("AUTHORED_AUTHOR_PROMPT_MODEL", settings) or "").strip()
+    return value or None
+
+
 def get_image_generation_concurrency(settings: RuntimeSettings | None = None) -> int:
     """Concurrent image provider calls per process, clamped to 1..8."""
     return _clamped_int("IMAGE_GENERATION_CONCURRENCY", 3, 1, 8, settings)
@@ -39,9 +95,23 @@ def is_export_font_embedding_default_cjk_enabled(
     return _bool_setting("EXPORT_FONT_EMBEDDING_DEFAULT_CJK", True, settings)
 
 
+def get_authored_html_normalization(settings: RuntimeSettings | None = None) -> str:
+    """Select legacy source-span or canonical HTML5-tree normalization."""
+
+    mode = (get_setting_env("AUTHORED_HTML_NORMALIZATION", settings) or "legacy").strip().lower()
+    return mode if mode in {"legacy", "tree"} else "legacy"
+
+
 def is_authored_style_anchor_enabled(settings: RuntimeSettings | None = None) -> bool:
     """Author one anchor slide first and hand its stylesheet to the rest."""
     return _bool_setting("AUTHORED_STYLE_ANCHOR_ENABLED", True, settings)
+
+
+def is_authored_content_brief_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Generate the optional knowledge brief before an authored outline."""
+    return _bool_setting("AUTHORED_CONTENT_BRIEF_ENABLED", True, settings)
 
 
 def get_authored_illustration_share(settings: RuntimeSettings | None = None) -> float:
@@ -85,6 +155,19 @@ def is_authored_header_deterministic_repair_enabled(
     return _bool_setting("AUTHORED_HEADER_DETERMINISTIC_REPAIR", True, settings)
 
 
+def is_authored_local_fit_source_reflow_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Whether a verbatim source-reflow deck also runs the deterministic local fit.
+
+    Off by default: the fitter may shrink type within its own floor and cap, and
+    whether a verbatim deck may carry that is a product decision. Use
+    ``services.authored_local_fit_policy.local_fit_applies`` rather than this
+    accessor, so every gate in one attempt agrees about one deck.
+    """
+    return _bool_setting("AUTHORED_LOCAL_FIT_SOURCE_REFLOW", False, settings)
+
+
 def is_authored_text_scale_rung_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:
@@ -119,8 +202,12 @@ def get_authored_type_floor_px(settings: RuntimeSettings | None = None) -> int:
 
 
 def is_authored_in_render_fit_enabled(settings: RuntimeSettings | None = None) -> bool:
-    """Fit card copy inside its card during the first render (grow then shrink)."""
-    return _bool_setting("AUTHORED_IN_RENDER_FIT_ENABLED", True, settings)
+    """Fit card copy inside its card during the first render (grow then shrink).
+
+    Off by default: local-fit is the active fitter. The in-render path stays
+    available behind this knob.
+    """
+    return _bool_setting("AUTHORED_IN_RENDER_FIT_ENABLED", False, settings)
 
 
 def get_authored_in_render_fit_verify_sample(
@@ -128,8 +215,8 @@ def get_authored_in_render_fit_verify_sample(
 ) -> float:
     """Fraction (0..1) of fitted slides re-rendered without the fit to verify.
 
-    The default is the design's first-enablement sample, not zero: the fit is
-    on by default now, and the layout-equivalence claim is watched on real
+    The default is the design's first-enablement sample, not zero: whenever the
+    fit is enabled, the layout-equivalence claim is watched on real
     decks until ``fit_reconstruction_mismatches`` has stayed at zero across
     200+ fitted slides (design section 8).
     """
@@ -301,8 +388,36 @@ def is_authored_prompt_bundle_enabled(
     return _bool_setting("AUTHORED_PROMPT_BUNDLE_ENABLED", False, settings)
 
 
+def is_authored_verbatim_placeholder_authoring_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Opt into source-token authoring; existing jobs keep the legacy binder."""
+    return _bool_setting("AUTHORED_VERBATIM_PLACEHOLDER_AUTHORING", False, settings)
+
+
+def is_authored_verbatim_single_repair_loop_enabled(
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Replace the four post-author repair paths with one bounded loop."""
+    return _bool_setting("AUTHORED_VERBATIM_SINGLE_REPAIR_LOOP", False, settings)
+
+
+def get_authored_verbatim_repair_loop_model_calls(
+    settings: RuntimeSettings | None = None,
+) -> int:
+    """Model repair calls the single loop may spend per slide, clamped 0..3."""
+    return _clamped_int("AUTHORED_VERBATIM_REPAIR_LOOP_MODEL_CALLS", 1, 0, 3, settings)
+
+
 __all__ = [
     "get_authored_fragmentation_max_text_owners",
+    "get_authored_verbatim_repair_loop_model_calls",
+    "is_authored_verbatim_placeholder_authoring_enabled",
+    "is_authored_verbatim_single_repair_loop_enabled",
+    "get_authored_admission_gate_mode",
+    "get_authored_author_prompt_model",
+    "get_authored_author_prompt_profile",
+    "get_authored_composition_envelope_profile",
     "get_authored_illustration_share",
     "get_authored_in_render_fit_verify_sample",
     "get_authored_metrics_cache_entries",
@@ -315,10 +430,12 @@ __all__ = [
     "get_llm_light_model_env",
     "get_openai_reasoning_effort_env",
     "get_outline_density_floor_chars",
+    "get_authored_html_normalization",
     "get_workspace_poll_idle_ceiling_seconds",
     "is_authored_author_streaming_enabled",
     "is_authored_checkpoint_batching_enabled",
     "is_authored_checkpoint_html_dedupe_enabled",
+    "is_authored_content_brief_enabled",
     "is_authored_deck_instruments_enabled",
     "is_authored_local_stage_async_enabled",
     "is_authored_exemplar_enabled",

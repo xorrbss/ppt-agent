@@ -1,3 +1,5 @@
+import { AUTHORED_CANVAS_BY_ASPECT_RATIO, authoredCanvasForDocument } from "../authored-canvas.ts";
+import { fragmentRasterBand, validateFragmentBand } from "./raster-fragments.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -10,8 +12,51 @@ import {
   SEMANTIC_OWNERSHIP_ALT_TEXT_PREFIX,
 } from "./pptx-assembler.ts";
 import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
+import { inspectPptxNativeElementReadback } from "./pptx-quality-inspection.ts";
+import { localFitImageEvidence, rememberLocalFitSource } from "./local-fit-export-evidence.ts";
 
 const { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT } = backplatePixelSize();
+
+test("A4 native geometry and CSS typography use document units without leaking into legacy", async () => {
+  for (const [width, height, widthEmu, heightEmu] of [[1188, 840, 10692000, 7560000], [840, 1188, 7560000, 10692000], [1280, 720, 12192000, 6858000]]) {
+    const legacy = width === 1280;
+    const canvas = legacy ? AUTHORED_CANVAS_BY_ASPECT_RATIO["16:9"] : authoredCanvasForDocument({
+      contractVersion: "document-canvas/v1", logicalSize: { width, height },
+      physicalSize: { widthEmu, heightEmu }, safeArea: { x: 60, y: 60, width: width - 120, height: height - 120 },
+    });
+    const size = backplatePixelSize(canvas);
+    const backplatePng = await sharp({ create: { ...size, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } } }).png().toBuffer();
+    const source = {
+      id: "a4-shape", tagName: "div", domPath: "body > div", sourceIndex: 0, zOrder: 0, cssZIndex: 0,
+      bounds: bounds(60, 60, 100, 100), rotationDeg: 0, opacity: 1,
+      classification: { mode: "native", kind: "shape", confidence: "safe" },
+      shape: { shape: "rectangle", fill: { hex: "112233", alpha: 1 }, stroke: { hex: "112233", alpha: 1 }, strokeWidthPt: 0.75, radiusPt: 0 },
+    };
+    const text = { ...source, id: "a4-text", classification: { mode: "native", kind: "text", confidence: "safe" },
+      text: { role: "body", plainText: "A4", paragraphs: ["A4"], runs: [], style: { ...textStyle, fontSizePt: 12 } } };
+    const result = assembleAuthoredHybridPptx(skeleton(), [{ slideNumber: 1, backplatePng, elements: [{ kind: "shape", source }, { kind: "text", source: text }] }], { canvas });
+    const archive = readPptxArchive(result);
+    assert.match(archive.get("ppt/presentation.xml").toString(), new RegExp(`cx="${widthEmu}" cy="${heightEmu}"`));
+    const xml = archive.get("ppt/slides/slide1.xml").toString();
+    assert.match(xml, new RegExp(`<a:off x="${legacy ? 571500 : 540000}" y="${legacy ? 571500 : 540000}"/><a:ext cx="${legacy ? 952500 : 900000}" cy="${legacy ? 952500 : 900000}"/>`));
+    assert.match(xml, new RegExp(`<a:ln w="${legacy ? 9525 : 9000}"`));
+    assert.match(xml, new RegExp(`sz="${legacy ? 1200 : 1134}"`));
+    const observed = inspectPptxNativeElementReadback(result, canvas).find(item => item.elementId === "a4-shape");
+    assert.deepEqual(observed.renderedBounds, { x: 60, y: 60, width: 100, height: 100 });
+    const measuredSlide = {};
+    rememberLocalFitSource(measuredSlide, {
+      runs: [{ owner_qid: "image-text" }],
+      local_image_sources: [{ element_id: "image-text", data_url: "data:image/png;base64,eA==", run_indices: [0],
+        sourceBoundsPx: { x: 0, y: 0, width: 100, height: 100 }, text_paint: "source" }],
+    });
+    const imageEvidence = localFitImageEvidence(measuredSlide, [{ kind: "image", png: backplatePng,
+      source: { id: "image-text", bounds: bounds(60, 60, 100, 100),
+        image: { src: "data:image/png;base64,eA==", objectFit: "fill", crop: { left: 0, top: 0, right: 0, bottom: 0 } } },
+    }], canvas);
+    assert.ok(Math.abs(imageEvidence[0].placement.widthPt - (legacy ? 75 : 70.86614173228347)) < 1e-9);
+    assert.ok(Math.abs(imageEvidence[0].placement.x - (legacy ? 45 : 42.51968503937008)) < 1e-9);
+  }
+});
 
 const CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -204,10 +249,14 @@ test("assembler sandwiches residual raster between the editable canvas and foreg
   const textOverlayXml = slideXml.slice(textOverlayStart, textOverlayEnd);
   assert.match(textOverlayXml, /<a:noFill\/>/);
   assert.doesNotMatch(textOverlayXml, /val="EAF2FF"/);
-  assert.match(relsXml, /hybrid-s1-backplate-[a-f0-9]{16}\.png/);
+  // Media names moved from a fixed "backplate" label to a z-band-indexed
+  // "raster-band-N" label in 2971728b6 (feat(authored): harden release
+  // generation and hybrid evidence) so a single-band slide and a
+  // multi-z-band audited slide (see the next test) share one naming scheme.
+  assert.match(relsXml, /hybrid-s1-raster-band-0-[a-f0-9]{16}\.png/);
   assert.doesNotMatch(relsXml, /Id="rId2"/);
   assert.equal(entries.has("ppt/media/image1.png"), false);
-  assert.ok([...entries.keys()].some((name) => /^ppt\/media\/hybrid-s1-backplate-/.test(name)));
+  assert.ok([...entries.keys()].some((name) => /^ppt\/media\/hybrid-s1-raster-band-0-/.test(name)));
   assert.match(entries.get("[Content_Types].xml").toString("utf8"), /Extension="png"/);
 });
 
@@ -240,7 +289,7 @@ test("assembler preserves audited raster-native-raster z-band order", async () =
   assert.equal((xml.match(/presenton-semantic-raster-ownership-v1:/g) ?? []).length, 2);
 });
 
-test("assembler stores an opaque full-slide residual as the slide background", async () => {
+test("assembler keeps an unaudited opaque residual as a picture and retains native background", async () => {
   const backplate = await sharp({
     create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 3, background: "#F7FAFC" },
   })
@@ -272,9 +321,9 @@ test("assembler stores an opaque full-slide residual as the slide background", a
   const entries = readPptxArchive(output);
   const slideXml = entries.get("ppt/slides/slide1.xml").toString("utf8");
 
-  assert.match(slideXml, /<p:bg><p:bgPr><a:blipFill[^>]*><a:blip r:embed="rId3"\/>/);
-  assert.doesNotMatch(slideXml, /DevAX hybrid backplate/);
-  assert.doesNotMatch(slideXml, /DevAX hybrid shape editable-canvas/);
+  assert.doesNotMatch(slideXml, /<p:bg>/);
+  assert.match(slideXml, /DevAX hybrid backplate/);
+  assert.match(slideXml, /DevAX hybrid shape editable-canvas/);
 });
 
 test("assembler preserves the exact raster semantic QID set in PowerPoint-readable ownership shapes", async () => {
@@ -292,7 +341,7 @@ test("assembler preserves the exact raster semantic QID set in PowerPoint-readab
     .get("ppt/slides/slide1.xml")
     .toString("utf8");
 
-  assert.match(slideXml, /<p:bg>/);
+  assert.doesNotMatch(slideXml, /<p:bg>/);
   for (const qid of qids) {
     assert.match(
       slideXml,
@@ -511,7 +560,7 @@ test("assembler fails closed for an incompatible slide size or malformed PNG", a
       assembleAuthoredHybridPptx(skeleton("100"), [
         { slideNumber: 1, backplatePng: png, elements: [] },
       ]),
-    /fixed 16:9/
+    /unsupported authored slide size/
   );
   assert.throws(
     () =>
@@ -596,6 +645,56 @@ test("assembler preserves authored breaks, bounds text safely, and never emits C
   assert.ok(Number(transform[3]) > 120 * 9_525);
 });
 
+test("assembler ignores innerText-only flex newlines but preserves measured hard breaks", async () => {
+  const backplate = await sharp({
+    create: { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT, channels: 4, background: "transparent" },
+  }).png().toBuffer();
+  const run = (text, x, lineIndex, breakKind) => ({
+    text,
+    bounds: bounds(x, 100 + lineIndex * 32, text === "\n" ? 0 : 80, text === "\n" ? 0 : 28),
+    fragments: text === "\n" ? [] : [bounds(x, 100 + lineIndex * 32, 80, 28)],
+    style: textStyle,
+    script: "cjk",
+    lineIndex,
+    ...(breakKind ? { breakKind } : {}),
+  });
+  const flexInnerTextArtifact = {
+    id: "q-phone-step-1", domPath: "body > div.step", tagName: "div",
+    sourceIndex: 0, zOrder: 1, cssZIndex: 1, bounds: bounds(100, 100, 240, 32),
+    rotationDeg: 0, opacity: 1,
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "body", plainText: "짧게 소개\n→", paragraphs: ["짧게 소개", "→"], style: textStyle,
+      runs: [run("짧게 소개", 100, 0), run("→", 190, 0)],
+    },
+  };
+  const authoredBreak = {
+    ...flexInnerTextArtifact,
+    id: "authored-break",
+    sourceIndex: 1,
+    bounds: bounds(100, 180, 240, 64),
+    text: {
+      ...flexInnerTextArtifact.text,
+      plainText: "첫째\n둘째",
+      paragraphs: ["첫째", "둘째"],
+      runs: [run("첫째", 100, 0), run("\n", 180, 1, "line"), run("둘째", 100, 1)],
+    },
+  };
+  const prepared = await prepareNativeElements([flexInnerTextArtifact, authoredBreak]);
+  const output = assembleAuthoredHybridPptx(skeleton(), [
+    { slideNumber: 1, backplatePng: backplate, elements: prepared },
+  ]);
+  const slideXml = readPptxArchive(output).get("ppt/slides/slide1.xml").toString("utf8");
+  const flexStart = slideXml.indexOf("DevAX hybrid text q-phone-step-1");
+  const flexXml = slideXml.slice(flexStart, slideXml.indexOf("</p:sp>", flexStart));
+  const hardStart = slideXml.indexOf("DevAX hybrid text authored-break");
+  const hardXml = slideXml.slice(hardStart, slideXml.indexOf("</p:sp>", hardStart));
+  assert.doesNotMatch(flexXml, /<a:br\/>/);
+  assert.match(flexXml, /짧게 소개/);
+  assert.match(flexXml, /→/);
+  assert.equal((hardXml.match(/<a:br\/>/g) ?? []).length, 1);
+});
+
 test("assembler writes provenance as valid, merge-safe PPTX custom properties", () => {
   const entries = readPptxArchive(skeleton());
   entries.set("_rels/.rels", Buffer.from(`<?xml version="1.0"?>
@@ -627,4 +726,51 @@ test("assembler writes provenance as valid, merge-safe PPTX custom properties", 
   assert.match(rootRelationships, /relationships\/custom-properties" Target="docProps\/custom\.xml"/);
   assert.equal((rootRelationships.match(/relationships\/custom-properties/g) ?? []).length, 1);
   assert.match(contentTypes, /PartName="\/docProps\/custom\.xml" ContentType="application\/vnd\.openxmlformats-officedocument\.custom-properties\+xml"/);
+});
+
+
+test("fragment bands preserve alpha pixels, empty ownership, and reject missing/overlapping fragments", async () => {
+  const pixels=Buffer.alloc(8*6*4);
+  for(const [x,y,alpha] of [[1,1,1],[6,4,127]]) { const i=(y*8+x)*4; pixels[i]=30; pixels[i+3]=alpha; }
+  const png=await sharp(pixels,{raw:{width:8,height:6,channels:4}}).png().toBuffer();
+  const band=await fragmentRasterBand({zBand:2,rasterPng:png,semanticOwnerQids:["body-raster"]});
+  assert.equal(band.fragments.length,2);
+  assert.deepEqual(band.fragments.map(f=>f.rect),[{x:1,y:1,width:1,height:1},{x:6,y:4,width:1,height:1}]);
+  await assert.rejects(validateFragmentBand({...band,fragments:band.fragments.slice(1).map((f,i)=>({...f,order:i}))}),/omitted painted/);
+  await assert.rejects(validateFragmentBand({...band,fragments:[band.fragments[0],{...band.fragments[0],id:"duplicate",order:1}]}),/overlap/);
+  await assert.rejects(validateFragmentBand({...band,sourceDigest:"sha256:bad"}),/digest/);
+  await assert.rejects(validateFragmentBand({...band,fragments:[{...band.fragments[0],digest:"sha256:bad"},band.fragments[1]]}),/digest/);
+  const empty=await sharp({create:{width:8,height:6,channels:4,background:"transparent"}}).png().toBuffer();
+  const emptyBand=await fragmentRasterBand({zBand:0,rasterPng:empty,semanticOwnerQids:["empty-owner"]});
+  assert.equal(emptyBand.fragments.length,0);
+  assert.deepEqual(emptyBand.semanticOwnerQids,["empty-owner"]);
+  const fallback=await fragmentRasterBand({zBand:2,rasterPng:png,semanticOwnerQids:[]},false,1);
+  assert.deepEqual(fallback.warnings,["raster-fragment-count-limit"]);
+  assert.equal(fallback.fragments.length,1);
+  assert.deepEqual(fallback.fragments[0].rect,{x:1,y:1,width:6,height:4});
+  await validateFragmentBand(fallback);
+});
+
+test("assembler promotes only audited lowest RGBA band and keeps upper fragments at scaled coordinates", async () => {
+  const opaque=await sharp({create:{width:8,height:6,channels:4,background:"white"}}).png().toBuffer();
+  const bottom=await fragmentRasterBand({zBand:0,rasterPng:opaque,semanticOwnerQids:[]},true);
+  const pixels=Buffer.alloc(8*6*4);pixels[(3*8+4)*4+3]=127;
+  const top=await fragmentRasterBand({zBand:2,rasterPng:await sharp(pixels,{raw:{width:8,height:6,channels:4}}).png().toBuffer(),semanticOwnerQids:["top-owner"]});
+  const backplate=await sharp({create:{width:BACKPLATE_WIDTH,height:BACKPLATE_HEIGHT,channels:4,background:"white"}}).png().toBuffer();
+  const output=assembleAuthoredHybridPptx(skeleton(),[{slideNumber:1,backplatePng:backplate,elements:[],rasterBands:[bottom,top]}]);
+  const xml=readPptxArchive(output).get("ppt/slides/slide1.xml").toString("utf8");
+  assert.match(xml,/<p:bg>/);
+  assert.equal((xml.match(/<p:pic>/g)??[]).length,1);
+  assert.match(xml,/<a:off x="6096000" y="3429000"\/><a:ext cx="1524000" cy="1143000"\/>/);
+  assert.equal((xml.match(/semantic-owner"/g)??[]).length,1);
+});
+
+
+test("fragment placement preserves portrait canvas with an independent capture scale", async () => {
+  const canvas=AUTHORED_CANVAS_BY_ASPECT_RATIO["9:16"], size=backplatePixelSize(canvas);
+  const backplate=await sharp({create:{width:size.width,height:size.height,channels:4,background:"transparent"}}).png().toBuffer();
+  const raw=Buffer.alloc(9*16*4);raw[(8*9+3)*4+3]=1;
+  const band=await fragmentRasterBand({zBand:0,rasterPng:await sharp(raw,{raw:{width:9,height:16,channels:4}}).png().toBuffer(),semanticOwnerQids:[]});
+  const xml=readPptxArchive(assembleAuthoredHybridPptx(skeleton(),[{slideNumber:1,backplatePng:backplate,elements:[],rasterBands:[band]}],{canvas})).get("ppt/slides/slide1.xml").toString("utf8");
+  assert.match(xml,/<a:off x="2286000" y="6096000"\/><a:ext cx="762000" cy="762000"\/>/);
 });

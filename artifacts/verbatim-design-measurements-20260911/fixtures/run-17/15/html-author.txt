@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#08916E}
+.header-left{position:absolute;left:64px;top:20px;width:820px}
+.eyebrow{font-size:14px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#FFFFFF}
+.title{margin-top:6px;font-size:32px;line-height:39px;font-weight:800;color:#FFFFFF}
+.header-right{position:absolute;left:956px;top:20px;width:260px;text-align:right;font-size:13px;line-height:18px;color:#FFFFFF}
+.project-tag{position:absolute;right:64px;bottom:0;height:28px;padding:4px 14px;background:#00140E;color:#FFFFFF;font-size:15px;line-height:20px;font-weight:700;border-radius:12px 12px 0 0}
+.body-wrap{position:absolute;left:0;right:0;top:120px}
+.inner{margin-left:64px;width:1152px}
+.claim{height:58px;display:flex;align-items:flex-start;justify-content:space-between}
+.claim-text{font-size:26px;line-height:36px;font-weight:800;color:#1D1D1B}
+.claim-text strong{color:#08916E}
+.claim-mark{width:150px;height:28px;padding:3px 12px;border-radius:12px;background:#E0F3FF;color:#002060;font-size:15px;line-height:22px;font-weight:700;text-align:center}
+.content-grid{display:grid;grid-template-columns:398px 730px;gap:24px;height:440px}
+.left-panel{height:440px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.panel-label{font-size:15px;line-height:22px;font-weight:800;letter-spacing:.02em;color:#08916E}
+.left-heading{margin-top:14px;font-size:24px;line-height:35px;font-weight:800;color:#002060}
+.left-rule{height:4px;width:64px;margin-top:16px;background:#219F88;border-radius:12px}
+.left-copy{margin-top:22px;font-size:18px;line-height:29px;color:#1D1D1B}
+.right-panel{height:440px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.evidence-head{display:flex;align-items:center;justify-content:space-between;height:40px}
+.evidence-title{font-size:24px;line-height:32px;font-weight:800;color:#002060}
+.evidence-chip{padding:4px 12px;border-radius:12px;background:#219F88;color:#FFFFFF;font-size:15px;line-height:22px;font-weight:700}
+.evidence-list{margin-top:20px;border:1px solid #E2E8F0;border-radius:12px}
+.evidence-row{display:grid;grid-template-columns:46px 1fr;min-height:53px;align-items:center;border-bottom:1px solid #E2E8F0}
+.evidence-row:last-child{border-bottom:0}
+.num{width:28px;height:28px;margin-left:14px;border-radius:12px;background:#CCECFF;color:#002060;font-size:16px;line-height:28px;font-weight:800;text-align:center}
+.evidence-copy{padding:10px 18px 10px 8px;font-size:18px;line-height:27px;color:#1D1D1B}
+.positioning{display:grid;grid-template-columns:154px 1fr;gap:18px;align-items:center;margin-top:22px;padding:17px 20px;background:#E0F3FF;border-radius:12px}
+.positioning-label{font-size:18px;line-height:27px;font-weight:800;color:#002060}
+.positioning-copy{font-size:20px;line-height:30px;font-weight:800;color:#08916E}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="96" class="header-band" style="height:96px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-8a04c78f5b523a6a" data-source-block-id="source-slide:16:text:3:run:0">2주차 PART 4</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-7ac91c67ab49908e" data-source-block-id="source-slide:16:text:3:run:1">자영업자 꽁트</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-qid="q-div-73774be43d12" data-semantic-role="decoration"></div>
+  <div class="project-tag" data-semantic-role="supporting" data-qid="source-block-37399f8f319f4882" data-source-block-id="source-slide:16:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:120px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="inner" data-qid="q-div-c9c4d24a38ca" data-semantic-role="decoration">
+    <div class="claim" data-qid="q-div-602277a791e7" data-semantic-role="decoration">
+      <div class="claim-text" data-semantic-role="body" data-qid="source-block-819d68ef86ea0559" data-source-block-id="source-slide:16:text:6">요즘 자영업자 숏폼의 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">기회</strong></div>
+      <div class="claim-mark" data-semantic-role="supporting" data-qid="source-block-d4506884aaf33c49" data-source-block-id="source-slide:16:text:11">핵심 포지션</div>
+    </div>
+
+    <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+      <div class="left-panel" data-semantic-role="decoration" data-qid="q-card-opportunity-15">
+        <div class="panel-label" data-semantic-role="supporting" data-qid="source-block-11276ae48abc015b" data-source-block-id="source-slide:16:text:7">사장님 + 직원</div>
+        <div class="left-heading" data-semantic-role="body" data-qid="q-heading-owner-15">사장님과 직원 사이의<br>숏폼 실행 공백</div>
+        <div class="left-rule" data-qid="q-div-e4fe0e4b03ba" data-semantic-role="decoration"></div>
+        <div class="left-copy" data-semantic-role="body" data-qid="q-copy-owner-15">아이디어부터 촬영 장면과 대사까지, 자영업자가 혼자 결정하기 어려운 구간이 숏폼의 기회가 됩니다.</div>
+      </div>
+
+      <div class="right-panel" data-semantic-role="decoration" data-qid="q-card-evidence-15">
+        <div class="evidence-head" data-qid="q-div-74967fa615a4" data-semantic-role="decoration">
+          <div class="evidence-title" data-semantic-role="body" data-qid="q-evidence-title-15">사장님 + 직원</div>
+          <div class="evidence-chip" data-semantic-role="supporting" data-qid="q-chip-15">기회 영역</div>
+        </div>
+        <div class="evidence-list" data-qid="q-div-bfb395016899" data-semantic-role="decoration">
+          <div class="evidence-row" data-qid="q-div-b83eab097263" data-semantic-role="decoration">
+            <div class="num" data-semantic-role="supporting" data-qid="q-num-1-15">1</div>
+            <div class="evidence-copy" data-semantic-role="body" data-qid="source-block-917341c9b452afad" data-source-block-id="source-slide:16:text:8:run:0">사장님은 아이디어가 부족하다</div>
+          </div>
+          <div class="evidence-row" data-qid="q-div-c28c44a55cf4" data-semantic-role="decoration">
+            <div class="num" data-semantic-role="supporting" data-qid="q-num-2-15">2</div>
+            <div class="evidence-copy" data-semantic-role="body" data-qid="source-block-82ef6dfc5d58d8fb" data-source-block-id="source-slide:16:text:8:run:1">직원에게 무엇을 시킬지 모른다</div>
+          </div>
+          <div class="evidence-row" data-qid="q-div-46fa797c036c" data-semantic-role="decoration">
+            <div class="num" data-semantic-role="supporting" data-qid="q-num-3-15">3</div>
+            <div class="evidence-copy" data-semantic-role="body" data-qid="source-block-ab16c0d52a28cd7d" data-source-block-id="source-slide:16:text:8:run:2">촬영할 장면과 대사를 정하기 어렵다</div>
+          </div>
+          <div class="evidence-row" data-qid="q-div-8d0295860161" data-semantic-role="decoration">
+            <div class="num" data-semantic-role="supporting" data-qid="q-num-4-15">4</div>
+            <div class="evidence-copy" data-semantic-role="body" data-qid="source-block-4c1e77e988a81bc5" data-source-block-id="source-slide:16:text:8:run:3">대행사는 ‘촬영 가이드’까지 제공할 수 있다</div>
+          </div>
+        </div>
+        <div class="positioning" data-qid="q-div-fbc10f077277" data-semantic-role="decoration">
+          <div class="positioning-label" data-semantic-role="supporting" data-qid="q-position-label-15">핵심 포지션</div>
+          <div class="positioning-copy" data-semantic-role="body" data-qid="source-block-3ee08a8d487c2e74" data-source-block-id="source-slide:16:text:12">‘편집자’가 아니라 기획 + 촬영가이드 + 제작 파트너</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="source-block-7240bc536b1ffb64" data-source-block-id="source-slide:16:text:4">16</div>
+</body>
+</html>

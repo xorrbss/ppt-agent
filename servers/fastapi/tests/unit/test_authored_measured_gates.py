@@ -18,8 +18,8 @@ from services.authored_measured_gates import (
 from services.authored_repair_round_order import gate_defects_by_slide
 from utils.authored_dom_footer_zone import _looks_like_page_number
 from utils.authored_fragmentation_gate import inspect_fragmentation, page_number_max_font_px
-from utils.slide_capture_fit import fit_probe_prelude
-from utils.slide_capture_fit_script import fit_constants
+from utils.slide_capture_fit import in_render_fit_probe_prelude
+from utils.slide_capture_fit_in_render_script import fit_constants
 
 GATE = "AUTHORED_FRAGMENTATION_GATE_ENABLED"
 
@@ -62,7 +62,7 @@ def test_page_number_threshold_stays_at_14px_when_the_gate_is_off(monkeypatch):
 def test_fitter_probe_carries_the_raised_threshold(monkeypatch):
     _clear(monkeypatch)
     monkeypatch.setenv(GATE, "true")
-    prelude = fit_probe_prelude()
+    prelude = in_render_fit_probe_prelude()
     assert '"page_number_max_font_px": 15.0' in prelude
     assert '"font_floor_px": 15.0' in prelude
 

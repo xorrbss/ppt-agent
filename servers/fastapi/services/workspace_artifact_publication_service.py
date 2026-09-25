@@ -12,7 +12,6 @@ import asyncio
 import hashlib
 import logging
 import os
-import re
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -50,11 +49,20 @@ from services.presentation_export_attempt_service import (
 from services.presentation_export_direct_attempt_service import (
     bind_completed_semantic_export_attempt,
 )
+from services.workspace_artifact_publication_paths import (
+    WorkspaceArtifactPublicationError,
+    _SHA256_PATTERN,
+    _app_data_root,
+    _artifact_relative_path,
+    _assert_path_parents_are_not_symlinks,
+    _chat_image_relative_directory,
+    _remove_owned_tree,
+    _safe_source,
+)
 from services.workspace_artifact_copy import copy_and_hash as _copy_and_hash
 from services.workspace_artifact_runtime_config import (
     configured_positive_int as _configured_positive_int,
 )
-from utils.get_env import get_app_data_directory_env
 from utils.owner_context import get_current_owner_id
 
 LOGGER = logging.getLogger(__name__)
@@ -66,15 +74,6 @@ DEFAULT_ARTIFACT_CLEANUP_MAX_ATTEMPTS = 8
 DEFAULT_EXPORT_ARTIFACT_TTL_SECONDS = 24 * 60 * 60
 _STAGING_SHA256 = "0" * 64
 _CHAT_IMAGE_SUFFIXES = frozenset({".avif", ".gif", ".jpeg", ".jpg", ".png", ".webp"})
-_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-
-
-class WorkspaceArtifactPublicationError(RuntimeError):
-    """Safe publication failure with a stable client/runner error code."""
-
-    def __init__(self, code: str) -> None:
-        self.code = code
-        super().__init__(code)
 
 
 @dataclass(frozen=True)
@@ -161,131 +160,6 @@ class ResolvedWorkspaceExportArtifact:
     expires_at: datetime
     absolute_path: Path | None
     public_artifact_id: uuid.UUID | None
-
-
-def _app_data_root() -> Path:
-    raw = (get_app_data_directory_env() or "").strip()
-    if not raw:
-        raise WorkspaceArtifactPublicationError("app_data_directory_required")
-    root = Path(raw).resolve()
-    if root == root.parent:
-        raise WorkspaceArtifactPublicationError("unsafe_app_data_directory")
-    root.mkdir(parents=True, exist_ok=True)
-    return root
-
-
-def _safe_source(source_path: str, app_data_root: Path) -> Path:
-    source = Path(source_path).resolve()
-    try:
-        source.relative_to(app_data_root)
-    except ValueError as error:
-        raise WorkspaceArtifactPublicationError(
-            "workspace_artifact_source_outside_app_data"
-        ) from error
-    if not source.is_file():
-        raise WorkspaceArtifactPublicationError("workspace_artifact_source_missing")
-    return source
-
-
-def _artifact_relative_path(
-    *,
-    owner_id: uuid.UUID | None,
-    operation_id: uuid.UUID,
-    artifact_id: uuid.UUID,
-    suffix: str,
-) -> PurePosixPath:
-    """Build the only storage namespace accepted for a durable artifact."""
-
-    filename = f"{artifact_id}{suffix}"
-    if owner_id is None:
-        return PurePosixPath(
-            "workspace-artifacts",
-            "anonymous",
-            str(operation_id),
-            filename,
-        )
-    return PurePosixPath(
-        "workspace-artifacts",
-        "users",
-        str(owner_id),
-        str(operation_id),
-        filename,
-    )
-
-
-def _chat_image_relative_directory(
-    *,
-    owner_id: uuid.UUID | None,
-    operation_id: uuid.UUID,
-    attempt_digest: str,
-    journal_id: uuid.UUID,
-) -> PurePosixPath:
-    """Return the exact image namespace owned by one durable chat journal."""
-
-    if not _SHA256_PATTERN.fullmatch(attempt_digest):
-        raise WorkspaceArtifactPublicationError(
-            "workspace_chat_artifact_attempt_invalid"
-        )
-    if owner_id is None:
-        return PurePosixPath(
-            "images",
-            "workspace-chat",
-            "anonymous",
-            str(operation_id),
-            attempt_digest,
-            str(journal_id),
-        )
-    return PurePosixPath(
-        "images",
-        "users",
-        str(owner_id),
-        "workspace-chat",
-        str(operation_id),
-        attempt_digest,
-        str(journal_id),
-    )
-
-
-def _assert_path_parents_are_not_symlinks(root: Path, path: Path) -> None:
-    """Reject a path whose existing parents could escape through a symlink."""
-
-    try:
-        relative = path.relative_to(root)
-    except ValueError as error:
-        raise WorkspaceArtifactPublicationError(
-            "workspace_artifact_path_invalid"
-        ) from error
-    current = root
-    for part in relative.parts:
-        current = current / part
-        if current.exists() and current.is_symlink():
-            raise WorkspaceArtifactPublicationError(
-                "workspace_artifact_symlink_invalid"
-            )
-
-
-def _remove_owned_tree(path: Path) -> None:
-    """Delete one validated journal-owned tree without following symlinks."""
-
-    if path.is_symlink():
-        path.unlink(missing_ok=True)
-        return
-    if not path.exists():
-        return
-    if not path.is_dir():
-        raise WorkspaceArtifactPublicationError(
-            "workspace_chat_artifact_directory_invalid"
-        )
-    with os.scandir(path) as entries:
-        for entry in entries:
-            child = Path(entry.path)
-            if entry.is_symlink():
-                child.unlink(missing_ok=True)
-            elif entry.is_dir(follow_symlinks=False):
-                _remove_owned_tree(child)
-            else:
-                child.unlink(missing_ok=True)
-    path.rmdir()
 
 
 def _remove_prepared_file(artifact: PreparedWorkspaceArtifact) -> bool:
@@ -2363,7 +2237,15 @@ async def publish_workspace_generation_artifact(
                 else {}
             ),
         }
-        if result_evidence is not None:
+        native_export_evidence_keys = {
+            "readback_verified",
+            "preview_snapshot",
+            "native_pptx_snapshot",
+            "visual_fidelity",
+        }
+        if result_evidence is not None and native_export_evidence_keys.intersection(
+            result_evidence
+        ):
             preview = result_evidence.get("preview_snapshot")
             native = result_evidence.get("native_pptx_snapshot")
             fidelity = result_evidence.get("visual_fidelity")
@@ -2378,6 +2260,39 @@ async def publish_workspace_generation_artifact(
                     "authored_template_visual_evidence_invalid"
                 )
             result_payload = {**result_payload, **result_evidence}
+        elif result_evidence is not None:
+            # Native export is deferred to the isolated export worker.  A
+            # generation-quality summary is safe to publish here, but it is
+            # not a substitute for native readback evidence.
+            result_payload = {**result_payload, **result_evidence}
+    elif (
+        operation_metadata is not None
+        and operation_metadata.kind == "presentation.generate"
+        and isinstance(result_evidence, dict)
+        and isinstance(
+            result_evidence.get("generationQualityReceipt"), dict
+        )
+    ):
+        # The workspace result card needs only the bounded completion summary.
+        # The full authored QualityReceipt remains on the generation task and
+        # evidence ledger; do not duplicate its internal metrics or QIDs here.
+        from services.workspace_operation_runner import (
+            sanitize_workspace_event_payload,
+        )
+
+        public_projection = sanitize_workspace_event_payload(
+            {
+                "generationQualityReceipt": result_evidence[
+                    "generationQualityReceipt"
+                ]
+            },
+            operation_kind="presentation.generate",
+        ).get("generationQualityReceipt")
+        if isinstance(public_projection, dict):
+            result_payload = {
+                **result_payload,
+                "generationQualityReceipt": public_projection,
+            }
     try:
         if fencing_token is None:
             raise WorkspaceArtifactPublicationError("operation_lease_lost")
@@ -2968,18 +2883,7 @@ async def resolve_workspace_export_artifact(
 
     absolute_path: Path | None = None
     if artifact.public_artifact_id is not None:
-        public_artifact = await session.scalar(
-            select(PublicArtifact).where(
-                PublicArtifact.id == artifact.public_artifact_id,
-                PublicArtifact.owner_id == artifact.owner_id,
-                PublicArtifact.created_by_operation_id == artifact.operation_id,
-                PublicArtifact.sha256 == artifact.sha256,
-                PublicArtifact.size_bytes == artifact.size_bytes,
-            )
-        )
-        expected_public_kind = f"presentation-{artifact.kind.removeprefix('export.')}"
-        if public_artifact is None or public_artifact.kind != expected_public_kind:
-            raise WorkspaceArtifactPublicationError("workspace_export_missing")
+        await _resolve_public_workspace_export(session, artifact)
     else:
         absolute_path = (_app_data_root() / artifact.storage_key).resolve()
         try:
@@ -3005,6 +2909,40 @@ async def resolve_workspace_export_artifact(
     )
 
 
+async def _resolve_public_workspace_export(
+    session: AsyncSession,
+    artifact: WorkspaceArtifact | ResolvedWorkspaceExportArtifact,
+) -> PublicArtifact:
+    """Bind each download to durable admission authority and committed metadata."""
+
+    if artifact.kind not in {"export.pptx", "export.pdf"}:
+        raise WorkspaceArtifactPublicationError("workspace_export_missing")
+    public_artifact = await session.scalar(
+        select(PublicArtifact)
+        .join(
+            PublicOperationAdmission,
+            and_(
+                PublicOperationAdmission.operation_id == PublicArtifact.created_by_operation_id,
+                PublicOperationAdmission.owner_id == PublicArtifact.owner_id,
+                PublicOperationAdmission.tenant_id == PublicArtifact.tenant_id,
+            ),
+        )
+        .where(
+            PublicArtifact.id == artifact.public_artifact_id,
+            PublicArtifact.owner_id == get_current_owner_id(),
+            PublicArtifact.created_by_operation_id == artifact.operation_id,
+            PublicArtifact.sha256 == artifact.sha256,
+            PublicArtifact.size_bytes == artifact.size_bytes,
+            PublicArtifact.kind == f"presentation-{artifact.kind.removeprefix('export.')}",
+            PublicArtifact.retention_class == "published",
+            PublicArtifact.lifecycle_state == "committed",
+        )
+    )
+    if public_artifact is None:
+        raise WorkspaceArtifactPublicationError("workspace_export_missing")
+    return public_artifact
+
+
 async def read_workspace_export_artifact_bytes(
     session: AsyncSession,
     artifact: ResolvedWorkspaceExportArtifact,
@@ -3013,17 +2951,7 @@ async def read_workspace_export_artifact_bytes(
         if artifact.absolute_path is None:
             raise WorkspaceArtifactPublicationError("workspace_export_missing")
         return artifact.absolute_path.read_bytes()
-    public_artifact = await session.scalar(
-        select(PublicArtifact).where(
-            PublicArtifact.id == artifact.public_artifact_id,
-            PublicArtifact.owner_id == get_current_owner_id(),
-            PublicArtifact.created_by_operation_id == artifact.operation_id,
-            PublicArtifact.sha256 == artifact.sha256,
-            PublicArtifact.size_bytes == artifact.size_bytes,
-        )
-    )
-    if public_artifact is None:
-        raise WorkspaceArtifactPublicationError("workspace_export_missing")
+    public_artifact = await _resolve_public_workspace_export(session, artifact)
     from services.artifact_store import configured_public_artifact_service
 
     return await configured_public_artifact_service().read_ref_bytes(

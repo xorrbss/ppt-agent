@@ -1,0 +1,56 @@
+{
+  "id": "innovation-12-launch-button",
+  "category": "innovation",
+  "tags": {
+    "ko": [
+      "혁신",
+      "출시"
+    ],
+    "en": [
+      "innovation",
+      "launch",
+      "button"
+    ]
+  },
+  "alt": {
+    "ko": "출시 단색 벡터 인포그래픽",
+    "en": "launch button monochrome vector infographic"
+  },
+  "path": "originals/innovation-12-launch-button.svg",
+  "thumbnail": "thumbnails/innovation-12-launch-button.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 706,
+  "sha256": "62e449918984643420c1054f12fd2f9de0b02ec8f58a592abb6c3a920f207dc2",
+  "geometry_sha256": "a35ec97872d69929096f31e66ba12b549da70f2b926ef2a619103b4b70843df3",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56570,
+    "preview_opaque_pixels": 6997,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "CirclePlay",
+      "Rocket"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

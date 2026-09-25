@@ -24,7 +24,7 @@ from utils.authored_dom_text_escape import TEXT_ESCAPE_CATEGORY
 from utils.authored_fit_edits import apply_fit_edits
 from utils.authored_semantic_role_repair import canonicalize_authored_roles
 from utils.slide_capture import _placeholder_png, render_html_to_png_with_metrics
-from utils.slide_capture_fit_script import FIT_CLASS
+from utils.slide_capture_fit_in_render_script import FIT_CLASS
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "authored_fit"
 FLOOR_PX = 12.0
@@ -83,7 +83,8 @@ async def _test_original_fixtures_still_escape():
         assert escapes, name
         worst = max(float((e.magnitude or {}).get("excess_px_y", 0)) for e in escapes)
         assert worst >= expected_px - 2.0, (name, worst)
-        assert capture.browser_metrics["fit"]["requested"] is False
+        # An unmarked request injects no fitter at all (``slide_capture_fit.probe_fit_prelude``).
+        assert capture.browser_metrics.get("fit") is None
 
 
 def test_slide_13_is_grown_not_shrunk():

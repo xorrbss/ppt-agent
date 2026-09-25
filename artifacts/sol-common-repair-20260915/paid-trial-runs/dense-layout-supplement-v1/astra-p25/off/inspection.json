@@ -1,0 +1,8 @@
+{
+  "status": "completed",
+  "telemetryStatus": "available",
+  "blockingIssues": [],
+  "capacityEnforced": false,
+  "capacityViolations": [],
+  "repairTrigger": false
+}

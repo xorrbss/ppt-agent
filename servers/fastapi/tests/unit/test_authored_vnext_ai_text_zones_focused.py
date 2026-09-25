@@ -21,6 +21,9 @@ from services.authored_vnext.generation.ai_text_zones import (
 from services.authored_vnext.generation.effective_style import (
     build_ai_edit_zone_template_design_context,
 )
+from services.authored_vnext.generation.repository import (
+    async_generation_repository,
+)
 from tests.support.authored_vnext_master_fixture import master_contract_payload
 from utils.llm_calls.author_deck import _constrain_structured_zone_html
 
@@ -129,7 +132,7 @@ def test_ai_binding_round_trips_with_editor_example_text_mirrored_to_content() -
 
 def test_deck_resolution_is_context_fenced_cached_and_materializes_empty_rules() -> None:
     async def scenario() -> None:
-        repository = _CandidateRepository()
+        repository = async_generation_repository(_CandidateRepository())
         contract = _contract()
         resolver_calls: list[AITextZoneResolutionRequest] = []
 
@@ -236,7 +239,7 @@ def test_deck_resolution_is_context_fenced_cached_and_materializes_empty_rules()
 
 def test_deterministic_resolution_can_bypass_repository_cache() -> None:
     async def scenario() -> None:
-        repository = _CandidateRepository()
+        repository = async_generation_repository(_CandidateRepository())
 
         async def deterministic_resolver(
             request: AITextZoneResolutionRequest,

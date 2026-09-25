@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF;border-top:8px solid #08916E}
+.header-left{position:absolute;left:64px;top:24px;width:780px}
+.eyebrow{font-size:13px;line-height:18px;font-weight:700;letter-spacing:.06em;color:#08916E}
+.title{margin-top:12px;font-size:34px;line-height:45px;font-weight:800;color:#0F172A}
+.divider{position:absolute;left:64px;right:64px;bottom:0;height:1px;background:#E2E8F0}
+.body-wrap{position:absolute;left:0;right:0;top:155px;margin:0;padding:0 64px}
+.architecture-grid{display:grid;grid-template-columns:812px 300px;gap:24px;height:430px}
+.map-panel,.practice-panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.map-panel{padding:28px}
+.map-head{height:42px;display:flex;align-items:center;gap:12px}
+.map-marker{width:8px;height:24px;background:#08916E;border-radius:12px;flex:none}
+.map-label{font-size:20px;line-height:28px;font-weight:800;color:#002060}
+.map-flow{display:grid;grid-template-columns:170px 24px 170px 24px 170px 24px 170px;align-items:center;margin-top:50px}
+.step-card{height:170px;padding:24px 18px 20px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px;display:flex;flex-direction:column;justify-content:space-between}
+.step-card:nth-of-type(1),.step-card:nth-of-type(3){background:#F0FAF7;border-color:#B9E5D9}
+.step-number{font-family:"IBM Plex Mono","Consolas",monospace;font-size:28px;line-height:34px;font-weight:700;color:#08916E}
+.step-text{font-size:21px;line-height:31px;font-weight:800;color:#002060}
+.connector{height:2px;background:#219F88;position:relative;margin:0 4px}
+.connector:after{;position:absolute;right:-1px;top:-5px;width:10px;height:10px;border-top:2px solid #219F88;border-right:2px solid #219F88;transform:rotate(45deg)}
+.map-note{margin-top:48px;padding:16px 18px;background:#EAEDF2;border-radius:12px;font-size:18px;line-height:29px;color:#1D1D1B}
+.practice-panel{padding:28px 24px;display:flex;flex-direction:column}
+.practice-label{font-size:18px;line-height:26px;font-weight:800;color:#08916E}
+.practice-rule{width:44px;height:3px;background:#08916E;margin-top:14px}
+.practice-copy{margin-top:28px;font-size:20px;line-height:34px;font-weight:700;color:#002060}
+.practice-emphasis{margin-top:auto;padding:18px;background:#F0FAF7;border-left:6px solid #08916E;border-radius:12px;font-size:18px;line-height:30px;font-weight:700;color:#1D1D1B}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="135" class="header-band" style="height:135px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-20">전화영업 구조</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-efaeb0d4e849116a" data-source-block-id="source-slide:21:text:3">3주차 PART 3 | 전화영업 기본 구조</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:155px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="architecture-grid" data-qid="q-div-7381995bf616" data-semantic-role="decoration">
+    <div class="map-panel" data-qid="q-map-panel-20" data-semantic-role="decoration">
+      <div class="map-head" data-qid="q-div-9336527ef6f7" data-semantic-role="decoration">
+        <div class="map-marker" data-qid="q-div-95e4029132da" data-semantic-role="decoration"></div>
+        <div class="map-label" data-semantic-role="supporting" data-qid="source-block-eb0997a27bd21e60" data-source-block-id="source-slide:21:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      </div>
+      <div class="map-flow" data-qid="q-div-e7c71ad10494" data-semantic-role="decoration">
+        <div class="step-card" data-qid="q-step-card-20-1" data-semantic-role="decoration">
+          <div class="step-number" data-semantic-role="supporting" data-qid="q-step-number-20-1">①</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-21bbb38a7f23f126" data-source-block-id="source-slide:21:text:6">인사</div>
+        </div>
+        <div class="connector" data-qid="q-div-1bfec761b021" data-semantic-role="decoration"></div>
+        <div class="step-card" data-qid="q-step-card-20-2" data-semantic-role="decoration">
+          <div class="step-number" data-semantic-role="supporting" data-qid="q-step-number-20-2">②</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-726cd0a9a2d2805e" data-source-block-id="source-slide:21:text:7">왜 연락했는지</div>
+        </div>
+        <div class="connector" data-qid="q-div-f954d062b2c8" data-semantic-role="decoration"></div>
+        <div class="step-card" data-qid="q-step-card-20-3" data-semantic-role="decoration">
+          <div class="step-number" data-semantic-role="supporting" data-qid="q-step-number-20-3">③</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-7b397eaba27cf3c2" data-source-block-id="source-slide:21:text:8">어떤 도움을 줄 수 있는지</div>
+        </div>
+        <div class="connector" data-qid="q-div-d70e41e2467e" data-semantic-role="decoration"></div>
+        <div class="step-card" data-qid="q-step-card-20-4" data-semantic-role="decoration">
+          <div class="step-number" data-semantic-role="supporting" data-qid="q-step-number-20-4">④</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-c6c2008b956970ee" data-source-block-id="source-slide:21:text:9">다음 행동 제안</div>
+        </div>
+      </div>
+      <div class="map-note" data-semantic-role="body" data-qid="q-map-note-20">전화영업은 네 단계의 흐름으로 짧고 명확하게 구성한다.</div>
+    </div>
+
+    <div class="practice-panel" data-qid="source-block-2989314964721e2f" data-semantic-role="decoration" data-source-block-id="source-slide:21:text:13">
+      <div class="practice-label" data-semantic-role="supporting" data-qid="source-block-2b8a18819565a17b" data-source-block-id="source-slide:21:text:12">연습 포인트</div>
+      <div class="practice-rule" data-qid="q-div-fc269f13e86d" data-semantic-role="decoration"></div>
+      <div class="practice-copy" data-semantic-role="body" data-qid="q-practice-copy-20">길게 설명하지 않는다.</div>
+      <div class="practice-emphasis" data-semantic-role="body" data-qid="q-practice-emphasis-20">‘관심 있으면 자료/샘플을 보내드리겠다’는 다음 단계까지 연결하는 것이 목표..</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-58ae0a9cf5981154" data-source-block-id="source-slide:21:text:4">21</div>
+</body>
+</html>

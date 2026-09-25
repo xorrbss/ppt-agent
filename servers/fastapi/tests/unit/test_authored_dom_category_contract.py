@@ -97,6 +97,7 @@ def test_exactly_these_categories_block_publication():
     """
 
     assert BLOCKING_SAFETY_CATEGORIES == {
+        "empty_media_panel",
         "overflow",
         "clipping",
         "off_canvas",

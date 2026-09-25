@@ -1,0 +1,55 @@
+{
+  "id": "infrastructure-13-construction-crane",
+  "category": "infrastructure",
+  "tags": {
+    "ko": [
+      "인프라",
+      "크레인"
+    ],
+    "en": [
+      "infrastructure",
+      "construction",
+      "crane"
+    ]
+  },
+  "alt": {
+    "ko": "크레인 단색 벡터 인포그래픽",
+    "en": "construction crane monochrome vector infographic"
+  },
+  "path": "originals/infrastructure-13-construction-crane.svg",
+  "thumbnail": "thumbnails/infrastructure-13-construction-crane.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 484,
+  "sha256": "81aa6b91203da5686b9705a3f25ab0115fc9a620c93d169cb8600b848920cca2",
+  "geometry_sha256": "b3902c0dd49885d9643fbaee214636cb522900a6e5590c11706be3ea28411f57",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 51704,
+    "preview_opaque_pixels": 12142,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Construction"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

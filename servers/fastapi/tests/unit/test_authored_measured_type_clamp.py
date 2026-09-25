@@ -333,7 +333,7 @@ def test_the_render_cache_identity_follows_the_fitter_floor(monkeypatch):
     assert raised.fit_font_floor_px == 18.0
     assert raised.digest not in {on.digest, off.digest}
     assert slide_capture._metrics_cache_key(HTML) != (off.source_digest, off.digest, "metrics")
-    assert slide_capture.MEASUREMENT_CACHE_VERSION == "authored-measurement/v12-fit-floor-identity"
+    assert slide_capture.MEASUREMENT_CACHE_VERSION == "authored-measurement/v15-fit-floor-canvas-identity"
 
 
 # --- the shipped pipeline call site ----------------------------------------
@@ -368,6 +368,9 @@ async def _render_one_slide(tmp_path, monkeypatch, *, renderer):
     monkeypatch.setattr(pipeline, "render_html_to_png", unexpected_plain_render)
     monkeypatch.setattr(pipeline, "render_html_to_png_with_metrics", renderer)
     monkeypatch.setattr(pipeline, "record_local_stage", no_recording)
+    # The in-render fit is the non-local-fit render path; local fit (on by
+    # default for an ordinary deck) would route around this seam.
+    monkeypatch.setattr(pipeline, "local_fit_applies", lambda **_kwargs: False)
     try:
         job = await _completed_author_job(maker)
         return await pipeline._author_illustrate_render_pipeline(

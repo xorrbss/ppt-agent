@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#08916E;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:20px;width:832px}
+.eyebrow{height:21px;font-size:15px;line-height:21px;font-weight:700;letter-spacing:.04em;color:#FFFFFF}
+.title{margin-top:6px;font-size:32px;line-height:38px;font-weight:700;color:#FFFFFF}
+.header-tag{position:absolute;right:0;top:0;width:276px;height:103px;padding:20px 64px 0 24px;background:#00140E;font-size:15px;line-height:21px;font-weight:700;color:#FFFFFF;text-align:right}
+.body-wrap{width:1152px;margin-left:64px;margin-top:24px}
+.claim-row{height:78px;display:flex;align-items:flex-start;justify-content:space-between}
+.claim{font-size:25px;line-height:36px;font-weight:700;color:#1D1D1B;max-width:940px}
+.claim strong{color:#08916E}
+.section-no{padding-top:5px;font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:24px;font-weight:700;color:#08916E}
+.flow{display:grid;grid-template-columns:1fr 24px 1fr;grid-template-rows:1fr 1fr;column-gap:24px;row-gap:24px;height:388px}
+.card{height:182px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;position:relative}
+.card-index{display:flex;align-items:center;justify-content:center;width:48px;height:36px;border-radius:12px;background:#00140E;color:#FFFFFF;font-family:"IBM Plex Mono","Consolas",monospace;font-size:17px;line-height:22px;font-weight:700}
+.card-title{margin-top:16px;font-size:20px;line-height:28px;font-weight:700;color:#08916E}
+.card-rule{width:100%;height:1px;margin-top:12px;background:#E2E8F0}
+.card-copy{margin-top:12px;font-size:18px;line-height:28px;font-weight:500;color:#1D1D1B}
+.connector{height:2px;margin:0 0;background:#08916E;position:relative;align-self:center}
+.connector-node{position:absolute;right:-1px;top:-5px;width:12px;height:12px;background:#08916E;border-radius:2px}
+.row-connector{grid-column:1 / 4;height:2px;background:#E2E8F0;align-self:center}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="103" class="header-band" style="height:103px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-8h-principle">수업 원칙</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-51d6a43c463aba5a" data-source-block-id="source-slide:4:text:3">8시간의 원칙</div>
+  </div>
+  <div data-header-part="right" class="header-tag" data-semantic-role="supporting" data-qid="source-block-4cfe6d7e66337a56" data-source-block-id="source-slide:4:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim-row" data-qid="q-div-75b3498fbbe1" data-semantic-role="decoration">
+    <div class="claim" data-semantic-role="body" data-qid="source-block-9ea436f3c989a513" data-source-block-id="source-slide:4:text:4">본 수업은 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">‘필수’</strong>만. 나머지는 템플릿과 보너스 자료로 제공합니다.</div>
+    <div class="section-no" data-semantic-role="supporting" data-qid="source-block-b37b36733c3c1adb" data-source-block-id="source-slide:4:text:5">04</div>
+  </div>
+
+  <div class="flow" data-qid="q-div-7fd902b74613" data-semantic-role="decoration">
+    <div class="card" data-qid="q-card-01" data-semantic-role="decoration">
+      <div class="card-index" data-semantic-role="supporting" data-qid="q-card-index-01">01</div>
+      <div class="card-title" data-semantic-role="supporting" data-qid="q-card-title-01">원칙 01</div>
+      <div class="card-rule" data-qid="q-div-e24a51b44c9c" data-semantic-role="decoration"></div>
+      <div class="card-copy" data-semantic-role="body" data-qid="source-block-b1717ef4283139ee" data-source-block-id="source-slide:4:text:7:run:0">기능을 많이 배우는 것보다 실제 영상 1개를 완성한다.</div>
+    </div>
+
+    <div class="connector" data-qid="q-div-1bfec761b021" data-semantic-role="decoration"><div class="connector-node" data-qid="q-div-8b813e36675c" data-semantic-role="decoration"></div></div>
+
+    <div class="card" data-qid="q-card-02" data-semantic-role="decoration">
+      <div class="card-index" data-semantic-role="supporting" data-qid="q-card-index-02">02</div>
+      <div class="card-title" data-semantic-role="supporting" data-qid="q-card-title-02">원칙 02</div>
+      <div class="card-rule" data-qid="q-div-0b8bad9e5967" data-semantic-role="decoration"></div>
+      <div class="card-copy" data-semantic-role="body" data-qid="source-block-607b039387270d5f" data-source-block-id="source-slide:4:text:7:run:1">영업 방법을 전부 외우기보다 핵심 3개를 실제로 해본다.</div>
+    </div>
+
+    <div class="row-connector" data-qid="q-div-2e2afaaf360e" data-semantic-role="decoration"></div>
+
+    <div class="card" data-qid="q-card-03" data-semantic-role="decoration">
+      <div class="card-index" data-semantic-role="supporting" data-qid="q-card-index-03">03</div>
+      <div class="card-title" data-semantic-role="supporting" data-qid="q-card-title-03">원칙 03</div>
+      <div class="card-rule" data-qid="q-div-7a9c3ff3b470" data-semantic-role="decoration"></div>
+      <div class="card-copy" data-semantic-role="body" data-qid="source-block-24d2db609f913159" data-source-block-id="source-slide:4:text:7:run:2">강의가 끝날 때 ‘무엇을 누구에게 팔지’가 명확해야 한다.</div>
+    </div>
+
+    <div class="connector" data-qid="q-div-f954d062b2c8" data-semantic-role="decoration"><div class="connector-node" data-qid="q-div-8a31b39488c8" data-semantic-role="decoration"></div></div>
+
+    <div class="card" data-qid="q-card-04" data-semantic-role="decoration">
+      <div class="card-index" data-semantic-role="supporting" data-qid="q-card-index-04">04</div>
+      <div class="card-title" data-semantic-role="supporting" data-qid="q-card-title-04">원칙 04</div>
+      <div class="card-rule" data-qid="q-div-7f25fb171299" data-semantic-role="decoration"></div>
+      <div class="card-copy" data-semantic-role="body" data-qid="source-block-f1f67204522209cf" data-source-block-id="source-slide:4:text:7:run:3">수강생이 집에 가서 바로 실행할 수 있는 자료를 남긴다.</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="q-page-number">04</div>
+</body>
+</html>

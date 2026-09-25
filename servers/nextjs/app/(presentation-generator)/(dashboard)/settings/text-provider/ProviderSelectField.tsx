@@ -39,7 +39,7 @@ const ProviderSelectField = ({
         selectedProvider === "codex" ? "w-[240px]" : "w-[262px]"
       }`}
     >
-      <div className="flex flex-col justify-start ">
+      <div className="flex w-full flex-col justify-start sm:w-[262px]">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           텍스트 제공자 선택
         </label>
@@ -52,7 +52,7 @@ const ProviderSelectField = ({
               variant="outline"
               role="combobox"
               aria-expanded={openProviderSelect}
-              className="w-[222px] h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
+              className="w-full h-11 px-4 py-4 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors hover:border-gray-400 justify-between"
             >
               <div className="flex gap-3 items-center">
                 <span className="text-sm font-medium text-gray-900">

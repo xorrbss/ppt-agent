@@ -1,0 +1,55 @@
+{
+  "id": "data-09-table-grid",
+  "category": "data",
+  "tags": {
+    "ko": [
+      "데이터",
+      "표"
+    ],
+    "en": [
+      "data",
+      "table",
+      "grid"
+    ]
+  },
+  "alt": {
+    "ko": "표 단색 벡터 인포그래픽",
+    "en": "table grid monochrome vector infographic"
+  },
+  "path": "originals/data-09-table-grid.svg",
+  "thumbnail": "thumbnails/data-09-table-grid.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 373,
+  "sha256": "5f19129604c811381efbed3fdad581afa4b018463f4dd18afa99bbe94c940de5",
+  "geometry_sha256": "cf56937e7e3ef7632b241f460bfa83483c3b6ecb404fdb359cb2049ffd2f6176",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 49784,
+    "preview_opaque_pixels": 13884,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "TableProperties"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

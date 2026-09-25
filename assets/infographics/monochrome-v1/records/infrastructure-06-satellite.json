@@ -1,0 +1,54 @@
+{
+  "id": "infrastructure-06-satellite",
+  "category": "infrastructure",
+  "tags": {
+    "ko": [
+      "인프라",
+      "위성"
+    ],
+    "en": [
+      "infrastructure",
+      "satellite"
+    ]
+  },
+  "alt": {
+    "ko": "위성 단색 벡터 인포그래픽",
+    "en": "satellite monochrome vector infographic"
+  },
+  "path": "originals/infrastructure-06-satellite.svg",
+  "thumbnail": "thumbnails/infrastructure-06-satellite.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 412,
+  "sha256": "ea76daa160b8842c4ae2961ade0835c498846f8a2bc4faa676605a5a2a79866f",
+  "geometry_sha256": "bcf151dbb65e77fda6b86822eb9a0fb1436acc106408d9740ad6d08215c361d5",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55293,
+    "preview_opaque_pixels": 8791,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Satellite"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

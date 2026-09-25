@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.structural-repair-v3",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Use full DOM scoping, pure candidate evaluation, sequential cause-based repair, reserved model budget, and strict source/design admission.",
+  "scope": [
+    "authored",
+    "structural-repair"
+  ],
+  "invariants": [
+    "Analyze the full DOM before building bounded model input.",
+    "Evaluate against immutable original and selected evidence; advance only the chosen candidate.",
+    "Use sequential candidates within each slide and cause-based prioritization.",
+    "Reserve model capture capacity when model recovery is available.",
+    "Preserve source integrity and design contracts; admit only strict final passes."
+  ],
+  "forbidden": [
+    "Use aggregate improvement to offset new source damage.",
+    "Treat proposed numeric thresholds as runtime-verified contracts."
+  ],
+  "evidence": [
+    "docs/authored-structural-quality-repair-v3-design-20260910.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-10T05:55:22.1571088+00:00"
+}

@@ -1,0 +1,50 @@
+{
+  "status": "failed",
+  "telemetryStatus": "available",
+  "blockingIssues": [
+    {
+      "category": "off_canvas",
+      "severity": "high",
+      "detail": "element extends outside the slide canvas",
+      "qids": [
+        "s27-main-card"
+      ],
+      "policy": "style_reference",
+      "magnitude": {
+        "overshoot_px_left": 0.0,
+        "overshoot_px_top": 0.0,
+        "overshoot_px_right": 0.0,
+        "overshoot_px_bottom": 24.0,
+        "element_kind": "container"
+      }
+    },
+    {
+      "category": "off_canvas",
+      "severity": "high",
+      "detail": "element extends outside the slide canvas",
+      "qids": [
+        "s27-side-card"
+      ],
+      "policy": "style_reference",
+      "magnitude": {
+        "overshoot_px_left": 0.0,
+        "overshoot_px_top": 0.0,
+        "overshoot_px_right": 0.0,
+        "overshoot_px_bottom": 24.0,
+        "element_kind": "container"
+      }
+    },
+    {
+      "category": "overlap",
+      "severity": "medium",
+      "detail": "browser pixel-area probe reports a continuous occluding layer",
+      "qids": [
+        "s27-main-title"
+      ],
+      "policy": "style_reference"
+    }
+  ],
+  "capacityEnforced": false,
+  "capacityViolations": [],
+  "repairTrigger": true
+}

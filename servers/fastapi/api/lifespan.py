@@ -86,6 +86,9 @@ from services.workspace_page_remake_operation_handler import (
 from services.workspace_batch_remake_operation_handler import (
     register_workspace_batch_remake_operation_handler,
 )
+from services.workspace_slide_order_operation_handler import (
+    register_workspace_slide_order_operation_handler,
+)
 from services.workspace_authored_template_operation_handler import (
     register_workspace_authored_template_operation_handler,
 )
@@ -210,6 +213,7 @@ async def app_lifespan(_: FastAPI):
         register_presentation_chat_operation_handlers(replace=True)
         register_workspace_page_remake_operation_handler(replace=True)
         register_workspace_batch_remake_operation_handler(replace=True)
+        register_workspace_slide_order_operation_handler(replace=True)
         register_workspace_quality_export_operation_handlers(replace=True)
         register_workspace_authored_template_operation_handler(replace=True)
         if (

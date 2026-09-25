@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "sol-common-repair-paid-trial/v1",
+  "status": "prepared_not_authorized",
+  "providerCallsExecuted": 0,
+  "requestedModel": "gpt-5.6-sol",
+  "effort": "medium",
+  "sampleSource": "artifacts/sol-speed-quality-20260915/samples/stage1.json",
+  "sampleCount": 6,
+  "promptArms": [
+    {
+      "id": "baseline",
+      "basePrompt": "artifacts/sol-speed-quality-20260915/prompts/A-author.txt",
+      "supplement": null
+    },
+    {
+      "id": "dense-layout-supplement-v1",
+      "basePrompt": "artifacts/sol-speed-quality-20260915/prompts/A-author.txt",
+      "supplement": "artifacts/sol-common-repair-20260915/prompts/dense-layout-supplement.txt"
+    }
+  ],
+  "authorCallCap": 12,
+  "authorCallsScheduled": 12,
+  "planCallsScheduled": 0,
+  "repairModelCallsScheduled": 0,
+  "outputComparisonsScheduled": 24,
+  "captureCountContract": "At least 24 captures; correction-on may add one fit=False verification capture when fitted HTML changes. Aggregate actual captures from fit and verification receipts.",
+  "sharingContract": "Each author HTML is immutable input shared by correction-off and correction-on branches.",
+  "comparisonContract": "Compare prompt arms only within the same source sample; compare correction off/on only from the same generated HTML.",
+  "qualityAggregation": {
+    "promptEffect": "aggregate same-sample baseline versus improved prompt separately",
+    "correctionEffect": "aggregate off versus on from shared generated HTML separately",
+    "historicalComparison": "do not compare directly with the previous failure ratio"
+  },
+  "neutralPacketWhitelist": [
+    "sourceContent",
+    "requiredImages",
+    "htmlPath",
+    "pngPath",
+    "htmlSha256",
+    "pngSha256"
+  ],
+  "timingContract": {
+    "clock": "time.perf_counter_ns",
+    "trialBoundary": "author entry through completion of both branches' final inspection",
+    "phases": [
+      "author",
+      "correctionOffCapture",
+      "correctionOffInspection",
+      "correctionOnRepair",
+      "correctionOnCapture",
+      "correctionOnInspection"
+    ],
+    "rule": "Persist uninterrupted trial start/end and each phase start/end/duration. Do not label additive phase estimates as monotonic completion latency."
+  },
+  "executionGates": [
+    "representative10CommonCorrectionPassed",
+    "rootExplicitExecutionInstruction",
+    "callLedgerCanReserveAll12WithoutExceedingCap"
+  ]
+}

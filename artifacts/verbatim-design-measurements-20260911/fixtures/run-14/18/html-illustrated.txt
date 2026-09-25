@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#08916E;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:20px;width:832px}
+.eyebrow{height:21px;font-size:15px;line-height:21px;font-weight:700;letter-spacing:.04em;color:#FFFFFF}
+.title{margin-top:6px;font-size:32px;line-height:38px;font-weight:700;color:#FFFFFF}
+.header-tag{position:absolute;right:0;top:0;width:276px;height:103px;padding:20px 64px 0 24px;background:#00140E;font-size:15px;line-height:21px;font-weight:700;color:#FFFFFF;text-align:right}
+.body-wrap{width:1152px;margin-left:64px;margin-top:24px}
+.claim-row{height:54px;display:flex;align-items:flex-start;justify-content:space-between}
+.claim{font-size:25px;line-height:36px;font-weight:700;color:#1D1D1B}
+.claim strong{color:#08916E}
+.section-no{padding-top:5px;font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:24px;font-weight:700;color:#08916E}
+.architecture-grid{display:grid;grid-template-columns:730px 398px;gap:24px;height:485px}
+.card{height:100%;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;position:relative}
+.card-index{display:flex;align-items:center;justify-content:center;width:48px;height:36px;border-radius:12px;background:#00140E;color:#FFFFFF;font-family:"IBM Plex Mono","Consolas",monospace;font-size:17px;line-height:22px;font-weight:700}
+.card-title{margin-top:23px;font-size:26px;line-height:36px;font-weight:700;color:#08916E}
+.card-rule{width:100%;height:1px;margin-top:18px;background:#E2E8F0}
+.card-copy{margin-top:20px;font-size:18px;line-height:30px;font-weight:500;color:#1D1D1B}
+.structure-card{height:485px;padding:28px}
+.structure-head{display:flex;align-items:center;gap:16px;height:36px}
+.structure-head .card-title{margin-top:0}
+.structure-caption{margin-top:18px;font-size:18px;line-height:30px;font-weight:500;color:#1D1D1B}
+.flow{display:grid;grid-template-columns:122px 28px 122px 28px 122px 28px 122px 28px 122px;align-items:center;margin-top:38px}
+.flow-box{height:142px;padding:16px 10px;background:#EAF7F4;border:1px solid #A6DCCF;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.flow-box .card-index{width:38px;height:30px;border-radius:12px;font-size:15px;line-height:20px}
+.flow-label{margin-top:14px;font-size:18px;line-height:27px;font-weight:700;color:#00140E}
+.connector{height:2px;margin:0 4px;background:#08916E;position:relative}
+.connector-node{position:absolute;right:-1px;top:-5px;width:12px;height:12px;background:#08916E;border-radius:2px}
+.flow-note{margin-top:38px;padding:18px 20px;background:#F1F4F6;border-left:6px solid #08916E;border-radius:12px;font-size:18px;line-height:30px;font-weight:600;color:#1D1D1B}
+.side-column{display:flex;flex-direction:column;gap:16px;height:485px}
+.strategy-card{height:240px;padding:24px 28px}
+.strategy-card .card-title{margin-top:0;font-size:22px;line-height:31px}
+.strategy-card .card-rule{margin-top:14px}
+.bullet-list{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.bullet-item{display:flex;gap:10px;font-size:16px;line-height:24px;font-weight:500;color:#1D1D1B}
+.bullet-mark{width:7px;height:7px;margin-top:8px;flex:none;background:#08916E;border-radius:2px}
+.image-panel{height:229px;padding:8px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.image-panel img{display:block;width:380px;height:211px;border-radius:12px;object-fit:cover;background:#E0F3FF}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="103" class="header-band" style="height:103px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-18">3주차</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-0af096b13b18e735" data-source-block-id="source-slide:19:text:3">3주차 PART 1 | 무료 샘플 전략</div>
+  </div>
+  <div data-header-part="right" class="header-tag" data-semantic-role="supporting" data-qid="source-block-a219155582a20462" data-source-block-id="source-slide:19:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim-row" data-qid="q-div-75b3498fbbe1" data-semantic-role="decoration">
+    <div class="claim" data-semantic-role="body" data-qid="q-claim-18">무료 샘플은 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">유료 전환</strong>을 설계하는 첫 단계입니다.</div>
+    <div class="section-no" data-semantic-role="supporting" data-qid="source-block-0835442ac46726d4" data-source-block-id="source-slide:19:text:4">19</div>
+  </div>
+
+  <div class="architecture-grid" data-qid="q-div-7381995bf616" data-semantic-role="decoration">
+    <div class="card structure-card" data-qid="q-structure-card-18" data-semantic-role="decoration">
+      <div class="structure-head" data-qid="q-div-527a0b8590a4" data-semantic-role="decoration">
+        <div class="card-index" data-semantic-role="supporting" data-qid="q-structure-index-18">01</div>
+        <div class="card-title" data-semantic-role="supporting" data-qid="source-block-07640de12403b83a" data-source-block-id="source-slide:19:text:9">샘플 구조</div>
+      </div>
+      <div class="card-rule" data-qid="q-div-e24a51b44c9c" data-semantic-role="decoration"></div>
+      <div class="structure-caption" data-semantic-role="supporting" data-qid="q-structure-caption-18">가게 특성에 맞춘 흐름으로 샘플을 설계합니다.</div>
+
+      <div class="flow" data-qid="q-div-7fd902b74613" data-semantic-role="decoration">
+        <div class="flow-box" data-qid="q-flow-card-1-18" data-semantic-role="decoration">
+          <div class="card-index" data-semantic-role="supporting" data-qid="q-flow-index-1-18">01</div>
+          <div class="flow-label" data-semantic-role="supporting" data-qid="source-block-a11a65f3b9145fb3" data-source-block-id="source-slide:19:text:10:run:0">가게 분석</div>
+        </div>
+        <div class="connector" data-qid="q-div-1bfec761b021" data-semantic-role="decoration"><div class="connector-node" data-qid="q-div-8b813e36675c" data-semantic-role="decoration"></div></div>
+
+        <div class="flow-box" data-qid="q-flow-card-2-18" data-semantic-role="decoration">
+          <div class="card-index" data-semantic-role="supporting" data-qid="q-flow-index-2-18">02</div>
+          <div class="flow-label" data-semantic-role="supporting" data-qid="source-block-d9e9c28b5cd9f168" data-source-block-id="source-slide:19:text:10:run:1">4개 기획</div>
+        </div>
+        <div class="connector" data-qid="q-div-f954d062b2c8" data-semantic-role="decoration"><div class="connector-node" data-qid="q-div-8a31b39488c8" data-semantic-role="decoration"></div></div>
+
+        <div class="flow-box" data-qid="q-flow-card-3-18" data-semantic-role="decoration">
+          <div class="card-index" data-semantic-role="supporting" data-qid="q-flow-index-3-18">03</div>
+          <div class="flow-label" data-semantic-role="supporting" data-qid="source-block-2398587430512a02" data-source-block-id="source-slide:19:text:10:run:2">1~4개 제작</div>
+        </div>
+        <div class="connector" data-qid="q-div-d70e41e2467e" data-semantic-role="decoration"><div class="connector-node" data-qid="q-div-9a2b4e6f98a1" data-semantic-role="decoration"></div></div>
+
+        <div class="flow-box" data-qid="q-flow-card-4-18" data-semantic-role="decoration">
+          <div class="card-index" data-semantic-role="supporting" data-qid="q-flow-index-4-18">04</div>
+          <div class="flow-label" data-semantic-role="supporting" data-qid="source-block-5b66a2541e102aba" data-source-block-id="source-slide:19:text:10:run:3">반응 확인</div>
+        </div>
+        <div class="connector" data-qid="q-div-44f8a0ccb367" data-semantic-role="decoration"><div class="connector-node" data-qid="q-div-424adc9b41f3" data-semantic-role="decoration"></div></div>
+
+        <div class="flow-box" data-qid="q-flow-card-5-18" data-semantic-role="decoration">
+          <div class="card-index" data-semantic-role="supporting" data-qid="q-flow-index-5-18">05</div>
+          <div class="flow-label" data-semantic-role="supporting" data-qid="source-block-b9f3835789dcc417" data-source-block-id="source-slide:19:text:10:run:4">유료 제안</div>
+        </div>
+      </div>
+
+      <div class="flow-note" data-semantic-role="body" data-qid="source-block-de09f6324020debd" data-source-block-id="source-slide:19:text:6:run:3">무료 제공 범위와 기간을 명확히</div>
+    </div>
+
+    <div class="side-column" data-qid="q-div-e7ead5e2e45c" data-semantic-role="decoration">
+      <div class="card strategy-card" data-qid="q-strategy-card-18" data-semantic-role="decoration">
+        <div class="card-title" data-semantic-role="supporting" data-qid="q-strategy-title-18">첫 고객 접근 원칙</div>
+        <div class="card-rule" data-qid="q-div-0b8bad9e5967" data-semantic-role="decoration"></div>
+        <div class="bullet-list" data-qid="q-div-64b2e031b133" data-semantic-role="decoration">
+          <div class="bullet-item" data-semantic-role="decoration" data-qid="q-bullet-1-18"><span class="bullet-mark" data-qid="q-span-42f15cbbf745" data-semantic-role="decoration"></span><span data-qid="source-block-e02d960ceebeda77" data-semantic-role="body" data-source-block-id="source-slide:19:text:6:run:0">첫 고객에게 무작정 가격부터 말하지 않는다</span></div>
+          <div class="bullet-item" data-semantic-role="decoration" data-qid="q-bullet-2-18"><span class="bullet-mark" data-qid="q-span-b5961728f975" data-semantic-role="decoration"></span><span data-qid="source-block-84b7944dbf4cfd3d" data-semantic-role="body" data-source-block-id="source-slide:19:text:6:run:1">가능하면 가게 특성에 맞는 샘플을 준비</span></div>
+          <div class="bullet-item" data-semantic-role="decoration" data-qid="q-bullet-3-18"><span class="bullet-mark" data-qid="q-span-e331268f35e2" data-semantic-role="decoration"></span><span data-qid="source-block-4d1c12468a948af9" data-semantic-role="body" data-source-block-id="source-slide:19:text:6:run:2">한 가게에 4개 소재를 기획해보기</span></div>
+          <div class="bullet-item" data-semantic-role="decoration" data-qid="q-bullet-4-18"><span class="bullet-mark" data-qid="q-span-9f77a5cecf39" data-semantic-role="decoration"></span><span data-qid="source-block-61cad05b020a74c3" data-semantic-role="body" data-source-block-id="source-slide:19:text:6:run:4">목표는 ‘공짜 노동’이 아니라 유료 전환</span></div>
+        </div>
+      </div>
+
+      <div class="image-panel" data-qid="q-image-panel-18" data-semantic-role="decoration">
+        
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="q-page-number-18">19</div>
+</body>
+</html>

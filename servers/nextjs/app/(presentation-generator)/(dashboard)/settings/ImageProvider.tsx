@@ -58,13 +58,13 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
     const renderQualitySelector = (llmConfig: LLMConfig, input_field_changed: (value: string, field: string) => void) => {
         if (llmConfig.IMAGE_PROVIDER === "dall-e-3") {
             return (
-                <div className="w-[205px] mr-0 ml-auto">
+                <div className="ml-auto w-full sm:w-[262px]">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                         DALL·E 3 이미지 품질
                     </label>
                     <div className="">
                         <Select value={llmConfig.DALL_E_3_QUALITY || 'standard'} onValueChange={(value) => input_field_changed(value, "DALL_E_3_QUALITY")}>
-                            <SelectTrigger className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
+                            <SelectTrigger className="w-full h-11 px-3 py-2 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors hover:border-gray-400 justify-between">
                                 <SelectValue placeholder="품질 선택" />
                             </SelectTrigger>
                             <SelectContent>
@@ -81,7 +81,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
 
         if (llmConfig.IMAGE_PROVIDER === "gpt-image-1.5") {
             return (
-                <div className="w-[205px]">
+                <div className="w-full sm:w-[262px]">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                         GPT Image 1.5 품질
                     </label>
@@ -92,7 +92,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                         >
                             <SelectTrigger
 
-                                className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
+                                className="w-full h-11 px-3 py-2 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors hover:border-gray-400 justify-between">
                                 <SelectValue placeholder="품질 선택" />
                             </SelectTrigger>
                             <SelectContent>
@@ -107,22 +107,23 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
             );
         }
 
-        if (llmConfig.IMAGE_PROVIDER === "gpt-image-2") {
+        if (llmConfig.IMAGE_PROVIDER === "gpt-image-2" || llmConfig.IMAGE_PROVIDER === "gpt-image-2.5-flare" || llmConfig.IMAGE_PROVIDER === "gpt-image-2.5-sunburst" || llmConfig.IMAGE_PROVIDER === "codex_image") {
+            const qualityKey = llmConfig.IMAGE_PROVIDER === "gpt-image-2" ? "GPT_IMAGE_2_QUALITY" : "GPT_IMAGE_2_5_QUALITY";
             return (
-                <div className="w-[205px]">
+                <div className="w-full sm:w-[262px]">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        GPT Image 2 품질
+                        {IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER].label} 품질
                     </label>
                     <div className="">
                         <Select
-                            value={llmConfig.GPT_IMAGE_2_QUALITY || 'medium'}
-                            onValueChange={(value) => input_field_changed(value, "GPT_IMAGE_2_QUALITY")}
+                            value={llmConfig[qualityKey] || 'medium'}
+                            onValueChange={(value) => input_field_changed(value, qualityKey)}
                         >
-                            <SelectTrigger className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
+                            <SelectTrigger className="w-full h-11 px-3 py-2 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors hover:border-gray-400 justify-between">
                                 <SelectValue placeholder="품질 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                                {IMAGE_QUALITY_OPTIONS["gpt-image-2"].map((option) => (
+                                {IMAGE_QUALITY_OPTIONS[llmConfig.IMAGE_PROVIDER === "codex_image" ? "gpt-image-2.5-sunburst" : llmConfig.IMAGE_PROVIDER].map((option) => (
                                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -139,9 +140,9 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
 
 
     return (
-        <div className="space-y-6 bg-[#F9F8F8] p-7 rounded-[12px] ">
+        <div className="space-y-5 pb-6">
             {/* API Key Input */}
-            <div className="mb-4  bg-white p-10 pt-5 rounded-[12px]">
+            <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm sm:p-7">
                 <ToolTip content="이미지 생성 켜기/끄기" className='flex justify-end items-center'>
                     <div className='flex justify-end items-center'>
                         <Switch
@@ -155,14 +156,14 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                 <div className='flex items-center justify-between'>
 
 
-                    <div className=" max-w-[290px] pb-[50px]">
+                    <div className="max-w-sm pb-6">
                         <div className='w-[60px] h-[60px] px-[13.5px] py-[14.2px] rounded-[4px] flex items-center justify-center'
                             style={{ backgroundColor: '#F4F3FF' }}
                         >
                             <Image src="/image-markup.svg" width={33} height={32} className='w-full h-full object-cover' alt='image-markup' />
                         </div>
-                        <h3 className="text-xl font-normal text-[#191919] py-2.5">이미지 생성 설정</h3>
-                        <p className=" text-sm  text-gray-500">
+                        <h3 className="py-3 text-lg font-semibold tracking-tight text-zinc-900">이미지 생성 설정</h3>
+                        <p className="text-sm leading-relaxed text-zinc-500">
                             이미지를 가져올 위치를 선택하세요
                         </p>
                     </div>
@@ -187,7 +188,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                                         variant="outline"
                                                         role="combobox"
                                                         aria-expanded={openImageProviderSelect}
-                                                        className="w-[205px] h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
+                                                        className="w-full sm:w-[262px] h-11 px-4 py-4 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors hover:border-gray-400 justify-between"
                                                     >
                                                         <div className="flex gap-3 items-center">
                                                             <span className="text-sm font-medium text-gray-900">
@@ -258,6 +259,10 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                         IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER] &&
                                         (() => {
                                             const provider = IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER];
+                                            if (provider.value === "codex_image") {
+                                                return <p className="text-sm text-gray-600">기존 Codex 로그인을 사용하며 Codex 사용 한도가 적용됩니다. GPT Image 2.5 Sunburst를 요청하지만 실제 적용 모델은 서버가 공개하지 않습니다. 로그인은 ChatGPT 제공자 설정에서 관리합니다.</p>;
+                                            }
+
                                             const layout = PUBLIC_PROVIDERS_BY_ID[provider.value]?.ui?.credentialLayout;
 
 
@@ -295,7 +300,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                                                 <input
                                                                     type="text"
                                                                     placeholder="http://192.168.1.7:8188"
-                                                                    className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                                                    className="w-full px-4 py-2.5 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors"
                                                                     value={llmConfig.COMFYUI_URL || ""}
                                                                     onChange={(e) => {
                                                                         input_field_changed(
@@ -324,7 +329,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                                                 <input
                                                                     type="text"
                                                                     placeholder="http://localhost:3000/api/v1"
-                                                                    className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                                                    className="w-full px-4 py-2.5 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors"
                                                                     value={llmConfig.OPEN_WEBUI_IMAGE_URL || ""}
                                                                     onChange={(e) => {
                                                                         input_field_changed(
@@ -341,7 +346,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
 
                                             // Show API key input for other providers
                                             return (
-                                                <div className=" w-[205px]">
+                                                <div className="w-full sm:w-[262px]">
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         {provider.apiKeyFieldLabel}
                                                     </label>
@@ -349,7 +354,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                                         <input
                                                             type={showApiKey ? 'text' : 'password'}
                                                             placeholder={`${provider.apiKeyFieldLabel} 입력`}
-                                                            className="w-full px-4 py-2.5 h-12 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                                            className="w-full px-4 py-2.5 h-12 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors"
                                                             value={getFieldValue(provider.apiKeyField)}
                                                             onChange={(e) =>
                                                                 updateFieldValue(
@@ -386,7 +391,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                         <input
                                             type={showApiKey ? 'text' : 'password'}
                                             placeholder="API 키"
-                                            className="w-full px-4 py-2.5 h-12 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            className="w-full px-4 py-2.5 h-12 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors"
                                             value={llmConfig.OPEN_WEBUI_IMAGE_API_KEY || ""}
                                             onChange={(e) => {
                                                 input_field_changed(e.target.value, "OPEN_WEBUI_IMAGE_API_KEY");
@@ -409,7 +414,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                 <div className="relative">
                                     <textarea
                                         placeholder='ComfyUI 워크플로 JSON을 여기에 붙여넣으세요 (ComfyUI에서 "Export (API)"로 내보내기)'
-                                        className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors font-mono text-xs"
+                                        className="w-full px-4 py-2.5 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors font-mono text-xs"
                                         rows={3}
                                         value={llmConfig.COMFYUI_WORKFLOW || ""}
                                         onChange={(e) => {
@@ -438,12 +443,12 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                             </p>
                         </div>
                         <div className="flex w-full justify-end">
-                            <div className="w-[205px]">
+                            <div className="w-full sm:w-[262px]">
                                 <label className="mb-2 block text-sm font-medium text-gray-700">이미지 모델 ID</label>
                                 <input
                                     type="text"
                                     placeholder="예: dall-e-3, gpt-image-1"
-                                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                                    className="w-full rounded-lg border border-zinc-200 px-4 py-2.5 outline-none transition-colors focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/10"
                                     value={llmConfig.OPENAI_COMPAT_IMAGE_MODEL || ""}
                                     onChange={(e) => {
                                         setLlmConfig((prev) => ({
@@ -459,22 +464,22 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
 
 
             {/* Web Grounding Toggle - show at the end, below models dropdown */}
-            {/* <div className="bg-white flex justify-between items-center p-10 rounded-[12px]">
+            {/* <div className="flex flex-col gap-5 rounded-2xl border border-zinc-200/80 bg-white p-5 sm:p-7 xl:flex-row xl:items-center xl:justify-between">
                 <div className=' max-w-[290px]'>
 
-                    <h4 className="text-xl font-normal text-[#191919]">Advanced</h4>
-                    <p className="mt-2.5 text-sm  text-gray-500">
+                    <h4 className="text-lg font-semibold tracking-tight text-zinc-900">Advanced</h4>
+                    <p className="mt-2.5text-sm leading-relaxed text-zinc-500">
                         Configure advanced AI features.
                     </p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex w-full flex-wrap items-center gap-4 xl:w-auto">
 
-                    <div className="w-[275px]">
+                    <div className="w-full sm:w-[275px]">
 
 
 
                     </div>
-                    <div className="w-[295px]"></div>
+                    <div className="w-full sm:w-[295px]"></div>
                 </div>
 
             </div> */}

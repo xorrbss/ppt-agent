@@ -38,6 +38,10 @@ ARTIFACT_REF_SCHEMA_VERSION = "artifact-ref/v1"
 PUBLIC_ARTIFACT_KINDS = (
     "checkpoint",
     "slide-html",
+    "slide-svg",
+    "image-derivative",
+    "source-manifest",
+    "placement-manifest",
     "slide-png",
     "export-bundle",
     "presentation-pptx",
@@ -57,6 +61,10 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _MEDIA_TYPE_BY_KIND = {
     "checkpoint": "application/json",
     "slide-html": "text/html",
+    "slide-svg": "image/svg+xml",
+    "image-derivative": ("image/png", "image/jpeg"),
+    "source-manifest": "application/json",
+    "placement-manifest": "application/json",
     "slide-png": "image/png",
     "export-bundle": "application/vnd.presenton.export-bundle+json",
     "presentation-pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -104,6 +112,10 @@ class ArtifactRef(BaseModel):
     kind: Literal[
         "checkpoint",
         "slide-html",
+        "slide-svg",
+        "image-derivative",
+        "source-manifest",
+        "placement-manifest",
         "slide-png",
         "export-bundle",
         "presentation-pptx",
@@ -138,7 +150,8 @@ class ArtifactRef(BaseModel):
         )
         if self.storage_key != expected_key:
             raise ValueError("artifact storage key is not bound to owner, tenant, and digest")
-        if self.media_type != _MEDIA_TYPE_BY_KIND[self.kind]:
+        allowed = _MEDIA_TYPE_BY_KIND[self.kind]
+        if self.media_type not in (allowed if isinstance(allowed, tuple) else (allowed,)):
             raise ValueError("artifact media type does not match its kind")
         if "\\" in self.storage_key or ".." in self.storage_key or self.storage_key.startswith("/"):
             raise ValueError("artifact storage key must not be a local path")
@@ -160,8 +173,9 @@ class PublicArtifact(SQLModel, table=True):
             name="uq_public_artifact_operation_digest",
         ),
         CheckConstraint(
-            "kind IN ('checkpoint', 'slide-html', 'slide-png', 'export-bundle', "
-            "'presentation-pptx', 'presentation-pdf')",
+            "kind IN ('checkpoint', 'slide-html', 'slide-svg', 'slide-png', 'export-bundle', "
+            "'presentation-pptx', 'presentation-pdf', 'image-derivative', "
+            "'source-manifest', 'placement-manifest')",
             name="ck_public_artifact_kind",
         ),
         CheckConstraint(

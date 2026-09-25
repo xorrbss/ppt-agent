@@ -21,9 +21,9 @@ upstream sources of truth.
   (`eng.traineddata`, `kor.traineddata`). `LiteParseService` auto-detects this
   directory, so scanned-PDF OCR works without a CDN. Override with
   `LITEPARSE_TESSDATA_PATH` to add languages.
-- **PPTX/PDF export fix** — `servers/fastapi/utils/export_utils.py` seeds the export
-  session cookie via the Next.js proxy so the headless render authenticates (modern
-  Chromium drops CDP-set `Cookie` headers).
+- **PPTX/PDF export** — runs as a durable `export.pptx` / `export.pdf` workspace
+  operation executed by the isolated export worker. The in-process exporter that
+  seeded a `/pdf-maker?exportSession=` cookie through the Next.js proxy is gone.
 
 ## Prerequisites
 Node LTS, Python 3.11, [uv](https://docs.astral.sh/uv/). For export/parsing:
@@ -59,6 +59,9 @@ over with `-Adopt`.
 to be a hybrid of this script and `start-public-v2-rc.ps1` that neither could
 restart or stop: the environment existed only inside the running processes, and
 the schema drifted six migrations behind the code without anything saying so.
+The supported launcher also fails closed unless the API and both controllers
+have PostgreSQL `DATABASE_URL` values; it never permits the backend's SQLite
+fallback for this daily multi-user stack.
 
 `start-public-v2-rc.ps1` is a different tool: it creates a throwaway PostgreSQL
 under the temp directory for RC verification, on ports 8010/3010/5110. It is not
@@ -153,7 +156,14 @@ Key flags: `--content` / `--batch`, `--slides <n|auto>` (default 8), `--language
 (default `"Korean (한국어)"`), `--template`, `--style <id>` (authored-mode style preset), `--export pptx|pdf`, `--instructions`,
 `--tone`, `--verbosity`, `--web-search`, `--toc`, `--no-title`, `--base`,
 `--user`/`--password`, `--out <dir>`, `--timeout <sec>`. `--flag=value` also works.
-Verified end-to-end: a 3-slide Korean PPTX (valid OOXML) generated and downloaded.
+
+`--export` no longer produces a file inside the generate request. The server
+chains an `export.pptx` / `export.pdf` workspace command onto the finished deck
+and returns its `export_operation_id`; `--out` follows that operation on
+`GET /api/v1/ppt/workspace/presentations/{id}/timeline` and downloads the
+artifact it publishes from
+`GET /api/v1/ppt/workspace/artifacts/{artifact_id}/download`. A generation whose
+export was refused still succeeds and prints the refusal code.
 
 ## AI 저작(authored) 고품질 모드
 

@@ -38,6 +38,9 @@ from services import authored_checkpoint_service as checkpoints
 from services import authored_presentation_pipeline as pipeline
 from services.authored_author_stage_deferral import (
     author_failure_is_rescuable,
+    author_failure_retryable,
+    author_rejection_code,
+    author_stage_failure,
     defer_rescuable_author_failures,
     resumed_author_budget_is_rescuable,
 )
@@ -84,6 +87,39 @@ def _renderer_policy_rejection():
     return AuthoredBatchFailure(error, "Remove the forbidden declaration.", "<html/>")
 
 
+def _enforce_gate_rejection():
+    """The failure the enforce lane's in-batch producer entry actually mints.
+
+    run-29: with ``AUTHORED_ADMISSION_GATE_MODE=enforce`` the admission gate
+    rejects a candidate that dropped a bound source block inside the provider
+    batch call -- at ``provider_raw_html``/``provider_expanded_html``, upstream
+    of the persist seam that used to attach the rejected candidate -- and
+    ``_batch_failure`` records whatever escapes there. Built through the real
+    gate so this is the run's shape rather than a model of it.
+    """
+
+    from services.authored_admission_session import AdmissionSession, _SESSION, check_producer
+    from services.source_content.browser_readback import BrowserSourceReadbackError
+    from tests.unit.test_authored_admission import HTML, context
+    from utils.llm_calls.author_deck import _batch_failure
+
+    session = AdmissionSession(mode="enforce", contexts=(context(),))
+    token = _SESSION.set(session)
+    try:
+        check_producer(
+            HTML.replace("원문 제목", "다른 제목"),
+            index=0,
+            producer="author_batch",
+            legacy=lambda html: html,
+            representation="token",
+        )
+    except BrowserSourceReadbackError as error:
+        return _batch_failure(error)
+    finally:
+        _SESSION.reset(token)
+    raise AssertionError("the enforce gate must reject a candidate that dropped its source text")
+
+
 # --- the classification -------------------------------------------------------
 
 
@@ -97,6 +133,25 @@ def test_a_rejected_candidate_is_the_dead_end_the_rescue_answers():
         )
         is True
     )
+    assert author_rejection_code(_header_contract_rejection().error) == (
+        "authored_header_contract_rejected"
+    )
+
+
+def test_the_enforce_gate_s_rejection_is_the_dead_end_the_rescue_answers():
+    """run-29: enforce moved the rejection, it must not change what it means.
+
+    The gate answers with the candidate it refused and with its own
+    classification, so this reads exactly like the header-contract rejection
+    above: rescuable, and not the operation retry's -- which is what cost
+    run-29 a 712-second replay of a rejection no replay can change.
+    """
+
+    failure = _enforce_gate_rejection()
+    assert isinstance(failure.rejected_html, str) and failure.rejected_html
+    assert author_failure_is_rescuable(failure) is True
+    assert author_failure_retryable(failure.error) is False
+    assert author_stage_failure(_FAILING_SLIDE, failure.error).retryable is False
 
 
 def test_a_renderer_policy_refusal_and_a_transport_failure_are_not_rescuable():
@@ -151,6 +206,23 @@ def test_an_inactive_predicate_defers_nothing():
     )
     assert set(deferred) == {_FAILING_SLIDE}
     assert deferred[_FAILING_SLIDE].provider_attempt_count == 2
+    assert deferred[_FAILING_SLIDE].prior_failure == {
+        "code": "authored_header_contract_rejected",
+        "exception_type": "ValueError",
+        "cause": "header contract violated: header_band_missing",
+    }
+
+    strict_deferred = defer_rescuable_author_failures(
+        _SLIDE_COUNT,
+        successful=set(),
+        failures=failures,
+        attempt_counts={_FAILING_SLIDE: 2},
+        profile=None,
+        reference_mode="style_reference",
+        source_reflow=True,
+    )
+    assert set(strict_deferred) == {_FAILING_SLIDE}
+    assert strict_deferred[_FAILING_SLIDE].provider_attempt_count == 2
 
 
 def test_a_resumed_slide_keeps_a_recorded_refusal_fail_closed():
@@ -372,6 +444,40 @@ def test_a_twice_rejected_slide_is_rescued_and_the_deck_publishes(
     assert result.author_flagged_slides == ()
     assert result.author_provider_attempt_counts[_FAILING_SLIDE] == 3
     # Two batch calls were spent on the failing slide before the rescue.
+    assert sum(_FAILING_SLIDE in selected for selected in calls) == 2
+
+
+@pytest.mark.parametrize("lane", (_streaming, _barrier))
+def test_the_enforce_gate_s_rejection_reaches_the_third_attempt(
+    tmp_path, monkeypatch, lane
+):
+    """The whole run-29 chain: enforce rejection -> deferral -> rescue.
+
+    Before the gate error carried the candidate, this deck died at attempt 2
+    with no rescue line in the log at all, while the shadow lane recovered the
+    same class of slide on its third, simplified call.
+    """
+
+    lane(monkeypatch)
+    batch, calls = _batch_that_never_authors_one_slide(failure=_enforce_gate_rejection())
+    rescued: list[int] = []
+
+    async def rescue(_plan, index, **_kwargs):
+        rescued.append(index)
+        return _RESCUED_HTML
+
+    result = _drive(
+        tmp_path,
+        monkeypatch,
+        batch=batch,
+        rescue=rescue,
+        contract=default_header_contract(primary="#2563EB"),
+    )
+
+    assert rescued == [_FAILING_SLIDE]
+    assert "RESCUED" in result.deck.htmls[_FAILING_SLIDE]
+    assert result.author_flagged_slides == ()
+    assert result.author_provider_attempt_counts[_FAILING_SLIDE] == 3
     assert sum(_FAILING_SLIDE in selected for selected in calls) == 2
 
 

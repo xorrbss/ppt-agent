@@ -13,17 +13,17 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import threading
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import time
 from typing import BinaryIO, Protocol
 
 from services.isolated_worker_contracts import ArtifactRef, IsolatedWorkerJob
-from services.trusted_executor.isolation_policy import PlatformIsolationReport
-from services.trusted_executor.isolation_policy import SandboxFilesystemSpec
+from services.trusted_executor.isolation_policy import PlatformIsolationReport, SandboxFilesystemSpec
 from services.trusted_executor.process_supervisor import (
     OperationProcessSupervisor,
     ProcessDeadlineExceeded,
@@ -46,6 +46,8 @@ MAX_WIRE_STDOUT_BYTES = 16 * 1024 * 1024
 MAX_WIRE_STDERR_BYTES = 1024 * 1024
 MAX_WIRE_STDIN_BYTES = 2 * 1024 * 1024
 MAX_EXPORT_BUNDLE_BYTES = 8 * 1024 * 1024
+MAX_OUTPUT_ARTIFACT_BYTES = 512 * 1024 * 1024
+DEFAULT_STAGING_CAPACITY_BYTES = 4 * 1024 * 1024 * 1024
 _CHUNK_BYTES = 1024 * 1024
 
 
@@ -81,6 +83,8 @@ class ArtifactObjectStoreWireAdapter:
         opened = await self._object_store.open_read_stream(product_ref)
         destination.parent.mkdir(parents=True, exist_ok=True)
 
+        cancelled = threading.Event()
+
         def copy() -> None:
             temporary = destination.with_name(
                 f".{destination.name}.stage-{uuid.uuid4().hex}.tmp"
@@ -90,6 +94,8 @@ class ArtifactObjectStoreWireAdapter:
             try:
                 with temporary.open("xb") as target:
                     while True:
+                        if cancelled.is_set():
+                            return
                         chunk = opened.body.read(_CHUNK_BYTES)
                         if not chunk:
                             break
@@ -110,12 +116,32 @@ class ArtifactObjectStoreWireAdapter:
                     raise TrustedWorkerWireError(
                         "trusted_worker_artifact_digest_mismatch"
                     )
-                os.replace(temporary, destination)
+                if not cancelled.is_set():
+                    os.replace(temporary, destination)
             finally:
-                opened.close()
-                temporary.unlink(missing_ok=True)
+                try:
+                    opened.close()
+                finally:
+                    temporary.unlink(missing_ok=True)
 
-        await asyncio.to_thread(copy)
+        # Cancelling a to_thread await does not stop its filesystem writes.
+        # Retain the copy task until its stream and temporary file are closed,
+        # including when another cancellation arrives while draining it.
+        copying = asyncio.create_task(asyncio.to_thread(copy))
+        try:
+            await asyncio.shield(copying)
+        except asyncio.CancelledError:
+            cancelled.set()
+            while not copying.done():
+                try:
+                    await asyncio.shield(copying)
+                except asyncio.CancelledError:
+                    continue
+                except Exception:
+                    break
+            if not copying.cancelled():
+                copying.exception()
+            raise
 
     async def publish(self, *, reference: ArtifactRef, source: Path) -> None:
         _verify_artifact_file(reference, source)
@@ -156,6 +182,53 @@ class _CapturedProcess:
     stdout_overflow: bool
 
 
+@dataclass(frozen=True, slots=True)
+class _StagedArtifact:
+    reference: ArtifactRef
+    destination: Path
+
+
+class _StagingCapacitySupervisor:
+    """Process-local admission for job-owned staging disk reservations."""
+
+    def __init__(self, capacity_bytes: int) -> None:
+        if capacity_bytes <= 0:
+            raise ValueError("staging capacity must be positive")
+        self.capacity_bytes = capacity_bytes
+        self._reserved_bytes = 0
+        self._lock = asyncio.Lock()
+
+    async def reserve(self, size_bytes: int) -> None:
+        if size_bytes < 0:
+            raise ValueError("staging reservation must be non-negative")
+        async with self._lock:
+            if self._reserved_bytes + size_bytes > self.capacity_bytes:
+                raise TrustedWorkerWireError("trusted_worker_staging_capacity_exceeded")
+            self._reserved_bytes += size_bytes
+
+    async def release(self, size_bytes: int) -> None:
+        async with self._lock:
+            self._reserved_bytes = max(0, self._reserved_bytes - size_bytes)
+
+
+class _StagingReservation:
+    def __init__(
+        self, supervisor: _StagingCapacitySupervisor, reserved_bytes: int
+    ) -> None:
+        self._supervisor = supervisor
+        self._reserved_bytes = reserved_bytes
+
+    async def grow(self, size_bytes: int) -> None:
+        await self._supervisor.reserve(size_bytes)
+        self._reserved_bytes += size_bytes
+
+    async def release(self) -> None:
+        reserved_bytes = self._reserved_bytes
+        self._reserved_bytes = 0
+        if reserved_bytes:
+            await self._supervisor.release(reserved_bytes)
+
+
 class SupervisedStdioWireTransport:
     """Job-owned concrete wire transport with bounded output and cancellation."""
 
@@ -166,15 +239,17 @@ class SupervisedStdioWireTransport:
         isolation_report: PlatformIsolationReport,
         allow_local_development_isolation_gap: bool = False,
         zero_timeout_seconds: float = 5.0,
+        supervisor_factory: Callable[..., OperationProcessSupervisor] = OperationProcessSupervisor,
+        staging_capacity_bytes: int = DEFAULT_STAGING_CAPACITY_BYTES,
     ) -> None:
         if zero_timeout_seconds <= 0:
             raise ValueError("zero timeout must be positive")
         self._artifact_authority = artifact_authority
         self._isolation_report = isolation_report
-        self._allow_local_development_isolation_gap = (
-            allow_local_development_isolation_gap
-        )
+        self._allow_local_development_isolation_gap = allow_local_development_isolation_gap
+        self._supervisor_factory = supervisor_factory
         self._zero_timeout_seconds = zero_timeout_seconds
+        self._staging_capacity = _StagingCapacitySupervisor(staging_capacity_bytes)
         self._closed = False
         self._active: set[OperationProcessSupervisor] = set()
         self._active_lock = asyncio.Lock()
@@ -191,9 +266,60 @@ class SupervisedStdioWireTransport:
             raise TrustedWorkerWireError("trusted_worker_transport_closed")
         if len(payload) > MAX_WIRE_STDIN_BYTES:
             raise TrustedWorkerWireError("trusted_worker_job_too_large")
+        try:
+            configured_output_limit = int(environment.get(
+                "PPT_WORKER_OUTPUT_LIMIT_BYTES", str(MAX_OUTPUT_ARTIFACT_BYTES)
+            ))
+        except ValueError as error:
+            raise TrustedWorkerWireError("trusted_worker_output_limit_invalid") from error
+        if configured_output_limit <= 0:
+            raise TrustedWorkerWireError("trusted_worker_output_limit_invalid")
+        output_limit = min(MAX_OUTPUT_ARTIFACT_BYTES, configured_output_limit)
+        try:
+            output_reservation = int(environment.get(
+                "PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES", str(output_limit)
+            ))
+        except ValueError as error:
+            raise TrustedWorkerWireError("trusted_worker_cache_limits_invalid") from error
+        if output_reservation <= 0:
+            raise TrustedWorkerWireError("trusted_worker_cache_limits_invalid")
         spec = work_item.launch_spec
         if spec.filesystem is None:
             raise TrustedWorkerWireError("trusted_worker_filesystem_missing")
+        reserved_bytes = (
+            job.input_artifact.size_bytes
+            + output_reservation
+            + spec.limits.temporary_bytes
+        )
+        await self._staging_capacity.reserve(reserved_bytes)
+        reservation = _StagingReservation(self._staging_capacity, reserved_bytes)
+        try:
+            return await self._execute_admitted(
+                work_item=work_item,
+                job=job,
+                payload=payload,
+                environment=environment,
+                output_limit=output_limit,
+                reservation=reservation,
+            )
+        finally:
+            try:
+                await asyncio.to_thread(_remove_operation_staging, spec.filesystem)
+            finally:
+                await reservation.release()
+
+    async def _execute_admitted(
+        self,
+        *,
+        work_item: TrustedExecutorWorkItem,
+        job: IsolatedWorkerJob,
+        payload: bytes,
+        environment: Mapping[str, str],
+        output_limit: int,
+        reservation: _StagingReservation,
+    ) -> TrustedWorkerWireResult:
+        spec = work_item.launch_spec
+        assert spec.filesystem is not None
         object_root = spec.filesystem.input_root
         output_root = spec.filesystem.sandbox_root / "output"
         spec.filesystem.sandbox_root.mkdir(parents=True, exist_ok=True)
@@ -207,21 +333,28 @@ class SupervisedStdioWireTransport:
             destination=primary_path,
         )
         references = _input_bundle_references(job, primary_path)
-        staged_paths = [primary_path]
-        for reference in references:
-            destination = object_root.joinpath(*reference.storage_key.split("/"))
+        staging_plan = _physical_staging_plan(
+            object_root=object_root,
+            references=(job.input_artifact, *references),
+        )
+        if staging_plan[0].destination != primary_path:
+            raise TrustedWorkerWireError("trusted_worker_stage_binding_mismatch")
+        additional_input_bytes = sum(
+            item.reference.size_bytes for item in staging_plan[1:]
+        )
+        await reservation.grow(additional_input_bytes)
+        for item in staging_plan[1:]:
             await self._artifact_authority.stage(
-                reference=reference,
-                destination=destination,
+                reference=item.reference,
+                destination=item.destination,
             )
-            staged_paths.append(destination)
         spec = replace(
             spec,
             filesystem=SandboxFilesystemSpec(
                 sandbox_root=spec.filesystem.sandbox_root,
                 input_root=object_root,
                 temporary_root=spec.filesystem.temporary_root,
-                staged_inputs=tuple(staged_paths),
+                staged_inputs=tuple(item.destination for item in staging_plan),
             ),
         )
         if self._allow_local_development_isolation_gap:
@@ -240,6 +373,9 @@ class SupervisedStdioWireTransport:
         child_environment.pop("PUBLIC_WORKER_OBJECT_STORE_ROOT", None)
         child_environment["PUBLIC_WORKER_INPUT_STORE_ROOT"] = str(object_root)
         child_environment["PUBLIC_WORKER_OUTPUT_STORE_ROOT"] = str(output_root)
+        child_environment["TMPDIR"] = str(spec.filesystem.temporary_root)
+        child_environment["TEMP"] = str(spec.filesystem.temporary_root)
+        child_environment["TMP"] = str(spec.filesystem.temporary_root)
         if self._allow_local_development_isolation_gap:
             child_environment["PUBLIC_WORKER_LOCAL_DEVELOPMENT"] = "1"
         capability_key = child_environment.get(
@@ -248,7 +384,15 @@ class SupervisedStdioWireTransport:
         if not capability_key or not Path(capability_key).is_absolute():
             raise TrustedWorkerWireError("trusted_worker_capability_key_unavailable")
 
-        supervisor = OperationProcessSupervisor(spec.identity, spec.limits)
+        # Staging and scheduler waits cannot renew the admitted wall-clock budget.
+        remaining_seconds = job.deadline_epoch_seconds - time.time()
+        if remaining_seconds <= 0:
+            raise TrustedWorkerWireError("deadline_exceeded")
+        spec = replace(spec, limits=replace(
+            spec.limits,
+            deadline_seconds=min(spec.limits.deadline_seconds, remaining_seconds),
+        ))
+        supervisor = self._supervisor_factory(spec.identity, spec.limits)
         resource_metrics: Mapping[str, object] = {}
         async with self._active_lock:
             if self._closed:
@@ -289,10 +433,8 @@ class SupervisedStdioWireTransport:
                 raise TrustedWorkerWireError("trusted_worker_descendants_remained")
             tree_zero_at = datetime.now(timezone.utc)
             tree_zero_monotonic_ns = time.perf_counter_ns()
-            for reference, staged_path in zip(
-                (job.input_artifact, *references), staged_paths, strict=True
-            ):
-                _verify_artifact_file(reference, staged_path)
+            for item in staging_plan:
+                _verify_artifact_file(item.reference, item.destination)
             supervisor_metrics = await asyncio.to_thread(supervisor.telemetry)
             resource_metrics = {
                 **supervisor_metrics,
@@ -339,17 +481,23 @@ class SupervisedStdioWireTransport:
             if captured.exit_code != 0:
                 raise TrustedWorkerWireError("trusted_worker_success_exit_mismatch")
             output_path = output_root.joinpath(*output_reference.storage_key.split("/"))
-            _verify_artifact_file(output_reference, output_path)
+            _verify_artifact_file(output_reference, output_path, max_bytes=output_limit)
             render_outputs, render_runtime = _render_output_bundle_references(
                 job,
                 output_reference=output_reference,
                 path=output_path,
             )
+            # Validate every child before publishing any part of a render bundle.
+            # The child is untrusted and may bypass its own store/runtime checks.
             for render_output in render_outputs:
                 render_output_path = output_root.joinpath(
                     *render_output.storage_key.split("/")
                 )
-                _verify_artifact_file(render_output, render_output_path)
+                _verify_artifact_file(render_output, render_output_path, max_bytes=output_limit)
+            for render_output in render_outputs:
+                render_output_path = output_root.joinpath(
+                    *render_output.storage_key.split("/")
+                )
                 await self._artifact_authority.publish(
                     reference=render_output,
                     source=render_output_path,
@@ -453,11 +601,36 @@ def _supervisor_metrics_or_empty(
         return {}
 
 
-def _verify_artifact_file(reference: ArtifactRef, path: Path) -> None:
+def _remove_operation_staging(filesystem: SandboxFilesystemSpec) -> None:
+    """Remove only the validated job-owned sandbox tree."""
+
+    root = filesystem.sandbox_root.resolve(strict=False)
+    if root == Path(root.anchor):
+        return
+    children = (
+        filesystem.input_root.resolve(strict=False),
+        filesystem.temporary_root.resolve(strict=False),
+        (filesystem.sandbox_root / "output").resolve(strict=False),
+    )
+    try:
+        for child in children:
+            child.relative_to(root)
+    except ValueError:
+        return
+    shutil.rmtree(root, ignore_errors=True)
+
+
+def _verify_artifact_file(
+    reference: ArtifactRef, path: Path, *, max_bytes: int | None = None
+) -> None:
+    if max_bytes is not None and reference.size_bytes > max_bytes:
+        raise TrustedWorkerWireError("trusted_worker_output_limit_exceeded")
     try:
         size = path.stat().st_size
     except OSError as error:
         raise TrustedWorkerWireError("trusted_worker_artifact_unavailable") from error
+    if max_bytes is not None and size > max_bytes:
+        raise TrustedWorkerWireError("trusted_worker_output_limit_exceeded")
     if size != reference.size_bytes:
         raise TrustedWorkerWireError("trusted_worker_artifact_size_mismatch")
     digest = hashlib.sha256()
@@ -466,6 +639,29 @@ def _verify_artifact_file(reference: ArtifactRef, path: Path) -> None:
             digest.update(chunk)
     if digest.hexdigest() != reference.sha256:
         raise TrustedWorkerWireError("trusted_worker_artifact_digest_mismatch")
+
+
+def _physical_staging_plan(
+    *, object_root: Path, references: Sequence[ArtifactRef]
+) -> tuple[_StagedArtifact, ...]:
+    plan: list[_StagedArtifact] = []
+    by_destination: dict[Path, _StagedArtifact] = {}
+    for reference in references:
+        destination = object_root.joinpath(*reference.storage_key.split("/"))
+        existing = by_destination.get(destination)
+        if existing is None:
+            item = _StagedArtifact(reference=reference, destination=destination)
+            by_destination[destination] = item
+            plan.append(item)
+            continue
+        if (
+            existing.reference.sha256 != reference.sha256
+            or existing.reference.size_bytes != reference.size_bytes
+        ):
+            raise TrustedWorkerWireError(
+                "trusted_worker_stage_destination_collision"
+            )
+    return tuple(plan)
 
 
 def _input_bundle_references(
@@ -484,15 +680,47 @@ def _input_bundle_references(
         raise TrustedWorkerWireError("trusted_worker_bundle_invalid") from error
     if not isinstance(value, Mapping) or not isinstance(value.get("slides"), list):
         raise TrustedWorkerWireError("trusted_worker_bundle_invalid")
-    if job.role == "render" and value.get("schemaVersion") != "public-render-bundle/v1":
+    if job.role == "render" and value.get("schemaVersion") not in {
+        "public-render-bundle/v1", "public-render-bundle/v2",
+    }:
         raise TrustedWorkerWireError("trusted_worker_render_bundle_invalid")
-    expected_kind = "slide-html" if job.role == "render" else "slide-png"
-    expected_media_type = "text/html" if job.role == "render" else "image/png"
+    svg_export = job.role == "export" and value.get("schemaVersion") in {
+        "public-svg-export-bundle/v1", "public-svg-export-bundle/v2",
+        "public-svg-export-bundle/v3",
+    }
+    expected_kind = "slide-svg" if svg_export else ("slide-html" if job.role == "render" else "slide-png")
+    expected_media_type = "image/svg+xml" if svg_export else ("text/html" if job.role == "render" else "image/png")
     result = _staged_bundle_slides(
         job, value["slides"], kind=expected_kind, media_type=expected_media_type
     )
     if not 1 <= len(result) <= 100:
         raise TrustedWorkerWireError("trusted_worker_bundle_slide_count_invalid")
+    if svg_export and value.get("schemaVersion") in {
+        "public-svg-export-bundle/v2", "public-svg-export-bundle/v3",
+    }:
+        asset_refs = []
+        for entry in value["slides"]:
+            assets = entry.get("assets")
+            if assets is None:
+                continue
+            required_asset_keys = {"sourceManifestRef", "placementManifestRef", "sourceManifestDigest",
+                                   "placementManifestDigest", "pageIndex", "slideRevision", "derivatives"}
+            if (not isinstance(assets, Mapping)
+                    or set(assets) not in (required_asset_keys, required_asset_keys | {"fullPagePreserve"})
+                    or ("fullPagePreserve" in assets and type(assets["fullPagePreserve"]) is not bool)
+                    or not isinstance(assets["derivatives"], Mapping)
+                    or len(assets["derivatives"]) > 4096):
+                raise TrustedWorkerWireError("trusted_worker_svg_asset_bundle_invalid")
+            for name, kind in (("sourceManifestRef", "source-manifest"),
+                               ("placementManifestRef", "placement-manifest")):
+                asset_refs.extend(_staged_bundle_slides(job, [assets[name]], kind=kind, media_type="application/json"))
+            for wire in assets["derivatives"].values():
+                if not isinstance(wire, Mapping) or wire.get("mediaType") not in {"image/png", "image/jpeg"}:
+                    raise TrustedWorkerWireError("trusted_worker_svg_derivative_type_invalid")
+                asset_refs.extend(_staged_bundle_slides(job, [wire], kind="image-derivative", media_type=wire["mediaType"]))
+        if any(ref.created_by_operation_id != job.operation_id for ref in (*result, *asset_refs)):
+            raise TrustedWorkerWireError("trusted_worker_svg_asset_operation_mismatch")
+        result = (*result, *asset_refs)
     # An editable-hybrid export additionally measures the authored HTML inside
     # the isolated worker, so those sources must be staged with the rasters.
     sources = value.get("sourceSlides")

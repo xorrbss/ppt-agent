@@ -36,6 +36,7 @@ from utils.authored_fragmentation_gate import fit_font_floor_px
 from utils.authored_image_slots import scan_slots, source_slot_id_for_asset
 from utils.llm_calls import author_slide_prompt, author_slide_rules
 from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
+from utils.llm_calls.author_prompt_profile import authoring_model
 from utils.llm_calls.author_prompt_split import (
     invariant_prefix_source,
     is_authored_prompt_system_hoist_enabled,
@@ -102,6 +103,7 @@ class AuthoredBatchSlideRequest:
     capacity_brief: str | None = None
     source_images: tuple[SourceImageCandidate, ...] = ()
     require_all_source_images: bool = False
+    source_image_placement_plan: Mapping | None = None
     correction_hint: str | None = None
     rejected_html: str | None = None
     # G0: the deck's already-authored anchor slide, offered as data.
@@ -192,6 +194,10 @@ def _prepare_slide(
         source_slot_candidates,
         required=request.require_all_source_images,
     )
+    if not request.require_all_source_images:
+        source_guidance += author_slide_prompt.planned_source_image_brief(
+            request.source_image_placement_plan or (request.structured_context or {}).get("source_image_placement_plan")
+        )
     if request.require_all_source_images and source_slot_candidates:
         source_guidance = (
             "\n\nSLIDE-SPECIFIC SOURCE AUTHORITY: Every listed source slot is "
@@ -234,15 +240,22 @@ def _postprocess_slide(
     raw_html: str,
     *,
     brand: Brand,
+    normalization_receipt: list[dict] | None = None,
 ) -> str:
     request = prepared.request
     mode = normalize_reference_mode(request.reference_mode)
     authored_html = extract_html_document(raw_html)
+    from services.authored_admission_producers import provider_raw_html, provider_expanded_html
+    authored_html = provider_raw_html(
+        authored_html, index=request.index, producer="author_batch", normalization_receipt=normalization_receipt)
     authored_html = _strip_nonvisual_pointer_events(authored_html)
     if mode != EXACT_RECONSTRUCTION:
-        # Same mechanical floor as the single-slide path (see author_slide).
+        # Same mechanical floor as the single-slide path (see author_slide),
+        # including the explicit user-requested override in `instructions`.
         authored_html = enforce_authored_font_floor(
-            authored_html, minimum_px=fit_font_floor_px()
+            authored_html,
+            minimum_px=fit_font_floor_px(),
+            instructions=request.instructions,
         )
         # Same collapse guard, figure contract, and library injection as the
         # single-slide path: a pinned data-header-part="body" wrapper with no
@@ -289,9 +302,9 @@ def _postprocess_slide(
             authored_html,
             prepared.source_slot_candidates,
         )
-    authored_html = validate_authored_slide_html(
-        authored_html,
-        allow_illustration_slots=True,
+    authored_html = provider_expanded_html(
+        authored_html, index=request.index, producer="author_batch", validate=validate_authored_slide_html,
+        normalization_receipt=normalization_receipt,
     )
     if authored_semantic_dual_output_mode() == "declared":
         try:
@@ -310,6 +323,7 @@ async def author_slides_html(
     brand: Brand,
     slide_count: int,
     recovery: bool = False,
+    normalization_receipts_by_index: Mapping[int, list[dict]] | None = None,
 ) -> AuthoredBatchCallResult:
     """Return up to three slide documents from exactly one provider call."""
 
@@ -369,7 +383,7 @@ async def author_slides_html(
         user_parts.extend(item.image_parts)
 
     client = get_client(config=get_llm_config())
-    model = get_model()
+    model = authoring_model(get_model())
     messages = [
         SystemMessage(
             content=author_slide_rules.SYSTEM_PROMPT
@@ -447,7 +461,8 @@ async def author_slides_html(
     for index, candidate in raw.items():
         try:
             htmls[index] = _postprocess_slide(
-                prepared_by_index[index], candidate, brand=brand
+                prepared_by_index[index], candidate, brand=brand,
+                normalization_receipt=(normalization_receipts_by_index or {}).get(index),
             )
         except BaseException as error:  # per-slide validation boundary
             errors[index] = error

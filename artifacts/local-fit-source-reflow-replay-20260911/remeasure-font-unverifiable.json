@@ -1,0 +1,8816 @@
+{
+ "generated": "2026-09-12",
+ "question": "with the image-text evidence producer in place, how many of the 414 zero-candidate slides now run?",
+ "method": "remeasure_font_unverifiable.py through capture_with_policy; icon pack root of this app_data: absent",
+ "still_font_unverifiable": 414,
+ "search_now_runs": 0,
+ "image_text_verdicts": {
+  "unverifiable": 721
+ },
+ "slides": [
+  {
+   "deck": "1f711882-e8ae-5991-bf86-d6218df8dee9",
+   "title": "DEVAX PLATFORM",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.icon.1",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.2",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.3",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.4",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1f711882-e8ae-5991-bf86-d6218df8dee9",
+   "title": "DEVAX PLATFORM",
+   "slide": 9,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-icon-book",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-icon-shield",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-icon-record",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "47cc4df9-894f-41b6-86cd-ab88a9966328",
+   "title": "DevAX SI 구축 제안",
+   "slide": 1,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "visual.illustration",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "47cc4df9-894f-41b6-86cd-ab88a9966328",
+   "title": "DevAX SI 구축 제안",
+   "slide": 3,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "illustration.architecture",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "47cc4df9-894f-41b6-86cd-ab88a9966328",
+   "title": "DevAX SI 구축 제안",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "illustration.governance",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.icon.1",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.2",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.3",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.4",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 9,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-icon-book",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-icon-shield",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-icon-record",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 11,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.office",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.build",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.content",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.infra",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.workspace",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 13,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-evidence",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-mark",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 14,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.image1",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.image2",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.image3",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 15,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "evidence.source",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 16,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.deploy.image",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.aiops.image",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 17,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-image-1",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-image-2",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-image-3",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-image-4",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 19,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-office-icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-build-icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-content-icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-infra-icon",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 20,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "evidence.orchestration.image",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "evidence.editor.image",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 21,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-image-01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-image-02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-image-03",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-image-04",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-image-05",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-image-06",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-image-07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 22,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.image31",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.imagecabb",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.image02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icondb",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icondoc",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.iconsearch",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 23,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "image.cli",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "image.framework",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "image.deploy",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "image.aiops",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 24,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-b9aadb",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-92b1e9",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-da23ae",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-49c76b",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-c494fe",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-699290",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-010553",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 25,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.report.summary.img",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.report.detail.img",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.report.method.img",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.data.img",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.report.img",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.rescan.img",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 26,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.preview",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.published",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.publish",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.preview",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.address",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.lock",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.domain",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.cancel",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 27,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.dashboard",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.alert",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.search",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.tag",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.block",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.settings",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 28,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.03",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.04",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.05",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.06",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 32,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "case.01.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "case.02.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "case.03.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "case.04.icon",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 34,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "domain.productivity.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "domain.quality.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "domain.control.icon",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 38,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.image.1",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.image.2",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.image.3",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.image.4",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ce2105b5-f1a8-49f5-a9ea-40522f503376",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 42,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "step-01-image",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "step-02-image",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "step-03-image",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "step-04-image",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.image1",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.image2",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.image3",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.image4",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 9,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "icon.01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "icon.02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "icon.03",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 11,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "slide12.source-shot",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "slide12.office-icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "slide12.build-icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "slide12.content-icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "slide12.infra-icon",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 13,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.screenshot",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 14,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.03",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 15,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.image",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 16,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-deploy",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-aiops",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 17,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.1",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.2",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.3",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.4",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 19,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "icon.office",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "icon.build",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "icon.content",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "icon.infrastructure",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 20,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.image.code",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.image.design",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 21,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "s22.source.01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "s22.source.02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "s22.source.03",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "s22.source.04",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "s22.source.05",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "s22.source.06",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "s22.source.07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 23,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-cli-icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-deploy-icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-aiops-icon",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 24,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.03",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.04",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.05",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.06",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 25,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "evidence.image.01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "evidence.image.02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "evidence.image.03",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 27,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "image.detect",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "image.rca",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "image.ticket",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "image.block",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "image.policy",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "image.dashboard.source",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 28,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.f7d7168b4bd0e9e48210",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 32,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "case-01-icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "case-02-icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "case-03-icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "case-04-icon",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 34,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "productivity-image",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "quality-image",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "control-image",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 38,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.f7b1",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.c9cc",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.616e",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.789e",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bc76cfad-be79-4cd0-99df-3d82c09ab6f2",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 42,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "step.01.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "step.02.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "step.03.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "step.04.icon",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-flag",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-target",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-layers",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-growth",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 9,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-icon-01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-icon-02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-icon-03",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 11,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.hero",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 13,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.screen",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 16,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.deploy.image",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.aiops.image",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 17,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-1",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-2",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-3",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-4",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 20,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "arch.source.image",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 21,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-03",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-04",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-05",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-06",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 22,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-image-one",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-image-two",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-image-three",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-image-four",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 23,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "icon-cli",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "icon-framework",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "icon-aiops",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 24,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "screen.01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "screen.02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "screen.03",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "screen.04",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "screen.05",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "screen.06",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "screen.07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 25,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-image-01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-image-02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-image-03",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 26,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "deploy.preview",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "step.01.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "step.02.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "step.03.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "step.04.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "step.05.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "step.06.icon",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 27,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "icon.incident",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "icon.rca",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "icon.ticket",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "icon.block",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 28,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "evidence.img01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "evidence.img02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "evidence.img03",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "evidence.img04",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "evidence.img05",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "evidence.img06",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 32,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.icon.01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.02",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 34,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "productivity.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "quality.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "control.icon",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 38,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "img-cloud",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "img-dedicated",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "img-server",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "img-lock",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62025dd1-7030-442c-bd62-3f0a5e4a99e4",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 42,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-mark",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "background.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "purpose.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "scope.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "effect.icon",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 9,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-icon-6b6198",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-icon-b905fa",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-icon-ddd4d0",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 11,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.entry_screen",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.code",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.content",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.infrastructure",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 13,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.image.1",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.image.2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 14,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "evidence.excel",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "evidence.board",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "evidence.orchestration",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 15,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "evidence.image",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 16,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "slide17.evidence.deploy.image",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "slide17.evidence.aiops.image",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 17,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.approval",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.audit",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.members",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.masking",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 20,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.image",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 21,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "img.a",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "img.b",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "img.c",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "img.d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "img.e",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "img.f",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "img.g",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 22,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "db-icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "evidence-01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "evidence-02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "evidence-03",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 23,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "image.cli",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "image.framework",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "image.deploy",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 24,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-03",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-04",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-05",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-06",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 25,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-0",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-1",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 26,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "feature.icon.01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "feature.icon.02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "feature.icon.03",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "feature.icon.04",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "feature.icon.05",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "feature.icon.06",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.preview",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 27,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "icon-incident",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "icon-rca",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "icon-ticket",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "icon-block",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 28,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "screen-01",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "screen-02",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "screen-03",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "screen-04",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 32,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source.icon.chat",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source.icon.chart",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 34,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-productivity",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "source-quality",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 38,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "environment.saas.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "environment.cloud.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "environment.onprem.icon",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "environment.airgap.icon",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1373d1ca-8c87-4564-a9ef-94d8a6433901",
+   "title": "㈜아이비즈소프트웨어  AI 자율개발 플랫폼 기반 SI 프로젝트 구축 제안  DevAX 기반 SI 프로젝트 구축 제안서  구축 기간 단축 · 비용 절감 — 재사용 · 자동 싱크 · ",
+   "slide": 42,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "source-image",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "15e8f3b2-6eee-49bb-85b5-a8e369c64cb3",
+   "title": "품질 동등성: Authored와 authored-vNext",
+   "slide": 0,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "15e8f3b2-6eee-49bb-85b5-a8e369c64cb3",
+   "title": "품질 동등성: Authored와 authored-vNext",
+   "slide": 1,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "15e8f3b2-6eee-49bb-85b5-a8e369c64cb3",
+   "title": "품질 동등성: Authored와 authored-vNext",
+   "slide": 2,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "15e8f3b2-6eee-49bb-85b5-a8e369c64cb3",
+   "title": "품질 동등성: Authored와 authored-vNext",
+   "slide": 3,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "15e8f3b2-6eee-49bb-85b5-a8e369c64cb3",
+   "title": "품질 동등성: Authored와 authored-vNext",
+   "slide": 4,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "15e8f3b2-6eee-49bb-85b5-a8e369c64cb3",
+   "title": "품질 동등성: Authored와 authored-vNext",
+   "slide": 5,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "15e8f3b2-6eee-49bb-85b5-a8e369c64cb3",
+   "title": "품질 동등성: Authored와 authored-vNext",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "15e8f3b2-6eee-49bb-85b5-a8e369c64cb3",
+   "title": "품질 동등성: Authored와 authored-vNext",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "15e8f3b2-6eee-49bb-85b5-a8e369c64cb3",
+   "title": "품질 동등성: Authored와 authored-vNext",
+   "slide": 8,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "15e8f3b2-6eee-49bb-85b5-a8e369c64cb3",
+   "title": "품질 동등성: Authored와 authored-vNext",
+   "slide": 9,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b6988b4a-ef81-43b1-b20a-8b339c10e237",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 0,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b6988b4a-ef81-43b1-b20a-8b339c10e237",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 1,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b6988b4a-ef81-43b1-b20a-8b339c10e237",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 2,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b6988b4a-ef81-43b1-b20a-8b339c10e237",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 3,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b6988b4a-ef81-43b1-b20a-8b339c10e237",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 4,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b6988b4a-ef81-43b1-b20a-8b339c10e237",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 5,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b6988b4a-ef81-43b1-b20a-8b339c10e237",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b6988b4a-ef81-43b1-b20a-8b339c10e237",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b6988b4a-ef81-43b1-b20a-8b339c10e237",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 8,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b6988b4a-ef81-43b1-b20a-8b339c10e237",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 9,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "3d9f2d26-552a-4770-b857-70c9aefe5d38",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 0,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "3d9f2d26-552a-4770-b857-70c9aefe5d38",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 1,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "3d9f2d26-552a-4770-b857-70c9aefe5d38",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 2,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "3d9f2d26-552a-4770-b857-70c9aefe5d38",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 3,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "3d9f2d26-552a-4770-b857-70c9aefe5d38",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 4,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "3d9f2d26-552a-4770-b857-70c9aefe5d38",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 5,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "3d9f2d26-552a-4770-b857-70c9aefe5d38",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "3d9f2d26-552a-4770-b857-70c9aefe5d38",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "3d9f2d26-552a-4770-b857-70c9aefe5d38",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 8,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "3d9f2d26-552a-4770-b857-70c9aefe5d38",
+   "title": "Authored vNext Scene 통합 품질과 회사표준 furniture 분리, 편집·저장·복구 안정성 검증",
+   "slide": 9,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ef2a228183a8",
+     "scope": "unverifiable"
+    },
+    {
+     "qid": "q-div-2c988a1f079d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ac5cc67a-71ee-4720-9a85-d6a3ac0f1ed2",
+   "title": "삼성디스플레이 기업 현황과 2026년 과제",
+   "slide": 0,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ac5cc67a-71ee-4720-9a85-d6a3ac0f1ed2",
+   "title": "삼성디스플레이 기업 현황과 2026년 과제",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ebd15203-df73-4ddc-836e-ea2d7d865a44",
+   "title": "삼성디스플레이 기업 분석",
+   "slide": 0,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "f46adebd-fe3c-425b-8719-12305a497a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "f46adebd-fe3c-425b-8719-12305a497a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 14,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-32942c5d60ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "f46adebd-fe3c-425b-8719-12305a497a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 33,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "f46adebd-fe3c-425b-8719-12305a497a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 37,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-92fee66b6a7e",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "f46adebd-fe3c-425b-8719-12305a497a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 43,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-article-5839075e64e9",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "f46adebd-fe3c-425b-8719-12305a497a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 67,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "f46adebd-fe3c-425b-8719-12305a497a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 74,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-3942d310dd42",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "a5091c67-7bfd-477b-ba84-b78e04bc334b",
+   "title": "통합 기능 구현 방안",
+   "slide": 2,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-32942c5d60ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "a5091c67-7bfd-477b-ba84-b78e04bc334b",
+   "title": "통합 기능 구현 방안",
+   "slide": 5,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-fb0802c39681",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "a5091c67-7bfd-477b-ba84-b78e04bc334b",
+   "title": "통합 기능 구현 방안",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-15c309b9b063",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62489b91-b638-42eb-8792-cc7987844acf",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 20,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-a09703cdf91a",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62489b91-b638-42eb-8792-cc7987844acf",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 30,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-890c19e96ee9",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62489b91-b638-42eb-8792-cc7987844acf",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 33,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-121b734afc62",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62489b91-b638-42eb-8792-cc7987844acf",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 37,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-15b8ccaf3192",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62489b91-b638-42eb-8792-cc7987844acf",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 38,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62489b91-b638-42eb-8792-cc7987844acf",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 39,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-32942c5d60ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62489b91-b638-42eb-8792-cc7987844acf",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 40,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62489b91-b638-42eb-8792-cc7987844acf",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 41,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-4a207222b353",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62489b91-b638-42eb-8792-cc7987844acf",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 46,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-aside-d191acca7711",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62489b91-b638-42eb-8792-cc7987844acf",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 52,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-890c19e96ee9",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62489b91-b638-42eb-8792-cc7987844acf",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 64,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62489b91-b638-42eb-8792-cc7987844acf",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 67,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "62489b91-b638-42eb-8792-cc7987844acf",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 69,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-aside-d191acca7711",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "9c2bd6ef-f942-4ab0-923f-c26b821d3aad",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 4,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "9c2bd6ef-f942-4ab0-923f-c26b821d3aad",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 5,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "9c2bd6ef-f942-4ab0-923f-c26b821d3aad",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-fc832d4bf783",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "9c2bd6ef-f942-4ab0-923f-c26b821d3aad",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-32942c5d60ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ae66b291-772d-4d67-a9db-b4505954b31e",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 4,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "ae66b291-772d-4d67-a9db-b4505954b31e",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 5,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "e8bf030f-71fb-483c-9a6b-3d40332eb797",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "e8bf030f-71fb-483c-9a6b-3d40332eb797",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 64,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "e8bf030f-71fb-483c-9a6b-3d40332eb797",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 67,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-aside-a6ada321f08f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 2,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-32942c5d60ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 3,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 4,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-890c19e96ee9",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 8,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 9,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 10,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-fb0802c39681",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 11,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 12,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-32942c5d60ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 13,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-cb3f41c97a07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 14,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-121b734afc62",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 15,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-121b734afc62",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 16,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-aside-0808cf720dbf",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 17,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-e59873539cda",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 18,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 19,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 20,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 21,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 22,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-5d4d9c0eb997",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 23,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 24,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-cb3f41c97a07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 25,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 26,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-2b9faac7a8d9",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 27,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 28,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 29,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 30,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-aside-8afbbf2965e4",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 31,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 32,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-30b226b8deca",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 33,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-aa64c46009ea",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 34,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-15c309b9b063",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 35,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 36,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 37,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 38,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-50b8bd6130b4",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 39,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 40,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-890c19e96ee9",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 41,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-890c19e96ee9",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 42,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 43,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-15c309b9b063",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 44,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-2d982f29a4ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 45,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-890c19e96ee9",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 46,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-cb3f41c97a07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 47,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 48,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-df4f3b5a562b",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 49,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-aside-45dd763b6a27",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 50,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 51,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 52,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-890c19e96ee9",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 53,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 54,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-32942c5d60ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 55,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 56,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 57,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-aside-0808cf720dbf",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 58,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-fb0802c39681",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 59,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-aside-0808cf720dbf",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 60,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 61,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-fb0802c39681",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 62,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-04433be207fc",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 63,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 64,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-fb0802c39681",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 65,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-2d982f29a4ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 66,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-cb3f41c97a07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 67,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 68,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-aside-8afbbf2965e4",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 69,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-50b8bd6130b4",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 70,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-32942c5d60ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 71,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 72,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 73,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 74,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-32942c5d60ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "bf176ac6-a3ad-4041-84d1-445c217105ed",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 75,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-3afc8ef59311",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1c0d3d3b-afa2-4b4a-a367-6a20e2b0c302",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 1,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-890c19e96ee9",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1c0d3d3b-afa2-4b4a-a367-6a20e2b0c302",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 3,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1c0d3d3b-afa2-4b4a-a367-6a20e2b0c302",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 4,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-15c309b9b063",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1c0d3d3b-afa2-4b4a-a367-6a20e2b0c302",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 5,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-472013c4fc87",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1c0d3d3b-afa2-4b4a-a367-6a20e2b0c302",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1c0d3d3b-afa2-4b4a-a367-6a20e2b0c302",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1bdfe0c4-9b4b-4412-8c8a-a9eb555a2622",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 1,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-121b734afc62",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1bdfe0c4-9b4b-4412-8c8a-a9eb555a2622",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 2,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-472013c4fc87",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1bdfe0c4-9b4b-4412-8c8a-a9eb555a2622",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 3,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-aside-9afd62f40051",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1bdfe0c4-9b4b-4412-8c8a-a9eb555a2622",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 4,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1bdfe0c4-9b4b-4412-8c8a-a9eb555a2622",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 5,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-472013c4fc87",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1bdfe0c4-9b4b-4412-8c8a-a9eb555a2622",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-cb3f41c97a07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "1bdfe0c4-9b4b-4412-8c8a-a9eb555a2622",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 2,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-cb3f41c97a07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 3,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e592a94e2587",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 4,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-121b734afc62",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 5,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-472013c4fc87",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-070431addc2d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 8,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 9,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-aside-e281ed88162e",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 10,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 11,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 12,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 13,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 14,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 15,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-15c309b9b063",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 16,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 17,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-472013c4fc87",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 18,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 19,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-32942c5d60ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 20,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 21,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-15c309b9b063",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 22,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e592a94e2587",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 23,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 24,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 25,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 26,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f5f7a5773732",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 27,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 28,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f6790d575653",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 29,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-a0972868aa8c",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 30,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 31,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-c2f34d548df0",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 32,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 33,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-a5e222c2815c",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 34,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 35,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 36,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 37,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-31ea75415731",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 38,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 39,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 40,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 41,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-15c309b9b063",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 42,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 43,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 44,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 45,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 46,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 47,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-2d982f29a4ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 48,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-4b2eb801555f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 49,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-aa64c46009ea",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 50,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 51,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 52,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-890c19e96ee9",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 53,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 54,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-85689614a884",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 55,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 56,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 57,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 58,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 59,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 60,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 61,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-2d982f29a4ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 62,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-472013c4fc87",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 63,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 64,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-472013c4fc87",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 65,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 66,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 67,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 68,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 69,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 70,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 71,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 72,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 73,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 74,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b0ed17ee-7e04-44b7-9407-d019ebfd9a16",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 75,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-3afc8ef59311",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 2,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-9ead105e4879",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 3,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-3dbe6e159ad0",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 4,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 5,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 8,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 9,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 10,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f5f7a5773732",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 11,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 12,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-9ead105e4879",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 13,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 14,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-121b734afc62",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 15,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 16,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-15c309b9b063",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 17,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-15c309b9b063",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 18,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 19,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 20,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-15c309b9b063",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 21,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-50b8bd6130b4",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 22,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 23,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 24,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-0fcbbd51ebc6",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 25,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-32942c5d60ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 26,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 27,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-121b734afc62",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 28,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 29,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-aside-45dd763b6a27",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 30,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-31ea75415731",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 31,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 32,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-15c309b9b063",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 33,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 34,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 35,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-32942c5d60ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 36,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-267d303279cc",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 37,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 38,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-3afc8ef59311",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 39,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 40,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 41,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-b1579259c80c",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 42,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 43,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-070431addc2d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 44,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-15c309b9b063",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 45,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 46,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-cb3f41c97a07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 47,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-b9b21efe8ad0",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 48,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 49,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 50,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-27caf246c1ae",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 51,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 52,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 53,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 54,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 55,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 56,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 57,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 58,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-32942c5d60ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 59,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 60,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 61,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 62,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-2a95832c87bd",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 63,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 64,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-472013c4fc87",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 65,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 66,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e592a94e2587",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 67,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-3942d310dd42",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 68,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 69,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-cb3f41c97a07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 70,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 71,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-2985605df8a0",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 72,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-121b734afc62",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 73,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f279539d6d15",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 74,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "2c89713d-ce17-4415-8c72-c5ae2cda7002",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 75,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-472013c4fc87",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "cd1d341b-ed88-4a76-b1b0-0b2e00191240",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 1,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "cd1d341b-ed88-4a76-b1b0-0b2e00191240",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 2,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "cd1d341b-ed88-4a76-b1b0-0b2e00191240",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 3,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-5e0d969fd99d",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "cd1d341b-ed88-4a76-b1b0-0b2e00191240",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 4,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-15c309b9b063",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "cd1d341b-ed88-4a76-b1b0-0b2e00191240",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 5,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "cd1d341b-ed88-4a76-b1b0-0b2e00191240",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-b1b0de739b9f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "cd1d341b-ed88-4a76-b1b0-0b2e00191240",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-f74e46b93c26",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "17629e57-5a8a-45f8-96ac-b7bf0f53ad8e",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 1,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-0e668c4fb053",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "17629e57-5a8a-45f8-96ac-b7bf0f53ad8e",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 2,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "17629e57-5a8a-45f8-96ac-b7bf0f53ad8e",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 3,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-472013c4fc87",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "17629e57-5a8a-45f8-96ac-b7bf0f53ad8e",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 4,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-8f65eb62c07f",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "17629e57-5a8a-45f8-96ac-b7bf0f53ad8e",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 5,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e4d7d4c05a37",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "17629e57-5a8a-45f8-96ac-b7bf0f53ad8e",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-71ec9fedf83e",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "17629e57-5a8a-45f8-96ac-b7bf0f53ad8e",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-32942c5d60ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b216082f-0da1-400d-94ef-2f384144200c",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 1,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-cb3f41c97a07",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b216082f-0da1-400d-94ef-2f384144200c",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 2,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-15ff1f490b88",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b216082f-0da1-400d-94ef-2f384144200c",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 3,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-e25ca81e908c",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b216082f-0da1-400d-94ef-2f384144200c",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 4,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-7c74cf206b74",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b216082f-0da1-400d-94ef-2f384144200c",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 5,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable",
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-69ea84b5c0d3",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b216082f-0da1-400d-94ef-2f384144200c",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 6,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "b216082f-0da1-400d-94ef-2f384144200c",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-86b6600a2c69",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "659a1777-e556-4b37-87be-aad2bd0cdd93",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 7,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "659a1777-e556-4b37-87be-aad2bd0cdd93",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 9,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-ec43a4421e9e",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "659a1777-e556-4b37-87be-aad2bd0cdd93",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 64,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "659a1777-e556-4b37-87be-aad2bd0cdd93",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 67,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-226331f0fbb2",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "659a1777-e556-4b37-87be-aad2bd0cdd93",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 74,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-div-32942c5d60ef",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "659a1777-e556-4b37-87be-aad2bd0cdd93",
+   "title": "현대백화점 통합 리뉴얼 구축 제안",
+   "slide": 76,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [
+    {
+     "qid": "q-section-b27b3789d087",
+     "scope": "unverifiable"
+    }
+   ],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  },
+  {
+   "deck": "12618ac4-134f-493c-a961-223cba97036f",
+   "title": "현대백화점 TCP·VOC·물품대여 통합 리뉴얼 제안서",
+   "slide": 24,
+   "status": "unresolved",
+   "unresolved": [
+    "font_unverifiable"
+   ],
+   "candidates": 0,
+   "image_text": [],
+   "evidence_records": 0,
+   "verdict": "no_edit"
+  }
+ ],
+ "rerun_with_illustration_producer": {
+  "generated": "2026-09-12",
+  "still_font_unverifiable": 414,
+  "search_now_runs": 0,
+  "image_text_verdicts": {
+   "unverifiable": 721
+  },
+  "why": "no stored deck was generated under the illustration review store, so no illustration carries a review entry"
+ }
+}

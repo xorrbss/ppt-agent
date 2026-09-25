@@ -1,0 +1,347 @@
+{
+ "source-slide:5:text:3": {
+  "text": "최종 수료 기준",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "최종 수료 기준",
+    "begin": 0,
+    "end": 8,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:5:text:4": {
+  "text": "수강생 손에 아래 결과물이 남으면 성공입니다.",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "수강생 손에 아래 결과물이 남으면 성공입니다.",
+    "begin": 0,
+    "end": 25,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:5:text:5": {
+  "text": "05",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "05",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:5:text:6": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:5:text:9": {
+  "text": "상품",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "상품",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:5:text:10": {
+  "text": "서비스 구성 · 가격",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "서비스 구성 · 가격",
+    "begin": 0,
+    "end": 11,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:5:text:13": {
+  "text": "프로필",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "프로필",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:5:text:14": {
+  "text": "인스타 · 블로그",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "인스타 · 블로그",
+    "begin": 0,
+    "end": 9,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:5:text:17": {
+  "text": "포트폴리오",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "포트폴리오",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:5:text:18": {
+  "text": "숏폼 1~2개",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼 1~2개",
+    "begin": 0,
+    "end": 7,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:5:text:21": {
+  "text": "영업",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "영업",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:5:text:22": {
+  "text": "대본 · 리스트",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "대본 · 리스트",
+    "begin": 0,
+    "end": 8,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:5:text:25": {
+  "text": "제안",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "제안",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:5:text:26": {
+  "text": "제안서 · 무료샘플",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "제안서 · 무료샘플",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:5:text:29": {
+  "text": "운영",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "운영",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:5:text:30": {
+  "text": "상담 · 계약 · 납품",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "상담 · 계약 · 납품",
+    "begin": 0,
+    "end": 12,
+    "order_free_before": false
+   }
+  ]
+ }
+}

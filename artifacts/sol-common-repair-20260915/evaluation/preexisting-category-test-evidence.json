@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "sol-common-repair-preexisting-category-evidence/v1",
+  "headCommit": "51ff3405ccbf769757d7ad7a483ca438492438d2",
+  "failingTest": "test_footer_zone_category_is_advisory_not_blocking",
+  "testFunctionAstUnchangedFromHead": true,
+  "categoryModuleUnchangedFromHead": true,
+  "emptyMediaModuleUnchangedFromHead": true,
+  "headTestExpectedCategories": [
+    "clipping",
+    "off_canvas",
+    "overflow",
+    "overlap",
+    "text_escapes_card"
+  ],
+  "currentActualCategories": [
+    "clipping",
+    "empty_media_panel",
+    "off_canvas",
+    "overflow",
+    "overlap",
+    "text_escapes_card"
+  ],
+  "actualExtraCategories": [
+    "empty_media_panel"
+  ],
+  "baselineFailureConclusion": "unchanged HEAD registry and unchanged HEAD exact-set assertion already disagree on empty_media_panel; no additional test execution performed"
+}

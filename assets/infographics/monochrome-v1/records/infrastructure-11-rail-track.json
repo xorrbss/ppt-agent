@@ -1,0 +1,55 @@
+{
+  "id": "infrastructure-11-rail-track",
+  "category": "infrastructure",
+  "tags": {
+    "ko": [
+      "인프라",
+      "철도"
+    ],
+    "en": [
+      "infrastructure",
+      "rail",
+      "track"
+    ]
+  },
+  "alt": {
+    "ko": "철도 단색 벡터 인포그래픽",
+    "en": "rail track monochrome vector infographic"
+  },
+  "path": "originals/infrastructure-11-rail-track.svg",
+  "thumbnail": "thumbnails/infrastructure-11-rail-track.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 431,
+  "sha256": "9b7b7fa28c689790ac86408f7dec22994d15c53c940195753834dca2996e9de0",
+  "geometry_sha256": "be2eee456c6c5e32c3652d247d7b694ee304b7d11d92c191bfdc403f63fc7e02",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 52748,
+    "preview_opaque_pixels": 10954,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "TrainTrack"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

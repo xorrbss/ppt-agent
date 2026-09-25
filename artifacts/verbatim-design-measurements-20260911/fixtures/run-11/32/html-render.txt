@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:28px;width:980px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:6px;font-size:28px;line-height:35px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:3px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:126px;height:522px}
+.content-field{margin-left:64px;width:1152px;height:500px;display:flex;flex-direction:column;gap:24px}
+.identity{font-size:18px;line-height:28px;font-weight:700;color:#4B5563}
+.claim{font-size:26px;line-height:38px;font-weight:700;color:#1D1D1B}
+.claim strong{color:#08916E}
+.process-row{height:142px;display:grid;grid-template-columns:1fr 42px 1fr 42px 1fr 42px 1fr;align-items:stretch}
+.step{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:25px 22px;display:flex;align-items:center;justify-content:center;font-size:24px;line-height:34px;font-weight:700;color:#002060}
+.step:first-child{border-top:5px solid #08916E}
+.step:nth-of-type(3){border-top:5px solid #219F88}
+.step:nth-of-type(5){border-top:5px solid #08916E}
+.step:nth-of-type(7){border-top:5px solid #219F88}
+.arrow{display:flex;align-items:center;justify-content:center;color:#08916E;font-size:29px;line-height:34px;font-weight:700}
+.goal{height:184px;background:#00140E;border-radius:12px;padding:25px 32px;display:grid;grid-template-columns:220px 1fr;gap:28px;align-items:center}
+.goal-label{font-size:23px;line-height:32px;font-weight:700;color:#219F88}
+.goal-copy{font-size:25px;line-height:39px;font-weight:700;color:#FFFFFF}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" style="height:104px" data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-execution">실행 전략</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-7e1905ce7c35aa78" data-source-block-id="source-slide:33:text:3">수료 후 실행 공식</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:126px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-field" data-qid="q-div-f437b86905e0" data-semantic-role="decoration">
+    <div class="identity" data-semantic-role="supporting" data-qid="source-block-bc82bac02b65c54c" data-source-block-id="source-slide:33:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+    <div class="claim" data-semantic-role="body" data-qid="source-block-7622a952d8dc338b" data-source-block-id="source-slide:33:text:4">완벽해질 때까지 기다리지 않습니다.</div>
+
+    <div class="process-row" data-qid="q-process-row" data-semantic-role="decoration">
+      <div class="step" data-semantic-role="body" data-qid="source-block-de67ffd6dc2f72d9" data-source-block-id="source-slide:33:text:7">배우기</div>
+      <div class="arrow" data-semantic-role="supporting" data-qid="source-block-ba4f196bb7091795" data-source-block-id="source-slide:33:text:8">→</div>
+      <div class="step" data-semantic-role="body" data-qid="source-block-3803d8241d52288a" data-source-block-id="source-slide:33:text:9">만들기</div>
+      <div class="arrow" data-semantic-role="supporting" data-qid="source-block-0b28b1ea94c8980f" data-source-block-id="source-slide:33:text:10">→</div>
+      <div class="step" data-semantic-role="body" data-qid="source-block-74b19d6160f650ef" data-source-block-id="source-slide:33:text:11">영업하기</div>
+      <div class="arrow" data-semantic-role="supporting" data-qid="source-block-df199fd4fbca8304" data-source-block-id="source-slide:33:text:12">→</div>
+      <div class="step" data-semantic-role="body" data-qid="source-block-6aa960a03424f4fe" data-source-block-id="source-slide:33:text:13">계약하기</div>
+    </div>
+
+    <div class="goal" data-qid="q-goal-card" data-semantic-role="decoration">
+      <div class="goal-label" data-semantic-role="supporting" data-qid="source-block-993f49c1f51f00ac" data-source-block-id="source-slide:33:text:16">첫 번째 목표</div>
+      <div class="goal-copy" data-semantic-role="body" data-qid="source-block-f76c3a31c6f50d9d" data-source-block-id="source-slide:33:text:17">‘대단한 회사’가 되는 것이 아니라<br>첫 고객 한 명을 만들어보는 것.</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-4e4768fb963fdd11" data-source-block-id="source-slide:33:text:5">33</div>
+</body>
+</html>

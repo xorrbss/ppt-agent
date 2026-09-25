@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
+from dataclasses import replace
 import hashlib
 import sys
 import time
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -19,6 +21,7 @@ from services.trusted_executor.weighted_scheduler import (
 )
 from services.trusted_executor.worker_dispatcher import (
     TrustedWorkerDispatcher,
+    TrustedWorkerWireError,
     TrustedWorkerWireResult,
 )
 
@@ -261,3 +264,69 @@ async def _cancel_pending_dispatch(tmp_path: Path) -> None:
     assert [operation_id for operation_id, _, _ in transport.bindings] == [
         first_job.operation_id
     ]
+
+
+def test_queue_wait_excludes_transport_time(tmp_path: Path, monkeypatch) -> None:
+    from services.trusted_executor import worker_dispatcher
+
+    clock = SimpleNamespace(now=100.0)
+    monkeypatch.setattr(worker_dispatcher, "time", SimpleNamespace(
+        time=time.time, monotonic=lambda: clock.now,
+    ))
+
+    async def run():
+        transport = _BlockingTransport()
+        dispatcher = _dispatcher(tmp_path, transport, global_cap=1)
+        jobs = [_job(owner_id=uuid.uuid4(), operation_id=uuid.uuid4(), fencing_token=1)
+                for _ in range(2)]
+
+        async def execute(job):
+            return await dispatcher.execute(
+                job=job, presentation_id=uuid.uuid4(), payload=b"result",
+                command=(sys.executable,), environment={},
+            )
+
+        first = asyncio.create_task(execute(jobs[0]))
+        await transport.started.get()
+        second = asyncio.create_task(execute(jobs[1]))
+        await asyncio.sleep(0)
+        clock.now = 103.0
+        transport.release(jobs[0].operation_id)
+        await transport.started.get()
+        clock.now = 110.0
+        transport.release(jobs[1].operation_id)
+        results = await asyncio.gather(first, second)
+        assert [r.resource_metrics["trustedSchedulerQueueWaitMs"] for r in results] == [0, 3000]
+
+    asyncio.run(run())
+
+
+def test_cap_blocked_dispatch_expires_without_launching(tmp_path: Path) -> None:
+    async def run():
+        transport = _BlockingTransport()
+        dispatcher = _dispatcher(tmp_path, transport, global_cap=1)
+        first_job = _job(owner_id=uuid.uuid4(), operation_id=uuid.uuid4(), fencing_token=1)
+
+        async def execute(job):
+            return await dispatcher.execute(
+                job=job, presentation_id=uuid.uuid4(), payload=b"result",
+                command=(sys.executable,), environment={},
+            )
+
+        first = asyncio.create_task(execute(first_job))
+        await transport.started.get()
+        expired = replace(
+            _job(owner_id=uuid.uuid4(), operation_id=uuid.uuid4(), fencing_token=1),
+            deadline_epoch_seconds=time.time() + 0.05,
+        )
+        try:
+            with pytest.raises(TrustedWorkerWireError, match="deadline_exceeded"):
+                await asyncio.wait_for(execute(expired), timeout=1)
+            assert len(transport.bindings) == 1
+        finally:
+            transport.release(first_job.operation_id)
+            await first
+        assert not dispatcher._pending
+        assert transport.active == 0
+
+    asyncio.run(run())

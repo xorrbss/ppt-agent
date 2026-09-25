@@ -40,7 +40,7 @@ from services.provider_credential_reference_service import (
 from services.workspace_cleanup_journal_service import (
     snapshot_account_workspace_cleanup_targets,
 )
-from utils.datetime_utils import get_current_utc_datetime
+from utils.datetime_utils import as_utc, get_current_utc_datetime
 from utils.get_env import get_app_data_directory_env
 
 
@@ -251,7 +251,7 @@ async def finalize_account_deletion_claim(
     # and let the same generation be reclaimed with a fresh fence instead.
     if (
         request.claim_expires_at is None
-        or request.claim_expires_at <= get_current_utc_datetime()
+        or as_utc(request.claim_expires_at) <= get_current_utc_datetime()
     ):
         raise AccountDeletionFenceConflict(
             "account deletion claim expired before final cascade"

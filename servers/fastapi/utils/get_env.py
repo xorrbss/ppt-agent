@@ -7,6 +7,16 @@ from constants.settings_registry import get_settings_by_key
 from services.provider_settings_values import SECRET_SETTING_KEYS
 from utils.parsers import parse_bool_or_none
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
+from utils.get_env_authored_publish import (
+    is_authored_publish_flagged_slides_enabled,
+    is_authored_publish_flagged_slides_source_reflow_enabled,
+)
+from utils.get_env_concurrency import (
+    get_authored_cluster_job_concurrency_env,
+    get_authored_job_concurrency_env,
+    get_public_export_scheduler_global_cap_env,
+    get_workspace_operation_max_concurrency_env,
+)
 
 
 def _is_truthy(value: str | None) -> bool:
@@ -117,6 +127,7 @@ _GETTER_KEYS = {
     "get_dall_e_3_quality_env": "DALL_E_3_QUALITY",
     "get_gpt_image_1_5_quality_env": "GPT_IMAGE_1_5_QUALITY",
     "get_gpt_image_2_quality_env": "GPT_IMAGE_2_QUALITY",
+    "get_gpt_image_2_5_quality_env": "GPT_IMAGE_2_5_QUALITY",
     "get_codex_access_token_env": "CODEX_ACCESS_TOKEN",
     "get_codex_refresh_token_env": "CODEX_REFRESH_TOKEN",
     "get_codex_token_expires_env": "CODEX_TOKEN_EXPIRES",
@@ -240,22 +251,6 @@ def is_authored_design_critique_enabled(
 ) -> bool:
     """Whether the closed-operation design critic runs. Off by default."""
     return _is_truthy(get_setting_env("AUTHORED_DESIGN_CRITIQUE_ENABLED", settings))
-
-
-def is_authored_publish_flagged_slides_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Whether a still-terminal slide is remade once and then published flagged.
-
-    On by default (D7, ``docs/generation-programme-master-design-20260904.md``
-    section A4): a published deck carrying one flagged slide beats a deck that
-    failed with ``authored_composition_safety_gate_failed``. Setting it to
-    false restores the fail-closed deck behaviour exactly.
-    """
-    parsed = parse_bool_or_none(
-        get_setting_env("AUTHORED_PUBLISH_FLAGGED_SLIDES", settings)
-    )
-    return True if parsed is None else parsed
 
 
 def is_authored_retain_checkpoint_html_enabled(

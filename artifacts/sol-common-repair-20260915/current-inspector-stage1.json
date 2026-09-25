@@ -1,0 +1,1505 @@
+[
+  {
+    "sourcePath": "runs/stage1/case-01/C",
+    "sampleId": "sol-p02",
+    "strategy": "C",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-01\\C\\normalized-slide.html",
+    "htmlDigest": "224c073feb4812c00197ed1873dcef8d64550792d48d98d1257c85f8dcb131b1",
+    "geometryPass": false,
+    "contentPreserved": true,
+    "imageContractPass": true,
+    "priorAutomaticPass": true,
+    "currentAutomaticPass": true,
+    "telemetryStatus": "available",
+    "blockers": [],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast"
+    ],
+    "visualDefects": [
+      {
+        "category": "parent_escape_sibling_overlap",
+        "description": "Analysis and goal boxes end446 while business panel ends415,31px parent escape; lower governance card starts439 and covers their final7px. Analysis raw text ends432,17px below semantic panel.",
+        "qids": [
+          "q-s1-business-card",
+          "q-s1-analysis-box",
+          "q-s1-goal-box",
+          "q-s1-analysis-sub",
+          "q-s1-governance-card"
+        ],
+        "bounds": {
+          "parent": [
+            64,
+            197,
+            552,
+            218
+          ],
+          "analysis": [
+            85,
+            260,
+            208,
+            186
+          ],
+          "goal": [
+            335,
+            260,
+            260,
+            186
+          ],
+          "lastAnalysisText": [
+            100,
+            412,
+            25.765625,
+            20
+          ],
+          "nextPanel": [
+            64,
+            439,
+            552,
+            249
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "sourcePath": "runs/stage1/case-01/A",
+    "sampleId": "sol-p02",
+    "strategy": "A",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-01\\A\\normalized-slide.html",
+    "htmlDigest": "760cf680a9583b768efc7eb41bd460a43a6720eb3603a29e0963a38dfd5c0c20",
+    "geometryPass": false,
+    "contentPreserved": true,
+    "imageContractPass": true,
+    "priorAutomaticPass": false,
+    "currentAutomaticPass": false,
+    "telemetryStatus": "available",
+    "blockers": [
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of q-strong-f2092292903b prints 41px below the bottom of its card s1-area-card-4",
+        "qids": [
+          "q-strong-f2092292903b"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.1962,
+          "excess_px_x": 0.0,
+          "excess_px_y": 41.0,
+          "card_qid": "s1-area-card-4",
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s1-after prints 3px below the bottom of its card s1-problem-card",
+        "qids": [
+          "s1-after"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0069,
+          "excess_px_x": 0.0,
+          "excess_px_y": 3.0,
+          "card_qid": "s1-problem-card",
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s1-area-copy-3 prints 16px below the bottom of its card s1-area-card-3",
+        "qids": [
+          "s1-area-copy-3"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0766,
+          "excess_px_x": 0.0,
+          "excess_px_y": 16.0,
+          "card_qid": "s1-area-card-3",
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s1-area-copy-4 prints 41px below the bottom of its card s1-area-card-4",
+        "qids": [
+          "s1-area-copy-4"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.1962,
+          "excess_px_x": 0.0,
+          "excess_px_y": 41.0,
+          "card_qid": "s1-area-card-4",
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s1-before prints 3px below the bottom of its card s1-problem-card",
+        "qids": [
+          "s1-before"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0069,
+          "excess_px_x": 0.0,
+          "excess_px_y": 3.0,
+          "card_qid": "s1-problem-card",
+          "element_kind": "text"
+        }
+      }
+    ],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "font",
+      "text_escapes_card",
+      "text_escapes_card",
+      "text_escapes_card",
+      "text_escapes_card",
+      "text_escapes_card"
+    ],
+    "visualDefects": [
+      {
+        "category": "parent_escape_footer_overlap",
+        "description": "Method card ends614 but its last raw text fragments end659,45px escape onto footer beginning628. Governance copy ends634,20px below its card. Left transition pills end634,20px below problem card; screenshot shows semantic content entering footer area.",
+        "qids": [
+          "s1-area-card-3",
+          "s1-area-card-4",
+          "s1-area-copy-3",
+          "s1-area-copy-4",
+          "s1-before",
+          "s1-after",
+          "q-div-45499f8e6b25"
+        ],
+        "bounds": {
+          "methodPanel": [
+            840,
+            405,
+            376,
+            209
+          ],
+          "methodLastText": [
+            989,
+            633,
+            109.4375,
+            26
+          ],
+          "governanceLastText": [
+            471,
+            608,
+            142.546875,
+            26
+          ],
+          "footer": [
+            64,
+            628,
+            1152,
+            54
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "sourcePath": "runs/stage1/case-02/C",
+    "sampleId": "sol-p28",
+    "strategy": "C",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-02\\C\\slide.html",
+    "htmlDigest": "0b5bd416537c4510252cdfb3b0cd5498f4d14be79bfd2a96add4e07a7ce7bb2b",
+    "geometryPass": true,
+    "contentPreserved": true,
+    "imageContractPass": true,
+    "priorAutomaticPass": true,
+    "currentAutomaticPass": true,
+    "telemetryStatus": "available",
+    "blockers": [],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast"
+    ],
+    "visualDefects": []
+  },
+  {
+    "sourcePath": "runs/stage1/case-02/B",
+    "sampleId": "sol-p28",
+    "strategy": "B",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-02\\B\\slide.html",
+    "htmlDigest": "373f3ca9480da00c7f4ec47749f3b45f3ca15fa542c128141194ee1e9308ffc8",
+    "geometryPass": false,
+    "contentPreserved": false,
+    "imageContractPass": true,
+    "priorAutomaticPass": false,
+    "currentAutomaticPass": false,
+    "telemetryStatus": "available",
+    "blockers": [
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s27-takeaway-copy prints 11px below the bottom of its card s27-takeaway",
+        "qids": [
+          "s27-takeaway-copy"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.1618,
+          "excess_px_x": 0.0,
+          "excess_px_y": 11.0,
+          "card_qid": "s27-takeaway",
+          "element_kind": "text"
+        }
+      }
+    ],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "font",
+      "font",
+      "text_escapes_card"
+    ],
+    "visualDefects": [
+      {
+        "category": "parent_escape",
+        "description": "Footer copy last raw line ends654 while footer ends639,15px escape visible beneath background.",
+        "qids": [
+          "s27-takeaway",
+          "s27-takeaway-copy"
+        ],
+        "bounds": {
+          "footer": [
+            64,
+            571,
+            1152,
+            68
+          ],
+          "lastText": [
+            85,
+            629,
+            159.453125,
+            25
+          ]
+        }
+      },
+      {
+        "category": "parent_escape",
+        "description": "No-indefinite-exception field ends532.5, while last raw text ends543.5,11px escape below pill border.",
+        "qids": [
+          "s27-field-6"
+        ],
+        "bounds": {
+          "pill": [
+            503,
+            493.5,
+            106,
+            39
+          ],
+          "lastText": [
+            543.109375,
+            523.5,
+            25.765625,
+            20
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "sourcePath": "runs/stage1/case-02/A",
+    "sampleId": "sol-p28",
+    "strategy": "A",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-02\\A\\normalized-slide.html",
+    "htmlDigest": "373f3ca9480da00c7f4ec47749f3b45f3ca15fa542c128141194ee1e9308ffc8",
+    "geometryPass": false,
+    "contentPreserved": false,
+    "imageContractPass": true,
+    "priorAutomaticPass": false,
+    "currentAutomaticPass": false,
+    "telemetryStatus": "available",
+    "blockers": [
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s27-takeaway-copy prints 11px below the bottom of its card s27-takeaway",
+        "qids": [
+          "s27-takeaway-copy"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.1618,
+          "excess_px_x": 0.0,
+          "excess_px_y": 11.0,
+          "card_qid": "s27-takeaway",
+          "element_kind": "text"
+        }
+      }
+    ],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "font",
+      "font",
+      "text_escapes_card"
+    ],
+    "visualDefects": [
+      {
+        "category": "parent_escape",
+        "description": "Footer copy last raw line ends654 while footer ends639,15px escape visible beneath background.",
+        "qids": [
+          "s27-takeaway",
+          "s27-takeaway-copy"
+        ],
+        "bounds": {
+          "footer": [
+            64,
+            571,
+            1152,
+            68
+          ],
+          "lastText": [
+            85,
+            629,
+            159.453125,
+            25
+          ]
+        }
+      },
+      {
+        "category": "parent_escape",
+        "description": "No-indefinite-exception field ends532.5, while last raw text ends543.5,11px escape below pill border.",
+        "qids": [
+          "s27-field-6"
+        ],
+        "bounds": {
+          "pill": [
+            503,
+            493.5,
+            106,
+            39
+          ],
+          "lastText": [
+            543.109375,
+            523.5,
+            25.765625,
+            20
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "sourcePath": "runs/stage1/case-03/B",
+    "sampleId": "astra-p17",
+    "strategy": "B",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-03\\B\\slide.html",
+    "htmlDigest": "609dc89a45fed38bb25973dea43539ed757e6300c2674c8de76ead9eb68e0587",
+    "geometryPass": false,
+    "contentPreserved": false,
+    "imageContractPass": false,
+    "priorAutomaticPass": true,
+    "currentAutomaticPass": true,
+    "telemetryStatus": "available",
+    "blockers": [],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast"
+    ],
+    "visualDefects": [
+      {
+        "category": "parent_escape",
+        "description": "Two phase2 callout pills end539 while containing phase2 panel ends530,9px escape; text raw ends534,4px below parent.",
+        "qids": [
+          "s16-phase2-card",
+          "s16-callout-tracking",
+          "s16-callout-notice"
+        ],
+        "bounds": {
+          "panel": [
+            762,
+            376,
+            454,
+            154
+          ],
+          "pill": [
+            829,
+            511,
+            65.84375,
+            28
+          ],
+          "pillText": [
+            838,
+            515,
+            47.84375,
+            19
+          ]
+        }
+      },
+      {
+        "category": "forbidden_source_image_overlay",
+        "description": "Dark caption overlaps source image bottom-left region y641..667. Explicit assignment prohibits image overlap. Disclaimer text above is still visible; do not overclaim that it is hidden.",
+        "qids": [
+          "s16-source-image",
+          "s16-screen-caption"
+        ],
+        "bounds": {
+          "image": [
+            73,
+            195,
+            656,
+            472
+          ],
+          "caption": [
+            85,
+            641,
+            221.609375,
+            32
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "sourcePath": "runs/stage1/case-03/A",
+    "sampleId": "astra-p17",
+    "strategy": "A",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-03\\A\\slide.html",
+    "htmlDigest": "b6849077571314c8d6a70b47e67157c18419ea1092fa3df0d61afdf8251a3d7b",
+    "geometryPass": false,
+    "contentPreserved": false,
+    "imageContractPass": false,
+    "priorAutomaticPass": false,
+    "currentAutomaticPass": false,
+    "telemetryStatus": "available",
+    "blockers": [
+      {
+        "category": "off_canvas",
+        "severity": "high",
+        "detail": "element extends outside the slide canvas",
+        "qids": [
+          "q-div-651f6847781f"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "overshoot_px_left": 0.0,
+          "overshoot_px_top": 0.0,
+          "overshoot_px_right": 0.0,
+          "overshoot_px_bottom": 181.0,
+          "element_kind": "container"
+        }
+      },
+      {
+        "category": "off_canvas",
+        "severity": "high",
+        "detail": "element extends outside the slide canvas",
+        "qids": [
+          "q-div-d62c5af9c267"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "overshoot_px_left": 0.0,
+          "overshoot_px_top": 0.0,
+          "overshoot_px_right": 0.0,
+          "overshoot_px_bottom": 184.0,
+          "element_kind": "container"
+        }
+      }
+    ],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "off_canvas",
+      "off_canvas"
+    ],
+    "visualDefects": [
+      {
+        "category": "parent_escape",
+        "description": "Two phase2 callout pills end539 while containing phase2 panel ends530,9px escape; text raw ends534,4px below parent.",
+        "qids": [
+          "s16-phase2-card",
+          "s16-callout-tracking",
+          "s16-callout-notice"
+        ],
+        "bounds": {
+          "panel": [
+            762,
+            376,
+            454,
+            154
+          ],
+          "pill": [
+            829,
+            511,
+            65.84375,
+            28
+          ],
+          "pillText": [
+            838,
+            515,
+            47.84375,
+            19
+          ]
+        }
+      },
+      {
+        "category": "forbidden_source_image_overlay",
+        "description": "Dark caption overlaps source image bottom-left region y641..667. Explicit assignment prohibits image overlap. Disclaimer text above is still visible; do not overclaim that it is hidden.",
+        "qids": [
+          "s16-source-image",
+          "s16-screen-caption"
+        ],
+        "bounds": {
+          "image": [
+            73,
+            195,
+            656,
+            472
+          ],
+          "caption": [
+            85,
+            641,
+            221.609375,
+            32
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "sourcePath": "runs/stage1/case-03/C",
+    "sampleId": "astra-p17",
+    "strategy": "C",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-03\\C\\slide.html",
+    "htmlDigest": "a21a6ae84cf892653d8cfe781a9f5f17d7fe7496e235f7f713c9df792c1a6a89",
+    "geometryPass": false,
+    "contentPreserved": true,
+    "imageContractPass": true,
+    "priorAutomaticPass": false,
+    "currentAutomaticPass": false,
+    "telemetryStatus": "available",
+    "blockers": [
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of q-strong-f2342e01f838 prints 8px below the bottom of its card s16-user-role",
+        "qids": [
+          "q-strong-f2342e01f838"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.1111,
+          "excess_px_x": 0.0,
+          "excess_px_y": 8.0,
+          "card_qid": "s16-user-role",
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s16-user-copy prints 8px below the bottom of its card s16-user-role",
+        "qids": [
+          "s16-user-copy"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.1111,
+          "excess_px_x": 0.0,
+          "excess_px_y": 8.0,
+          "card_qid": "s16-user-role",
+          "element_kind": "text"
+        }
+      }
+    ],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "font",
+      "font",
+      "font",
+      "text_escapes_card",
+      "text_escapes_card"
+    ],
+    "visualDefects": [
+      {
+        "category": "parent_escape",
+        "description": "User-role text last raw line ends354 while green role card ends342,12px escape visible at its bottom edge immediately before admin card.",
+        "qids": [
+          "s16-user-role",
+          "s16-user-copy",
+          "q-strong-f2342e01f838"
+        ],
+        "bounds": {
+          "card": [
+            877,
+            270,
+            312,
+            72
+          ],
+          "lastText": [
+            941.6875,
+            328,
+            92.890625,
+            26
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "sourcePath": "runs/stage1/case-04/C",
+    "sampleId": "astra-p25",
+    "strategy": "C",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-04\\C\\slide.html",
+    "htmlDigest": "779c3408d01f7a7ed81af301b036bf9195f5898c10cb68f3e302d2cf7e188903",
+    "geometryPass": false,
+    "contentPreserved": false,
+    "imageContractPass": true,
+    "priorAutomaticPass": false,
+    "currentAutomaticPass": false,
+    "telemetryStatus": "available",
+    "blockers": [
+      {
+        "category": "clipping",
+        "severity": "medium",
+        "detail": "browser reports clipped visible content",
+        "qids": [
+          "s24-change-note"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "hidden_fraction": 1.0,
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "clipping",
+        "severity": "medium",
+        "detail": "browser reports clipped visible content",
+        "qids": [
+          "s24-flow-copy-3"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "hidden_fraction": 0.825,
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "clipping",
+        "severity": "medium",
+        "detail": "browser reports clipped visible content",
+        "qids": [
+          "s24-flow-num-3"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "hidden_fraction": 0.771,
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "off_canvas",
+        "severity": "high",
+        "detail": "element extends outside the slide canvas",
+        "qids": [
+          "s24-change-note"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "overshoot_px_left": 0.0,
+          "overshoot_px_top": 0.0,
+          "overshoot_px_right": 0.0,
+          "overshoot_px_bottom": 100.0,
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "off_canvas",
+        "severity": "high",
+        "detail": "element extends outside the slide canvas",
+        "qids": [
+          "s24-flow-card-3"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "overshoot_px_left": 0.0,
+          "overshoot_px_top": 0.0,
+          "overshoot_px_right": 0.0,
+          "overshoot_px_bottom": 28.0,
+          "element_kind": "container"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s24-change-note prints 118px below the bottom of its card s24-change-panel",
+        "qids": [
+          "s24-change-note"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.2479,
+          "excess_px_x": 0.0,
+          "excess_px_y": 118.0,
+          "card_qid": "s24-change-panel",
+          "element_kind": "text"
+        }
+      }
+    ],
+    "allCategories": [
+      "clipping",
+      "clipping",
+      "clipping",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "font",
+      "font",
+      "font",
+      "off_canvas",
+      "off_canvas",
+      "text_escapes_card",
+      "text_intrudes_footer_zone",
+      "text_intrudes_footer_zone"
+    ],
+    "visualDefects": [
+      {
+        "category": "parent_escape_offcanvas",
+        "description": "Change panel ends688, but final step y705..748 crosses canvas720 and final change note y758..820 is fully offcanvas. Raw final note fragments y768..809 cannot count as visible.",
+        "qids": [
+          "s24-change-panel",
+          "s24-flow-card-3",
+          "s24-flow-copy-3",
+          "s24-change-note"
+        ],
+        "bounds": {
+          "panel": [
+            888,
+            212,
+            328,
+            476
+          ],
+          "lastStep": [
+            909,
+            705,
+            286,
+            43
+          ],
+          "stepText": [
+            950,
+            716.5,
+            174.609375,
+            20
+          ],
+          "note": [
+            909,
+            758,
+            286,
+            62
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "sourcePath": "runs/stage1/case-04/A",
+    "sampleId": "astra-p25",
+    "strategy": "A",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-04\\A\\slide.html",
+    "htmlDigest": "409b90a5f9c2554cac3e6f6d5bfc43eff5d900ebfb7c5110ae79abb2cccc1684",
+    "geometryPass": true,
+    "contentPreserved": true,
+    "imageContractPass": true,
+    "priorAutomaticPass": true,
+    "currentAutomaticPass": true,
+    "telemetryStatus": "available",
+    "blockers": [],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "font"
+    ],
+    "visualDefects": []
+  },
+  {
+    "sourcePath": "runs/stage1/case-04/B",
+    "sampleId": "astra-p25",
+    "strategy": "B",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-04\\B\\slide.html",
+    "htmlDigest": "409b90a5f9c2554cac3e6f6d5bfc43eff5d900ebfb7c5110ae79abb2cccc1684",
+    "geometryPass": true,
+    "contentPreserved": true,
+    "imageContractPass": true,
+    "priorAutomaticPass": true,
+    "currentAutomaticPass": true,
+    "telemetryStatus": "available",
+    "blockers": [],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "font"
+    ],
+    "visualDefects": []
+  },
+  {
+    "sourcePath": "runs/stage1/case-05/A",
+    "sampleId": "sol-p06",
+    "strategy": "A",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-05\\A\\slide.html",
+    "htmlDigest": "e512a9a2943f7958be5b13d7e686c765c47416ea8e7d8d62ab05fc7fc2f2f7a4",
+    "geometryPass": false,
+    "contentPreserved": false,
+    "imageContractPass": true,
+    "priorAutomaticPass": true,
+    "currentAutomaticPass": true,
+    "telemetryStatus": "available",
+    "blockers": [],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font"
+    ],
+    "visualDefects": [
+      {
+        "category": "connector_crosses_text",
+        "description": "Continuous pale-green workflow lines pass through unboxed text labels in rows1-3. Screenshot visibly shows line through center of labels; this differs from intended gap connectors because line intersects meaningful text.",
+        "qids": [
+          "q-div-44ddca4cba28",
+          "q-div-c00ff804b22a",
+          "q-div-7a7ec62305af",
+          "s5-step-1-5",
+          "s5-step-2-1",
+          "s5-step-2-5",
+          "s5-step-3-5"
+        ],
+        "bounds": {
+          "row1Line": [
+            355,
+            279,
+            778,
+            2
+          ],
+          "row1Label": [
+            1076.140625,
+            267.5,
+            97.28125,
+            24
+          ],
+          "row2Line": [
+            355,
+            375,
+            778,
+            2
+          ],
+          "row2Label": [
+            1082.21875,
+            365,
+            85.125,
+            20
+          ],
+          "row3Line": [
+            355,
+            471,
+            778,
+            2
+          ],
+          "row3Label": [
+            1082.21875,
+            461,
+            85.125,
+            20
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "sourcePath": "runs/stage1/case-05/C",
+    "sampleId": "sol-p06",
+    "strategy": "C",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-05\\C\\slide.html",
+    "htmlDigest": "de803026538c39d7c1cb5580c783a046eeb5d809e2f10cac730d4e833c1c571e",
+    "geometryPass": true,
+    "contentPreserved": true,
+    "imageContractPass": true,
+    "priorAutomaticPass": true,
+    "currentAutomaticPass": true,
+    "telemetryStatus": "available",
+    "blockers": [],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast"
+    ],
+    "visualDefects": []
+  },
+  {
+    "sourcePath": "runs/stage1/case-05/B",
+    "sampleId": "sol-p06",
+    "strategy": "B",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-05\\B\\slide.html",
+    "htmlDigest": "e512a9a2943f7958be5b13d7e686c765c47416ea8e7d8d62ab05fc7fc2f2f7a4",
+    "geometryPass": false,
+    "contentPreserved": false,
+    "imageContractPass": true,
+    "priorAutomaticPass": true,
+    "currentAutomaticPass": true,
+    "telemetryStatus": "available",
+    "blockers": [],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font",
+      "font"
+    ],
+    "visualDefects": [
+      {
+        "category": "connector_crosses_text",
+        "description": "Continuous pale-green workflow lines pass through unboxed text labels in rows1-3. Screenshot visibly shows line through center of labels; this differs from intended gap connectors because line intersects meaningful text.",
+        "qids": [
+          "q-div-44ddca4cba28",
+          "q-div-c00ff804b22a",
+          "q-div-7a7ec62305af",
+          "s5-step-1-5",
+          "s5-step-2-1",
+          "s5-step-2-5",
+          "s5-step-3-5"
+        ],
+        "bounds": {
+          "row1Line": [
+            355,
+            279,
+            778,
+            2
+          ],
+          "row1Label": [
+            1076.140625,
+            267.5,
+            97.28125,
+            24
+          ],
+          "row2Line": [
+            355,
+            375,
+            778,
+            2
+          ],
+          "row2Label": [
+            1082.21875,
+            365,
+            85.125,
+            20
+          ],
+          "row3Line": [
+            355,
+            471,
+            778,
+            2
+          ],
+          "row3Label": [
+            1082.21875,
+            461,
+            85.125,
+            20
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "sourcePath": "runs/stage1/case-06/B",
+    "sampleId": "astra-p19",
+    "strategy": "B",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-06\\B\\slide.html",
+    "htmlDigest": "574af1605a4b9bcca247d5462b905b3bd5d03d8cf034011599c3b0409c5c7762",
+    "geometryPass": true,
+    "contentPreserved": false,
+    "imageContractPass": false,
+    "priorAutomaticPass": true,
+    "currentAutomaticPass": true,
+    "telemetryStatus": "available",
+    "blockers": [],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "font"
+    ],
+    "visualDefects": [
+      {
+        "category": "assigned_image_loaded_but_invisible",
+        "description": "Assigned target image reports 256x256 loaded but its entire 94x94 screenshot region is blank white; required visual image is absent.",
+        "qids": [
+          "s18-target-image"
+        ],
+        "bounds": {
+          "image": [
+            945,
+            535,
+            94,
+            94
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "sourcePath": "runs/stage1/case-06/C",
+    "sampleId": "astra-p19",
+    "strategy": "C",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-06\\C\\slide.html",
+    "htmlDigest": "cadd0e5d42b407238478f0ec7faf241a1f88665ad72afa1b173f69a0e87a93cc",
+    "geometryPass": false,
+    "contentPreserved": true,
+    "imageContractPass": true,
+    "priorAutomaticPass": false,
+    "currentAutomaticPass": false,
+    "telemetryStatus": "available",
+    "blockers": [
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s18-metric-load prints 38px below the bottom of its card s18-quality-card",
+        "qids": [
+          "s18-metric-load"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.1845,
+          "excess_px_x": 0.0,
+          "excess_px_y": 38.0,
+          "card_qid": "s18-quality-card",
+          "element_kind": "text"
+        }
+      }
+    ],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "text_escapes_card"
+    ],
+    "visualDefects": [
+      {
+        "category": "semantic_panel_escape",
+        "description": "Load-test metric is painted below its quality panel, with text extending to y537 beyond panel bottom495; it also leaves the enclosing white matrix bottom518.",
+        "qids": [
+          "s18-metric-load",
+          "s18-quality-card"
+        ],
+        "bounds": {
+          "rawText": [
+            867.65625,
+            511,
+            250.75,
+            26
+          ],
+          "qualityPanel": [
+            839.65625,
+            289,
+            351.34375,
+            206
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "sourcePath": "runs/stage1/case-06/A",
+    "sampleId": "astra-p19",
+    "strategy": "A",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-06\\A\\slide.html",
+    "htmlDigest": "19d2fa10a1c63417585fcf68e86be590ed98b2e8dae459ed1ae88ddfa67a6f0a",
+    "geometryPass": false,
+    "contentPreserved": false,
+    "imageContractPass": false,
+    "priorAutomaticPass": false,
+    "currentAutomaticPass": false,
+    "telemetryStatus": "available",
+    "blockers": [
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s18-quality-6 prints 14px below the bottom of its card s18-card-quality",
+        "qids": [
+          "s18-quality-6"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0642,
+          "excess_px_x": 0.0,
+          "excess_px_y": 14.0,
+          "card_qid": "s18-card-quality",
+          "element_kind": "text"
+        }
+      }
+    ],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "text_escapes_card"
+    ],
+    "visualDefects": [
+      {
+        "category": "semantic_panel_escape",
+        "description": "Last quality metric escapes its panel into the gap above the dark next section: raw final line reaches y512 against panel bottom494.",
+        "qids": [
+          "s18-quality-6",
+          "s18-card-quality"
+        ],
+        "bounds": {
+          "rawText": [
+            772.59375,
+            486,
+            104.40625,
+            26
+          ],
+          "qualityPanel": [
+            758.59375,
+            276,
+            213.203125,
+            218
+          ]
+        }
+      },
+      {
+        "category": "assigned_image_loaded_but_invisible",
+        "description": "Assigned target image reports 256x256 loaded but its entire 94x94 screenshot region is blank white; required visual image is absent.",
+        "qids": [
+          "s18-target-image"
+        ],
+        "bounds": {
+          "image": [
+            945,
+            535,
+            94,
+            94
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "sourcePath": "runs/stage1/case-01/B",
+    "sampleId": "sol-p02",
+    "strategy": "B",
+    "html": "C:\\project\\PPT-agent\\ppt-agent\\artifacts\\sol-speed-quality-20260915\\runs\\stage1\\case-01\\B\\slide.html",
+    "htmlDigest": "f1a5edabf58a56fe20b7b0ab34387563952a86c99fdbcb09c007010d956d6cca",
+    "geometryPass": false,
+    "contentPreserved": true,
+    "imageContractPass": true,
+    "priorAutomaticPass": false,
+    "currentAutomaticPass": false,
+    "telemetryStatus": "available",
+    "blockers": [
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s1-after prints 3px below the bottom of its card s1-problem-card",
+        "qids": [
+          "s1-after"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0069,
+          "excess_px_x": 0.0,
+          "excess_px_y": 3.0,
+          "card_qid": "s1-problem-card",
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s1-area-copy-3 prints 10px below the bottom of its card s1-area-card-3",
+        "qids": [
+          "s1-area-copy-3"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0478,
+          "excess_px_x": 0.0,
+          "excess_px_y": 10.0,
+          "card_qid": "s1-area-card-3",
+          "element_kind": "text"
+        }
+      },
+      {
+        "category": "text_escapes_card",
+        "severity": "medium",
+        "detail": "text of s1-before prints 3px below the bottom of its card s1-problem-card",
+        "qids": [
+          "s1-before"
+        ],
+        "policy": "style_reference",
+        "magnitude": {
+          "ratio_x": 1.0,
+          "ratio_y": 1.0069,
+          "excess_px_x": 0.0,
+          "excess_px_y": 3.0,
+          "card_qid": "s1-problem-card",
+          "element_kind": "text"
+        }
+      }
+    ],
+    "allCategories": [
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "contrast",
+      "font",
+      "font",
+      "font",
+      "text_escapes_card",
+      "text_escapes_card",
+      "text_escapes_card"
+    ],
+    "visualDefects": [
+      {
+        "category": "semantic_panel_escape",
+        "description": "Governance card final text visibly extends below its panel bottom598, reaching raw y612.",
+        "qids": [
+          "s1-area-copy-3",
+          "s1-area-card-3"
+        ],
+        "bounds": {
+          "rawText": [
+            471,
+            587,
+            134.625,
+            25
+          ],
+          "panel": [
+            448,
+            389,
+            376,
+            209
+          ]
+        }
+      },
+      {
+        "category": "unintended_sibling_overlap",
+        "description": "Method note and following copy are visibly crowded and overlapping: note last raw line y547-568 intersects following copy y560-584; following text also reaches y602 below card bottom598.",
+        "qids": [
+          "s1-method-note",
+          "s1-area-copy-4",
+          "s1-area-card-4"
+        ],
+        "bounds": {
+          "noteText": [
+            875,
+            547,
+            27.609375,
+            21
+          ],
+          "followingText": [
+            863,
+            560,
+            291.84375,
+            24
+          ],
+          "panel": [
+            840,
+            389,
+            376,
+            209
+          ]
+        }
+      }
+    ]
+  }
+]

@@ -46,8 +46,6 @@ function isAuthDisabled(): boolean {
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
-const SESSION_COOKIE_NAME = "presenton_session";
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 // A hung backend must not hold every API request open. A timeout is handled
 // by the same catch as a network error: unauthenticated, never fail-open.
 const AUTH_STATUS_TIMEOUT_MS = 5_000;
@@ -97,30 +95,6 @@ function isApiAuthExempt(pathname: string): boolean {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname === "/pdf-maker") {
-    const exportSession = request.nextUrl.searchParams.get("exportSession");
-    if (exportSession) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.searchParams.delete("exportSession");
-
-      const response = NextResponse.redirect(redirectUrl);
-      response.cookies.set({
-        name: SESSION_COOKIE_NAME,
-        value: exportSession,
-        maxAge: SESSION_TTL_SECONDS,
-        httpOnly: true,
-        secure:
-          request.headers.get("x-forwarded-proto")?.toLowerCase() === "https" ||
-          request.nextUrl.protocol === "https:",
-        sameSite: "lax",
-        path: "/",
-      });
-      return response;
-    }
-
-    return NextResponse.next();
-  }
-
   if (isAuthDisabled()) {
     return NextResponse.next();
   }
@@ -158,5 +132,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*", "/pdf-maker"],
+  matcher: ["/api/:path*"],
 };

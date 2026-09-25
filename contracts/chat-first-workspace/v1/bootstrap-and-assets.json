@@ -8,7 +8,9 @@
       "n_slides": 8,
       "tone": "professional"
     },
-    "asset_ids": ["66666666-6666-4666-8666-666666666666"],
+    "asset_ids": [
+      "66666666-6666-4666-8666-666666666666"
+    ],
     "attachments": [],
     "operation_type": "presentation.generate",
     "expected_revision": 0
@@ -86,6 +88,12 @@
           "error": null,
           "error_message": null,
           "retryable": null,
+          "providerAttemptCount": null,
+          "retryCount": null,
+          "recoveryReason": null,
+          "recoveryStatus": "unavailable",
+          "capacity_waiting": false,
+          "queue_position": null,
           "result": null,
           "version": 0,
           "operation_version": 0,
@@ -130,6 +138,12 @@
               "error": null,
               "safe_message": null,
               "retryable": null,
+              "providerAttemptCount": null,
+              "retryCount": null,
+              "recoveryReason": null,
+              "recoveryStatus": "unavailable",
+              "capacity_waiting": null,
+              "queue_position": null,
               "result": null,
               "created_at": "2026-08-03T00:00:01Z"
             }
@@ -143,10 +157,30 @@
     }
   },
   "asset_policy": {
-    "bootstrap_allowed": ["uploaded", "scanning", "processing", "ready"],
-    "wait_states": ["uploaded", "scanning", "processing"],
-    "block_states": ["failed", "quarantined", "expired", "deleted"],
-    "terminal_states": ["ready", "failed", "quarantined", "expired", "deleted"],
+    "bootstrap_allowed": [
+      "uploaded",
+      "scanning",
+      "processing",
+      "ready"
+    ],
+    "wait_states": [
+      "uploaded",
+      "scanning",
+      "processing"
+    ],
+    "block_states": [
+      "failed",
+      "quarantined",
+      "expired",
+      "deleted"
+    ],
+    "terminal_states": [
+      "ready",
+      "failed",
+      "quarantined",
+      "expired",
+      "deleted"
+    ],
     "processing_timeout_error_code": "asset_processing_timeout"
   }
 }

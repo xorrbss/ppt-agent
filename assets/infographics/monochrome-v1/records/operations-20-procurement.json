@@ -1,0 +1,55 @@
+{
+  "id": "operations-20-procurement",
+  "category": "operations",
+  "tags": {
+    "ko": [
+      "운영",
+      "구매조달"
+    ],
+    "en": [
+      "operations",
+      "procurement"
+    ]
+  },
+  "alt": {
+    "ko": "구매조달 단색 벡터 인포그래픽",
+    "en": "procurement monochrome vector infographic"
+  },
+  "path": "originals/operations-20-procurement.svg",
+  "thumbnail": "thumbnails/operations-20-procurement.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 670,
+  "sha256": "55216453ca39d8e2509cb2bfa420e76bf282e95a8ec6adf829ae0c7a4f2895b6",
+  "geometry_sha256": "a8cb2a20fb730074fd832b04f7295d6e3ea20ffd03a88ca0639be4db984f58cf",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54993,
+    "preview_opaque_pixels": 8445,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ShoppingBag",
+      "ClipboardList"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

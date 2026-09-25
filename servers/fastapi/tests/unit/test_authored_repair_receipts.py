@@ -128,7 +128,9 @@ def _install_remake(monkeypatch, *, candidate: str = "<html><body>REMADE</body><
         await _author_boundary(index)
         return [[candidate], [b"remade-png"], [0], [{"path": "full_reauthor"}]]
 
-    async def fake_admit(*, candidate_html, capacity, profile, reference_mode):
+    async def fake_admit(
+        *, candidate_html, capacity, profile, reference_mode, slide_index=None
+    ):
         return candidate_html, b"remade-png", {"telemetry": "ok"}
 
     monkeypatch.setattr(terminal_mod, "revise_authored_deck", fake_revise)

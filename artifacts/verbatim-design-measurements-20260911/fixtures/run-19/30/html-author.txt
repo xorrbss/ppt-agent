@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:106px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:960px}
+.eyebrow{font-size:14px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:38px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:134px;width:100%;height:514px}
+.inner{margin-left:64px;width:1152px}
+.lead{height:48px;display:flex;align-items:center;font-size:22px;line-height:32px;font-weight:700;color:#1D1D1B}
+.lead strong{color:#08916E}
+.rule{height:1px;background:#E2E8F0;margin-top:14px;margin-bottom:22px}
+.main-grid{display:grid;grid-template-columns:694px 434px;gap:24px;height:416px}
+.resource-area{height:416px;padding:24px 24px 20px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.resource-name{font-size:20px;line-height:30px;font-weight:700;color:#002060;margin-bottom:18px}
+.resource-name span{color:#08916E}
+.list-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:18px;row-gap:10px}
+.item{min-height:55px;display:flex;align-items:center;gap:14px;padding:10px 14px;background:#F9F9F9;border:1px solid #E2E8F0;border-radius:12px}
+.item-mark{width:8px;height:28px;flex:none;border-radius:12px;background:#219F88}
+.item:nth-child(3n) .item-mark{background:#00828E}
+.item:nth-child(5n) .item-mark{background:#E5A93D}
+.item-text{font-size:18px;line-height:25px;font-weight:600;color:#1D1D1B}
+.image-panel{height:416px;padding:20px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px}
+.image-head{font-size:18px;line-height:27px;font-weight:700;color:#002060;margin-bottom:14px}
+.image-frame{width:392px;height:250px;padding:8px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.image-frame img{display:block;width:374px;height:232px;border-radius:12px;object-fit:cover;background:#E0F3FF}
+.image-note{margin-top:18px;padding:12px 14px;border-left:6px solid #08916E;background:#FFFFFF;border-radius:12px;font-size:17px;line-height:27px;font-weight:600;color:#1D1D1B}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="106" class="header-band" style="height:106px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-30">보너스 자료</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-710a8a51d9d348e4" data-source-block-id="source-slide:31:text:3">꿀벌쌤 보너스 자료</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:134px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="inner" data-qid="q-div-c9c4d24a38ca" data-semantic-role="decoration">
+    <div class="lead" data-semantic-role="body" data-qid="source-block-ea971747b7377c6d" data-source-block-id="source-slide:31:text:4">수업 시간을 줄이고 실행력을 높이기 위해 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">자료로 제공합니다.</strong></div>
+    <div class="rule" data-qid="q-div-cbd8ff350888" data-semantic-role="decoration"></div>
+    <div class="main-grid" data-qid="q-div-948c49f110fb" data-semantic-role="decoration">
+      <div class="resource-area" data-qid="q-div-d0153891519d" data-semantic-role="decoration">
+        <div class="resource-name" data-semantic-role="body" data-qid="source-block-0c7c9fd2a1601fb1" data-source-block-id="source-slide:31:text:6">꿀벌쌤 <span data-qid="q-span-f32986c526a1" data-semantic-role="body">|</span> 숏폼대행 1인사업자 홀로서기</div>
+        <div class="list-grid" data-qid="source-block-e0c2f103e3a0af3b" data-semantic-role="decoration" data-source-block-id="source-slide:31:text:7">
+          <div class="item" data-qid="q-card-30-01" data-semantic-role="decoration"><span class="item-mark" data-qid="q-span-463fd3af2234" data-semantic-role="decoration"></span><div class="item-text" data-semantic-role="body" data-qid="q-div-26230145ef11">캡컷 기능 가이드</div></div>
+          <div class="item" data-qid="q-card-30-02" data-semantic-role="decoration"><span class="item-mark" data-qid="q-span-2b72862b3382" data-semantic-role="decoration"></span><div class="item-text" data-semantic-role="body" data-qid="q-div-8bad4dbdd803">스냅챗 활용법 / 얼굴 노출 최소화</div></div>
+          <div class="item" data-qid="q-card-30-03" data-semantic-role="decoration"><span class="item-mark" data-qid="q-span-405d725bd974" data-semantic-role="decoration"></span><div class="item-text" data-semantic-role="body" data-qid="q-div-4a8e7ad1a867">후킹 문구 모음</div></div>
+          <div class="item" data-qid="q-card-30-04" data-semantic-role="decoration"><span class="item-mark" data-qid="q-span-87defe4c88c0" data-semantic-role="decoration"></span><div class="item-text" data-semantic-role="body" data-qid="q-div-824dcf1718b3">업종별 콘텐츠 아이디어</div></div>
+          <div class="item" data-qid="q-card-30-05" data-semantic-role="decoration"><span class="item-mark" data-qid="q-span-f19d82d554f2" data-semantic-role="decoration"></span><div class="item-text" data-semantic-role="body" data-qid="q-div-696d551c95ef">전화영업 대본</div></div>
+          <div class="item" data-qid="q-card-30-06" data-semantic-role="decoration"><span class="item-mark" data-qid="q-span-9881fad6040f" data-semantic-role="decoration"></span><div class="item-text" data-semantic-role="body" data-qid="q-div-46e130b4a6dc">DM / 문자 / 카카오톡 문구</div></div>
+          <div class="item" data-qid="q-card-30-07" data-semantic-role="decoration"><span class="item-mark" data-qid="q-span-4ed014bcbff8" data-semantic-role="decoration"></span><div class="item-text" data-semantic-role="body" data-qid="q-div-f5532ee27ff1">당근마켓 활용 가이드</div></div>
+          <div class="item" data-qid="q-card-30-08" data-semantic-role="decoration"><span class="item-mark" data-qid="q-span-06d8c3688699" data-semantic-role="decoration"></span><div class="item-text" data-semantic-role="body" data-qid="q-div-7f5f2370cac9">제안서 · 견적서 템플릿</div></div>
+          <div class="item" data-qid="q-card-30-09" data-semantic-role="decoration"><span class="item-mark" data-qid="q-span-b220d4ac5e57" data-semantic-role="decoration"></span><div class="item-text" data-semantic-role="body" data-qid="q-div-0dfa917a28e6">촬영 가이드</div></div>
+          <div class="item" data-qid="q-card-30-10" data-semantic-role="decoration"><span class="item-mark" data-qid="q-span-20f1fa7c8e3c" data-semantic-role="decoration"></span><div class="item-text" data-semantic-role="body" data-qid="q-div-0c7c91b83bc3">콘텐츠 기획표</div></div>
+        </div>
+      </div>
+      <div class="image-panel" data-qid="q-div-5e0d969fd99d" data-semantic-role="decoration">
+        <div class="image-head" data-semantic-role="supporting" data-qid="q-image-head-30">실행에 바로 쓰는 현장형 자료</div>
+        <div class="image-frame" data-qid="q-div-8f65eb62c07f" data-semantic-role="decoration">
+          <img data-semantic-role="image" data-qid="q-image-30" data-illust-prompt="A premium editorial still life of practical short-form content production materials arranged on a clean worktable: a smartphone showing a vertical video editing interface, compact filming equipment, handwritten hook phrase cards, a simple shooting checklist, and a content planning grid. Viewpoint is a slightly elevated three-quarter angle, organized and calm, with clear separation between each artefact. No people, no logos, no brand marks, no paragraphs, no sentence text; labels: &quot;캡컷 기능 가이드&quot;, &quot;후킹 문구 모음&quot;, &quot;촬영 가이드&quot;, &quot;콘텐츠 기획표.&quot;" alt="" style="width:374px;height:232px">
+        </div>
+        <div class="image-note" data-semantic-role="body" data-qid="q-image-note-30">수업 준비부터 영업과 제작까지, 실행에 필요한 자료를 한 번에 활용</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-c00adf51311ddb71" data-source-block-id="source-slide:31:text:5">31</div>
+</body>
+</html>

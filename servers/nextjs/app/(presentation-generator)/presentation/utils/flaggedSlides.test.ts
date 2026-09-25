@@ -64,6 +64,7 @@ test("readFlaggedSlideEntries keeps only well-formed receipt rows", () => {
       remakeOutcome: "remake_budget_exhausted",
       remakeCount: 2,
       repeated: undefined,
+      classification: undefined,
     },
   ]);
 });
@@ -106,6 +107,7 @@ test("deriveFlaggedSlideMap keys badges by slide id so a reorder keeps them", ()
     categories: ["overflow", "clipping"],
     remakeAttempted: true,
     remakeOutcome: "remake_budget_exhausted",
+    classification: null,
   });
   assert.equal(map["s-a"].stage, "author");
   assert.deepEqual(map["s-a"].categories, []);

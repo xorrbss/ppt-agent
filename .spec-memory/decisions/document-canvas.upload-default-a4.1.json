@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "document-canvas.upload-default-a4",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "새 업로드 화면은 A4를 기본으로 사용한다. 원본 보존 SVG는 분석된 원본 캔버스를 따르며, 이전 16:9 폼 설정으로 A4 요청을 차단하지 않는다.",
+  "scope": [
+    "document-canvas",
+    "upload",
+    "svg-generation"
+  ],
+  "invariants": [
+    "새 업로드 폼의 기본 페이지 크기는 A4이며 기본 방향은 가로다.",
+    "원본 보존 SVG의 캔버스는 분석된 원본 메타데이터로 결정한다.",
+    "기존 문서의 비율 호환성과 서버의 원본 캔버스 검증을 유지한다."
+  ],
+  "forbidden": [
+    "A4 기본 설정을 이유로 원본 보존 SVG를 16:9 전용이라는 안내와 함께 차단하지 않는다."
+  ],
+  "evidence": [
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/useUploadPageState.ts",
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/useUploadPageState.cy.tsx"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-23T20:37:41.6609766+00:00"
+}

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:28px;width:980px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:6px;font-size:28px;line-height:35px;font-weight:700;color:#1D1D1B;max-width:980px}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:3px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:126px;width:1280px;padding:0 64px}
+.identity{height:34px;display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.identity-label{font-size:18px;line-height:27px;font-weight:700;color:#002060}
+.identity-rule{width:430px;height:1px;background:#E2E8F0}
+.content-grid{display:grid;grid-template-columns:610px 520px;gap:24px;height:400px}
+.pillar-stack{display:flex;flex-direction:column;gap:16px}
+.pillar-card{height:122px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:18px 22px;display:grid;grid-template-columns:116px 1fr;gap:18px;align-items:center}
+.pillar-card.product{border-left:6px solid #08916E}
+.pillar-card.people{border-left:6px solid #219F88}
+.pillar-card.move{border-left:6px solid #00828E}
+.pillar-label{font-size:24px;line-height:34px;font-weight:700;color:#002060}
+.pillar-copy{display:flex;flex-direction:column;gap:8px}
+.pillar-line{font-size:18px;line-height:27px;font-weight:600;color:#1D1D1B}
+.image-panel{height:400px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:14px}
+.image-panel img{display:block;width:490px;height:370px;border-radius:12px;object-fit:cover;background:linear-gradient(135deg,#E0F3FF,#EAF7F4)}
+.takeaway{height:52px;margin-top:18px;display:flex;align-items:center;padding:0 20px;background:#EAF7F4;border-radius:12px;border-left:6px solid #08916E}
+.takeaway-text{font-size:18px;line-height:27px;font-weight:700;color:#164F43}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+  <div data-header-part="band" data-header-band="104" class="header-band" style="height:104px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+    <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+      <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-smartphone" style="color: rgb(0, 105, 85)">스마트폰 촬영</div>
+      <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-f06e4b7484efcaf0" data-source-block-id="source-slide:15:text:3">2주차 PART 3 | 스마트폰 촬영</div>
+    </div>
+    <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+  </div>
+
+  <div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:126px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+    <div class="identity" data-qid="q-div-ca97991e836c" data-semantic-role="decoration">
+      <div class="identity-label" data-semantic-role="supporting" data-qid="source-block-392a7709af5deaf6" data-source-block-id="source-slide:15:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      <div class="identity-rule" data-qid="q-div-8e3d1713842e" data-semantic-role="decoration"></div>
+    </div>
+
+    <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+      <div class="pillar-stack" data-qid="q-div-b1b1b3a249a9" data-semantic-role="decoration">
+        <div class="pillar-card product" data-qid="q-card-product" data-semantic-role="decoration">
+          <div class="pillar-label" data-semantic-role="supporting" data-qid="source-block-7f41015711774905" data-source-block-id="source-slide:15:text:8">제품</div>
+          <div class="pillar-copy" data-qid="source-block-80c5338ab07c9d84" data-semantic-role="decoration" data-source-block-id="source-slide:15:text:9">
+            <div class="pillar-line" data-semantic-role="body" data-qid="q-product-sequence">전체샷 → 디테일 → 사용 장면</div>
+            <div class="pillar-line" data-semantic-role="body" data-qid="q-product-note">손을 활용해 자연스럽게</div>
+          </div>
+        </div>
+
+        <div class="pillar-card people" data-qid="q-card-people" data-semantic-role="decoration">
+          <div class="pillar-label" data-semantic-role="supporting" data-qid="source-block-d99a431195b181f6" data-source-block-id="source-slide:15:text:12">사람</div>
+          <div class="pillar-copy" data-qid="source-block-c977a700f4d255d9" data-semantic-role="decoration" data-source-block-id="source-slide:15:text:13">
+            <div class="pillar-line" data-semantic-role="body" data-qid="q-people-sequence">전신 → 상반신 → 행동 장면</div>
+            <div class="pillar-line" data-semantic-role="body" data-qid="q-people-note">자연스러운 대화와 리액션</div>
+          </div>
+        </div>
+
+        <div class="pillar-card move" data-qid="q-card-move" data-semantic-role="decoration">
+          <div class="pillar-label" data-semantic-role="supporting" data-qid="source-block-fe3fdc72d22ae54d" data-source-block-id="source-slide:15:text:16">이동</div>
+          <div class="pillar-copy" data-qid="source-block-83c714019179b004" data-semantic-role="decoration" data-source-block-id="source-slide:15:text:17">
+            <div class="pillar-line" data-semantic-role="body" data-qid="q-move-sequence">좌→우 / 우→좌</div>
+            <div class="pillar-line" data-semantic-role="body" data-qid="q-move-direction">상→하 / 하→상</div>
+            <div class="pillar-line" data-semantic-role="body" data-qid="q-move-note">천천히, 흔들림 최소화</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="image-panel" data-qid="q-image-panel" data-semantic-role="decoration">
+        
+      </div>
+    </div>
+
+    <div class="takeaway" data-qid="q-div-45499f8e6b25" data-semantic-role="decoration">
+      <div class="takeaway-text" data-semantic-role="body" data-qid="q-takeaway">손과 대화, 이동을 활용해 자연스러운 숏폼 장면을 구성</div>
+    </div>
+  </div>
+
+  <div class="page-number" data-semantic-role="supporting" data-qid="source-block-82ae953b023eea4f" data-source-block-id="source-slide:15:text:4" style="color: rgb(75, 85, 99); top: 672px">15</div>
+</body>
+</html>

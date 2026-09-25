@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.osb-density-aware-typography",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "OSB keeps spacious ordinary slides and permits bounded spacing and typography adjustments for dense slides while preserving content and the 9pt floor.",
+  "scope": [
+    "servers/fastapi/authored_styles/osb-smart-banking.yaml"
+  ],
+  "invariants": [
+    "For dense slides remove unnecessary min-height and reflow before reducing spacing or font size.",
+    "Dense body guidance is 14-18 CSS px and supporting text 12-14 CSS px, with a 12 CSS px (9pt) floor.",
+    "Preserve facts, source references, free HTML layout and existing QID contracts."
+  ],
+  "forbidden": [
+    "Deleting information to fit.",
+    "Introducing fixed slots or Deck IR.",
+    "Treating unresolved clipping or overlap as quality passed."
+  ],
+  "evidence": [
+    "User requested applying the candidate and validating a 20-slide PPT.",
+    "artifacts/codex-parallel-20260913/august-current-four-slide-ab/candidate-density/candidate-envelope-manifest.json",
+    "Applied style SHA256 68de80276f6dd6d902a709775174ff1b29c46d89e2a126fa88a8dc0620536f61"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T16:50:59.8174194+00:00"
+}

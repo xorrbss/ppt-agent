@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 import json
 import uuid
 
+import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
 
 from api.v1.ppt.endpoints import presentation_generate
@@ -128,6 +130,44 @@ def test_durable_payload_never_contains_legacy_file_locator() -> None:
 
     assert payload["files"] is None
     assert "C:/private/server/upload.docx" not in str(payload)
+
+
+def test_source_svg_admission_retry_preserves_failure_without_synthesized_pins() -> None:
+    request = GeneratePresentationRequest(
+        content="",
+        strategy="svg",
+        authored_style="osb-smart-banking",
+        sourceMode="source_content_restyle",
+        sourceContentManifestPin={
+            "manifestId": "missing-owned-manifest",
+            "digest": "sha256:" + ("a" * 64),
+        },
+        contentPolicy={
+            "text": "verbatim",
+            "preserveAllTableCells": True,
+            "preserveAllChartValues": False,
+            "preserveAllImageOccurrences": True,
+            "preserveSourceOrder": True,
+            "preserveSourceSlideCount": True,
+            "allowSlideExpansion": False,
+            "allowSummarization": False,
+            "overflowPolicy": "same_page_recompose_or_fail",
+        },
+    )
+
+    payload = presentation_generate._durable_request_payload(
+        request, admission_retry=True
+    )
+    assert payload["_internal_admission_retry_required"] is True
+    assert "_internal_svg_style_snapshot" not in payload
+    assert "_internal_svg_source_binding" not in payload
+    assert "_internal_authored_canvas" not in payload
+    restored = presentation_generate._request_from_durable_payload(payload)
+    assert restored.authored_style == "osb-smart-banking"
+    assert restored._svg_style_snapshot is None
+
+    with pytest.raises(HTTPException, match="svg_source_canvas_binding_required"):
+        presentation_generate._durable_request_payload(request)
 
 
 def test_legacy_files_are_immediately_replaced_by_snapshot_identity(

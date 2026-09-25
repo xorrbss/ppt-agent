@@ -208,6 +208,7 @@ def build_composition_plan(
     narrative: object,
     slide: object,
     frame: object,
+    target_typography: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], list[SealedContentUnit], list[dict[str, Any]]]:
     units = sealed_units_for_slide(narrative, slide)
     source_verbatim = bool(units) and all(
@@ -220,6 +221,9 @@ def build_composition_plan(
     new_authoring_adaptive = generation_lane == "new-authoring"
     uses_source_flow = source_verbatim or new_authoring_adaptive
     slots = source_flow_slots(frame) if uses_source_flow else executable_slots(frame)
+    if target_typography:
+        from .source_native_target_fit import target_typography_slots
+        slots = target_typography_slots(slots, **target_typography)
     assigned, assignments, unmapped = allocate_units(units, slots)
     mapped_ids = [item["contentUnitId"] for item in assignments]
     duplicates = sorted({item for item in mapped_ids if mapped_ids.count(item) > 1})

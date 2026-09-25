@@ -68,7 +68,10 @@ function decisionClass(decision: AuthoredSemanticDecision): string {
 export function authoredHybridUnavailableReason(
   status: AuthoredEmissionCapabilityStatus,
   expectedRevision?: number,
+  _presentation?: unknown,
 ): string | undefined {
+  // Quality is advisory for original-source export. The capability and immutable
+  // manifest checks below remain admission guards for editable Hybrid output.
   if (status.state === "checking") return "capability projection을 확인하는 중입니다.";
   if (status.state === "unavailable") return status.reason ?? "Hybrid capability projection을 확인하지 못했습니다.";
   const { readiness } = status;
@@ -82,12 +85,14 @@ export function authoredHybridUnavailableReason(
     if (projection.degradedFidelityOnly) return "semantic source가 Fidelity 전용으로 강등되었습니다.";
     if (projection.canonicalMode !== "bundleGraph") return "legacy HTML revision은 Hybrid admission을 제공하지 않습니다.";
     if (!projection.canonicalDigest || !projection.manifestDigest) return "immutable manifest binding digest가 없습니다.";
-    if (
-      readiness.version === "v3" &&
-      readiness.projection.releaseProfile.nativeSubsetStatus === "notApplicable"
-    ) {
-      return "이 릴리스 프로필은 native Hybrid를 지원하지 않습니다. Fidelity 출력만 사용할 수 있습니다.";
-    }
+    // `nativeSubsetStatus` is a promotion-claim scope, not an export capability:
+    // it names the receipts (CJK, chart, table, z-band, image crop) this bounded
+    // release does not certify. It is a `Literal["notApplicable"]` on the server,
+    // so treating it as a blocker retired Hybrid from this editor outright and
+    // made `authoredV3HybridStatusMessage` -- which states the opposite, that
+    // raster-fallback Hybrid exports while the native subset stays unclaimed --
+    // unreachable. Hybrid availability is decided by the checks above; the
+    // status line below carries the uncertified scope to the user.
     return undefined;
   }
   const projection = readiness.projection;

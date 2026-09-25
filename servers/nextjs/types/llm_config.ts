@@ -101,6 +101,8 @@ export interface LLMConfig {
   GPT_IMAGE_1_5_QUALITY?: string;
   // GPT Image 2 Quality
   GPT_IMAGE_2_QUALITY?: string;
+  // GPT Image 2.5 Flare and Sunburst quality
+  GPT_IMAGE_2_5_QUALITY?: string;
 
   // Other Configs
   DISABLE_THINKING?: boolean;
@@ -108,6 +110,7 @@ export interface LLMConfig {
 
   // Codex OAuth (ChatGPT)
   CODEX_MODEL?: string;
+  CODEX_REASONING_EFFORT?: string;
   CODEX_ACCESS_TOKEN?: string;
   CODEX_REFRESH_TOKEN?: string;
   CODEX_TOKEN_EXPIRES?: string;

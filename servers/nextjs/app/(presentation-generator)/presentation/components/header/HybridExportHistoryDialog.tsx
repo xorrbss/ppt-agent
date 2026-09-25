@@ -101,6 +101,11 @@ const HybridExportHistoryDialog = ({
               <p className="mt-2 text-xs">
                 실제 native: 텍스트 {attempt.evidence.nativeText ?? "미기록"} · 이미지 {attempt.evidence.nativeImage ?? "미기록"} · 도형 {attempt.evidence.nativeShape ?? "미기록"} · 표 {attempt.evidence.nativeTable ?? "미기록"} · 차트 {attempt.evidence.nativeChart ?? "미기록"} · raster {attempt.evidence.rasterRemaining ?? "미기록"}
               </p>
+              {attempt.evidence.localFitFallbackPages?.length ? (
+                <p className="mt-1 text-xs text-amber-800">
+                  내보내기 검증 후 원본 이미지로 대체된 페이지: {attempt.evidence.localFitFallbackPages.join(", ")}장
+                </p>
+              ) : null}
               {attempt.evidence.typographyIssues?.length || attempt.evidence.fallbackReasons?.length ? (
                 <p className="mt-1 text-xs text-amber-800">
                   typography/fallback: {[...(attempt.evidence.typographyIssues ?? []), ...(attempt.evidence.fallbackReasons ?? [])].join(", ")}

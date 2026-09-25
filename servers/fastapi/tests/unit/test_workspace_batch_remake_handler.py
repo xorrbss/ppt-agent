@@ -143,11 +143,14 @@ def _install_publishers(monkeypatch, session, *, failing_indexes: frozenset[int]
     revision_calls: list[dict] = []
 
     async def publish_page(
-        *, session, presentation_id, slide_index, preview_task_id, snapshot=True
+        *, session, presentation_id, slide_index, preview_task_id, snapshot=True,
+        operation_id=None, attempt_token=None, expected_revision=None,
     ):
         # The batch takes one snapshot of its own, so it must never ask the
         # per-page publisher for another.
         assert snapshot is False
+        assert operation_id is not None and attempt_token == "attempt"
+        assert expected_revision == 3
         await session.execute(
             update(SlideModel)
             .where(

@@ -22,7 +22,7 @@ from utils.authored_dom_footer_zone import (
     UNNUMBERED_CONTENT_BOTTOM_PX,
 )
 from utils.authored_dom_text_escape import ESCAPE_TOLERANCE_PX
-from utils.slide_capture_fit_script import (
+from utils.slide_capture_fit_in_render_script import (
     DEFAULT_FIT_TIMEOUT_MS,
     FIT_BISECTION_STEPS,
     FIT_CLASS,
@@ -35,7 +35,7 @@ from utils.slide_capture_fit_script import (
     fit_script_fragment,
 )
 
-_MODULE = Path(__file__).resolve().parents[2] / "utils" / "slide_capture_fit_script.py"
+_MODULE = Path(__file__).resolve().parents[2] / "utils" / "slide_capture_fit_in_render_script.py"
 
 
 def test_public_interface_is_the_agreed_one() -> None:

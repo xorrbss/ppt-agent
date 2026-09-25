@@ -1,0 +1,187 @@
+<!DOCTYPE html><html lang="ko"><head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#00140E;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:18px;width:840px}
+.eyebrow{height:21px;font-size:15px;line-height:21px;font-weight:700;letter-spacing:0;color:#08916E}
+.title{margin-top:6px;max-width:840px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:924px;top:18px;width:300px;height:27px;display:flex;align-items:center;justify-content:flex-end}
+.requirements{height:27px;display:flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap}
+.req-label{font-size:13px;line-height:27px;font-weight:700;color:#00140E}
+.req-chip{height:27px;padding:0 9px;border:1px solid #08916E;border-radius:5px;background:#EAEDF2;font-size:13px;line-height:25px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:115px;height:573px}
+.content-grid{width:1152px;height:573px;margin-left:64px;display:grid;grid-template-columns:564px 564px;grid-template-rows:37px 236px 252px;column-gap:24px;row-gap:24px}
+.structure-label{grid-column:1 / 3;display:flex;align-items:flex-start;justify-content:space-between}
+.claim{font-size:24px;line-height:31px;font-weight:700;color:#00140E;letter-spacing:-.02em}
+.claim strong{color:#08916E}
+.guide{display:flex;align-items:center;gap:9px;height:31px;font-size:15px;line-height:22px;font-weight:700;color:#00140E}
+.guide-mark{width:9px;height:9px;border-radius:5px;background:#08916E}
+.role-card{position:relative;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;box-shadow:0 8px 20px rgba(0,20,14,.05);overflow:hidden}
+.card-top{display:flex;align-items:center;justify-content:space-between;height:30px}
+.role-title{font-size:22px;line-height:28px;font-weight:700;color:#00140E}
+.role-index{font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:22px;font-weight:700;color:#08916E}
+.summary{margin-top:10px;font-size:18px;line-height:26px;font-weight:500;color:#00140E}
+.flow{margin-top:14px;display:flex;align-items:center;width:100%;height:60px}
+.step{height:60px;min-width:0;flex:1;display:flex;align-items:center;justify-content:center;padding:6px 5px;border:1px solid #E2E8F0;border-radius:12px;background:#F9F9F9;text-align:center;font-size:13px;line-height:18px;font-weight:700;color:#00140E}
+.step.emphasis{border-color:#08916E;background:#EAF7F4;color:#00140E}
+.connector{position:relative;width:10px;height:2px;flex:none;background:#08916E}
+.connector-tip{position:absolute;right:-1px;top:-3px;width:0;height:0;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:5px solid #08916E}
+.constraint{margin-top:10px;display:flex;align-items:center;gap:9px;font-size:15px;line-height:22px;font-weight:700;color:#00140E}
+.constraint-bar{width:5px;height:22px;border-radius:5px;background:#08916E;flex:none}
+.split-area{margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px;height:102px}
+.mini-lane{padding:12px;border:1px solid #E2E8F0;border-radius:12px;background:#F9F9F9}
+.mini-head{display:flex;align-items:center;justify-content:space-between;font-size:15px;line-height:21px;font-weight:700;color:#08916E}
+.mini-scope{font-size:13px;line-height:19px;font-weight:700;color:#00140E}
+.mini-flow{margin-top:9px;display:flex;align-items:center}
+.mini-node{flex:1;min-width:0;padding:7px 5px;border-radius:12px;background:#FFFFFF;border:1px solid #E2E8F0;text-align:center;font-size:13px;line-height:18px;font-weight:700;color:#00140E}
+.mini-arrow{width:14px;text-align:center;font-size:15px;line-height:18px;font-weight:700;color:#08916E}
+.hub-area{margin-top:12px;display:grid;grid-template-columns:318px 1fr;gap:14px;height:103px}
+.source-grid{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:7px}
+.source-item{display:flex;align-items:center;justify-content:center;border:1px solid #E2E8F0;border-radius:12px;background:#F9F9F9;font-size:13px;line-height:18px;font-weight:700;color:#00140E;text-align:center}
+.result-stack{display:grid;grid-template-rows:1fr 1fr;gap:7px}
+.result-box{display:flex;align-items:center;justify-content:center;padding:6px 10px;border:1px solid #08916E;border-radius:12px;background:#EAF7F4;font-size:14px;line-height:19px;font-weight:700;color:#00140E;text-align:center}
+.card-accent{position:absolute;left:28px;right:28px;bottom:0;height:4px;border-radius:12px 12px 0 0;background:#08916E}
+</style>
+</head>
+<body>
+<div class="header-band" data-header-band="101" data-header-part="band" style="height:101px" data-qid="q-div-75dcf98740c9">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0">
+    <div class="eyebrow" data-header-part="eyebrow" data-qid="s5-eyebrow" data-semantic-role="supporting">사용자 요구 분석</div>
+    <div class="title" data-header-part="title" data-qid="s5-title" data-semantic-role="title">사용자별 핵심 요구 이해</div>
+  </div>
+  <div class="header-right" data-header-part="right" data-qid="q-div-73774be43d12">
+    <div class="requirements" data-header-part="requirements" data-qid="s5-requirements" data-requirement-ids="SFR-002,SIR-006,SIR-007,SER-007" data-semantic-role="supporting">
+      <span class="req-label" data-qid="s5-req-label" data-semantic-role="supporting">요구사항 번호</span>
+      <span class="req-chip" data-qid="s5-req-1" data-semantic-role="supporting">SFR-002</span>
+      <span class="req-chip" data-qid="s5-req-2" data-semantic-role="supporting">SIR-006</span>
+      <span class="req-chip" data-qid="s5-req-more" data-semantic-role="supporting">+2</span>
+    </div>
+  </div>
+  <div class="divider" data-header-part="divider" data-qid="q-div-59f86380b966"></div>
+</div>
+
+<div class="body-wrap" data-header-part="body" style="position:absolute;left:0;right:0;top:115px" data-qid="q-div-66757db28fba">
+  <div class="content-grid" data-qid="q-div-fb5bd1098200">
+    <div class="structure-label" data-qid="q-div-4f33c2417c8d">
+      <div class="claim" data-qid="s5-claim" data-semantic-role="body">역할별 업무 흐름과 권한 범위를 분리해 <strong data-qid="q-strong-663977331dde">처리 책임</strong>을 명확히 합니다.</div>
+      <div class="guide" data-qid="s5-guide" data-semantic-role="supporting">
+        <span class="guide-mark" data-qid="q-span-f08567554c8b"></span>
+        신청부터 통합 관제까지 단일 업무 체계
+      </div>
+    </div>
+
+    <div class="role-card" data-qid="s5-card-company">
+      <div class="card-top" data-qid="q-div-aeebf6f63e53">
+        <div class="role-title" data-qid="s5-company-title" data-semantic-role="supporting">지원기업</div>
+        <div class="role-index" data-qid="s5-company-index" data-semantic-role="supporting">01 · 신청 흐름</div>
+      </div>
+      <div class="summary" data-qid="s5-company-summary" data-semantic-role="body">웹폼 신청부터 결과 알림까지 중단 없이 이어지는 단일 이용 흐름을 제공합니다.</div>
+      <div class="flow" data-qid="s5-company-flow">
+        <div class="step emphasis" data-qid="s5-company-step1" data-semantic-role="body">웹폼<br>신청</div>
+        <div class="connector" data-qid="q-div-1bfec761b021"><span class="connector-tip" data-qid="q-span-9e0421374302"></span></div>
+        <div class="step" data-qid="s5-company-step2" data-semantic-role="body">임시<br>저장</div>
+        <div class="connector" data-qid="q-div-f954d062b2c8"><span class="connector-tip" data-qid="q-span-a4ed40c75f86"></span></div>
+        <div class="step" data-qid="s5-company-step3" data-semantic-role="body">단계별<br>서류 제출</div>
+        <div class="connector" data-qid="q-div-d70e41e2467e"><span class="connector-tip" data-qid="q-span-14675fc566c1"></span></div>
+        <div class="step" data-qid="s5-company-step4" data-semantic-role="body">보완 대상<br>수정</div>
+        <div class="connector" data-qid="q-div-44f8a0ccb367"><span class="connector-tip" data-qid="q-span-e0ac043bfeb6"></span></div>
+        <div class="step" data-qid="s5-company-step5" data-semantic-role="body">진행상태<br>조회</div>
+        <div class="connector" data-qid="q-div-ef96e2b0d005"><span class="connector-tip" data-qid="q-span-6bbd2f372068"></span></div>
+        <div class="step emphasis" data-qid="s5-company-step6" data-semantic-role="body">결과<br>알림</div>
+      </div>
+      <div class="card-accent" data-qid="q-div-978021e3068c"></div>
+    </div>
+
+    <div class="role-card" data-qid="s5-card-evaluator">
+      <div class="card-top" data-qid="q-div-bcdfe0915c1f">
+        <div class="role-title" data-qid="s5-evaluator-title" data-semantic-role="supporting">평가위원</div>
+        <div class="role-index" data-qid="s5-evaluator-index" data-semantic-role="supporting">02 · 평가 통제</div>
+      </div>
+      <div class="summary" data-qid="s5-evaluator-summary" data-semantic-role="body">배정 기업과 평가기간 안에서만 접근하고, 제출 완료 이후에는 수정을 제한합니다.</div>
+      <div class="flow" data-qid="s5-evaluator-flow">
+        <div class="step emphasis" data-qid="s5-evaluator-step1" data-semantic-role="body">제한된<br>접근</div>
+        <div class="connector" data-qid="q-div-be04d9e970be"><span class="connector-tip" data-qid="q-span-82844ffa2278"></span></div>
+        <div class="step" data-qid="s5-evaluator-step2" data-semantic-role="body">신청서류·<br>평가표</div>
+        <div class="connector" data-qid="q-div-31154e494041"><span class="connector-tip" data-qid="q-span-aa6181d4797f"></span></div>
+        <div class="step" data-qid="s5-evaluator-step3" data-semantic-role="body">점수<br>검증</div>
+        <div class="connector" data-qid="q-div-edbd9d1ebf4a"><span class="connector-tip" data-qid="q-span-1e6e41023fb3"></span></div>
+        <div class="step" data-qid="s5-evaluator-step4" data-semantic-role="body">서명</div>
+        <div class="connector" data-qid="q-div-1cfb312ab268"><span class="connector-tip" data-qid="q-span-429a606ec9f5"></span></div>
+        <div class="step" data-qid="s5-evaluator-step5" data-semantic-role="body">제출<br>완료</div>
+        <div class="connector" data-qid="q-div-f6b2b7cb3ecd"><span class="connector-tip" data-qid="q-span-8d08d5f9d6bc"></span></div>
+        <div class="step emphasis" data-qid="s5-evaluator-step6" data-semantic-role="body">수정<br>제한</div>
+      </div>
+      <div class="constraint" data-qid="s5-evaluator-note" data-semantic-role="body">
+        <span class="constraint-bar" data-qid="q-span-6aad3f91bce8"></span>
+        접근 범위와 제출 이력을 통제해 평가 공정성 및 감사 가능성 확보
+      </div>
+      <div class="card-accent" data-qid="q-div-a3332eaea642"></div>
+    </div>
+
+    <div class="role-card" data-qid="s5-card-admin">
+      <div class="card-top" data-qid="q-div-557e73025730">
+        <div class="role-title" data-qid="s5-admin-title" data-semantic-role="supporting">수행·검증기관 / 관리자</div>
+        <div class="role-index" data-qid="s5-admin-index" data-semantic-role="supporting">03 · 배정과 일괄처리</div>
+      </div>
+      <div class="summary" data-qid="s5-admin-summary" data-semantic-role="body">기관의 처리 범위는 배정 기업으로 한정하고, 관리자의 배정과 상태변경은 권한에 따라 일괄 수행합니다.</div>
+      <div class="split-area" data-qid="q-div-70ea562d0d16">
+        <div class="mini-lane" data-qid="s5-agency-lane">
+          <div class="mini-head" data-qid="s5-agency-head" data-semantic-role="supporting">
+            수행·검증기관
+            <span class="mini-scope" data-qid="s5-agency-scope" data-semantic-role="supporting">배정 기업 한정</span>
+          </div>
+          <div class="mini-flow" data-qid="q-div-eceaeb4bd8ea">
+            <div class="mini-node" data-qid="s5-agency-node1" data-semantic-role="body">보고서</div>
+            <div class="mini-arrow" data-qid="s5-agency-arrow" data-semantic-role="decoration">→</div>
+            <div class="mini-node" data-qid="s5-agency-node2" data-semantic-role="body">진행상태 처리</div>
+          </div>
+        </div>
+        <div class="mini-lane" data-qid="s5-manager-lane">
+          <div class="mini-head" data-qid="s5-manager-head" data-semantic-role="supporting">
+            관리자
+            <span class="mini-scope" data-qid="s5-manager-scope" data-semantic-role="supporting">권한 기반</span>
+          </div>
+          <div class="mini-flow" data-qid="q-div-906278028635">
+            <div class="mini-node" data-qid="s5-manager-node1" data-semantic-role="body">기업·평가자·기관 배정</div>
+            <div class="mini-arrow" data-qid="s5-manager-arrow" data-semantic-role="decoration">→</div>
+            <div class="mini-node" data-qid="s5-manager-node2" data-semantic-role="body">복수 건 상태변경</div>
+          </div>
+        </div>
+      </div>
+      <div class="card-accent" data-qid="q-div-6f458358abab"></div>
+    </div>
+
+    <div class="role-card" data-qid="s5-card-owner">
+      <div class="card-top" data-qid="q-div-e5013d681611">
+        <div class="role-title" data-qid="s5-owner-title" data-semantic-role="supporting">업무담당자</div>
+        <div class="role-index" data-qid="s5-owner-index" data-semantic-role="supporting">04 · 통합 관제</div>
+      </div>
+      <div class="summary" data-qid="s5-owner-summary" data-semantic-role="body">전 업무정보를 한곳에서 조회하고 미처리 업무와 기한을 대시보드로 확인합니다.</div>
+      <div class="hub-area" data-qid="q-div-d9562d602935">
+        <div class="source-grid" data-qid="s5-owner-source-grid">
+          <div class="source-item" data-qid="s5-owner-source1" data-semantic-role="body">접수</div>
+          <div class="source-item" data-qid="s5-owner-source2" data-semantic-role="body">서류</div>
+          <div class="source-item" data-qid="s5-owner-source3" data-semantic-role="body">평가</div>
+          <div class="source-item" data-qid="s5-owner-source4" data-semantic-role="body">알림</div>
+          <div class="source-item" data-qid="s5-owner-source5" data-semantic-role="body">정산</div>
+          <div class="source-item" data-qid="s5-owner-source6" data-semantic-role="body">성과정보</div>
+        </div>
+        <div class="result-stack" data-qid="s5-owner-results">
+          <div class="result-box" data-qid="s5-owner-result1" data-semantic-role="body">통합 조회</div>
+          <div class="result-box" data-qid="s5-owner-result2" data-semantic-role="body">미처리 업무·기한<br>대시보드 확인</div>
+        </div>
+      </div>
+      <div class="constraint" data-qid="s5-owner-note" data-semantic-role="body">
+        <span class="constraint-bar" data-qid="q-span-f5128010e440"></span>
+        수작업 대사와 처리 누락을 줄이는 운영 기반 확보
+      </div>
+      <div class="card-accent" data-qid="q-div-a66a48f17ba3"></div>
+    </div>
+  </div>
+</div>
+
+</body></html>

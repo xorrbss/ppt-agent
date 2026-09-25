@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:146px;background:#08916E}
+.header-left{position:absolute;left:64px;top:24px;width:760px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#E0F3FF}
+.title{margin-top:8px;font-size:32px;line-height:38px;font-weight:700;color:#FFFFFF}
+.header-right{position:absolute;left:916px;top:24px;width:300px;height:98px;padding:20px 24px;background:#00140E;color:#FFFFFF;text-align:right;font-size:15px;line-height:20px;font-weight:600;border-radius:12px 0 0 12px}
+.body-wrap{position:absolute;left:0;right:0;top:170px;width:1152px;margin-left:64px}
+.claim-row{height:62px;display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.claim{font-size:26px;line-height:38px;font-weight:700;letter-spacing:-.02em}
+.claim strong{color:#08916E}
+.claim-mark{height:34px;padding:5px 14px;border-radius:12px;background:#E0F3FF;color:#002060;font-size:17px;line-height:24px;font-weight:700}
+.pillars{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px 24px;height:250px}
+.card{position:relative;height:117px;padding:28px 22px 18px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card:nth-child(4){grid-column:1 / 2}
+.card:nth-child(5){grid-column:2 / 3}
+.card-tab{position:absolute;left:22px;top:-14px;min-width:42px;height:28px;padding:3px 10px;border-radius:12px;background:#002060;color:#FFFFFF;font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:22px;font-weight:700;text-align:center}
+.card-text{font-size:18px;line-height:28px;font-weight:600;color:#1D1D1B}
+.bottom-panel{margin-top:24px;height:100px;display:grid;grid-template-columns:176px 1fr;align-items:center;border-radius:12px;background:#00140E}
+.bottom-label{height:100%;display:flex;align-items:center;padding-left:24px;background:#219F88;color:#FFFFFF;border-radius:12px 0 0 12px;font-size:21px;line-height:30px;font-weight:700}
+.bottom-copy{padding:0 30px;color:#FFFFFF}
+.bottom-main{font-size:22px;line-height:32px;font-weight:700}
+.bottom-sub{margin-top:5px;font-size:17px;line-height:27px;color:#CCECFF}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="146" class="header-band" style="height: 146px; background-color: rgb(0, 120, 90)" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-69c01e277b9ea86d" data-source-block-id="source-slide:29:text:9" style="line-height: 22px; padding-top: 2px">원칙</div>
+  <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-679f559813b2b8f3" data-source-block-id="source-slide:29:text:3">4주차 PART 5 | 수정 지옥을 피하는 법</div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-29b191e8a9767bfb" data-source-block-id="source-slide:29:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:170px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim-row" data-qid="q-div-75b3498fbbe1" data-semantic-role="decoration">
+    <div class="claim" data-semantic-role="body" data-qid="source-block-150e3d875b2eac47" data-source-block-id="source-slide:29:text:10:run:0">친절함과 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">무제한 노동</strong>은 다릅니다.</div>
+    <div class="claim-mark" data-semantic-role="supporting" data-qid="q-mark-28">수정 기준 5가지</div>
+  </div>
+
+  <div class="pillars" data-qid="q-div-31ba150fc76b" data-semantic-role="decoration">
+    <div class="card" data-qid="q-card-28-1" data-semantic-role="decoration">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-28-1">01</div>
+      <div class="card-text" data-semantic-role="body" data-qid="source-block-1952fab2b6e73b04" data-source-block-id="source-slide:29:text:6:run:0">처음부터 작업 범위를 문서화</div>
+    </div>
+    <div class="card" data-qid="q-card-28-2" data-semantic-role="decoration">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-28-2">02</div>
+      <div class="card-text" data-semantic-role="body" data-qid="source-block-c75c0c31ccd0c9d8" data-source-block-id="source-slide:29:text:6:run:1">수정 횟수 기준 설정</div>
+    </div>
+    <div class="card" data-qid="q-card-28-3" data-semantic-role="decoration">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-28-3">03</div>
+      <div class="card-text" data-semantic-role="body" data-qid="source-block-4a7285db8e3a5029" data-source-block-id="source-slide:29:text:6:run:2">촬영 전 레퍼런스와 가이드 공유</div>
+    </div>
+    <div class="card" data-qid="q-card-28-4" data-semantic-role="decoration">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-28-4">04</div>
+      <div class="card-text" data-semantic-role="body" data-qid="source-block-c33222a3908c3432" data-source-block-id="source-slide:29:text:6:run:3">수정 요청을 한 번에 모아서 받기</div>
+    </div>
+    <div class="card" data-qid="q-card-28-5" data-semantic-role="decoration">
+      <div class="card-tab" data-semantic-role="supporting" data-qid="q-tab-28-5">05</div>
+      <div class="card-text" data-semantic-role="body" data-qid="source-block-bd9540bd8955097b" data-source-block-id="source-slide:29:text:6:run:4">‘무제한 수정’은 피하기</div>
+    </div>
+  </div>
+
+  <div class="bottom-panel" data-qid="q-div-37a40236c089" data-semantic-role="decoration">
+    <div class="bottom-label" data-semantic-role="supporting" data-qid="q-bottom-label-28" style="background-color: rgb(0, 120, 90)">원칙</div>
+    <div class="bottom-copy" data-qid="q-div-8ce7fde30e1b" data-semantic-role="decoration">
+      <div class="bottom-main" data-semantic-role="body" data-qid="source-block-830f050baacf0f86" data-source-block-id="source-slide:29:text:10:run:1">기준을 정해두는 것이 오히려 장기 고객을 만드는 방법.</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-12a28da466c08064" data-source-block-id="source-slide:29:text:4" style="color: rgb(70, 80, 90); top: 672px">29</div>
+</body>
+</html>

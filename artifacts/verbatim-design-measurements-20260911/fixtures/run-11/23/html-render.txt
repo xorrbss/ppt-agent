@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;height:104px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:28px;width:980px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:6px;font-size:28px;line-height:35px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:3px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:126px;height:522px}
+.body-inner{width:1152px;margin-left:64px}
+.topline{display:flex;align-items:flex-start;justify-content:space-between;height:59px}
+.project{font-size:18px;line-height:28px;font-weight:700;color:#002060}
+.goal{font-size:22px;line-height:32px;font-weight:700;color:#1D1D1B;text-align:right}
+.goal-key{color:#08916E}
+.architecture-panel{height:174px;padding:22px 28px 20px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.panel-heading{font-size:15px;line-height:22px;font-weight:700;color:#08916E;letter-spacing:.02em}
+.flow-row{display:flex;align-items:center;margin-top:19px;width:100%}
+.flow-node{height:58px;display:flex;align-items:center;justify-content:center;padding:0 15px;background:#E0F3FF;border:1px solid #1B469C;border-radius:12px;color:#002060;font-size:18px;line-height:26px;font-weight:700;white-space:nowrap}
+.flow-node.primary{background:#002060;color:#FFFFFF}
+.flow-arrow{width:24px;height:2px;margin:0 5px;background:#00828E;position:relative;flex:none}
+.flow-arrow span{position:absolute;right:-1px;top:-5px;width:10px;height:10px;border-top:2px solid #00828E;border-right:2px solid #00828E;transform:rotate(45deg)}
+.lower-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:24px}
+.module-card{height:188px;padding:0 24px 22px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.module-tab{height:42px;margin:0 -24px 20px;padding:9px 24px;background:#002060;color:#FFFFFF;border-radius:12px 12px 0 0;font-size:18px;line-height:24px;font-weight:700}
+.module-copy{font-size:20px;line-height:32px;font-weight:700;color:#1D1D1B}
+.module-rule{width:46px;height:4px;margin-top:19px;background:#08916E;border-radius:12px}
+.module-card.operation .module-rule{background:#219F88}
+.module-card.renewal .module-rule{background:#E5A93D}
+.takeaway{height:50px;margin-top:18px;padding:12px 18px;background:#EAEDF2;border-radius:12px;color:#002060;font-size:18px;line-height:26px;font-weight:700}
+.takeaway-mark{display:inline-block;width:7px;height:24px;margin-right:10px;vertical-align:-6px;background:#08916E;border-radius:12px}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" class="header-band" style="height:104px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-23">고객 전환 구조</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-70aacf52342bc3b7" data-source-block-id="source-slide:24:text:3">4주차 | 계약하고 장기고객 만들기</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:126px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="body-inner" data-qid="q-div-b79d9d1fba65" data-semantic-role="decoration">
+    <div class="topline" data-qid="q-div-ae5367147281" data-semantic-role="decoration">
+      <div class="project" data-semantic-role="supporting" data-qid="source-block-a202e9b93653f89a" data-source-block-id="source-slide:24:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      <div class="goal" data-semantic-role="body" data-qid="source-block-3be1401d7ba1344b" data-source-block-id="source-slide:24:text:4">목표: 상담 → 계약 → 납품 → <span class="goal-key" data-qid="source-block-2e719209a97a37a6" data-semantic-role="body" data-source-block-id="source-slide:24:text:19">재계약</span> 구조 완성</div>
+    </div>
+
+    <div class="architecture-panel" data-qid="q-flow-card-23" data-semantic-role="decoration">
+      <div class="panel-heading" data-semantic-role="supporting" data-qid="source-block-8abfab6af5120722" data-source-block-id="source-slide:24:text:7">고객 흐름</div>
+      <div class="flow-row" data-qid="q-div-7700ecb2253c" data-semantic-role="decoration">
+        <div class="flow-node" data-semantic-role="body" data-qid="source-block-2aba65b5a1f01749" data-source-block-id="source-slide:24:text:8:run:0">영업</div>
+        <div class="flow-arrow" data-qid="q-div-502df5a3ff33" data-semantic-role="decoration"><span data-qid="q-span-f32986c526a1" data-semantic-role="decoration"></span></div>
+        <div class="flow-node" data-semantic-role="body" data-qid="source-block-b08236b1005bc22a" data-source-block-id="source-slide:24:text:8:run:1">상담</div>
+        <div class="flow-arrow" data-qid="q-div-17a2a1bad702" data-semantic-role="decoration"><span data-qid="q-span-c83eac29f2ad" data-semantic-role="decoration"></span></div>
+        <div class="flow-node" data-semantic-role="body" data-qid="source-block-b108ffb972382bc5" data-source-block-id="source-slide:24:text:8:run:2">제안</div>
+        <div class="flow-arrow" data-qid="q-div-75a8fef0eb0c" data-semantic-role="decoration"><span data-qid="q-span-eedec0ea8962" data-semantic-role="decoration"></span></div>
+        <div class="flow-node primary" data-semantic-role="body" data-qid="source-block-70d4e83686a41e80" data-source-block-id="source-slide:24:text:8:run:3">계약</div>
+        <div class="flow-arrow" data-qid="q-div-6b39c6998e88" data-semantic-role="decoration"><span data-qid="q-span-2af01d53a93e" data-semantic-role="decoration"></span></div>
+        <div class="flow-node" data-semantic-role="body" data-qid="source-block-14c3b1ff2efd79bb" data-source-block-id="source-slide:24:text:8:run:4">제작</div>
+        <div class="flow-arrow" data-qid="q-div-4e4f49b3ff3a" data-semantic-role="decoration"><span data-qid="q-span-0856754b8eb9" data-semantic-role="decoration"></span></div>
+        <div class="flow-node" data-semantic-role="body" data-qid="source-block-e7155f80fb00fc55" data-source-block-id="source-slide:24:text:8:run:5">납품</div>
+        <div class="flow-arrow" data-qid="q-div-aef2463a03de" data-semantic-role="decoration"><span data-qid="q-span-ff27a5abbc91" data-semantic-role="decoration"></span></div>
+        <div class="flow-node primary" data-semantic-role="body" data-qid="source-block-66fdad6f6ab4216e" data-source-block-id="source-slide:24:text:8:run:6">재계약</div>
+      </div>
+    </div>
+
+    <div class="lower-grid" data-qid="q-div-91292a76f13a" data-semantic-role="decoration">
+      <div class="module-card" data-qid="q-proposal-card-23" data-semantic-role="decoration">
+        <div class="module-tab" data-semantic-role="supporting" data-qid="source-block-45eddfdd1d562dc5" data-source-block-id="source-slide:24:text:11">제안</div>
+        <div class="module-copy" data-semantic-role="body" data-qid="source-block-99450260569beed3" data-source-block-id="source-slide:24:text:12">고객 문제에 맞춘다</div>
+        <div class="module-rule" data-qid="q-div-efb1bba70276" data-semantic-role="decoration"></div>
+      </div>
+      <div class="module-card operation" data-qid="q-operation-card-23" data-semantic-role="decoration">
+        <div class="module-tab" data-semantic-role="supporting" data-qid="source-block-f31c040e8451c814" data-source-block-id="source-slide:24:text:15">운영</div>
+        <div class="module-copy" data-semantic-role="body" data-qid="source-block-498c78cc6017801c" data-source-block-id="source-slide:24:text:16">범위와 수정 기준을 정한다</div>
+        <div class="module-rule" data-qid="q-div-25807e726b60" data-semantic-role="decoration"></div>
+      </div>
+      <div class="module-card renewal" data-qid="q-renewal-card-23" data-semantic-role="decoration">
+        <div class="module-tab" data-semantic-role="supporting" data-qid="q-renewal-label-23">재계약</div>
+        <div class="module-copy" data-semantic-role="body" data-qid="source-block-93753a78a03f0463" data-source-block-id="source-slide:24:text:20">다음 콘텐츠를 먼저 제안</div>
+        <div class="module-rule" data-qid="q-div-1ff5718b181d" data-semantic-role="decoration"></div>
+      </div>
+    </div>
+
+    <div class="takeaway" data-semantic-role="body" data-qid="q-takeaway-23"><span class="takeaway-mark" data-qid="q-span-44a446e52719" data-semantic-role="decoration"></span>상담부터 재계약까지 고객 흐름을 하나의 운영 구조로 완성</div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-f8a10a06259be68e" data-source-block-id="source-slide:24:text:5">24</div>
+</body>
+</html>

@@ -40,7 +40,7 @@ LOGGER = logging.getLogger(__name__)
 #: Bumped when the instructions change meaning, not merely wording. v3 stopped
 #: asking for an absolute band height and asks for the rhythm around a derived
 #: one, so a v2 answer is not a v3 answer.
-HEADER_CONTRACT_PROMPT_VERSION = "authored-header-contract-v3"
+HEADER_CONTRACT_PROMPT_VERSION = "authored-header-contract-v4"
 
 #: Per-slide excerpt budget for the material the contract call reads.
 _MAX_SAMPLE_CHARS = 700
@@ -56,6 +56,10 @@ _SYSTEM = (
 
 _GUIDANCE = """\
 Design rules for this contract:
+- Explicit user design instructions take precedence over the defaults below.
+  Honor requested typography, compact headers, spacing and colors within the
+  schema and runtime canvas. Use defaults only for unspecified properties;
+  a request for compact proposal content is a reason to reduce header gaps.
 - The canvas is exactly 1280x720px. You are NOT choosing a band height: each
   slide derives its own from what it rendered, as
   header_top_px + max(left column, right column) + title_gap_px, and starts its

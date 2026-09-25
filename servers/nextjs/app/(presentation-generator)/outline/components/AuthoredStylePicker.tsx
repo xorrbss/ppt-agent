@@ -7,6 +7,7 @@ import { useDispatch, useSelector } from "react-redux";
 import AuthoredStylesApi, {
   AUTHORED_STYLE_CATEGORIES,
   DEFAULT_AUTHORED_STYLE,
+  canonicalAuthoredStyleId,
 } from "@/app/(presentation-generator)/services/api/authored";
 import type {
   AuthoredStyleCategory,
@@ -63,6 +64,11 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
   const authoredStyle = useSelector(
     (state: RootState) => state.pptGenUpload.authoredStyle
   );
+  const preserveSourceTemplateSelection = useSelector(
+    (state: RootState) =>
+      state.pptGenUpload.sourceContentMode &&
+      state.pptGenUpload.generationStrategy === "svg",
+  );
   const [styles, setStyles] = useState<AuthoredStyleSummary[]>([
     DEFAULT_AUTHORED_STYLE,
   ]);
@@ -81,9 +87,11 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
       })
       .catch(() => {
         if (cancelled) return;
-        dispatch(
-          setPptGenUploadState({ authoredStyle: DEFAULT_AUTHORED_STYLE.id })
-        );
+        if (!preserveSourceTemplateSelection) {
+          dispatch(
+            setPptGenUploadState({ authoredStyle: DEFAULT_AUTHORED_STYLE.id })
+          );
+        }
         setStyles([DEFAULT_AUTHORED_STYLE]);
         setLoadStatus("fallback");
       });
@@ -91,18 +99,19 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
     return () => {
       cancelled = true;
     };
-  }, [dispatch]);
+  }, [dispatch, preserveSourceTemplateSelection]);
 
   useEffect(() => {
-    if (
-      loadStatus !== "loading" &&
-      !styles.some((style) => style.id === authoredStyle)
-    ) {
-      dispatch(
-        setPptGenUploadState({ authoredStyle: DEFAULT_AUTHORED_STYLE.id })
-      );
+    if (loadStatus === "loading") return;
+    if (loadStatus === "fallback" && preserveSourceTemplateSelection) return;
+    const canonicalId = canonicalAuthoredStyleId(styles, authoredStyle);
+    const nextId = styles.some((style) => style.id === canonicalId)
+      ? canonicalId
+      : DEFAULT_AUTHORED_STYLE.id;
+    if (nextId !== authoredStyle) {
+      dispatch(setPptGenUploadState({ authoredStyle: nextId }));
     }
-  }, [authoredStyle, dispatch, loadStatus, styles]);
+  }, [authoredStyle, dispatch, loadStatus, preserveSourceTemplateSelection, styles]);
 
   const categoryCounts = useMemo(() => {
     const counts = Object.fromEntries(
@@ -322,8 +331,15 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
                     ? "불러오는 중"
                     : DEFAULT_AUTHORED_STYLE.name)}
               </p>
+              {/* The toggle decides more than generation time: the export
+                  gate refuses editable Hybrid PPTX for a deck that carries no
+                  visual-review evidence, and almost every real deck needs it
+                  (a cover or closing slide alone raises the deck to tier T1).
+                  Fidelity PPTX and PDF still export without it. */}
               <p className="mt-0.5 text-xs leading-5 text-[#666078]">
-                생성 전 시각 검수를 추가하면 시간이 더 걸릴 수 있습니다.
+                편집 가능한 PPTX(Hybrid)로 내보내려면 시각 검수가 필요합니다. 켜면 생성
+                시간이 약 두 배가 되고, 끄면 화면을 그대로 담는 Fidelity PPTX와 PDF만
+                내보낼 수 있습니다.
               </p>
             </div>
           </div>

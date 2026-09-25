@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "generation.svg-mode-shared-authored-styles",
+  "revision": 2,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Authored 기본을 유지하며 전체 문서용 SVG 생성 모드를 추가한다. 기존 Authored 스타일을 공유하고 SVG 작성 어댑터와 필요한 스타일별 보완 규칙을 적용한다.",
+  "scope": [
+    "generation",
+    "svg",
+    "authored-styles"
+  ],
+  "invariants": [
+    "SVG 모드는 3페이지 샘플 기능이 아니라 전체 문서 생성·저장·수정·내보내기 기능이다.",
+    "기존 Authored 템플릿 카탈로그를 공유하며 SVG용 전체 템플릿 복제본을 만들지 않는다.",
+    "기존 Authored 기본 동작과 Composer를 보존한다.",
+    "설계 개선안을 기준으로 SVG 모드를 구현한다. 병렬 개발 모델은 작업 난이도에 맞추되 최대 astra-medium으로 제한한다."
+  ],
+  "forbidden": [
+    "샘플 제작 성공을 SVG 제품 모드 구현 완료로 보고"
+  ],
+  "evidence": [
+    "docs/svg-generation-mode-design-20260916.md"
+  ],
+  "supersedes": "generation.svg-mode-shared-authored-styles@1",
+  "recordedAt": "2026-09-16T12:30:59.8653797+00:00"
+}

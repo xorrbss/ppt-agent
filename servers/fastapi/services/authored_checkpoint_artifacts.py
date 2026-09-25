@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import hashlib
+import io
 import json
 import logging
 import os
@@ -16,9 +17,12 @@ from sqlalchemy import and_, case, func, or_, select, update
 
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.public_artifact import ArtifactRef
+from models.sql.public_admission import PublicOperationAdmission
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.workspace import WorkspaceActionReceipt, WorkspaceOperation
 from services.database import async_session_maker
 from services.artifact_store import configured_public_artifact_service
+from services.workspace_service import canonical_payload_hash
 from utils.datetime_utils import get_current_utc_datetime
 from utils.get_env import get_app_data_directory_env
 from services.authored_checkpoint_html import checkpoint_stage_html
@@ -513,32 +517,311 @@ def _checkpoint_artifact_ref(
     name: str,
 ) -> ArtifactRef | None:
     refs = checkpoint.artifact_refs
+    if refs is None:
+        return None
     if not isinstance(refs, dict):
+        raise SlideCheckpointCorrupt("checkpoint_artifact_ref_invalid")
+    if name not in refs:
         return None
     value = refs.get(name)
     if not isinstance(value, dict):
-        return None
+        raise SlideCheckpointCorrupt("checkpoint_artifact_ref_invalid")
     try:
         return ArtifactRef.model_validate(value)
     except Exception as exc:
         raise SlideCheckpointCorrupt("checkpoint_artifact_ref_invalid") from exc
 
 
+_MAX_RETRY_ANCESTRY_DEPTH = 32
+_JOB_ID_PAYLOAD_KEYS = frozenset(
+    {"jobId", "job_id", "generationJobId", "generation_job_id"}
+)
+
+
+def _declared_job_ids(value: object, *, depth: int = 0) -> set[str]:
+    if depth > 4:
+        return set()
+    if isinstance(value, Mapping):
+        declared = {
+            str(item)
+            for key, item in value.items()
+            if key in _JOB_ID_PAYLOAD_KEYS and item is not None
+        }
+        for item in value.values():
+            declared.update(_declared_job_ids(item, depth=depth + 1))
+        return declared
+    if isinstance(value, (list, tuple)):
+        declared: set[str] = set()
+        for item in value:
+            declared.update(_declared_job_ids(item, depth=depth + 1))
+        return declared
+    return set()
+
+
+async def _verified_retry_artifact_origin(
+    session,
+    *,
+    current_operation_id: uuid.UUID,
+    artifact_operation_id: uuid.UUID,
+    presentation_id: uuid.UUID,
+    job_id: uuid.UUID,
+    task_id: str,
+    job_request_sha256: str,
+    job_request_payload: Mapping[str, object],
+) -> tuple[uuid.UUID, str] | None:
+    """Resolve authority through applied workspace retries to the admitted root."""
+
+    current = await session.get(WorkspaceOperation, current_operation_id)
+    if current is None:
+        return None
+    authority = (
+        current.owner_id,
+        current.owner_scope,
+        current.conversation_id,
+        current.presentation_id,
+        current.kind,
+    )
+    immutable_payload = {
+        key: value
+        for key, value in current.request_payload.items()
+        if key not in {
+            "retry_of_operation_id",
+            "account_deletion_generation",
+            "recovery_revision",
+        }
+    }
+    seen: set[uuid.UUID] = set()
+    artifact_origin_seen = False
+    cursor = current
+    for _depth in range(_MAX_RETRY_ANCESTRY_DEPTH):
+        if cursor.id in seen:
+            return None
+        seen.add(cursor.id)
+        if (
+            cursor.owner_id,
+            cursor.owner_scope,
+            cursor.conversation_id,
+            cursor.presentation_id,
+            cursor.kind,
+        ) != authority:
+            return None
+        if cursor.owner_id is None or cursor.presentation_id != presentation_id:
+            return None
+        declared_job_ids = set()
+        for payload in (cursor.request_payload, cursor.progress, cursor.result):
+            declared_job_ids.update(_declared_job_ids(payload))
+        if declared_job_ids != {str(job_id)}:
+            return None
+        if (
+            cursor.request_payload.get("generation_request") != job_request_payload
+            or cursor.request_payload.get("task_id") != task_id
+            or str(cursor.request_payload.get("job_id")) != str(job_id)
+            or str(cursor.request_payload.get("presentation_id")) != str(presentation_id)
+        ):
+            return None
+        cursor_immutable_payload = {
+            key: value
+            for key, value in cursor.request_payload.items()
+            if key not in {
+                "retry_of_operation_id",
+                "account_deletion_generation",
+                "recovery_revision",
+            }
+        }
+        if cursor_immutable_payload != immutable_payload:
+            return None
+        if cursor.id == artifact_operation_id:
+            artifact_origin_seen = True
+        parent_id = cursor.retry_of_operation_id
+        if parent_id is None:
+            if (
+                not artifact_origin_seen
+                or cursor.request_payload.get("retry_of_operation_id") is not None
+                or cursor.request_hash != job_request_sha256
+            ):
+                return None
+            admission = (await session.execute(
+                select(PublicOperationAdmission).where(
+                    PublicOperationAdmission.operation_id == cursor.id,
+                    PublicOperationAdmission.operation_kind == "generation",
+                )
+            )).scalar_one_or_none()
+            if admission is None or admission.owner_id != cursor.owner_id:
+                return None
+            return admission.owner_id, admission.tenant_id
+        if cursor.request_payload.get("retry_of_operation_id") != str(parent_id):
+            return None
+        expected_retry_hash = canonical_payload_hash({
+            "retry_of_operation_id": str(parent_id),
+            "presentation_revision": cursor.expected_revision,
+            "request_payload": cursor.request_payload,
+        })
+        if cursor.request_hash != expected_retry_hash:
+            return None
+        receipt = (await session.execute(
+            select(WorkspaceActionReceipt).where(
+                WorkspaceActionReceipt.operation_id == parent_id,
+                WorkspaceActionReceipt.result_operation_id == cursor.id,
+                WorkspaceActionReceipt.action_type == "retry",
+                WorkspaceActionReceipt.status == "applied",
+                WorkspaceActionReceipt.owner_scope == cursor.owner_scope,
+            )
+        )).scalar_one_or_none()
+        if receipt is None or receipt.owner_id != cursor.owner_id:
+            return None
+        cursor = await session.get(WorkspaceOperation, parent_id)
+        if cursor is None:
+            return None
+    return None
+
+
+async def _read_bound_checkpoint_artifact(
+    checkpoint: AuthoredSlideCheckpoint, reference: ArtifactRef,
+) -> bytes:
+    """Resolve checkpoint bytes against durable admission and committed metadata."""
+
+    service = configured_public_artifact_service()
+    async with async_session_maker() as session:
+        binding = (await session.execute(
+            select(
+                PublicOperationAdmission.owner_id,
+                PublicOperationAdmission.tenant_id,
+                PublicOperationAdmission.operation_id,
+                PresentationGenerationJob.presentation_id,
+            ).join(
+                PresentationGenerationJob,
+                PresentationGenerationJob.workspace_operation_id
+                == PublicOperationAdmission.operation_id,
+            ).where(
+                PresentationGenerationJob.id == checkpoint.job_id,
+                PublicOperationAdmission.operation_kind == "generation",
+            )
+        )).one_or_none()
+        owner_id = binding.owner_id if binding is not None else None
+        tenant_id = binding.tenant_id if binding is not None else None
+        current_operation_id = binding.operation_id if binding is not None else None
+        presentation_id = binding.presentation_id if binding is not None else None
+        origin_allowed = (
+            binding is not None
+            and reference.created_by_operation_id == binding.operation_id
+        )
+        if binding is None or reference.created_by_operation_id != binding.operation_id:
+            job = await session.get(PresentationGenerationJob, checkpoint.job_id)
+            retry_authority = (
+                await _verified_retry_artifact_origin(
+                    session,
+                    current_operation_id=job.workspace_operation_id,
+                    artifact_operation_id=reference.created_by_operation_id,
+                    presentation_id=job.presentation_id,
+                    job_id=checkpoint.job_id,
+                    task_id=job.task_id,
+                    job_request_sha256=job.request_sha256,
+                    job_request_payload=job.request_payload,
+                )
+                if job is not None and job.workspace_operation_id is not None
+                else None
+            )
+            if retry_authority is not None:
+                owner_id, tenant_id = retry_authority
+                current_operation_id = job.workspace_operation_id
+                presentation_id = job.presentation_id
+                origin_allowed = True
+        if (
+            owner_id is None
+            or tenant_id is None
+            or current_operation_id is None
+            or presentation_id is None
+            or not origin_allowed
+            or reference.owner_id != owner_id
+            or reference.tenant_id != tenant_id
+            or reference.retention_class != "checkpoint"
+        ):
+            raise SlideCheckpointCorrupt("checkpoint_artifact_owner_binding_invalid")
+        resolved = await service.resolve_ref(
+            session,
+            artifact_id=reference.artifact_id,
+            owner_id=owner_id,
+            tenant_id=tenant_id,
+            expected_digest=reference.sha256,
+        )
+        if resolved != reference:
+            raise SlideCheckpointCorrupt("checkpoint_artifact_ref_binding_invalid")
+        return await service.read_ref_bytes(resolved)
+
+
+def _require_checkpoint_canvas(
+    png: bytes,
+    *,
+    expected_width_px: int | None,
+    expected_height_px: int | None,
+) -> None:
+    if expected_width_px is None and expected_height_px is None:
+        return
+    if expected_width_px is None or expected_height_px is None:
+        raise SlideCheckpointCorrupt("checkpoint_canvas_contract_incomplete")
+    try:
+        from PIL import Image
+
+        with Image.open(io.BytesIO(png)) as image:
+            actual = image.size
+    except Exception as exc:
+        raise SlideCheckpointCorrupt("checkpoint_render_image_invalid") from exc
+    if actual != (int(expected_width_px), int(expected_height_px)):
+        raise SlideCheckpointCorrupt("checkpoint_render_canvas_mismatch")
+
+
+def _require_evidence_canvas(
+    bundle: SlideCheckpointBundle,
+    *,
+    expected_width_px: int | None,
+    expected_height_px: int | None,
+) -> None:
+    _require_checkpoint_canvas(
+        bundle.png,
+        expected_width_px=expected_width_px,
+        expected_height_px=expected_height_px,
+    )
+    if expected_width_px is None and expected_height_px is None:
+        return
+    if (
+        bundle.metrics.get("width"), bundle.metrics.get("height")
+    ) != (int(expected_width_px), int(expected_height_px)):
+        raise SlideCheckpointCorrupt("checkpoint_evidence_canvas_mismatch")
+
+
 async def read_valid_render_artifact(
     checkpoint: AuthoredSlideCheckpoint,
+    *,
+    expected_width_px: int | None = None,
+    expected_height_px: int | None = None,
 ) -> bytes | None:
     """Read the authoritative PNG ArtifactRef, with legacy cache fallback."""
 
     reference = _checkpoint_artifact_ref(checkpoint, "render")
     if reference is None:
-        return read_valid_render(checkpoint)
+        if checkpoint.artifact_refs is not None:
+            raise SlideCheckpointCorrupt("checkpoint_render_artifact_missing")
+        render = read_valid_render(checkpoint)
+        if render is not None:
+            _require_checkpoint_canvas(
+                render,
+                expected_width_px=expected_width_px,
+                expected_height_px=expected_height_px,
+            )
+        return render
     if (
         reference.kind != "slide-png"
         or reference.media_type != "image/png"
         or checkpoint.render_sha256 != reference.sha256
     ):
         raise SlideCheckpointCorrupt("checkpoint_render_artifact_binding_invalid")
-    return await configured_public_artifact_service().read_ref_bytes(reference)
+    render = await _read_bound_checkpoint_artifact(checkpoint, reference)
+    _require_checkpoint_canvas(
+        render,
+        expected_width_px=expected_width_px,
+        expected_height_px=expected_height_px,
+    )
+    return render
 
 
 def _evidence_sidecar_path(render_path: Path) -> Path:
@@ -592,6 +875,8 @@ def write_valid_evidence(
 
 def read_valid_evidence(
     checkpoint: AuthoredSlideCheckpoint,
+    *,
+    require_current_html_match: bool = True,
 ) -> SlideCheckpointBundle | None:
     """Recover browser evidence using the checkpoint's render pointer.
 
@@ -656,6 +941,8 @@ def read_valid_evidence(
             and hashlib.sha256(render_bytes).hexdigest() != checkpoint.render_sha256
         )
         or (
+            require_current_html_match
+            and
             checkpoint_stage_html(checkpoint) is not None
             and checkpoint_stage_html(checkpoint) != bundle.html
         )
@@ -666,12 +953,28 @@ def read_valid_evidence(
 
 async def read_valid_evidence_artifact(
     checkpoint: AuthoredSlideCheckpoint,
+    *,
+    require_current_html_match: bool = True,
+    expected_width_px: int | None = None,
+    expected_height_px: int | None = None,
 ) -> SlideCheckpointBundle | None:
     """Read an immutable checkpoint bundle from object storage when present."""
 
     reference = _checkpoint_artifact_ref(checkpoint, "evidence")
     if reference is None:
-        return read_valid_evidence(checkpoint)
+        if checkpoint.artifact_refs is not None:
+            return None
+        bundle = read_valid_evidence(
+            checkpoint,
+            require_current_html_match=require_current_html_match,
+        )
+        if bundle is not None:
+            _require_evidence_canvas(
+                bundle,
+                expected_width_px=expected_width_px,
+                expected_height_px=expected_height_px,
+            )
+        return bundle
     if (
         reference.kind != "checkpoint"
         or reference.media_type != "application/json"
@@ -679,7 +982,7 @@ async def read_valid_evidence_artifact(
         raise SlideCheckpointCorrupt("checkpoint_evidence_artifact_binding_invalid")
     try:
         payload = json.loads(
-            (await configured_public_artifact_service().read_ref_bytes(reference)).decode(
+            (await _read_bound_checkpoint_artifact(checkpoint, reference)).decode(
                 "utf-8"
             )
         )
@@ -688,17 +991,28 @@ async def read_valid_evidence_artifact(
         raise
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise SlideCheckpointCorrupt("checkpoint_evidence_unreadable") from exc
-    render = await read_valid_render_artifact(checkpoint)
+    render = await read_valid_render_artifact(
+        checkpoint,
+        expected_width_px=expected_width_px,
+        expected_height_px=expected_height_px,
+    )
     if (
         render is None
         or bundle.slide_index != checkpoint.slide_index
         or bundle.png != render
         or (
+            require_current_html_match
+            and
             checkpoint_stage_html(checkpoint) is not None
             and checkpoint_stage_html(checkpoint) != bundle.html
         )
     ):
         raise SlideCheckpointCorrupt("checkpoint_evidence_pointer_mismatch")
+    _require_evidence_canvas(
+        bundle,
+        expected_width_px=expected_width_px,
+        expected_height_px=expected_height_px,
+    )
     return bundle
 
 

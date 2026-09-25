@@ -1,0 +1,54 @@
+{
+  "id": "infrastructure-09-warehouse",
+  "category": "infrastructure",
+  "tags": {
+    "ko": [
+      "인프라",
+      "창고"
+    ],
+    "en": [
+      "infrastructure",
+      "warehouse"
+    ]
+  },
+  "alt": {
+    "ko": "창고 단색 벡터 인포그래픽",
+    "en": "warehouse monochrome vector infographic"
+  },
+  "path": "originals/infrastructure-09-warehouse.svg",
+  "thumbnail": "thumbnails/infrastructure-09-warehouse.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 473,
+  "sha256": "28cc3171d7126ca4f7ebe09b582f8f3705f08458e441ce85786d115ddfd68e35",
+  "geometry_sha256": "e23e1f4f4c6a6c372ec8f8c52d6e66e8e9696485ecf9660bace9da9b0c464dbc",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 48336,
+    "preview_opaque_pixels": 15054,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Warehouse"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

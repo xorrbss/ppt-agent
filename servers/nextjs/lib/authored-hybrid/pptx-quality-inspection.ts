@@ -1,3 +1,4 @@
+import { canvasEmuPerUnit, LEGACY_AUTHORED_CANVAS, type AuthoredCanvasContract } from "../authored-canvas.ts";
 import { createHash } from "node:crypto";
 
 import {
@@ -273,12 +274,12 @@ function xmlOpeningAttribute(xml: string, attribute: string): string | null {
   return match ? decodeXmlAttributeValue(match[1]) : null;
 }
 
-function renderedBounds(block: string): AuthoredHybridNativeReadbackElement["renderedBounds"] {
+function renderedBounds(block: string, canvas: AuthoredCanvasContract): AuthoredHybridNativeReadbackElement["renderedBounds"] {
   const transform = block.match(/<(?:a|p):xfrm\b[^>]*>[\s\S]*?<\/(?:a|p):xfrm>/)?.[0];
   const offset = transform?.match(/<a:off\b[^>]*\bx="(-?\d+)"[^>]*\by="(-?\d+)"/);
   const extent = transform?.match(/<a:ext\b[^>]*\bcx="(\d+)"[^>]*\bcy="(\d+)"/);
   if (!offset || !extent) return undefined;
-  const px = (emu: string) => Math.round((Number(emu) / 9_525) * 1_000_000) / 1_000_000;
+  const px = (emu: string) => Math.round((Number(emu) / canvasEmuPerUnit(canvas)) * 1_000_000) / 1_000_000;
   return { x: px(offset[1]), y: px(offset[2]), width: px(extent[1]), height: px(extent[2]) };
 }
 
@@ -347,6 +348,23 @@ function advancedTextReadback(
     (owner.autoFit === "shrink" && normAutofitCount !== 1) ||
     (owner.autoFit === "none" && noAutofitCount !== 1)) {
     throw new Error(`Hybrid text ${identity.elementId} autofit OOXML disagrees with its owner receipt.`);
+  }
+  const actualRuns = [...block.matchAll(/<a:r>([\s\S]*?)<\/a:r>/g)];
+  if (actualRuns.length !== owner.textRunMap.length) {
+    throw new Error(`Hybrid text ${identity.elementId} OOXML run count disagrees with its owner receipt.`);
+  }
+  for (let index = 0; index < actualRuns.length; index += 1) {
+    const runXml = actualRuns[index][1];
+    const runId = runXml.match(/<pt:runIdentity\b[^>]*\brunId="([^"]*)"/)?.[1];
+    const rawText = runXml.match(/<a:t\b[^>]*>([\s\S]*?)<\/a:t>/)?.[1];
+    const text = rawText === undefined ? null : decodeXmlAttributeValue(rawText);
+    const identityRun = owner.textRunMap[index];
+    if (!runId || text === null ||
+      decodeXmlAttributeValue(runId) !== identityRun.runId ||
+      text.length !== identityRun.utf16Length ||
+      canonicalDigest({ text }) !== identityRun.textDigest) {
+      throw new Error(`Hybrid text ${identity.elementId} OOXML run identity disagrees with its owner receipt.`);
+    }
   }
   return {
     autoFit: owner.autoFit,
@@ -631,7 +649,8 @@ function tableReadback(
  * substitute for PowerPoint COM save/reopen/render evidence.
  */
 export function inspectPptxNativeElementReadback(
-  pptxBytes: Buffer
+  pptxBytes: Buffer,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS
 ): AuthoredHybridNativeReadbackElement[] {
   const archive = readPptxArchive(pptxBytes);
   const results: AuthoredHybridNativeReadbackElement[] = [];
@@ -675,7 +694,7 @@ export function inspectPptxNativeElementReadback(
           throw new Error(`Hybrid chart ${identity.elementId} normalized carrier mismatch.`);
         }
       }
-      const bounds = renderedBounds(block);
+      const bounds = renderedBounds(block, canvas);
       const nativeOwner = tagOwner
         ? null
         : nativeOwnerReceipt(block, slideNumber, identity);
@@ -727,7 +746,8 @@ function coversWholeSlide(
  * exist; it does not infer the converter's full raster fallback reason set.
  */
 export function inspectPptxEditability(
-  pptxBytes: Buffer
+  pptxBytes: Buffer,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS
 ): WithAuthoredNativeDisposition<PresentationExportQualityReport> {
   const archive = readPptxArchive(pptxBytes);
   const slideSize = presentationSlideSize(
@@ -743,7 +763,7 @@ export function inspectPptxEditability(
     )
     .sort((a, b) => a.slideNumber - b.slideNumber);
 
-  const nativeReadback = inspectPptxNativeElementReadback(pptxBytes);
+  const nativeReadback = inspectPptxNativeElementReadback(pptxBytes, canvas);
   return attachAuthoredNativeDispositionReceipt(createPresentationExportQuality(
     "hybrid",
     slideEntries.map(({ slideNumber, bytes }) => {
@@ -851,9 +871,9 @@ export function inspectPptxEditability(
 /** Preserve stage2 structural counters after the generic logical/readback join. */
 export function attachAuthoredHybridStage2ReadbackMetadata<
   T extends PresentationExportQualityReport,
->(quality: T, pptxBytes: Buffer): WithAuthoredNativeDisposition<T> {
-  const structural = inspectPptxEditability(pptxBytes);
-  const nativeReadback = inspectPptxNativeElementReadback(pptxBytes);
+>(quality: T, pptxBytes: Buffer, canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS): WithAuthoredNativeDisposition<T> {
+  const structural = inspectPptxEditability(pptxBytes, canvas);
+  const nativeReadback = inspectPptxNativeElementReadback(pptxBytes, canvas);
   const bySlide = new Map(structural.slides.map((slide) => [slide.slideNumber, slide as typeof slide & { nativeTableElements?: number; nativeImageCropElements?: number }]));
   return attachAuthoredNativeDispositionReceipt({
     ...quality,

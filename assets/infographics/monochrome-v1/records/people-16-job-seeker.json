@@ -1,0 +1,56 @@
+{
+  "id": "people-16-job-seeker",
+  "category": "people",
+  "tags": {
+    "ko": [
+      "사람",
+      "구직자"
+    ],
+    "en": [
+      "people",
+      "job",
+      "seeker"
+    ]
+  },
+  "alt": {
+    "ko": "구직자 단색 벡터 인포그래픽",
+    "en": "job seeker monochrome vector infographic"
+  },
+  "path": "originals/people-16-job-seeker.svg",
+  "thumbnail": "thumbnails/people-16-job-seeker.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 542,
+  "sha256": "bc40affc857917ce9c6d12bd866d5fae748eea9536d5f5d41ff769fc9a09add1",
+  "geometry_sha256": "74921028cf82ec5de6737916adac42f09aa571aa917a0aaf27c5623b64c6a235",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 58362,
+    "preview_opaque_pixels": 5648,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Search",
+      "BriefcaseBusiness"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "id": "education-20-learning-puzzle",
+  "category": "education",
+  "tags": {
+    "ko": [
+      "교육",
+      "학습퍼즐"
+    ],
+    "en": [
+      "education",
+      "learning",
+      "puzzle"
+    ]
+  },
+  "alt": {
+    "ko": "학습퍼즐 단색 벡터 인포그래픽",
+    "en": "learning puzzle monochrome vector infographic"
+  },
+  "path": "originals/education-20-learning-puzzle.svg",
+  "thumbnail": "thumbnails/education-20-learning-puzzle.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 1330,
+  "sha256": "455cf4000078a2bb8532d095f8ddc6ab49feefddc4a8571b8ea8e9b5352f5bb7",
+  "geometry_sha256": "3b9f81a24db8ea0f368ae316a882f51b93d1728b2a2b2c136820e48c1ea96e50",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55755,
+    "preview_opaque_pixels": 7686,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Puzzle",
+      "BookOpen"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

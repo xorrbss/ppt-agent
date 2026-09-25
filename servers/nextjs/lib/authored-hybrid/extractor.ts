@@ -1,5 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
+  authoredCanvasForSize,
+  LEGACY_AUTHORED_CANVAS,
+  type AuthoredCanvasContract,
+} from "../authored-canvas.ts";
+import {
   authoredHtmlSha256,
   assertAuthoredHybridSlide,
   buildAuthoredHybridSlide,
@@ -15,13 +20,11 @@ import {
   type AuthoredHybridFontLayoutMode,
 } from "./html-instrumentation.ts";
 import type { BrowserAuthoredHybridObservation } from "./observation.ts";
+import type { LocalFitObservation } from "./local-fit-browser.ts";
+import { rememberLocalFitSource } from "./local-fit-export-evidence.ts";
 import type {
   AuthoredHybridBackplateRenderResult,
   AuthoredHybridSlideV1,
-} from "./schema.ts";
-import {
-  AUTHORED_SLIDE_HEIGHT_PX,
-  AUTHORED_SLIDE_WIDTH_PX,
 } from "./schema.ts";
 import { backplatePixelSize } from "./capture-scale.ts";
 import sharp from "sharp";
@@ -34,6 +37,7 @@ import {
 
 export interface AuthoredHybridExtractionOptions
   extends AuthoredHybridChromeOptions {
+  canvas?: AuthoredCanvasContract;
   /** Base used to resolve relative HTML assets. Persist and reuse for backplate. */
   baseUrl?: string;
   /** Optional editable-layout measurement mode; omitted/default remains source fidelity. */
@@ -53,10 +57,11 @@ async function captureWithFixedViewport(
   domCompletionToken: string,
   options: AuthoredHybridExtractionOptions
 ) {
-  const cacheKey = options.chromeExecutable ?? `auto:${process.platform}`;
+  const canvas = options.canvas ?? LEGACY_AUTHORED_CANVAS;
+  const cacheKey = `${options.chromeExecutable ?? `auto:${process.platform}`}:${canvas.widthPx}x${canvas.heightPx}`;
   let windowSize = calibratedWindowSizes.get(cacheKey) ?? {
-    width: AUTHORED_SLIDE_WIDTH_PX,
-    height: AUTHORED_SLIDE_HEIGHT_PX,
+    width: canvas.widthPx,
+    height: canvas.heightPx,
   };
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -74,8 +79,8 @@ async function captureWithFixedViewport(
     }
     const observation = parseAuthoredHybridDomDump(capture.serializedDom);
     if (
-      observation.viewport.widthPx === AUTHORED_SLIDE_WIDTH_PX &&
-      observation.viewport.heightPx === AUTHORED_SLIDE_HEIGHT_PX
+      observation.viewport.widthPx === canvas.widthPx &&
+      observation.viewport.heightPx === canvas.heightPx
     ) {
       calibratedWindowSizes.set(cacheKey, windowSize);
       return { capture, observation };
@@ -83,14 +88,14 @@ async function captureWithFixedViewport(
     windowSize = {
       width:
         windowSize.width +
-        (AUTHORED_SLIDE_WIDTH_PX - observation.viewport.widthPx),
+        (canvas.widthPx - observation.viewport.widthPx),
       height:
         windowSize.height +
-        (AUTHORED_SLIDE_HEIGHT_PX - observation.viewport.heightPx),
+        (canvas.heightPx - observation.viewport.heightPx),
     };
   }
   throw new Error(
-    `Chrome could not calibrate the authored hybrid ${AUTHORED_SLIDE_WIDTH_PX}x${AUTHORED_SLIDE_HEIGHT_PX} viewport.`
+    `Chrome could not calibrate the authored hybrid ${canvas.widthPx}x${canvas.heightPx} viewport.`
   );
 }
 
@@ -127,8 +132,10 @@ async function extractAuthoredSlideDomObservation(
     domCompletionToken,
     options
   );
+  const slide = buildAuthoredHybridSlide(html, observation, baseUrl);
+  rememberLocalFitSource(slide, observation.localFitObservation);
   return {
-    slide: buildAuthoredHybridSlide(html, observation, baseUrl),
+    slide,
     observation,
     screenshotPng: capture.screenshotPng,
   };
@@ -167,7 +174,10 @@ export async function extractDeclaredAuthoredSlideDom(
   if (!result.screenshotPng) {
     throw new Error("authored_browser_observation_png_missing");
   }
-  const capturedPng = await normalizeBackplatePng(result.screenshotPng);
+  const capturedPng = await normalizeBackplatePng(
+    result.screenshotPng,
+    options.canvas ?? LEGACY_AUTHORED_CANVAS,
+  );
   return {
     slide: result.slide,
     observation: result.observation,
@@ -176,22 +186,26 @@ export async function extractDeclaredAuthoredSlideDom(
   };
 }
 
-async function normalizeBackplatePng(png: Buffer): Promise<Buffer> {
+async function normalizeBackplatePng(
+  png: Buffer,
+  canvas: AuthoredCanvasContract,
+): Promise<Buffer> {
   const metadata = await sharp(png).metadata();
+  const expected = backplatePixelSize(canvas);
   if (
-    metadata.width === backplatePixelSize().width &&
-    metadata.height === backplatePixelSize().height
+    metadata.width === expected.width &&
+    metadata.height === expected.height
   ) {
     return png;
   }
   if (
     !metadata.width ||
     !metadata.height ||
-    metadata.width < backplatePixelSize().width ||
-    metadata.height < backplatePixelSize().height
+    metadata.width < expected.width ||
+    metadata.height < expected.height
   ) {
     throw new Error(
-      `Chrome authored hybrid backplate is ${metadata.width ?? "unknown"}x${metadata.height ?? "unknown"}; expected at least ${backplatePixelSize().width}x${backplatePixelSize().height}.`
+      `Chrome authored hybrid backplate is ${metadata.width ?? "unknown"}x${metadata.height ?? "unknown"}; expected at least ${expected.width}x${expected.height}.`
     );
   }
 
@@ -202,8 +216,8 @@ async function normalizeBackplatePng(png: Buffer): Promise<Buffer> {
     .extract({
       left: 0,
       top: 0,
-      width: backplatePixelSize().width,
-      height: backplatePixelSize().height,
+      width: expected.width,
+      height: expected.height,
     })
     .png()
     .toBuffer();
@@ -234,7 +248,7 @@ export async function renderAuthoredFidelityBackplate(
     captureMode: "fidelity",
     completionToken: domCompletionToken,
   });
-  const { capture } = await captureWithFixedViewport(
+  const { capture, observation } = await captureWithFixedViewport(
     instrumented,
     true,
     domCompletionToken,
@@ -243,10 +257,14 @@ export async function renderAuthoredFidelityBackplate(
   if (!capture.screenshotPng) {
     throw new Error("Chrome did not return the complete authored Fidelity capture.");
   }
-  const screenshotPng = await normalizeBackplatePng(capture.screenshotPng);
+  const screenshotPng = await normalizeBackplatePng(
+    capture.screenshotPng,
+    options.canvas ?? LEGACY_AUTHORED_CANVAS,
+  );
   return {
     backplatePng: screenshotPng,
     appliedPromotedElementIds: [],
+    localFitObservation: observation.localFitObservation,
     fallbackElementIds: [],
     capturePngSha256: `sha256:${createHash("sha256").update(screenshotPng).digest("hex")}`,
   };
@@ -268,6 +286,10 @@ export async function renderAuthoredBackplate(
     throw new Error(`Authored renderer preflight rejected HTML: ${preflight.reason ?? "unknown"}.`);
   }
   assertAuthoredHybridSlide(slide);
+  const canvas = options.canvas ?? authoredCanvasForSize(
+    slide.source.viewport.widthPx,
+    slide.source.viewport.heightPx,
+  );
   if (authoredHtmlSha256(html) !== slide.source.htmlSha256) {
     throw new Error(
       "Authored hybrid backplate HTML does not match the analysed source fingerprint."
@@ -302,7 +324,7 @@ export async function renderAuthoredBackplate(
     instrumented,
     true,
     domCompletionToken,
-    options
+    { ...options, canvas }
   );
   if (!capture.screenshotPng) {
     throw new Error("Chrome did not return the complete authored hybrid backplate capture.");
@@ -320,7 +342,7 @@ export async function renderAuthoredBackplate(
       "Authored hybrid backplate did not account for every requested element ID."
     );
   }
-  const screenshotPng = await normalizeBackplatePng(capture.screenshotPng);
+  const screenshotPng = await normalizeBackplatePng(capture.screenshotPng, canvas);
   if (
     screenshotPng.length < 24 ||
     !screenshotPng.subarray(0, 8).equals(
@@ -332,12 +354,14 @@ export async function renderAuthoredBackplate(
   return {
     backplatePng: screenshotPng,
     appliedPromotedElementIds: promoted.filter((id) => applied.includes(id)),
+    localFitObservation: observation.localFitObservation,
     fallbackElementIds: promoted.filter((id) => rejected.includes(id)),
     capturePngSha256: `sha256:${createHash("sha256").update(screenshotPng).digest("hex")}`,
   };
 }
 
 export interface AuthoredHybridRasterPaintBandRenderResult {
+  readonly localFitObservation?: LocalFitObservation;
   readonly rasterPng: Buffer;
   readonly elementIds: readonly string[];
   readonly capturePngSha256: string;
@@ -355,6 +379,10 @@ export async function renderAuthoredRasterPaintBand(
     throw new Error(`Authored renderer preflight rejected HTML: ${preflight.reason ?? "unknown"}.`);
   }
   assertAuthoredHybridSlide(slide);
+  const canvas = options.canvas ?? authoredCanvasForSize(
+    slide.source.viewport.widthPx,
+    slide.source.viewport.heightPx,
+  );
   if (authoredHtmlSha256(html) !== slide.source.htmlSha256) {
     throw new Error("Authored hybrid paint band source fingerprint mismatch.");
   }
@@ -385,7 +413,7 @@ export async function renderAuthoredRasterPaintBand(
     instrumented,
     true,
     domCompletionToken,
-    options,
+    { ...options, canvas },
   );
   if (!capture.screenshotPng) {
     throw new Error("Chrome did not return the authored hybrid paint band.");
@@ -398,9 +426,10 @@ export async function renderAuthoredRasterPaintBand(
   ) {
     throw new Error("Authored hybrid paint band observation drifted from its source contract.");
   }
-  const rasterPng = await normalizeBackplatePng(capture.screenshotPng);
+  const rasterPng = await normalizeBackplatePng(capture.screenshotPng, canvas);
   return {
     rasterPng,
+    localFitObservation: observation.localFitObservation,
     elementIds: requested,
     capturePngSha256: `sha256:${createHash("sha256").update(rasterPng).digest("hex")}`,
   };

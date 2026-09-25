@@ -51,6 +51,12 @@ export interface PresentationGenerationInfo {
   prompt: string;
   attachment_file_names: string[];
   settings: PresentationGenerationSettings;
+  conversation_id?: string | null;
+  operation_id?: string | null;
+  first_user_message_id?: string | null;
+  previous_presentation_id?: string | null;
+  next_presentation_ids?: string[];
+  can_start_new_attempt?: boolean;
 }
 
 export interface ShareInfo {
@@ -99,12 +105,17 @@ export class DashboardApi {
     }
   }
 
-  static async getPresentation(id: string) {
+  static async getPresentation(id: string, signal?: AbortSignal) {
     const response = await fetch(
       getApiUrl(`/api/v1/ppt/presentation/${id}`),
       {
         method: "GET",
         credentials: "include",
+        headers: {
+          ...getHeader(),
+          "X-Document-Canvas-Contracts": "document-canvas/v1",
+        },
+        signal,
       }
     );
 

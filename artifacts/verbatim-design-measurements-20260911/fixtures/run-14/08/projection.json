@@ -1,0 +1,271 @@
+{
+ "source-slide:9:text:3": {
+  "text": "1주차 PART 3 | 인스타·블로그 세팅",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "1주차 PART 3",
+    "begin": 0,
+    "end": 10,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "인스타·블로그 세팅",
+    "begin": 13,
+    "end": 23,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:9:text:4": {
+  "text": "09",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "09",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:9:text:5": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:9:text:8": {
+  "text": "인스타",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "인스타",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:9:text:9": {
+  "text": "• 프로필 사진 • 한 줄 소개 • 어떤 업체를 돕는지 • 문의 동선 • 포트폴리오 게시 방향",
+  "run_count": 5,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    4,
+    4
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "• ",
+    "body": "프로필 사진",
+    "begin": 0,
+    "end": 8,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "• ",
+    "body": "한 줄 소개",
+    "begin": 9,
+    "end": 17,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "• ",
+    "body": "어떤 업체를 돕는지",
+    "begin": 18,
+    "end": 30,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "• ",
+    "body": "문의 동선",
+    "begin": 31,
+    "end": 38,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 4,
+    "marker": "• ",
+    "body": "포트폴리오 게시 방향",
+    "begin": 39,
+    "end": 52,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:9:text:12": {
+  "text": "블로그",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "블로그",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:9:text:13": {
+  "text": "• 기본 프로필 • 지역 + 업종 키워드 • 검색형 제목 • 포트폴리오 글 • 장기 영업자산으로 운영",
+  "run_count": 5,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    4,
+    4
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "• ",
+    "body": "기본 프로필",
+    "begin": 0,
+    "end": 8,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "• ",
+    "body": "지역 + 업종 키워드",
+    "begin": 9,
+    "end": 22,
+    "order_free_before": false
+   },
+   {
+    "index": 2,
+    "line": 2,
+    "marker": "• ",
+    "body": "검색형 제목",
+    "begin": 23,
+    "end": 31,
+    "order_free_before": false
+   },
+   {
+    "index": 3,
+    "line": 3,
+    "marker": "• ",
+    "body": "포트폴리오 글",
+    "begin": 32,
+    "end": 41,
+    "order_free_before": false
+   },
+   {
+    "index": 4,
+    "line": 4,
+    "marker": "• ",
+    "body": "장기 영업자산으로 운영",
+    "begin": 42,
+    "end": 56,
+    "order_free_before": false
+   }
+  ]
+ }
+}

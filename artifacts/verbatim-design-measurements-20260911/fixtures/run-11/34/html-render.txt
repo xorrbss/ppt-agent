@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden}
+body{
+  background:#00140E;
+  color:#FFFFFF;
+  font-family:"Noto Sans KR","Malgun Gothic",sans-serif;
+  word-break:keep-all;
+  overflow-wrap:break-word;
+}
+.slide{
+  position:relative;
+  width:1280px;
+  height:720px;
+  overflow:hidden;
+  background:linear-gradient(135deg,#00140E 0%,#00271C 58%,#00140E 100%);
+}
+.glow{
+  position:absolute;
+  width:560px;
+  height:560px;
+  left:360px;
+  top:78px;
+  border:1px solid rgba(33,159,136,.18);
+  border-radius:50%;
+}
+.glow-inner{
+  position:absolute;
+  width:380px;
+  height:380px;
+  left:450px;
+  top:168px;
+  border:1px solid rgba(8,145,110,.22);
+  border-radius:50%;
+}
+.top-rule{
+  position:absolute;
+  left:64px;
+  right:64px;
+  top:48px;
+  height:1px;
+  background:rgba(33,159,136,.45);
+}
+.author{
+  position:absolute;
+  left:64px;
+  top:68px;
+  font-size:18px;
+  line-height:28px;
+  font-weight:700;
+  letter-spacing:.02em;
+  color:#FFFFFF;
+}
+.author-mark{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:28px;
+  height:28px;
+  margin-right:8px;
+  border-radius:12px;
+  background:#08916E;
+  font-size:16px;
+}
+.eyebrow{
+  position:absolute;
+  right:64px;
+  top:75px;
+  font-size:15px;
+  line-height:22px;
+  letter-spacing:.15em;
+  font-weight:700;
+  color:#219F88;
+}
+.hero{
+  position:absolute;
+  left:64px;
+  right:64px;
+  top:190px;
+  text-align:center;
+}
+.hero-title{
+  margin:0;
+  font-size:52px;
+  line-height:1.28;
+  font-weight:700;
+  letter-spacing:-.055em;
+  color:#FFFFFF;
+}
+.hero-title span{
+  color:#08916E;
+}
+.hero-subtitle{
+  margin-top:28px;
+  font-size:20px;
+  line-height:32px;
+  font-weight:500;
+  color:#CCECFF;
+}
+.steps{
+  position:absolute;
+  left:256px;
+  top:430px;
+  width:768px;
+  height:88px;
+  display:grid;
+  grid-template-columns:150px 34px 150px 34px 150px 34px 150px;
+  align-items:center;
+}
+.step{
+  height:64px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid rgba(33,159,136,.72);
+  border-radius:12px;
+  background:rgba(0,20,14,.56);
+  font-size:20px;
+  line-height:28px;
+  font-weight:700;
+  color:#FFFFFF;
+}
+.step:first-child{
+  background:#08916E;
+  border-color:#08916E;
+}
+.arrow{
+  height:2px;
+  margin:0 8px;
+  background:#219F88;
+  position:relative;
+}
+.arrow-end{
+  position:absolute;
+  right:-1px;
+  top:-5px;
+  width:10px;
+  height:10px;
+  border-top:2px solid #219F88;
+  border-right:2px solid #219F88;
+  transform:rotate(45deg);
+}
+.master{
+  position:absolute;
+  left:0;
+  right:0;
+  top:563px;
+  text-align:center;
+  font-size:18px;
+  line-height:28px;
+  font-weight:500;
+  color:#A7D9CC;
+}
+.bottom-rule{
+  position:absolute;
+  left:64px;
+  right:64px;
+  bottom:49px;
+  height:1px;
+  background:rgba(33,159,136,.45);
+}
+.page{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:14px;
+  text-align:center;
+  font-size:15px;
+  line-height:16px;
+  font-weight:500;
+  color:#A7ACB3;
+}
+</style>
+</head>
+<body>
+<div class="slide" data-qid="q-div-f18d7f4bae9b" data-semantic-role="decoration">
+  <div class="glow" data-qid="q-div-5f9be5222e1c" data-semantic-role="decoration"></div>
+  <div class="glow-inner" data-qid="q-div-4f25fe803b40" data-semantic-role="decoration"></div>
+  <div class="top-rule" data-qid="q-div-dcf34389bcbf" data-semantic-role="decoration"></div>
+
+  <div class="author" data-semantic-role="supporting" data-qid="source-block-5137d489be601f9d" data-source-block-id="source-slide:35:text:3">
+    <span class="author-mark" data-semantic-role="body" data-qid="q-span-dfe192a987bc">🐝</span><span data-semantic-role="supporting" data-qid="q-author-name-34">꿀벌쌤</span>
+  </div>
+  <div class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-34">강의용 마스터</div>
+
+  <div class="hero" data-qid="q-div-19a94afde0da" data-semantic-role="decoration">
+    <div class="hero-title" data-semantic-role="title" data-qid="source-block-396ed15ac83e4af0" data-source-block-id="source-slide:35:text:4">이제, <span data-qid="q-span-c83eac29f2ad" data-semantic-role="body">홀로서기</span> 시작입니다.</div>
+    <div class="hero-subtitle" data-semantic-role="body" data-qid="source-block-776ff9a28e9acf4f" data-source-block-id="source-slide:35:text:5">숏폼대행 1인사업자 홀로서기 · 4주 8시간</div>
+  </div>
+
+  <div class="steps" data-qid="q-process-34" data-semantic-role="decoration">
+    <div class="step" data-semantic-role="body" data-qid="source-block-c13f14acad4dde72" data-source-block-id="source-slide:35:text:6:run:0">실행</div>
+    <div class="arrow" data-semantic-role="decoration" data-qid="q-div-f2e763bf438c"><span class="arrow-end" data-qid="q-span-fcc6b57d526c" data-semantic-role="decoration"></span></div>
+    <div class="step" data-semantic-role="body" data-qid="source-block-73d0b44bcd0f588f" data-source-block-id="source-slide:35:text:6:run:1">경험</div>
+    <div class="arrow" data-semantic-role="decoration" data-qid="q-div-d3cb923b1c37"><span class="arrow-end" data-qid="q-span-135dfa22f225" data-semantic-role="decoration"></span></div>
+    <div class="step" data-semantic-role="body" data-qid="source-block-44d6f33ea1bf68d7" data-source-block-id="source-slide:35:text:6:run:2">고객</div>
+    <div class="arrow" data-semantic-role="decoration" data-qid="q-div-6221deea81c6"><span class="arrow-end" data-qid="q-span-835bcf18fc56" data-semantic-role="decoration"></span></div>
+    <div class="step" data-semantic-role="body" data-qid="source-block-a23adb9942fc9fba" data-source-block-id="source-slide:35:text:6:run:3">성장</div>
+  </div>
+
+  <div class="master" data-semantic-role="body" data-qid="source-block-c8d33f4e1c121d7a" data-source-block-id="source-slide:35:text:7">꿀벌쌤 강의용 마스터 PPT</div>
+  <div class="bottom-rule" data-semantic-role="decoration" data-qid="q-div-b9c7054f7dc9"></div>
+  <div class="page" data-semantic-role="supporting" data-qid="q-page-34">35</div>
+</div>
+</body>
+</html>

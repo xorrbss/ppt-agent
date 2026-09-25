@@ -20,12 +20,12 @@ const ThemeCardContent: React.FC<ThemeCardProps> = ({ theme, onSelect, onDelete,
 
 
   return (<div
-    className={` group rounded-xl border w-[305px] cursor-pointer transition-all relative bg-white border-[#EDEEEF]   hover:shadow-md`}
+    className={`group relative w-full min-w-0 cursor-pointer rounded-2xl border border-zinc-200/80 bg-white transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400`}
     onClick={() => onSelect(theme)}
 
   >
     {showDeleteButton && <button
-      className="absolute hidden group-hover:block duration-300 transition-all -top-3 -right-3 z-10 bg-white rounded-full p-2  border border-[#EDEEEF] hover:bg-gray-100 hover:text-gray-700"
+      className="absolute right-2 top-2 z-10 rounded-lg border border-zinc-200 bg-white p-2 text-zinc-500 shadow-sm transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
       style={{ boxShadow: '0 6.6px 13.2px 0 rgba(0, 0, 0, 0.10)' }}
       onClick={(e) => {
         e.stopPropagation()
@@ -38,30 +38,30 @@ const ThemeCardContent: React.FC<ThemeCardProps> = ({ theme, onSelect, onDelete,
     {/* Delete Confirmation Dialog */}
     {showDeleteDialog && (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center animate-[fadeIn_150ms_ease-out]"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 motion-safe:animate-[fadeIn_150ms_ease-out]"
         onClick={(e) => {
           e.stopPropagation()
           setShowDeleteDialog(false)
         }}
       >
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+        <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-[2px]" />
         <div
-          className="relative bg-white rounded-2xl w-[340px] shadow-2xl animate-[scaleIn_200ms_ease-out] "
+          className="relative w-full max-w-[400px] max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl border border-gray-200/80 bg-white shadow-[0_12px_40px_-16px_rgba(15,23,42,0.18)] motion-safe:animate-[scaleIn_200ms_ease-out]"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="p-6 pb-4 flex flex-col items-center text-center">
-            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mb-4">
+          <div className="px-6 pt-8 pb-6 sm:px-8 flex flex-col items-center text-center">
+            <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center mb-4">
               <AlertTriangle className="h-6 w-6 text-red-500" />
             </div>
-            <h3 className="text-lg font-semibold text-[#191919] mb-2">테마를 삭제할까요?</h3>
+            <h3 className="break-keep text-xl font-semibold leading-7 tracking-tight text-gray-900 mb-2">테마를 삭제할까요?</h3>
             <p className="text-sm text-gray-500 leading-relaxed">
               <span className="font-medium text-gray-700">"{theme.name}"</span> 테마를 삭제하려고 합니다. 이 작업은 되돌릴 수 없습니다.
             </p>
           </div>
-          <div className="flex border-t border-gray-100">
+          <div className="flex flex-wrap justify-end gap-2 px-6 pb-6 sm:px-8">
             <button
               onClick={() => setShowDeleteDialog(false)}
-              className="flex-1 px-4 py-3.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              className="flex-1 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none disabled:opacity-50"
             >
               취소
             </button>
@@ -70,7 +70,7 @@ const ThemeCardContent: React.FC<ThemeCardProps> = ({ theme, onSelect, onDelete,
                 onDelete(theme.id)
                 setShowDeleteDialog(false)
               }}
-              className="flex-1 px-4 py-3.5 text-sm font-medium text-red-500 hover:bg-red-50 transition-colors border-l border-gray-100"
+              className="flex-1 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:pointer-events-none disabled:opacity-50"
             >
               삭제
             </button>

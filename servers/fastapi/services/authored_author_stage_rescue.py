@@ -13,13 +13,15 @@ header band.
 This module extends the same principle one stage earlier, as the same three
 rungs:
 
-1. A THIRD author call whose brief is deliberately simpler than the two that
+1. A THIRD author attempt whose brief is deliberately simpler than the two that
    failed. Same content, same header contract -- but the contract is restated
    first and as non-negotiable, the deck's silhouette/figure decisions are
    withheld so the model composes the role's plain layout, and the frame is
    spelled out in pixels. It reuses ``author_planned_slide`` and the existing
    correction-hint seam rather than a second prompt module, so there is exactly
-   one authoring prompt in this system.
+   one authoring prompt in this system. A provider overload may replay that
+   same ordinal once after the batch scheduler's cooldown; it does not spend a
+   fourth content-attempt ordinal.
 2. Failing that, ``services/authored_author_stage_placeholder.py`` renders the
    slide's outline deterministically and the slide is registered flagged with
    reason ``author:attempts_exhausted`` -- the same ``flaggedSlides`` structure
@@ -43,6 +45,10 @@ from typing import Any, Mapping
 
 from services.authored_author_stage_placeholder import author_placeholder_html
 from services.authored_terminal_slide_policy import terminal_fallback_active
+from services.authored_wave_scheduler import AuthoredWaveSchedule
+from services.source_content.browser_readback import (
+    inspect_browser_source_readback,
+)
 from utils.llm_calls.author_deck import (
     AuthoredProviderBudgetExhausted,
     author_planned_slide,
@@ -69,9 +75,10 @@ AUTHOR_OUTPUT_TOKEN_LIMIT_REASON = "author:output_token_limit"
 #: rather than under-reporting what the deck was billed for.
 RESCUE_ATTEMPT_ORDINAL = 3
 
-#: ``_author_one_resilient`` runs ``while offset + made < 2``. An offset of one
-#: therefore buys EXACTLY one more call -- not a second two-call budget.
-_ONE_MORE_CALL_OFFSET = 1
+#: The strict third attempt starts after the two ordinary calls and raises the
+#: temporary call limit to three, buying exactly one call rather than another
+#: two-call budget.
+_ONE_MORE_CALL_OFFSET = 2
 
 #: The lowest point on the canvas an absolutely positioned element may claim.
 #: Below it a box is either clipped by the 720px frame or collides with the
@@ -87,6 +94,25 @@ class AuthorStageRescue:
     provider_attempt_count: int
     #: ``None`` when the third call succeeded; the deck publishes it unflagged.
     flagged_entry: dict[str, object] | None = None
+    prior_failure: Mapping[str, object] | None = None
+
+
+def source_reflow_rescue_readback(**kwargs):
+    from services.authored_admission_session import check_producer, current_session
+    from services.authored_admission_legacy import legacy_rescue_readback
+
+    session = current_session()
+    result, admission = check_producer(
+        kwargs["html"], index=kwargs["index"], producer="author_rescue",
+        legacy=lambda _html: legacy_rescue_readback(
+            **kwargs, inspector=inspect_browser_source_readback, fallback_policy=terminal_fallback_active,
+        ),
+        metrics=kwargs["metrics"], evidence=True,
+    )
+    if session is not None and session.mode == "enforce":
+        # First-pass rejected capture stays evidence; terminal policy owns flags.
+        return None
+    return result
 
 
 class _SimplifiedPlan:
@@ -178,6 +204,26 @@ def simplified_author_brief(*, role: str, contract: Any) -> str:
     )
 
 
+def strict_source_reflow_author_brief(*, role: str, contract: Any) -> str:
+    """Final correction for a source-locked slide without relaxing fidelity."""
+
+    header = (
+        "Reproduce the header contract exactly with only these required parts: "
+        f"{_required_header_parts(contract)}. Remove any data-header-part=\"right\" "
+        "element; move its source text into an ordinary body owner unchanged."
+        if contract is not None
+        else "Do not add a header band or header-part elements."
+    )
+    return (
+        "The two previous candidates were rejected. This is the one final, "
+        "source-locked correction. Preserve every source text block verbatim, "
+        "including punctuation and ordering; do not summarize, shorten, merge, "
+        "or invent text. Give every source block exactly one visible owner. "
+        f"{header} Use a plain {role or 'content'} layout inside 1280x720 and "
+        "change geometry only as needed to make all source text visible."
+    )
+
+
 def _rescue_attempt_kwargs(author_kwargs: Mapping[str, Any], hint: str) -> dict[str, Any]:
     """The third call's kwargs: the caller's, with the attempt plumbing rebound.
 
@@ -189,16 +235,7 @@ def _rescue_attempt_kwargs(author_kwargs: Mapping[str, Any], hint: str) -> dict[
     kwargs = dict(author_kwargs)
     kwargs["prior_failure_hint"] = hint
     kwargs["provider_attempt_offset"] = _ONE_MORE_CALL_OFFSET
-    observer = kwargs.get("attempt_observer")
-    if observer is not None:
-        kwargs["attempt_observer"] = lambda _ordinal: observer(RESCUE_ATTEMPT_ORDINAL)
-    reserver = kwargs.get("attempt_reserver")
-    if reserver is not None:
-
-        async def reserve_rescue_attempt(_ordinal: int) -> None:
-            await reserver(RESCUE_ATTEMPT_ORDINAL)
-
-        kwargs["attempt_reserver"] = reserve_rescue_attempt
+    kwargs["provider_attempt_limit"] = RESCUE_ATTEMPT_ORDINAL
     return kwargs
 
 
@@ -228,6 +265,27 @@ def _placeholder(plan: Any, index: int) -> str:
     )
 
 
+async def _author_with_provider_policy(
+    plan: Any,
+    index: int,
+    *,
+    author_kwargs: Mapping[str, Any],
+    hint: str,
+    schedule: AuthoredWaveSchedule,
+) -> str:
+    """Run ordinal three once; the bounded provider layer owns overload replay."""
+
+    kwargs = _rescue_attempt_kwargs(author_kwargs, hint)
+    await schedule.wait_out_cooldown(f"author-rescue-{index + 1}")
+    try:
+        html = await author_planned_slide(_SimplifiedPlan(plan), index, **kwargs)
+    except Exception as error:
+        schedule.advance(error, succeeded=False)
+        raise
+    schedule.advance(html, succeeded=True)
+    return html
+
+
 async def rescue_author_stage(
     plan: Any,
     index: int,
@@ -237,6 +295,7 @@ async def rescue_author_stage(
     profile: Any,
     reference_mode: str,
     source_reflow: bool,
+    schedule: AuthoredWaveSchedule,
 ) -> AuthorStageRescue | None:
     """Rescue one slide whose author budget is spent, or ``None`` to fail closed.
 
@@ -246,15 +305,20 @@ async def rescue_author_stage(
 
     if not isinstance(error, AuthoredProviderBudgetExhausted):
         return None
-    if not terminal_fallback_active(
+    fallback_allowed = terminal_fallback_active(
         profile=profile, reference_mode=reference_mode, source_reflow=source_reflow
-    ):
+    )
+    if not fallback_allowed and not source_reflow:
         return None
 
     role = str(plan.roles[index]) if getattr(plan, "roles", None) else ""
     resolver = getattr(plan, "header_contract_at", None)
     contract = resolver(index) if callable(resolver) else None
-    hint = simplified_author_brief(role=role, contract=contract)
+    hint = (
+        strict_source_reflow_author_brief(role=role, contract=contract)
+        if source_reflow
+        else simplified_author_brief(role=role, contract=contract)
+    )
     token_limited = output_token_limit_in_cause_chain(error)
     LOGGER.warning(
         "[authored] slide %d author budget spent (%s); one simplified attempt%s",
@@ -263,10 +327,12 @@ async def rescue_author_stage(
         f". {OUTPUT_TOKEN_LIMIT_GUIDANCE}" if token_limited else "",
     )
     try:
-        html = await author_planned_slide(
-            _SimplifiedPlan(plan), index, **_rescue_attempt_kwargs(author_kwargs, hint)
+        html = await _author_with_provider_policy(
+            plan, index, author_kwargs=author_kwargs, hint=hint, schedule=schedule
         )
     except AuthoredProviderBudgetExhausted as exhausted:
+        if source_reflow:
+            raise
         outcome = "author_rescue_budget_exhausted"
         token_limited = token_limited or output_token_limit_in_cause_chain(exhausted)
         LOGGER.warning(
@@ -276,6 +342,8 @@ async def rescue_author_stage(
             f". {OUTPUT_TOKEN_LIMIT_GUIDANCE}" if token_limited else "",
         )
     except Exception:
+        if source_reflow:
+            raise
         outcome = "author_rescue_failed"
         LOGGER.warning(
             "[authored] slide %d simplified attempt failed; publishing flagged",
@@ -285,7 +353,9 @@ async def rescue_author_stage(
     else:
         LOGGER.info("[authored] slide %d recovered on the simplified attempt", index + 1)
         return AuthorStageRescue(
-            html=html, provider_attempt_count=RESCUE_ATTEMPT_ORDINAL
+            html=html,
+            provider_attempt_count=RESCUE_ATTEMPT_ORDINAL,
+            prior_failure=getattr(error, "prior_failure", None),
         )
     try:
         placeholder = _placeholder(plan, index)
@@ -319,5 +389,7 @@ __all__ = [
     "SAFE_BOTTOM_Y_PX",
     "AuthorStageRescue",
     "rescue_author_stage",
+    "source_reflow_rescue_readback",
     "simplified_author_brief",
+    "strict_source_reflow_author_brief",
 ]

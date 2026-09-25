@@ -4,7 +4,8 @@ import {
   ImageGenerate,
   PreviousGeneratedImagesResponse,
 } from "./params";
-import { apiErrorFromPayload, ApiResponseHandler } from "./api-error-handler";
+import type { SourceContentPolicy } from "./source-content/contract";
+import { ApiError, apiErrorFromPayload, ApiResponseHandler } from "./api-error-handler";
 import { getApiUrl, resolveBackendAssetUrl } from "@/utils/api";
 import { fetchWithNetworkRetry } from "@/utils/fetchWithNetworkRetry";
 import {
@@ -17,143 +18,35 @@ import type {
   GenerationPreferences,
   PresentationThemePayload,
 } from "./presentation-generation-options";
+import type {
+  BlankPresentationResponse,
+  CanonicalDocumentAsset,
+  DecomposedDocument,
+  DecomposeDocumentsOptions,
+  DecomposeDocumentSource,
+  DocumentDecomposeJob,
+  DocumentUploadAdmission,
+  GenerationStatusResponse,
+  StartGenerationResponse,
+} from "./presentation-generation-types";
 
 export type { GenerationPreferences, PresentationThemePayload } from "./presentation-generation-options";
 
-export type BlankPresentationResponse = {
-  id: string;
-  version: number;
-  title: string | null;
-  n_slides: number;
-  language: string;
-  fonts?: Record<string, string> | null;
-  slides: Array<Record<string, unknown>>;
-};
-
-export type GenerationStage =
-  | "author"
-  | "illustrate"
-  | "render"
-  | "persist"
-  | "finalize"
-  | "template_v2_layout_selection"
-  | "template_v2_slide_generation"
-  | "template_v2_pptx_validation"
-  | "template_v2_saving"
-  | "template_v2_exporting"
-  | "template_v2_publishing"
-  | "completed";
-
-export type GenerationProgress = {
-  completed_slides: number;
-  total_slides: number;
-  percent?: number;
-  current_slide?: number | null;
-  current_stage?: GenerationStage | null;
-  stage_counts?: Partial<Record<GenerationStage, number>>;
-  finalizing?: boolean;
-};
-
-export type GenerationFailure = {
-  code?: string;
-  message?: string;
-  stage?: GenerationStage;
-  slide_number?: number;
-  exception_type?: string;
-  fingerprint?: string;
-  retryable?: boolean;
-  request_id?: string | null;
-  status_code?: number;
-  detail?: unknown;
-};
-
-export type GenerationStatusResponse = {
-  id?: string;
-  status: string;
-  message?: string | null;
-  error?: GenerationFailure | Record<string, unknown> | null;
-  // Free-form task payload. Left as `any` values on purpose: consumers read
-  // fields such as `data.edit_path` directly, and narrowing them here would
-  // require edits in `outline/hooks/usePresentationGeneration.ts`.
-  data?: Record<string, any> | null;
-  request_id?: string;
-  progress?: GenerationProgress | null;
-  failure?: GenerationFailure | null;
-};
-
-export type StartGenerationResponse = {
-  id?: string;
-  status?: string;
-  operation_id?: string;
-  request_id?: string;
-};
-
-export type DocumentDecomposeProgress = {
-  completed_files: number;
-  total_files: number;
-  current_file?: string | null;
-};
-
-export type DocumentDecomposeFailure = {
-  code?: string;
-  message?: string;
-  filename?: string;
-  retryable?: boolean;
-};
-
-export type DecomposedDocument = {
-  name: string;
-  asset_id?: string;
-  content_sha256?: string;
-  /** Legacy synchronous decomposition facade only. */
-  file_path?: string;
-  [key: string]: unknown;
-};
-
-export type CanonicalDocumentAsset = {
-  asset_id: string;
-  kind: "document";
-  state: string;
-  media_type?: string | null;
-  size_bytes: number;
-  sha256: string;
-  version: number;
-  expires_at?: string | null;
-};
-
-export type DocumentUploadAdmission = {
-  assets: CanonicalDocumentAsset[];
-  assetIds: string[];
-  referenceSnapshotId: string;
-};
-
-type DecomposeDocumentSource =
-  | { referenceSnapshotId: string; documentCount: number }
-  | string[];
-
-export type DocumentDecomposeJob = {
-  job_id: string;
-  status:
-    | "queued"
-    | "running"
-    | "cancelling"
-    | "succeeded"
-    | "failed"
-    | "cancelled";
-  progress: DocumentDecomposeProgress;
-  result: DecomposedDocument[] | null;
-  error: DocumentDecomposeFailure | null;
-  created_at?: string;
-  updated_at?: string;
-  expires_at?: string;
-};
-
-export type DecomposeDocumentsOptions = {
-  signal?: AbortSignal;
-  onProgress?: (job: DocumentDecomposeJob) => void;
-  pollIntervalMs?: number;
-  idempotencyKey?: string;
-};
+export type {
+  BlankPresentationResponse,
+  CanonicalDocumentAsset,
+  DecomposedDocument,
+  DecomposeDocumentsOptions,
+  DocumentDecomposeFailure,
+  DocumentDecomposeJob,
+  DocumentDecomposeProgress,
+  DocumentUploadAdmission,
+  GenerationFailure,
+  GenerationProgress,
+  GenerationStage,
+  GenerationStatusResponse,
+  StartGenerationResponse,
+} from "./presentation-generation-types";
 
 const DOCUMENT_DECOMPOSE_POLL_INTERVAL_MS = 1_000;
 
@@ -190,7 +83,7 @@ function waitForDecomposePoll(delayMs: number, signal?: AbortSignal) {
   });
 }
 
-const generationPreferencesPayload = (body: GenerationPreferences) => ({ language: body.language ?? null, ...(body.tone ? { tone: body.tone } : {}), ...(body.verbosity ? { verbosity: body.verbosity } : {}), ...(body.instructions !== undefined ? { instructions: body.instructions } : {}), ...(body.include_table_of_contents !== undefined ? { include_table_of_contents: body.include_table_of_contents } : {}), ...(body.include_title_slide !== undefined ? { include_title_slide: body.include_title_slide } : {}), ...(body.web_search !== undefined ? { web_search: body.web_search } : {}) });
+const generationPreferencesPayload = (body: GenerationPreferences) => ({ language: body.language ?? null, ...(body.tone ? { tone: body.tone } : {}), ...(body.verbosity ? { verbosity: body.verbosity } : {}), ...(body.instructions !== undefined ? { instructions: body.instructions } : {}), ...(body.include_table_of_contents !== undefined ? { include_table_of_contents: body.include_table_of_contents } : {}), ...(body.include_title_slide !== undefined ? { include_title_slide: body.include_title_slide } : {}), ...(body.web_search !== undefined ? { web_search: body.web_search } : {}), ...(body.codex_generation_preset ? { codex_generation_preset: body.codex_generation_preset } : {}) });
 
 export class PresentationGenerationApi {
   static async uploadDoc(
@@ -452,6 +345,7 @@ export class PresentationGenerationApi {
   }
   static async createPresentation({
     presentation_id,
+    previous_presentation_id,
     idempotency_key,
     content,
     n_slides,
@@ -464,9 +358,14 @@ export class PresentationGenerationApi {
     include_table_of_contents,
     include_title_slide,
     web_search,
+    aspect_ratio,
+    page_size,
+    orientation,
     theme,
+    strategy = "authored",
   }: {
     presentation_id: string;
+    previous_presentation_id?: string | null;
     idempotency_key: string;
     content: string;
     n_slides: number | null;
@@ -479,7 +378,12 @@ export class PresentationGenerationApi {
     include_table_of_contents?: boolean;
     include_title_slide?: boolean;
     web_search?: boolean;
+    aspect_ratio?: "16:9" | "9:16" | "9:13";
+    page_size?: "A4";
+    orientation?: "landscape" | "portrait";
     theme?: PresentationThemePayload | null;
+    /** Server persists this before the async generation job is admitted. */
+    strategy?: "authored" | "svg";
   }) {
     try {
       const response = await fetch(
@@ -492,6 +396,7 @@ export class PresentationGenerationApi {
           },
           body: JSON.stringify({
             presentation_id,
+            ...(previous_presentation_id ? { previous_presentation_id } : {}),
             content,
             n_slides,
             file_paths,
@@ -503,7 +408,11 @@ export class PresentationGenerationApi {
             include_table_of_contents,
             include_title_slide,
             web_search,
+            ...(page_size && orientation
+              ? { page_size, orientation }
+              : { aspect_ratio }),
             theme,
+            strategy,
           }),
           cache: "no-cache",
         },
@@ -518,10 +427,14 @@ export class PresentationGenerationApi {
       }
       return created;
     } catch (error) {
-      for (const snapshotId of reference_snapshot_ids ?? []) {
-        await PresentationGenerationApi.cleanupDocumentAdmission({
-          referenceSnapshotId: snapshotId,
-        });
+      // A lost response or server error can follow a committed create. Keep
+      // immutable document admissions usable for an exact same-key replay.
+      if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+        for (const snapshotId of reference_snapshot_ids ?? []) {
+          await PresentationGenerationApi.cleanupDocumentAdmission({
+            referenceSnapshotId: snapshotId,
+          });
+        }
       }
       console.error("error in presentation creation", error);
       throw error;
@@ -601,13 +514,40 @@ export class PresentationGenerationApi {
     }
   }
 
+  // The drag reorder in SidePanel.tsx used to rely on the generic autosave
+  // PATCH above (`/presentation/update`), which has no backend handler, so
+  // reorder never persisted for any deck. This calls the narrow slide-order
+  // endpoint instead; other autosave behavior is unchanged.
+  static async reorderSlides(
+    presentationId: string,
+    body: { slide_ids: string[]; expected_revision: number },
+  ): Promise<{ presentation_id: string; revision: number; order: string[]; operation_id: string }> {
+    const response = await fetch(
+      getApiUrl(`/api/v1/ppt/presentation/${presentationId}/slides/order`),
+      {
+        method: "PATCH",
+        headers: getHeader(),
+        body: JSON.stringify(body),
+        cache: "no-cache",
+      },
+    );
+
+    return await ApiResponseHandler.handleResponse(
+      response,
+      "Failed to save the new slide order",
+    );
+  }
+
   static async getPresentationVersions(presentationId: string) {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/${presentationId}/versions`),
         {
           method: "GET",
-          headers: getHeader(),
+          headers: {
+            ...getHeader(),
+            "X-Document-Canvas-Contracts": "document-canvas/v1",
+          },
           cache: "no-cache",
         },
       );
@@ -633,7 +573,10 @@ export class PresentationGenerationApi {
         ),
         {
           method: "POST",
-          headers: getHeader(),
+          headers: {
+            ...getHeader(),
+            "X-Document-Canvas-Contracts": "document-canvas/v1",
+          },
           cache: "no-cache",
         },
       );
@@ -708,28 +651,24 @@ export class PresentationGenerationApi {
       content: string;
       slides_markdown?: string[];
       vision_qa?: boolean;
+      strategy?: "authored" | "svg";
       authored_style?: string;
+      aspect_ratio?: "16:9" | "9:16" | "9:13";
+      page_size?: "A4";
+      orientation?: "landscape" | "portrait";
       masterPin?: {
         masterId: string;
         revision: number;
         digest: `sha256:${string}`;
       };
-      sourceMode?: "source_content_restyle";
+      sourceMode?: "source_content_restyle" | "raster_reconstruction";
+      rasterApprovalPin?: import("./source-content/raster-contract").RasterApprovalPinWire;
+      referenceSnapshotIds?: string[];
       sourceContentManifestPin?: {
         manifestId: string;
         digest: `sha256:${string}`;
       };
-      contentPolicy?: {
-        text: "verbatim" | "outline";
-        preserveAllTableCells: false;
-        preserveAllChartValues: false;
-        preserveAllImageOccurrences: true;
-        preserveSourceOrder: true;
-        preserveSourceSlideCount: true;
-        allowSlideExpansion: false;
-        allowSummarization: boolean;
-        overflowPolicy: "same_page_recompose_or_fail";
-      };
+      contentPolicy?: SourceContentPolicy;
       idempotency_key?: string;
     },
   ): Promise<StartGenerationResponse> {
@@ -750,16 +689,26 @@ export class PresentationGenerationApi {
             ...(body.sourceMode ? {} : { slides_markdown: body.slides_markdown ?? [] }),
             ...generationPreferencesPayload(body),
             template: "authored",
-            strategy: "authored",
+            strategy: body.strategy ?? "authored",
             export_as: "pptx",
+            // Export refuses a "development" receipt in every format.
+            qualityProfile: "release",
             // Optional self-correction pass (render + vision-critique + re-author flagged).
             // OFF by default — it adds a second authoring round (~doubles time); the
             // design-system hardening already prevents most overflow/overlap. Opt in for
             // a max-quality, slower pass.
-            vision_qa: body.vision_qa ?? false,
+            vision_qa: body.strategy === "svg" ? false : (body.vision_qa ?? false),
             authored_style: body.authored_style ?? "default",
+            ...(body.sourceMode === "source_content_restyle" && body.strategy === "svg"
+              ? {}
+              : body.page_size && body.orientation
+                ? { page_size: body.page_size, orientation: body.orientation }
+                : { aspect_ratio: body.aspect_ratio ?? "16:9" }),
             ...(body.masterPin ? { masterPin: body.masterPin } : {}),
             ...(body.sourceMode ? { sourceMode: body.sourceMode } : {}),
+            ...(body.rasterApprovalPin ? { rasterApprovalPin: body.rasterApprovalPin } : {}),
+            ...(body.sourceMode === "raster_reconstruction" && body.referenceSnapshotIds
+              ? { reference_snapshot_ids: body.referenceSnapshotIds } : {}),
             ...(body.sourceContentManifestPin
               ? { sourceContentManifestPin: body.sourceContentManifestPin }
               : {}),

@@ -1,3 +1,4 @@
+import { referencedBundledFamilies } from "./bundled-fonts-manifest.ts";
 import {
   sfntHasCodePoint,
   type FontEmbeddingPlan,
@@ -271,19 +272,20 @@ export function embeddedGlyphAvailable(plan: FontEmbeddingPlan) {
   };
 }
 
-const BUNDLED_HANGUL_FAMILY_PATTERN = /font(?:-family)?\s*:\s*(?:[^;}]*[\s,"'])?pretendard(?=$|[\s,"';}])/iu;
-
 /**
  * Families named by the stored slide HTML that the package can embed. The
  * active-emission binding only lists families from declared text runs, which
- * compatibility bundles leave empty, so the authored CSS is scanned directly.
+ * compatibility bundles leave empty, so the authored CSS is scanned directly
+ * against the bundled manifest.
  */
 export function bundledFamiliesReferencedByHtml(
   slideHtml: readonly string[],
 ): string[] {
-  return slideHtml.some((html) => BUNDLED_HANGUL_FAMILY_PATTERN.test(html))
-    ? ["Pretendard"]
-    : [];
+  const families = new Set<string>();
+  for (const html of slideHtml) {
+    for (const family of referencedBundledFamilies(html)) families.add(family.family);
+  }
+  return [...families];
 }
 
 export function nativeEmbeddingFamilies(

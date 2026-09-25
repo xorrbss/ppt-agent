@@ -1,0 +1,54 @@
+{
+  "id": "technology-12-smartwatch",
+  "category": "technology",
+  "tags": {
+    "ko": [
+      "기술",
+      "스마트워치"
+    ],
+    "en": [
+      "technology",
+      "smartwatch"
+    ]
+  },
+  "alt": {
+    "ko": "스마트워치 단색 벡터 인포그래픽",
+    "en": "smartwatch monochrome vector infographic"
+  },
+  "path": "originals/technology-12-smartwatch.svg",
+  "thumbnail": "thumbnails/technology-12-smartwatch.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 497,
+  "sha256": "4e4aa679db25a00e55a61025c9bcddcedcd79b64ab714e3dc82f334c58abb2b7",
+  "geometry_sha256": "41f6e97e9eaf1eae94331e005c734e3526c444e6a6d9f056f9178b0db465a00d",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55658,
+    "preview_opaque_pixels": 8577,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Watch"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

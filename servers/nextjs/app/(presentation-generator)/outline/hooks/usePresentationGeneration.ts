@@ -9,6 +9,7 @@ import { LoadingState } from "../types/index";
 import { LanguageType } from "../../upload/type";
 import {
   ApiError,
+  getApiErrorDisplayMessage,
   isPresentationGenerationSlideLimitError,
   isRetryablePresentationGenerationError,
 } from "../../services/api/api-error-handler";
@@ -22,6 +23,8 @@ import {
   updateDurableGenerationTask,
 } from "./durableGenerationTask";
 import { generationMasterPin } from "@/lib/authored-vnext/master/selection-storage";
+import { DEFAULT_AUTHORED_STYLE } from "../../services/api/authored";
+import { SOURCE_CONTENT_POLICY } from "../../services/api/source-content/contract";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
@@ -83,6 +86,9 @@ export const usePresentationGeneration = (
   const authoredStyle = useSelector(
     (s: RootState) => s.pptGenUpload.authoredStyle
   );
+  const generationStrategy = useSelector(
+    (s: RootState) => s.pptGenUpload.generationStrategy,
+  );
   const companyStandard = useSelector(
     (s: RootState) => s.pptGenUpload.companyStandard
   );
@@ -102,6 +108,7 @@ export const usePresentationGeneration = (
   const [loadingState, setLoadingState] = useState<LoadingState>(
     DEFAULT_LOADING_STATE
   );
+  const [startRecovery, setStartRecovery] = useState<"receipt" | "retry" | null>(null);
   const generationRunRef = useRef(0);
   const retrySubmitRef = useRef<(() => void) | null>(null);
   const activeDurableTaskRef = useRef<string | null>(null);
@@ -225,7 +232,7 @@ export const usePresentationGeneration = (
       } else {
         notify.error(
           t("errorTitle"),
-          t("errorDescription")
+          getApiErrorDisplayMessage(error, t("errorDescription")),
         );
       }
     },
@@ -239,6 +246,7 @@ export const usePresentationGeneration = (
   }, [presentationId]);
 
   const handleSubmit = useCallback(async () => {
+    if (submittingDurableTaskRef.current) return;
     if (!presentationId) {
       notify.error(
         t("presentationUnavailableTitle"),
@@ -252,6 +260,7 @@ export const usePresentationGeneration = (
         : findDurableGenerationTask(presentationId);
     const isSourceContentGeneration =
       durableTask?.authoredRequest?.sourceMode === "source_content_restyle" ||
+      durableTask?.authoredRequest?.sourceMode === "raster_reconstruction" ||
       (sourceContentMode && Boolean(sourceContentAdmission));
     if (!isSourceContentGeneration && !validateInputs()) return;
     const runId = ++generationRunRef.current;
@@ -302,6 +311,7 @@ export const usePresentationGeneration = (
     // "Auto" is a sentinel, not a real language: send null so the backend applies
     // its language-aware fallback instead of authoring with a literal "Auto".
     const reduxAuthoredRequest = {
+      strategy: generationStrategy,
       language: isSourceContentGeneration
         ? null
         : language && language !== LanguageType.Auto
@@ -312,26 +322,30 @@ export const usePresentationGeneration = (
         : {}),
       // The immutable source-content path must never enter vision re-authoring,
       // including outline reload/resume paths reconstructed from Redux.
-      visionQa: isSourceContentGeneration ? false : authoredVisionQa,
-      authoredStyle,
-      ...(companyStandard
+      visionQa: isSourceContentGeneration || generationStrategy === "svg" ? false : authoredVisionQa,
+      authoredStyle:
+        generationConfig?.pageSize !== "A4" && generationConfig?.aspectRatio === "9:16"
+          ? DEFAULT_AUTHORED_STYLE.id
+          : authoredStyle,
+      ...(sourceContentAdmission?.documentCanvas
+        ? { documentCanvas: sourceContentAdmission.documentCanvas }
+        : {}),
+      ...(isSourceContentGeneration && generationStrategy === "svg"
+        ? {}
+        : generationConfig?.pageSize === "A4" && generationConfig.orientation
+          ? { pageSize: "A4" as const, orientation: generationConfig.orientation }
+          : { aspectRatio: generationConfig?.aspectRatio ?? "16:9" }),
+      ...(generationConfig?.codexGenerationPreset
+        ? { codexGenerationPreset: generationConfig.codexGenerationPreset }
+        : {}),
+      ...(companyStandard && !isSourceContentGeneration && generationStrategy === "authored"
         ? { masterPin: generationMasterPin(companyStandard) }
         : {}),
       ...(sourceContentMode && sourceContentAdmission
         ? {
             sourceMode: "source_content_restyle" as const,
             sourceContentManifestPin: sourceContentAdmission.manifestPin,
-            contentPolicy: {
-              text: "outline" as const,
-              preserveAllTableCells: false as const,
-              preserveAllChartValues: false as const,
-              preserveAllImageOccurrences: true as const,
-              preserveSourceOrder: true as const,
-              preserveSourceSlideCount: true as const,
-              allowSlideExpansion: false as const,
-              allowSummarization: true as const,
-              overflowPolicy: "same_page_recompose_or_fail" as const,
-            },
+            contentPolicy: SOURCE_CONTENT_POLICY,
           }
         : {}),
     };
@@ -341,10 +355,10 @@ export const usePresentationGeneration = (
     }
     // A "starting" record can survive a lost POST response. Reusing it here
     // resubmits with the same idempotency key instead of creating a second job.
-    if (!durableTask || durableTask.mode !== "authored") {
+    if (!durableTask || (durableTask.mode !== "authored" && durableTask.mode !== "svg")) {
       durableTask = saveDurableGenerationTask({
         ...createDurableGenerationTask({
-          mode: "authored",
+          mode: generationStrategy,
           sourcePresentationId: presentationId,
           timeoutMs: AUTHORED_TIMEOUT_MS,
           progressDurationSeconds: estSeconds,
@@ -355,8 +369,13 @@ export const usePresentationGeneration = (
     // A resume must resend the captured settings verbatim: a reload wipes the
     // Redux copies, and the server 409s a same-key re-POST whose payload drifts.
     const authoredRequest = durableTask.authoredRequest ?? reduxAuthoredRequest;
+    const requestPageSize = "pageSize" in authoredRequest ? authoredRequest.pageSize : undefined;
+    const requestOrientation = "orientation" in authoredRequest ? authoredRequest.orientation : undefined;
+    const requestAspectRatio = "aspectRatio" in authoredRequest ? authoredRequest.aspectRatio : undefined;
     startingDurableTaskRef.current = durableTask;
     submittingDurableTaskRef.current = durableTask.idempotencyKey;
+    setStartRecovery(null);
+    setLoadingState({ isLoading: true, message: "슬라이드 제작 요청을 접수하고 있습니다.", showProgress: false, duration: 0 });
     try {
       const started = await PresentationGenerationApi.generateAuthoredAsync({
         presentation_id: presentationId,
@@ -370,9 +389,19 @@ export const usePresentationGeneration = (
           : {}),
         language: authoredRequest.language,
         vision_qa: authoredRequest.visionQa,
+        strategy: authoredRequest.strategy ?? "authored",
         authored_style: authoredRequest.authoredStyle,
+        ...(authoredRequest.sourceMode === "source_content_restyle" && authoredRequest.strategy === "svg"
+          ? {}
+          : requestPageSize === "A4" && requestOrientation
+            ? { page_size: "A4" as const, orientation: requestOrientation }
+            : { aspect_ratio: requestAspectRatio ?? "16:9" }),
+        codex_generation_preset: authoredRequest.codexGenerationPreset,
         masterPin: authoredRequest.masterPin,
         sourceMode: authoredRequest.sourceMode,
+        rasterApprovalPin: "rasterApprovalPin" in authoredRequest ? authoredRequest.rasterApprovalPin : undefined,
+        referenceSnapshotIds: authoredRequest.sourceMode === "raster_reconstruction"
+          ? authoredRequest.referenceSnapshotIds : undefined,
         sourceContentManifestPin: authoredRequest.sourceContentManifestPin,
         contentPolicy: authoredRequest.contentPolicy,
         idempotency_key: durableTask.idempotencyKey,
@@ -392,6 +421,8 @@ export const usePresentationGeneration = (
     } catch (error: unknown) {
       submittingDurableTaskRef.current = null;
       if (!isActiveRun()) return;
+      setLoadingState({ ...DEFAULT_LOADING_STATE, message: error instanceof Error ? error.message : "제작 요청을 접수하지 못했습니다. 다시 확인해 주세요." });
+      setStartRecovery(isAmbiguousGenerationTransportError(error) ? "receipt" : isRetryableGenerationStartError(error) ? "retry" : null);
       if (isCompanyStandardAdmissionError(error)) {
         clearDurableGenerationTask(durableTask.idempotencyKey);
         startingDurableTaskRef.current = null;
@@ -421,6 +452,7 @@ export const usePresentationGeneration = (
     sourceContentMode,
     sourceContentAdmission,
     authoredStyle,
+    generationStrategy,
     companyStandard,
     onMasterRequired,
     openWorkspace,
@@ -465,5 +497,5 @@ export const usePresentationGeneration = (
     );
   }, [presentationId]);
 
-  return { loadingState, handleSubmit, cancelGeneration };
+  return { loadingState, handleSubmit, cancelGeneration, startRecovery };
 };

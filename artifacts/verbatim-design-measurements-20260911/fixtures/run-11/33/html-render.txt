@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:104px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:28px;width:980px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:6px;font-size:28px;line-height:35px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:3px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:126px}
+.body-inner{margin-left:64px;width:1152px}
+.kicker-row{display:flex;align-items:center;justify-content:space-between;height:32px;margin-bottom:16px}
+.kicker{font-size:18px;line-height:27px;font-weight:700;color:#002060}
+.status{display:flex;align-items:center;gap:9px;font-size:15px;line-height:22px;font-weight:700;color:#1D1D1B}
+.status-mark{width:9px;height:9px;background:#E5A93D;border-radius:12px;flex:none}
+.claim{margin-bottom:22px;font-size:30px;line-height:42px;font-weight:700;color:#1D1D1B}
+.claim strong{color:#08916E}
+.main-grid{display:grid;grid-template-columns:710px 418px;gap:24px;height:398px}
+.checklist-panel{height:398px;padding:24px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.panel-head{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.panel-tab{padding:7px 14px;border-radius:12px;background:#002060;color:#FFFFFF;font-size:15px;line-height:21px;font-weight:700}
+.panel-caption{font-size:18px;line-height:27px;font-weight:700;color:#002060}
+.check-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:26px;row-gap:13px}
+.check-item{display:flex;align-items:center;min-height:39px;border-bottom:1px solid #E2E8F0;padding-bottom:8px}
+.check-box{width:22px;height:22px;margin-right:12px;border:2px solid #08916E;border-radius:4px;flex:none}
+.check-text{font-size:18px;line-height:27px;color:#1D1D1B}
+.takeaway-panel{height:398px;padding:28px;background:#00140E;border-radius:12px;display:flex;flex-direction:column;justify-content:space-between}
+.takeaway-label{font-size:15px;line-height:22px;font-weight:700;letter-spacing:.02em;color:#219F88}
+.takeaway-title{margin-top:18px;font-size:27px;line-height:39px;font-weight:700;color:#FFFFFF}
+.takeaway-title strong{color:#08916E}
+.quote-list{margin-top:22px;padding-left:20px;border-left:3px solid #08916E}
+.quote-line{font-size:21px;line-height:35px;font-weight:700;color:#FFFFFF}
+.quote-line.emphasis{color:#08916E}
+.quote-foot{font-size:15px;line-height:23px;color:#CCECFF}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" style="height:104px" data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-33">실행 점검</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-0d8ce11ed2b755dd" data-source-block-id="source-slide:34:text:3">마지막 체크리스트</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:126px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="body-inner" data-qid="q-div-b79d9d1fba65" data-semantic-role="decoration">
+    <div class="kicker-row" data-qid="q-div-986c9a9a4af2" data-semantic-role="supporting">
+      <div class="kicker" data-semantic-role="supporting" data-qid="source-block-8c4949e2075a8cf3" data-source-block-id="source-slide:34:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      <div class="status" data-semantic-role="supporting" data-qid="q-status-33"><span class="status-mark" data-qid="q-span-e03ff4786d8f" data-semantic-role="decoration"></span>최종 점검</div>
+    </div>
+
+    <div class="claim" data-semantic-role="body" data-qid="source-block-c631fb4d39d0712d" data-source-block-id="source-slide:34:text:4">이제 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">혼자서 시작</strong>할 수 있는가?</div>
+
+    <div class="main-grid" data-qid="q-div-948c49f110fb" data-semantic-role="decoration">
+      <div class="checklist-panel" data-semantic-role="decoration" data-qid="q-card-checklist-33">
+        <div class="panel-head" data-qid="q-div-e25ca81e908c" data-semantic-role="decoration">
+          <div class="panel-tab" data-semantic-role="supporting" data-qid="source-block-92207b6a96ee25cd" data-source-block-id="source-slide:34:text:5">34</div>
+          <div class="panel-caption" data-semantic-role="supporting" data-qid="q-caption-33">시작 전 확인할 것</div>
+        </div>
+        <div class="check-grid" data-qid="q-div-2a5c8bb6ef63" data-semantic-role="decoration">
+          <div class="check-item" data-semantic-role="decoration" data-qid="q-check-01-33"><span class="check-box" data-qid="q-span-acd61501c301" data-semantic-role="decoration"></span><span class="check-text" data-qid="source-block-2580b2c9f8243659" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:0">누구에게 팔지 안다</span></div>
+          <div class="check-item" data-semantic-role="decoration" data-qid="q-check-02-33"><span class="check-box" data-qid="q-span-7b2a57107bd6" data-semantic-role="decoration"></span><span class="check-text" data-qid="source-block-419ba32807d0923b" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:1">무엇을 팔지 안다</span></div>
+          <div class="check-item" data-semantic-role="decoration" data-qid="q-check-03-33"><span class="check-box" data-qid="q-span-99f5bdcd104d" data-semantic-role="decoration"></span><span class="check-text" data-qid="source-block-125dd57781b7222c" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:2">가격을 말할 수 있다</span></div>
+          <div class="check-item" data-semantic-role="decoration" data-qid="q-check-04-33"><span class="check-box" data-qid="q-span-261d45706776" data-semantic-role="decoration"></span><span class="check-text" data-qid="source-block-6feae989aea88692" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:3">숏폼 1개를 만들 수 있다</span></div>
+          <div class="check-item" data-semantic-role="decoration" data-qid="q-check-05-33"><span class="check-box" data-qid="q-span-21819a06fc55" data-semantic-role="decoration"></span><span class="check-text" data-qid="source-block-c22fea9f6e610db1" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:4">영업할 곳을 찾을 수 있다</span></div>
+          <div class="check-item" data-semantic-role="decoration" data-qid="q-check-06-33"><span class="check-box" data-qid="q-span-b4a988854315" data-semantic-role="decoration"></span><span class="check-text" data-qid="source-block-ed50497f354f883c" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:5">샘플을 제안할 수 있다</span></div>
+          <div class="check-item" data-semantic-role="decoration" data-qid="q-check-07-33"><span class="check-box" data-qid="q-span-2d58cdda4808" data-semantic-role="decoration"></span><span class="check-text" data-qid="source-block-a6de5e09c9cbedcc" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:6">상담과 계약의 기본을 안다</span></div>
+          <div class="check-item" data-semantic-role="decoration" data-qid="q-check-08-33"><span class="check-box" data-qid="q-span-e61bc17f96f5" data-semantic-role="decoration"></span><span class="check-text" data-qid="source-block-fddd0c589ae94ce0" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:7">다음 달 콘텐츠를 제안할 수 있다</span></div>
+        </div>
+      </div>
+
+      <div class="takeaway-panel" data-semantic-role="decoration" data-qid="q-card-takeaway-33">
+        <div data-qid="q-div-621f91553489" data-semantic-role="decoration">
+          <div class="takeaway-label" data-semantic-role="supporting" data-qid="source-block-5270538a9e5de870" data-source-block-id="source-slide:34:text:10">기억하세요</div>
+          <div class="takeaway-title" data-semantic-role="body" data-qid="source-block-4c42feb7bff98e01" data-source-block-id="source-slide:34:text:11:run:0-2">작게 시작하고<br>빠르게 만들고<br><strong data-qid="q-strong-f213b54d7db8" data-semantic-role="body">많이 영업하고</strong></div>
+          <div class="quote-list" data-qid="source-block-a455ca4fc38a66b0" data-semantic-role="decoration" data-source-block-id="source-slide:34:text:11:run:3-4">
+            <div class="quote-line" data-semantic-role="body" data-qid="q-quote-01-33">한 명의 고객을</div>
+            <div class="quote-line emphasis" data-semantic-role="body" data-qid="q-quote-02-33">장기 고객으로.</div>
+          </div>
+        </div>
+        <div class="quote-foot" data-semantic-role="supporting" data-qid="q-quote-foot-33">작은 실행이 지속 가능한 사업을 만듭니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="q-page-33">34</div>
+</body>
+</html>

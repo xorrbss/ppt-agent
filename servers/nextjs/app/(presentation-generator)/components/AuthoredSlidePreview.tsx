@@ -1,12 +1,17 @@
 "use client";
 
 import React from "react";
+import {
+  LEGACY_AUTHORED_CANVAS,
+  type AuthoredCanvasContract,
+} from "@/lib/authored-canvas";
 
 interface AuthoredSlidePreviewProps {
   slideIndex: number;
   html?: unknown;
   imageSrc?: string;
   preferHtml?: boolean;
+  canvas?: AuthoredCanvasContract;
 }
 
 const AUTHORED_PREVIEW_CSP = [
@@ -59,6 +64,7 @@ export function AuthoredSlidePreview({
   html,
   imageSrc,
   preferHtml = false,
+  canvas = LEGACY_AUTHORED_CANVAS,
 }: AuthoredSlidePreviewProps) {
   const htmlSource = typeof html === "string" ? html.trim() : "";
   const canRenderHtml = preferHtml && htmlSource.length > 0;
@@ -69,7 +75,9 @@ export function AuthoredSlidePreview({
   return (
     <div
       data-testid={`authored-slide-preview-${slideIndex}`}
-      className="aspect-video h-full w-full overflow-hidden bg-white"
+      data-authored-canvas={`${canvas.widthPx}x${canvas.heightPx}`}
+      className="h-full w-full overflow-hidden bg-white"
+      style={{ aspectRatio: `${canvas.widthPx} / ${canvas.heightPx}` }}
     >
       {canRenderHtml ? (
         <iframe

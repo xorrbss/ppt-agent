@@ -4,10 +4,12 @@ import React from "react";
 import { useSelector } from "react-redux";
 
 import type { PresentationDriverId } from "@/lib/presentation-profile";
+import { resolveAuthoredCanvas, type AuthoredCanvasContract } from "@/lib/authored-canvas";
 import type { RootState } from "@/store/store";
 import { resolveAuthoredImageUrl } from "@/utils/api";
 
 import { AuthoredSlidePreview } from "./AuthoredSlidePreview";
+import { SvgSlidePreview } from "./SvgSlidePreview";
 import SlideErrorBoundary from "./SlideErrorBoundary";
 import {
   shouldRenderTemplateV2HtmlPreview,
@@ -19,7 +21,9 @@ type SlideRecord = Record<string, any>;
 type PresentationContentRenderProps = {
   slide: SlideRecord;
   preferAuthoredHtml?: boolean;
+  resolveSvgAssets?: boolean;
   driverId?: PresentationDriverId;
+  canvas?: AuthoredCanvasContract;
 };
 
 type DriverRendererProps = PresentationContentRenderProps & {
@@ -29,6 +33,7 @@ type DriverRendererProps = PresentationContentRenderProps & {
 function AuthoredContent({
   slide,
   preferAuthoredHtml = false,
+  canvas,
 }: DriverRendererProps) {
   const imageRef = slide?.content?.image || slide?.properties?.image;
   const imageSrc = resolveAuthoredImageUrl(imageRef);
@@ -40,6 +45,7 @@ function AuthoredContent({
         html={slide.html_content}
         imageSrc={imageSrc}
         preferHtml={preferAuthoredHtml}
+        canvas={canvas}
       />
     </SlideErrorBoundary>
   );
@@ -53,8 +59,16 @@ function TemplateV2Content({ slide, fonts }: DriverRendererProps) {
   );
 }
 
+function SvgContent({ slide, canvas, resolveSvgAssets }: DriverRendererProps) {
+  const imageRef = slide?.content?.image || slide?.properties?.image;
+  const manifest = slide?.content?.svgAssetManifest;
+  const revision = manifest?.slideRevision ?? slide?.content?.svgReceipt?.source_digest ?? slide?.svg_content;
+  return <SlideErrorBoundary label={`Slide ${slide.index + 1}`}><SvgSlidePreview slideIndex={slide.index} slideId={slide.id} svg={slide.svg_content} resolveAssets={resolveSvgAssets} revision={revision} imageSrc={resolveAuthoredImageUrl(imageRef)} canvas={canvas} /></SlideErrorBoundary>;
+}
+
 const PRESENTATION_CONTENT_RENDERER_REGISTRY = Object.freeze({
   authored: AuthoredContent,
+  "svg-v1": SvgContent,
   "template-v2": TemplateV2Content,
 } satisfies Record<PresentationDriverId, React.ComponentType<DriverRendererProps>>);
 
@@ -76,8 +90,10 @@ function inferSupportedDriver(
 
 export function PresentationContentRender({
   slide,
+  resolveSvgAssets = false,
   preferAuthoredHtml = false,
   driverId,
+  canvas,
 }: PresentationContentRenderProps) {
   const presentationData = useSelector(
     (state: RootState) => state.presentationGeneration.presentationData,
@@ -85,7 +101,7 @@ export function PresentationContentRender({
   const issuedDriver = presentationData?.profile?.driver_id;
   const resolvedDriver =
     driverId ??
-    (issuedDriver === "authored" || issuedDriver === "template-v2"
+    (issuedDriver === "authored" || issuedDriver === "svg-v1" || issuedDriver === "template-v2"
       ? issuedDriver
       : inferSupportedDriver(slide, presentationData?.version));
 
@@ -98,12 +114,17 @@ export function PresentationContentRender({
   }
 
   const Renderer = PRESENTATION_CONTENT_RENDERER_REGISTRY[resolvedDriver];
+  const authoredCanvas = (resolvedDriver === "authored" || resolvedDriver === "svg-v1")
+    ? canvas ?? resolveAuthoredCanvas(presentationData?.theme)
+    : undefined;
   return (
     <Renderer
       slide={slide}
       fonts={presentationData?.fonts}
       preferAuthoredHtml={preferAuthoredHtml}
+      resolveSvgAssets={resolveSvgAssets}
       driverId={resolvedDriver}
+      canvas={authoredCanvas}
     />
   );
 }

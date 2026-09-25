@@ -22,7 +22,7 @@ from services.authored_vnext.integration.export_payload import (
     semantic_asset_references,
 )
 from services.authored_vnext.integration.sql_repository import (
-    AuthoredVNextSqlRepository,
+    AsyncAuthoredVNextSqlRepository, AuthoredVNextSqlRepository,
     ExportArtifactInput,
     OperationFenceError,
     PublicationConflictError,
@@ -316,6 +316,8 @@ def _assert_worker_readback(
                 if not isinstance(text, str):
                     raise ExportServiceError("authored_vnext_scene_read_back_invalid")
                 identity["textDigest"] = prefixed_sha256({"text": text})
+                style = element.get("style")
+                identity["autoFit"] = style.get("autoFit", "none") if isinstance(style, dict) else "none"
             elif kind == "image":
                 identity["assetDigest"] = element.get("assetDigest")
             elif kind in {"table", "chart"}:
@@ -657,6 +659,7 @@ class AuthoredVNextExportService:
         master_asset_store: OwnerMasterAssetStore | None = None,
     ) -> None:
         self.repository = repository
+        self.async_repository = AsyncAuthoredVNextSqlRepository(repository)
         self.worker = worker
         self.artifact_store = artifact_store
         self.master_asset_store = master_asset_store
@@ -895,9 +898,9 @@ class AuthoredVNextExportService:
         if master.contract.font_manifest.digest != command.expected_font_digest:
             raise ExportServiceError("authored_vnext_font_digest_mismatch")
         expected_asset_manifest = source_digests["assetManifest"]
-        actual_asset_digests = sorted(
+        actual_asset_digests = sorted({
             f"sha256:{asset['sha256']}" for asset in assets
-        )
+        })
         if sorted(set(command.expected_asset_digests)) != actual_asset_digests:
             raise ExportServiceError("authored_vnext_asset_digest_mismatch")
         active = self.repository.get_active_artifact(deck.deck_id)
@@ -931,15 +934,15 @@ class AuthoredVNextExportService:
         )
 
     async def run_job(self, job_id: uuid.UUID):
-        claimed = self.repository.claim_export_job(
+        claimed = await self.async_repository.claim_export_job(
             job_id,
             worker_id=f"fastapi:{uuid.uuid4()}",
             lease_seconds=600,
         )
         try:
-            deck = self.repository.get_deck(claimed.deck_id, claimed.deck_revision)
+            deck = await self.async_repository.get_deck(claimed.deck_id, claimed.deck_revision)
             master_pin = getattr(deck, "master", None)
-            master = self.repository.get_master(
+            master = await self.async_repository.get_master(
                 master_pin.master_id if master_pin is not None else deck.master_id,
                 master_pin.master_revision if master_pin is not None else deck.master_revision,
             )
@@ -1015,7 +1018,7 @@ class AuthoredVNextExportService:
             ):
                 raise ExportServiceError("authored_vnext_worker_read_back_invalid")
             package_digest = f"sha256:{package['packageDigest']}"
-            self.repository.complete_export_job(
+            await self.async_repository.complete_export_job(
                 claimed.id,
                 fence_token=claimed.fence_token,
                 artifact=ExportArtifactInput(
@@ -1035,12 +1038,11 @@ class AuthoredVNextExportService:
             ExportServiceError,
             ArtifactStoreError,
             OperationFenceError,
-            PublicationConflictError,
-            SourceDigestMismatchError,
+            PublicationConflictError, SourceDigestMismatchError,
         ) as error:
             code = getattr(error, "code", str(error))
             try:
-                self.repository.fail_export_job(
+                await self.async_repository.fail_export_job(
                     claimed.id,
                     fence_token=claimed.fence_token,
                     failure_code=code,
@@ -1053,7 +1055,7 @@ class AuthoredVNextExportService:
             # Never strand a claimed durable job in ``running`` because an
             # unexpected adapter/runtime error escaped the known taxonomy.
             try:
-                self.repository.fail_export_job(
+                await self.async_repository.fail_export_job(
                     claimed.id,
                     fence_token=claimed.fence_token,
                     failure_code="authored_vnext_export_failed",
@@ -1061,4 +1063,4 @@ class AuthoredVNextExportService:
                 )
             except Exception:
                 pass
-        return self.repository.get_export_job(claimed.id)
+        return await self.async_repository.get_export_job(claimed.id)

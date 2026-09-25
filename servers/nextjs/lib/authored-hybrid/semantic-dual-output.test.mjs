@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 
 import sharp from "sharp";
 
 import { backplatePixelSize, BACKPLATE_SCALE } from "./capture-scale.ts";
 import { resolveScriptAwareTypeface } from "./font-policy.ts";
 import { instrumentAuthoredHtml } from "./html-instrumentation.ts";
+import { LOCAL_FIT_BROWSER_SOURCE } from "./local-fit-browser.ts";
 import { planLayerSafeNativeElements, prepareNativeElements } from "./native-plan.ts";
 import {
   buildBrowserObservationReceiptV1,
@@ -25,6 +27,52 @@ import {
 const { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT } = backplatePixelSize();
 const digest = (value) =>
   `sha256:${createHash("sha256").update(value).digest("hex")}`;
+
+test("local-fit export verifies declared fallback fonts without changing measured size", () => {
+  const observe = ({ family, installed = [], status = "loaded", checked = true }) => {
+    const style = { fontFamily: family, fontStyle: "normal", fontWeight: "400",
+      fontSize: "13px", display: "block", visibility: "visible", transform: "none",
+      scale: "none", rotate: "none", zoom: "1" };
+    const owner = { parentElement: null, getAttribute: () => "body.note",
+      closest: (selector) => selector === "[data-qid]" ? owner : null };
+    const text = { parentElement: owner, textContent: "Fallback 123" };
+    const fonts = [];
+    fonts.status = status;
+    fonts.check = () => checked;
+    const document = { body: owner, fonts,
+      createTreeWalker() {
+        let visited = false;
+        return { currentNode: null, nextNode() {
+          if (visited) return false;
+          visited = true; this.currentNode = text; return text;
+        } };
+      },
+      createElement: () => ({ getContext: () => ({ font: "",
+        measureText() {
+          return { width: installed.some((name) => this.font.includes(JSON.stringify(name))) ? 123 : 100 };
+        },
+      }) }),
+    };
+    return runInNewContext(LOCAL_FIT_BROWSER_SOURCE + "\nobserveLocalFitFonts()", {
+      document, NodeFilter: { SHOW_TEXT: 4 }, getComputedStyle: () => style,
+      innerWidth: 1280, innerHeight: 720, devicePixelRatio: 1,
+    }).runs[0];
+  };
+  const fallback = observe({ family: '"IBM Plex Mono","Consolas",monospace', installed: ["Consolas"] });
+  assert.equal(fallback.font_loaded, true);
+  assert.equal(fallback.resolved_font_family, "Consolas");
+  assert.equal(fallback.font_resolution_source, "installed-local-font");
+  assert.equal(fallback.font_px, 13);
+  assert.equal(fallback.effective_text_scale, 1);
+  assert.equal(fallback.font_px * 0.75, 9.75);
+  const generic = observe({ family: '"Missing",monospace' });
+  assert.equal(generic.font_loaded, true);
+  assert.equal(generic.font_resolution_source, "generic-fallback");
+  assert.equal(observe({ family: '"Missing"' }).font_loaded, false);
+  assert.equal(observe({ family: '"Missing",monospace', status: "loading" }).font_loaded, false);
+  assert.equal(observe({ family: '"Missing",monospace', checked: false }).font_loaded, false);
+  assert.equal(observe({ family: '"Comma, Font",monospace', installed: ["Comma, Font"] }).resolved_font_family, "Comma, Font");
+});
 const bounds = (x, y, width, height) => ({
   px: { x, y, width, height },
   inches: { x: x / 96, y: y / 96, width: width / 96, height: height / 96 },
@@ -283,8 +331,16 @@ test("declared image asset authority uses decoded bytes and fails closed on mism
 });
 
 test("single-backplate planner reaches a fixed point and records z-band demotions", () => {
+  // identityAuthority is pinned to "compatibility-ordinal" (not the file's
+  // default "declared-qid" from base()) so this exercises the iterative
+  // single-backplate-fixed-point demotion path this test targets. Since
+  // 2971728b6 (feat(authored): harden release generation and hybrid
+  // evidence), an all-declared-qid element set takes a different
+  // "audited-multi-z-band" shortcut (see the "declared paint order..." test
+  // in native-plan.test.mjs) that does not perform overlap-based demotion.
   const nativeShape = (id, zOrder, rect) => ({
     ...base(id, zOrder, rect),
+    identityAuthority: "compatibility-ordinal",
     classification: { mode: "native", kind: "shape", confidence: "safe" },
     shape: {
       shape: "rectangle",
@@ -298,6 +354,7 @@ test("single-backplate planner reaches a fixed point and records z-band demotion
   const middle = nativeShape("native.middle", 1, [60, 0, 100, 100]);
   const upperRaster = {
     ...base("chart.raster", 2, [130, 0, 60, 100]),
+    identityAuthority: "compatibility-ordinal",
     classification: {
       mode: "raster",
       candidateKind: "complex",

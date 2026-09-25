@@ -157,6 +157,11 @@ def _decode_static_data_url(value: str) -> bytes:
 
 
 def _neutralize_css(css: str, asset_digests: list[str]) -> str:
+    # Validate every branch of inert responsive layout, while the admitted
+    # document retains the original queries for source-viewport measurement.
+    from utils.source_canvas_css import flatten_layout_conditions
+
+    css = flatten_layout_conditions(css)
     def replace_url(match: re.Match[str]) -> str:
         value = match.group("value").strip()
         if re.fullmatch(r"#[A-Za-z_][A-Za-z0-9_.:-]*", value):

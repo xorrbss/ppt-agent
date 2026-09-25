@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#FFFFFF;background:linear-gradient(120deg,#00140E 0%,#00291F 58%,#00140E 100%);word-break:keep-all;overflow-wrap:break-word}
+.cover{position:relative;width:1280px;height:720px;padding:64px}
+.glow{position:absolute;right:84px;bottom:72px;width:370px;height:370px;border:1px solid rgba(8,145,110,.28);border-radius:50%}
+.glow-inner{position:absolute;right:142px;bottom:130px;width:254px;height:254px;border:1px solid rgba(33,159,136,.22);border-radius:50%}
+.top-mark{position:absolute;top:64px;right:64px;display:flex;align-items:center;gap:12px;color:#A7ACB3;font-size:15px;line-height:22px;font-weight:500}
+.top-mark-line{width:38px;height:1px;background:#08916E}
+.brand{position:relative;display:flex;align-items:center;gap:12px;color:#08916E;font-size:20px;line-height:28px;font-weight:700;letter-spacing:.02em}
+.brand-dot{width:10px;height:10px;background:#08916E;border-radius:12px}
+.hero{position:relative;margin-top:110px;width:780px}
+.kicker{color:#219F88;font-size:18px;line-height:28px;font-weight:700;letter-spacing:.08em}
+.title{margin-top:18px;color:#FFFFFF;font-size:56px;line-height:1.22;font-weight:700;letter-spacing:-.045em}
+.title-line{display:block}
+.title-line.accent{color:#08916E}
+.rule{margin-top:32px;width:92px;height:4px;background:#08916E;border-radius:12px}
+.course{margin-top:28px;color:#FFFFFF;font-size:22px;line-height:34px;font-weight:500}
+.claim{position:absolute;left:64px;bottom:76px;width:662px;padding-left:22px;border-left:4px solid #08916E;color:#DCEDE8;font-size:19px;line-height:32px;font-weight:500}
+.claim strong{color:#FFFFFF;font-weight:700}
+.author{position:absolute;right:64px;bottom:76px;width:280px;padding-top:18px;border-top:1px solid rgba(33,159,136,.55);color:#A7ACB3;font-size:16px;line-height:26px;text-align:right}
+.author-accent{display:block;margin-bottom:8px;color:#08916E;font-size:15px;line-height:22px;font-weight:700;letter-spacing:.1em}
+.corner{position:absolute;left:64px;bottom:32px;width:22px;height:1px;background:#219F88}
+.corner-two{position:absolute;left:64px;bottom:32px;width:1px;height:22px;background:#219F88}
+</style>
+</head>
+<body>
+<div class="cover" data-qid="q-div-45f6c33b0728" data-semantic-role="decoration">
+  <div class="glow" data-qid="q-div-5f9be5222e1c" data-semantic-role="decoration"></div>
+  <div class="glow-inner" data-qid="q-div-4f25fe803b40" data-semantic-role="decoration"></div>
+  <div class="top-mark" data-semantic-role="title" data-qid="source-block-d998a880c1825a65" data-source-block-id="source-slide:1:text:10">
+    <span class="top-mark-line" data-qid="q-span-409f21b2bb1b" data-semantic-role="decoration"></span>
+    꿀벌쌤 강의용 마스터 PPT
+  </div>
+  <div class="brand" data-semantic-role="supporting" data-qid="source-block-98846a3732f14a05" data-source-block-id="source-slide:1:text:6">
+    <span class="brand-dot" data-qid="q-span-1a6d54a09715" data-semantic-role="decoration"></span>
+    🐝 꿀벌쌤
+  </div>
+  <div class="hero" data-qid="q-div-19a94afde0da" data-semantic-role="decoration">
+    <div class="kicker" data-semantic-role="supporting" data-qid="q-kicker-42b8de">숏폼대행</div>
+    <div class="title" data-semantic-role="decoration" data-qid="source-block-fb8ed3c6b1083cb4" data-source-block-id="source-slide:1:text:7">
+      <span class="title-line accent" data-qid="q-span-41e0e7177e9f" data-semantic-role="body">숏폼대행</span>
+      <span class="title-line" data-qid="q-span-3fa79da04575" data-semantic-role="body">1인사업자 홀로서기</span>
+    </div>
+    <div class="rule" data-qid="q-div-cbd8ff350888" data-semantic-role="decoration"></div>
+    <div class="course" data-semantic-role="body" data-qid="source-block-33e774472066bd01" data-source-block-id="source-slide:1:text:8">4주 · 총 8시간 · 온라인 실전 창업 과정</div>
+  </div>
+  <div class="claim" data-semantic-role="body" data-qid="source-block-81b3a560fe0b0a76" data-source-block-id="source-slide:1:text:9">
+    영상 하나를 만드는 사람이 아니라<br>
+    <strong data-qid="q-strong-663977331dde" data-semantic-role="body">숏폼으로 돈을 버는 1인사업자가 되는 과정</strong>
+  </div>
+  <div class="author" data-semantic-role="supporting" data-qid="q-author-5f28ac">
+    <span class="author-accent" data-qid="q-span-0483838265f2" data-semantic-role="body">MASTER COURSE</span>
+    꿀벌쌤 강의용 마스터 PPT.
+  </div>
+  <div class="corner" data-qid="q-div-74aec41c2b46" data-semantic-role="decoration"></div>
+  <div class="corner-two" data-qid="q-div-d8baebe9d997" data-semantic-role="decoration"></div>
+</div>
+</body>
+</html>

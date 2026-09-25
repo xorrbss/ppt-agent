@@ -99,6 +99,7 @@ describe("PresentationGenerationApi.createPresentation", () => {
         file_paths: [],
         language: "Korean",
         theme,
+        strategy: "authored",
       });
     });
   });
@@ -160,8 +161,12 @@ describe("PresentationGenerationApi.generateAuthoredAsync", () => {
         // `template` field; the backend resume path reads `strategy`.
         strategy: "authored",
         export_as: "pptx",
+        // Export refuses a deck whose generation receipt says "development",
+        // so the UI asks for the release policy on every authored run.
+        qualityProfile: "release",
         vision_qa: true,
         authored_style: "strategic-navy",
+        aspect_ratio: "16:9",
       });
     });
   });

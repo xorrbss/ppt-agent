@@ -21,6 +21,7 @@ from models.sql.presentation_export_attempt import (
     validate_export_attempt_provenance,
 )
 from models.sql.slide import SlideModel
+from models.sql.workspace import WorkspaceOperation
 from services.presentation_export_capabilities import (
     PresentationExportCapabilityAnalysis,
     PresentationExportContractError,
@@ -66,6 +67,7 @@ def build_export_source_snapshot_sha256(
             "content": slide.content,
             "ui": slide.ui,
             "html_content": slide.html_content,
+            **({"svg_content": slide.svg_content, "source_format": "svg"} if getattr(slide, "source_format", None) == "svg" else {}),
             "speaker_note": slide.speaker_note,
             "properties": slide.properties,
         }
@@ -110,7 +112,7 @@ def build_export_source_snapshot_sha256(
 def build_export_html_source_sha256(slides: Sequence[SlideModel]) -> str:
     return sha256_canonical_json(
         [
-            {"index": slide.index, "html_content": slide.html_content}
+            {"index": slide.index, "html_content": slide.html_content, **({"svg_content": slide.svg_content, "source_format": "svg"} if getattr(slide, "source_format", None) == "svg" else {})}
             for slide in sorted(slides, key=lambda item: (item.index, str(item.id)))
         ]
     )
@@ -140,6 +142,7 @@ def build_export_composition_sha256(
                     "layout_group": slide.layout_group,
                     "layout": slide.layout,
                     "html_content": slide.html_content,
+            **({"svg_content": slide.svg_content, "source_format": "svg"} if getattr(slide, "source_format", None) == "svg" else {}),
                     "ui": slide.ui,
                     "properties": slide.properties,
                 }
@@ -495,6 +498,71 @@ async def terminalize_export_attempt_failed(
     await session.commit()
 
 
+async def terminalize_export_attempt_failed_if_current_workspace_claim(
+    session: AsyncSession,
+    *,
+    attempt_id: uuid.UUID,
+    expected_owner_id: uuid.UUID | None,
+    expected_owner_scope: str,
+    expected_workspace_operation_id: uuid.UUID,
+    expected_attempt_token: str,
+    expected_fencing_token: int,
+    failure_code: str,
+    failure_path: str | None,
+    selected_adapter: str | None = None,
+) -> bool:
+    """Fail a running export attempt only while its worker claim remains current."""
+
+    operation = await session.scalar(
+        select(WorkspaceOperation)
+        .where(
+            WorkspaceOperation.id == expected_workspace_operation_id,
+            WorkspaceOperation.owner_id == expected_owner_id,
+            WorkspaceOperation.owner_scope == expected_owner_scope,
+        )
+        .with_for_update()
+    )
+    if (
+        operation is None
+        or operation.state != "running"
+        or operation.attempt_token != expected_attempt_token
+        or operation.fencing_token != expected_fencing_token
+    ):
+        await session.rollback()
+        return False
+
+    if not isinstance(failure_code, str) or not failure_code or len(failure_code) > 128:
+        failure_code = "presentation_export_failed"
+    safe_path = failure_path[:512] if isinstance(failure_path, str) else None
+    now = datetime.now(timezone.utc)
+    result = await session.execute(
+        update(PresentationExportAttempt)
+        .where(
+            PresentationExportAttempt.id == attempt_id,
+            PresentationExportAttempt.owner_id == expected_owner_id,
+            PresentationExportAttempt.owner_scope == expected_owner_scope,
+            PresentationExportAttempt.workspace_operation_id
+            == expected_workspace_operation_id,
+            PresentationExportAttempt.state == "running",
+        )
+        .values(
+            state="failed",
+            selected_adapter=selected_adapter,
+            artifact_sha256=None,
+            artifact_size_bytes=None,
+            failure_code=failure_code,
+            failure_path=safe_path,
+            completed_at=now,
+            updated_at=now,
+        )
+    )
+    if result.rowcount != 1:
+        await session.rollback()
+        return False
+    await session.commit()
+    return True
+
+
 async def require_export_source_revision(
     session: AsyncSession,
     *,
@@ -522,5 +590,6 @@ __all__ = [
     "require_export_source_revision",
     "sha256_canonical_json",
     "terminalize_export_attempt_failed",
+    "terminalize_export_attempt_failed_if_current_workspace_claim",
     "terminalize_export_attempt_succeeded",
 ]

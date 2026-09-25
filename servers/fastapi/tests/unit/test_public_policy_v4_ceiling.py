@@ -56,6 +56,7 @@ VERSIONS_DIRECTORY = ALEMBIC_DIRECTORY / "versions"
 
 V3_REVISION = "e1a7c9d4b2f8"
 V4_REVISION = "a2c4e6f8b1d3"
+V5_REVISION = "b4e6f8a0c2d5"
 REVISION_BEFORE_V4 = "e8b3d1f6a4c2"
 
 # Frozen: the v3 row is applied in production and can never move again.
@@ -189,6 +190,7 @@ def test_v4_row_clones_v3_and_only_raises_the_generation_ceiling(tmp_path) -> No
             "public-default/v2",
             "public-default/v3",
             "public-default/v4",
+            "public-default/v5",
         }
         v3 = rows["public-default/v3"]
         v4 = rows["public-default/v4"]
@@ -208,6 +210,13 @@ def test_v4_row_clones_v3_and_only_raises_the_generation_ceiling(tmp_path) -> No
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one() == revision_contract.HEAD_REVISION
 
+        command.downgrade(config, V4_REVISION)
+        assert set(_policy_rows(engine)) == {
+            "public-default/v1",
+            "public-default/v2",
+            "public-default/v3",
+            "public-default/v4",
+        }
         command.downgrade(config, REVISION_BEFORE_V4)
         remaining = _policy_rows(engine)
         assert set(remaining) == {
@@ -333,7 +342,7 @@ def test_large_decks_receive_the_formula_not_a_clamp(
                     request_plan=_plan(slide_count),
                     resource_plan=_RESOURCE_PLAN,
                 )
-                assert admitted.policy_version == "public-default/v4"
+                assert admitted.policy_version == "public-default/v5"
                 assert _granted_seconds(admitted) == expected_seconds
                 assert (
                     public_generation_deadline_seconds(slide_count)
@@ -347,21 +356,23 @@ def test_large_decks_receive_the_formula_not_a_clamp(
     asyncio.run(scenario())
 
 
-def test_default_version_falls_back_to_the_previous_row_before_migration(
+def test_default_version_refuses_instead_of_falling_back_before_migration(
     tmp_path,
 ) -> None:
-    """Deployment ordering: code ahead of the database degrades, never fails.
+    """Deployment ordering is now settled at startup, not per request.
 
-    Admission fails closed with ``public_policy_unavailable`` when the row for
-    the configured version is missing, so a process that expects v4 in front of
-    an unmigrated database would reject every deck.  The default version -- and
-    only the default version -- therefore falls back one step, with a warning.
+    The resolver used to answer a missing current default with the previous
+    default's row and a warning, so decks kept generating under silently older
+    ceilings.  ``require_database_schema_revision_authority`` refuses to start
+    against a database behind the code, which makes that substitution
+    unreachable; reaching it means the schema contract was bypassed, so it
+    raises.  An explicitly requested version is still never redirected.
     """
 
     database_path = tmp_path / "public-policy-fallback.db"
     command.upgrade(
         _alembic_config(f"sqlite:///{database_path.as_posix()}"),
-        REVISION_BEFORE_V4,
+        V4_REVISION,
     )
 
     async def scenario() -> None:
@@ -374,15 +385,21 @@ def test_default_version_falls_back_to_the_previous_row_before_migration(
                     )
                 ) is None
 
-                resolved = await resolve_public_policy_row(
-                    session, PUBLIC_DEFAULT_POLICY_VERSION
-                )
-                assert resolved is not None
-                assert resolved.version == PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION
-                assert resolved.generation_deadline_seconds == V3_ROW_CEILING_SECONDS
+                with pytest.raises(RuntimeError) as fallback:
+                    await resolve_public_policy_row(
+                        session, PUBLIC_DEFAULT_POLICY_VERSION
+                    )
+                message = str(fallback.value)
+                assert message.startswith("public_policy_version_fallback")
+                assert PUBLIC_DEFAULT_POLICY_VERSION in message
+                assert PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION in message
+                assert "uv run alembic upgrade head" in message
 
-                policy = await load_public_policy(session)
-                assert policy.version == PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION
+                # The refusal is not an admission rejection: it reaches the
+                # caller as the invariant violation it is.
+                with pytest.raises(RuntimeError) as through_admission:
+                    await load_public_policy(session)
+                assert not isinstance(through_admission.value, PublicAdmissionRejected)
 
                 # An explicitly requested version is never redirected: a pinned
                 # operation must keep the policy it was admitted under.
@@ -398,27 +415,27 @@ def test_default_version_falls_back_to_the_previous_row_before_migration(
     asyncio.run(scenario())
 
 
-def test_admission_records_the_version_of_the_row_it_actually_applied(
+def test_admission_against_a_database_behind_the_code_writes_nothing(
     monkeypatch, tmp_path
 ) -> None:
-    """The fallback has to move the identity, not only the limits.
+    """Admission stops before it spends, and leaves no half-pinned quota rows.
 
-    ``load_public_policy`` answered the missing v4 default with the v3 row, but
-    admission kept writing the *requested* version onto the admission row and
-    the quota counters. Both carry a foreign key onto ``public_policy_profiles``,
-    so PostgreSQL rejected the insert with ``public_policy_authority_unavailable``
-    and every generation returned 500 -- the seam that exists to keep decks
-    working while the code is ahead of its migration instead broke all of them.
+    The fallback this replaces had to move the *identity* as well as the
+    limits: admission kept writing the requested version onto the admission row
+    and the quota counters, both of which carry a foreign key onto
+    ``public_policy_profiles``, so PostgreSQL rejected the insert and every
+    generation returned 500.  Refusing at the policy lookup removes that whole
+    class of half-written state -- the transaction rolls back with no counter.
     """
 
     monkeypatch.setattr(
         "services.public_operation_admission._require_phase2_authority",
         lambda _session: PublicResourceLease,
     )
-    database_path = tmp_path / "public-admission-before-v4.db"
+    database_path = tmp_path / "public-admission-before-v5.db"
     command.upgrade(
         _alembic_config(f"sqlite:///{database_path.as_posix()}"),
-        REVISION_BEFORE_V4,
+        V4_REVISION,
     )
 
     async def scenario() -> None:
@@ -431,26 +448,26 @@ def test_admission_records_the_version_of_the_row_it_actually_applied(
                     User(id=owner_id, username="fallback-owner", hashed_password="test")
                 )
             operation_id = await _seed_operation(maker, owner_id, key="fallback")
-            async with maker() as session, session.begin():
-                admitted = await admit_public_operation_compatible_v2(
-                    session,
-                    principal=principal,
-                    operation_id=operation_id,
-                    operation_kind="generation",
-                    request_plan=_plan(18),
-                    resource_plan=_RESOURCE_PLAN,
-                )
-                assert admitted.policy_version == PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION
+            with pytest.raises(RuntimeError, match="public_policy_version_fallback"):
+                async with maker() as session, session.begin():
+                    await admit_public_operation_compatible_v2(
+                        session,
+                        principal=principal,
+                        operation_id=operation_id,
+                        operation_kind="generation",
+                        request_plan=_plan(18),
+                        resource_plan=_RESOURCE_PLAN,
+                    )
 
-            # The quota counters have to agree, or the same foreign key fails on
-            # the next admission against this database.
+            # Nothing was pinned to the stale version, so there is no orphan
+            # foreign key waiting for the next admission against this database.
             async with maker() as session:
                 versions = (
                     await session.execute(
                         text("SELECT DISTINCT policy_version FROM public_quota_counters")
                     )
                 ).scalars().all()
-            assert versions == [PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION]
+            assert versions == []
         finally:
             await engine.dispose()
 
@@ -458,6 +475,6 @@ def test_admission_records_the_version_of_the_row_it_actually_applied(
 
 
 def test_both_default_version_constants_move_together() -> None:
-    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v4"
+    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v5"
     assert PUBLIC_PHASE2_DEFAULT_POLICY_VERSION == PUBLIC_DEFAULT_POLICY_VERSION
-    assert PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION == "public-default/v3"
+    assert PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION == "public-default/v4"

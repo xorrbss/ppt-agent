@@ -1,0 +1,57 @@
+{
+  "id": "environment-10-reusable-bottle",
+  "category": "environment",
+  "tags": {
+    "ko": [
+      "환경",
+      "다회용병"
+    ],
+    "en": [
+      "environment",
+      "reusable",
+      "bottle"
+    ]
+  },
+  "alt": {
+    "ko": "다회용병 단색 벡터 인포그래픽",
+    "en": "reusable bottle monochrome vector infographic"
+  },
+  "path": "originals/environment-10-reusable-bottle.svg",
+  "thumbnail": "thumbnails/environment-10-reusable-bottle.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 300,
+  "sha256": "bbb10e014e002a95ecf122ddf88cd7dfef1857c19c80ce42614e02afcc3a2485",
+  "geometry_sha256": "11131c83ae72be03142dc9ec9a887bb368f34d3e2117e33318cdc64873d3f560",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54108,
+    "preview_opaque_pixels": 10048,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ReusableBottle"
+    ],
+    "custom_symbols": [
+      "ReusableBottle"
+    ],
+    "parallel_jobs": 10
+  }
+}

@@ -31,10 +31,10 @@ from services.authored_vnext.master.file_repository import (
 from services.authored_vnext.master.service import AuthoredVNextMasterService
 from services.authored_vnext.master.validation import validate_master
 from utils.renderer_isolation import (
-    RendererPolicyError,
     admit_authored_html,
     admit_static_output_html,
 )
+from utils.renderer_static_policy import neutralize_static_output_html
 from tests.support.authored_vnext_master_fixture import (
     ZERO_DIGEST,
     long_title_slide_payload,
@@ -351,6 +351,27 @@ def test_validation_fails_closed_on_furniture_ai_zone_overlap() -> None:
 def test_file_repository_keeps_immutable_revisions_and_never_saves_preview_html(
     tmp_path,
 ) -> None:
+    """Revisions stay immutable and derived preview HTML is never persisted.
+
+    Decision (2026-09-12, recorded in
+    ``artifacts/verbatim-design-impl-20260911/standing-test-triage.md`` item 4):
+    the vNext preview MAY also satisfy ``admit_authored_html``. This test used
+    to assert ``pytest.raises(RendererPolicyError)`` there, which read as a
+    designed authored/static admission boundary but was only ever a reflection
+    of how narrow the shared CSS allowlist happened to be; widening it for the
+    authored pipeline (``33fef6d1a``) silently retired the assertion.
+
+    There is no invariant that static output must be *inadmissible* as authored
+    HTML, and there cannot be: ``admit_static_output_html`` is defined as
+    "validate the inert static extensions, neutralize them, then run the public
+    authored parser on the result" -- the static profile is a pre-validator in
+    front of the stricter public gate, not a disjoint universe. The invariant is
+    one-directional and is what this test asserts instead: static admission
+    never *widens* authored admission -- same bytes, same source digest, no
+    extra assets -- and the producer is named by the preview receipt's own
+    ``canonical_digest`` rather than by anything smuggled through a gate.
+    """
+
     store = tmp_path / "authored-vnext-store"
     repository = FileAuthoredVNextMasterRepository(store)
     service = AuthoredVNextMasterService(repository)
@@ -390,13 +411,29 @@ def test_file_repository_keeps_immutable_revisions_and_never_saves_preview_html(
     ]
     assert preview.html.startswith("<!doctype html>")
     assert repeated_preview == preview
-    with pytest.raises(RendererPolicyError):
-        admit_authored_html(preview.html)
+    # The preview emits no static-profile extension today: no ``data-*``
+    # attribute, no ``vector-effect``, no embedded CSS asset. Neutralization is
+    # therefore the identity, which is precisely why the public authored gate
+    # admits the same bytes. Assert it, so the day the preview starts emitting
+    # one the divergence becomes visible here rather than silently.
+    assert neutralize_static_output_html(preview.html)[0] == preview.html
+    authored_gate = admit_authored_html(preview.html)
     admitted = admit_static_output_html(preview.html)
+    # Same bytes in, same bytes attested: static admission relabels nothing and
+    # widens nothing.
     assert admitted.source_digest.startswith("sha256:")
-    assert "data-canonical-digest" in admitted.html
-    assert "data-master-furniture" in admitted.html
-    assert "data-body-slot" in admitted.html
+    assert admitted.source_digest == authored_gate.source_digest
+    assert admitted.asset_digests == authored_gate.asset_digests == ()
+    # The producer is named by the receipt, not smuggled through admission: the
+    # canonical digest is a field of the preview response, and the master's
+    # furniture is ordinary markup that both gates carry through untouched.
+    assert preview.canonical_digest.startswith("sha256:")
+    assert repeated_preview.canonical_digest == preview.canonical_digest
+    assert 'class="master-furniture' in admitted.html
+    assert 'id="furniture:header"' in admitted.html
+    assert "data-canonical-digest" not in admit_authored_html(
+        neutralize_static_output_html(preview.html)[0]
+    ).html
     assert all("<!doctype html>" not in path.read_text("utf-8") for path in store.rglob("*.json"))
     assert not (store / "candidates").exists()
 

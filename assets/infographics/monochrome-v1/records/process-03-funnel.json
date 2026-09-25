@@ -1,0 +1,56 @@
+{
+  "id": "process-03-funnel",
+  "category": "process",
+  "tags": {
+    "ko": [
+      "프로세스",
+      "깔때기"
+    ],
+    "en": [
+      "process",
+      "funnel"
+    ]
+  },
+  "alt": {
+    "ko": "깔때기 단색 벡터 인포그래픽",
+    "en": "funnel monochrome vector infographic"
+  },
+  "path": "originals/process-03-funnel.svg",
+  "thumbnail": "thumbnails/process-03-funnel.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 276,
+  "sha256": "81830bc54e4b3e070e36dd8623680aecbb2731adb4cc8b6215a6c19d81bfcef1",
+  "geometry_sha256": "c0adf47e8ba8755e10db4e126a9f147005da828c431dd5e49b4491f908618d86",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57382,
+    "preview_opaque_pixels": 7022,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Funnel"
+    ],
+    "custom_symbols": [
+      "Funnel"
+    ],
+    "parallel_jobs": 10
+  }
+}

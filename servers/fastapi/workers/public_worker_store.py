@@ -8,6 +8,7 @@ each verified by size and sha256 before use, under a byte and TTL budget.
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 import pathlib
 import shutil
@@ -34,6 +35,7 @@ class LocalContentAddressedStore:
         self,
         input_root: pathlib.Path,
         output_root: pathlib.Path | None = None,
+        active_deadline_epoch_seconds: float | None = None,
     ) -> None:
         resolved_output = input_root if output_root is None else output_root
         if not input_root.is_absolute() or not resolved_output.is_absolute():
@@ -51,9 +53,31 @@ class LocalContentAddressedStore:
             ) from error
         if self.max_cache_bytes <= 0 or self.ttl_seconds <= 0:
             raise PublicWorkerExecutionError("public_worker_cache_limits_invalid")
+        if active_deadline_epoch_seconds is not None and (
+            not math.isfinite(active_deadline_epoch_seconds)
+            or active_deadline_epoch_seconds <= 0
+        ):
+            raise PublicWorkerExecutionError("public_worker_active_deadline_invalid")
         self.input_root = input_root.resolve(strict=False)
         self.output_root = resolved_output.resolve(strict=False)
+        self._operation_scoped = self.input_root != self.output_root
+        self._active_deadline_epoch_seconds = active_deadline_epoch_seconds
         self.output_root.mkdir(parents=True, exist_ok=True)
+
+    def _attempt_active(self) -> bool:
+        return (
+            self._operation_scoped
+            and self._active_deadline_epoch_seconds is not None
+            and time.time() <= self._active_deadline_epoch_seconds
+        )
+
+    def _require_active_deadline(self) -> None:
+        if (
+            self._operation_scoped
+            and self._active_deadline_epoch_seconds is not None
+            and not self._attempt_active()
+        ):
+            raise PublicWorkerExecutionError("public_worker_artifact_expired")
 
     def _entries(self) -> list[tuple[pathlib.Path, float, int]]:
         entries: list[tuple[pathlib.Path, float, int]] = []
@@ -102,6 +126,7 @@ class LocalContentAddressedStore:
         return candidate
 
     def verified_path(self, reference: ArtifactRef) -> pathlib.Path:
+        self._require_active_deadline()
         path = self._path(reference.storage_key)
         if not path.is_file() and self.output_root != self.input_root:
             path = self._path(reference.storage_key, output=True)
@@ -112,7 +137,7 @@ class LocalContentAddressedStore:
             stat = path.stat()
         except OSError as error:
             raise PublicWorkerExecutionError("public_worker_artifact_unavailable") from error
-        if time.time() - stat.st_mtime > self.ttl_seconds:
+        if not self._attempt_active() and time.time() - stat.st_mtime > self.ttl_seconds:
             if is_output:
                 try:
                     path.unlink(missing_ok=True)
@@ -144,6 +169,7 @@ class LocalContentAddressedStore:
         kind: str,
         media_type: str,
     ) -> ArtifactRef:
+        self._require_active_deadline()
         try:
             configured_limit = int(
                 os.getenv("PPT_WORKER_OUTPUT_LIMIT_BYTES", str(MAX_ARTIFACT_BYTES))
@@ -179,6 +205,7 @@ class LocalContentAddressedStore:
         kind: str,
         media_type: str,
     ) -> ArtifactRef:
+        self._require_active_deadline()
         size_bytes = source_path.stat().st_size
         if size_bytes <= 0 or size_bytes > MAX_ARTIFACT_BYTES:
             raise PublicWorkerExecutionError("public_worker_output_size_invalid")
@@ -208,16 +235,24 @@ class LocalContentAddressedStore:
                 if existing_digest.hexdigest() != digest:
                     raise PublicWorkerExecutionError("public_worker_cas_conflict")
             else:
+                if self._attempt_active():
+                    active_bytes = sum(size for _, _, size in self._entries())
+                    if active_bytes + size_bytes > self.max_cache_bytes:
+                        raise PublicWorkerExecutionError(
+                            "public_worker_cache_budget_exceeded"
+                        )
                 with temporary.open("xb") as stream:
                     with source_path.open("rb") as source_stream:
                         shutil.copyfileobj(source_stream, stream, 1024 * 1024)
                     stream.flush()
                     os.fsync(stream.fileno())
+                self._require_active_deadline()
                 os.replace(temporary, path)
         finally:
             temporary.unlink(missing_ok=True)
         os.utime(path, None)
-        self._evict(protected=path)
+        if not self._attempt_active():
+            self._evict(protected=path)
         reference = ArtifactRef(
             artifact_id=uuid.uuid4(),
             owner_id=source.owner_id,

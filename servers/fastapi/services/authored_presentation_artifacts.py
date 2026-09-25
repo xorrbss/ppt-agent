@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import shutil
 import uuid
-from typing import List, Optional
+from typing import List, Mapping, Optional, Sequence
 
 from pathvalidate import sanitize_filename
 from sqlalchemy.exc import SQLAlchemyError
@@ -20,6 +20,7 @@ from services.authored_checkpoint_service import (
     clear_checkpoint_html,
     complete_stage,
 )
+from services.authored_admission_checkpoint import prepare_checkpoint_write
 from utils.asset_directory_utils import (
     filesystem_image_path_to_app_data_reference,
     get_exports_directory,
@@ -158,11 +159,29 @@ def _remove_partial_slide_pngs(
         shutil.rmtree(target)
 
 
-def _build_image_pdf(pngs: List[bytes], out_path: str) -> str:
+def _build_image_pdf(
+    pngs: List[bytes], out_path: str, *,
+    canvas_width_px: int = 1280, canvas_height_px: int = 720,
+    physical_size_emu: tuple[int, int] | None = None,
+) -> str:
     from PIL import Image
 
     imgs = [Image.open(io.BytesIO(p)).convert("RGB") for p in pngs]
-    imgs[0].save(out_path, save_all=True, append_images=imgs[1:])
+    expected_size = (int(canvas_width_px), int(canvas_height_px))
+    if any(image.size != expected_size for image in imgs):
+        raise ValueError("authored export image canvas mismatch")
+    resolution = 96.0
+    if physical_size_emu is not None:
+        width_emu, height_emu = physical_size_emu
+        if width_emu <= 0 or height_emu <= 0 or width_emu * canvas_height_px != height_emu * canvas_width_px:
+            raise ValueError("document_canvas_geometry_mismatch")
+        resolution = canvas_width_px * 914400 / width_emu
+    imgs[0].save(
+        out_path,
+        save_all=True,
+        append_images=imgs[1:],
+        resolution=resolution,
+    )
     return out_path
 
 
@@ -171,6 +190,9 @@ def _build_authored_export(
     presentation_id: uuid.UUID,
     pngs: List[bytes],
     title: str,
+    *,
+    local_fit_receipts: Sequence[Mapping[str, object]] | None = None,
+    canvas: object | None = None,
 ) -> str:
     """Assemble the rendered slides into the requested export format (pure Python:
     python-pptx / PIL ??no external converter). Returns the absolute file path."""
@@ -178,12 +200,28 @@ def _build_authored_export(
     exports = os.path.dirname(destination)
     stem, extension = os.path.splitext(os.path.basename(destination))
     os.makedirs(exports, exist_ok=True)
+    canvas_width_px = int(getattr(canvas, "width_px", 1280))
+    canvas_height_px = int(getattr(canvas, "height_px", 720))
+    physical_kwargs = {}
+    document_canvas = getattr(request, "_document_canvas", None)
+    if document_canvas is not None:
+        from services.document_canvas import canvas_physical_size
+        from services.document_canvas_generation import export_size_points
+
+        export_size_points(canvas, document_canvas)
+        physical_kwargs["physical_size_emu"] = canvas_physical_size(document_canvas)
     if extension == ".pdf":
         from PIL import Image
 
         temporary = os.path.join(exports, f".{stem}.{uuid.uuid4().hex}.pdf")
         try:
-            _build_image_pdf(pngs, temporary)
+            _build_image_pdf(
+                pngs,
+                temporary,
+                canvas_width_px=canvas_width_px,
+                canvas_height_px=canvas_height_px,
+                **physical_kwargs,
+            )
             with Image.open(temporary) as exported_pdf:
                 if getattr(exported_pdf, "n_frames", 1) != len(pngs):
                     raise RuntimeError("authored PDF slide count validation failed")
@@ -194,11 +232,26 @@ def _build_authored_export(
         return destination
     temporary = os.path.join(exports, f".{stem}.{uuid.uuid4().hex}.pptx")
     try:
-        build_image_pptx(pngs, temporary)
+        build_image_pptx(
+            pngs,
+            temporary,
+            canvas_width_px=canvas_width_px,
+            canvas_height_px=canvas_height_px,
+            **physical_kwargs,
+        )
         from pptx import Presentation as PptxPresentation
 
         if len(PptxPresentation(temporary).slides) != len(pngs):
             raise RuntimeError("authored PPTX slide count validation failed")
+        if local_fit_receipts is not None:
+            from services.authored_local_fit_export import verify_local_fit_pptx
+
+            verify_local_fit_pptx(
+                temporary,
+                local_fit_receipts,
+                mode="fidelity",
+                pngs=pngs,
+            )
         os.replace(temporary, destination)
     finally:
         if os.path.exists(temporary):
@@ -251,7 +304,7 @@ async def _complete_stage_after_external_success(**kwargs):
     lets the pipeline join all workers before its attempt token can be revoked.
     """
 
-    checkpoint_task = asyncio.create_task(complete_stage(**kwargs))
+    checkpoint_task = asyncio.create_task(complete_stage(**prepare_checkpoint_write(kwargs)))
     try:
         return await asyncio.shield(checkpoint_task)
     except asyncio.CancelledError:

@@ -25,7 +25,7 @@ from utils.prompt_safety import format_untrusted_source_documents
 from utils.schema_utils import prepare_schema_for_validation
 
 from .errors import GenerationNotFoundError
-from .repository import GenerationRepository
+from .repository import AsyncGenerationRepository
 
 
 def _to_camel(name: str) -> str:
@@ -684,7 +684,7 @@ def _resolved_payload(
 
 async def resolve_deck_ai_text_zones(
     *,
-    repository: GenerationRepository,
+    repository: AsyncGenerationRepository,
     deck_id: str,
     master_digest: str,
     contract: DeckMasterContract,
@@ -718,7 +718,7 @@ async def resolve_deck_ai_text_zones(
     stored = None
     if use_repository_cache:
         try:
-            stored = repository.get_candidate(candidate_digest)
+            stored = await repository.get_candidate(candidate_digest)
         except GenerationNotFoundError:
             stored = None
     if stored is not None:
@@ -779,7 +779,7 @@ async def resolve_deck_ai_text_zones(
     # avoidable second SQLite writer between deck publication and checkpoint
     # persistence.  Real zones remain digest-cached and idempotent as before.
     if use_repository_cache and zones:
-        repository.save_candidate(candidate_digest, payload)
+        await repository.save_candidate(candidate_digest, payload)
     return ResolvedAITextZoneSet.model_validate(payload)
 
 

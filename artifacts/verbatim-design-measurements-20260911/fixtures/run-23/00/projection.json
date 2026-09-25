@@ -1,0 +1,133 @@
+{
+ "source-slide:1:text:6": {
+  "text": "🐝 꿀벌쌤",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "🐝 꿀벌쌤",
+    "begin": 0,
+    "end": 5,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:1:text:7": {
+  "text": "숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행",
+    "begin": 0,
+    "end": 4,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "1인사업자 홀로서기",
+    "begin": 5,
+    "end": 15,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:1:text:8": {
+  "text": "4주 · 총 8시간 · 온라인 실전 창업 과정",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "4주 · 총 8시간 · 온라인 실전 창업 과정",
+    "begin": 0,
+    "end": 25,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:1:text:9": {
+  "text": "영상 하나를 만드는 사람이 아니라 숏폼으로 돈을 버는 1인사업자가 되는 과정",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "영상 하나를 만드는 사람이 아니라",
+    "begin": 0,
+    "end": 18,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "숏폼으로 돈을 버는 1인사업자가 되는 과정",
+    "begin": 19,
+    "end": 42,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:1:text:10": {
+  "text": "꿀벌쌤 강의용 마스터 PPT",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤 강의용 마스터 PPT",
+    "begin": 0,
+    "end": 15,
+    "order_free_before": false
+   }
+  ]
+ }
+}

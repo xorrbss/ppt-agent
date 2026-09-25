@@ -1,0 +1,56 @@
+{
+  "id": "infrastructure-08-water-pipe",
+  "category": "infrastructure",
+  "tags": {
+    "ko": [
+      "인프라",
+      "수도관"
+    ],
+    "en": [
+      "infrastructure",
+      "water",
+      "pipe"
+    ]
+  },
+  "alt": {
+    "ko": "수도관 단색 벡터 인포그래픽",
+    "en": "water pipe monochrome vector infographic"
+  },
+  "path": "originals/infrastructure-08-water-pipe.svg",
+  "thumbnail": "thumbnails/infrastructure-08-water-pipe.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 771,
+  "sha256": "294f67a175ca8e747e2e272bd2e15ea8eec43e592f17175c0c915b07896f18c6",
+  "geometry_sha256": "61f5e9f12fb5e207b66e80f8a95f3318e1f12023819a3338f9e2e2060b03b4c3",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 58208,
+    "preview_opaque_pixels": 5568,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Pipette",
+      "Waves"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "id": "growth-05-stairway",
+  "category": "growth",
+  "tags": {
+    "ko": [
+      "성장",
+      "상승계단"
+    ],
+    "en": [
+      "growth",
+      "stairway"
+    ]
+  },
+  "alt": {
+    "ko": "상승계단 단색 벡터 인포그래픽",
+    "en": "stairway monochrome vector infographic"
+  },
+  "path": "originals/growth-05-stairway.svg",
+  "thumbnail": "thumbnails/growth-05-stairway.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 735,
+  "sha256": "70849cbe8631fcc06e49cfa548f103381cb6f8fb12fd8625e1d370814b31b9cd",
+  "geometry_sha256": "11aef56570f72257e63f401bf25c5e3e5974b66c717705f97919ff02e3ec50b2",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 60758,
+    "preview_opaque_pixels": 3652,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ChartNoAxesColumnIncreasing",
+      "Footprints"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

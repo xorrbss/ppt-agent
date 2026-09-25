@@ -116,6 +116,16 @@ def stamp_new_authored_presentation(presentation: PresentationModel) -> None:
         presentation.theme = {**dict(presentation.theme), "mode": "authored"}
 
 
+def stamp_new_svg_presentation(presentation: PresentationModel) -> None:
+    """Stamp a new SVG shell while retaining the shared authored style data."""
+    presentation.generation_mode = "standard"
+    presentation.mode = "svg"
+    presentation.version = "v1-standard"
+    presentation.profile_driver_id = "svg-v1"
+    presentation.profile_schema_version = PROFILE_SCHEMA_VERSION
+    presentation.theme = {**dict(presentation.theme or {}), "mode": "svg"}
+
+
 __all__ = [
     "AUTHORED_ONLY_ADMISSION_CLOSED",
     "AUTHORED_ONLY_BLANK_CLOSED",
@@ -126,4 +136,5 @@ __all__ = [
     "require_authored_generation_admission",
     "require_legacy_creation_closed",
     "stamp_new_authored_presentation",
+    "stamp_new_svg_presentation",
 ]

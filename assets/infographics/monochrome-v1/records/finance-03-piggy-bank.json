@@ -1,0 +1,55 @@
+{
+  "id": "finance-03-piggy-bank",
+  "category": "finance",
+  "tags": {
+    "ko": [
+      "금융",
+      "저금통"
+    ],
+    "en": [
+      "finance",
+      "piggy",
+      "bank"
+    ]
+  },
+  "alt": {
+    "ko": "저금통 단색 벡터 인포그래픽",
+    "en": "piggy bank monochrome vector infographic"
+  },
+  "path": "originals/finance-03-piggy-bank.svg",
+  "thumbnail": "thumbnails/finance-03-piggy-bank.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 444,
+  "sha256": "a46167bcabf43271f857b60ec3af5fec38ebda18f255c6ddff75ddfd20a7d06f",
+  "geometry_sha256": "52034d6b4c86ae0666dca0c7da98dc0f8e90071ece024cf31ef28dac2f9e8f49",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 56138,
+    "preview_opaque_pixels": 8103,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "PiggyBank"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

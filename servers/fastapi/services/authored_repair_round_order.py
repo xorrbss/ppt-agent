@@ -202,6 +202,7 @@ async def _apply_text_scale_rung(
     index: int, factor: float, htmls: list[str], pngs: list[bytes],
     metrics_by_slide: dict[int, object], scene_envelope: Any, capacity: object,
     profile: Any, reference_mode: str, generation_job: Any,
+    prepare_admitted: Any = None,
 ) -> tuple[Any, bool]:
     """Step 0: shrink this slide's type and keep it only if it now passes.
 
@@ -226,6 +227,10 @@ async def _apply_text_scale_rung(
         return scene_envelope, False
     if admitted is None:
         return scene_envelope, False
+    if prepare_admitted is not None:
+        admitted = await prepare_admitted(index, admitted)
+        if admitted is None:
+            return scene_envelope, False
     resealed = await apply_admitted_remake(
         index=index, admitted=admitted, htmls=htmls, pngs=pngs,
         metrics_by_slide=metrics_by_slide, scene_envelope=scene_envelope,
@@ -268,7 +273,7 @@ async def _text_scale_pass(
     *, flagged: Sequence[int], issues_by_index: Mapping[int, Sequence[Mapping[str, object]]],
     htmls: list[str], pngs: list[bytes], metrics_by_slide: dict[int, object],
     scene_envelope: Any, capacity_plan: Any, profile: Any, reference_mode: str,
-    generation_job: Any,
+    generation_job: Any, prepare_admitted: Any = None,
 ) -> tuple[Any, list[int]]:
     """H3 step 0 over every flagged slide, in the order given; renders only."""
 
@@ -285,6 +290,7 @@ async def _text_scale_pass(
             capacity=(capacity_plan.at(index) if capacity_plan is not None else {}),
             profile=profile, reference_mode=reference_mode,
             generation_job=generation_job,
+            prepare_admitted=prepare_admitted,
         )
         if ok:
             rescued.append(int(index))
@@ -300,6 +306,7 @@ async def remake_first_flagged_slides(
     metrics_by_slide: dict[int, object], chapter_plan: Any = None,
     illustration_plan: Any = None, infographic_plan: Any = None,
     instructions: object = None, generation_job: Any = None,
+    prepare_admitted: Any = None,
 ) -> RemakeFirstOutcome:
     """Remake every flagged slide once, before the bounded patch round is built.
 
@@ -328,6 +335,7 @@ async def remake_first_flagged_slides(
         htmls=htmls, pngs=pngs, metrics_by_slide=metrics_by_slide,
         scene_envelope=scene_envelope, capacity_plan=capacity_plan,
         profile=profile, reference_mode=reference_mode, generation_job=generation_job,
+        prepare_admitted=prepare_admitted,
     )
     # AUTHORED_REPAIR_CALLS_ENABLED off: the deterministic text-scale pass above
     # still runs (it only re-renders); no slide is planned for a provider call.
@@ -381,6 +389,10 @@ async def remake_first_flagged_slides(
             admitted, outcome = None, "remake_provider_failed"
         else:
             admitted, outcome = result
+        if admitted is not None and prepare_admitted is not None:
+            admitted = await prepare_admitted(launch.index, admitted)
+            if admitted is None:
+                outcome = "remake_prepare_rejected"
         if admitted is None:
             LOGGER.info(
                 "[authored] remake-first not admitted slide=%d outcome=%s",

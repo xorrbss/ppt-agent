@@ -1,0 +1,55 @@
+{
+  "id": "infrastructure-16-cooling-fan",
+  "category": "infrastructure",
+  "tags": {
+    "ko": [
+      "인프라",
+      "냉각"
+    ],
+    "en": [
+      "infrastructure",
+      "cooling",
+      "fan"
+    ]
+  },
+  "alt": {
+    "ko": "냉각 단색 벡터 인포그래픽",
+    "en": "cooling fan monochrome vector infographic"
+  },
+  "path": "originals/infrastructure-16-cooling-fan.svg",
+  "thumbnail": "thumbnails/infrastructure-16-cooling-fan.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 468,
+  "sha256": "c99252f13a2e8caf02cc82ec28fd7ee44c473255f2292dc0519a98ac758a6ad9",
+  "geometry_sha256": "d814cc0966ccec9a24e2dee835ed9f9d03402188d01e69ec004bd8eb4ecd4bcb",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 54515,
+    "preview_opaque_pixels": 9453,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Fan"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

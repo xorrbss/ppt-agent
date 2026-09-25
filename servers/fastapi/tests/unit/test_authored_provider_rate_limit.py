@@ -5,6 +5,7 @@ import asyncio
 import pytest
 
 from utils.llm_calls import author_slide
+from utils.provider_idempotency import ProviderOutcomeError
 
 
 def test_author_request_starts_are_spaced_by_configured_rpm(monkeypatch):
@@ -26,7 +27,7 @@ def test_author_request_starts_are_spaced_by_configured_rpm(monkeypatch):
     assert sleeps == [pytest.approx(1.0, abs=0.05)]
 
 
-def test_429_retry_after_is_shared_with_following_calls(monkeypatch):
+def test_provider_classified_overload_is_shared_with_following_calls(monkeypatch):
     author_slide._AUTHOR_RATE_STATES.clear()
     monkeypatch.setattr(author_slide, "AUTHOR_REQUESTS_PER_MINUTE", 0.0)
     monkeypatch.setattr(author_slide, "AUTHOR_RATE_LIMIT_MAX_COOLDOWN_SECONDS", 60.0)
@@ -37,12 +38,15 @@ def test_429_retry_after_is_shared_with_following_calls(monkeypatch):
 
     monkeypatch.setattr(author_slide.asyncio, "sleep", fake_sleep)
 
-    class RateLimited(RuntimeError):
-        status_code = 429
-        headers = {"Retry-After": "2.5"}
-
     async def exercise() -> None:
-        author_slide._register_author_rate_limit(RateLimited("rate limited"))
+        author_slide._register_author_rate_limit(
+            ProviderOutcomeError(
+                "public_provider_overload",
+                recovery_allowed=True,
+                overload=True,
+                cooldown_seconds=2.5,
+            )
+        )
         await author_slide._wait_for_author_rate_slot()
 
     asyncio.run(exercise())

@@ -12,6 +12,7 @@ behavior-changing refactor and is tracked apart from this move-only split.
 """
 
 import asyncio
+from services.source_images.budget import source_image_admission_budget
 import json
 import logging
 import os
@@ -26,7 +27,6 @@ from typing import Any, List, Optional, Tuple
 
 import dirtyjson
 from fastapi import (
-    APIRouter,
     BackgroundTasks,
     Depends,
     Header,
@@ -34,7 +34,6 @@ from fastapi import (
     Path,
     Request,
 )
-from pydantic import BaseModel
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,6 +45,14 @@ from api.v1.ppt.endpoints.presentation_generation_staging import (
     _uses_isolated_render_staging,
     _discard_render_staging,
     _request_from_durable_payload,
+)
+from api.v1.ppt.endpoints.presentation_generate_admission import (
+    AsyncPresentationGenerationAdmissionResponse,
+    AsyncPresentationGenerationTaskResponse,
+    PRESENTATION_GENERATE_ROUTER,
+    _chat_first_generation_enabled,
+    _require_local_legacy_async_generation,
+    _require_local_sync_generation,
 )
 from constants.presentation import (
     DEFAULT_ATTACHMENT_GENERATION_PROMPT,
@@ -96,12 +103,20 @@ from services.authored_vnext.generation.legacy_pin import (
 )
 from services.authored_vnext.generation.scene_compiler import SceneTextFitError
 from services.authored_vnext.master.digests import canonical_digest
+from services.authored_canvas import (
+    canvas_metadata_for_aspect_ratio,
+    merge_presentation_canvas,
+    presentation_canvas_metadata,
+    request_canvas_metadata,
+    validate_authored_canvas_admission,
+)
 from services.concurrent_service import CONCURRENT_SERVICE
 from services.source_content.errors import SourceContentError
 from services.source_content.pipeline import (
     SOURCE_MODE as SOURCE_CONTENT_RESTYLE_MODE,
     admit_source_content_request,
     prepare_source_content_authored_reflow,
+    prepare_source_content_svg_reflow,
 )
 from services.database import async_session_maker, get_async_session, sql_engine
 from services.documents_loader import DocumentsLoader
@@ -127,9 +142,8 @@ from services.presentation_generation_job_service import (
     release_generation_job,
     request_sha256,
 )
-from services.presentation_export_router import (
-    PresentationExportExecution,
-    execute_presentation_export,
+from services.presentation_generation_export_chain import (
+    finalize_generation_export_chain,
 )
 from services.references import (
     ReferenceProviderError,
@@ -163,12 +177,6 @@ from services.workspace_service import (
     WorkspaceServiceError,
     bootstrap_workspace,
 )
-from services.workspace_runtime_profile import (
-    UnsupportedWorkspaceRuntimeError,
-    WorkspaceRuntimeKind,
-    require_supported_workspace_runtime,
-    resolve_workspace_runtime_profile,
-)
 from services.public_operation_admission import (
     PublicAdmissionRejected,
     admit_public_operation_compatible_v2,
@@ -191,6 +199,7 @@ from utils.authored_styles import (
 )
 from utils.document_context import build_document_context
 from utils.get_env import get_authored_resume_max_attempts_env
+from utils.get_env_programme import is_authored_content_brief_enabled
 from services.public_operation_deadline_scope import remaining_public_operation_seconds
 from api.v1.ppt.endpoints.content_brief_policy import (
     brief_failure_is_terminal, log_content_brief_skipped, merge_brief_context,
@@ -208,7 +217,7 @@ from utils.outline_citations import strip_outline_citations
 from utils.outline_utils import (
     get_no_of_outlines_to_generate_for_n_slides,
 )
-from utils.owner_context import get_current_owner_id
+from utils.owner_context import get_current_owner_id, get_current_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -237,108 +246,21 @@ async def _publish_staged_presentation(*args: Any, **kwargs: Any) -> str:
     )
 
 
-async def _execute_generation_export(*args: Any, **kwargs: Any) -> PresentationExportExecution:
-    return await generation_staging._execute_generation_export(
-        *args, **kwargs, execute_export=execute_presentation_export
-    )
-
-
-def _chat_first_generation_enabled() -> bool:
-    """Keep runtime admission injectable at the endpoint boundary."""
-
-    try:
-        require_supported_workspace_runtime(sql_engine.url)
-    except UnsupportedWorkspaceRuntimeError as error:
-        raise HTTPException(status_code=501, detail=error.code) from error
-    return True
-
-
-def _require_local_sync_generation(database_url_or_dialect: Any) -> None:
-    """Keep the legacy inline generator on the explicit local SQLite path only."""
-
-    profile = resolve_workspace_runtime_profile(database_url_or_dialect)
-    if profile.kind == WorkspaceRuntimeKind.SQLITE_LOCAL:
-        return
-    raise HTTPException(
-        status_code=410,
-        detail={
-            "reasonCode": "sync_generation_deprecated",
-            "replacement": "/api/v2/presentations/generations",
-        },
-        headers={
-            "Deprecation": "true",
-            "Link": '</api/v2/presentations/generations>; rel="successor-version"',
-        },
-    )
-
-
-def _require_local_legacy_async_generation(database_url_or_dialect: Any) -> None:
-    """Allow the compatibility route only on supported workspace stores."""
-
-    try:
-        require_supported_workspace_runtime(database_url_or_dialect)
-    except UnsupportedWorkspaceRuntimeError as error:
-        raise HTTPException(status_code=501, detail=error.code) from error
-
-
-PRESENTATION_GENERATE_ROUTER = APIRouter(
-    prefix="/presentation", tags=["Presentation"]
-)
-
-
-class AsyncPresentationGenerationTaskResponse(BaseModel):
-    id: str
-    status: str
-    message: Optional[str] = None
-    error: Optional[dict] = None
-    created_at: datetime
-    updated_at: datetime
-    data: Optional[dict] = None
-    progress: Optional[dict] = None
-    failure: Optional[dict] = None
-
-
-class AsyncPresentationGenerationAdmissionResponse(
-    AsyncPresentationGenerationTaskResponse
-):
-    """Accepted durable generation plus its canonical workspace operation."""
-
-    operation_id: Optional[uuid.UUID] = None
-
-
 def _authored_exact_admission_exception(
     error: AuthoredExactReconstructionUnavailableError,
 ) -> HTTPException:
     """Map private exact-preset failures to stable, non-sensitive API errors."""
-    # ``resolve_authored_style`` deliberately includes useful server-side context
-    # (style id and validation reason).  That context can identify a private
-    # preset and must not cross the API or durable task-status boundary.
     if "failed preset validation" in str(error):
-        exception = HTTPException(
-            status_code=422,
-            detail="authored_exact_reconstruction_invalid",
-        )
+        exception = HTTPException(status_code=422, detail="authored_exact_reconstruction_invalid")
     else:
-        exception = HTTPException(
-            status_code=403,
-            detail="authored_exact_reconstruction_unavailable",
-        )
-    # The workspace operation adapter preserves these attributes when it maps
-    # a retry admission failure. Exact-preset failures are deterministic and
-    # must not be presented as an automatically retryable card.
+        exception = HTTPException(status_code=403, detail="authored_exact_reconstruction_unavailable")
     exception.code = str(exception.detail)
     exception.retryable = False
     return exception
 
 
 def _validate_authored_exact_admission(request: GeneratePresentationRequest) -> None:
-    """Reject unavailable exact presets before sync work or durable queueing.
-
-    An unknown ordinary authored style intentionally retains the historical
-    default-style fallback.  Only a style *declared* as exact is fail-closed by
-    ``resolve_authored_style``; this keeps the rollout private without silently
-    downgrading an exact request to style-reference generation.
-    """
+    """Reject unavailable exact presets before sync work or durable queueing."""
     template = (request.template or "").strip().lower()
     authored_requested = template == AUTHORED_TEMPLATE or request.strategy == "authored"
     if not authored_requested:
@@ -349,97 +271,50 @@ def _validate_authored_exact_admission(request: GeneratePresentationRequest) -> 
         raise _authored_exact_admission_exception(error) from error
 
 
-async def _validate_authored_master_pin_admission(
-    request: GeneratePresentationRequest,
-) -> None:
+async def _validate_authored_master_pin_admission(request: GeneratePresentationRequest) -> None:
     """Resolve a company-standard pin only when authored generation requests one."""
-
     if request.template != AUTHORED_TEMPLATE:
         if request.master_pin is not None:
             raise HTTPException(status_code=400, detail="generation_strategy_conflict")
         return
-    if (
-        request.master_pin is None
-        and request._authored_master_pin is None
-        and request._authored_composition_pin is None
-    ):
-        # "No company standard" is an explicit product choice. Keep the request
-        # unpinned so the Authored style owns the full canvas; publication seals
-        # the resulting unpinned style/composition digests independently.
+    if request.master_pin is None and request._authored_master_pin is None and request._authored_composition_pin is None:
         return
-    master_enabled = (
-        os.getenv("AUTHORED_VNEXT_MASTER_ENABLED", "true").strip().lower()
-        == "true"
-    )
+    master_enabled = os.getenv("AUTHORED_VNEXT_MASTER_ENABLED", "true").strip().lower() == "true"
     if not master_enabled:
         raise HTTPException(status_code=404, detail="authored_vnext_master_disabled")
     owner_id = get_current_owner_id()
     if owner_id is None:
         raise HTTPException(status_code=401, detail="authored_vnext_owner_required")
-    if (
-        request._authored_master_pin is not None
-        and request._authored_composition_pin is not None
-    ):
+    if request._authored_master_pin is not None and request._authored_composition_pin is not None:
         frozen_pin = request._authored_master_pin
         composition_pin = request._authored_composition_pin
         if frozen_pin is None or composition_pin is None:
-            raise HTTPException(
-                status_code=409,
-                detail="authored_vnext_composition_checkpoint_missing",
-            )
+            raise HTTPException(status_code=409, detail="authored_vnext_composition_checkpoint_missing")
         try:
             repository = generation_repository_for_owner(owner_id)
-            master = await asyncio.to_thread(
-                repository.get_master,
-                frozen_pin.master_id,
-                frozen_pin.master_revision,
-            )
+            master = await asyncio.to_thread(repository.get_master, frozen_pin.master_id, frozen_pin.master_revision)
             font_digest = master.contract.font_manifest.digest
-            layout_digest = canonical_digest(
-                master.contract.layouts.model_dump(mode="json", by_alias=True)
-            )
-            if (
-                master.status != "published"
-                or master.digest != frozen_pin.master_digest
-                or layout_digest != frozen_pin.layout_registry_digest
-                or font_digest != frozen_pin.font_manifest_digest
-                or composition_pin.master_digest != frozen_pin.master_digest
-            ):
+            layout_digest = canonical_digest(master.contract.layouts.model_dump(mode="json", by_alias=True))
+            if (master.status != "published" or master.digest != frozen_pin.master_digest or layout_digest != frozen_pin.layout_registry_digest or font_digest != frozen_pin.font_manifest_digest or composition_pin.master_digest != frozen_pin.master_digest):
                 raise ValueError("frozen authored design checkpoint mismatch")
             materialize_authored_composition(master.contract, composition_pin)
         except AuthoredVNextGenerationNotFoundError as error:
-            exception = HTTPException(
-                status_code=404,
-                detail="authored_vnext_generation_not_found",
-            )
+            exception = HTTPException(status_code=404, detail="authored_vnext_generation_not_found")
             exception.code = "authored_vnext_generation_not_found"
             exception.retryable = False
             raise exception from error
         except ValueError as error:
-            exception = HTTPException(
-                status_code=409,
-                detail="authored_vnext_stale_master",
-            )
+            exception = HTTPException(status_code=409, detail="authored_vnext_stale_master")
             exception.code = "authored_vnext_stale_master"
             exception.retryable = False
             raise exception from error
         request._authored_master_contract = master.contract
-        request._authored_master_resolution = ResolvedLegacyMasterPin(
-            owner_id=owner_id,
-            pin=frozen_pin,
-            contract=master.contract,
-        )
+        request._authored_master_resolution = ResolvedLegacyMasterPin(owner_id=owner_id, pin=frozen_pin, contract=master.contract)
         return
     try:
-        resolved = await asyncio.to_thread(
-            resolve_legacy_master_pin,
-            owner_id=owner_id,
-            requested=request.master_pin,
-        )
+        resolved = await asyncio.to_thread(resolve_legacy_master_pin, owner_id=owner_id, requested=request.master_pin)
     except AuthoredVNextGenerationPipelineError as error:
-        status_code = (
-            404 if isinstance(error, AuthoredVNextGenerationNotFoundError) else 409
-        )
+        status_code = 404 if isinstance(error, AuthoredVNextGenerationNotFoundError) else 409
         exception = HTTPException(status_code=status_code, detail=error.code)
         exception.code = error.code
         exception.retryable = False
@@ -447,16 +322,9 @@ async def _validate_authored_master_pin_admission(
     request._authored_master_pin = resolved.pin
     request._authored_master_contract = resolved.contract
     request._authored_master_resolution = resolved
-    # Freeze every mutable style/rule input before the durable queue is
-    # admitted. Workers and export replay this pin and never reread style YAML.
     style = resolve_authored_style(request.authored_style)
     request._authored_style_snapshot = style
-    composition, _ = resolve_authored_composition(
-        resolved.contract,
-        style=style if request.authored_style is not None else None,
-        visual_direction=getattr(resolved, "visual_direction", None),
-        metadata=request._authored_deck_metadata,
-    )
+    composition, _ = resolve_authored_composition(resolved.contract, style=style if request.authored_style is not None else None, visual_direction=getattr(resolved, "visual_direction", None), metadata=request._authored_deck_metadata)
     request._authored_composition_pin = composition
 
 
@@ -513,7 +381,7 @@ async def _admit_source_content_generation(
     request: GeneratePresentationRequest,
     sql_session: AsyncSession,
 ) -> None:
-    if request.source_mode != SOURCE_CONTENT_RESTYLE_MODE:
+    if request.source_mode not in {SOURCE_CONTENT_RESTYLE_MODE, "raster_reconstruction"}:
         return
     if request._authored_style_snapshot is None:
         request._authored_style_snapshot = resolve_authored_style(request.authored_style)
@@ -526,6 +394,7 @@ async def _admit_source_content_generation(
             request,
             sql_session=sql_session,
             owner_id=get_current_owner_id(),
+            tenant_id=get_current_tenant_id() or request._raster_tenant_id,
         )
     except SourceContentError as error:
         raise _source_content_http_exception(error) from error
@@ -605,7 +474,7 @@ async def check_if_api_request_is_valid(
             snapshot.snapshot_id,
         ]
 
-    if request.source_mode != SOURCE_CONTENT_RESTYLE_MODE:
+    if request.source_mode not in {SOURCE_CONTENT_RESTYLE_MODE, "raster_reconstruction"}:
         await _admit_generation_references(request, sql_session)
 
     if request.n_slides is not None and request.n_slides <= 0:
@@ -630,13 +499,38 @@ async def check_if_api_request_is_valid(
             detail="Number of slides cannot be less than 3 if table of contents is included",
         )
 
-    if request.strategy not in {None, "authored"}:
+    if request.strategy not in {None, "authored", "svg"}:
         raise HTTPException(status_code=400, detail="generation_strategy_conflict")
+    if request.strategy == "svg":
+        from services.svg_generation_admission import require_svg_creation_admission
+
+        require_svg_creation_admission(request)
+    if (
+        request.aspect_ratio != "16:9"
+        and str(request.template or "").strip().lower() != AUTHORED_TEMPLATE
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="authored_portrait_combination_not_supported",
+        )
     # Any template name is normalised to the authored template rather than
     # rejected: a caller naming both a strategy and a template is asking for
     # the strategy, and this endpoint has normalised that since before the
     # strategy existed.
     request.template = AUTHORED_TEMPLATE
+    try:
+        canvas_style_id = (
+            resolve_authored_style(request.authored_style).id
+            if request.aspect_ratio != "16:9"
+            else request.authored_style or "default"
+        )
+        validate_authored_canvas_admission(request, style_id=canvas_style_id)
+    except ValueError as error:
+        if str(error).startswith("document_canvas") or str(error).startswith("authored_canvas") or str(error).startswith(
+            "authored_portrait"
+        ):
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        raise
     _validate_authored_exact_admission(request)
     await _validate_authored_master_pin_admission(request)
     await _admit_source_content_generation(request, sql_session)
@@ -820,8 +714,7 @@ async def _record_chat_first_generation_admission_failure(
         "retryable": retryable,
         "stage": "admission",
     }
-    payload = _durable_request_payload(request)
-    payload[_INTERNAL_ADMISSION_RETRY_KEY] = True
+    payload = _durable_request_payload(request, admission_retry=True)
     status = AsyncPresentationGenerationTaskModel(
         status="error",
         message="Generation request was not admitted",
@@ -947,13 +840,21 @@ async def generate_presentation_handler(
 ):
     # Internal callers can bypass validation, so re-run owner, expiry, asset
     # state and digest admission before generation.
-    if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+    if request.source_mode in {SOURCE_CONTENT_RESTYLE_MODE, "raster_reconstruction"}:
+        if generation_job is not None:
+            from services.public_generation_route import restore_source_restyle_route
+
+            restore_source_restyle_route(request, generation_job.request_payload)
         # A retry must never trust a manifest object cached by another process.
         # Re-resolve owner scope and the immutable pin before any authoring work.
         await _validate_authored_master_pin_admission(request)
         await _admit_source_content_generation(request, sql_session)
-        await _admit_source_content_reference_snapshot(request, sql_session)
-        prepare_source_content_authored_reflow(request)
+        if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+            await _admit_source_content_reference_snapshot(request, sql_session)
+        if request.strategy == "svg":
+            prepare_source_content_svg_reflow(request)
+        else:
+            prepare_source_content_authored_reflow(request)
     elif request.reference_snapshot_ids and not request._reference_snapshots:
         await _admit_generation_references(request, sql_session)
     # Bootstrap admission failures have a linked failed job so a terminal
@@ -1031,34 +932,37 @@ async def generate_presentation_handler(
             # then ground the outline in it. Falls back to documents-only on failure.
             # Deadline, single reduced retry and brief_status: content_brief_policy.
             outline_context = additional_context
-            try:
-                with provider_usage_scope(
-                    job_id=(generation_job.id if generation_job is not None else None),
-                    operation="authored_generation",
-                    stage="content_brief",
-                    attempt_number=(generation_job.attempt_number if generation_job else 0),
-                ):
-                    brief_outcome = await run_content_brief_with_checkpoint(
-                        generate_content_brief, content=request.content,
-                        language=language_to_use,
-                        additional_context=additional_context,
-                        tone=request.tone.value, verbosity=request.verbosity.value,
-                        instructions=request.instructions,
-                        # A resume reuses this brief instead of re-paying its 500 s.
-                        presentation_id=presentation_id, generation_job=generation_job,
-                        remaining_operation_seconds=remaining_public_operation_seconds(),
-                    )
-                if brief_outcome.brief is not None:
-                    outline_context = merge_brief_context(additional_context, brief_outcome.brief)
-            except Exception as error:
-                # A content brief is optional only for ordinary provider or
-                # parsing failures (and a 429 always ends generation). Durable
-                # budget/admission decisions must retain their terminal
-                # retryability instead of becoming a generic HTTP 500.
-                if brief_failure_is_terminal(error):
-                    raise
-                log_content_brief_skipped(presentation_id, error)
-                traceback.print_exc()
+            if is_authored_content_brief_enabled():
+                try:
+                    with provider_usage_scope(
+                        job_id=(generation_job.id if generation_job is not None else None),
+                        operation="authored_generation",
+                        stage="content_brief",
+                        attempt_number=(generation_job.attempt_number if generation_job else 0),
+                    ):
+                        brief_outcome = await run_content_brief_with_checkpoint(
+                            generate_content_brief, content=request.content,
+                            language=language_to_use,
+                            additional_context=additional_context,
+                            tone=request.tone.value, verbosity=request.verbosity.value,
+                            instructions=request.instructions,
+                            # A resume reuses this brief instead of re-paying its 500 s.
+                            presentation_id=presentation_id, generation_job=generation_job,
+                            remaining_operation_seconds=remaining_public_operation_seconds(),
+                        )
+                    if brief_outcome.brief is not None:
+                        outline_context = merge_brief_context(
+                            additional_context, brief_outcome.brief
+                        )
+                except Exception as error:
+                    # A content brief is optional only for ordinary provider or
+                    # parsing failures (and a 429 always ends generation). Durable
+                    # budget/admission decisions must retain their terminal
+                    # retryability instead of becoming a generic HTTP 500.
+                    if brief_failure_is_terminal(error):
+                        raise
+                    log_content_brief_skipped(presentation_id, error)
+                    traceback.print_exc()
 
             # Finding number of slides to generate by considering table of contents
             #
@@ -1219,13 +1123,48 @@ async def generate_presentation_handler(
                 async_status.updated_at = datetime.now(timezone.utc)
                 sql_session.add(async_status)
                 await sql_session.commit()
-            response = await generate_authored_presentation(
+            generate_document = generate_authored_presentation
+            if request.strategy == "svg":
+                from services.svg_presentation_service import generate_svg_presentation
+
+                generate_document = generate_svg_presentation
+            response = await generate_document(
                 request,
                 presentation_id,
                 presentation_outlines,
                 language_to_use,
                 sql_session,
                 generation_job,
+            )
+            # The single point where "generation finished and an export was
+            # requested" is decided, for the synchronous and the durable path
+            # alike: this is the one successful completion of the handler.
+            if request.strategy == "svg" and async_status is not None:
+                # Source SVG publication returns only after every preservation
+                # receipt and rendered page passed its enforced quality gate.
+                source_verified = bool(request._source_content_svg_reflow)
+                async_status.status = "completed"
+                async_status.message = (
+                    "SVG source presentation generation completed; preservation verified"
+                    if source_verified else "SVG presentation generation completed; review required"
+                )
+                async_status.data = {
+                    **response.model_dump(mode="json"),
+                    "quality_gate_status": "passed" if source_verified else "review_required",
+                }
+                async_status.error = None
+                sql_session.add(async_status)
+                # Durable independent of the chained export below: a failure
+                # submitting export_as must never roll back "completed" too
+                # (it used to -- chain_generation_export rolls back the
+                # session on a submission error, discarding whatever else was
+                # pending on it). Commit "completed" on its own first.
+                await sql_session.commit()
+            response = await finalize_generation_export_chain(
+                sql_session,
+                response=response,
+                export_as=request.export_as,
+                async_status=async_status,
             )
             if request.trigger_webhook:
                 CONCURRENT_SERVICE.run_task(
@@ -1315,7 +1254,10 @@ async def generate_presentation_handler(
         elif not isinstance(e, HTTPException):
             safe_exception = _authored_vnext_generation_http_exception(e)
             if safe_exception is None:
-                traceback.print_exc()
+                # Keep the public payload generic, but preserve the exception
+                # class and traceback in the managed backend log so a durable
+                # retry cannot erase the only actionable failure evidence.
+                logger.exception("Unhandled presentation generation failure")
                 safe_exception = HTTPException(
                     status_code=500, detail="Presentation generation failed"
                 )
@@ -1428,7 +1370,7 @@ async def run_generation_job(
                 raise RuntimeError("presentation_generation_job_missing")
             request = _request_from_durable_payload(job.request_payload)
             request._request_id = job.request_id
-            if request.source_mode != SOURCE_CONTENT_RESTYLE_MODE:
+            if request.source_mode not in {SOURCE_CONTENT_RESTYLE_MODE, "raster_reconstruction"}:
                 await _admit_generation_references(request, session)
             # Recheck rollout and source validity on the worker too. A private
             # exact preset may have changed after admission; it must become a
@@ -1508,7 +1450,7 @@ async def _resume_failed_authored_job(
         job.state != "failed"
         or not job.resume_allowed
         or (
-            job.request_payload.get("strategy") != "authored"
+            job.request_payload.get("strategy") not in {"authored", "svg"}
             and str(job.request_payload.get("template", "")).lower()
             != AUTHORED_TEMPLATE
         )
@@ -1632,7 +1574,15 @@ async def _bootstrap_generation_workspace(
     # same canonical Authored identity before workspace capability derivation.
     # Leaving the profile unset makes the documented one-call API fail with
     # ``unsupported_presentation_driver`` before it can enqueue its operation.
-    stamp_new_authored_presentation(presentation)
+    if request.strategy == "svg":
+        from services.compatibility_migration.admission import stamp_new_svg_presentation
+
+        stamp_new_svg_presentation(presentation)
+    else:
+        stamp_new_authored_presentation(presentation)
+    presentation.theme = merge_presentation_canvas(
+        presentation.theme, request_canvas_metadata(request)
+    )
     sql_session.add(presentation)
     await sql_session.flush()
 
@@ -1656,6 +1606,8 @@ async def _bootstrap_generation_workspace(
                     "include_table_of_contents": request.include_table_of_contents,
                     "include_title_slide": request.include_title_slide,
                     "web_search": request.web_search,
+                    **({"page_size": request.page_size, "orientation": request.orientation}
+                       if request.page_size is not None else {"aspect_ratio": request.aspect_ratio}),
                     "reference_snapshot_ids": [
                         str(snapshot_id)
                         for snapshot_id in request.reference_snapshot_ids
@@ -1759,6 +1711,9 @@ async def _admit_generation_operation_v2_compatible(
                 slide_count=slide_count,
                 image_budget=slide_count,
                 repair_budget=slide_count,
+                source_image_budget=source_image_admission_budget(
+                    request._reference_snapshots, request.files
+                ),
                 vqa_budget=slide_count if request.vision_qa else 0,
             ),
             resource_plan=plan_weighted_resources(
@@ -1790,10 +1745,26 @@ async def queue_presentation_generation(
     idempotency_key: Optional[str] = None,
 ) -> AsyncPresentationGenerationTaskModel:
     """Validate and atomically enqueue one durable, idempotent generation job."""
+    from utils.generation_model import generation_model_settings
+
+    generation_model_settings(request.codex_generation_preset)
     # Apply the authored-vNext creation contract before idempotency lookup or
     # chat-first workspace bootstrap.  This keeps blocked Template V2/legacy
     # requests from minting even a temporary durable presentation shell.
     require_authored_vnext_creation_admission(request)
+    try:
+        canvas_style_id = (
+            resolve_authored_style(request.authored_style).id
+            if request.aspect_ratio != "16:9"
+            else request.authored_style or "default"
+        )
+        validate_authored_canvas_admission(request, style_id=canvas_style_id)
+    except ValueError as error:
+        if str(error).startswith("document_canvas") or str(error).startswith("authored_canvas") or str(error).startswith(
+            "authored_portrait"
+        ):
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        raise
     # Workspace orchestration can deliberately create a separate, new deck
     # while keeping progress anchored to the source deck's operation timeline.
     # That nested generation job must use the existing durable generator rather
@@ -1808,9 +1779,10 @@ async def queue_presentation_generation(
         or request.source_mode == SOURCE_CONTENT_RESTYLE_MODE
     ):
         await _validate_authored_master_pin_admission(request)
-    if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+    if request.source_mode in {SOURCE_CONTENT_RESTYLE_MODE, "raster_reconstruction"}:
         await _admit_source_content_generation(request, sql_session)
-        await _admit_source_content_reference_snapshot(request, sql_session)
+        if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+            await _admit_source_content_reference_snapshot(request, sql_session)
     # The fingerprint is taken before any deck is minted, so a replay under the
     # same idempotency key matches the stored job instead of bootstrapping a
     # second deck. It now includes the resolved pins/rule/style snapshots.
@@ -1906,8 +1878,21 @@ async def queue_presentation_generation(
 
     admitted_presentation: PresentationModel | None = None
     workspace_operation: WorkspaceOperation | None = None
+    document_preflight_done = False
     if chat_first_enabled:
         if request.presentation_id is None:
+            # Nothing durable exists yet for a bare API/CLI generate: no deck,
+            # no workspace operation, no timeline card to project a rejection
+            # onto. So the admission that can fail on the request alone runs
+            # here, before the bootstrap mints a deck, copies the caller's
+            # uploads into immutable workspace storage, and before any job row
+            # or background task exists. A request that already carries a
+            # ``presentation_id`` keeps the opposite ordering on purpose: its
+            # rejection is deferred so it lands on the operation's timeline.
+            _validate_authored_exact_admission(request)
+            if request.files:
+                await _load_document_context(request.files, request.language)
+                document_preflight_done = True
             # A bare API/CLI generate carries no deck. Mint one plus its
             # bootstrap anchor so the lookup below resolves exactly as it does
             # for a web client that created the deck in an earlier request.
@@ -1919,6 +1904,34 @@ async def queue_presentation_generation(
             PresentationModel,
             presentation_id,
         )
+        if admitted_presentation is not None:
+            try:
+                persisted_canvas = presentation_canvas_metadata(
+                    admitted_presentation.theme
+                )
+            except ValueError as error:
+                raise HTTPException(status_code=422, detail=str(error)) from error
+            resolved_canvas = request_canvas_metadata(request)
+            generic_landscape_canvas = canvas_metadata_for_aspect_ratio(
+                "16:9"
+            ).model_dump(mode="json", by_alias=True)
+            can_freeze_resolved_master_canvas = (
+                admitted_presentation.lifecycle_status
+                == PRESENTATION_LIFECYCLE_STAGING
+                and request.aspect_ratio == "16:9"
+                and getattr(request, "_authored_master_contract", None) is not None
+                and persisted_canvas == generic_landscape_canvas
+            )
+            if persisted_canvas != resolved_canvas and can_freeze_resolved_master_canvas:
+                admitted_presentation.theme = merge_presentation_canvas(
+                    admitted_presentation.theme,
+                    resolved_canvas,
+                )
+                persisted_canvas = resolved_canvas
+            if persisted_canvas != resolved_canvas:
+                raise HTTPException(
+                    status_code=409, detail="authored_canvas_request_mismatch"
+                )
         workspace_operation = await sql_session.scalar(
             select(WorkspaceOperation)
             .where(
@@ -2007,14 +2020,19 @@ async def queue_presentation_generation(
             if key_error is not None:
                 raise key_error
             _validate_authored_exact_admission(admitted_request)
-            await check_if_api_request_is_valid(admitted_request, sql_session)
-            if admitted_request.files:
+            if admitted_request.files and not document_preflight_done:
                 # Bootstrap copied uploads to immutable workspace storage.
                 # Admission and all later retries consume only those paths.
+                # This runs *before* validation because validation consumes the
+                # paths -- it canonicalizes them into reference snapshots and
+                # clears ``files`` -- so a preflight placed after it could never
+                # see a document again. Skipped when the fail-first admission
+                # above already measured the same bytes for this request.
                 await _load_document_context(
                     admitted_request.files,
                     admitted_request.language,
                 )
+            await check_if_api_request_is_valid(admitted_request, sql_session)
         except Exception as error:
             workspace_projected = (
                 await _record_chat_first_generation_admission_failure(
@@ -2042,17 +2060,16 @@ async def queue_presentation_generation(
                 ) from error
             raise
         request = admitted_request
-    else:
-        (presentation_id,) = await check_if_api_request_is_valid(
-            request, sql_session
-        )
-        if request.files:
-            # Reject oversized extracted input before persisting a durable job.
-            await _load_document_context(request.files, request.language)
 
-    # Persist the exact admitted request that the worker will execute. The fingerprint remains
-    # tied to the caller's canonical submitted payload for stable replay.
+    # Persist the exact admitted request and server-owned route that the worker
+    # will execute. The fingerprint remains tied to the caller's canonical
+    # submitted payload for stable replay.
+    from services.public_generation_route import pin_source_restyle_authoring
+
+    generation_route_receipt = pin_source_restyle_authoring(request)
     payload = _durable_request_payload(request)
+    if generation_route_receipt is not None:
+        payload["generation_route_receipt"] = generation_route_receipt
 
     async_status = AsyncPresentationGenerationTaskModel(
         status="pending",
@@ -2093,15 +2110,20 @@ async def queue_presentation_generation(
     sql_session.add(job)
     if workspace_operation is not None and presentation is not None:
         try:
+            operation_request_payload = {
+                "generation_request": payload,
+                "task_id": async_status.id,
+                "job_id": str(job.id),
+            }
+            if generation_route_receipt is not None:
+                operation_request_payload["generation_route_receipt"] = (
+                    generation_route_receipt
+                )
             await activate_workspace_operation(
                 sql_session,
                 operation_id=workspace_operation.id,
                 request_hash=fingerprint,
-                request_payload={
-                    "generation_request": payload,
-                    "task_id": async_status.id,
-                    "job_id": str(job.id),
-                },
+                request_payload=operation_request_payload,
                 expected_revision=presentation.revision,
                 expected_operation_version=workspace_operation.version,
                 commit=False,
@@ -2235,12 +2257,6 @@ async def queue_presentation_generation(
 
     if workspace_operation_id is not None:
         wake_workspace_operation_runner()
-    else:
-        background_tasks.add_task(
-            launch_generation_job,
-            job.id,
-            export_cookie_header,
-        )
     return async_status
 
 

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:24px;width:800px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:32px;line-height:38px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:916px;top:24px;width:300px;height:60px;padding:14px 18px;background:#00140E;color:#FFFFFF;text-align:right;font-size:15px;line-height:20px;font-weight:600;border-radius:12px}
+.body-wrap{width:1152px;margin-left:64px}
+.claim{height:54px;display:flex;align-items:center;margin-bottom:16px}
+.claim-text{font-size:28px;line-height:38px;font-weight:700;letter-spacing:-.03em}
+.claim-text strong{color:#08916E}
+.content-grid{display:grid;grid-template-columns:350px 778px;gap:24px;height:410px}
+.core-panel{height:410px;padding:28px;background:#00140E;border-radius:12px;position:relative}
+.core-label{font-size:15px;line-height:22px;font-weight:700;letter-spacing:.15em;color:#219F88}
+.core-word{margin-top:30px;font-size:58px;line-height:70px;font-weight:700;color:#08916E}
+.core-copy{position:absolute;left:28px;right:28px;bottom:30px;padding-top:22px;border-top:1px solid rgba(33,159,136,.55);font-size:20px;line-height:32px;font-weight:600;color:#FFFFFF}
+.core-copy strong{color:#5BC8AE}
+.evidence-panel{height:410px;padding:24px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.panel-head{height:42px;display:flex;align-items:flex-start;justify-content:space-between}
+.panel-title{font-size:22px;line-height:30px;font-weight:700;color:#002060}
+.panel-mark{padding:5px 12px;background:#E0F3FF;border-radius:12px;color:#00828E;font-size:15px;line-height:22px;font-weight:700}
+.evidence-list{margin-top:12px;border-top:1px solid #E2E8F0}
+.evidence-row{height:60px;display:flex;align-items:center;border-bottom:1px solid #E2E8F0}
+.row-index{width:38px;height:28px;display:flex;align-items:center;justify-content:center;background:#219F88;color:#FFFFFF;border-radius:12px;font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:20px;font-weight:700}
+.row-text{margin-left:18px;font-size:18px;line-height:28px;font-weight:600;color:#1D1D1B}
+.evidence-foot{margin-top:18px;padding:13px 16px;background:#F9F9F9;border-left:6px solid #08916E;border-radius:12px;font-size:17px;line-height:25px;font-weight:600;color:#1D1D1B}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="108" style="height:108px" data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-27" style="color: rgb(0, 106, 78)">장기고객 만들기</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-b15a5509cf3e870e" data-source-block-id="source-slide:28:text:3">4주차 PART 4 | 장기고객 만들기</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-semantic-role="supporting" data-qid="source-block-f46666d065b161ca" data-source-block-id="source-slide:28:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim" data-semantic-role="body" data-qid="source-block-4944da184a3e0b54" data-source-block-id="source-slide:28:text:6">한 번의 계약을 ‘<strong data-qid="q-strong-663977331dde" data-semantic-role="body">월 관리</strong>’로</div>
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="core-panel" data-semantic-role="decoration" data-qid="q-card-core-27">
+      <div class="core-label" data-semantic-role="supporting" data-qid="source-block-03913a405febe2a7" data-source-block-id="source-slide:28:text:10">핵심</div>
+      <div class="core-word" data-semantic-role="supporting" data-qid="q-core-word-27">핵심</div>
+      <div class="core-copy" data-semantic-role="body" data-qid="source-block-33096d52fdad8a75" data-source-block-id="source-slide:28:text:11">고객이 ‘내가 계속 아이디어를 내야 하나?’라고 느끼지 않게 한다.</div>
+    </div>
+
+    <div class="evidence-panel" data-semantic-role="decoration" data-qid="q-card-evidence-27">
+      <div class="panel-head" data-qid="q-div-e25ca81e908c" data-semantic-role="decoration">
+        <div class="panel-title" data-semantic-role="supporting" data-qid="q-panel-title-27">한 번의 계약을 ‘월 관리’로</div>
+        <div class="panel-mark" data-semantic-role="supporting" data-qid="q-panel-mark-27" style="color: rgb(0, 92, 104)">월 관리</div>
+      </div>
+      <div class="evidence-list" data-qid="q-div-bfb395016899" data-semantic-role="decoration">
+        <div class="evidence-row" data-qid="q-div-b83eab097263" data-semantic-role="decoration">
+          <div class="row-index" data-semantic-role="supporting" data-qid="q-index-01-27" style="background-color: rgb(0, 116, 92)">01</div>
+          <div class="row-text" data-semantic-role="body" data-qid="source-block-b230a1affe531fde" data-source-block-id="source-slide:28:text:7:run:0">다음 달 콘텐츠를 먼저 제안</div>
+        </div>
+        <div class="evidence-row" data-qid="q-div-c28c44a55cf4" data-semantic-role="decoration">
+          <div class="row-index" data-semantic-role="supporting" data-qid="q-index-02-27" style="background-color: rgb(0, 116, 92)">02</div>
+          <div class="row-text" data-semantic-role="body" data-qid="source-block-2e05b9acbfb922ef" data-source-block-id="source-slide:28:text:7:run:1">월간 콘텐츠 캘린더 제공</div>
+        </div>
+        <div class="evidence-row" data-qid="q-div-46fa797c036c" data-semantic-role="decoration">
+          <div class="row-index" data-semantic-role="supporting" data-qid="q-index-03-27" style="background-color: rgb(0, 116, 92)">03</div>
+          <div class="row-text" data-semantic-role="body" data-qid="source-block-3e811b0daf92b564" data-source-block-id="source-slide:28:text:7:run:2">고객 업종에 맞는 소재를 지속 발굴</div>
+        </div>
+        <div class="evidence-row" data-qid="q-div-8d0295860161" data-semantic-role="decoration">
+          <div class="row-index" data-semantic-role="supporting" data-qid="q-index-04-27" style="background-color: rgb(0, 116, 92)">04</div>
+          <div class="row-text" data-semantic-role="body" data-qid="source-block-974bf21d2869dc37" data-source-block-id="source-slide:28:text:7:run:3">성과와 개선점을 간단히 공유</div>
+        </div>
+        <div class="evidence-row" data-qid="q-div-0e7459b8a690" data-semantic-role="decoration">
+          <div class="row-index" data-semantic-role="supporting" data-qid="q-index-05-27" style="background-color: rgb(0, 116, 92)">05</div>
+          <div class="row-text" data-semantic-role="body" data-qid="source-block-a750c5538dc06bbb" data-source-block-id="source-slide:28:text:7:run:4">소개받을 수 있는 만족 경험 만들기</div>
+        </div>
+      </div>
+      <div class="evidence-foot" data-semantic-role="body" data-qid="q-evidence-foot-27" style="margin-top: -8px; padding-top: 0px; padding-bottom: 0px; line-height: 20px">고객이 ‘내가 계속 아이디어를 내야 하나?’라고 느끼지 않게 한다..</div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="source-block-ac0696b54813061d" data-source-block-id="source-slide:28:text:4" style="color: rgb(99, 105, 114); top: 673px">28</div>
+</body>
+</html>

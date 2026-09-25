@@ -9,13 +9,22 @@ from typing import Optional
 from fastapi import Request
 from starlette.responses import Response
 
+from api.v1.auth.secret_store import (
+    clear_auth_secret,
+    get_or_create_auth_secret,
+    peek_auth_secret,
+    rotate_auth_secret,
+)
 from utils.get_env import get_user_config_path_env, is_disable_auth_enabled
 from utils.user_config_store import read_user_config_file, update_user_config_file
 
 SESSION_COOKIE_NAME = "presenton_session"
 PBKDF2_ITERATIONS = 200_000
 SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
+# The signing secret is owned by `api.v1.auth.secret_store`; this module only
+# persists the credential pair and clears the legacy secret field on reset.
 AUTH_CONFIG_FIELDS = ("AUTH_USERNAME", "AUTH_PASSWORD_HASH", "AUTH_SECRET_KEY")
+_PERSISTED_CREDENTIAL_FIELDS = ("AUTH_USERNAME", "AUTH_PASSWORD_HASH")
 DISABLED_AUTH_OWNER_SCOPE = "local-disabled-auth-scope-v1"
 _OWNER_SCOPE_PURPOSE = b"template-v2-pptx-import-owner-v1\x00"
 
@@ -47,7 +56,7 @@ def _save_user_config(config: dict, removed_keys: tuple[str, ...] = ()) -> None:
 
     auth_config = {
         key: config[key]
-        for key in AUTH_CONFIG_FIELDS
+        for key in _PERSISTED_CREDENTIAL_FIELDS
         if key in config
     }
 
@@ -93,17 +102,6 @@ def _verify_password_hash(password: str, encoded_hash: str) -> bool:
         return False
 
 
-def _get_or_create_auth_secret(config: dict) -> str:
-    secret = config.get("AUTH_SECRET_KEY")
-    if secret:
-        return secret
-
-    secret = _base64url_encode(secrets.token_bytes(32))
-    config["AUTH_SECRET_KEY"] = secret
-    _save_user_config(config)
-    return secret
-
-
 def is_auth_configured() -> bool:
     config = _load_user_config()
     return bool(config.get("AUTH_USERNAME") and config.get("AUTH_PASSWORD_HASH"))
@@ -131,8 +129,8 @@ def setup_initial_credentials(username: str, password: str) -> None:
 
     config["AUTH_USERNAME"] = cleaned_username
     config["AUTH_PASSWORD_HASH"] = _encode_password_hash(password)
-    _get_or_create_auth_secret(config)
     _save_user_config(config)
+    get_or_create_auth_secret()
 
 
 def force_set_credentials(username: str, password: str) -> None:
@@ -147,20 +145,17 @@ def force_set_credentials(username: str, password: str) -> None:
     config = _load_user_config()
     config["AUTH_USERNAME"] = cleaned_username
     config["AUTH_PASSWORD_HASH"] = _encode_password_hash(password)
-    config["AUTH_SECRET_KEY"] = _base64url_encode(secrets.token_bytes(32))
     _save_user_config(config)
+    rotate_auth_secret()
 
 
 def clear_stored_credentials() -> None:
     """Remove stored credentials; next boot will request setup again."""
     config = _load_user_config()
-    removed = False
-    for key in ("AUTH_USERNAME", "AUTH_PASSWORD_HASH", "AUTH_SECRET_KEY"):
-        if key in config:
-            config.pop(key, None)
-            removed = True
-    if removed:
+    if [key for key in AUTH_CONFIG_FIELDS if config.pop(key, None) is not None]:
         _save_user_config(config, removed_keys=AUTH_CONFIG_FIELDS)
+    # Also clears the vault entry when a credential backend is configured.
+    clear_auth_secret()
 
 
 def verify_credentials(username: str, password: str) -> bool:
@@ -186,8 +181,7 @@ def _sign_payload(payload_encoded: str, secret: str) -> str:
 
 
 def create_session_token(username: str) -> str:
-    config = _load_user_config()
-    secret = _get_or_create_auth_secret(config)
+    secret = get_or_create_auth_secret()
     issued_at = int(time.time())
     payload = {
         "v": 1,
@@ -206,9 +200,8 @@ def validate_session_token(token: Optional[str]) -> Optional[str]:
     if not token:
         return None
 
-    config = _load_user_config()
-    stored_username = config.get("AUTH_USERNAME")
-    secret = config.get("AUTH_SECRET_KEY")
+    stored_username = _load_user_config().get("AUTH_USERNAME")
+    secret = peek_auth_secret()
     if not stored_username or not secret:
         return None
 
@@ -305,8 +298,8 @@ def get_request_owner_scope(request: Request) -> str:
     if not isinstance(username, str) or not username.strip():
         raise ValueError("Authenticated request identity is unavailable")
 
-    secret = _load_user_config().get("AUTH_SECRET_KEY")
-    if not isinstance(secret, str) or not secret:
+    secret = peek_auth_secret()
+    if not secret:
         raise ValueError("Authentication signing secret is unavailable")
 
     return hmac.new(

@@ -27,6 +27,10 @@ from models.sql.presentation import (
     PresentationModel,
 )
 from models.sql.slide import SlideModel
+from services.authored_canvas import (
+    canvas_metadata_for_aspect_ratio,
+    merge_presentation_canvas,
+)
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
 TABLES = [
@@ -41,6 +45,22 @@ AUTHORED_COVER_HTML = (
     + "</section>"
 )
 AUTHORED_SECOND_HTML = "<section data-slide='body'><h2>Second</h2></section>"
+SVG_DETAIL = {"diagnostic": "large source geometry " * 2048}
+LIST_THEME = merge_presentation_canvas({
+    "data": {"colors": {"primary": "#123456"}},
+    "svg": {"qualityStatus": "passed", "reviewPages": []},
+}, canvas_metadata_for_aspect_ratio("16:9").model_dump(mode="json", by_alias=True))
+STORED_THEME = {
+    **LIST_THEME,
+    "authoredQualityGate": {"localFit": SVG_DETAIL},
+    "authored_vnext": {**LIST_THEME["authored_vnext"], "scene": SVG_DETAIL},
+    "svg": {
+        **LIST_THEME["svg"],
+        "quality": [SVG_DETAIL],
+        "initialQuality": [SVG_DETAIL],
+        "styleSnapshot": SVG_DETAIL,
+    },
+}
 
 
 def _native_ui() -> dict[str, Any]:
@@ -96,6 +116,7 @@ async def _seed(maker) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
                     n_slides=2,
                     language="ko",
                     title="Authored deck",
+                    theme=STORED_THEME,
                     mode="authored",
                     lifecycle_status=PRESENTATION_LIFECYCLE_PUBLISHED,
                 ),
@@ -128,7 +149,8 @@ async def _seed(maker) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
                     layout_group="authored",
                     layout="authored:cover",
                     index=0,
-                    content={"image": "/static/cover.png", "__authored__": True},
+                    content={"image": "/static/cover.png", "__authored__": True,
+                             "svgReceipt": SVG_DETAIL},
                     html_content=AUTHORED_COVER_HTML,
                     speaker_note="cover note",
                     properties={"source": "authored"},
@@ -221,6 +243,11 @@ def test_presentation_list_withholds_slide_html_and_never_selects_it(tmp_path: P
             assert authored_slide.properties == {"source": "authored"}
             assert by_id[authored_id].title == "Authored deck"
             assert by_id[authored_id].mode == "authored"
+            assert by_id[authored_id].theme == LIST_THEME
+            assert by_id[native_id].theme is None
+            # Both large JSON columns are reduced inside SQL, not after fetch.
+            assert any("json_remove(presentations.theme" in sql for sql in statements)
+            assert any("json_remove(slides.content" in sql for sql in statements)
 
             native_slide = by_id[native_id].slides[0]
             assert native_slide.content == {"title": "Native cover"}
@@ -253,6 +280,13 @@ def test_presentation_list_withholds_slide_html_and_never_selects_it(tmp_path: P
                 AUTHORED_COVER_HTML,
                 AUTHORED_SECOND_HTML,
             ]
+            assert stored[0].content["svgReceipt"] == SVG_DETAIL
+            async with maker() as session:
+                detail = await presentation_crud._get_presentation_with_slides(
+                    authored_id, session
+                )
+                assert detail.theme == STORED_THEME
+                assert detail.slides[0].content["svgReceipt"] == SVG_DETAIL
         finally:
             await engine.dispose()
 

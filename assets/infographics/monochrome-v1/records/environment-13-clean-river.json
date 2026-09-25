@@ -1,0 +1,56 @@
+{
+  "id": "environment-13-clean-river",
+  "category": "environment",
+  "tags": {
+    "ko": [
+      "환경",
+      "하천보전"
+    ],
+    "en": [
+      "environment",
+      "clean",
+      "river"
+    ]
+  },
+  "alt": {
+    "ko": "하천보전 단색 벡터 인포그래픽",
+    "en": "clean river monochrome vector infographic"
+  },
+  "path": "originals/environment-13-clean-river.svg",
+  "thumbnail": "thumbnails/environment-13-clean-river.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 762,
+  "sha256": "b0f43663befe387da3f25399c6ecdaceee21ea534edc39660c6a56c17cac186e",
+  "geometry_sha256": "8535db07b4516ee675fc360c1355ef6ca8fd7185039bb7ff6175340d17b2bb90",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57957,
+    "preview_opaque_pixels": 5872,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Waves",
+      "Leaf"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

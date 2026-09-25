@@ -1,0 +1,554 @@
+{
+ "sourceUnitId": "source-slide:18",
+ "sourceIndex": 17,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:18:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "3주차 | 첫 고객 만들기",
+    "paragraphs": [
+     {
+      "runs": [
+       "3주차 | 첫 고객 만들기"
+      ],
+      "text": "3주차 | 첫 고객 만들기"
+     }
+    ],
+    "runs": [
+     "3주차 | 첫 고객 만들기"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:0ef6c94629545d9297dc693f622aa9ae5a4351fafa699e6439ff3ebb2819b06a",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "목표: 실제 영업할 대상과 접근 방법을 만든다.",
+    "paragraphs": [
+     {
+      "runs": [
+       "목표: 실제 영업할 대상과 접근 방법을 만든다."
+      ],
+      "text": "목표: 실제 영업할 대상과 접근 방법을 만든다."
+     }
+    ],
+    "runs": [
+     "목표: 실제 영업할 대상과 접근 방법을 만든다."
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 658368,
+     "y": 987552,
+     "cx": 10424160,
+     "cy": 365760
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:4e84818559e2c7dca9208e2e6e16db99fad0605e360d331f32ee215f64e04f89",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "18",
+    "paragraphs": [
+     {
+      "runs": [
+       "18"
+      ],
+      "text": "18"
+     }
+    ],
+    "runs": [
+     "18"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:4dc864ce6d12457f5f944a70076e0f85797576bd2d8223f7926849cf0b007a96",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:36fd55bab03eb0480d24a03055e21590393daa37f1e868df1a69112f2d6294dd",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:text:7",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 5,
+   "payload": {
+    "text": "첫 고객의 공식",
+    "paragraphs": [
+     {
+      "runs": [
+       "첫 고객의 공식"
+      ],
+      "text": "첫 고객의 공식"
+     }
+    ],
+    "runs": [
+     "첫 고객의 공식"
+    ],
+    "shapeName": "TextBox 6",
+    "geometry": {
+     "x": 822960,
+     "y": 1463040,
+     "cx": 2743200,
+     "cy": 411480
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:ae54c041dd8b2dfd23df31dd868bf64bf91195f9f082145a717a3a6041eddc4f",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:text:8",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 6,
+   "payload": {
+    "text": "포트폴리오 → 무료 샘플 → 영업 → 상담",
+    "paragraphs": [
+     {
+      "runs": [
+       "포트폴리오 → 무료 샘플 → 영업 → 상담"
+      ],
+      "text": "포트폴리오 → 무료 샘플 → 영업 → 상담"
+     }
+    ],
+    "runs": [
+     "포트폴리오 → 무료 샘플 → 영업 → 상담"
+    ],
+    "shapeName": "TextBox 7",
+    "geometry": {
+     "x": 822960,
+     "y": 2011680,
+     "cx": 9875520,
+     "cy": 640080
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:9c64d69b2087fd1c41c632c072cf5cc8d72938036e32b655356c6e755beed200",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:shape:9",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 7,
+   "payload": {
+    "shapeName": "Rounded Rectangle 8",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 822960,
+     "y": 3246120,
+     "cx": 3108960,
+     "cy": 1508760
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:ae8a5e60c3fd245b41127ab5ae949ebb0614b7bd224d3c1a4aed54496ef4ca55",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:shape:10",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 8,
+   "payload": {
+    "shapeName": "Rectangle 9",
+    "preset": "rect",
+    "geometry": {
+     "x": 822960,
+     "y": 3246120,
+     "cx": 73152,
+     "cy": 1508760
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:a6fc338defbdff1fa188d35a9ec6a0597184d05177a6d8c2e7707c77449d667f",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:text:11",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 9,
+   "payload": {
+    "text": "1",
+    "paragraphs": [
+     {
+      "runs": [
+       "1"
+      ],
+      "text": "1"
+     }
+    ],
+    "runs": [
+     "1"
+    ],
+    "shapeName": "TextBox 10",
+    "geometry": {
+     "x": 1024128,
+     "y": 3383279,
+     "cx": 2743200,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:08aa13fe1995e2e0d4346948ccf7b3975920d2cdb3030bf646aba04b4aeb5e1c",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:text:12",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 10,
+   "payload": {
+    "text": "보여줄 영상 준비",
+    "paragraphs": [
+     {
+      "runs": [
+       "보여줄 영상 준비"
+      ],
+      "text": "보여줄 영상 준비"
+     }
+    ],
+    "runs": [
+     "보여줄 영상 준비"
+    ],
+    "shapeName": "TextBox 11",
+    "geometry": {
+     "x": 1024128,
+     "y": 3813048,
+     "cx": 2743200,
+     "cy": 822959
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:9179d2092d792765452dc4d0cefa1e9e778dadcbeb8eb999099d9d56235aa0a2",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:shape:13",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 11,
+   "payload": {
+    "shapeName": "Rounded Rectangle 12",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 4160520,
+     "y": 3246120,
+     "cx": 3108960,
+     "cy": 1508760
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:f614b347eb8d780977516ef94c90fb97c240f98869d1401dfff807b35f5565fc",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:shape:14",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 12,
+   "payload": {
+    "shapeName": "Rectangle 13",
+    "preset": "rect",
+    "geometry": {
+     "x": 4160520,
+     "y": 3246120,
+     "cx": 73152,
+     "cy": 1508760
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:ca4b0360a3500b35dd969a7c81f9cac9b9a42ddf55380bedf3619f574d7c3490",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:text:15",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 13,
+   "payload": {
+    "text": "2",
+    "paragraphs": [
+     {
+      "runs": [
+       "2"
+      ],
+      "text": "2"
+     }
+    ],
+    "runs": [
+     "2"
+    ],
+    "shapeName": "TextBox 14",
+    "geometry": {
+     "x": 4361688,
+     "y": 3383279,
+     "cx": 2743200,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:ab0846e3e4c35b7e7bc0c8ce4170916da561ae41e88692deaa96bdca2767f9d4",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:text:16",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 14,
+   "payload": {
+    "text": "가게 하나 선정",
+    "paragraphs": [
+     {
+      "runs": [
+       "가게 하나 선정"
+      ],
+      "text": "가게 하나 선정"
+     }
+    ],
+    "runs": [
+     "가게 하나 선정"
+    ],
+    "shapeName": "TextBox 15",
+    "geometry": {
+     "x": 4361688,
+     "y": 3813048,
+     "cx": 2743200,
+     "cy": 822959
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:64cc663c10562c4db0ccf070eb1b4d88834dfc1c7ecea4c7aed87102bf85734f",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:shape:17",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 15,
+   "payload": {
+    "shapeName": "Rounded Rectangle 16",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 7498079,
+     "y": 3246120,
+     "cx": 3108960,
+     "cy": 1508760
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:f83667299ac876921dfc2d3294193e2625cdd16434469056e0fe5a9d1b44fa2b",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:shape:18",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 16,
+   "payload": {
+    "shapeName": "Rectangle 17",
+    "preset": "rect",
+    "geometry": {
+     "x": 7498079,
+     "y": 3246120,
+     "cx": 73152,
+     "cy": 1508760
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:203a383f63243597aaebf9fda0624a4badc8119c97a80f6ef6b1d773f431a23a",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:text:19",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 17,
+   "payload": {
+    "text": "3",
+    "paragraphs": [
+     {
+      "runs": [
+       "3"
+      ],
+      "text": "3"
+     }
+    ],
+    "runs": [
+     "3"
+    ],
+    "shapeName": "TextBox 18",
+    "geometry": {
+     "x": 7699248,
+     "y": 3383279,
+     "cx": 2743200,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:13e41d42e8db67b6c32f7100e05e30616b2fee5255e077605d5879cb17bf29a6",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:18:text:20",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 18,
+   "payload": {
+    "text": "직접 제안",
+    "paragraphs": [
+     {
+      "runs": [
+       "직접 제안"
+      ],
+      "text": "직접 제안"
+     }
+    ],
+    "runs": [
+     "직접 제안"
+    ],
+    "shapeName": "TextBox 19",
+    "geometry": {
+     "x": 7699248,
+     "y": 3813048,
+     "cx": 2743200,
+     "cy": 822959
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:dfd5749f107de82266f3c72d046d3712f01e08b5b221d67cd8ca59d1b089b9a0",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

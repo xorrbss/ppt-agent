@@ -174,6 +174,59 @@ def test_stamp_repairs_one_appended_full_stop_back_to_source_bytes() -> None:
         stamp_source_block_ids("<div>제작 파트너&#46;</div>", [("n", "제작 파트너")])
 
 
+@pytest.mark.parametrize("actual", [
+    "‘영상’ 아니라 ‘콘텐츠 운영’을 판다",
+    "‘영상’이 아니라 ‘콘텍텐츠 운영’을 판다",
+    "‘영상’이 아니라 ‘콘텐츠 운영’을 판더",
+])
+def test_stamp_restores_one_unambiguous_leaf_to_authoritative_text(actual) -> None:
+    expected = "‘영상’이 아니라 ‘콘텐츠 운영’을 판다"
+    block_id = "source-slide:7:text:10"
+    stamped = stamp_source_blocks(
+        f'<section><p class="message"><span>{actual}</span></p></section>',
+        [(block_id, expected)],
+    )
+    assert f">{expected}</span>" in stamped.html
+    assert f'<span data-source-block-id="{block_id}"' in stamped.html
+    assert stamped.deviations == ()
+    assert stamp_source_block_ids(stamped.html, [(block_id, expected)]) == stamped.html
+
+
+def test_stamp_leaf_repair_preserves_source_whitespace_and_escapes_markup() -> None:
+    expected = "  A & B < C  "
+    stamped = stamp_source_block_ids("<p>A &amp; B &lt; D</p>", [("b", expected)])
+    assert ">  A &amp; B &lt; C  </p>" in stamped
+    assert stamp_source_block_ids(stamped, [("b", expected)]) == stamped
+
+
+@pytest.mark.parametrize("authored", [
+    "<p>‘영상’ 아니라 ‘콘텐츠 운영’을 판다</p>"
+    "<p>‘영상’ 아니라 ‘콘텐츠 운영’을 판다</p>",
+    "<p><span>‘영상’</span> 아니라 <strong>‘콘텐츠 운영’을 판다</strong></p>",
+    '<p data-source-block-id="other">‘영상’ 아니라 ‘콘텐츠 운영’을 판다</p>',
+    '<section data-source-block-id="other"><p>‘영상’ 아니라 ‘콘텐츠 운영’을 판다</p></section>',
+    '<section style="display:none"><p>‘영상’ 아니라 ‘콘텐츠 운영’을 판다</p></section>',
+    '<p hidden>‘영상’ 아니라 ‘콘텐츠 운영’을 판다</p>',
+    "<p>완전히 다른 내용</p>",
+])
+def test_stamp_does_not_guess_ambiguous_nested_owned_hidden_or_missing_text(authored) -> None:
+    expected = "‘영상’이 아니라 ‘콘텐츠 운영’을 판다"
+    with pytest.raises(BrowserSourceReadbackError) as error:
+        stamp_source_block_ids(authored, [("source-slide:7:text:10", expected)])
+    assert error.value.block_ids == ("source-slide:7:text:10",)
+    assert expected in error.value.detail
+
+
+def test_stamp_missing_footer_stays_fail_closed_and_reports_expected_span() -> None:
+    with pytest.raises(BrowserSourceReadbackError) as error:
+        stamp_source_block_ids(
+            "<h1>완성된 제목</h1>",
+            [("title", "완성된 제목"), ("footer", "빠진 원문 푸터 전체")],
+        )
+    assert error.value.block_ids == ("footer",)
+    assert "빠진 원문 푸터 전체" in error.value.detail
+
+
 def _manifest() -> dict[str, object]:
     return {
         "units": [{
@@ -460,3 +513,45 @@ def test_an_arrow_on_its_own_line_never_becomes_its_own_run() -> None:
     assert [run.body for run in project_source_runs("↓").runs] == ["↓"]
     # A page number is content, not presentation, however alone it stands.
     assert [run.body for run in project_source_runs("13").runs] == ["13"]
+
+
+def test_an_enumerator_on_its_own_line_or_piece_is_kept_not_deleted() -> None:
+    """An enumerator or corporate mark is content, unlike a template arrow.
+
+    ``"㈜"`` before a company name is routinely written on its own line in a
+    source deck (``"㈜\\n아이비즈소프트웨어"``). Unlike the arrow in
+    ``test_an_arrow_on_its_own_line_never_becomes_its_own_run``, it is a
+    printed character the deck actually shows, so ``_drop_marker_only_lines``/
+    ``_drop_marker_only_pieces`` must not delete it the way they delete a
+    decoration-only line or piece. It is kept as its own body-only run instead
+    (``_split_marker``'s own rule against consuming an entire segment already
+    produces that shape) rather than merged across a real separator, which
+    would stop the merged text being a substring of the source line.
+    """
+
+    mark = project_source_runs("㈜\n아이비즈소프트웨어")
+    assert [(run.marker, run.body) for run in mark.runs] == [
+        ("", "㈜"),
+        ("", "아이비즈소프트웨어"),
+    ]
+    assert "㈜" in mark.text and "아이비즈소프트웨어" in mark.text
+
+    numbered = project_source_runs("①\n하나")
+    assert [run.body for run in numbered.runs] == ["①", "하나"]
+
+    corporate_mark = project_source_runs("㈀\n내용")
+    assert [run.body for run in corporate_mark.runs] == ["㈀", "내용"]
+
+    # Split into its own piece by a real separator, the mark still survives --
+    # as its own run rather than merged with the piece the separator joins it
+    # to (see the module docstring on why merging is unsafe here).
+    piped = project_source_runs("㈜ | 아이비즈")
+    assert [(run.body, run.order_free_before) for run in piped.runs] == [
+        ("㈜", False),
+        ("아이비즈", True),
+    ]
+    assert piped.accepts(0, 1, "㈜ | 아이비즈")
+
+    # Nothing follows to fold into: the mark is kept standalone rather than
+    # discarded, exactly like a lone decorative glyph with no item either.
+    assert [run.body for run in project_source_runs("㈜").runs] == ["㈜"]

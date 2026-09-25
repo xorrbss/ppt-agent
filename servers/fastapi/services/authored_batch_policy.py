@@ -30,15 +30,15 @@ OVERLOAD_COOLDOWN_MAX_SECONDS = 300.0
 _OVERLOAD_CODES = frozenset(
     {
         "provider_circuit_open",
-        "public_provider_bridge_exception",
+        "public_provider_overload",
         # A call that exhausted its own transport timeout is the strongest
         # overload signal available.  The underscore-joined code does not match
         # the free-text timeout pattern below, so it is named here explicitly.
         "public_provider_call_timeout",
     }
 )
-_OVERLOAD_STATUS_CODES = frozenset({429, 500, 503})
-_HTTP_OVERLOAD_PATTERN = re.compile(r"(?<!\d)(?:429|500|503)(?!\d)")
+_OVERLOAD_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+_HTTP_OVERLOAD_PATTERN = re.compile(r"(?<!\d)(?:429|500|502|503|504)(?!\d)")
 _TIMEOUT_PATTERN = re.compile(r"\b(?:timeout|timed out|deadline exceeded)\b", re.IGNORECASE)
 # What the provider bridges actually surface for a 429: ``openai.RateLimitError``
 # (status 429), llmai's ``usage_limit_reached`` / "usage limit" messages,
@@ -246,7 +246,7 @@ def advance_authored_batch_policy(
 def is_authored_provider_overload(error: object | None) -> bool:
     """Recognize failures which must slow a job's provider-call scheduling.
 
-    Covers transport timeouts, HTTP 429/500/503, the durable overload codes,
+    Covers transport timeouts, HTTP 429/500/502/503/504, the durable overload codes,
     and rate-limit / usage-limit / resource-exhausted texts.
     """
 

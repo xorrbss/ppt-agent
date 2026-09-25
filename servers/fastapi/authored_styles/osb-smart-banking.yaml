@@ -28,6 +28,24 @@ design_tokens:
   heading_font: Noto Sans KR
   body_font: Noto Sans KR
   mono_font: IBM Plex Mono
+composer_profile:
+  profile_id: banking-proposal-blue
+  version: composer-style/v1
+  header_style: tab-band
+  header_fill: "#173A63"
+  header_tab_fill: "#FFFFFF"
+  heading_color: "#173A63"
+  surface_color: "#DCECF6"
+  table_header_fill: "#0879B7"
+  table_header_text: "#FFFFFF"
+  footer_fill: "#FFFFFF"
+  footer_text: "#173A63"
+  cover_alignment: left
+  cover_fill: "#173A63"
+  cover_text: "#FFFFFF"
+  cover_accent_fill: "#0879B7"
+  emphasis_color: "#E7352A"
+  border_radius: 6
 illustration:
   # STYLE ONLY: palette, medium and finish. Subject matter belongs to the
   # slide's own scene prompt. This text is appended to every scene, so motifs
@@ -60,29 +78,38 @@ brief: |-
 
   PALETTE
   Use white #FFFFFF as the primary canvas, deep navy #173A63 for headings and structural anchors, and cobalt #0879B7 for the main reading path, section bars, and diagrams. Use pale blue #DCECF6 for information zones and table fills. Reserve red #E7352A for one critical warning, exception, or priority signal per slide. Dark section dividers may invert to navy with white type.
+  Use the original palette with strong text/background contrast. Pale tints serve as surfaces, not low-contrast body text; differentiate critical states with wording or shape as well as color.
 
   TYPOGRAPHY
-  Use Noto Sans KR throughout. Titles are bold, compact, and phrased as conclusions. Use medium-weight labels and regular body copy with clear hierarchy. Keep body copy short, align numerals carefully in tables, and use IBM Plex Mono only for small system identifiers or technical metadata. All meaningful text must remain editable HTML rather than being embedded in generated images.
+  Use Noto Sans KR throughout. Titles are bold, compact, and phrased as supported conclusions. Use medium-weight labels and regular body copy with clear hierarchy. Wrap long labels at phrase boundaries and keep amounts with their units. Allocate width to dense table columns before reducing text size. Use navy text on pale-blue fills and white text on dark navy; red priority labels must also state their meaning in words. Align numerals carefully in tables and use IBM Plex Mono only for system identifiers or technical metadata. All meaningful text must remain editable HTML rather than being embedded in generated images.
+  At 1280x720, use the Korean-safe stack "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif for Korean text. Retain the larger established type scale and spacious rhythm on ordinary slides. Only when supplied content is dense enough that the ordinary scale would cause overlap or canvas escape, first remove decorative minimum heights, reflow or reallocate width, and compact line-height to 1.3-1.45 with 12-18px inter-block gaps. If the content still cannot fit, use 14-18px body text and 12-14px supporting labels or notes. Keep every visible text run at or above 12 CSS px (9pt), preserve every supplied fact and relationship, and introduce neither fixed slots nor content deletion. Preserve any genre-specific display-face accents only where Korean fallback remains clear.
 
   LAYOUT SYSTEM
-  Use a wide 16:9 corporate grid with generous outer margins, a stable top title zone, and a thin section or progress indicator when useful. White content slides should combine one dominant diagram or table with concise supporting copy. Dark navy slides should feature a single central solution system with surrounding modules. Keep alignment strict, grouping obvious, and reading order left-to-right or top-to-bottom.
+  Use a wide 16:9 corporate grid with outer margins sized to the content density, a stable top title zone, and a thin section indicator when useful. Reserve separate title, evidence, and source-note zones. White content slides combine one dominant diagram or table with concise supporting copy; size the support column around its longest Korean labels. Dark navy statement slides carry one claim, while architecture slides may feature a central solution system when the source describes one. Keep alignment strict, grouping obvious, and reading order left-to-right or top-to-bottom. Vary the composition by slide role, reflow dense evidence within the allocated slide, and preserve required content and the requested slide count.
+  Preserve the banking proposal's white, navy and blue discipline while opening each page around its operational question. Choose a workflow, control comparison or service metric only when the source supports it. Alternate customer journey, operational evidence and delivery decisions; table density must not dictate the entire deck. These are free compositional choices driven by content, never fixed layouts or required slots. Give the main evidence space matched to its content, use content-sized rows and panels on dense pages, and vary visual density across the deck.
 
   SIGNATURE ELEMENTS
   Use slim blue section bars, rounded pale-blue panels, navy headline bands, precise connector lines, numbered process nodes, restrained iconography, smartphone interface frames, and small red priority markers. Tables should use blue header fills and subtle row rules. Treat every visual element as part of one connected argument rather than as decoration.
+  Use the existing blue rules and precise connectors to reveal control boundaries or handoffs. Keep the original branding and reference-image provenance intact. Use the red accent for a named exception, never as a general decorative counterweight.
 
   DATA VISUALIZATION
-  Favor comparison tables, grouped bars, progress rails, maturity matrices, and timeline bands that can be read quickly by executives. Direct-label important values, use blue intensity to encode hierarchy, and keep axes and legends minimal but unambiguous. Use a single red marker only to identify risk or required attention. Charts, tables, and values must be editable HTML or inline SVG.
+  Favor comparison tables, grouped bars, and timeline bands that can be read quickly by executives. Right-align numeric columns, retain units, reporting periods, supplied source notes, and consistent precision. Bars start at zero and comparable series share a scale. Progress rails require a supplied current value and target; maturity matrices require stated criteria and evidence. Use a qualitative comparison when the input has no measurements, without inventing scores, targets, or readiness levels. Direct-label important values, use blue intensity for hierarchy, and retain axes or legends needed for interpretation. Red identifies a supported risk or required attention together with a text label. Charts, tables, and values must be editable HTML or inline SVG.
+  Separate measured performance, proposed controls and implementation assumptions. For banking flows, identify the actor and the purpose of each handoff; avoid implying security certification or regulatory compliance without evidence. Show denominators, waiting-time definitions and exception counts when supplied.
 
   IMAGE DIRECTION
-  Use polished mobile-banking UI frames, abstract secure-data networks, and restrained professional human imagery only when they directly support the slide claim. Prefer original vector-like financial IT illustrations over generic stock photography. Reference images define composition and visual hierarchy only; never reproduce their wording, logos, company marks, watermarks, or exact object arrangement.
+  Use polished mobile-banking UI frames, abstract secure-data networks, and restrained professional human imagery only when they directly support the slide claim. Show supplied screens faithfully without distorting their aspect ratio; put explanatory labels outside the device frame. An illustrative interface must remain clearly conceptual and must not invent account balances, product rates, customer identities, or claims of a deployed system. Prefer original vector-like financial IT illustrations over generic stock photography. Reference images define composition and visual hierarchy only; never reproduce their wording, logos, company marks, watermarks, or exact object arrangement.
 
   SLIDE ARCHETYPES
   cover: Place a bold proposal title and concise subtitle in a clean left-aligned field, balanced by one focused mobile-banking or secure-digital visual.
+  agenda: List the supplied chapters in aligned rows with navy names, cobalt numerals, and slim pale-blue rules. Keep long Korean labels readable and omit invented page references.
+  section: Use a spacious navy field with the actual chapter name in white, a cobalt rule, and a short supplied context line only when needed.
   content: Combine one structured process, comparison, or priority framework with short evidence labels and a clear bottom-line takeaway.
-  architecture: Use one central navy solution platform with three to six connected domains, visible data flow, and a concise implication ribbon.
+  architecture: Use one central navy solution platform when the source describes a hub, otherwise use aligned service tiers. Include the supplied domains and label known data flows, routing connectors through clear lanes to node boundaries. Place an implication ribbon outside the diagram only when supported; do not invent domains to fill a fixed layout.
   data: Build one dominant comparison table or chart family with direct labels, blue hierarchy, and a short interpretation panel.
-  timeline: Use a single horizontal program rail with four to six phases, aligned milestone labels, and one highlighted current or critical phase.
-  closing: Present three decisive priorities or outcomes beside one memorable digital-banking system visual and one clear next action.
+  timeline: Use a horizontal program rail with the actual phases and aligned milestone labels. Date bands reflect supplied dates and durations; an undated sequence uses ordered stages without implied elapsed time. Highlight a current or critical phase only when identified in the input.
+  closing: Present the supported recommendation and supplied next action in a spacious field, using a digital-banking visual only when it adds meaning. Do not add priorities or outcomes to reach a fixed count.
+  Additional forms — customer-to-operations handoff with one friction point; service-time comparison; control-coverage table with evidence status; exception route with escalation criteria; delivery checkpoint connecting an outcome to its acceptance evidence.
 
   AVOID
   Avoid generic card mosaics, playful consumer-app styling, excessive gradients, decorative 3D objects, mismatched icon styles, dense paragraphs, oversized logos, unexplained abbreviations, ambiguous arrows, more than one red emphasis signal, unreadable table text, text inside generated images, copied source wording, copied brand marks, and conclusions unsupported by the visual evidence.
+  Avoid invented bank metrics, compliance badges, imitation logos and dense system diagrams on pages whose subject is a customer outcome.

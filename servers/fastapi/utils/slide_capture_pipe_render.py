@@ -23,6 +23,7 @@ METRICS_ELEMENT_ID = "__codex_authored_dom_metrics"
 
 def render_admitted_html_over_pipe(
     admitted: AdmittedHtml, timeout: int, *,
+    width_px: int = SLIDE_W, height_px: int = SLIDE_H,
     blocked_urls: Sequence[str],
     chrome_pipe: Callable[[str, pathlib.Path], Any],
     find_chrome: Callable[[], str | None],
@@ -32,6 +33,8 @@ def render_admitted_html_over_pipe(
     return render_admitted_htmls_over_pipe(
         (admitted,),
         timeout,
+        width_px=width_px,
+        height_px=height_px,
         blocked_urls=blocked_urls,
         chrome_pipe=chrome_pipe,
         find_chrome=find_chrome,
@@ -44,6 +47,8 @@ def render_admitted_htmls_over_pipe(
     admitted_htmls: Sequence[AdmittedHtml],
     timeout: int,
     *,
+    width_px: int = SLIDE_W,
+    height_px: int = SLIDE_H,
     blocked_urls: Sequence[str],
     chrome_pipe: Callable[[str, pathlib.Path], Any],
     find_chrome: Callable[[], str | None],
@@ -133,8 +138,8 @@ def render_admitted_htmls_over_pipe(
                 page_command(
                     "Emulation.setDeviceMetricsOverride",
                     {
-                        "width": SLIDE_W,
-                        "height": SLIDE_H,
+                        "width": width_px,
+                        "height": height_px,
                         "deviceScaleFactor": 1,
                         "mobile": False,
                     },
@@ -151,6 +156,8 @@ def render_admitted_htmls_over_pipe(
                     admitted.html,
                     script_nonce=admitted.nonce,
                     issue_capability=False,
+                    width_px=width_px,
+                    height_px=height_px,
                 )
                 page_command(
                     "Page.setDocumentContent",
@@ -210,14 +217,16 @@ def render_admitted_htmls_over_pipe(
                     str(shot.get("data") or ""), validate=True
                 )
                 image = Image.open(io.BytesIO(image_bytes)).convert("RGB").crop(
-                    (0, 0, SLIDE_W, SLIDE_H)
+                    (0, 0, width_px, height_px)
                 )
                 output = io.BytesIO()
                 image.save(output, format="PNG")
                 if metrics is not None:
+                    from utils.slide_capture_local_fit import measured_html
                     metrics = probe_glyph_clipping_sync(
-                        admitted.html, metrics, output.getvalue(),
+                        measured_html(admitted.html, metrics), metrics, output.getvalue(),
                         command=page_command, frame_id=frame_id,
+                        width_px=width_px, height_px=height_px,
                     )
                 return output.getvalue(), metrics
             finally:

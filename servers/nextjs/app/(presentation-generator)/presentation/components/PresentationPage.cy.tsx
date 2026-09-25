@@ -187,7 +187,7 @@ describe("<PresentationPage />", () => {
       .and("have.attr", "data-assistant-adapter", "canonical-workspace");
   });
 
-  it("stops workspace staging when the design operation has failed", () => {
+  it("keeps workspace staging recoverable when the design operation is terminal", () => {
     apiMocks.setupGetIntercept(presentationUrl, buildDeck(0), "loadStagingDeck");
     apiMocks.setupGetIntercept(
       `**/api/v1/ppt/workspace/presentations/${presentationId}/timeline*`,
@@ -217,10 +217,76 @@ describe("<PresentationPage />", () => {
 
     cy.wait("@loadStagingDeck");
     cy.wait("@stagingTimeline");
-    cy.get('[data-testid="workspace-staging-failure"]')
+    cy.get('[data-testid="workspace-staging-terminal"]')
       .should("be.visible")
-      .and("contain.text", "디자인 변경에 실패했습니다");
+      .and("contain.text", "디자인 변경을 완료하지 못했습니다");
     cy.get('[data-testid="workspace-staging-loading"]').should("not.exist");
+    cy.contains("button", "작업 확인").click();
+    cy.get('[data-testid="workspace-chat-pane"]').should("be.visible");
+  });
+
+  it("pauses an aged queued operation and only performs a read when manually refreshed", () => {
+    let workspacePosts = 0;
+    cy.intercept("POST", "**/api/v1/ppt/workspace/**", () => {
+      workspacePosts += 1;
+    });
+    apiMocks.setupGetIntercept(presentationUrl, buildDeck(0), "loadQueuedDeck");
+    apiMocks.setupGetIntercept(
+      `**/api/v1/ppt/workspace/presentations/${presentationId}/timeline*`,
+      {
+        schema_version: 1,
+        items: [{
+          schema_version: 1,
+          anchor_type: "operation",
+          id: "operation-queued",
+          operation_id: "operation-queued",
+          position: 1,
+          operation_type: "design.apply",
+          title: "디자인 변경",
+          status: "queued",
+          created_at: "2020-01-01T00:00:00Z",
+          events: [],
+        }],
+        revision: 0,
+        has_more: false,
+      },
+      "queuedTimeline",
+    );
+
+    mountPage(true);
+
+    cy.wait("@queuedTimeline");
+    cy.contains("자동 상태 확인을 잠시 멈췄습니다").should("be.visible");
+    cy.get(".presentation-loading-indicator-static").should("exist");
+    cy.contains("button", "상태 새로 고침").click();
+    cy.wait("@queuedTimeline");
+    cy.wrap(null).should(() => expect(workspacePosts).to.equal(0));
+  });
+
+  it("keeps staging visible when a background slide refresh has a transient failure", () => {
+    let presentationRequests = 0;
+    apiMocks.setupGetIntercept(
+      presentationUrl,
+      () => {
+        presentationRequests += 1;
+        if (presentationRequests === 2) {
+          return { forceNetworkError: true } as never;
+        }
+        return buildDeck(0);
+      },
+      "loadTransientDeck",
+    );
+    apiMocks.setupGetIntercept(
+      `**/api/v1/ppt/workspace/presentations/${presentationId}/timeline*`,
+      { schema_version: 1, items: [], revision: 0, has_more: false },
+      "transientTimeline",
+    );
+
+    mountPage(true);
+
+    cy.wait("@transientTimeline");
+    cy.get('[data-testid="workspace-staging-loading"]').should("be.visible");
+    cy.contains("프레젠테이션을 불러오지 못했습니다").should("not.exist");
   });
 
   it("offers a recoverable empty state and reloads the deck on demand", () => {
@@ -239,7 +305,7 @@ describe("<PresentationPage />", () => {
     cy.wait("@loadDeck");
     cy.contains("슬라이드가 없습니다").should("be.visible");
     cy.contains(
-      "이 발표자료에는 아직 생성된 슬라이드가 없습니다. 다시 불러오거나 상단의 재생성 버튼으로 슬라이드를 만들 수 있습니다.",
+      "아직 표시할 슬라이드가 없습니다. 작업 대화를 확인하거나 결과를 다시 불러올 수 있습니다.",
     ).should("be.visible");
 
     cy.contains("button", "다시 불러오기").click();
@@ -328,6 +394,51 @@ describe("<PresentationPage />", () => {
     cy.wait("@loadDeck");
 
     cy.get('[data-thumbnail-display="rail"]').should("be.visible");
-    cy.get('[data-testid="mobile-thumbnail-drawer-trigger"]').should("not.be.visible");
+    cy.get('[data-testid="mobile-thumbnail-drawer-trigger"]').should("not.exist");
+  });
+
+  it("preserves the preferred split width and keyboard focus across the 968px tab boundary", () => {
+    cy.viewport(1400, 900);
+    apiMocks.setupGetIntercept(presentationUrl, buildDeck(2), "loadDeck");
+
+    mountPage();
+    cy.wait("@loadDeck");
+
+    cy.get('[data-testid="workspace-pane-separator"]', { timeout: 10_000 })
+      .should("have.attr", "aria-valuemin", "360")
+      .and("have.attr", "aria-valuemax", "600")
+      .and("have.attr", "aria-valuenow", "490")
+      .focus()
+      .trigger("keydown", { key: "ArrowLeft" })
+      .should("have.attr", "aria-valuenow", "506")
+      .trigger("keydown", { key: "ArrowLeft", shiftKey: true })
+      .should("have.attr", "aria-valuenow", "554")
+      .trigger("keydown", { key: "Home" })
+      .should("have.attr", "aria-valuenow", "360")
+      .trigger("keydown", { key: "End" })
+      .should("have.attr", "aria-valuenow", "600");
+
+    cy.viewport(1000, 900);
+    cy.get('[data-testid="workspace-pane-separator"]')
+      .should("have.attr", "aria-valuemax", "392")
+      .and("have.attr", "aria-valuenow", "392");
+
+    cy.viewport(1400, 900);
+    cy.get('[data-testid="workspace-pane-separator"]')
+      .should("have.attr", "aria-valuenow", "600")
+      .focus();
+    cy.viewport(967, 900);
+    cy.get('[data-testid="responsive-slides-tab"]').should("be.focused");
+
+    cy.get('[data-testid="responsive-chat-tab"]').click();
+    cy.get("#workspace-command").focus().type("보존할 초안");
+    cy.viewport(1400, 900);
+    cy.get('[data-testid="workspace-pane-separator"]').should("be.visible");
+    cy.viewport(967, 900);
+    cy.get('[data-testid="responsive-chat-tab"]')
+      .should("have.attr", "aria-selected", "true");
+    cy.get("#workspace-command")
+      .should("be.focused")
+      .and("have.value", "보존할 초안");
   });
 });

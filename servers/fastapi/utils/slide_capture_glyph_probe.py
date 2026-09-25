@@ -93,7 +93,7 @@ window.__codexGlyphClipProof = (async () => {
       if(nodes.some(matches=>matches.length!==1)) throw Error('qid_not_unique');
       for(let side=0;side<2;side++) {
         const doc=pair[side], target=nodes[side][0];
-        if(doc.defaultView.innerWidth!==1280 || doc.defaultView.innerHeight!==720 || doc.defaultView.devicePixelRatio!==1) throw Error('viewport_mismatch');
+        if(doc.defaultView.innerWidth!==config.width || doc.defaultView.innerHeight!==config.height || doc.defaultView.devicePixelRatio!==1) throw Error('viewport_mismatch');
         if(doc.querySelectorAll('[data-qid]').length>128) throw Error('owner_limit');
         for(const element of doc.querySelectorAll('*')) {
           const css=doc.defaultView.getComputedStyle(element);
@@ -114,7 +114,7 @@ window.__codexGlyphClipProof = (async () => {
           if(!doc.fonts.check(css.font)) throw Error('font_unavailable');
         }
         const ranges=fragments(doc,target);
-        if(!ranges.length||ranges.some(r=>r.x<2||r.y<2||r.x+r.width>1278||r.y+r.height>718)) throw Error('reference_viewport_incomplete');
+        if(!ranges.length||ranges.some(r=>r.x<2||r.y<2||r.x+r.width>config.width-2||r.y+r.height>config.height-2)) throw Error('reference_viewport_incomplete');
       }
       const before=pair.map(snapshot);
       if(JSON.stringify(before[0])!==JSON.stringify(before[1])) throw Error('frame_geometry_mismatch');
@@ -133,7 +133,10 @@ window.__codexGlyphClipProof = (async () => {
 """
 
 
-def build_glyph_probe(html: str, metrics: Mapping[str, Any]) -> dict[str, Any] | None:
+def build_glyph_probe(
+    html: str, metrics: Mapping[str, Any], *,
+    width_px: int = _W, height_px: int = _H,
+) -> dict[str, Any] | None:
     suspects = [item for item in metrics.get("elements", ()) if isinstance(item, Mapping) and item.get("range_clip_suspect") is True]
     if not suspects:
         return None
@@ -143,12 +146,12 @@ def build_glyph_probe(html: str, metrics: Mapping[str, Any]) -> dict[str, Any] |
     targets = [item["qid"] for item in suspects[:MAX_GLYPH_SUSPECTS] if isinstance(item.get("qid"), str)] if valid_source else []
     if len(enriched.encode()) > 512 * 1024 or len(metrics.get("elements", ())) > MAX_GLYPH_OWNERS:
         targets = []
-    height = max(1, len(targets) * 2) * _H
+    height = max(1, len(targets) * 2) * height_px
     frames = "".join(f'<iframe srcdoc="{html_lib.escape(enriched, quote=True)}"></iframe>' for _ in range(len(targets) * 2))
     binding = {"epoch": secrets.token_hex(16), "render_digest": render_digest, "source_digest": metrics.get("source_digest"), "sensor_version": GLYPH_CLIPPING_SENSOR_VERSION}
-    script = _SCRIPT.replace("__CONFIG__", json.dumps({"targets": targets, "binding": binding, "source": enriched}).replace("<", "\\u003c"))
-    base = f'<!doctype html><html><head><style>html,body{{margin:0;width:{_W}px;height:{height}px;overflow:hidden;background:#000}}iframe{{display:block;border:0;width:{_W}px;height:{_H}px}}</style></head><body>{frames}'
-    return {"document": base + f'<script>{script}</script></body></html>', "cdp_document": base + '</body></html>', "script": script, "height": height, "targets": targets, **binding}
+    script = _SCRIPT.replace("__CONFIG__", json.dumps({"targets": targets, "binding": binding, "source": enriched, "width": width_px, "height": height_px}).replace("<", "\\u003c"))
+    base = f'<!doctype html><html><head><style>html,body{{margin:0;width:{width_px}px;height:{height}px;overflow:hidden;background:#000}}iframe{{display:block;border:0;width:{width_px}px;height:{height_px}px}}</style></head><body>{frames}'
+    return {"document": base + f'<script>{script}</script></body></html>', "cdp_document": base + '</body></html>', "script": script, "width": width_px, "height": height, "frame_height": height_px, "targets": targets, **binding}
 
 
 def read_glyph_probe_proof(dumped_dom: bytes) -> object:
@@ -191,7 +194,8 @@ def apply_glyph_probe(metrics, plan, proof, probe_png, original_png):
             evidence["reason"] = "source_or_probe_limit"
             continue
         observed = proof_by_qid.get(qid, {})
-        if observed.get("complete") is not True or image is None or image.size != (_W, plan["height"]):
+        plan_width = int(plan.get("width", _W))
+        if observed.get("complete") is not True or image is None or image.size != (plan_width, plan["height"]):
             if observed.get("reason") in {"missing_frame", "qid_not_unique", "viewport_mismatch", "owner_limit", "unsupported_effect", "font_unavailable", "reference_viewport_incomplete", "frame_geometry_mismatch", "geometry_or_font_changed", "non_leaf_text_paint", "active_motion", "pseudo_paint", "unsupported_text_ink", "source_document_mismatch"}:
                 evidence["reason"] = observed["reason"]
             continue
@@ -215,9 +219,10 @@ def apply_glyph_probe(metrics, plan, proof, probe_png, original_png):
         if not invariant:
             evidence["reason"] = "original_geometry_or_font_mismatch"
             continue
-        offset = plan["targets"].index(qid) * 2 * _H
-        current = image.crop((0, offset, _W, offset + _H))
-        reference = image.crop((0, offset + _H, _W, offset + 2 * _H))
+        frame_height = int(plan.get("frame_height", _H))
+        offset = plan["targets"].index(qid) * 2 * frame_height
+        current = image.crop((0, offset, plan_width, offset + frame_height))
+        reference = image.crop((0, offset + frame_height, plan_width, offset + 2 * frame_height))
         histogram = reference.histogram()
         ink = sum(histogram[1:])
         if not ink:
@@ -241,8 +246,10 @@ def apply_glyph_probe(metrics, plan, proof, probe_png, original_png):
     return result
 
 
-def _cdp_steps(html, metrics, png, frame_id):
-    plan = build_glyph_probe(html, metrics)
+def _cdp_steps(html, metrics, png, frame_id, *, width_px=_W, height_px=_H):
+    plan = build_glyph_probe(
+        html, metrics, width_px=width_px, height_px=height_px
+    )
     if plan is None:
         return metrics
     proof, probe_png = None, None
@@ -253,7 +260,7 @@ def _cdp_steps(html, metrics, png, frame_id):
             # remain enabled; every srcdoc retains its original CSP unchanged.
             navigation = yield "Page.navigate", {"url": "about:blank"}
             frame_id = navigation.get("frameId", frame_id)
-            yield "Emulation.setDeviceMetricsOverride", {"width": _W, "height": plan["height"], "deviceScaleFactor": 1, "mobile": False}
+            yield "Emulation.setDeviceMetricsOverride", {"width": plan["width"], "height": plan["height"], "deviceScaleFactor": 1, "mobile": False}
             yield "Page.setDocumentContent", {"frameId": frame_id, "html": plan["cdp_document"]}
             response = yield "Runtime.evaluate", {"expression": plan["script"], "awaitPromise": True, "returnByValue": True}
             if response.get("exceptionDetails"):
@@ -268,8 +275,12 @@ def _cdp_steps(html, metrics, png, frame_id):
     return apply_glyph_probe(metrics, plan, proof, probe_png, png)
 
 
-async def probe_glyph_clipping_async(html, metrics, png, *, command, frame_id):
-    steps = _cdp_steps(html, metrics, png, frame_id)
+async def probe_glyph_clipping_async(
+    html, metrics, png, *, command, frame_id, width_px=_W, height_px=_H
+):
+    steps = _cdp_steps(
+        html, metrics, png, frame_id, width_px=width_px, height_px=height_px
+    )
     answer = None
     while True:
         try:
@@ -285,8 +296,12 @@ async def probe_glyph_clipping_async(html, metrics, png, *, command, frame_id):
                 return done.value
 
 
-def probe_glyph_clipping_sync(html, metrics, png, *, command, frame_id):
-    steps = _cdp_steps(html, metrics, png, frame_id)
+def probe_glyph_clipping_sync(
+    html, metrics, png, *, command, frame_id, width_px=_W, height_px=_H
+):
+    steps = _cdp_steps(
+        html, metrics, png, frame_id, width_px=width_px, height_px=height_px
+    )
     answer = None
     while True:
         try:
@@ -307,8 +322,11 @@ async def probe_glyph_clipping_file(
     # The screenshot subprocess owns this deadline; see capture_slide_evidence.
     timeout,  # noqa: ASYNC109
     count_runtime, run_screenshot, wait_for_output,
+    width_px=_W, height_px=_H,
 ):
-    plan = build_glyph_probe(html, metrics)
+    plan = build_glyph_probe(
+        html, metrics, width_px=width_px, height_px=height_px
+    )
     if plan is None:
         return metrics
     proof, probe_png = None, None
@@ -318,7 +336,7 @@ async def probe_glyph_clipping_file(
             target = Path(directory) / "glyph-probe.png"
             source.write_text(plan["document"], encoding="utf-8")
             args = [value for value in screenshot_args[:-1] if value != "--dump-dom" and not value.startswith(("--window-size=", "--screenshot=", "--user-data-dir="))]
-            args += [f"--user-data-dir={Path(directory) / 'glyph-profile'}", f"--window-size={_W},{plan['height']}", f"--screenshot={target}", "--dump-dom", source.as_uri()]
+            args += [f"--user-data-dir={Path(directory) / 'glyph-profile'}", f"--window-size={width_px},{plan['height']}", f"--screenshot={target}", "--dump-dom", source.as_uri()]
             count_runtime("chrome_process_launches")
             dumped = await asyncio.to_thread(run_screenshot, args, timeout)
             if await wait_for_output(str(target)):

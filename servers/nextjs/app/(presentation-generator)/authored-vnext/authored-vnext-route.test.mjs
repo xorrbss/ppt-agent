@@ -27,7 +27,10 @@ test("flow wires Master publish, ten-slide creation, typed outbox, conflict and 
   assert.match(callbacksSource, /conflict\/rebaseSucceeded/);
   assert.match(source, /export\.requested/);
   assert.match(source, /Re-read the publication head at click time/);
-  assert.match(actionsSource, /deck\.scene\?\.assetManifest/);
+  // Optional-chained `deck.scene?.assetManifest` was rewritten as an
+  // early-return guard by 0e444bb59 (2026-08-25); same null-safety intent.
+  assert.match(actionsSource, /if \(!deck\.scene\) return \[\];/);
+  assert.match(actionsSource, /deck\.scene\.assetManifest/);
   assert.match(actionsSource, /expectedAssetDigests:\s*\[\.\.\.new Set/);
   assert.doesNotMatch(source, /dangerouslySetInnerHTML|\.innerHTML|slides\s*:\s*any/);
 });

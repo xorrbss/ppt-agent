@@ -1,0 +1,54 @@
+{
+  "id": "people-09-technician",
+  "category": "people",
+  "tags": {
+    "ko": [
+      "사람",
+      "기술자"
+    ],
+    "en": [
+      "people",
+      "technician"
+    ]
+  },
+  "alt": {
+    "ko": "기술자 단색 벡터 인포그래픽",
+    "en": "technician monochrome vector infographic"
+  },
+  "path": "originals/people-09-technician.svg",
+  "thumbnail": "thumbnails/people-09-technician.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 631,
+  "sha256": "9082af85f912b09fd8598092299ea42956b25f8b37f935839e5adfac84c9092f",
+  "geometry_sha256": "ff5438925d52bf42533e90eed728905607a78bd7d7380909ae02a5ab85d085d2",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 55824,
+    "preview_opaque_pixels": 8362,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "UserRoundCog"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "id": "education-06-globe",
+  "category": "education",
+  "tags": {
+    "ko": [
+      "교육",
+      "지구본"
+    ],
+    "en": [
+      "education",
+      "globe"
+    ]
+  },
+  "alt": {
+    "ko": "지구본 단색 벡터 인포그래픽",
+    "en": "globe monochrome vector infographic"
+  },
+  "path": "originals/education-06-globe.svg",
+  "thumbnail": "thumbnails/education-06-globe.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 372,
+  "sha256": "354e13960771323b0fe7303e4387ab70dba3948cce17ddff3a86b6a8069d8edc",
+  "geometry_sha256": "9029dc022dee270c03c772412a3a6a8ce64d9b7bbfad050f5eeece960ac6cf93",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 49143,
+    "preview_opaque_pixels": 14239,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Globe"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

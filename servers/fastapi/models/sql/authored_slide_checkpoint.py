@@ -103,6 +103,8 @@ class AuthoredSlideCheckpoint(SQLModel, table=True):
         ),
     )
 
+    svg_checkpoint: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))
+
     author_html: Optional[str] = Field(
         default=None,
         sa_column=Column(Text, nullable=True),

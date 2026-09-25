@@ -179,6 +179,7 @@ def test_public_export_product_path_uses_postgres_claim_trusted_dispatch_and_fen
         tenant_token = set_current_tenant_id(tenant)
         object_store = LocalDevelopmentArtifactObjectStore(tmp_path / "artifact-object-store")
         artifacts = DurableArtifactService(object_store)
+        monkeypatch.setattr("services.artifact_store.configured_public_artifact_service", lambda: artifacts)
         try:
             async with maker() as session:
                 session.add(
@@ -280,7 +281,7 @@ def test_public_export_product_path_uses_postgres_claim_trusted_dispatch_and_fen
                 session.add(WorkspaceArtifact(
                     id=workspace_artifact_id, owner_id=owner, operation_id=operation_id,
                     presentation_id=presentation_id, kind="export.pptx", status="staging",
-                    storage_key="workspace-artifacts/test/product-path.pptx", sha256=output_digest,
+                    storage_key=output_ref.storage_key, sha256=output_digest,
                     size_bytes=len(output_bytes), source_revision=0, public_artifact_id=output_ref.artifact_id,
                 ))
                 await session.flush()
@@ -289,7 +290,7 @@ def test_public_export_product_path_uses_postgres_claim_trusted_dispatch_and_fen
                     artifact=PreparedWorkspaceArtifact(
                         artifact_id=workspace_artifact_id, owner_id=owner, operation_id=operation_id,
                         presentation_id=presentation_id, kind="export.pptx", absolute_path=private_path,
-                        storage_key="workspace-artifacts/test/product-path.pptx", public_path="/api/v2/artifacts/hidden/download",
+                        storage_key=output_ref.storage_key, public_path="/api/v2/artifacts/hidden/download",
                         sha256=output_digest, size_bytes=len(output_bytes), source_revision=0,
                         # Publication cross-checks the prepared intent against
                         # the arguments; a prepared artifact that claims no

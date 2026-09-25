@@ -1,0 +1,55 @@
+{
+  "id": "operations-01-delivery-truck",
+  "category": "operations",
+  "tags": {
+    "ko": [
+      "운영",
+      "배송"
+    ],
+    "en": [
+      "operations",
+      "delivery",
+      "truck"
+    ]
+  },
+  "alt": {
+    "ko": "배송 단색 벡터 인포그래픽",
+    "en": "delivery truck monochrome vector infographic"
+  },
+  "path": "originals/operations-01-delivery-truck.svg",
+  "thumbnail": "thumbnails/operations-01-delivery-truck.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 516,
+  "sha256": "a66f98c7d8b6cfa6500f8d5a67059ab4a389c1099d76156e42a6bf357f7a17c8",
+  "geometry_sha256": "1a398c4cec3b3e86dc1ae610719f5ba94612b917e5cc30cef6469b16477ce2df",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 53740,
+    "preview_opaque_pixels": 10294,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Truck"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

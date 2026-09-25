@@ -35,12 +35,11 @@ test("a deck that loses nothing needs no confirmation", async () => {
   assert.deepEqual(sourceContentLosses(summary()), []);
 });
 
-test("dropped tables and charts are each reported", async () => {
+test("preserved tables are not reported while dropped charts are", async () => {
   const { sourceContentLosses } = await loadModule();
   const losses = sourceContentLosses(summary({ tables: 3, charts: 1 }));
-  assert.equal(losses.length, 2);
-  assert.ok(losses[0].includes("3"), losses[0]);
-  assert.ok(losses[1].includes("1"), losses[1]);
+  assert.equal(losses.length, 1);
+  assert.ok(losses[0].includes("1"), losses[0]);
 });
 
 test("blocks kept as flat images are reported as a loss of editability", async () => {
@@ -56,6 +55,6 @@ test("every kind of loss is listed together", async () => {
     sourceContentLosses(
       summary({ tables: 2, charts: 4, rasterFallbackBlocks: 1 }),
     ).length,
-    3,
+    2,
   );
 });

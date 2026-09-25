@@ -139,6 +139,7 @@ async def _request_advisory(sheet: bytes, *, slide_count: int) -> tuple[str, obj
     from utils.llm_provider import get_llm_provider, get_model
     from utils.llm_utils import extract_text, get_generate_kwargs
     from utils.provider_idempotency import (
+        AUTHORED_DECK_OUTCOME_SCOPE,
         provider_generate_call,
         supports_provider_idempotency,
     )
@@ -181,7 +182,10 @@ async def _request_advisory(sheet: bytes, *, slide_count: int) -> tuple[str, obj
                 provider_id=provider,
                 kwargs=kwargs,
                 idempotency_key=current_provider_idempotency_key(),
-                outcome_scope="authored",
+                # Deck-level: this call reviews a whole deck and owns no slide
+                # attempt, so it takes the authored outcome mapping without
+                # ever spending a slide's replay reservation.
+                outcome_scope=AUTHORED_DECK_OUTCOME_SCOPE,
             )
             response = await asyncio.get_running_loop().run_in_executor(
                 None, generate_call

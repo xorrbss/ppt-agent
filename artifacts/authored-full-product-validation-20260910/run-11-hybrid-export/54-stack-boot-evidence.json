@@ -1,0 +1,89 @@
+{
+  "schema": "local-stack-boot-regression-20260912/v1",
+  "restart": {
+    "owner": "scripts/start-local-stack.ps1",
+    "authorization": "coordinator granted exactly one restart for this regression",
+    "stopCommand": "pwsh -NoProfile -File scripts/start-local-stack.ps1 -Stop",
+    "startCommand": "pwsh -NoProfile -File scripts/start-local-stack.ps1",
+    "stoppedComponents": [
+      "proxy (PID 14284)",
+      "next (PID 12956)",
+      "worker-export (PID 42900)",
+      "worker-generation (PID 13448)",
+      "api (PID 15140)"
+    ],
+    "postgresNote": "PostgreSQL on 21000 was unsupervised (not in the state file), so -Stop left it running and -Start adopted the live listener. The persistent database was never restarted.",
+    "logStamp": "20260912-025947",
+    "commitRunning": "f6db6f33d06a129d678e91ab639af5c31099643a",
+    "commitRunningShort": "f6db6f33d"
+  },
+  "status": {
+    "command": "pwsh -NoProfile -File scripts/start-local-stack.ps1 -Status",
+    "postgres": "listening (PID 28968) [unsupervised]",
+    "api": "listening (PID 35176), supervised root 26904",
+    "next": "listening (PID 20104), supervised root 52916",
+    "proxy": "listening (PID 33460)",
+    "controllers": "2/2 running (PIDs 19448, 29276)",
+    "allListening": true
+  },
+  "logScan": {
+    "method": "grep -i for Traceback / ImportError / ModuleNotFoundError / 'cannot import name' / 'No module named' across every 20260912-025947 stdout+stderr log",
+    "filesScanned": [
+      "api-20260912-025947.stderr.log",
+      "api-20260912-025947.stdout.log",
+      "worker-export-20260912-025947.stderr.log",
+      "worker-export-20260912-025947.stdout.log",
+      "worker-generation-20260912-025947.stderr.log",
+      "worker-generation-20260912-025947.stdout.log",
+      "next-20260912-025947.stderr.log",
+      "next-20260912-025947.stdout.log",
+      "proxy-20260912-025947.stderr.log",
+      "proxy-20260912-025947.stdout.log"
+    ],
+    "importErrorsFound": 0,
+    "apiStartupLines": [
+      "runtime settings sync outcome=applied revision=14 attempt=0",
+      "provider_availability_check_skipped profile=export_only_validation",
+      "Application startup complete.",
+      "Uvicorn running on http://127.0.0.1:8000"
+    ],
+    "workerStartupLines": [
+      "runtime settings sync outcome=applied revision=14 attempt=0",
+      "Workspace operation external worker started"
+    ]
+  },
+  "todaysModuleImportCheck": {
+    "method": "servers/fastapi/.venv/Scripts/python.exe, sys.path seeded with servers/fastapi, importlib.import_module per module",
+    "results": {
+      "html5lib": "OK (version 1.1)",
+      "services.authored_rollout_profile": "OK",
+      "services.authored_admission": "OK",
+      "services.authored_admission_policy": "OK",
+      "services.authored_admission_session": "OK",
+      "services.authored_admission_checkpoint": "OK",
+      "services.authored_admission_publication": "OK",
+      "utils.get_env_programme": "OK (composition envelope profile accessor present)",
+      "services.workspace_operation_worker": "OK",
+      "services.public_export_operation": "OK",
+      "services.presentation_export_direct_attempt_service": "OK",
+      "services.authored_presentation_generation": "OK"
+    },
+    "rolloutProfileDefaultConstructed": {
+      "gate_mode": "shadow",
+      "html_normalization": "legacy",
+      "placeholder_authoring": false,
+      "single_repair_loop": false,
+      "repair_loop_model_calls": 1
+    }
+  },
+  "transientImportWindow": {
+    "observedAt": "2026-09-12T03:13:00+09:00 through roughly 03:16:40+09:00",
+    "error": "ImportError: cannot import name 'is_authored_publish_flagged_slides_enabled' from 'utils.get_env'",
+    "chain": "services.workspace_operation_worker -> account_deletion_controller -> workspace_cleanup_journal_service -> authored_checkpoint_service -> authored_checkpoint_state -> authored_admission_checkpoint -> authored_admission_session -> authored_terminal_slide_policy",
+    "cause": "An uncommitted working-tree edit by a concurrent session removed the re-export of is_authored_publish_flagged_slides_enabled / is_authored_publish_flagged_slides_source_reflow_enabled from utils/get_env.py while services/authored_terminal_slide_policy.py still imported both from that facade.",
+    "notFromTodaysCommits": "HEAD f6db6f33d carries the facade import in utils/get_env.py; the break existed only in the shared worktree's intermediate state.",
+    "resolved": true,
+    "resolvedAt": "2026-09-12T03:19:34+09:00",
+    "runningStackUnaffected": "The api and both controllers had already imported the chain at 02:59:47, before the edit landed at 03:09:56."
+  }
+}

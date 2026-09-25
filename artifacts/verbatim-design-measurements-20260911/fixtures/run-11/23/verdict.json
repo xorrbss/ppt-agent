@@ -1,0 +1,317 @@
+{
+ "run": "run-11",
+ "slide_index": 23,
+ "fixture_role": "published_slide",
+ "is_failing_slide": false,
+ "authoring_passed": false,
+ "job_id": "d185a6d0-bc47-4c8e-8fc9-23d5ad1713fa",
+ "job_id_basis": "05-admission.json operation_id -> presentation_generation_jobs.workspace_operation_id (authoritative join; agrees with the created_at ordering it replaces for all 11 runs)",
+ "job_id_basis_note": "repeatability-20260911.md",
+ "workspace_operation_id": "97267adb-db55-436a-afaf-02a31192a7fa",
+ "job_state": "published",
+ "presentation_id": "bc843f70-a28e-45f6-a87f-8a4b6c017928",
+ "completed_slides": 35,
+ "created_at": "2026-09-11 03:06:25.785935+09:00",
+ "checkpoint": {
+  "render_sha256": "b5f0221ad387201737a216ccb306587547595e670eb9e4957123d464a61700d0",
+  "failed_stage": null,
+  "error": {
+   "provider_attempt_count": 1,
+   "provider_attempt_epoch": 1,
+   "provider_attempt_total": 0
+  },
+  "author_status": "completed",
+  "render_status": "completed"
+ },
+ "run_artifacts": {
+  "files": [
+   "01-upload.json",
+   "02-snapshot.json",
+   "03-analysis.json",
+   "04-generate-request.json",
+   "05-admission.json",
+   "06-final-status.json",
+   "07-download-evidence.json",
+   "08-audit.json",
+   "8e90e2d2-87b2-4c50-ba08-63ce4332b278.pptx"
+  ],
+  "06-final-status.json": {
+   "detail": "browser pixel-area probe reports a continuous occluding layer",
+   "visibilityFailures": [
+    "source-slide:17:text:3"
+   ],
+   "missingBlockIds": [],
+   "integrityFailures": [],
+   "orderViolations": 0,
+   "flaggedSlides": [
+    {
+     "index": 10,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "d3157d48-4638-413f-ac2a-92bb4d4f0bad"
+    },
+    {
+     "index": 14,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "0b04d424-a3ba-4153-9939-b06c0a9c9417"
+    },
+    {
+     "index": 16,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "a8f40aa2-11fb-4e06-b55b-a0a8d9d7cb91",
+     "sourceVisibilityBlockIds": [
+      "source-slide:17:text:3"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 26,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "224464fe-2c61-46d2-9b3f-c45b0d2f2f78"
+    },
+    {
+     "index": 28,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "7bc230b7-8a7e-4111-9341-5f925f9d2fd3"
+    },
+    {
+     "index": 29,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "6513b581-b573-4314-8a27-0582df5b6c0e"
+    },
+    {
+     "index": 30,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "a5c5eb6d-0d1c-4789-bd2f-0fdf9715e4ac"
+    }
+   ],
+   "reviewPages": [
+    {
+     "index": 10,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 14,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 16,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 26,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 28,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 29,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 30,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    }
+   ],
+   "residualIssues": [
+    {
+     "slide_index": 26,
+     "issues": [
+      {
+       "category": "overlap",
+       "severity": "medium",
+       "detail": "browser pixel-area probe reports a continuous occluding layer",
+       "qids": [
+        "q-support-copy-26"
+       ],
+       "policy": "style_reference"
+      }
+     ]
+    },
+    {
+     "slide_index": 29,
+     "issues": [
+      {
+       "category": "overlap",
+       "severity": "medium",
+       "detail": "browser pixel-area probe reports a continuous occluding layer",
+       "qids": [
+        "q-span-2af01d53a93e"
+       ],
+       "policy": "style_reference"
+      },
+      {
+       "category": "overlap",
+       "severity": "medium",
+       "detail": "browser pixel-area probe reports a continuous occluding layer",
+       "qids": [
+        "q-span-c83eac29f2ad"
+       ],
+       "policy": "style_reference"
+      },
+      {
+       "category": "overlap",
+       "severity": "medium",
+       "detail": "browser pixel-area probe reports a continuous occluding layer",
+       "qids": [
+        "q-span-ff27a5abbc91"
+       ],
+       "policy": "style_reference"
+      },
+      {
+       "category": "text_escapes_card",
+       "severity": "high",
+       "detail": "text of q-span-2af01d53a93e prints 57px past the right edge of its card q-card-business-pillars, over q-card-seven-day-action, q-div-3483a9cc0c69",
+       "qids": [
+        "q-span-2af01d53a93e"
+       ],
+       "policy": "style_reference",
+       "magnitude": {
+        "ratio_x": 1.1163,
+        "ratio_y": 1.0,
+        "excess_px_x": 56.98,
+        "excess_px_y": 0.0,
+        "card_qid": "q-card-business-pillars",
+        "element_kind": "text"
+       }
+      },
+      {
+       "category": "text_escapes_card",
+       "severity": "high",
+       "detail": "text of q-span-c83eac29f2ad prints 58px past the right edge of its card q-card-business-pillars, over q-card-seven-day-action, q-div-8385c2167e73",
+       "qids": [
+        "q-span-c83eac29f2ad"
+       ],
+       "policy": "style_reference",
+       "magnitude": {
+        "ratio_x": 1.1176,
+        "ratio_y": 1.0,
+        "excess_px_x": 57.62,
+        "excess_px_y": 0.0,
+        "card_qid": "q-card-business-pillars",
+        "element_kind": "text"
+       }
+      },
+      {
+       "category": "text_escapes_card",
+       "severity": "high",
+       "detail": "text of q-span-ff27a5abbc91 prints 57px past the right edge of its card q-card-business-pillars, over q-card-seven-day-action, q-div-53ac0a69e658",
+       "qids": [
+        "q-span-ff27a5abbc91"
+       ],
+       "policy": "style_reference",
+       "magnitude": {
+        "ratio_x": 1.1163,
+        "ratio_y": 1.0,
+        "excess_px_x": 57.0,
+        "excess_px_y": 0.0,
+        "card_qid": "q-card-business-pillars",
+        "element_kind": "text"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "08-audit.json": {
+   "visibilityFailures": 1,
+   "missingBlockIds": 0,
+   "orderViolations": 0,
+   "flaggedSlides": [
+    {
+     "index": 10,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "d3157d48-4638-413f-ac2a-92bb4d4f0bad"
+    },
+    {
+     "index": 14,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "0b04d424-a3ba-4153-9939-b06c0a9c9417"
+    },
+    {
+     "index": 16,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "a8f40aa2-11fb-4e06-b55b-a0a8d9d7cb91",
+     "sourceVisibilityBlockIds": [
+      "source-slide:17:text:3"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 26,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "224464fe-2c61-46d2-9b3f-c45b0d2f2f78"
+    },
+    {
+     "index": 28,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "7bc230b7-8a7e-4111-9341-5f925f9d2fd3"
+    },
+    {
+     "index": 29,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "6513b581-b573-4314-8a27-0582df5b6c0e"
+    },
+    {
+     "index": 30,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "a5c5eb6d-0d1c-4789-bd2f-0fdf9715e4ac"
+    }
+   ]
+  }
+ },
+ "absent": [
+  "html-author.txt: checkpoint author_html is null (cleared after publication on published decks)",
+  "html-illustrated.txt: checkpoint illustrated_html is null",
+  "metrics.json: browser metrics are not persisted anywhere (authored_slide_checkpoints has no metrics column, artifact_refs is null, authored_evidence_*_v3 are empty)"
+ ]
+}

@@ -3,8 +3,12 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import SlideScale, {
-  SLIDE_SCALE_RESERVED_HEIGHT_CSS,
+  slideScaleReservedHeightCss,
 } from "@/app/(presentation-generator)/components/PresentationRender";
+import {
+  LEGACY_AUTHORED_CANVAS,
+  resolveAuthoredCanvas,
+} from "@/lib/authored-canvas";
 
 /**
  * How far outside the viewport a card starts rendering its slide stage —
@@ -28,7 +32,7 @@ const NEAR_VIEWPORT_ROOT_MARGIN = "600px 0px";
  * grid never reflows — neither when a card materialises nor when SlideScale's
  * ResizeObserver first measures its container.
  */
-export const DeferredSlideThumbnail = ({ slide }: { slide: any }) => {
+export const DeferredSlideThumbnail = ({ slide, theme }: { slide: any; theme?: unknown }) => {
   const boxRef = useRef<HTMLDivElement | null>(null);
   const [isNearViewport, setIsNearViewport] = useState(false);
 
@@ -66,6 +70,10 @@ export const DeferredSlideThumbnail = ({ slide }: { slide: any }) => {
     : isNearViewport
       ? "rendered"
       : "deferred";
+  const canvas = slide?.content?.__authored__ === true ||
+    slide?.layout_group === "authored" || slide?.layout_group === "svg"
+    ? resolveAuthoredCanvas(theme)
+    : LEGACY_AUTHORED_CANVAS;
 
   return (
     <div
@@ -73,11 +81,11 @@ export const DeferredSlideThumbnail = ({ slide }: { slide: any }) => {
       data-testid="deck-thumbnail"
       data-thumbnail-state={state}
       className="relative w-full"
-      style={{ paddingTop: SLIDE_SCALE_RESERVED_HEIGHT_CSS }}
+      style={{ paddingTop: slideScaleReservedHeightCss(canvas) }}
     >
       <div className="absolute inset-0">
         {state === "rendered" ? (
-          <SlideScale slide={slide} isClickable={false} />
+          <SlideScale slide={slide} theme={theme} isClickable={false} />
         ) : (
           <div className="h-full w-full bg-gray-100" aria-hidden="true" />
         )}

@@ -1,0 +1,242 @@
+[
+  {
+    "run": "run-16",
+    "slideIndex": 6,
+    "deviations": [
+      {
+        "sourceBlockId": "source-slide:7:text:6",
+        "bindingId": "source-slide:7:text:6:run:3",
+        "kind": "out_of_order"
+      },
+      {
+        "sourceBlockId": "source-slide:7:text:14",
+        "bindingId": "source-slide:7:text:14",
+        "kind": "shared_owner"
+      }
+    ],
+    "htmlSha256": "212e000bff4e969a00a92a9d4b631a66a6e45a77da615fc0f973a66f98f692a8"
+  },
+  {
+    "run": "run-16",
+    "slideIndex": 28,
+    "deviations": [
+      {
+        "sourceBlockId": "source-slide:29:text:6",
+        "bindingId": "source-slide:29:text:6",
+        "kind": "shared_owner"
+      }
+    ],
+    "htmlSha256": "1ba8256e8d1be8be1cdd401a68a35b2702dfbc2f2f2e5b8a976365f655894cca"
+  },
+  {
+    "run": "run-16",
+    "slideIndex": 29,
+    "deviations": [
+      {
+        "sourceBlockId": "source-slide:30:text:6",
+        "bindingId": "source-slide:30:text:6:run:7-11",
+        "kind": "shared_owner"
+      }
+    ],
+    "htmlSha256": "c7fdaeb8c6a65e79c0e8b6f2e70f5fd122acd4221c5b0bd34ee77c9367ee97fc"
+  },
+  {
+    "run": "run-16",
+    "slideIndex": 31,
+    "deviations": [
+      {
+        "sourceBlockId": "source-slide:32:text:7",
+        "bindingId": "source-slide:32:text:7",
+        "kind": "shared_owner"
+      },
+      {
+        "sourceBlockId": "source-slide:32:text:8",
+        "bindingId": "source-slide:32:text:8",
+        "kind": "shared_owner"
+      }
+    ],
+    "htmlSha256": "703408b8073cb67af673ee5f2b519219a0af868da4a9c0b6531cb52c415f4fda"
+  },
+  {
+    "run": "run-16",
+    "slideIndex": 32,
+    "deviations": [
+      {
+        "sourceBlockId": "source-slide:33:text:8",
+        "bindingId": "source-slide:33:text:8",
+        "kind": "shared_owner"
+      },
+      {
+        "sourceBlockId": "source-slide:33:text:10",
+        "bindingId": "source-slide:33:text:10",
+        "kind": "shared_owner"
+      },
+      {
+        "sourceBlockId": "source-slide:33:text:12",
+        "bindingId": "source-slide:33:text:12",
+        "kind": "shared_owner"
+      }
+    ],
+    "htmlSha256": "bd6184601359858e153c856bd88569acc4c01d07d64f041271587de54662df41"
+  },
+  {
+    "run": "run-16",
+    "slideIndex": 33,
+    "deviations": [
+      {
+        "sourceBlockId": "source-slide:34:text:4",
+        "bindingId": "source-slide:34:text:4",
+        "kind": "shared_owner"
+      }
+    ],
+    "htmlSha256": "96184d447341ec6c19ef8751554733c3672c6523b18b14aa018f400195d92a41"
+  },
+  {
+    "run": "run-20",
+    "slideIndex": 0,
+    "deviations": [
+      {
+        "sourceBlockId": "source-slide:1:text:8",
+        "bindingId": "source-slide:1:text:8",
+        "kind": "shared_owner"
+      }
+    ],
+    "htmlSha256": "b1a62c62bba4aeebaa58c3a68080f2cab1f58d42fd6ae239f5104d109ab9d76c"
+  },
+  {
+    "run": "run-20",
+    "slideIndex": 6,
+    "deviations": [
+      {
+        "sourceBlockId": "source-slide:7:text:6",
+        "bindingId": "source-slide:7:text:6:run:4",
+        "kind": "out_of_order"
+      },
+      {
+        "sourceBlockId": "source-slide:7:text:14",
+        "bindingId": "source-slide:7:text:14",
+        "kind": "shared_owner"
+      }
+    ],
+    "htmlSha256": "eaed3f389dbbcbb74c8f04819ee6906f15025940882ac62f5490db819e73bb5a"
+  },
+  {
+    "run": "run-20",
+    "slideIndex": 17,
+    "deviations": [
+      {
+        "sourceBlockId": "source-slide:18:text:4",
+        "bindingId": "source-slide:18:text:4",
+        "kind": "shared_owner"
+      }
+    ],
+    "htmlSha256": "35ef011d9ba1992aecce459d393a082e171dca3fdbbe1ba9f0d652ca9671fcf3"
+  },
+  {
+    "run": "run-20",
+    "slideIndex": 29,
+    "deviations": [
+      {
+        "sourceBlockId": "source-slide:30:text:6",
+        "bindingId": "source-slide:30:text:6",
+        "kind": "shared_owner"
+      }
+    ],
+    "htmlSha256": "d2df00f7ca51dd3edb7495bea29d22ee4882cce9404ddfba0a03396a4da56862"
+  },
+  {
+    "run": "run-20",
+    "slideIndex": 32,
+    "deviations": [
+      {
+        "sourceBlockId": "source-slide:33:text:10",
+        "bindingId": "source-slide:33:text:10",
+        "kind": "shared_owner"
+      }
+    ],
+    "htmlSha256": "65942dbba9ef2e6da45c0921eed6fd829ecff31d76579840b3fd9cfd7ddd6874"
+  },
+  {
+    "run": "run-21",
+    "slideIndex": 6,
+    "deviations": [
+      {
+        "sourceBlockId": "source-slide:7:text:6",
+        "bindingId": "source-slide:7:text:6:run:2",
+        "kind": "out_of_order"
+      },
+      {
+        "sourceBlockId": "source-slide:7:text:6",
+        "bindingId": "source-slide:7:text:6:run:3",
+        "kind": "out_of_order"
+      },
+      {
+        "sourceBlockId": "source-slide:7:text:6",
+        "bindingId": "source-slide:7:text:6:run:4",
+        "kind": "out_of_order"
+      },
+      {
+        "sourceBlockId": "source-slide:7:text:14",
+        "bindingId": "source-slide:7:text:14",
+        "kind": "shared_owner"
+      }
+    ],
+    "htmlSha256": "3f88ac579871e40b6a35f0bae84d8129502cbf71baee9989badf94fc6709a618"
+  },
+  {
+    "run": "run-21",
+    "slideIndex": 9,
+    "deviations": [
+      {
+        "sourceBlockId": "source-slide:10:text:17",
+        "bindingId": "source-slide:10:text:17",
+        "kind": "shared_owner"
+      }
+    ],
+    "htmlSha256": "26a8a405567d4cbafa47131c2a6969881e0050aa3cdd245cb16bae9ad511c121"
+  },
+  {
+    "run": "run-21",
+    "slideIndex": 23,
+    "deviations": [
+      {
+        "sourceBlockId": "source-slide:24:text:4",
+        "bindingId": "source-slide:24:text:4",
+        "kind": "shared_owner"
+      }
+    ],
+    "htmlSha256": "db60b88e6325b6af96b924a5bf68ee1f87e17ed4bcc99a0a0e566316111ebe05"
+  },
+  {
+    "run": "run-21",
+    "slideIndex": 31,
+    "deviations": [
+      {
+        "sourceBlockId": "source-slide:32:text:7",
+        "bindingId": "source-slide:32:text:7",
+        "kind": "shared_owner"
+      },
+      {
+        "sourceBlockId": "source-slide:32:text:8",
+        "bindingId": "source-slide:32:text:8",
+        "kind": "shared_owner"
+      },
+      {
+        "sourceBlockId": "source-slide:32:text:11",
+        "bindingId": "source-slide:32:text:11",
+        "kind": "shared_owner"
+      },
+      {
+        "sourceBlockId": "source-slide:32:text:15",
+        "bindingId": "source-slide:32:text:15",
+        "kind": "shared_owner"
+      },
+      {
+        "sourceBlockId": "source-slide:32:text:19",
+        "bindingId": "source-slide:32:text:19",
+        "kind": "shared_owner"
+      }
+    ],
+    "htmlSha256": "01eb1a682ebcaeccab21328044b6208be2e552d765a2817b3b66b78c3301b531"
+  }
+]

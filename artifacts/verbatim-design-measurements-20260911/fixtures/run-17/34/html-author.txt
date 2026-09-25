@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden}
+body{
+  font-family:"Noto Sans KR","Malgun Gothic",sans-serif;
+  color:#FFFFFF;
+  background:#00140E;
+  word-break:keep-all;
+  overflow-wrap:break-word;
+}
+.slide{
+  position:relative;
+  width:1280px;
+  height:720px;
+  background:linear-gradient(118deg,#00140E 0%,#002A20 58%,#003B2C 100%);
+}
+.glow{
+  position:absolute;
+  right:84px;
+  top:92px;
+  width:380px;
+  height:380px;
+  border:1px solid rgba(33,159,136,.28);
+  border-radius:50%;
+}
+.glow-inner{
+  position:absolute;
+  right:144px;
+  top:152px;
+  width:260px;
+  height:260px;
+  border:1px solid rgba(8,145,110,.32);
+  border-radius:50%;
+}
+.marker{
+  position:absolute;
+  left:64px;
+  top:62px;
+  width:10px;
+  height:44px;
+  border-radius:12px;
+  background:#219F88;
+}
+.brand{
+  position:absolute;
+  left:96px;
+  top:61px;
+  font-size:20px;
+  line-height:30px;
+  font-weight:700;
+  letter-spacing:.03em;
+  color:#9BDCCB;
+}
+.kicker{
+  position:absolute;
+  left:96px;
+  top:162px;
+  font-size:15px;
+  line-height:24px;
+  font-weight:700;
+  letter-spacing:.15em;
+  color:#08916E;
+}
+.title{
+  position:absolute;
+  left:96px;
+  top:204px;
+  width:700px;
+  font-size:58px;
+  line-height:1.22;
+  font-weight:800;
+  letter-spacing:-.055em;
+  color:#FFFFFF;
+}
+.title span{
+  color:#8BE0CA;
+}
+.rule{
+  position:absolute;
+  left:96px;
+  top:378px;
+  width:112px;
+  height:2px;
+  background:#08916E;
+}
+.program{
+  position:absolute;
+  left:96px;
+  top:414px;
+  width:700px;
+  font-size:21px;
+  line-height:34px;
+  font-weight:500;
+  color:#D2E9E2;
+}
+.steps{
+  position:absolute;
+  left:96px;
+  top:500px;
+  display:flex;
+  align-items:center;
+  gap:0;
+}
+.step{
+  min-width:112px;
+  height:46px;
+  padding:8px 16px;
+  border:1px solid rgba(139,224,202,.5);
+  border-radius:12px;
+  text-align:center;
+  font-size:18px;
+  line-height:28px;
+  font-weight:700;
+  color:#FFFFFF;
+}
+.arrow{
+  width:34px;
+  height:1px;
+  margin:0 8px;
+  background:#219F88;
+}
+.master{
+  position:absolute;
+  right:96px;
+  bottom:102px;
+  width:300px;
+  padding:18px 22px;
+  border:1px solid rgba(139,224,202,.38);
+  border-radius:12px;
+  background:rgba(0,20,14,.32);
+  font-size:17px;
+  line-height:28px;
+  font-weight:600;
+  color:#BFE4D9;
+}
+.master-mark{
+  display:inline-block;
+  width:7px;
+  height:7px;
+  margin:0 8px 2px 0;
+  border-radius:12px;
+  background:#E5A93D;
+}
+.page{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:14px;
+  text-align:center;
+  font-size:12px;
+  line-height:16px;
+  font-weight:500;
+  color:#A7ACB3;
+}
+</style>
+</head>
+<body>
+<div class="slide" data-qid="q-div-f18d7f4bae9b" data-semantic-role="decoration">
+  <div class="glow" data-qid="q-div-5f9be5222e1c" data-semantic-role="decoration"></div>
+  <div class="glow-inner" data-qid="q-div-4f25fe803b40" data-semantic-role="decoration"></div>
+  <div class="marker" data-qid="q-div-493a8921fa80" data-semantic-role="decoration"></div>
+  <div class="brand" data-semantic-role="supporting" data-qid="source-block-5137d489be601f9d" data-source-block-id="source-slide:35:text:3">🐝 꿀벌쌤</div>
+  <div class="kicker" data-semantic-role="supporting" data-qid="q-kicker-34">홀로서기의 첫 장</div>
+  <div class="title" data-semantic-role="title" data-qid="source-block-396ed15ac83e4af0" data-source-block-id="source-slide:35:text:4">이제, <span data-qid="q-span-f32986c526a1" data-semantic-role="body">홀로서기 시작입니다.</span></div>
+  <div class="rule" data-qid="q-div-cbd8ff350888" data-semantic-role="decoration"></div>
+  <div class="program" data-semantic-role="body" data-qid="source-block-776ff9a28e9acf4f" data-source-block-id="source-slide:35:text:5">숏폼대행 1인사업자 홀로서기 · 4주 8시간</div>
+  <div class="steps" data-qid="q-div-17e8625ebe5f" data-semantic-role="decoration">
+    <div class="step" data-semantic-role="body" data-qid="source-block-c13f14acad4dde72" data-source-block-id="source-slide:35:text:6:run:0">실행</div>
+    <div class="arrow" data-qid="q-div-f2e763bf438c" data-semantic-role="decoration"></div>
+    <div class="step" data-semantic-role="body" data-qid="source-block-73d0b44bcd0f588f" data-source-block-id="source-slide:35:text:6:run:1">경험</div>
+    <div class="arrow" data-qid="q-div-d3cb923b1c37" data-semantic-role="decoration"></div>
+    <div class="step" data-semantic-role="body" data-qid="source-block-44d6f33ea1bf68d7" data-source-block-id="source-slide:35:text:6:run:2">고객</div>
+    <div class="arrow" data-qid="q-div-6221deea81c6" data-semantic-role="decoration"></div>
+    <div class="step" data-semantic-role="body" data-qid="source-block-a23adb9942fc9fba" data-source-block-id="source-slide:35:text:6:run:3">성장</div>
+  </div>
+  <div class="master" data-semantic-role="supporting" data-qid="source-block-c8d33f4e1c121d7a" data-source-block-id="source-slide:35:text:7"><span class="master-mark" data-qid="q-span-00ece3ed629a" data-semantic-role="decoration"></span>꿀벌쌤 강의용 마스터 PPT</div>
+  <div class="page" data-semantic-role="supporting" data-qid="q-page-34">35</div>
+</div>
+</body>
+</html>

@@ -3,32 +3,58 @@ import {
   DragEvent,
   FormEvent,
   RefObject,
+  useLayoutEffect,
+  useRef,
   useState,
 } from "react";
+import { ArrowUp, Paperclip, Square, X } from "lucide-react";
+import { ConversationComposerFrame } from "../conversation/ConversationPrimitives";
 
 interface ComposerAsset {
   assetId: string;
   fileName: string;
   status: string;
+  ready?: boolean;
+}
+
+export interface WorkspaceComposerCancelOperation {
+  operationId: string;
+  pending: boolean;
+  onCancel: (operationId: string) => Promise<void>;
 }
 
 interface WorkspaceComposerProps {
   disabled?: boolean;
+  canEdit?: boolean;
+  canSend?: boolean;
+  canAttach?: boolean;
+  blockedReason?: string;
   uploading?: boolean;
   uploadError?: string | null;
   assets?: ComposerAsset[];
   fileInputRef?: RefObject<HTMLInputElement | null>;
-  /** Owned by the panel so suggestion chips can seed the draft. */
   value: string;
   onValueChange: (value: string) => void;
   textareaRef?: RefObject<HTMLTextAreaElement | null>;
+  onFocus?: () => void;
+  onBlur?: () => void;
   onFilesSelected?: (files: File[]) => Promise<void> | void;
   onRemoveAsset?: (assetId: string) => void;
+  scope?: "unselected" | "presentation" | "slide";
+  pinnedSlideNumber?: number;
+  scopeError?: string | null;
+  onScopeChange?: (scope: "unselected" | "presentation" | "slide") => void;
+  supportsAttachmentOnly?: boolean;
+  cancelOperation?: WorkspaceComposerCancelOperation;
   onSend: (command: string) => Promise<void>;
 }
 
 export function WorkspaceComposer({
   disabled = false,
+  canEdit = true,
+  canSend = !disabled,
+  canAttach = !disabled,
+  blockedReason,
   uploading = false,
   uploadError,
   assets = [],
@@ -36,14 +62,44 @@ export function WorkspaceComposer({
   value,
   onValueChange,
   textareaRef,
+  onFocus,
+  onBlur,
   onFilesSelected,
   onRemoveAsset,
+  scope = "unselected",
+  pinnedSlideNumber,
+  scopeError,
+  onScopeChange,
+  supportsAttachmentOnly = false,
+  cancelOperation,
   onSend,
 }: WorkspaceComposerProps) {
   const [draggingFiles, setDraggingFiles] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const submitLock = useRef(false);
+  const cancelLock = useRef<string | null>(null);
+  const localTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = textareaRef ?? localTextareaRef;
+  const latestValue = useRef(value);
+  latestValue.current = value;
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = "auto";
+    input.style.height = `${Math.min(input.scrollHeight, 180)}px`;
+  }, [inputRef, value]);
+  const editingDisabled = disabled || !canEdit;
+  const sendingDisabled = disabled || !canSend || sending || Boolean(cancelOperation);
+  const attachingDisabled = disabled || !canAttach;
+  const attachmentsReady = assets.every((asset) => asset.ready === true);
+  const hasContent = value.trim().length > 0 || (supportsAttachmentOnly && assets.length > 0 && attachmentsReady);
+  const submissionBlocked = sendingDisabled || uploading || !attachmentsReady || !hasContent || scope === "unselected" || Boolean(scopeError);
+  const stopping = Boolean(cancelOperation?.pending || (cancelOperation && cancellingId === cancelOperation.operationId));
 
   const uploadFiles = (files: File[]) => {
-    if (!files.length || disabled || uploading || !onFilesSelected) return;
+    if (!files.length || attachingDisabled || uploading || !onFilesSelected)
+      return;
     void onFilesSelected(files);
   };
 
@@ -53,28 +109,46 @@ export function WorkspaceComposer({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const command = value.trim();
-    if (!command || disabled) return;
+    if (submissionBlocked || submitLock.current) return;
+    submitLock.current = true;
+    setSending(true);
     try {
       await onSend(command);
-      onValueChange("");
+      if (latestValue.current === value) onValueChange("");
     } catch {
       // The timeline hook renders the durable request error next to the input.
+    } finally {
+      submitLock.current = false;
+      setSending(false);
+    }
+  };
+
+  const stop = async () => {
+    if (!cancelOperation || stopping || cancelLock.current) return;
+    const { operationId, onCancel } = cancelOperation;
+    cancelLock.current = operationId;
+    setCancellingId(operationId);
+    try {
+      await onCancel(operationId);
+    } catch {
+      // The server action path owns recovery and error reporting.
+    } finally {
+      cancelLock.current = null;
+      setCancellingId(null);
     }
   };
 
   return (
     <form
-      className={`relative border-t border-slate-200 bg-white p-3 transition-shadow ${
-        draggingFiles ? "ring-2 ring-inset ring-blue-400" : ""
-      }`}
+      className="shrink-0 border-t border-slate-200 bg-white px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-2"
       onSubmit={submit}
       onDragEnter={(event) => {
-        if (!hasDraggedFiles(event) || disabled || uploading) return;
+        if (!hasDraggedFiles(event) || attachingDisabled || uploading) return;
         event.preventDefault();
         setDraggingFiles(true);
       }}
       onDragOver={(event) => {
-        if (!hasDraggedFiles(event) || disabled || uploading) return;
+        if (!hasDraggedFiles(event) || attachingDisabled || uploading) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = "copy";
         setDraggingFiles(true);
@@ -83,19 +157,18 @@ export function WorkspaceComposer({
         if (
           event.relatedTarget instanceof Node &&
           event.currentTarget.contains(event.relatedTarget)
-        ) {
+        )
           return;
-        }
         setDraggingFiles(false);
       }}
       onDrop={(event) => {
-        if (!hasDraggedFiles(event) || disabled || uploading) return;
+        if (!hasDraggedFiles(event) || attachingDisabled || uploading) return;
         event.preventDefault();
         setDraggingFiles(false);
         uploadFiles(Array.from(event.dataTransfer.files ?? []));
       }}
       onPaste={(event: ClipboardEvent<HTMLFormElement>) => {
-        if (disabled || uploading) return;
+        if (attachingDisabled || uploading) return;
         const images = Array.from(event.clipboardData.files ?? []).filter(
           (file) => file.type.startsWith("image/"),
         );
@@ -111,22 +184,58 @@ export function WorkspaceComposer({
         multiple
         className="sr-only"
         aria-label="첨부할 파일 선택"
-        disabled={disabled || uploading}
+        disabled={attachingDisabled || uploading}
         onChange={(event) => {
           const files = Array.from(event.currentTarget.files ?? []);
           event.currentTarget.value = "";
           uploadFiles(files);
         }}
       />
+
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <label className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-600">
+          <span className="shrink-0">수정 범위</span>
+          <select
+            value={scope}
+            onChange={(event) =>
+              onScopeChange?.(event.target.value as "unselected" | "presentation" | "slide")
+            }
+            disabled={editingDisabled || !onScopeChange}
+            className="min-w-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            aria-label="수정 범위 선택"
+          >
+            <option value="unselected">대상 선택</option>
+            <option value="presentation">전체 발표자료</option>
+            <option value="slide">
+              {pinnedSlideNumber
+                ? `${pinnedSlideNumber}페이지 수정`
+                : "현재 슬라이드"}
+            </option>
+          </select>
+        </label>
+        {scope === "slide" && pinnedSlideNumber && (
+          <button
+            type="button"
+            onClick={() => onScopeChange?.("unselected")}
+            disabled={editingDisabled}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-200"
+            aria-label={`${pinnedSlideNumber}번 슬라이드 대상 해제`}
+          >
+            {pinnedSlideNumber}페이지 수정
+            <X className="h-3 w-3" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+
       {assets.length > 0 && (
         <ul className="mb-2 flex flex-wrap gap-2" aria-label="전송할 첨부 파일">
           {assets.map((asset) => (
             <li
               key={asset.assetId}
-              className="flex max-w-full items-center gap-1 rounded-lg bg-blue-50 px-2 py-1 text-xs text-blue-800"
+              className="flex max-w-full items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs text-slate-700"
             >
               <span className="max-w-48 truncate">{asset.fileName}</span>
-              <span className="text-blue-500">{asset.status}</span>
+              <span className="text-slate-500">{asset.status}</span>
               {onRemoveAsset && (
                 <button
                   type="button"
@@ -141,58 +250,84 @@ export function WorkspaceComposer({
           ))}
         </ul>
       )}
-      {uploadError && (
+      {(uploadError || scopeError) && (
         <p className="mb-2 text-xs text-red-700" role="alert">
-          {uploadError}
+          {scopeError ?? uploadError}
         </p>
       )}
-      <label htmlFor="workspace-command" className="sr-only">
-        프레젠테이션 수정 요청
-      </label>
-      <textarea
-        id="workspace-command"
-        ref={textareaRef}
-        value={value}
-        onChange={(event) => onValueChange(event.target.value)}
-        onKeyDown={(event) => {
-          // Skip while an IME composition is active so confirming Korean input
-          // does not submit the half-written command.
-          if (
-            event.key === "Enter" &&
-            !event.shiftKey &&
-            !event.nativeEvent.isComposing
-          ) {
-            event.preventDefault();
-            event.currentTarget.form?.requestSubmit();
-          }
-        }}
-        rows={3}
-        disabled={disabled}
-        placeholder="슬라이드 수정을 요청하세요"
-        className="block w-full resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
-      />
-      <div className="mt-2 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+
+      <ConversationComposerFrame
+        className={`px-3 py-2 ${
+          draggingFiles
+            ? "border-blue-400 ring-2 ring-blue-100"
+            : "border-slate-300"
+        }`}
+      >
+        <label htmlFor="workspace-command" className="sr-only">
+          프레젠테이션 수정 요청
+        </label>
+        <textarea
+          id="workspace-command"
+          ref={inputRef}
+          value={value}
+          onChange={(event) => onValueChange(event.target.value)}
+          onFocus={onFocus}
+          onBlur={onBlur}
+          onKeyDown={(event) => {
+            if (
+              event.key === "Enter" &&
+              !event.shiftKey &&
+              !event.nativeEvent.isComposing &&
+              event.nativeEvent.keyCode !== 229
+            ) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+          rows={2}
+          disabled={editingDisabled}
+          placeholder="슬라이드 수정을 요청하세요"
+          className="block max-h-[180px] min-h-12 w-full resize-none overflow-y-auto bg-transparent px-1 py-1 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:bg-slate-50"
+        />
+        <div className="mt-1 flex items-end justify-between gap-3">
           <button
             type="button"
             onClick={() => fileInputRef?.current?.click()}
-            disabled={disabled || uploading || !onFilesSelected}
-            className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={attachingDisabled || uploading || !onFilesSelected}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label={uploading ? "파일 업로드 중" : "파일 첨부"}
+            title={uploading ? "업로드 중" : "파일 첨부"}
           >
-            {uploading ? "업로드 중" : "파일 첨부"}
+            <Paperclip className="h-4 w-4" aria-hidden="true" />
           </button>
-          <p className="text-[11px] text-slate-500">
-            Enter 전송 · Shift+Enter 줄바꿈
-          </p>
+          <span className="ml-auto text-[11px] text-slate-500" aria-live="polite">
+            {scope === "unselected" ? "대상 선택" : scope === "presentation" ? "전체 발표자료" : pinnedSlideNumber ? `${pinnedSlideNumber}페이지 수정` : "대상 확인 필요"}
+          </span>
+          {cancelOperation ? (
+            <button
+              type="button"
+              onClick={() => void stop()}
+              disabled={stopping}
+              className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-slate-900 px-3 text-xs font-medium text-white disabled:opacity-50"
+              aria-label={stopping ? "중지 요청 중" : "생성 중지"}
+            >
+              <Square className="h-3 w-3" aria-hidden="true" />
+              {stopping ? "중지 요청 중" : "생성 중지"}
+            </button>
+          ) : <button
+            type="submit"
+            disabled={submissionBlocked}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+            aria-label="수정 요청 전송"
+            title="전송"
+          >
+            <ArrowUp className="h-4 w-4" aria-hidden="true" />
+          </button>}
         </div>
-        <button
-          type="submit"
-          disabled={disabled || uploading || value.trim().length === 0}
-          className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          전송
-        </button>
-      </div>
+      </ConversationComposerFrame>
+      <p className="mt-1.5 px-1 text-[11px] text-slate-500" role="status">
+        {blockedReason ?? "Enter 전송 · Shift+Enter 줄바꿈"}
+      </p>
     </form>
   );
 }

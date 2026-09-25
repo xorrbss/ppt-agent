@@ -1,0 +1,54 @@
+{
+  "id": "data-18-distribution",
+  "category": "data",
+  "tags": {
+    "ko": [
+      "데이터",
+      "분포"
+    ],
+    "en": [
+      "data",
+      "distribution"
+    ]
+  },
+  "alt": {
+    "ko": "분포 단색 벡터 인포그래픽",
+    "en": "distribution monochrome vector infographic"
+  },
+  "path": "originals/data-18-distribution.svg",
+  "thumbnail": "thumbnails/data-18-distribution.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 373,
+  "sha256": "352e26b7e3edcca5d7e3174e1fe53d33d65dd681577dca9763d2717e0dce58d8",
+  "geometry_sha256": "98927f494bd91c113733313cc101e59566680f27c8169949181a0634829ef610",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 60760,
+    "preview_opaque_pixels": 4104,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ChartNoAxesColumnIncreasing"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

@@ -1,0 +1,27 @@
+<!-- Original conceptual diagram for product-lab. No actual product, benchmark, measurement, or external asset is represented. -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>프로덕트 랩 — 관찰 가능한 흐름</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:1280px;height:720px;background:#F1F4F2;color:#202B2E;font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif}main{position:relative;width:1280px;height:720px;padding:45px 64px 38px}header{display:flex;justify-content:space-between;align-items:center;font-size:16px;line-height:1.4;border-bottom:1px solid #B4C3BD;padding-bottom:17px}.brand{font-weight:700}.square{display:inline-block;width:12px;height:12px;background:#BE432B;margin-right:10px}.folio{color:#435551}h1{font-size:44px;font-weight:700;letter-spacing:-1px;line-height:1.27;margin:27px 0 12px}.lead{font-size:23px;line-height:1.45;margin:0;max-width:1010px;color:#435551}.diagram{margin:28px 0 0;display:grid;grid-template-columns:250px 74px 504px 74px 250px;align-items:center}.io{padding:24px 24px 26px;border-top:2px solid #8BA49B;min-height:180px;background:#E4EBE7}.label{font-size:17px;color:#435551;margin:0 0 12px}.io h2{font-size:27px;line-height:1.35;margin:0 0 14px;font-weight:650}.io p:last-child{font-size:21px;line-height:1.45;margin:0}.connection{height:2px;background:#435551;position:relative}.arrowhead{position:absolute;right:0;top:-4px;width:9px;height:9px;border-top:2px solid #435551;border-right:2px solid #435551;transform:rotate(45deg)}.engine{position:relative;background:#202B2E;color:#F1F4F2;min-height:222px;padding:22px 29px;border-top:5px solid #BE432B}.engine .label{color:#D9E1DD}.engine h2{font-size:31px;line-height:1.35;margin:0 0 18px;font-weight:650}.stages{display:flex;align-items:center;gap:12px;font-size:21px;line-height:1.4}.stages .separator{color:#AFC8BC}.engine .boundary{border-top:1px solid #617871;margin-top:22px;padding-top:13px;font-size:17px;line-height:1.4;color:#D9E1DD}.observation{margin-top:24px;display:grid;grid-template-columns:214px 1fr;gap:34px;border-top:1px solid #B4C3BD;padding-top:21px}.observation h2{font-size:21px;font-weight:650;line-height:1.45;margin:0;color:#246968}.observation p{font-size:21px;line-height:1.5;margin:0}.observation strong{font-weight:650}footer{position:absolute;left:64px;right:64px;bottom:29px;display:flex;justify-content:space-between;gap:24px;font-size:16px;line-height:1.4;color:#435551}
+</style>
+</head>
+<body>
+<main>
+  <header><span class="brand"><span class="square"></span>프로덕트 랩</span><span class="folio">설명용 개념 도식 · 시스템 관찰</span></header>
+  <h1>흐름이 보이면,<br>확인할 질문도 선명해집니다.</h1>
+  <p class="lead">입력과 처리, 출력의 경계를 나누어 제품의 작동 원리와 관찰 지점을 설명합니다.</p>
+  <figure class="diagram" aria-label="입력 요청이 처리 영역을 거쳐 출력 응답으로 이어지는 설명용 개념 흐름">
+    <section class="io"><p class="label">입력</p><h2>요청과 조건</h2><p>무엇이 들어오고<br>어떤 조건이 필요한가</p></section>
+    <div class="connection" aria-hidden="true"><span class="arrowhead"></span></div>
+    <section class="engine"><p class="label">처리 영역</p><h2>동작을 나누어 이해합니다.</h2><div class="stages"><span>확인</span><span class="separator" aria-hidden="true">/</span><span>처리</span><span class="separator" aria-hidden="true">/</span><span>기록</span></div><div class="boundary">경계와 연결은 실제 설계에 맞게 설명합니다.</div></section>
+    <div class="connection" aria-hidden="true"><span class="arrowhead"></span></div>
+    <section class="io"><p class="label">출력</p><h2>응답과 기록</h2><p>무엇을 돌려주고<br>무엇을 남기는가</p></section>
+  </figure>
+  <section class="observation"><h2>다음 관찰 질문</h2><p><strong>어느 지점에서 기대와 실제가 달라지는가?</strong><br>조건 · 동작 · 기록을 살피고, 확인된 사실과 남은 질문을 구분합니다.</p></section>
+  <footer><span>직접 저작한 구조 설명 예시 · 실제 제품 설계나 측정 결과를 나타내지 않습니다.</span><span>04</span></footer>
+</main>
+</body>
+</html>

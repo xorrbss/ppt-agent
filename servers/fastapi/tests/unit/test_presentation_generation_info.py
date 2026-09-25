@@ -11,6 +11,7 @@ from api.v1.ppt.endpoints.presentation_crud import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
+from models.sql.workspace import WorkspaceMessage
 from templates.v2.constants import LEGACY_PRESENTATION_VERSION
 
 
@@ -223,4 +224,122 @@ def test_generation_info_returns_404_for_unknown_presentation(tmp_path):
 
         await engine.dispose()
 
+    _run(runner())
+
+
+async def _seed_generation_attempt(session, *, state="failed", owner_id=None, deleted=False):
+    if owner_id is not None:
+        from models.sql.user import User
+        session.add(User(id=owner_id, username=f"attempt-owner-{owner_id}", hashed_password="test-only"))
+        await session.flush()
+    presentation = PresentationModel(
+        id=uuid.uuid4(), content="original request", n_slides=3, language="ko",
+        mode="authored", owner_id=owner_id,
+        lifecycle_status="deleted" if deleted else "staging",
+    )
+    conversation = WorkspaceConversation(
+        presentation_id=presentation.id, owner_id=owner_id,
+        owner_scope=str(owner_id) if owner_id else "anonymous",
+    )
+    message = WorkspaceMessage(
+        conversation_id=conversation.id, owner_id=owner_id,
+        position=1, role="user", content="original request",
+    )
+    operation = WorkspaceOperation(
+        presentation_id=presentation.id, conversation_id=conversation.id,
+        owner_id=owner_id, owner_scope=conversation.owner_scope,
+        anchor_position=2, kind="presentation.generate", state=state,
+        idempotency_key_hash=uuid.uuid4().hex * 2,
+        request_hash=uuid.uuid4().hex * 2,
+        request_payload={"prompt": "original request", "user_message_id": str(message.id)},
+    )
+    session.add_all([presentation, conversation, message, operation])
+    await session.commit()
+    return presentation, conversation, message, operation
+
+
+def test_generation_info_correlates_only_the_owned_operation_message(tmp_path):
+    async def runner():
+        engine = await _make_engine(tmp_path / "message-correlation.db")
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            presentation, conversation, message, operation = await _seed_generation_attempt(session)
+            info = await get_presentation_generation_info(presentation.id, session)
+            assert (info.conversation_id, info.operation_id, info.first_user_message_id) == (conversation.id, operation.id, message.id)
+            assert info.can_start_new_attempt is True
+            _, _, other_message, _ = await _seed_generation_attempt(session)
+            operation.request_payload = {**operation.request_payload, "user_message_id": str(other_message.id)}
+            session.add(operation)
+            await session.commit()
+            info = await get_presentation_generation_info(presentation.id, session)
+            assert info.first_user_message_id is None
+            assert info.operation_id is None
+            assert info.conversation_id is None
+        await engine.dispose()
+    _run(runner())
+
+
+def test_new_attempt_link_is_durable_idempotent_and_owner_filtered(tmp_path, monkeypatch):
+    from api.v1.ppt.endpoints import presentation_crud
+
+    monkeypatch.setattr(presentation_crud, "_chat_first_create_enabled", lambda: True)
+
+    async def runner():
+        engine = await _make_engine(tmp_path / "attempt-links.db")
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            previous, _, _, _ = await _seed_generation_attempt(session)
+            next_id = uuid.uuid4()
+            request = dict(content="changed request", presentation_id=next_id, previous_presentation_id=previous.id,
+                           n_slides=3, language="ko", idempotency_key=f"create:{next_id}", sql_session=session)
+            created = await presentation_crud.create_presentation(**request)
+            assert created.id == next_id
+            repeated = await presentation_crud.create_presentation(**request)
+            assert repeated.id == next_id
+            info = await get_presentation_generation_info(next_id, session)
+            assert info.previous_presentation_id == previous.id
+            assert info.first_user_message_id is not None
+            parent_info = await get_presentation_generation_info(previous.id, session)
+            assert parent_info.next_presentation_ids == [next_id]
+            _, _, _, unrelated_operation = await _seed_generation_attempt(session)
+            unrelated_operation.request_payload = {
+                "prompt": f"unrelated \u0000 {previous.id}",
+                "previous_presentation_id": "invalid \u0000 parent",
+            }
+            session.add(unrelated_operation)
+            await session.commit()
+            assert (await get_presentation_generation_info(previous.id, session)).next_presentation_ids == [next_id]
+            _, _, _, foreign_operation = await _seed_generation_attempt(session, owner_id=uuid.uuid4())
+            foreign_operation.request_payload = {**foreign_operation.request_payload, "previous_presentation_id": str(previous.id)}
+            session.add(foreign_operation)
+            await session.commit()
+            assert (await get_presentation_generation_info(previous.id, session)).next_presentation_ids == [next_id]
+            other, _, _, _ = await _seed_generation_attempt(session, state="cancelled")
+            with pytest.raises(HTTPException) as conflict:
+                await presentation_crud.create_presentation(**{**request, "previous_presentation_id": other.id})
+            assert conflict.value.status_code == 409
+            assert conflict.value.detail == "idempotency_key_payload_conflict"
+            previous.lifecycle_status = "deleted"
+            session.add(previous)
+            await session.commit()
+            assert (await get_presentation_generation_info(next_id, session)).previous_presentation_id is None
+        await engine.dispose()
+    _run(runner())
+
+
+@pytest.mark.parametrize("case", ["running", "foreign", "deleted"])
+def test_new_attempt_rejects_unavailable_or_active_predecessor(tmp_path, case):
+    from api.v1.ppt.endpoints.presentation_generation_context import validate_previous_attempt
+
+    async def runner():
+        engine = await _make_engine(tmp_path / f"attempt-{case}.db")
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            previous, _, _, _ = await _seed_generation_attempt(
+                session, state="running" if case == "running" else "failed",
+                owner_id=uuid.uuid4() if case == "foreign" else None,
+                deleted=case == "deleted",
+            )
+            with pytest.raises(HTTPException) as rejected:
+                await validate_previous_attempt(session, previous_presentation_id=previous.id, presentation_id=uuid.uuid4())
+            assert rejected.value.status_code == (404 if case == "foreign" else 409)
+            await session.rollback()
+        await engine.dispose()
     _run(runner())

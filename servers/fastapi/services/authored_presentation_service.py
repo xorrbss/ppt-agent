@@ -43,27 +43,36 @@ from utils.authored_styles import (
     validate_exact_reconstruction_style,
 )
 from utils.authored_dom_quality import ensure_authored_qids
+from utils.get_env import get_authored_job_concurrency_env
 from utils.llm_calls.author_deck import author_planned_slide, prepare_authored_deck
 from utils.llm_calls.author_slide import is_fallback_slide_html
 from utils.llm_calls.author_vision_qa import revise_authored_deck
-from utils.slide_capture import find_chrome, render_html_to_png, render_html_to_png_with_metrics
-
-
-_AUTHORED_JOB_SEMAPHORE = asyncio.Semaphore(
-    max(1, int(os.getenv("AUTHORED_JOB_CONCURRENCY", "1")))
+from utils.slide_capture import (
+    find_chrome,
+    render_html_to_png,
+    render_html_to_png_with_metrics,
 )
+
+
+# Read once at import time; changing AUTHORED_JOB_CONCURRENCY needs a
+# process restart to take effect.
+_AUTHORED_JOB_SEMAPHORE = asyncio.Semaphore(get_authored_job_concurrency_env())
 _AUTHORED_SLIDE_WORKERS = max(
     1, int(os.getenv("AUTHORED_SLIDE_PIPELINE_CONCURRENCY", "8"))
 )
 
 
 def _sync_runtime_dependencies() -> None:
+    # The facade owns the Chromium capture seam for the whole authored lane:
+    # both capture entry points are rebound here, in one place, so a caller
+    # that replaces them on this module reaches every stage of the pipeline.
     _pipeline._AUTHORED_SLIDE_WORKERS = _AUTHORED_SLIDE_WORKERS
     _pipeline.author_planned_slide = author_planned_slide
     _pipeline.is_fallback_slide_html = is_fallback_slide_html
     _pipeline.prepare_authored_deck = prepare_authored_deck
     _pipeline.render_html_to_png = render_html_to_png
     _pipeline.render_html_to_png_with_metrics = render_html_to_png_with_metrics
+    _generation.render_html_to_png_with_metrics = render_html_to_png_with_metrics
     _generation._author_illustrate_render_pipeline = _author_illustrate_render_pipeline
     _generation._build_authored_export = _build_authored_export
     _generation._cleanup_published_checkpoints = _cleanup_published_checkpoints

@@ -1,0 +1,55 @@
+{
+  "id": "strategy-11-balance-priorities",
+  "category": "strategy",
+  "tags": {
+    "ko": [
+      "전략",
+      "우선순위"
+    ],
+    "en": [
+      "strategy",
+      "balance",
+      "priorities"
+    ]
+  },
+  "alt": {
+    "ko": "우선순위 단색 벡터 인포그래픽",
+    "en": "balance priorities monochrome vector infographic"
+  },
+  "path": "originals/strategy-11-balance-priorities.svg",
+  "thumbnail": "thumbnails/strategy-11-balance-priorities.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 474,
+  "sha256": "fc7d1339e13f03db33c816521aa7554f79f4614a434a304314673ae344f0a67a",
+  "geometry_sha256": "8f442df3f6e87c86aee10ad3b535e9ac65310743d7d4a33fa574b9aa27860964",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 52680,
+    "preview_opaque_pixels": 11137,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Scale"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

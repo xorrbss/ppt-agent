@@ -1,0 +1,56 @@
+{
+  "id": "operations-07-supply-chain",
+  "category": "operations",
+  "tags": {
+    "ko": [
+      "운영",
+      "공급망"
+    ],
+    "en": [
+      "operations",
+      "supply",
+      "chain"
+    ]
+  },
+  "alt": {
+    "ko": "공급망 단색 벡터 인포그래픽",
+    "en": "supply chain monochrome vector infographic"
+  },
+  "path": "originals/operations-07-supply-chain.svg",
+  "thumbnail": "thumbnails/operations-07-supply-chain.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 713,
+  "sha256": "5ef341d00236d63a5e9d9b4040eb6c77fc160aba84398ccd3995ebda9643496a",
+  "geometry_sha256": "90d864c6a0b91da51d005f776834ae22eaaa1e59b9deb406e7ccff59ad33bd15",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57998,
+    "preview_opaque_pixels": 5908,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Link",
+      "Truck"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

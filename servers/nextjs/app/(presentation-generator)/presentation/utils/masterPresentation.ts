@@ -194,3 +194,39 @@ export function masterPinnedBodyOnlyContext(
     layout_id: layoutId,
   };
 }
+
+/** The blockers a deck's sealed V3 receipt still carries, if any. */
+function unresolvedQualityBlockers(presentation: unknown): string[] | undefined {
+  const gate = record(record(record(presentation)?.theme)?.authoredQualityGate);
+  const receipt = record(gate?.qualityReceiptV3);
+  if (!receipt) return [];
+  if (receipt.gatePassed === true) return undefined;
+  return Array.isArray(receipt.blockers)
+    ? receipt.blockers.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
+/** A sealed quality result is reported with an export; it does not block it. */
+export function presentationExportQualityAdvisory(
+  presentation: unknown,
+): string | undefined {
+  const blockers = unresolvedQualityBlockers(presentation);
+  if (blockers === undefined) return undefined;
+  if (blockers.includes("visualReview.failed")) {
+    return "시각 검수 미통과 상태입니다. 원본 상태로 내보내며, 품질 결과는 이력에 유지됩니다.";
+  }
+  if (blockers.length === 1 && blockers[0] === "visualReview.required_failed") {
+    return "시각 검수 미실시 상태입니다. 원본 상태로 내보내며, 품질 결과는 이력에 유지됩니다.";
+  }
+  return "품질 검수 확인 필요 상태입니다. 원본 상태로 내보내며, 품질 결과는 이력에 유지됩니다.";
+}
+
+/** @deprecated Quality no longer withholds an original-source export. */
+export function presentationExportBlockReason(_presentation: unknown): undefined {
+  return undefined;
+}
+
+/** @deprecated Hybrid availability is now decided by its capability guards. */
+export function presentationHybridQualityBlockReason(_presentation: unknown): undefined {
+  return undefined;
+}

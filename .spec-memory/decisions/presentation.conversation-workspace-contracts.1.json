@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "key": "presentation.conversation-workspace-contracts",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Preserve one conversation; separate slide browsing from edit targeting, receipt recovery from new attempts, and split layout by available space.",
+  "scope": [
+    "presentation",
+    "upload",
+    "workspace",
+    "ui"
+  ],
+  "invariants": [
+    "Keep draft and conversation context across generation and result layout transitions.",
+    "Viewing a slide does not change the edit target; explicit scope is pinned at send time.",
+    "Distinguish uncertain admission, same-request retry, changed-input new attempt, and result-fetch retry.",
+    "Use actual progress data and a useful request summary when intermediate content is unavailable.",
+    "Size split layout from available container space; dragging does not switch to tabs.",
+    "Define event transitions and inline required choices before UI rollout."
+  ],
+  "forbidden": [
+    "Starting a duplicate generation to recover an uncertain receipt.",
+    "Automatically sending a draft after generation completes."
+  ],
+  "evidence": [
+    "docs/conversation-first-generation-workspace-design-20260922.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-22T07:02:25.8531684+00:00"
+}

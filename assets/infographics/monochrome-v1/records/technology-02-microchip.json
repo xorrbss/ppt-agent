@@ -1,0 +1,54 @@
+{
+  "id": "technology-02-microchip",
+  "category": "technology",
+  "tags": {
+    "ko": [
+      "기술",
+      "반도체"
+    ],
+    "en": [
+      "technology",
+      "microchip"
+    ]
+  },
+  "alt": {
+    "ko": "반도체 단색 벡터 인포그래픽",
+    "en": "microchip monochrome vector infographic"
+  },
+  "path": "originals/technology-02-microchip.svg",
+  "thumbnail": "thumbnails/technology-02-microchip.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 549,
+  "sha256": "fdc8aa3830d6f2987c7d588e9cb0d6ff8a1f30dd5c8485506727077e6ff981e0",
+  "geometry_sha256": "11f5b6008e2c5fa7c0c61772563015fe1670c028e7f641e02bbcf52b84bf4215",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 51891,
+    "preview_opaque_pixels": 11852,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Cpu"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

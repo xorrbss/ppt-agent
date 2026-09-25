@@ -82,10 +82,7 @@ from models.sql.public_artifact import (
 from models.sql.authored_vnext_repository import AUTHORED_VNEXT_SQL_TABLES
 from services.database_owner_scope import register_owner_scope_hooks
 from utils.get_env import get_migrate_database_on_startup_env
-from utils.db_utils import (
-    get_database_url_and_connect_args,
-    get_pool_kwargs,
-)
+from utils.db_utils import get_database_url_and_connect_args, get_pool_kwargs
 
 
 database_url, connect_args = get_database_url_and_connect_args()
@@ -146,6 +143,17 @@ def _configure_sqlite_connection(dbapi_connection) -> None:
 
 
 async_session_maker = async_sessionmaker(sql_engine, expire_on_commit=False)
+
+
+# The synchronous view of this same database (for the few subsystems that are
+# synchronous by design, e.g. the authored-vNext repository's database-native
+# CAS) lives in ``services/database_sync.py`` — see that module's docstring
+# for why it is derived from ``sql_engine`` rather than the environment.
+# ``get_sync_engine``/``sync_session_maker`` stay importable from here.
+from services.database_sync import get_sync_engine, sync_session_maker  # noqa: E402,F401
+from services.database_revision_authority import (  # noqa: E402
+    require_database_schema_revision_authority,
+)
 
 
 PUBLIC_CONTROLLER_DATABASE_ROLE = "presenton_public_controller"
@@ -253,8 +261,16 @@ def validate_public_database_authority(
 async def require_public_controller_database_authority(
     engine: AsyncEngine = sql_engine,
 ) -> None:
-    """Require the dedicated cross-tenant queue role for a controller process."""
+    """Require the dedicated cross-tenant queue role for a controller process.
 
+    An externalised controller starts through ``workspace_operation_worker``
+    rather than ``api/lifespan.py``, so it never reaches the API-side authority
+    check.  The schema-revision contract is enforced here too, from the same
+    function, so that every process boundary refuses a mismatched schema
+    instead of only the ones that boot through the API.
+    """
+
+    await require_database_schema_revision_authority(engine)
     local_development = _local_development_environment()
     if not local_development and (
         os.getenv("PUBLIC_DATABASE_PROCESS_ROLE") or ""
@@ -273,8 +289,16 @@ async def require_public_controller_database_authority(
 async def require_public_api_database_authority(
     engine: AsyncEngine = sql_engine,
 ) -> None:
-    """Ensure a remote public API cannot inherit controller or BYPASSRLS power."""
+    """Ensure a remote public API cannot inherit controller or BYPASSRLS power.
 
+    Also the single point where the schema-revision contract is enforced: a
+    database stamped at a revision other than this code's head is refused here,
+    for *every* runtime and dialect, before ``api/lifespan.py`` starts a worker
+    or a dispatcher.  Checking it at admission time instead would let the
+    in-process workers that are already running straight past it.
+    """
+
+    await require_database_schema_revision_authority(engine)
     local_development = _local_development_environment()
     public_runtime = bool(
         (os.getenv("PUBLIC_DATABASE_PROCESS_ROLE") or "").strip()

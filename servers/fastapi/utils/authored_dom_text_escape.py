@@ -105,6 +105,28 @@ def _is_card_like(item: Mapping[str, Any]) -> bool:
         return False
     if str(item.get("tag", "")).strip().lower() in _PAINTED_TAGS:
         return True
+    # A measured, unpadded two-pixel connector is a line, not the panel
+    # containing its arrow. Keep walking to the real enclosing panel. This
+    # does not exempt the arrow from clipping, overlap or source readback.
+    edges = _edges(item.get("bbox"))
+    if edges is not None:
+        width, height = edges[2] - edges[0], edges[3] - edges[1]
+        if (
+            item.get("semantic_role") == "decoration"
+            and item.get("has_owned_text") is False
+            and not item.get("text_fragments")
+            and min(width, height) <= 2.0
+            and max(width, height) >= 12.0
+            and all(style.get(axis) == "visible" for axis in ("overflowX", "overflowY"))
+            and all(_css_px(style.get(f"padding{side}")) == 0 for side in ("Top", "Right", "Bottom", "Left"))
+            and all(_css_px(style.get(f"border{side}Width")) == 0 for side in ("Top", "Right", "Bottom", "Left"))
+            and style.get("backgroundImage") == "none"
+            and style.get("boxShadow") == "none"
+            and style.get("clipPath") == "none"
+            and style.get("maskImage") == "none"
+            and style.get("transform") == "none"
+        ):
+            return False
     background = str(style.get("backgroundColor", "")).replace(" ", "").lower()
     if background and background not in _TRANSPARENT:
         return True
@@ -194,7 +216,13 @@ def _collision_qids(
 
 
 def find_text_escapes(elements: Iterable[Mapping[str, Any]]) -> tuple[TextEscape, ...]:
-    """Every text owner whose glyph ink prints past its nearest card-like box."""
+    """Every text owner whose glyph ink prints past its owning card-like box.
+
+    Nested painted panels are common.  A child panel can contain its text while
+    the same text still prints past an enclosing content card, so walk outward
+    until the nearest violated boundary.  Explicitly intentional or decorative
+    overlays stop that walk; badges may intentionally cross the card behind them.
+    """
 
     items = [item for item in elements if isinstance(item, Mapping)]
     item_by_qid = {str(item.get("qid")): item for item in items}
@@ -210,23 +238,29 @@ def find_text_escapes(elements: Iterable[Mapping[str, Any]]) -> tuple[TextEscape
             continue
         qid = str(item.get("qid"))
         ancestors = _ancestors(qid, parent_by_qid)
-        card = next(
-            (
-                item_by_qid[ancestor]
-                for ancestor in ancestors
-                if ancestor in item_by_qid and _is_card_like(item_by_qid[ancestor])
-            ),
-            None,
-        )
-        card_edges = _edges(card.get("bbox")) if card is not None else None
-        if card is None or card_edges is None:
-            continue
-        card_left, card_top, card_right, card_bottom = card_edges
         right, bottom = extent
-        escape_right = max(0.0, right - card_right)
-        escape_bottom = max(0.0, bottom - card_bottom)
-        if max(escape_right, escape_bottom) <= ESCAPE_TOLERANCE_PX:
+        selected: tuple[Mapping[str, Any], tuple[float, float, float, float], float, float] | None = None
+        for ancestor in ancestors:
+            card = item_by_qid.get(ancestor)
+            if card is None or not _is_card_like(card):
+                continue
+            stops_outer_walk = bool(
+                card.get("intentional") or card.get("semantic_role") == "decoration"
+            )
+            card_edges = _edges(card.get("bbox"))
+            if card_edges is None:
+                continue
+            escape_right = max(0.0, right - card_edges[2])
+            escape_bottom = max(0.0, bottom - card_edges[3])
+            if max(escape_right, escape_bottom) > ESCAPE_TOLERANCE_PX:
+                selected = card, card_edges, escape_right, escape_bottom
+                break
+            if stops_outer_walk:
+                break
+        if selected is None:
             continue
+        card, card_edges, escape_right, escape_bottom = selected
+        card_left, card_top, card_right, card_bottom = card_edges
         escapes.append(
             TextEscape(
                 qid=qid,

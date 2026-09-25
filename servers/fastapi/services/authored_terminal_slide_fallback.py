@@ -35,6 +35,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from services.authored_admission_capture import capture_once
 from services.authored_composition_policy import (
     blocking_safety_issues,
     capacity_violations,
@@ -54,6 +55,7 @@ from services.authored_remake_schedule import (
     settled_flag_entry,
     terminal_reason as _terminal_reason,
 )
+from services.authored_terminal_slide_flag_only import verbatim_flagged_slides
 from services.authored_terminal_slide_policy import terminal_fallback_active
 from services.authored_vnext.generation.scene_envelope import replace_deck_scene_slide
 from services.image_generation_service import ImageGenerationService
@@ -229,23 +231,36 @@ async def _remake_candidate(
 
 
 async def _admit_remade_slide(
-    *, candidate_html: str, capacity: object, profile: Any, reference_mode: str
+    *, candidate_html: str, capacity: object, profile: Any, reference_mode: str,
+    slide_index: int | None = None,
 ) -> tuple[str, bytes, object] | None:
     """Bind fresh pixels/telemetry and admit only a candidate that clears both gates."""
 
     canonical = canonicalize_authored_roles(candidate_html)
-    fit_on = is_authored_in_render_fit_enabled()  # no ``fit=`` kwarg at all when off
-    capture = await (
-        render_html_to_png_with_metrics(canonical, fit=True)
-        if fit_on else render_html_to_png_with_metrics(canonical)
+    # Local-fit is the active fitter; the in-render fit is opt-in and passes no
+    # ``fit=`` kwarg at all when off.
+    fit_kwargs = {"fit": True} if is_authored_in_render_fit_enabled() else {}
+    capture = await capture_once(
+        canonical,
+        index=slide_index,
+        capture=render_html_to_png_with_metrics,
+        **fit_kwargs,
     )
-    metrics = capture.browser_metrics
-    if metrics is None or capture.png == _placeholder_png():
+    metrics = getattr(capture, "browser_metrics", None)
+    # Only a capture the owner bound to its prepared bytes is admissible; an
+    # unbound payload carries no ``prepared_html`` and is refused below.
+    prepared_html = getattr(capture, "prepared_html", None)
+    if prepared_html is None or metrics is None or capture.png == _placeholder_png():
         return None
-    candidate = getattr(capture, "fitted_html", None) or canonical
+    candidate = getattr(capture, "fitted_html", None) or prepared_html
     if capacity_violations(candidate, metrics, capacity):
         return None
-    if _blocking_defects(html=candidate, metrics=metrics, profile=profile, reference_mode=reference_mode):
+    if _blocking_defects(
+        html=candidate,
+        metrics=metrics,
+        profile=profile,
+        reference_mode=reference_mode,
+    ):
         return None
     return candidate, capture.png, metrics
 
@@ -282,7 +297,7 @@ async def remake_slide_once(
     try:
         admitted = await _admit_remade_slide(
             candidate_html=candidate, capacity=capacity, profile=profile,
-            reference_mode=reference_mode,
+            reference_mode=reference_mode, slide_index=index,
         )
     except Exception:
         LOGGER.warning(
@@ -342,8 +357,10 @@ async def resolve_terminal_gate_slides(
     instructions: object = None, generation_job: Any = None,
     predeclared: Sequence[Mapping[str, object]] = (),
     remake_counts: Mapping[int, int] | None = None,
+    preserved_flagged_indices: Sequence[int] = (),
+    prepare_admitted: Any = None,
 ) -> TerminalSlideFallback:
-    """Remake every ladder-terminal slide again; flag the ones that stay terminal.
+    """Resolve ladder-terminal slides by remake or verbatim flag-only fallback.
 
     ``htmls``, ``pngs`` and ``metrics_by_slide`` are updated in place for an
     admitted remake so the caller keeps one deck state; the resealed scene
@@ -367,6 +384,7 @@ async def resolve_terminal_gate_slides(
     ):
         return TerminalSlideFallback(scene_envelope=scene_envelope)
 
+    preserved_indices = {int(index) for index in preserved_flagged_indices}
     declared_by_index = {
         int(entry["index"]): dict(entry)
         for entry in predeclared
@@ -374,6 +392,8 @@ async def resolve_terminal_gate_slides(
     }
     terminal: list[tuple[int, tuple[Any, ...], dict[str, object]]] = []
     for index, html in enumerate(htmls):
+        if index in preserved_indices:
+            continue
         metrics = _slide_metrics(index, html, metrics_by_slide)
         defects = (
             _blocking_defects(
@@ -392,6 +412,17 @@ async def resolve_terminal_gate_slides(
             terminal.append((index, defects, {"reason": _terminal_reason(defects)}))
     if not terminal:
         return TerminalSlideFallback(scene_envelope=scene_envelope)
+
+    if source_reflow:
+        flagged = verbatim_flagged_slides(terminal)
+        LOGGER.info(
+            "[authored] terminal source-reflow slides flagged without remake slides=%s",
+            [entry["index"] for entry in flagged],
+        )
+        return TerminalSlideFallback(
+            scene_envelope=scene_envelope,
+            flagged_slides=flagged,
+        )
 
     repair_calls = are_repair_calls_enabled()
     prior_counts = {int(key): int(value) for key, value in (remake_counts or {}).items()}
@@ -454,6 +485,17 @@ async def resolve_terminal_gate_slides(
                 )
             )
             continue
+        if prepare_admitted is not None:
+            admitted = await prepare_admitted(index, admitted)
+            if admitted is None:
+                flagged.append(
+                    _flagged_entry(
+                        index=index, reason=reason, attempted=True,
+                        outcome="remake_local_fit_rejected", repeated=repeated,
+                        remake_count=spent,
+                    )
+                )
+                continue
         scene_envelope = await apply_admitted_remake(
             index=index, admitted=admitted, htmls=htmls, pngs=pngs,
             metrics_by_slide=metrics_by_slide, scene_envelope=scene_envelope,

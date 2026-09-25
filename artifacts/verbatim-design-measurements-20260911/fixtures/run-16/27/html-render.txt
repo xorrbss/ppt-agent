@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;height:104px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:24px;width:1000px}
+.eyebrow{font-size:16px;line-height:22px;font-weight:700;letter-spacing:.04em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:36px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:64px;right:64px;top:132px;height:496px}
+.claim-row{height:92px;display:flex;align-items:flex-start;justify-content:space-between}
+.claim-kicker{display:flex;align-items:center;gap:12px;padding-top:7px;font-size:18px;line-height:28px;font-weight:700;color:#4B5563}
+.claim-kicker span{display:block;width:9px;height:9px;background:#D9A441;border-radius:12px}
+.claim{width:720px;font-size:32px;line-height:44px;font-weight:700;letter-spacing:-.03em;color:#1D1D1B}
+.claim strong{color:#08916E}
+.content-grid{display:grid;grid-template-columns:430px 698px;gap:24px;height:376px}
+.core-panel{height:376px;padding:28px;background:#00140E;border-radius:12px;display:flex;flex-direction:column;justify-content:space-between}
+.core-label{font-size:18px;line-height:27px;font-weight:700;color:#71CDB5;letter-spacing:.04em}
+.core-word{font-size:54px;line-height:1.25;font-weight:700;color:#FFFFFF;letter-spacing:-.04em}
+.core-rule{height:2px;width:100%;background:#219F88}
+.core-copy{font-size:20px;line-height:34px;font-weight:700;color:#FFFFFF}
+.core-copy em{font-style:normal;color:#71CDB5}
+.evidence-panel{height:376px;padding:24px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.evidence-head{height:44px;display:flex;align-items:flex-start;justify-content:space-between;border-bottom:2px solid #219F88}
+.evidence-title{font-size:22px;line-height:30px;font-weight:700;color:#002060}
+.evidence-mark{width:10px;height:10px;margin-top:9px;background:#08916E;border-radius:12px}
+.evidence-list{margin-top:13px;display:flex;flex-direction:column;gap:0}
+.evidence-item{min-height:54px;padding:13px 8px 12px 20px;border-bottom:1px solid #E2E8F0;display:flex;align-items:flex-start;gap:14px;font-size:18px;line-height:28px;font-weight:500;color:#1D1D1B}
+.evidence-item:last-child{border-bottom:0}
+.evidence-item span{display:block;flex:none;width:8px;height:8px;margin-top:10px;background:#219F88;border-radius:12px}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+  <div data-header-part="band" data-header-band="104" class="header-band" style="height:104px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+    <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+      <div data-header-part="eyebrow" data-semantic-role="supporting" data-qid="source-block-f46666d065b161ca" class="eyebrow" data-source-block-id="source-slide:28:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      <div data-header-part="title" data-semantic-role="title" data-qid="source-block-b15a5509cf3e870e" class="title" data-source-block-id="source-slide:28:text:3">4주차 PART 4 | 장기고객 만들기</div>
+    </div>
+    <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+  </div>
+
+  <div data-header-part="body" class="body-wrap" style="position:absolute;left:64px;right:64px;top:132px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+    <div class="claim-row" data-qid="q-div-75b3498fbbe1" data-semantic-role="decoration">
+      <div data-semantic-role="body" data-qid="source-block-4944da184a3e0b54" class="claim" data-source-block-id="source-slide:28:text:6">한 번의 계약을 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">‘월 관리’</strong>로</div>
+      <div data-semantic-role="supporting" data-qid="q-kicker-27" class="claim-kicker"><span data-qid="q-span-f32986c526a1" data-semantic-role="decoration"></span>장기고객 만들기</div>
+    </div>
+
+    <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+      <div class="core-panel" data-qid="q-div-76da2471923a" data-semantic-role="decoration">
+        <div data-semantic-role="supporting" data-qid="source-block-03913a405febe2a7" class="core-label" data-source-block-id="source-slide:28:text:10">핵심</div>
+        <div data-semantic-role="body" data-qid="source-block-33096d52fdad8a75" class="core-copy" data-source-block-id="source-slide:28:text:11">고객이 <em data-qid="q-em-324970b590cd" data-semantic-role="body">‘내가 계속 아이디어를 내야 하나?’</em>라고 느끼지 않게 한다.</div>
+        <div class="core-rule" data-qid="q-div-51bb8da6b706" data-semantic-role="decoration"></div>
+      </div>
+
+      <div class="evidence-panel" data-qid="q-div-df1635d03534" data-semantic-role="decoration">
+        <div class="evidence-head" data-qid="q-div-74967fa615a4" data-semantic-role="decoration">
+          <div data-semantic-role="supporting" data-qid="q-evidence-title-27" class="evidence-title">한 번의 계약을 ‘월 관리’로</div>
+          <div class="evidence-mark" data-qid="q-div-c0a814613e2c" data-semantic-role="decoration"></div>
+        </div>
+        <div class="evidence-list" data-qid="source-block-59f6dcdb8edf9d34" data-semantic-role="decoration" data-source-block-id="source-slide:28:text:7">
+          <div data-semantic-role="body" data-qid="q-item-01-27" class="evidence-item"><span data-qid="q-span-c83eac29f2ad" data-semantic-role="decoration"></span>다음 달 콘텐츠를 먼저 제안</div>
+          <div data-semantic-role="body" data-qid="q-item-02-27" class="evidence-item"><span data-qid="q-span-eedec0ea8962" data-semantic-role="decoration"></span>월간 콘텐츠 캘린더 제공</div>
+          <div data-semantic-role="body" data-qid="q-item-03-27" class="evidence-item"><span data-qid="q-span-2af01d53a93e" data-semantic-role="decoration"></span>고객 업종에 맞는 소재를 지속 발굴</div>
+          <div data-semantic-role="body" data-qid="q-item-04-27" class="evidence-item"><span data-qid="q-span-0856754b8eb9" data-semantic-role="decoration"></span>성과와 개선점을 간단히 공유</div>
+          <div data-semantic-role="body" data-qid="q-item-05-27" class="evidence-item"><span data-qid="q-span-ff27a5abbc91" data-semantic-role="decoration"></span>소개받을 수 있는 만족 경험 만들기</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div data-semantic-role="supporting" data-qid="source-block-ac0696b54813061d" class="footer-page" data-source-block-id="source-slide:28:text:4">28</div>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html><html lang="ko"><head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#00140E;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:18px;width:840px}
+.eyebrow{height:21px;font-size:15px;line-height:21px;font-weight:700;letter-spacing:0;color:#08916E}
+.slide-title{margin-top:6px;max-width:840px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:924px;top:18px;width:300px;height:27px;display:flex;justify-content:flex-end}
+.requirements{height:27px;display:flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap}
+.req-label{margin-right:2px;font-size:13px;line-height:27px;font-weight:700;color:#00140E}
+.req-chip{height:27px;padding:0 9px;border:1px solid #08916E;border-radius:5px;background:#EAEDF2;font-family:"IBM Plex Mono","Consolas",monospace;font-size:13px;line-height:25px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px}
+.claim{height:56px;display:flex;align-items:center;justify-content:space-between}
+.claim-text{font-size:25px;line-height:34px;font-weight:700;letter-spacing:-.02em;color:#00140E}
+.claim-text strong{color:#08916E}
+.claim-side{display:flex;align-items:center;gap:10px;font-size:15px;line-height:22px;font-weight:700;color:#00140E}
+.claim-mark{width:9px;height:24px;border-radius:12px;background:#08916E}
+.problem-strip{display:grid;grid-template-columns:164px 1fr 322px;align-items:stretch;height:92px;border:1px solid #E2E8F0;border-radius:12px;background:#FFFFFF;overflow:hidden}
+.problem-label{display:flex;flex-direction:column;justify-content:center;padding:16px 20px;background:#00140E;color:#FFFFFF}
+.problem-kicker{font-size:14px;line-height:20px;font-weight:700;color:#FFFFFF}
+.problem-title{margin-top:3px;font-size:20px;line-height:28px;font-weight:700;color:#FFFFFF}
+.problem-detail{display:flex;align-items:center;padding:14px 24px;font-size:18px;line-height:27px;font-weight:500;color:#00140E}
+.target-zone{display:flex;flex-direction:column;justify-content:center;padding:14px 22px;background:#EAF7F4;border-left:1px solid #E2E8F0}
+.target-label{font-size:14px;line-height:20px;font-weight:700;color:#08916E}
+.target-copy{margin-top:3px;font-size:18px;line-height:26px;font-weight:700;color:#00140E}
+.flow-shell{position:relative;height:292px;margin-top:12px}
+.connector{position:absolute;left:117px;right:117px;top:36px;height:2px;background:#08916E}
+.node{position:absolute;top:31px;width:12px;height:12px;border:2px solid #08916E;border-radius:12px;background:#FFFFFF}
+.node-1{left:129px}.node-2{left:423px}.node-3{left:717px}.node-4{left:1011px}
+.cards{position:relative;display:grid;grid-template-columns:repeat(4,270px);gap:24px;height:292px}
+.card{height:292px;padding:22px 20px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-index{font-family:"IBM Plex Mono","Consolas",monospace;font-size:14px;line-height:20px;font-weight:700;color:#08916E}
+.card-title{margin-top:16px;font-size:21px;line-height:29px;font-weight:700;color:#00140E}
+.card-rule{width:36px;height:3px;margin-top:10px;background:#08916E}
+.card-copy{margin-top:12px;font-size:17px;line-height:25px;font-weight:500;color:#00140E}
+.tag-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:12px}
+.tag{min-height:29px;padding:5px 6px;border-radius:12px;background:#EAF7F4;text-align:center;font-size:14px;line-height:19px;font-weight:700;color:#00140E}
+.role-list{margin-top:12px;display:grid;gap:7px}
+.role-row{display:grid;grid-template-columns:86px 1fr;align-items:center;min-height:38px;border-bottom:1px solid #E2E8F0}
+.role-row:last-child{border-bottom:0}
+.role-name{font-size:14px;line-height:20px;font-weight:700;color:#08916E}
+.role-desc{font-size:15px;line-height:21px;font-weight:500;color:#00140E}
+.steps{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:12px}
+.step{display:flex;align-items:center;min-height:34px;padding:5px 7px;border:1px solid #E2E8F0;border-radius:12px;background:#F9F9F9}
+.step-num{flex:none;width:20px;font-family:"IBM Plex Mono","Consolas",monospace;font-size:13px;line-height:18px;font-weight:700;color:#08916E}
+.step-text{font-size:13px;line-height:18px;font-weight:700;color:#00140E}
+.takeaway{height:66px;margin-top:12px;display:grid;grid-template-columns:164px 1fr;align-items:center;border-radius:12px;background:#00140E}
+.takeaway-label{padding-left:22px;font-size:15px;line-height:22px;font-weight:700;color:#FFFFFF}
+.takeaway-copy{padding:0 24px;border-left:1px solid #08916E;font-size:19px;line-height:28px;font-weight:700;color:#FFFFFF}
+.takeaway-copy strong{color:#08916E}
+</style>
+</head>
+<body>
+<div class="header-band" data-header-band="101" data-header-part="band" style="height:101px" data-qid="q-div-75dcf98740c9">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0">
+    <div class="eyebrow" data-header-part="eyebrow" data-qid="s1-eyebrow" data-semantic-role="supporting">전략 및 방법론</div>
+    <div class="slide-title" data-header-part="title" data-qid="s1-title" data-semantic-role="title">Ⅱ. 전략 및 방법론 구성</div>
+  </div>
+  <div class="header-right" data-header-part="right" data-qid="q-div-73774be43d12">
+    <div class="requirements" data-header-part="requirements" data-requirement-ids="SFR-001,QUR-003,PMR-002" data-qid="q-div-4809de7a0f2d">
+      <span class="req-label" data-qid="s1-req-label" data-semantic-role="supporting">요구사항 번호</span>
+      <span class="req-chip" data-qid="s1-req-1" data-semantic-role="supporting">SFR-001</span>
+      <span class="req-chip" data-qid="s1-req-2" data-semantic-role="supporting">QUR-003</span>
+      <span class="req-chip" data-qid="s1-req-3" data-semantic-role="supporting">PMR-002</span>
+    </div>
+  </div>
+  <div class="divider" data-header-part="divider" data-qid="q-div-59f86380b966"></div>
+</div>
+
+<div class="body-wrap" data-header-part="body" style="margin-top:14px" data-qid="q-div-66757db28fba">
+  <div class="claim" data-qid="q-div-602277a791e7">
+    <div class="claim-text" data-qid="s1-claim" data-semantic-role="body">분산된 탄소중립 지원업무를 <strong data-qid="q-strong-663977331dde">하나의 실행체계</strong>로 전환합니다.</div>
+    <div class="claim-side" data-qid="s1-claim-side" data-semantic-role="supporting">
+      <span class="claim-mark" data-qid="q-span-05fa3191c699"></span>
+      현황 진단에서 시험운영·환류까지
+    </div>
+  </div>
+
+  <div class="problem-strip" data-qid="s1-problem-card">
+    <div class="problem-label" data-qid="q-div-257568253ea4">
+      <div class="problem-kicker" data-qid="s1-problem-kicker" data-semantic-role="supporting">현재의 구조적 문제</div>
+      <div class="problem-title" data-qid="s1-problem-title" data-semantic-role="body">업무·정보 분산</div>
+    </div>
+    <div class="problem-detail" data-qid="s1-problem-detail" data-semantic-role="body">
+      현행 9개 핵심기능에서 신청·서류·평가·상태·통계가 개별 처리되고, 공급망·설비투자·사업화·MRV별 업무 차이가 누적
+    </div>
+    <div class="target-zone" data-qid="q-div-5abc4d38fbd8">
+      <div class="target-label" data-qid="s1-target-label" data-semantic-role="supporting">전환 목표</div>
+      <div class="target-copy" data-qid="s1-target-copy" data-semantic-role="body">업무 차이는 유지하되 공통 절차와 데이터 기준으로 통합</div>
+    </div>
+  </div>
+
+  <div class="flow-shell" data-qid="q-div-e66c6c929545">
+    <div class="connector" data-qid="q-div-1bfec761b021"></div>
+    <div class="node node-1" data-qid="q-div-fff0574002ba"></div>
+    <div class="node node-2" data-qid="q-div-9c1297527a80"></div>
+    <div class="node node-3" data-qid="q-div-2331fb6febf8"></div>
+    <div class="node node-4" data-qid="q-div-59d82d23af8f"></div>
+
+    <div class="cards" data-qid="q-div-beb8611456c7">
+      <div class="card" data-qid="s1-card-understanding">
+        <div class="card-index" data-qid="s1-index-1" data-semantic-role="supporting">01</div>
+        <div class="card-title" data-qid="s1-card-title-1" data-semantic-role="body">사업이해도</div>
+        <div class="card-rule" data-qid="q-div-e24a51b44c9c"></div>
+        <div class="card-copy" data-qid="s1-card-copy-1" data-semantic-role="body">
+          9개 핵심기능과 사업유형별 차이를 분석하고, 분산 업무를 공통 업무체계로 전환할 목표를 정의합니다.
+        </div>
+        <div class="tag-grid" data-qid="q-div-c25a5f32ef13">
+          <div class="tag" data-qid="s1-tag-1" data-semantic-role="supporting">공급망</div>
+          <div class="tag" data-qid="s1-tag-2" data-semantic-role="supporting">설비투자</div>
+          <div class="tag" data-qid="s1-tag-3" data-semantic-role="supporting">사업화</div>
+          <div class="tag" data-qid="s1-tag-4" data-semantic-role="supporting">MRV</div>
+        </div>
+      </div>
+
+      <div class="card" data-qid="s1-card-strategy">
+        <div class="card-index" data-qid="s1-index-2" data-semantic-role="supporting">02</div>
+        <div class="card-title" data-qid="s1-card-title-2" data-semantic-role="body">추진전략</div>
+        <div class="card-rule" data-qid="q-div-0b8bad9e5967"></div>
+        <div class="card-copy" data-qid="s1-card-copy-2" data-semantic-role="body">여섯 전략을 기능·데이터·품질·운영 목표에 직접 연결합니다.</div>
+        <div class="tag-grid" data-qid="q-div-75809947bde5">
+          <div class="tag" data-qid="s1-strategy-1" data-semantic-role="supporting">웹폼</div>
+          <div class="tag" data-qid="s1-strategy-2" data-semantic-role="supporting">통합서류함</div>
+          <div class="tag" data-qid="s1-strategy-3" data-semantic-role="supporting">역할 기반 작업함</div>
+          <div class="tag" data-qid="s1-strategy-4" data-semantic-role="supporting">통합통계</div>
+          <div class="tag" data-qid="s1-strategy-5" data-semantic-role="supporting">DevAX 자동 검증</div>
+          <div class="tag" data-qid="s1-strategy-6" data-semantic-role="supporting">단계적 전환</div>
+        </div>
+      </div>
+
+      <div class="card" data-qid="s1-card-governance">
+        <div class="card-index" data-qid="s1-index-3" data-semantic-role="supporting">03</div>
+        <div class="card-title" data-qid="s1-card-title-3" data-semantic-role="body">추진체계</div>
+        <div class="card-rule" data-qid="q-div-7a9c3ff3b470"></div>
+        <div class="card-copy" data-qid="s1-card-copy-3" data-semantic-role="body">의사결정·운영·구축의 책임선을 분리해 협업과 승인 기준을 명확히 합니다.</div>
+        <div class="role-list" data-qid="q-div-bd29e05322ed">
+          <div class="role-row" data-qid="q-div-27068849e54b">
+            <div class="role-name" data-qid="s1-role-1" data-semantic-role="supporting">지원센터</div>
+            <div class="role-desc" data-qid="s1-role-desc-1" data-semantic-role="body">업무 기준·의사결정</div>
+          </div>
+          <div class="role-row" data-qid="q-div-ead1580b90d0">
+            <div class="role-name" data-qid="s1-role-2" data-semantic-role="supporting">ICT운영실</div>
+            <div class="role-desc" data-qid="s1-role-desc-2" data-semantic-role="body">기술·운영 통제</div>
+          </div>
+          <div class="role-row" data-qid="q-div-772245fa9d11">
+            <div class="role-name" data-qid="s1-role-3" data-semantic-role="supporting">수행사</div>
+            <div class="role-desc" data-qid="s1-role-desc-3" data-semantic-role="body">분석·구축·검증</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" data-qid="s1-card-method">
+        <div class="card-index" data-qid="s1-index-4" data-semantic-role="supporting">04</div>
+        <div class="card-title" data-qid="s1-card-title-4" data-semantic-role="body">DevAX 사업추진 방법론</div>
+        <div class="card-rule" data-qid="q-div-7f25fb171299"></div>
+        <div class="card-copy" data-qid="s1-card-copy-4" data-semantic-role="body">목표 정의부터 시험운영·환류까지 8단계 절차와 산출물을 적용합니다.</div>
+        <div class="steps" data-qid="q-div-17e8625ebe5f">
+          <div class="step" data-qid="q-div-76997843ad4f"><span class="step-num" data-qid="s1-step-num-1" data-semantic-role="supporting">01</span><span class="step-text" data-qid="s1-step-1" data-semantic-role="supporting">목표 정의</span></div>
+          <div class="step" data-qid="q-div-99a28a82e8a1"><span class="step-num" data-qid="s1-step-num-2" data-semantic-role="supporting">02</span><span class="step-text" data-qid="s1-step-2" data-semantic-role="supporting">현황 분석</span></div>
+          <div class="step" data-qid="q-div-0bbae897b6f1"><span class="step-num" data-qid="s1-step-num-3" data-semantic-role="supporting">03</span><span class="step-text" data-qid="s1-step-3" data-semantic-role="supporting">요건 설계</span></div>
+          <div class="step" data-qid="q-div-111d3d12a08f"><span class="step-num" data-qid="s1-step-num-4" data-semantic-role="supporting">04</span><span class="step-text" data-qid="s1-step-4" data-semantic-role="supporting">구현</span></div>
+          <div class="step" data-qid="q-div-47d0e3875972"><span class="step-num" data-qid="s1-step-num-5" data-semantic-role="supporting">05</span><span class="step-text" data-qid="s1-step-5" data-semantic-role="supporting">자동 검증</span></div>
+          <div class="step" data-qid="q-div-b232018c81d3"><span class="step-num" data-qid="s1-step-num-6" data-semantic-role="supporting">06</span><span class="step-text" data-qid="s1-step-6" data-semantic-role="supporting">통합 시험</span></div>
+          <div class="step" data-qid="q-div-7f974262228e"><span class="step-num" data-qid="s1-step-num-7" data-semantic-role="supporting">07</span><span class="step-text" data-qid="s1-step-7" data-semantic-role="supporting">시험운영</span></div>
+          <div class="step" data-qid="q-div-1cee72d38f5d"><span class="step-num" data-qid="s1-step-num-8" data-semantic-role="supporting">08</span><span class="step-text" data-qid="s1-step-8" data-semantic-role="supporting">환류</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway" data-qid="q-div-45499f8e6b25">
+    <div class="takeaway-label" data-qid="s1-takeaway-label" data-semantic-role="supporting">구성 원칙</div>
+    <div class="takeaway-copy" data-qid="s1-takeaway-copy" data-semantic-role="body">
+      업무 진단 → 실행전략 → 책임체계 → 검증 방법론을 연결해 <strong data-qid="q-strong-f213b54d7db8">실행 가능성과 추적성</strong>을 동시에 확보합니다.
+    </div>
+  </div>
+</div>
+
+</body></html>

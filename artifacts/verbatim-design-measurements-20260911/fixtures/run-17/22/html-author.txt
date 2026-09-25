@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:20px;width:820px}
+.eyebrow{font-size:14px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:6px;font-size:32px;line-height:39px;font-weight:800;color:#1D1D1B}
+.header-right{position:absolute;left:956px;top:20px;width:260px;text-align:right;font-size:13px;line-height:18px;color:#FFFFFF}
+.project-tag{position:absolute;right:64px;top:0;width:260px;height:96px;padding:20px 16px;background:#00140E;color:#FFFFFF;font-size:13px;line-height:18px;text-align:right}
+.body-wrap{position:absolute;left:0;right:0;top:120px;margin:0 64px;height:504px}
+.claim-row{height:62px;display:flex;align-items:flex-start;justify-content:space-between}
+.claim{font-size:25px;line-height:36px;font-weight:800;letter-spacing:-.02em}
+.claim strong{color:#08916E}
+.status{display:flex;align-items:center;gap:10px;margin-top:7px;color:#1D1D1B;font-size:15px;line-height:22px;font-weight:700}
+.status-mark{width:9px;height:9px;background:#E5A93D;border-radius:12px;flex:none}
+.content-grid{display:grid;grid-template-columns:420px 708px;gap:24px;height:414px}
+.task-panel{height:414px;padding:28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.panel-label{font-size:15px;line-height:22px;font-weight:800;color:#08916E;letter-spacing:.04em}
+.client-line{margin-top:14px;padding-bottom:20px;border-bottom:1px solid #E2E8F0;font-size:20px;line-height:30px;font-weight:800;color:#00140E}
+.task-list{display:flex;flex-direction:column;gap:16px;margin-top:22px}
+.task-item{display:flex;align-items:flex-start;gap:14px;font-size:18px;line-height:29px;font-weight:600;color:#1D1D1B}
+.task-bar{width:6px;height:29px;margin-top:1px;background:#219F88;border-radius:12px;flex:none}
+.image-panel{height:414px;padding:10px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.image-panel img{display:block;width:686px;height:392px;border-radius:12px;object-fit:cover;background:#EAF7F4}
+.takeaway{margin-top:18px;height:42px;padding:8px 14px;border-left:6px solid #08916E;background:#EAF7F4;font-size:17px;line-height:26px;font-weight:700;color:#164F43}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+.brand-tile{position:absolute;left:64px;bottom:14px;width:28px;height:16px;background:#08916E;border-radius:12px}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="96" class="header-band" style="height:96px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-22" class="eyebrow">영업 실행</div>
+    <div data-header-part="title" data-semantic-role="title" data-qid="source-block-5c533cf0c695d050" class="title" data-source-block-id="source-slide:23:text:3">3주차 과제</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-qid="q-div-73774be43d12" data-semantic-role="decoration"></div>
+  <div class="project-tag" data-semantic-role="supporting" data-qid="source-block-fd1b4b21d626adf5" data-source-block-id="source-slide:23:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:120px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim-row" data-qid="q-div-75b3498fbbe1" data-semantic-role="decoration">
+    <div data-semantic-role="body" data-qid="source-block-de2cb24234f4325a" class="claim" data-source-block-id="source-slide:23:text:4">강의가 끝난 뒤 실제 <strong data-semantic-role="body" data-qid="q-claim-keyword-22">영업</strong>이 시작됩니다.</div>
+    <div class="status" data-semantic-role="supporting" data-qid="q-status-22"><span class="status-mark" data-qid="q-span-e03ff4786d8f" data-semantic-role="decoration"></span>이번 주 실행 항목</div>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="task-panel" data-qid="q-card-22" data-semantic-role="decoration">
+      <div class="panel-label" data-semantic-role="supporting" data-qid="q-label-22">실행 과제</div>
+      <div class="client-line" data-semantic-role="body" data-qid="q-client-22">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      <div class="task-list" data-qid="source-block-fa920147c34170ca" data-semantic-role="decoration" data-source-block-id="source-slide:23:text:7">
+        <div class="task-item" data-semantic-role="decoration" data-qid="q-task-1-22"><span class="task-bar" data-qid="q-span-c0cf30cf3b81" data-semantic-role="decoration"></span><span data-qid="q-span-f32986c526a1" data-semantic-role="body">타깃 업체 30곳 리스트업</span></div>
+        <div class="task-item" data-semantic-role="decoration" data-qid="q-task-2-22"><span class="task-bar" data-qid="q-span-43b8254856cc" data-semantic-role="decoration"></span><span data-qid="q-span-c83eac29f2ad" data-semantic-role="body">전화/DM 중 하나를 선택해 최소 10곳 시도</span></div>
+        <div class="task-item" data-semantic-role="decoration" data-qid="q-task-3-22"><span class="task-bar" data-qid="q-span-a1a80f9f02d8" data-semantic-role="decoration"></span><span data-qid="q-span-eedec0ea8962" data-semantic-role="body">무료 샘플 1곳 기획</span></div>
+        <div class="task-item" data-semantic-role="decoration" data-qid="q-task-4-22"><span class="task-bar" data-qid="q-span-014c69be740b" data-semantic-role="decoration"></span><span data-qid="q-span-2af01d53a93e" data-semantic-role="body">거절 이유를 기록하고 멘트를 수정</span></div>
+      </div>
+    </div>
+
+    <div class="image-panel" data-qid="q-image-panel-22" data-semantic-role="decoration">
+      <img data-semantic-role="image" data-qid="q-image-22" data-illust-prompt="A premium editorial vector-like scene of a solo short-form video agency operator beginning real sales after a lecture, viewed from a slightly elevated three-quarter angle. On a clean desk, show a prospect list with target businesses, a phone and laptop representing phone and DM outreach, one planned free sample storyboard, and a small feedback note representing recording rejection reasons and revising the sales script. Arrange the four work stages from left to right as a focused execution workflow. labels: &quot;타깃 업체 30곳 리스트업&quot;, &quot;최소 10곳 시도&quot;, &quot;무료 샘플 1곳 기획&quot;, &quot;거절 이유&quot;" style="width:686px;height:392px">
+    </div>
+  </div>
+
+  <div class="takeaway" data-semantic-role="body" data-qid="q-takeaway-22">리스트업부터 멘트 수정까지, 실제 영업의 전 과정을 직접 실행합니다.</div>
+</div>
+
+<div class="brand-tile" data-semantic-role="decoration" data-qid="q-div-dac221dd097c"></div>
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-780036fd9a2ca8f2" data-source-block-id="source-slide:23:text:5">23</div>
+</body>
+</html>

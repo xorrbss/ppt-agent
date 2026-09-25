@@ -156,13 +156,13 @@ export default function CommunityDesignPreviewDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         hideDefaultClose
-        overlayClassName="bg-black/30"
-        className="block h-[100dvh] w-screen max-w-none gap-0 border-0 bg-transparent p-0 shadow-none sm:h-auto sm:w-[calc(100vw-32px)] sm:max-w-[977px]"
+        overlayClassName="bg-slate-950/35 backdrop-blur-[2px]"
+        className="block h-[calc(100dvh-2rem)] max-w-[977px] gap-0 overflow-hidden p-0 sm:h-auto"
       >
         {presentation && (
           <>
-            <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white shadow-[0_16px_50px_rgba(0,0,0,0.16)] sm:h-[min(614px,calc(100dvh-32px))] sm:rounded-[22px]">
-              <header className="flex min-h-[100px] shrink-0 items-center gap-3 border-b border-[#EDEEEF] bg-white px-4 py-4 pr-14 shadow-[0_4px_7px_rgba(0,0,0,0.04)] sm:gap-5 sm:px-6 sm:py-5 sm:pr-16 min-[1100px]:pr-6">
+            <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white sm:h-[min(614px,calc(100dvh-34px))]">
+              <header className="flex shrink-0 items-center gap-3 border-b border-gray-100 bg-white px-4 py-5 pr-14 sm:gap-5 sm:px-6 sm:pr-16">
                 <div className="min-w-0 flex-1 font-syne">
                   {isShowingReference && (
                     <button
@@ -175,14 +175,14 @@ export default function CommunityDesignPreviewDialog({
                     </button>
                   )}
                   <div className="flex items-center gap-2">
-                    <DialogTitle className="text-lg font-normal leading-normal text-[#191919]">
+                    <DialogTitle className="break-keep text-xl font-semibold leading-7 tracking-tight text-gray-900">
                       {title}
                     </DialogTitle>
                     {loading && (
                       <LoaderCircle className="h-4 w-4 shrink-0 animate-spin text-[#6847F4]" />
                     )}
                   </div>
-                  <DialogDescription className="mt-1 line-clamp-2 text-sm font-normal leading-normal tracking-[-0.14px] text-[#808080]">
+                  <DialogDescription className="mt-2 line-clamp-2 text-sm leading-6 text-gray-500">
                     {displayedPresentation?.description?.trim() ||
                       t("sharedDescription")}
                   </DialogDescription>
@@ -363,9 +363,9 @@ export default function CommunityDesignPreviewDialog({
               </div>
             </div>
 
-            <DialogClose className="absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#191919] shadow-sm transition hover:bg-[#F8F8FA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8]/30 min-[1100px]:-right-[68px] min-[1100px]:top-0 min-[1100px]:h-[52px] min-[1100px]:w-[52px]">
+            <DialogClose className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none z-20">
               <X
-                className="h-5 w-5 min-[1100px]:h-6 min-[1100px]:w-6"
+                className="h-4 w-4"
                 strokeWidth={1.5}
               />
               <span className="sr-only">{t("closePreview")}</span>

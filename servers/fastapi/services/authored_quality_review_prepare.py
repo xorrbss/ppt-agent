@@ -12,6 +12,7 @@ from services.authored_header_contract_service import (
     load_header_contract,
     page_number_mode_for,
 )
+from services.authored_canvas import presentation_canvas_contract
 
 
 async def prepare_legacy_review(ctx):
@@ -41,6 +42,7 @@ async def prepare_legacy_review(ctx):
         ctx.session, ctx.task, status="processing", message="슬라이드 렌더링을 준비하고 있습니다."
     )
     ctx.theme = ctx.presentation.theme if isinstance(ctx.presentation.theme, dict) else {}
+    ctx.canvas = presentation_canvas_contract(ctx.theme)
     ctx.saved_style_id = str(ctx.theme.get("style") or "default")
     ctx.provenance_row = await ctx.session.get(_service.AuthoredExactProvenance, ctx.presentation_id)
     ctx.exact_source_images: tuple[bytes, ...] | None = None
@@ -98,6 +100,7 @@ async def prepare_legacy_review(ctx):
         # use a generated picture than its untouched siblings.
         illustration_plan=load_illustration_plan(ctx.presentation.theme),
         infographic_plan=load_infographic_plan(ctx.presentation.theme),
+        canvas=ctx.canvas,
     )
     ctx.plan_reference_mode = _service.normalize_reference_mode(
         getattr(ctx.plan, "reference_mode", ctx.saved_reference_mode)
@@ -151,7 +154,9 @@ async def prepare_legacy_review(ctx):
         ctx.session, ctx.task, status="processing", message=f"{len(ctx.targets)}개 슬라이드를 렌더링하고 있습니다."
     )
     ctx.render_started_at = _service.time.perf_counter()
-    ctx.rendered = list(await _service.asyncio.gather(*(_service._render_review_html(html) for html in ctx.htmls)))
+    ctx.rendered = list(await _service.asyncio.gather(*(
+        _service._render_review_html(html, canvas=ctx.canvas) for html in ctx.htmls
+    )))
     ctx.pngs = [png for png, _metrics in ctx.rendered]
     ctx.browser_metrics = [metrics for _png, metrics in ctx.rendered]
     ctx.render_ms = (_service.time.perf_counter() - ctx.render_started_at) * 1000

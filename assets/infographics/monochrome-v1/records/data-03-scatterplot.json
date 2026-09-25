@@ -1,0 +1,54 @@
+{
+  "id": "data-03-scatterplot",
+  "category": "data",
+  "tags": {
+    "ko": [
+      "데이터",
+      "산점도"
+    ],
+    "en": [
+      "data",
+      "scatterplot"
+    ]
+  },
+  "alt": {
+    "ko": "산점도 단색 벡터 인포그래픽",
+    "en": "scatterplot monochrome vector infographic"
+  },
+  "path": "originals/data-03-scatterplot.svg",
+  "thumbnail": "thumbnails/data-03-scatterplot.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 599,
+  "sha256": "9dc12ea1cd91db0814ddf246c5d32bb038f1e00c5b1aeba8d2c49f8de2801c77",
+  "geometry_sha256": "ba2416f3ab5a0c4375eaf03d61e1c5e274694f70e7cb0ec068a8127d97421afb",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 58002,
+    "preview_opaque_pixels": 6394,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ChartScatter"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

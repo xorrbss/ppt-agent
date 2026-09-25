@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:28px;width:980px}
+.eyebrow{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:6px;font-size:28px;line-height:35px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:3px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:126px;margin:0 64px;width:auto;height:522px}
+.project{font-size:18px;line-height:28px;font-weight:700;color:#66707A;margin-bottom:4px}
+.brand{font-size:18px;line-height:28px;font-weight:700;color:#1D1D1B;margin-bottom:20px}
+.main-grid{display:grid;grid-template-columns:820px 316px;gap:24px;height:388px}
+.arch-panel{position:relative;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:28px}
+.flow{display:grid;grid-template-columns:170px 24px 170px 24px 170px 24px 170px;align-items:center;margin-top:8px}
+.step{height:176px;background:#E0F3FF;border:1px solid #CCECFF;border-radius:12px;padding:20px 16px;display:flex;flex-direction:column;justify-content:space-between}
+.step-num{font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:24px;font-weight:700;color:#1B469C}
+.step-text{font-size:20px;line-height:30px;font-weight:700;color:#002060}
+.connector{height:2px;background:#00828E;position:relative}
+.connector span{position:absolute;width:8px;height:8px;background:#00828E;right:-1px;top:-3px}
+.side-panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:28px}
+.side-title{font-size:22px;line-height:32px;font-weight:700;color:#002060;margin-bottom:24px}
+.side-copy{font-size:18px;line-height:30px;color:#1D1D1B}
+.side-rule{height:1px;background:#E2E8F0;margin:24px 0}
+.side-emphasis{padding:16px;background:#EAF7F4;border-left:6px solid #08916E;border-radius:12px;font-size:18px;line-height:30px;font-weight:700;color:#164F43}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="104" class="header-band" style="height:104px" data-qid="q20-header-band" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q20-header-left" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="q20-eyebrow">전화영업 기본 구조</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="q20-title">전화영업 기본 구조</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q20-divider" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:126px" data-qid="q20-body" data-semantic-role="decoration">
+  <div class="project" data-semantic-role="supporting" data-qid="source-block-efaeb0d4e849116a" data-source-block-id="source-slide:21:text:3">3주차 PART 3 | 전화영업 기본 구조</div>
+  <div class="brand" data-semantic-role="supporting" data-qid="source-block-eb0997a27bd21e60" data-source-block-id="source-slide:21:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+
+  <div class="main-grid" data-qid="q20-main-grid" data-semantic-role="decoration">
+    <div class="arch-panel" data-qid="q20-architecture-card" data-semantic-role="decoration">
+      <div class="flow" data-qid="q20-flow" data-semantic-role="decoration">
+        <div class="step" data-qid="q20-step-1" data-semantic-role="decoration">
+          <div class="step-num" data-semantic-role="supporting" data-qid="q20-step-1-num">①</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-21bbb38a7f23f126" data-source-block-id="source-slide:21:text:6">인사</div>
+        </div>
+        <div class="connector" data-qid="q20-connector-1" data-semantic-role="decoration"><span data-qid="q20-node-1" data-semantic-role="decoration"></span></div>
+        <div class="step" data-qid="q20-step-2" data-semantic-role="decoration">
+          <div class="step-num" data-semantic-role="supporting" data-qid="q20-step-2-num">②</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-726cd0a9a2d2805e" data-source-block-id="source-slide:21:text:7">왜 연락했는지</div>
+        </div>
+        <div class="connector" data-qid="q20-connector-2" data-semantic-role="decoration"><span data-qid="q20-node-2" data-semantic-role="decoration"></span></div>
+        <div class="step" data-qid="q20-step-3" data-semantic-role="decoration">
+          <div class="step-num" data-semantic-role="supporting" data-qid="q20-step-3-num">③</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-7b397eaba27cf3c2" data-source-block-id="source-slide:21:text:8">어떤 도움을 줄 수 있는지</div>
+        </div>
+        <div class="connector" data-qid="q20-connector-3" data-semantic-role="decoration"><span data-qid="q20-node-3" data-semantic-role="decoration"></span></div>
+        <div class="step" data-qid="q20-step-4" data-semantic-role="decoration">
+          <div class="step-num" data-semantic-role="supporting" data-qid="q20-step-4-num">④</div>
+          <div class="step-text" data-semantic-role="body" data-qid="source-block-c6c2008b956970ee" data-source-block-id="source-slide:21:text:9">다음 행동 제안</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-panel" data-qid="q20-practice-card" data-semantic-role="decoration">
+      <div class="side-title" data-semantic-role="body" data-qid="source-block-2b8a18819565a17b" data-source-block-id="source-slide:21:text:12">연습 포인트</div>
+      <div class="side-copy" data-semantic-role="body" data-qid="source-block-2989314964721e2f" data-source-block-id="source-slide:21:text:13">길게 설명하지 않는다. ‘관심 있으면 자료/샘플을 보내드리겠다’는 다음 단계까지 연결하는 것이 목표.</div>
+      <div class="side-rule" data-qid="q20-side-rule" data-semantic-role="decoration"></div>
+      <div class="side-emphasis" data-semantic-role="body" data-qid="q20-practice-emphasis">다음 행동 제안</div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-58ae0a9cf5981154" data-source-block-id="source-slide:21:text:4">21</div>
+</body>
+</html>

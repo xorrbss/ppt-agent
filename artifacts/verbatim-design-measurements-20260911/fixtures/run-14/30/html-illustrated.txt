@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#08916E;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:20px;width:832px}
+.eyebrow{height:21px;font-size:15px;line-height:21px;font-weight:700;letter-spacing:.04em;color:#FFFFFF}
+.title{margin-top:6px;font-size:32px;line-height:38px;font-weight:700;color:#FFFFFF}
+.header-right{position:absolute;left:896px;top:20px;width:320px;text-align:right;font-size:15px;line-height:21px;color:#FFFFFF}
+.header-tag{position:absolute;right:0;top:0;width:276px;height:103px;padding:20px 64px 0 24px;background:#00140E;font-size:15px;line-height:21px;font-weight:700;color:#FFFFFF;text-align:right}
+.body-wrap{width:1152px;margin-left:64px;margin-top:24px}
+.claim-row{height:62px;display:flex;align-items:flex-start;justify-content:space-between}
+.claim{font-size:25px;line-height:36px;font-weight:700;color:#1D1D1B}
+.section-no{padding-top:5px;font-family:"IBM Plex Mono","Consolas",monospace;font-size:18px;line-height:24px;font-weight:700;color:#08916E}
+.content-grid{display:grid;grid-template-columns:704px 424px;gap:24px;height:418px}
+.resource-grid{display:grid;grid-template-columns:340px 340px;grid-template-rows:repeat(5,74px);gap:12px 24px}
+.card{height:74px;padding:16px 18px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;position:relative;display:flex;align-items:center;gap:16px}
+.card-index{display:flex;align-items:center;justify-content:center;flex:none;width:42px;height:32px;border-radius:12px;background:#00140E;color:#FFFFFF;font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:22px;font-weight:700}
+.card-title{font-size:18px;line-height:27px;font-weight:700;color:#08916E}
+.card-rule{width:100%;height:1px;margin-top:18px;background:#E2E8F0}
+.card-copy{margin-top:20px;font-size:18px;line-height:30px;font-weight:500;color:#1D1D1B}
+.image-panel{height:418px;padding:12px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.image-panel img{display:block;width:398px;height:236px;border-radius:12px;object-fit:cover;background:#E0F3FF}
+.image-caption{margin-top:20px;padding:18px 18px;background:#EAF7F4;border-radius:12px;border-left:6px solid #08916E;font-size:18px;line-height:30px;font-weight:700;color:#1D1D1B}
+.image-caption strong{color:#08916E}
+.image-label{font-size:15px;line-height:21px;font-weight:700;letter-spacing:.04em;color:#08916E}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="103" class="header-band" style="height:103px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-qid="q-div-16db2223612a" data-semantic-role="supporting">보너스 자료</div>
+    <div data-header-part="title" class="title" data-qid="source-block-710a8a51d9d348e4" data-semantic-role="title" data-source-block-id="source-slide:31:text:3">꿀벌쌤 보너스 자료</div>
+  </div>
+  <div data-header-part="right" class="header-right" data-qid="q-div-73774db28fba" data-semantic-role="supporting"></div>
+  <div class="header-tag" data-qid="source-block-0c7c9fd2a1601fb1" data-semantic-role="body" data-source-block-id="source-slide:31:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:24px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="claim-row" data-qid="q-div-75b3498fbbe1" data-semantic-role="decoration">
+    <div class="claim" data-qid="source-block-ea971747b7377c6d" data-semantic-role="body" data-source-block-id="source-slide:31:text:4">수업 시간을 줄이고 실행력을 높이기 위해 자료로 제공합니다.</div>
+    <div class="section-no" data-qid="source-block-c00adf51311ddb71" data-semantic-role="supporting" data-source-block-id="source-slide:31:text:5">31</div>
+  </div>
+
+  <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+    <div class="resource-grid" data-qid="q-div-a9953d99ec2c" data-semantic-role="decoration">
+      <div class="card" data-qid="q-card-30-01" data-semantic-role="decoration">
+        <div class="card-index" data-qid="q-div-ab15ef87708b" data-semantic-role="supporting">01</div>
+        <div class="card-title" data-qid="source-block-8737ff24faecf23e" data-semantic-role="body" data-source-block-id="source-slide:31:text:7:run:0">캡컷 기능 가이드</div>
+      </div>
+      <div class="card" data-qid="q-card-30-02" data-semantic-role="decoration">
+        <div class="card-index" data-qid="q-div-15c2b691c902" data-semantic-role="supporting">02</div>
+        <div class="card-title" data-qid="source-block-ec5d4362aba6c6c7" data-semantic-role="body" data-source-block-id="source-slide:31:text:7:run:1">스냅챗 활용법 / 얼굴 노출 최소화</div>
+      </div>
+      <div class="card" data-qid="q-card-30-03" data-semantic-role="decoration">
+        <div class="card-index" data-qid="q-div-9e1339df48c4" data-semantic-role="supporting">03</div>
+        <div class="card-title" data-qid="source-block-8f5ae1e787adc57c" data-semantic-role="body" data-source-block-id="source-slide:31:text:7:run:2">후킹 문구 모음</div>
+      </div>
+      <div class="card" data-qid="q-card-30-04" data-semantic-role="decoration">
+        <div class="card-index" data-qid="q-div-03e08d65197b" data-semantic-role="supporting">04</div>
+        <div class="card-title" data-qid="source-block-1d90576feb5e8d3a" data-semantic-role="body" data-source-block-id="source-slide:31:text:7:run:3">업종별 콘텐츠 아이디어</div>
+      </div>
+      <div class="card" data-qid="q-card-30-05" data-semantic-role="decoration">
+        <div class="card-index" data-qid="q-div-23b65c543569" data-semantic-role="supporting">05</div>
+        <div class="card-title" data-qid="source-block-d8ac18b512e9deaa" data-semantic-role="body" data-source-block-id="source-slide:31:text:7:run:4">전화영업 대본</div>
+      </div>
+      <div class="card" data-qid="q-card-30-06" data-semantic-role="decoration">
+        <div class="card-index" data-qid="q-div-1ee1f5c67099" data-semantic-role="supporting">06</div>
+        <div class="card-title" data-qid="source-block-fc50df3ac60dd868" data-semantic-role="body" data-source-block-id="source-slide:31:text:7:run:5">DM / 문자 / 카카오톡 문구</div>
+      </div>
+      <div class="card" data-qid="q-card-30-07" data-semantic-role="decoration">
+        <div class="card-index" data-qid="q-div-fa7014c83caf" data-semantic-role="supporting">07</div>
+        <div class="card-title" data-qid="source-block-3d2443e3709f1189" data-semantic-role="body" data-source-block-id="source-slide:31:text:7:run:6">당근마켓 활용 가이드</div>
+      </div>
+      <div class="card" data-qid="q-card-30-08" data-semantic-role="decoration">
+        <div class="card-index" data-qid="q-div-b76147d9bb13" data-semantic-role="supporting">08</div>
+        <div class="card-title" data-qid="source-block-98505e3c70c033c9" data-semantic-role="body" data-source-block-id="source-slide:31:text:7:run:7">제안서 · 견적서 템플릿</div>
+      </div>
+      <div class="card" data-qid="q-card-30-09" data-semantic-role="decoration">
+        <div class="card-index" data-qid="q-div-28e9f682ba61" data-semantic-role="supporting">09</div>
+        <div class="card-title" data-qid="source-block-0d5d0993f6c36c2d" data-semantic-role="body" data-source-block-id="source-slide:31:text:7:run:8">촬영 가이드</div>
+      </div>
+      <div class="card" data-qid="q-card-30-10" data-semantic-role="decoration">
+        <div class="card-index" data-qid="q-div-c5461eb55821" data-semantic-role="supporting">10</div>
+        <div class="card-title" data-qid="source-block-0121b45b05c9d241" data-semantic-role="body" data-source-block-id="source-slide:31:text:7:run:9">콘텐츠 기획표</div>
+      </div>
+    </div>
+
+    <div class="image-panel" data-qid="q-div-5e0d969fd99d" data-semantic-role="decoration">
+      
+      <div class="image-caption" data-qid="q-caption-30" data-semantic-role="supporting">
+        <div class="image-label" data-qid="q-div-dafa87a5c64d" data-semantic-role="supporting">실행 자료 묶음</div>
+        <div data-qid="q-div-54fdca616fb4" data-semantic-role="body">반복 작업은 가이드로 줄이고, 바로 활용할 수 있는 <strong data-qid="q-strong-663977331dde" data-semantic-role="body">실전 템플릿</strong>으로 실행 속도를 높입니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="q-page-30">31</div>
+</body>
+</html>

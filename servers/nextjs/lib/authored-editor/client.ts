@@ -161,7 +161,8 @@ export class AuthoredEditorApi {
       );
     }
     if (!response.ok) throw new Error(errorCode(payload));
-    return payload as AuthoredCanonicalDocument;
+    if (!isRecord(rawPayload)) throw new Error("authored_canonical_invalid_response");
+    return rawPayload as AuthoredCanonicalDocument;
   }
 }
 

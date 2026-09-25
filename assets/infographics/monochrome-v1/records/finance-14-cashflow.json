@@ -1,0 +1,55 @@
+{
+  "id": "finance-14-cashflow",
+  "category": "finance",
+  "tags": {
+    "ko": [
+      "금융",
+      "현금흐름"
+    ],
+    "en": [
+      "finance",
+      "cashflow"
+    ]
+  },
+  "alt": {
+    "ko": "현금흐름 단색 벡터 인포그래픽",
+    "en": "cashflow monochrome vector infographic"
+  },
+  "path": "originals/finance-14-cashflow.svg",
+  "thumbnail": "thumbnails/finance-14-cashflow.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 755,
+  "sha256": "3937561d2b448f4514f42e6c2c2cc34faf1c8c0bdec836a2a720f6cbd8745e33",
+  "geometry_sha256": "95e5159958e40cad51a5b880bc13fa1e38ecc6e30e8ae7f07279830e18f98c45",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57771,
+    "preview_opaque_pixels": 5955,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Waves",
+      "Coins"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

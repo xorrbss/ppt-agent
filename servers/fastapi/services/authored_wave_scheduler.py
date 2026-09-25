@@ -41,6 +41,7 @@ from utils.get_env_programme import (
     is_authored_prompt_cache_warmup_enabled,
     is_authored_wave_barrier_disabled,
 )
+from utils.provider_idempotency import ProviderQuotaPause
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,7 @@ class AuthoredWaveSchedule:
         self.policy = policy
         self.cooldown_wait_seconds = 0.0
         self._clock = clock
+        self._cooldown_lock = asyncio.Lock()
         # Resolved at call time, not bound here: a default argument would
         # capture the ``asyncio.sleep`` that existed when this module was
         # imported, so a caller (or a test) that replaces it later would be
@@ -82,28 +84,33 @@ class AuthoredWaveSchedule:
         ordinary cancellable ``sleep``.
         """
 
-        now = self._clock()
-        remaining = self.policy.cooldown_remaining(now)
-        if remaining <= 0.0:
-            return 0.0
-        if self._deadline is not None:
-            remaining = min(remaining, max(0.0, self._deadline - now))
-        if remaining <= 0.0:
-            return 0.0
-        logger.info(
-            "authored_batch_cooldown_wait admission=%s seconds=%.1f",
-            label,
-            remaining,
-        )
-        await (self._sleep or asyncio.sleep)(remaining)
-        self.cooldown_wait_seconds += remaining
-        return remaining
+        waited = 0.0
+        async with self._cooldown_lock:
+            while True:
+                now = self._clock()
+                remaining = self.policy.cooldown_remaining(now)
+                if self._deadline is not None:
+                    remaining = min(remaining, max(0.0, self._deadline - now))
+                if remaining <= 0.0:
+                    return waited
+                logger.info(
+                    "authored_batch_cooldown_wait admission=%s seconds=%.1f",
+                    label,
+                    remaining,
+                )
+                await (self._sleep or asyncio.sleep)(remaining)
+                self.cooldown_wait_seconds += remaining
+                waited += remaining
+                # Test/no-op sleepers may deliberately leave the clock fixed.
+                if self._clock() <= now:
+                    return waited
 
     def advance(self, outcome: Any, *, succeeded: bool) -> None:
         self.policy = advance_authored_batch_policy(
             self.policy,
             succeeded=succeeded,
             error=outcome if isinstance(outcome, BaseException) else None,
+            now=self._clock(),
         )
 
 
@@ -198,6 +205,8 @@ async def _run_waves(
         )
         consumed: set[int] = set()
         for batch, outcome in zip(wave.batches, outcomes, strict=True):
+            if isinstance(outcome, ProviderQuotaPause):
+                raise outcome
             consumed.update(batch.slide_indices)
             schedule.advance(
                 outcome, succeeded=record(batch.slide_indices, outcome)
@@ -221,26 +230,37 @@ async def _run_admission(
     position = 0
     admitted = 0
     inflight: dict[asyncio.Task, tuple[int, ...]] = {}
-    while position < len(queue) or inflight:
-        # The width is re-read here, not captured: an overload that halved the
-        # cap between two admissions narrows the scheduler immediately, and a
-        # restored cap widens it again without rebuilding anything.
-        while position < len(queue) and len(inflight) < schedule.policy.concurrency:
-            admitted += 1
-            await schedule.wait_out_cooldown(f"admission-{admitted}")
-            batch = queue[position]
-            position += 1
-            inflight[asyncio.ensure_future(run_batch(batch))] = batch
-        # ``concurrency`` never falls below 1, so a pending queue always admits
-        # at least one call above and this wait can never spin on an empty set.
-        done, _ = await asyncio.wait(
-            set(inflight), return_when=asyncio.FIRST_COMPLETED
-        )
-        for task in done:
-            batch = inflight.pop(task)
-            error = task.exception()
-            outcome = error if error is not None else task.result()
-            schedule.advance(outcome, succeeded=record(batch, outcome))
+    try:
+        while position < len(queue) or inflight:
+            # The width is re-read here, not captured: an overload that halved the
+            # cap between two admissions narrows the scheduler immediately, and a
+            # restored cap widens it again without rebuilding anything.
+            while position < len(queue) and len(inflight) < schedule.policy.concurrency:
+                admitted += 1
+                await schedule.wait_out_cooldown(f"admission-{admitted}")
+                batch = queue[position]
+                position += 1
+                inflight[asyncio.ensure_future(run_batch(batch))] = batch
+            # ``concurrency`` never falls below 1, so a pending queue always admits
+            # at least one call above and this wait can never spin on an empty set.
+            done, _ = await asyncio.wait(
+                set(inflight), return_when=asyncio.FIRST_COMPLETED
+            )
+            for task in done:
+                batch = inflight.pop(task)
+                error = task.exception()
+                if isinstance(error, ProviderQuotaPause):
+                    raise error
+                outcome = error if error is not None else task.result()
+                schedule.advance(outcome, succeeded=record(batch, outcome))
+    finally:
+        # The streamed render tail can fail while later author calls are in
+        # flight. Reap those child tasks before the author pass returns so each
+        # provider admission can settle its durable reservation as cancelled.
+        for task in inflight:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*inflight, return_exceptions=True)
 
 
 __all__ = [

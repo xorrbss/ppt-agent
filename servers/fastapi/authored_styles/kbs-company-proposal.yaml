@@ -1,0 +1,59 @@
+id: kbs-company-proposal
+name: KBS 제안사 일반
+description: KBS 통합재난방송 제안서 양식의 네이비·블루 제목, 청록 구분선, 표·조직도·수행실적 중심 디자인입니다. 화면 비율에서 세로 9:13을 선택하면 원본과 같은 비율로 생성합니다.
+category: business
+tags: [KBS, 제안서, 제안사 일반, 회사 소개, 공공사업, 세로 원본]
+use_cases: [제안사 일반 현황, 조직 및 인력, 사업 소개, 수행실적, 공공사업 제안서]
+preview:
+  bg: '#FFFFFF'
+  accent: '#002060'
+  palette: ['#FFFFFF', '#002060', '#4472C4', '#00B0F0', '#FF8000', '#333333']
+  variant: business-proposal
+  image: kbs-company-proposal/slide-01.png
+design_tokens:
+  primary: '#002060'
+  background: '#FFFFFF'
+  heading_font: 나눔바른고딕
+  body_font: 나눔바른고딕
+reference_images:
+  cover: [kbs-company-proposal/slide-01.png]
+  section: [kbs-company-proposal/slide-01.png]
+  agenda: [kbs-company-proposal/slide-01.png, kbs-company-proposal/slide-10.png]
+  content: [kbs-company-proposal/slide-07.png, kbs-company-proposal/slide-08.png]
+  data: [kbs-company-proposal/slide-05.png, kbs-company-proposal/slide-11.png]
+  architecture: [kbs-company-proposal/slide-06.png, kbs-company-proposal/slide-09.png]
+  timeline: [kbs-company-proposal/slide-02.png, kbs-company-proposal/slide-03.png]
+  closing: [kbs-company-proposal/slide-04.png, kbs-company-proposal/slide-12.png]
+brief: |-
+  MOOD
+  Follow the supplied Korean public-sector proposal reference: formal, compact, evidence-led and highly structured. The twelve inspected source pages cover a chapter opener, company profile/history, patents/certifications, financial data, organization/staff, business capabilities, platforms, service processes and project references. Reuse their visual grammar, never their company claims, employee counts, financial numbers or client history as new content.
+
+  CANVAS AND SOURCE
+  The reference is portrait 7.5 by 10.8333 inches, approximately 9:13. Follow the actual runtime canvas contract. On a landscape canvas, move vertically stacked evidence into two balanced columns instead of stretching the source image or leaving a portrait page floating on a wide background. Reference images are design evidence, not full-slide raster backgrounds. Preserve the hierarchy and frame while adapting the composition to the selected canvas.
+
+  PALETTE
+  Use white as the dominant background, dark navy #002060 for chapter framing, medium blue #4472C4 for table headers and organization boxes, cyan #00B0F0 for fine edge rules, and charcoal #333333 for text. Reserve orange #FF8000 and small red marks for sparse, meaningful emphasis. Keep large content fields white or very pale gray; avoid dark dashboard surfaces and decorative gradients on body pages.
+
+  TYPOGRAPHY
+  Use NanumBarunGothic (나눔바른고딕) for Korean titles and body text with Noto Sans KR and Malgun Gothic fallbacks. The source uses bold compact section headings and quiet gray subtitles; retain that hierarchy. Use the runtime readability floor and reflow tables rather than copying the source's tiny dense text literally. Align numeric columns consistently and preserve all supplied units, dates and sources.
+
+  PAGE FRAME
+  Body pages have a thin cyan top and bottom rule, a short dark segment at the upper left and lower right, an optional small chapter label at the upper right, a stable upper-left title, and a quiet footer/page-number zone. The chapter opener uses a deep navy surrounding field with a large white inset panel, a bold chapter title, a thin blue divider and an aligned agenda below. Keep the central content area unobstructed. Only reproduce logos, client names, chapter labels and page numbers when supplied or explicitly requested for the generated document; KBS and iBiZ marks in reference images are not default branding for unrelated users.
+
+  SIGNATURE ELEMENTS
+  Use a small blue capsule labelled Key Message above a pale-gray summary panel when the content includes a summary. Use a small blue triangular bullet for subsection labels. Keep blue table header rows, fine gray cell borders, pale blue subheaders, occasional orange numbered service steps and restrained blue rounded organization nodes. Do not require a summary panel on every slide.
+
+  LAYOUT ARCHETYPES
+  Chapter/agenda: navy frame, white inset, left-aligned title and orderly topic list (page 1).
+  Company profile/history: compact key-value table followed by chronological columns (page 2).
+  Patents and certification: upper evidence table or summary with lower document-thumbnail panels; use only supplied certificates and dates (pages 3-4).
+  Finance: wide aligned financial table with smaller chart and credit-rating evidence below; only supplied figures and ratings (page 5).
+  Organization: hierarchy of blue nodes with clear connectors and a staffing table beneath; no invented people or reporting relationships (page 6).
+  Capabilities: three comparable vertical columns with blue/gray structure and a small supported advantage heading (page 7).
+  Platform: a central ecosystem diagram with direct labels and a short evidence strip below (page 8).
+  Services: numbered service descriptions followed by a compact architecture block diagram (page 9).
+  Technical capability: supplied technology marks arranged above a two-by-two capability grid; use plain labels when marks are unavailable (page 10).
+  Project references: a blue-header table with consistent client, period, value and scope columns; a second variant adds supplied screenshots above the table (pages 11-12).
+
+  EVIDENCE AND AVOID
+  Source analysis observed explicit fonts and colors with high confidence and coarse composition with medium confidence. The automated extractor could not infer repeated coarse layouts; the common frame and archetypes above were inspected visually across all twelve rendered source slides. Do not treat heuristic fallback colors from the draft as source facts. Avoid copying source business facts, inserting unrelated logos, fabricating certification imagery, converting every page into rounded cards, stretching screenshots, or flattening editable text and tables into a background image.

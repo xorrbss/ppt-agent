@@ -180,6 +180,7 @@ export async function fetchPersistedPresentationProjectionForExport(
     try {
       const headers: Record<string, string> = {
         Accept: "application/json",
+        "X-Document-Canvas-Contracts": "document-canvas/v1",
         ...options.authHeaders,
       };
       if (options.cookieHeader?.trim()) {

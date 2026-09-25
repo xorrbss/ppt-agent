@@ -7,4 +7,5 @@ export interface LoadingState {
   progress?: number;
   progressLabel?: string;
   extra_info?: string;
+  awaitingReceipt?: boolean;
 }

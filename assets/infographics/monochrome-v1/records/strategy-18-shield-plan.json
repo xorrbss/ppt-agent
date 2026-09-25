@@ -1,0 +1,56 @@
+{
+  "id": "strategy-18-shield-plan",
+  "category": "strategy",
+  "tags": {
+    "ko": [
+      "전략",
+      "위험대응"
+    ],
+    "en": [
+      "strategy",
+      "shield",
+      "plan"
+    ]
+  },
+  "alt": {
+    "ko": "위험대응 단색 벡터 인포그래픽",
+    "en": "shield plan monochrome vector infographic"
+  },
+  "path": "originals/strategy-18-shield-plan.svg",
+  "thumbnail": "thumbnails/strategy-18-shield-plan.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 632,
+  "sha256": "cc207759a75fba2820d37521b1001b255e936fa0cfc2eae71b001ff8b46de855",
+  "geometry_sha256": "6d23f09baaa0c41dd41e5ff35c2974e2151e8c169e57ed7b587c1d78257b9ab7",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 58636,
+    "preview_opaque_pixels": 5370,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ShieldCheck",
+      "ListChecks"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

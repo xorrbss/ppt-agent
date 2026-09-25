@@ -1,0 +1,302 @@
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/converter.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/converter.py
+index 1a969d478..7070dbcd9 100644
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/converter.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/converter.py
+@@ -27,6 +27,7 @@ from pptx_to_svg.preset_authoring import (
+ from resource_paths import icon_search_dirs_for_svg
+ 
+ from .context import ConvertContext, ShapeResult
++from ..conversion_context import current_conversion_context
+ from .theme_colors import ThemeColorSpec
+ from .theme_fonts import ThemeFontSpec
+ from .utils import (
+@@ -512,8 +513,8 @@ def convert_g(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
+     off_y = group_y
+     if rotate_pivot is not None and angle_deg:
+         cx_svg, cy_svg = rotate_pivot
+-        pivot_ex = (cx_svg + ctx.translate_x) * EMU_PER_PX
+-        pivot_ey = (cy_svg + ctx.translate_y) * EMU_PER_PX
++        pivot_ex = (cx_svg + ctx.translate_x) * current_conversion_context().emu_per_unit
++        pivot_ey = (cy_svg + ctx.translate_y) * current_conversion_context().emu_per_unit
+         bbox_cx = group_x + group_w / 2
+         bbox_cy = group_y + group_h / 2
+         theta = math.radians(angle_deg)
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/elements.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/elements.py
+index a6a94801a..7a4255352 100644
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/elements.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/elements.py
+@@ -12,6 +12,7 @@ from pathlib import Path
+ from typing import Any
+ from urllib.parse import unquote_to_bytes
+ from xml.etree import ElementTree as ET
++from ..conversion_context import current_conversion_context
+ 
+ from pptx_shapes import (
+     CONNECTOR_PRESET_TYPES,
+@@ -1702,7 +1703,7 @@ def _letter_spacing_to_drawingml_spc(letter_spacing_px: float) -> str:
+     """Convert SVG px letter spacing into DrawingML rPr@spc."""
+     if abs(letter_spacing_px) < 1e-9:
+         return ''
+-    spc_val = round(letter_spacing_px * FONT_PX_TO_HUNDREDTHS_PT)
++    spc_val = round(letter_spacing_px * current_conversion_context().hundredths_pt_per_unit)
+     return f' spc="{spc_val}"'
+ 
+ 
+@@ -2432,13 +2433,13 @@ def convert_text(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
+ 
+     if paragraph_runs is not None:
+         # SVG dy(px) -> hundredths-of-a-point: dy_pt = dy_px * 0.75, then x100.
+-        line_spc_val = round(line_height_px * FONT_PX_TO_HUNDREDTHS_PT)
++        line_spc_val = round(line_height_px * current_conversion_context().hundredths_pt_per_unit)
+         ln_spc_xml = f'<a:lnSpc><a:spcPts val="{line_spc_val}"/></a:lnSpc>'
+         paragraph_xml_chunks = []
+         for line, extra_px, bullet in zip(paragraph_runs, paragraph_space_before, paragraph_bullets):
+             spc_bef_xml = ''
+             if extra_px > 0:
+-                spc_bef_val = round(extra_px * FONT_PX_TO_HUNDREDTHS_PT)
++                spc_bef_val = round(extra_px * current_conversion_context().hundredths_pt_per_unit)
+                 spc_bef_xml = f'<a:spcBef><a:spcPts val="{spc_bef_val}"/></a:spcBef>'
+             runs_inner = '\n'.join(_build_run_xml(r, fonts, ctx, text_effect_xml) for r in line)
+             p_pr_xml = _paragraph_pr_xml(
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/theme_fonts.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/theme_fonts.py
+index 6ec97880d..abe041b15 100644
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/theme_fonts.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/theme_fonts.py
+@@ -9,6 +9,7 @@ from pathlib import Path
+ from xml.etree import ElementTree as ET
+ 
+ from .utils import FONT_PX_TO_HUNDREDTHS_PT, font_px_to_hpt, parse_font_family
++from ..conversion_context import current_conversion_context
+ 
+ 
+ DML_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
+@@ -110,7 +111,7 @@ def _font_size_hpt(raw: str, field: str) -> int:
+         raise ThemeFontError(
+             f"spec_lock.md typography {field} must be a numeric px value: {raw!r}"
+         ) from exc
+-    scaled = px * FONT_PX_TO_HUNDREDTHS_PT
++    scaled = px * current_conversion_context().hundredths_pt_per_unit
+     if not math.isfinite(scaled):
+         raise ThemeFontError(
+             f"spec_lock.md typography {field} must be finite: {raw!r}"
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/utils.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/utils.py
+index d36c981c8..58769007f 100644
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/utils.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/utils.py
+@@ -10,6 +10,7 @@ from xml.etree import ElementTree as ET
+ from pptx_shapes import validate_ooxml_xfrm
+ 
+ from .context import AffineMatrix, ConvertContext, IDENTITY_MATRIX
++from ..conversion_context import current_conversion_context
+ 
+ # ---------------------------------------------------------------------------
+ # Constants
+@@ -154,12 +155,15 @@ DASH_PRESETS = {
+ 
+ def px_to_emu(px: float) -> int:
+     """Convert SVG pixels to EMU."""
+-    return round(px * EMU_PER_PX)
++    return round(px * current_conversion_context().emu_per_unit)
+ 
+ 
+ def font_px_to_hpt(font_size_px: float) -> int:
+     """Convert SVG px to DrawingML hundredths-of-a-point at 0.1pt precision."""
+-    return int(round(font_size_px * FONT_PX_TO_HUNDREDTHS_PT / 10.0)) * 10
++    context = current_conversion_context()
++    value = font_size_px * context.hundredths_pt_per_unit
++    # Preserve upstream legacy rounding; the new contract uses OOXML's 0.01pt grid.
++    return int(round(value / 10.0)) * 10 if context.legacy else round(value)
+ 
+ 
+ def _f(val: str | None, default: float = 0.0) -> float:
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/marker_common.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/marker_common.py
+index aae32d004..ca5f65407 100644
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/marker_common.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/marker_common.py
+@@ -10,6 +10,7 @@ from typing import Any
+ from xml.etree import ElementTree as ET
+ 
+ from ..drawingml.context import ConvertContext, IDENTITY_MATRIX
++from ..conversion_context import current_conversion_context
+ from ..drawingml.utils import (
+     EMU_PER_PX,
+     FONT_PX_TO_HUNDREDTHS_PT,
+@@ -224,7 +225,7 @@ def _powerpoint_emu_value(
+ def _powerpoint_emu(value: Any, field_name: str, *, positive: bool = False) -> int:
+     """Convert SVG px to an EMU value that PowerPoint can represent."""
+     number = _number(value, field_name)
+-    scaled = number * EMU_PER_PX
++    scaled = number * current_conversion_context().emu_per_unit
+     if not math.isfinite(scaled):
+         raise RuntimeError(f"Native PPTX object {field_name} exceeds PowerPoint coordinates")
+     return _powerpoint_emu_value(round(scaled), field_name, positive=positive)
+@@ -820,7 +821,7 @@ def _font_size_hpt(value: Any, default_px: int = 18) -> int:
+             px = float(raw)
+         except (TypeError, ValueError, OverflowError):
+             return None
+-        scaled = px * FONT_PX_TO_HUNDREDTHS_PT
++        scaled = px * current_conversion_context().hundredths_pt_per_unit
+         if not math.isfinite(scaled):
+             return None
+         size = font_px_to_hpt(px)
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/pptx_package/builder.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/pptx_package/builder.py
+index 62dbabe2a..b885173d0 100644
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/pptx_package/builder.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/pptx_package/builder.py
+@@ -60,6 +60,7 @@ from ..drawingml.theme_fonts import (
+     apply_theme_font_spec,
+ )
+ from ..drawingml.utils import EMU_PER_PX
++from ..conversion_context import ConversionContext, current_conversion_context, scoped_conversion_context
+ from ..semantic_markers import (
+     chrome_token_from_markers,
+     page_layout_name_from_svg,
+@@ -1936,7 +1937,7 @@ def _shape_bounds_emu(
+     if override_px is not None:
+         x, y, width, height = override_px
+         return tuple(
+-            round(value * EMU_PER_PX)
++            round(value * current_conversion_context().emu_per_unit)
+             for value in (x, y, width, height)
+         )
+ 
+@@ -3842,6 +3843,7 @@ def _clear_preserved_slide_collections(extract_dir: Path) -> None:
+     _write_xml_tree(presentation_path, tree)
+ 
+ 
++@scoped_conversion_context
+ def create_pptx_with_native_svg(
+     svg_files: list[Path],
+     output_path: Path,
+@@ -3881,6 +3883,7 @@ def create_pptx_with_native_svg(
+     theme_color_spec: ThemeColorSpec | None = None,
+     structured_baseline: bool = False,
+     baseline_layout_specs: list[TemplateSlideSpec] | None = None,
++    conversion_context: ConversionContext | None = None,
+ ) -> bool:
+     """Create a PPTX file with native DrawingML shapes.
+ 
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/pptx_package/dimensions.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/pptx_package/dimensions.py
+index cb82e0409..d85a3371a 100644
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/pptx_package/dimensions.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/pptx_package/dimensions.py
+@@ -6,6 +6,7 @@ import re
+ import sys
+ from pathlib import Path
+ from xml.etree import ElementTree as ET
++from ..conversion_context import current_conversion_context
+ 
+ # Import project utility modules
+ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+@@ -64,6 +65,11 @@ def get_slide_dimensions(
+         else:
+             width_px, height_px = 1280, 720
+ 
++    context = current_conversion_context()
++    if not context.legacy:
++        if (width_px, height_px) != (context.width_units, context.height_units):
++            raise ValueError("svg_conversion_context_canvas_mismatch")
++        return context.width_emu, context.height_emu
+     return int(width_px * EMU_PER_PIXEL), int(height_px * EMU_PER_PIXEL)
+ 
+ 
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/pptx_package/template_validation.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/pptx_package/template_validation.py
+index f7499ac31..521718d6b 100644
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/pptx_package/template_validation.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/pptx_package/template_validation.py
+@@ -36,6 +36,7 @@ if __name__ == "__main__":
+     raise SystemExit(1)
+ 
+ from ..drawingml.utils import EMU_PER_PX
++from ..conversion_context import current_conversion_context
+ from .template_structure import (
+     OOXML_UINT32_MAX,
+     TemplatePlaceholderBinding,
+@@ -1145,7 +1146,7 @@ def validate_pptx_template_package(
+                     )
+                     if binding.element.placeholder_bounds is not None:
+                         expected_bounds = tuple(
+-                            round(value * EMU_PER_PX)
++                            round(value * current_conversion_context().emu_per_unit)
+                             for value in binding.element.placeholder_bounds
+                         )
+                     elif prototype_placeholder is not None:
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/conversion_context.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/conversion_context.py
+new file mode 100644
+--- /dev/null
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/conversion_context.py
+@@ -0,0 +1,74 @@
++"""Immutable, invocation-local physical units for native serialization.
++
++The ContextVar is task/thread local, never a mutable process-wide scale. The
++public converter scopes and resets it, including failures and nested calls.
++Nonlegacy calls are deliberately serial until child propagation is supported.
++"""
++from __future__ import annotations
++
++from contextvars import ContextVar
++from dataclasses import dataclass
++from functools import wraps
++from inspect import signature
++
++
++@dataclass(frozen=True)
++class ConversionContext:
++    width_units: int = 1280
++    height_units: int = 720
++    width_emu: int = 12192000
++    height_emu: int = 6858000
++    legacy: bool = True
++
++    def __post_init__(self):
++        values = (self.width_units, self.height_units, self.width_emu, self.height_emu)
++        if any(type(value) is not int or value <= 0 for value in values):
++            raise ValueError("svg_conversion_context_invalid")
++        aspect_error = abs(
++            self.width_emu * self.height_units - self.height_emu * self.width_units
++        )
++        if aspect_error and (self.legacy or aspect_error * 2 > self.width_emu):
++            raise ValueError("svg_conversion_context_nonuniform")
++        if self.legacy and self.width_emu != self.width_units * 9525:
++            raise ValueError("svg_conversion_context_legacy_scale")
++
++    @property
++    def emu_per_unit(self) -> float:
++        return self.width_emu / self.width_units
++
++    @property
++    def hundredths_pt_per_unit(self) -> float:
++        return self.emu_per_unit / 127
++
++
++_ACTIVE_CONTEXT: ContextVar[ConversionContext] = ContextVar(
++    "slide_master_conversion_context", default=ConversionContext()
++)
++
++
++def current_conversion_context() -> ConversionContext:
++    return _ACTIVE_CONTEXT.get()
++
++
++def scoped_conversion_context(function):
++    call_signature = signature(function)
++
++    @wraps(function)
++    def call(*args, **kwargs):
++        bound = call_signature.bind(*args, **kwargs)
++        context = bound.arguments.get("conversion_context") or ConversionContext()
++        if not isinstance(context, ConversionContext):
++            raise ValueError("svg_conversion_context_invalid")
++        if not context.legacy:
++            if bound.arguments.get("workers") not in (None, 1):
++                raise ValueError("svg_conversion_context_parallel_unsupported")
++            bound.arguments["workers"] = 1
++            if bound.arguments.get("pptx_structure", "structured") != "flat":
++                raise ValueError("svg_conversion_context_structure_unsupported")
++        token = _ACTIVE_CONTEXT.set(context)
++        try:
++            return function(*bound.args, **bound.kwargs)
++        finally:
++            _ACTIVE_CONTEXT.reset(token)
++
++    return call

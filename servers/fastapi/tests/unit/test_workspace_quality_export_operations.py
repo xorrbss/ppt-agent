@@ -33,6 +33,11 @@ from models.sql.workspace import (
 )
 from models.workspace import WorkspaceCommandRequest
 from services import workspace_artifact_publication_service as publication
+from services.authored_quality_receipt_v2 import (
+    QualityReceiptLedger,
+    create_quality_receipt_v2,
+)
+from services.public_export_operation import PublicExportOperationError
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     WorkspaceOperationClaim,
@@ -73,6 +78,66 @@ TABLES = [
     PublicOperationAdmission.__table__,
     AsyncPresentationGenerationTaskModel.__table__,
 ]
+
+
+def _published_flagged_hybrid_theme(
+    *, blockers: list[str] | None = None
+) -> dict[str, object]:
+    receipt_v2 = create_quality_receipt_v2(
+        QualityReceiptLedger(),
+        attempt_id="published-flagged-hybrid",
+        revision=1,
+        ledger_digest="sha256:" + "a" * 64,
+        deck_html_digest="sha256:" + "b" * 64,
+        evidence={
+            "safety": {"status": "passed", "residuals": []},
+            "capacity": {
+                "browserObserved": True,
+                "checks": {
+                    name: True
+                    for name in ("text", "title", "body", "font", "qid", "image")
+                },
+            },
+            "sourceReadback": {"required": False, "status": "not_applicable"},
+        },
+    )
+    gate = {
+        **receipt_v2.to_dict(),
+        "documentStatus": "completed",
+        "documentCompleted": True,
+        "slideCount": 1,
+        "flaggedSlides": [
+            {"index": 0, "remakeOutcome": "verbatim_flag_only"}
+        ],
+    }
+    sealed = {
+        "schemaVersion": "quality-receipt/v3",
+        "attemptId": "published-flagged-hybrid",
+        "revision": 1,
+        "sequence": 0,
+        "eventType": "evaluation",
+        "evidenceDigest": "sha256:" + "1" * 64,
+        "capabilityRegistryDigest": "sha256:" + "2" * 64,
+        "capabilityConsumerStatuses": {"chromium": "passed"},
+        "qualityTier": "T1",
+        "t1Triggers": ["slide:0:repair"],
+        "blockers": blockers
+        or ["providerCalls.slide_budget_invalid:0", "visualReview.failed"],
+        "gatePassed": False,
+        "previousSchemaVersion": "quality-receipt/v2",
+        "previousVersionReceiptDigest": receipt_v2.receipt_digest,
+        "previousReceiptDigest": None,
+    }
+    receipt_digest = "sha256:" + hashlib.sha256(
+        json.dumps(
+            sealed,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+    gate["qualityReceiptV3"] = {**sealed, "receiptDigest": receipt_digest}
+    return {"authoredQualityGate": gate}
 
 
 def test_release_review_receipt_is_evidence_and_revision_bound() -> None:
@@ -368,6 +433,15 @@ async def _seed_quality_operation(
         )
         session.add(presentation)
         await session.flush()
+        session.add(SlideModel(
+            presentation=presentation.id,
+            layout_group="authored",
+            layout="authored:content",
+            index=0,
+            content={"__authored__": True},
+            html_content="<html><body>Quality fixture</body></html>",
+            properties={},
+        ))
         conversation = WorkspaceConversation(presentation_id=presentation.id)
         session.add(conversation)
         await session.flush()
@@ -1448,6 +1522,60 @@ def test_export_publication_is_immutable_fenced_and_revision_neutral(
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize(
+    ("error_code", "expected_error"),
+    [
+        ("svg_source_export_format_unsupported", NonRetryableWorkspaceOperationError),
+        ("public_export_worker_failed", PublicExportOperationError),
+    ],
+)
+def test_svg_export_classifies_only_unsupported_format_as_nonretryable(
+    tmp_path: Path, monkeypatch, error_code: str, expected_error: type[Exception]
+) -> None:
+    async def scenario() -> None:
+        engine, maker = await _database(tmp_path / "svg-export-error.db")
+        try:
+            presentation_id, operation_id = await _seed_export(maker)
+            async with maker() as session, session.begin():
+                presentation = await session.get(PresentationModel, presentation_id)
+                presentation.mode = "svg"
+                operation = await session.get(WorkspaceOperation, operation_id)
+
+            async def fail_svg_export(*_args, **_kwargs):
+                raise PublicExportOperationError(error_code)
+
+            monkeypatch.setattr(
+                "services.svg_export_operation.execute_svg_workspace_export",
+                fail_svg_export,
+            )
+            claim = WorkspaceOperationClaim(
+                operation_id=operation_id,
+                owner_id=None,
+                owner_scope="anonymous",
+                conversation_id=operation.conversation_id,
+                presentation_id=presentation_id,
+                kind="export.pdf",
+                request_payload={},
+                expected_revision=7,
+                attempt_number=1,
+                attempt_token="attempt-1",
+                fencing_token=3,
+            )
+            context = SimpleNamespace(
+                claim=claim,
+                raise_if_cancelled=lambda: asyncio.sleep(0),
+            )
+            with pytest.raises(expected_error, match=error_code):
+                await WorkspaceExportOperationHandler(
+                    session_factory=maker,
+                    internal_header_provider=lambda: None,
+                ).execute(context)
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_export_attempt_and_artifact_terminalize_in_one_publication_commit(
     tmp_path: Path,
     monkeypatch,
@@ -1768,6 +1896,64 @@ def test_stale_export_publication_compensates_external_file(
             await engine.dispose()
 
     asyncio.run(scenario())
+
+
+def test_published_flagged_hybrid_accepts_only_known_terminal_blockers() -> None:
+    _digest, compatibility = _resolved_authored_quality_digest(
+        _published_flagged_hybrid_theme(),
+        scene_digest="sha256:" + "c" * 64,
+        pptx_mode="hybrid",
+        published=True,
+    )
+
+    assert compatibility == "published-flagged-hybrid"
+
+
+def test_published_flagged_hybrid_requires_publication_authority() -> None:
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="quality_receipt_v3_blocked",
+    ):
+        _resolved_authored_quality_digest(
+            _published_flagged_hybrid_theme(),
+            scene_digest="sha256:" + "c" * 64,
+            pptx_mode="hybrid",
+            published=False,
+        )
+
+
+def test_published_flagged_hybrid_rejects_non_whitelisted_blocker() -> None:
+    theme = _published_flagged_hybrid_theme(
+        blockers=[
+            "providerCalls.slide_budget_invalid:0",
+            "visualReview.failed",
+            "sourceContent.readback_mismatch",
+        ]
+    )
+
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="quality_receipt_v3_blocked",
+    ):
+        _resolved_authored_quality_digest(
+            theme,
+            scene_digest="sha256:" + "c" * 64,
+            pptx_mode="hybrid",
+            published=True,
+        )
+
+
+def test_published_flagged_compatibility_is_hybrid_only() -> None:
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="quality_receipt_v3_blocked",
+    ):
+        _resolved_authored_quality_digest(
+            _published_flagged_hybrid_theme(),
+            scene_digest="sha256:" + "c" * 64,
+            pptx_mode="fidelity",
+            published=True,
+        )
 
 
 def test_legacy_fidelity_compatibility_and_nonretryable_export_error(

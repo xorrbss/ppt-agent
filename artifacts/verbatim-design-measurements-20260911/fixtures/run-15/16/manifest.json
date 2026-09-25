@@ -1,0 +1,418 @@
+{
+ "sourceUnitId": "source-slide:17",
+ "sourceIndex": 16,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:17:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:17:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "2주차 PART 5 | 캡컷은 딱 이것만",
+    "paragraphs": [
+     {
+      "runs": [
+       "2주차 PART 5 | 캡컷은 딱 이것만"
+      ],
+      "text": "2주차 PART 5 | 캡컷은 딱 이것만"
+     }
+    ],
+    "runs": [
+     "2주차 PART 5 | 캡컷은 딱 이것만"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:4b869cf4489b119841d4014dd259e09688432f83ba44d2ddbd6f1d783817d563",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:17:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "17",
+    "paragraphs": [
+     {
+      "runs": [
+       "17"
+      ],
+      "text": "17"
+     }
+    ],
+    "runs": [
+     "17"
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:0a396a7422ee1fdca01f9a3ed17621897702737f164da128660144d6113fac8f",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:17:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:74f52ea3fedff52018a6c922ae9f9a5650ace6385c0dd96cc4f477c74504ce90",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:17:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "• 자르기 / 분할\n• 자동자막 / 자막 스타일\n• 음악 / 기본 효과\n• 화면 확대·축소\n• 기본 키프레임\n• 최종 저장과 납품",
+    "paragraphs": [
+     {
+      "runs": [
+       "• 자르기 / 분할"
+      ],
+      "text": "• 자르기 / 분할"
+     },
+     {
+      "runs": [
+       "• 자동자막 / 자막 스타일"
+      ],
+      "text": "• 자동자막 / 자막 스타일"
+     },
+     {
+      "runs": [
+       "• 음악 / 기본 효과"
+      ],
+      "text": "• 음악 / 기본 효과"
+     },
+     {
+      "runs": [
+       "• 화면 확대·축소"
+      ],
+      "text": "• 화면 확대·축소"
+     },
+     {
+      "runs": [
+       "• 기본 키프레임"
+      ],
+      "text": "• 기본 키프레임"
+     },
+     {
+      "runs": [
+       "• 최종 저장과 납품"
+      ],
+      "text": "• 최종 저장과 납품"
+     }
+    ],
+    "runs": [
+     "• 자르기 / 분할",
+     "\n",
+     "• 자동자막 / 자막 스타일",
+     "\n",
+     "• 음악 / 기본 효과",
+     "\n",
+     "• 화면 확대·축소",
+     "\n",
+     "• 기본 키프레임",
+     "\n",
+     "• 최종 저장과 납품"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 914400,
+     "y": 1417320,
+     "cx": 5943600,
+     "cy": 4389120
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:13ef1dd28e8bb60845e8b64bf82d2c91dc941dac13eecef4fa6845a5a9adccb2",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:17:shape:7",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 5,
+   "payload": {
+    "shapeName": "Rounded Rectangle 6",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 7315200,
+     "y": 1554480,
+     "cx": 3749039,
+     "cy": 3291840
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:ab027a624a4813755d2726079e200ccefd05e0617e97be8b62df4f0b59c10bc0",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:17:shape:8",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 6,
+   "payload": {
+    "shapeName": "Rectangle 7",
+    "preset": "rect",
+    "geometry": {
+     "x": 7315200,
+     "y": 1554480,
+     "cx": 73152,
+     "cy": 3291840
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:1a9f422a230f232ede9037fad161a47de00fdc81610b9c5e3ca60ac71a53c20c",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:17:text:9",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 7,
+   "payload": {
+    "text": "고급 기능은?",
+    "paragraphs": [
+     {
+      "runs": [
+       "고급 기능은?"
+      ],
+      "text": "고급 기능은?"
+     }
+    ],
+    "runs": [
+     "고급 기능은?"
+    ],
+    "shapeName": "TextBox 8",
+    "geometry": {
+     "x": 7516368,
+     "y": 1691639,
+     "cx": 3383279,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:26c8fcbe6f07f42a2dcf499c551bf1d43f84dacb763809bdf61a513536ace24e",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:17:text:10",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 8,
+   "payload": {
+    "text": "필요한 만큼만.\n처음부터 모든 기능을 외우지 않습니다.",
+    "paragraphs": [
+     {
+      "runs": [
+       "필요한 만큼만.\n처음부터 모든 기능을 외우지 않습니다."
+      ],
+      "text": "필요한 만큼만.\n처음부터 모든 기능을 외우지 않습니다."
+     }
+    ],
+    "runs": [
+     "필요한 만큼만.\n처음부터 모든 기능을 외우지 않습니다."
+    ],
+    "shapeName": "TextBox 9",
+    "geometry": {
+     "x": 7516368,
+     "y": 2121408,
+     "cx": 3383279,
+     "cy": 2606040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:42aa7078abc6b67396dbeb386d04a5f19212199738bcb8a93fd3051d23b13109",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:17:shape:11",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 9,
+   "payload": {
+    "shapeName": "Rounded Rectangle 10",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 7315200,
+     "y": 4892040,
+     "cx": 3749039,
+     "cy": 777240
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:9a5535d0ed11adada3ed80cf60b7772dce93676a0db894fd1063b169c23dd8d5",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:17:shape:12",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 10,
+   "payload": {
+    "shapeName": "Rectangle 11",
+    "preset": "rect",
+    "geometry": {
+     "x": 7315200,
+     "y": 4892040,
+     "cx": 73152,
+     "cy": 777240
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:ef98afb46708a131ff90425d913d725fce3db19bf42a8468c7099286c21caa7e",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:17:text:13",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 11,
+   "payload": {
+    "text": "실습 목표",
+    "paragraphs": [
+     {
+      "runs": [
+       "실습 목표"
+      ],
+      "text": "실습 목표"
+     }
+    ],
+    "runs": [
+     "실습 목표"
+    ],
+    "shapeName": "TextBox 12",
+    "geometry": {
+     "x": 7516368,
+     "y": 5029200,
+     "cx": 3383279,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:cbe37f82411ec4482d0ea3ea6b79dffff46e1aa87288e372e766a2066ffd89c9",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:17:text:14",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 12,
+   "payload": {
+    "text": "10~15초 영상 1개 완성",
+    "paragraphs": [
+     {
+      "runs": [
+       "10~15초 영상 1개 완성"
+      ],
+      "text": "10~15초 영상 1개 완성"
+     }
+    ],
+    "runs": [
+     "10~15초 영상 1개 완성"
+    ],
+    "shapeName": "TextBox 13",
+    "geometry": {
+     "x": 7516368,
+     "y": 5458968,
+     "cx": 3383279,
+     "cy": 91439
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:18e717b9b9c07a7954b5f26ba30a559cfa29c71e6bfcb3482e89d60dfd4bc87c",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

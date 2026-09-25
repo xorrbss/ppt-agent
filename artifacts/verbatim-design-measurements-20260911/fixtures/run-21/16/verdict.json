@@ -1,0 +1,436 @@
+{
+ "run": "run-21",
+ "slide_index": 16,
+ "fixture_role": "published_slide",
+ "is_failing_slide": false,
+ "authoring_passed": false,
+ "job_id": "58fe371f-7f63-459c-9f64-f3dd307e730a",
+ "job_id_basis": "05-admission.json operation_id -> presentation_generation_jobs.workspace_operation_id (authoritative join; agrees with the created_at ordering it replaces for all 11 runs)",
+ "job_id_basis_note": "created_at order, after run-20",
+ "workspace_operation_id": "2298a9c5",
+ "job_state": "published",
+ "presentation_id": "75cf9f7b-0a1c-45f5-842c-9c019565434c",
+ "completed_slides": 35,
+ "created_at": "2026-09-11 17:30:52.088004+09:00",
+ "checkpoint": {
+  "render_sha256": "81772b81b8d2342b691c6ae8b981f2dafd5c109f6a662a95ff2a45745c800d0a",
+  "failed_stage": null,
+  "error": {
+   "provider_attempt_count": 1,
+   "provider_attempt_epoch": 1,
+   "provider_attempt_total": 0
+  },
+  "author_status": "completed",
+  "render_status": "completed"
+ },
+ "run_artifacts": {
+  "files": [
+   "01-upload.json",
+   "02-snapshot.json",
+   "03-analysis.json",
+   "04-generate-request.json",
+   "05-admission.json",
+   "06-final-status.json",
+   "07-download-evidence.json",
+   "518557be-0177-4097-845b-bbba5f60e87f.pptx"
+  ],
+  "06-final-status.json": {
+   "detail": "Large empty painted media container: remove the placeholder and its reserved layout space; recompose existing source content without inventing an image.",
+   "visibilityFailures": [
+    "source-slide:2:text:3",
+    "source-slide:17:text:5",
+    "source-slide:17:text:3",
+    "source-slide:25:text:5",
+    "source-slide:27:text:9",
+    "source-slide:27:text:13",
+    "source-slide:29:text:3",
+    "source-slide:29:text:5",
+    "source-slide:30:text:5",
+    "source-slide:32:text:8",
+    "source-slide:32:text:7"
+   ],
+   "missingBlockIds": [],
+   "integrityFailures": [],
+   "orderViolations": 0,
+   "flaggedSlides": [
+    {
+     "index": 1,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "bf53dc32-95fa-4294-b639-b40a8f538355",
+     "sourceVisibilityBlockIds": [
+      "source-slide:2:text:3"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 2,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "9b59f655-fbe0-48e0-8191-5ca24ed883e0"
+    },
+    {
+     "index": 14,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "25736a22-af13-4d41-bf89-79e2aa1e23f5"
+    },
+    {
+     "index": 16,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "af79dd55-9346-49fc-8cf3-048a7ca95d4b",
+     "sourceVisibilityBlockIds": [
+      "source-slide:17:text:5",
+      "source-slide:17:text:3"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 18,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "9553b909-818c-4f2f-8dfb-37a0d7e66651"
+    },
+    {
+     "index": 22,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "eac0de9d-f46e-4b77-a881-07849b5455cb"
+    },
+    {
+     "index": 24,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "0c0f21dd-1270-4a5b-b683-9151425a72ba",
+     "sourceVisibilityBlockIds": [
+      "source-slide:25:text:5"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 25,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "eeee47d4-b26d-474a-a821-6208d6822af4"
+    },
+    {
+     "index": 26,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "3171c3d2-1790-4b7b-8c5e-e97313242eeb",
+     "sourceVisibilityBlockIds": [
+      "source-slide:27:text:9",
+      "source-slide:27:text:13"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 28,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "3d55288a-4bb8-4f32-98d8-f6b77a114825",
+     "sourceVisibilityBlockIds": [
+      "source-slide:29:text:3",
+      "source-slide:29:text:5"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 29,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "a0138490-e6ba-4f30-88d8-61e9b2440ad3",
+     "sourceVisibilityBlockIds": [
+      "source-slide:30:text:5"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 31,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "92178cdf-613e-4cff-a792-1fce96d4ea04",
+     "sourceVisibilityBlockIds": [
+      "source-slide:32:text:8",
+      "source-slide:32:text:7"
+     ],
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted",
+      "source_visibility"
+     ]
+    },
+    {
+     "index": 32,
+     "reason": "composition_safety:gate_repair_not_admitted",
+     "remakeAttempted": false,
+     "remakeOutcome": "verbatim_flag_only",
+     "slideId": "a7e7ca32-f22e-40a0-bc73-e8372531f2a7"
+    }
+   ],
+   "reviewPages": [
+    {
+     "index": 1,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 2,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 14,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 16,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 18,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 22,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 24,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 25,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 26,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 28,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 29,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 31,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    },
+    {
+     "index": 32,
+     "reasons": [
+      "composition_safety:gate_repair_not_admitted"
+     ]
+    }
+   ],
+   "residualIssues": [
+    {
+     "slide_index": 2,
+     "issues": [
+      {
+       "category": "empty_media_panel",
+       "severity": "medium",
+       "detail": "Large empty painted media container: remove the placeholder and its reserved layout space; recompose existing source content without inventing an image.",
+       "qids": [
+        "q-roadmap-image"
+       ],
+       "policy": "style_reference"
+      },
+      {
+       "category": "text_escapes_card",
+       "severity": "medium",
+       "detail": "text of q-takeaway prints 12px below the bottom of its card q-roadmap-panel",
+       "qids": [
+        "q-takeaway"
+       ],
+       "policy": "style_reference",
+       "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.0282,
+        "excess_px_x": 0.0,
+        "excess_px_y": 12.0,
+        "card_qid": "q-roadmap-panel",
+        "element_kind": "text"
+       }
+      },
+      {
+       "category": "text_escapes_card",
+       "severity": "medium",
+       "detail": "text of q-takeaway-keyword prints 12px below the bottom of its card q-roadmap-panel",
+       "qids": [
+        "q-takeaway-keyword"
+       ],
+       "policy": "style_reference",
+       "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.0282,
+        "excess_px_x": 0.0,
+        "excess_px_y": 12.0,
+        "card_qid": "q-roadmap-panel",
+        "element_kind": "text"
+       }
+      }
+     ]
+    },
+    {
+     "slide_index": 14,
+     "issues": [
+      {
+       "category": "empty_media_panel",
+       "severity": "medium",
+       "detail": "Large empty painted media container: remove the placeholder and its reserved layout space; recompose existing source content without inventing an image.",
+       "qids": [
+        "q-image-panel-14"
+       ],
+       "policy": "style_reference"
+      }
+     ]
+    },
+    {
+     "slide_index": 16,
+     "issues": [
+      {
+       "category": "overlap",
+       "severity": "medium",
+       "detail": "visible element boxes substantially overlap",
+       "qids": [
+        "source-block-6b03ef8b1e53f9ac",
+        "source-block-bd601c892ae13f2e"
+       ],
+       "policy": "style_reference"
+      },
+      {
+       "category": "overlap",
+       "severity": "high",
+       "detail": "browser pixel-area probe reports a continuous occluding layer",
+       "qids": [
+        "source-block-bd601c892ae13f2e"
+       ],
+       "policy": "style_reference"
+      }
+     ]
+    },
+    {
+     "slide_index": 18,
+     "issues": [
+      {
+       "category": "empty_media_panel",
+       "severity": "medium",
+       "detail": "Large empty painted media container: remove the placeholder and its reserved layout space; recompose existing source content without inventing an image.",
+       "qids": [
+        "q-image-panel-18"
+       ],
+       "policy": "style_reference"
+      }
+     ]
+    },
+    {
+     "slide_index": 26,
+     "issues": [
+      {
+       "category": "text_escapes_card",
+       "severity": "medium",
+       "detail": "text of q-module-next-26 prints 16px below the bottom of its card q-map-panel-26",
+       "qids": [
+        "q-module-next-26"
+       ],
+       "policy": "style_reference",
+       "magnitude": {
+        "ratio_x": 1.0,
+        "ratio_y": 1.0374,
+        "excess_px_x": 0.0,
+        "excess_px_y": 16.0,
+        "card_qid": "q-map-panel-26",
+        "element_kind": "text"
+       }
+      }
+     ]
+    },
+    {
+     "slide_index": 31,
+     "issues": [
+      {
+       "category": "overlap",
+       "severity": "high",
+       "detail": "browser pixel-area probe reports a continuous occluding layer",
+       "qids": [
+        "q-eyebrow-31"
+       ],
+       "policy": "style_reference"
+      },
+      {
+       "category": "overlap",
+       "severity": "medium",
+       "detail": "visible element boxes substantially overlap",
+       "qids": [
+        "q-eyebrow-31",
+        "source-block-431d0f51556f7f2e"
+       ],
+       "policy": "style_reference"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "absent": [
+  "html-author.txt: checkpoint author_html is null (cleared after publication on published decks)",
+  "html-illustrated.txt: checkpoint illustrated_html is null",
+  "metrics.json: browser metrics are not persisted anywhere (authored_slide_checkpoints has no metrics column, artifact_refs is null, authored_evidence_*_v3 are empty)"
+ ]
+}

@@ -1,0 +1,47 @@
+{
+  "schema": "sol-neutral-content-audit/v1",
+  "packetId": "item-c9576f15589c5dc8",
+  "reviewer": "independent-content",
+  "hashVerification": {
+    "html": true,
+    "png": true
+  },
+  "contentVerdict": "pass",
+  "passed": true,
+  "evidenceBasis": [
+    "this packet source and requiredImages",
+    "slide.html text cross-check",
+    "render.png visual inspection",
+    "whitelisted original image visual comparison"
+  ],
+  "requiredImageCount": 1,
+  "requiredImagesVerdict": "pass",
+  "imageEvidence": "Full dashboard retained without callout occlusion or crop: navigation/sidebar, four summaries, all progress stages and action bar, other projects and notifications. Source microtext is reduced and is not certified individually readable.",
+  "propositions": [
+    {
+      "index": 1,
+      "verdict": "pass",
+      "evidence": "Three header identifiers/category and required dashboard image visibly present."
+    },
+    {
+      "index": 2,
+      "verdict": "pass",
+      "evidence": "Four external callouts explicitly cover summary counts, current stage/evaluation-inspection schedule, supplementation/deadlines/pending work, other projects/recent notifications without covering image."
+    },
+    {
+      "index": 3,
+      "verdict": "pass",
+      "evidence": "User next action and deadline priority visible; administrator panel separately labels proposal scope and lists all six statuses."
+    },
+    {
+      "index": 4,
+      "verdict": "pass",
+      "evidence": "Drilldown heading, detailed-list/card-chart relationship and identical filters/aggregation visible."
+    }
+  ],
+  "findings": [],
+  "uncertainties": [],
+  "notes": [
+    "Caption '축소 없이' is imprecise because screenshot is scaled down; image is preserved uncropped. This caption does not establish fine-print readability."
+  ]
+}

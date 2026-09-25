@@ -59,6 +59,14 @@ export const PRESENTATION_PAGE_DRIVER_ADAPTER_REGISTRY = Object.freeze({
     background: "#EDEEEF",
     renderActions: RENDER_ACTIONS,
   }),
+  "svg-v1": Object.freeze({
+    driverId: "svg-v1",
+    editorAdapterId: "svg-readonly",
+    assistantAdapterId: "canonical-workspace",
+    exportAdapterId: "svg-v1",
+    background: "#EDEEEF",
+    renderActions: RENDER_ACTIONS,
+  }),
 } satisfies Readonly<
   Record<
     NonNullable<PresentationFeatureViewModel["driverId"]>,

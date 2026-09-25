@@ -1,0 +1,318 @@
+{
+ "sourceUnitId": "source-slide:25",
+ "sourceIndex": 24,
+ "blocks": [
+  {
+   "sourceBlockId": "source-slide:25:shape:2",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 0,
+   "payload": {
+    "shapeName": "Rectangle 1",
+    "preset": "rect",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "cx": 12191695,
+     "cy": 6858000
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:2d0edb9a550073f217d5176d22c5b6c4902f1930f035394e5de916b00bb34cf8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:25:text:3",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 1,
+   "payload": {
+    "text": "4주차 PART 1 | 제안서 만들기",
+    "paragraphs": [
+     {
+      "runs": [
+       "4주차 PART 1 | 제안서 만들기"
+      ],
+      "text": "4주차 PART 1 | 제안서 만들기"
+     }
+    ],
+    "runs": [
+     "4주차 PART 1 | 제안서 만들기"
+    ],
+    "shapeName": "TextBox 2",
+    "geometry": {
+     "x": 640080,
+     "y": 411480,
+     "cx": 10515600,
+     "cy": 594360
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:56d5268ab2bec93f6f90ed9c5956eea15b3cc88f4620f8026b5b166c09a5f06d",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:25:text:4",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 2,
+   "payload": {
+    "text": "25",
+    "paragraphs": [
+     {
+      "runs": [
+       "25"
+      ],
+      "text": "25"
+     }
+    ],
+    "runs": [
+     "25"
+    ],
+    "shapeName": "TextBox 3",
+    "geometry": {
+     "x": 11064240,
+     "y": 411480,
+     "cx": 502920,
+     "cy": 320040
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:dc48589654abe2a2ef04671bd7f496387c6b50c064278a2075c94686973b85e8",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:25:text:5",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 3,
+   "payload": {
+    "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+    "paragraphs": [
+     {
+      "runs": [
+       "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+      ],
+      "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+     }
+    ],
+    "runs": [
+     "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"
+    ],
+    "shapeName": "TextBox 4",
+    "geometry": {
+     "x": 640080,
+     "y": 6473952,
+     "cx": 6400800,
+     "cy": 228600
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:74f52ea3fedff52018a6c922ae9f9a5650ace6385c0dd96cc4f477c74504ce90",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:25:text:6",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 4,
+   "payload": {
+    "text": "• 나는 누구인가\n• 어떤 업종을 돕는가\n• 무엇을 제작하는가\n• 작업 과정\n• 포트폴리오\n• 가격과 포함 범위\n• 문의 방법",
+    "paragraphs": [
+     {
+      "runs": [
+       "• 나는 누구인가"
+      ],
+      "text": "• 나는 누구인가"
+     },
+     {
+      "runs": [
+       "• 어떤 업종을 돕는가"
+      ],
+      "text": "• 어떤 업종을 돕는가"
+     },
+     {
+      "runs": [
+       "• 무엇을 제작하는가"
+      ],
+      "text": "• 무엇을 제작하는가"
+     },
+     {
+      "runs": [
+       "• 작업 과정"
+      ],
+      "text": "• 작업 과정"
+     },
+     {
+      "runs": [
+       "• 포트폴리오"
+      ],
+      "text": "• 포트폴리오"
+     },
+     {
+      "runs": [
+       "• 가격과 포함 범위"
+      ],
+      "text": "• 가격과 포함 범위"
+     },
+     {
+      "runs": [
+       "• 문의 방법"
+      ],
+      "text": "• 문의 방법"
+     }
+    ],
+    "runs": [
+     "• 나는 누구인가",
+     "\n",
+     "• 어떤 업종을 돕는가",
+     "\n",
+     "• 무엇을 제작하는가",
+     "\n",
+     "• 작업 과정",
+     "\n",
+     "• 포트폴리오",
+     "\n",
+     "• 가격과 포함 범위",
+     "\n",
+     "• 문의 방법"
+    ],
+    "shapeName": "TextBox 5",
+    "geometry": {
+     "x": 822960,
+     "y": 1463040,
+     "cx": 5852160,
+     "cy": 4389120
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:ece872b42a9fa6f4d32c20fba658672efba3febb91055bdff71e4975dedcc2d3",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:25:shape:7",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 5,
+   "payload": {
+    "shapeName": "Rounded Rectangle 6",
+    "preset": "roundRect",
+    "geometry": {
+     "x": 7315200,
+     "y": 1554480,
+     "cx": 3657600,
+     "cy": 3383280
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:b23f6dcfba8e012bb22f3ded03c103bae61f9ac56a0b46898e5a12e250650cdc",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:25:shape:8",
+   "kind": "shape",
+   "semanticRole": "shape",
+   "order": 6,
+   "payload": {
+    "shapeName": "Rectangle 7",
+    "preset": "rect",
+    "geometry": {
+     "x": 7315200,
+     "y": 1554480,
+     "cx": 73152,
+     "cy": 3383280
+    }
+   },
+   "comparisonProjection": null,
+   "contentDigest": "sha256:fb368293b0829e937adf10d56c0b115b246ea16fb608a4176499a58e5b9e4c8e",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:25:text:9",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 7,
+   "payload": {
+    "text": "원칙",
+    "paragraphs": [
+     {
+      "runs": [
+       "원칙"
+      ],
+      "text": "원칙"
+     }
+    ],
+    "runs": [
+     "원칙"
+    ],
+    "shapeName": "TextBox 8",
+    "geometry": {
+     "x": 7516368,
+     "y": 1691639,
+     "cx": 3291840,
+     "cy": 384048
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:1079bd626b8fa6d2438ee367da56c88011f910726f9f8557cd43abeaafcce3af",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  },
+  {
+   "sourceBlockId": "source-slide:25:text:10",
+   "kind": "text",
+   "semanticRole": "body",
+   "order": 8,
+   "payload": {
+    "text": "제안서는 예쁜 문서보다\n‘사장님이 이해하기 쉬운 문서’가 우선",
+    "paragraphs": [
+     {
+      "runs": [
+       "제안서는 예쁜 문서보다\n‘사장님이 이해하기 쉬운 문서’가 우선"
+      ],
+      "text": "제안서는 예쁜 문서보다\n‘사장님이 이해하기 쉬운 문서’가 우선"
+     }
+    ],
+    "runs": [
+     "제안서는 예쁜 문서보다\n‘사장님이 이해하기 쉬운 문서’가 우선"
+    ],
+    "shapeName": "TextBox 9",
+    "geometry": {
+     "x": 7516368,
+     "y": 2121408,
+     "cx": 3291840,
+     "cy": 2697480
+    }
+   },
+   "comparisonProjection": {
+    "unicodeForm": "NFC",
+    "lineEnding": "LF"
+   },
+   "contentDigest": "sha256:a495d9e4d7e34294a4b52ae34d20708f58b00ff345f087e5e3f34e7a91ffd93e",
+   "nativeCandidate": true,
+   "fallbackAssetId": null
+  }
+ ]
+}

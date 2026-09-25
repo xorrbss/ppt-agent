@@ -303,6 +303,8 @@ export interface AuthoredStyleSummary {
   tags: string[];
   use_cases: string[];
   preview: AuthoredStylePreview;
+  aliases?: string[];
+  supportedAspectRatios: Array<"16:9" | "9:16" | "9:13">;
 }
 
 export const DEFAULT_AUTHORED_STYLE: AuthoredStyleSummary = {
@@ -312,6 +314,7 @@ export const DEFAULT_AUTHORED_STYLE: AuthoredStyleSummary = {
   category: "general",
   tags: ["범용", "깔끔한", "컨설팅"],
   use_cases: ["회사 소개", "프로젝트 제안", "일반 보고서"],
+  supportedAspectRatios: ["16:9"],
   preview: {
     bg: "#F8FAFC",
     accent: "#2563EB",
@@ -375,8 +378,27 @@ function toAuthoredStyleSummary(value: unknown): AuthoredStyleSummary | null {
     category: normalizeCategory(value.category),
     tags: normalizeStringList(value.tags),
     use_cases: normalizeStringList(value.use_cases),
+    supportedAspectRatios: Array.isArray(value.supportedAspectRatios)
+      ? value.supportedAspectRatios.filter(
+          (ratio): ratio is "16:9" | "9:16" | "9:13" => ratio === "16:9" || ratio === "9:16" || ratio === "9:13",
+        )
+      : ["16:9"],
     preview: previewShape,
+    ...(Array.isArray(value.aliases)
+      ? { aliases: normalizeStringList(value.aliases) }
+      : {}),
   };
+}
+
+import { normalizeDocumentCanvasCapabilities, unavailableDocumentCanvasCapabilities, type DocumentCanvasCapabilities, type DocumentCanvasSelection } from "./document-canvas-capabilities";
+export type { DocumentCanvasCapabilities, DocumentCanvasSelection } from "./document-canvas-capabilities";
+
+export function canonicalAuthoredStyleId(
+  styles: AuthoredStyleSummary[],
+  styleId: string,
+): string {
+  if (styles.some((style) => style.id === styleId)) return styleId;
+  return styles.find((style) => style.aliases?.includes(styleId))?.id ?? styleId;
 }
 
 export function normalizeAuthoredStyles(
@@ -420,6 +442,29 @@ class AuthoredStylesApi {
     } catch (error) {
       console.error("Error getting authored styles:", error);
       throw error;
+    }
+  }
+
+  /** The server alone decides which selected route is ready for A4. */
+  static async getDocumentCanvasCapabilities(selection?: DocumentCanvasSelection): Promise<DocumentCanvasCapabilities> {
+    try {
+      const query = selection ? `?${new URLSearchParams({
+        generation_strategy: selection.generationStrategy,
+        authored_style: selection.authoredStyle,
+        source_content_mode: String(selection.sourceContentMode),
+        has_company_standard: String(selection.hasCompanyStandard),
+      }).toString()}` : "";
+      const response = await fetch(
+        getApiUrl(`/api/v1/ppt/authored/canvas-capabilities${query}`),
+        { method: "GET", headers: getHeader(), cache: "no-store" },
+      );
+      const payload: unknown = await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to get document canvas capabilities",
+      );
+      return normalizeDocumentCanvasCapabilities(payload);
+    } catch {
+      return unavailableDocumentCanvasCapabilities();
     }
   }
 }

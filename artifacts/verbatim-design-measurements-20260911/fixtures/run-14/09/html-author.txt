@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;background:#08916E;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:20px;width:832px}
+.eyebrow{height:21px;font-size:15px;line-height:21px;font-weight:700;letter-spacing:.04em;color:#FFFFFF}
+.title{margin-top:6px;font-size:32px;line-height:38px;font-weight:700;color:#FFFFFF}
+.header-right{position:absolute;left:896px;top:20px;width:320px;text-align:right;font-size:15px;line-height:21px;color:#FFFFFF}
+.header-tag{position:absolute;right:0;top:0;width:276px;height:103px;padding:20px 64px 0 24px;background:#00140E;font-size:15px;line-height:21px;font-weight:700;color:#FFFFFF;text-align:right;white-space:nowrap}
+.body-wrap{position:absolute;left:0;right:0;top:127px;margin:0 64px;width:1152px}
+.pillar-grid{display:grid;grid-template-columns:564px 564px;grid-template-rows:165px 165px;gap:24px}
+.card{height:165px;padding:22px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;position:relative}
+.card-index{width:8px;height:36px;border-radius:2px;background:#08916E;position:absolute;left:28px;top:22px}
+.card-title{margin-left:24px;font-size:26px;line-height:36px;font-weight:700;color:#08916E}
+.card-rule{width:100%;height:1px;margin-top:16px;background:#E2E8F0}
+.card-copy{margin-top:17px;font-size:18px;line-height:30px;font-weight:500;color:#1D1D1B}
+.check-card{height:92px;margin-top:24px;padding:18px 28px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;display:flex;align-items:center;gap:28px}
+.check-title{flex:0 0 104px;font-size:26px;line-height:36px;font-weight:700;color:#08916E}
+.check-divider{width:1px;height:48px;background:#E2E8F0}
+.check-copy{font-size:18px;line-height:30px;font-weight:500;color:#1D1D1B}
+.page-number{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="103" class="header-band" style="height:103px" data-qid="q-band-9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-header-left-9" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-51e30f078c7abc44" data-source-block-id="source-slide:10:text:3:run:0">1주차 실습</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-fbb09bd58915c235" data-source-block-id="source-slide:10:text:3:run:1">내 사업 한 장으로 정리</div>
+  </div>
+  <div data-header-part="right" class="header-tag" data-semantic-role="supporting" data-qid="source-block-5d1d31da2869c1c1" data-source-block-id="source-slide:10:text:5">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:127px" data-qid="q-body-9" data-semantic-role="decoration">
+  <div class="pillar-grid" data-qid="q-pillar-grid-9" data-semantic-role="decoration">
+    <div class="card" data-qid="q-card-business-9" data-semantic-role="decoration">
+      <div class="card-index" data-qid="q-card-index-business-9" data-semantic-role="supporting"></div>
+      <div class="card-title" data-semantic-role="body" data-qid="source-block-3f00417bd48c7668" data-source-block-id="source-slide:10:text:6">타깃 업종</div>
+      <div class="card-rule" data-qid="q-card-rule-business-9" data-semantic-role="decoration"></div>
+      <div class="card-copy" data-semantic-role="body" data-qid="source-block-5a9628e2fa6cc085" data-source-block-id="source-slide:10:text:7">______________________________</div>
+    </div>
+
+    <div class="card" data-qid="q-card-service-9" data-semantic-role="decoration">
+      <div class="card-index" data-qid="q-card-index-service-9" data-semantic-role="supporting"></div>
+      <div class="card-title" data-semantic-role="body" data-qid="source-block-c3370afa72895052" data-source-block-id="source-slide:10:text:8">서비스</div>
+      <div class="card-rule" data-qid="q-card-rule-service-9" data-semantic-role="decoration"></div>
+      <div class="card-copy" data-semantic-role="body" data-qid="source-block-669369122b4aa2a8" data-source-block-id="source-slide:10:text:9">______________________________</div>
+    </div>
+
+    <div class="card" data-qid="q-card-price-9" data-semantic-role="decoration">
+      <div class="card-index" data-qid="q-card-index-price-9" data-semantic-role="supporting"></div>
+      <div class="card-title" data-semantic-role="body" data-qid="source-block-fd509e8d70477383" data-source-block-id="source-slide:10:text:10">가격</div>
+      <div class="card-rule" data-qid="q-card-rule-price-9" data-semantic-role="decoration"></div>
+      <div class="card-copy" data-semantic-role="body" data-qid="source-block-9f269f39aad030f5" data-source-block-id="source-slide:10:text:11">______________________________</div>
+    </div>
+
+    <div class="card" data-qid="q-card-intro-9" data-semantic-role="decoration">
+      <div class="card-index" data-qid="q-card-index-intro-9" data-semantic-role="supporting"></div>
+      <div class="card-title" data-semantic-role="body" data-qid="source-block-13a718856d44bca1" data-source-block-id="source-slide:10:text:12">한 줄 소개</div>
+      <div class="card-rule" data-qid="q-card-rule-intro-9" data-semantic-role="decoration"></div>
+      <div class="card-copy" data-semantic-role="body" data-qid="source-block-625ae8ac20dd9be1" data-source-block-id="source-slide:10:text:13">______________________________</div>
+    </div>
+  </div>
+
+  <div class="check-card" data-qid="q-check-card-9" data-semantic-role="decoration">
+    <div class="check-title" data-semantic-role="body" data-qid="source-block-d0e09424ddc39590" data-source-block-id="source-slide:10:text:16">체크</div>
+    <div class="check-divider" data-qid="q-check-divider-9" data-semantic-role="decoration"></div>
+    <div class="check-copy" data-semantic-role="body" data-qid="source-block-3e464ca90148cc93" data-source-block-id="source-slide:10:text:17">□ 인스타 프로필  □ 블로그 방향  □ 상품  □ 가격  □ 타깃</div>
+  </div>
+</div>
+
+<div class="page-number" data-semantic-role="supporting" data-qid="source-block-c8160e59d0d88d5b" data-source-block-id="source-slide:10:text:4">10</div>
+</body>
+</html>

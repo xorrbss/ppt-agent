@@ -154,13 +154,17 @@ class _RateLimited(RuntimeError):
     "error",
     [
         500,
+        502,
         503,
+        504,
         429,
         "HTTP 500",
+        "HTTP 502",
+        "HTTP 504",
         "HTTP 429",
         "request timed out",
         "provider_circuit_open",
-        "public_provider_bridge_exception",
+        "public_provider_overload",
         "public_provider_call_timeout",
         "rate_limit_exceeded",
         "Rate limit reached for gpt-5.2",
@@ -177,7 +181,17 @@ def test_overload_and_rate_limit_signals_are_recognized(error: object) -> None:
     assert is_authored_provider_overload(error) is True
 
 
-@pytest.mark.parametrize("error", [None, 400, "HTTP 404", "authored_batch_slide_missing", "schema mismatch"])
+@pytest.mark.parametrize(
+    "error",
+    [
+        None,
+        400,
+        "HTTP 404",
+        "public_provider_bridge_exception",
+        "authored_batch_slide_missing",
+        "schema mismatch",
+    ],
+)
 def test_ordinary_failures_are_not_overload(error: object) -> None:
     assert is_authored_provider_overload(error) is False
 
@@ -375,6 +389,30 @@ def test_batch_author_returns_three_slides_from_one_provider_call(monkeypatch) -
         for part in request_parts
         if getattr(part, "text", "").startswith("\n\nBEGIN REQUEST FOR SLIDE INDEX")
     ) == 3
+
+
+def test_batch_author_records_void_end_tag_normalization(monkeypatch) -> None:
+    candidate = _html(0).replace("</body>", "<img data-qid='hero'></img></body>")
+    _capture_batch_provider(
+        monkeypatch,
+        f'<authored-slide index="0">{candidate}</authored-slide>',
+    )
+    receipts = {0: []}
+
+    result = _run(
+        author_slides_html(
+            [AuthoredBatchSlideRequest(index=0, content="cover", role="COVER")],
+            design_system="DESIGN",
+            brand=_brand(),
+            slide_count=1,
+            normalization_receipts_by_index=receipts,
+        )
+    )
+
+    assert "</img>" not in result.htmls[0].lower()
+    assert receipts[0] == [
+        {"rule": "html_void_end_tag_dropped", "detail": "img", "count": 1}
+    ]
 
 
 def test_batch_author_preserves_successes_when_one_slide_is_missing(monkeypatch) -> None:

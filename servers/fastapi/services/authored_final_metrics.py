@@ -34,6 +34,7 @@ import asyncio
 import hashlib
 import logging
 from collections.abc import Mapping, Sequence
+from functools import partial
 from typing import Any
 
 LOGGER = logging.getLogger(__name__)
@@ -69,6 +70,8 @@ async def resolve_final_browser_metrics(
     *,
     retained: Sequence[Any] | None = None,
     overrides: Mapping[int, Any] | None = None,
+    width_px: int = 1280,
+    height_px: int = 720,
 ) -> list[Any]:
     """Browser metrics for every final slide, re-rendering only what is missing."""
 
@@ -97,10 +100,24 @@ async def resolve_final_browser_metrics(
         missing[:8],
     )
     if missing:
+        from services.authored_admission_capture import captured_metrics_or_existing
         from utils.slide_capture import ensure_browser_metrics
+        ensure = partial(
+            ensure_browser_metrics,
+            **(
+                {}
+                if (width_px, height_px) == (1280, 720)
+                else {"width_px": width_px, "height_px": height_px}
+            ),
+        )
 
         gathered = await asyncio.gather(
-            *(ensure_browser_metrics(htmls[index]) for index in missing)
+            *(
+                captured_metrics_or_existing(
+                    htmls[index], index=index, ensure=ensure
+                )
+                for index in missing
+            )
         )
         for index, metrics in zip(missing, gathered, strict=True):
             resolved[index] = metrics

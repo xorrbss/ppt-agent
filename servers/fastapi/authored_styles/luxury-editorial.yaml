@@ -23,34 +23,60 @@ preview:
     - "#A6917C"
     - "#FFFFFF"
   variant: dark
+  image: catalogue-previews/luxury-editorial.png
+reference_images:
+  content: [catalogue-previews/luxury-editorial.png]
 brief: |-
   MOOD:
   Create a dark fashion-atelier editorial: quiet, sensual, tactile, and highly art-directed. Favor the intimacy of silk, linen, jewelry, and portraiture over generic corporate luxury. Unlike editorial-tritone, this system is espresso, taupe, and old gold; it is image-and-material led rather than cream-paper, coral punctuation, and pull-quote led.
 
+  Make the fashion-atelier identity tangible through disciplined cropping, material contrast and a deliberate reveal of construction; each spread should feel edited rather than decorated.
+
   PALETTE:
   Use espresso #2D2926 and deep brown #3C2F2F as the dominant fields, white #FFFFFF for primary copy, taupe #A6917C for secondary information, and old gold #D4AF37 only for fine rules, one key word, a small script accent, or a single metric. Keep gold sparse and flat; never turn the canvas into metallic foil.
 
+  Use existing charcoal and brown fields with white body copy. Restrict gold and taupe to rules, labels with verified contrast, or large display accents; do not set thin taupe captions on dark brown.
+
   TYPOGRAPHY:
   Pair a very high-contrast, narrow display serif with a clean sans serif. Set display titles large and disciplined, often uppercase for short fashion statements. A fluid script may cross one word or one short line only; never use it for body copy, labels, or data. Keep body text compact, well-spaced, and limited to two or three short insights.
+  Use the body face and installed Korean-capable fallback for long Korean copy and captions, retaining script for optional accents. Preserve required wording and runtime typography requirements.
+
+  Keep display-serif drama to a short headline; use clear sans-serif analysis and aligned numerals for specifications. Avoid widely spaced Korean body text. All Korean text must resolve through a local stack including "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif. At a 1280x720 canvas, target body 22-28px and labels at least 16px; 9.5pt (12.667px) is the hard floor for every text run, including SVG, captions and sources. If text cannot fit, shorten with evidence intact or split the slide; never shrink below the floor.
 
   LAYOUT SYSTEM:
   Build asymmetrical 55/45 or 60/40 image splits, full-bleed tactile backgrounds, and generous pools of dark negative space. Let one large serif title cross a photographic boundary while a small gold script accent overlaps it. Use fine gold or white rules and occasional rectangular perimeter frames. Avoid magazine scrapbooking and repeated card grids.
+  Allow image splits to change when Korean copy needs a wider reading column. Cross a photographic boundary only when the entire title remains on a quiet, consistently contrasting area; keep script accents away from essential letters. Use solid espresso behind detailed text and evidence.
+
+  Build tension between a large cropped material plane and a narrow column of precise observations. Alternate a dark image-led study, a clean side-by-side specification spread and a near-empty statement page. Allow one headline and at most three craft observations around an image; place a longer specification table on its own pale inset surface. These are flexible compositional directions for freely authored HTML/CSS, not fixed layouts, slots, Deck IR or a layout engine.
 
   SIGNATURE ELEMENTS:
   Repeat a restrained four-point sparkle, a hairline frame, macro material texture, and one serif-plus-script title overlap. Use close crops of fabric, metal, skin, or jewelry as graphic fields. Each slide should feature no more than one ornamental gesture.
 
+  Use oversized editorial numerals, hairline gold rules and small material swatches keyed to the image. Anchor a crop to one edge while leaving the opposite edge calm. Gold acts as punctuation, never an all-over frame.
+
   DATA VISUALIZATION:
-  Keep data intimate and minimal: one hero value, two to four thin horizontal bars, or a compact comparison table on espresso. Draw axes and dividers in hairline gold, labels in white or taupe, and reserve gold for one decisive value. Do not use colorful dashboards, glossy gauges, or generic rounded KPI cards.
+  Use an intimate supported value, horizontal bars or a compact comparison table on espresso with fine dividers and white labels. Reserve gold for an emphasized mark or large value rather than small body text, and keep taupe secondary text readable. Retain units, period, baseline and source context; make bar lengths proportional and use a text comparison when numeric evidence is absent. Keep material textures out of chart and label areas.
+
+  Compare material or service options with aligned attributes, common-unit bars and explicit criteria. Use a compact craftsmanship ledger with equal row heights. Distinguish supplied measurements from aesthetic interpretation; luxury language must not imply unverified quality, sustainability or performance.
 
   IMAGE DIRECTION:
   Choose warm, low-saturation studio photography with soft directional light: chocolate textiles, linen, macro jewelry, sculptural beauty details, or composed fashion portraits. Crop boldly and preserve shadow. Avoid bright lifestyle stock, busy runway collages, and highly saturated color grading.
 
+  Art-direct close views of seams, grain or sculpted silhouettes under directional light. An original abstract fabric fold may support the scene, but label it as illustration and do not mimic a sourced product photograph.
+
   SLIDE ARCHETYPES:
-  - cover: Use a full-bleed tactile image or a 60/40 portrait split, one monumental serif title, one brief script accent, and a fine frame.
-  - content: Pair one macro image with two or three concise insights in a quiet dark column.
-  - data: Feature one gold hero metric or up to four hairline bars with restrained labels.
-  - timeline: Alternate short dated moments with narrow runway-like strips of material or portrait detail; keep each milestone to one line.
-  - closing: Use a thin perimeter frame, a short closing statement, small contact details, and one vertical image crop.
+  cover: Use a tactile image or portrait split with a monumental serif title and a restrained script accent positioned clear of the lettering.
+  agenda: Use a broad espresso column with white topic names, fine gold dividers and generous spacing.
+  section: Pair the section name with one material detail and a quiet gold rule.
+  content: Pair a macro image with concise insights in a dark reading column; widen that column for longer Korean explanations.
+  data: Feature a supported metric or compact chart, retaining enough room for units, context and source notes.
+  timeline: Use supplied dated moments along open rows, with optional narrow material crops. Avoid adding dates or decorative phases to fill the layout.
+  architecture: Use a sparse labeled relationship diagram on espresso, with fine white connectors and one restrained gold emphasis.
+  closing: Use a thin perimeter frame, a short supported conclusion and optional supplied contact details, with one vertical image sliver.
+
+  Explore — atelier material opening; dark macro study with three callouts; paired finish comparison; craft-process triptych; specification ledger on a light plane; full-width quotation with a provenance caption; closing recommendation with a material detail.
 
   AVOID:
   Avoid script paragraphs, gold-filled surfaces, baroque frames, embossed effects, coral-and-cream magazine layouts, generic rounded cards, dense copy, multiple hero images, gradients, fake foil, and unreplaced template text.
+
+  Do not invent claims, measurements, quotations, citations or provenance. Keep illustrative data visibly labeled and supplied evidence traceable. Avoid repeating the same composition throughout a deck; alternate the narrative scenes above while retaining this style's visual identity. Keep all original reference images and their provenance intact.

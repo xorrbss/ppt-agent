@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import { ConversationMessageFrame } from "../conversation/ConversationPrimitives";
+import { WorkspaceGenerationProgress } from "./WorkspaceGenerationProgress";
+import { operationFailureMessage, operationProgressEvidence, type WorkspaceOperationObservation } from "./WorkspaceOperationPresentation";
 import { useLocale, useTranslations } from "next-intl";
 import {
   downloadWorkspaceArtifact,
@@ -22,10 +25,10 @@ import {
   actorSummary,
   artifactExpired,
   artifactFileName,
-  booleanValue,
   displayResultValue,
   formatDuration,
   formatTimestamp,
+  generationCompletionSummary,
   numberValue,
   qualityMetric,
   qualityReviewHistory,
@@ -44,9 +47,14 @@ import {
   QualityReviewRemainingIssues,
   remainingIssueList,
 } from "./QualityReviewRemainingIssues";
-
+import {
+  templateApplicationEvidence,
+  templateApplicationEvidenceComplete,
+} from "./WorkspaceOperationTemplateEvidence";
 
 interface WorkspaceOperationCardProps {
+  composerCancelOperationId?: string;
+  observation?: WorkspaceOperationObservation;
   operation: WorkspaceOperationAnchor;
   currentRevision?: number;
   disabled?: boolean;
@@ -95,163 +103,6 @@ function useApprovalExpired(
   return expired;
 }
 
-type TemplateApplicationEvidence = {
-  templateId?: string;
-  templateDigest?: string;
-  referenceLayoutDigest?: string;
-  compositionDigest?: string;
-  ruleDigest?: string;
-  semanticRoles: string[];
-  layoutRoles: string[];
-  pageNumbers: number[];
-  slideCount?: number;
-  visualFidelityPassed: boolean;
-  previewMatches: boolean;
-  nativeMatches: boolean;
-  readbackVerified: boolean;
-};
-
-function matchesResolvedSnapshot(
-  snapshot: Record<string, unknown>,
-  evidence: Pick<
-    TemplateApplicationEvidence,
-    "referenceLayoutDigest" | "compositionDigest" | "ruleDigest" | "slideCount"
-  >,
-): boolean {
-  const referenceLayoutDigest = stringValue(
-    snapshot.reference_layout_digest,
-    snapshot.referenceLayoutDigest,
-  );
-  const compositionDigest = stringValue(
-    snapshot.composition_digest,
-    snapshot.compositionDigest,
-  );
-  const ruleDigest = stringValue(snapshot.rule_digest, snapshot.ruleDigest);
-  const slideCount = numberValue(snapshot.slide_count, snapshot.slideCount);
-  return Boolean(
-    evidence.referenceLayoutDigest &&
-      evidence.compositionDigest &&
-      evidence.ruleDigest &&
-      evidence.slideCount !== undefined &&
-      referenceLayoutDigest === evidence.referenceLayoutDigest &&
-      compositionDigest === evidence.compositionDigest &&
-      ruleDigest === evidence.ruleDigest &&
-      slideCount === evidence.slideCount,
-  );
-}
-
-function templateApplicationEvidence(
-  result: Record<string, unknown>,
-): TemplateApplicationEvidence {
-  // The durable design.apply receipt is snake_case.  Keep the older resolved
-  // aliases for historical rows, but prefer neither spelling: both describe the
-  // same immutable composition and must yield the same completed UI state.
-  const templateSnapshot = recordValue(
-    result.template_snapshot ?? result.templateSnapshot,
-  );
-  const referenceLayoutDigest = stringValue(
-    result.resolved_reference_layout_digest,
-    result.resolvedReferenceLayoutDigest,
-    result.reference_layout_digest,
-    result.referenceLayoutDigest,
-    templateSnapshot.reference_layout_digest,
-    templateSnapshot.referenceLayoutDigest,
-  );
-  const compositionDigest = stringValue(
-    result.resolved_composition_digest,
-    result.resolvedCompositionDigest,
-    result.composition_digest,
-    result.compositionDigest,
-    recordValue(result.resolved_composition_pin).digest,
-    recordValue(result.resolvedCompositionPin).digest,
-  );
-  const ruleDigest = stringValue(
-    result.resolved_rule_digest,
-    result.resolvedRuleDigest,
-    result.rule_digest,
-    result.ruleDigest,
-  );
-  const slideCount = numberValue(result.slide_count, result.slideCount);
-  const pageNumbers = (Array.isArray(result.page_numbers)
-    ? result.page_numbers
-    : Array.isArray(result.pageNumbers)
-      ? result.pageNumbers
-      : []
-  ).filter(
-    (value): value is number => typeof value === "number" && Number.isInteger(value),
-  );
-  const visualFidelity = recordValue(
-    result.visual_fidelity ?? result.visualFidelity,
-  );
-  const visualFidelityPassed =
-    stringValue(visualFidelity.status, result.visual_fidelity_status, result.visualFidelityStatus) ===
-      "passed" ||
-    booleanValue(visualFidelity.passed, result.visual_fidelity_passed, result.visualFidelityPassed) === true;
-  const evidence = {
-    templateId: stringValue(
-      result.resolved_template_id,
-      result.resolvedTemplateId,
-      result.template_id,
-      result.templateId,
-      templateSnapshot.resolved_template_id,
-      templateSnapshot.resolvedTemplateId,
-      templateSnapshot.template_id,
-      templateSnapshot.templateId,
-    ),
-    templateDigest: stringValue(
-      result.resolved_template_digest,
-      result.resolvedTemplateDigest,
-      result.template_digest,
-      result.templateDigest,
-      templateSnapshot.resolved_template_digest,
-      templateSnapshot.resolvedTemplateDigest,
-      templateSnapshot.template_digest,
-      templateSnapshot.templateDigest,
-    ),
-    referenceLayoutDigest,
-    compositionDigest,
-    ruleDigest,
-    semanticRoles: stringList(result.semantic_roles_used, result.semanticRolesUsed),
-    layoutRoles: stringList(result.layout_roles_used, result.layoutRolesUsed),
-    pageNumbers,
-    slideCount,
-    visualFidelityPassed,
-    previewMatches: false,
-    nativeMatches: false,
-    readbackVerified:
-      booleanValue(result.readback_verified, result.readbackVerified) === true,
-  } satisfies TemplateApplicationEvidence;
-  return {
-    ...evidence,
-    previewMatches: matchesResolvedSnapshot(
-      recordValue(result.preview_snapshot ?? result.previewSnapshot),
-      evidence,
-    ),
-    nativeMatches: matchesResolvedSnapshot(
-      recordValue(result.native_pptx_snapshot ?? result.nativePptxSnapshot),
-      evidence,
-    ),
-  };
-}
-
-function templateApplicationEvidenceComplete(
-  evidence: TemplateApplicationEvidence,
-): boolean {
-  return Boolean(
-    evidence.templateId &&
-    evidence.templateDigest &&
-      evidence.referenceLayoutDigest &&
-      evidence.compositionDigest &&
-      evidence.ruleDigest &&
-      evidence.visualFidelityPassed &&
-      evidence.previewMatches &&
-      evidence.nativeMatches &&
-      evidence.readbackVerified &&
-      evidence.slideCount !== undefined &&
-      evidence.pageNumbers.length === evidence.slideCount &&
-      evidence.pageNumbers.every((pageNumber, index) => pageNumber === index + 1),
-  );
-}
 
 export function WorkspaceOperationCard({
   operation,
@@ -262,6 +113,8 @@ export function WorkspaceOperationCard({
   onFocusSlide,
   onRemakePage,
   presentationRefreshState,
+  observation,
+  composerCancelOperationId,
 }: WorkspaceOperationCardProps) {
   const t = useTranslations("qualityReview.workspace");
   const locale = useLocale();
@@ -296,13 +149,10 @@ export function WorkspaceOperationCard({
   const latestMessage = [...operation.events]
     .reverse()
     .find((event) => event.message)?.message;
-  const latestProgressEvent = [...operation.events]
-    .reverse()
-    .find((event) => event.type === "operation.progress");
-  const progressAt = latestProgressEvent?.createdAt ?? operation.updatedAt;
-  const latestProgressAt = formatTimestamp(progressAt, locale);
   const isPresentationGeneration =
     operation.operationType === "presentation.generate";
+  const progressEvidence = operationProgressEvidence(operation);
+  const failed = ["failed", "dead_letter", "deadline_exceeded"].includes(operation.status);
   const actor = actorSummary(operation);
   const createdAt = formatTimestamp(operation.createdAt, locale);
   const updatedAt = formatTimestamp(operation.updatedAt, locale);
@@ -314,6 +164,8 @@ export function WorkspaceOperationCard({
       ? `${operation.expectedRevision ?? "-"} → ${operation.resultRevision ?? "-"}`
       : undefined;
   const operationMetadata = [
+    ["요청 ID", operation.operationId],
+    observation?.lastConfirmedAt ? ["마지막 서버 확인", formatTimestamp(observation.lastConfirmedAt, locale) ?? "확인 정보 없음"] : undefined,
     actor ? ["실행 주체", actor] : undefined,
     createdAt ? ["시작", createdAt] : undefined,
     updatedAt ? ["업데이트", updatedAt] : undefined,
@@ -322,12 +174,138 @@ export function WorkspaceOperationCard({
     activity ? ["활동", activity] : undefined,
   ].filter((item): item is [string, string] => item !== undefined);
   const result = recordValue(operation.result);
+  const publicExportWorkerEvidence = recordValue(
+    result.public_export_worker_evidence ?? result.publicExportWorkerEvidence,
+  );
+  const exportEditability = recordValue(
+    publicExportWorkerEvidence.editability,
+  );
+  const exportQuality = recordValue(publicExportWorkerEvidence.quality);
+  const exportProducerTiming = recordValue(
+    publicExportWorkerEvidence.producerTiming,
+  );
+  const exportEditabilityVerdict = stringValue(
+    exportEditability.verdict,
+    exportEditability.status,
+  );
+  const exportQualityStatus = stringValue(exportQuality.status);
+  const exportEditabilityReasons = Array.isArray(exportEditability.reasonCodes)
+    ? exportEditability.reasonCodes.filter(
+        (reason): reason is string =>
+          typeof reason === "string" && reason.length > 0,
+      )
+    : [];
+  const exportEditabilityImageOnlyPages = Array.isArray(
+    exportEditability.imageOnlyPages,
+  )
+    ? exportEditability.imageOnlyPages.filter(
+        (page): page is number =>
+          typeof page === "number" && Number.isSafeInteger(page) && page >= 1,
+      )
+    : [];
+  const exportQualitySlideFallbacks = Array.isArray(exportQuality.slideFallbacks)
+    ? exportQuality.slideFallbacks.flatMap((value) => {
+        const fallback = recordValue(value);
+        const slideNumber = numberValue(fallback.n, fallback.slideNumber);
+        if (slideNumber === undefined || slideNumber < 1) return [];
+        return [{
+          slideNumber,
+          code: stringValue(fallback.code, fallback.reason) ?? "unknown",
+        }];
+      })
+    : [];
+  const exportImageFallbackPages = [...new Set([
+    ...exportEditabilityImageOnlyPages,
+    ...exportQualitySlideFallbacks.map((fallback) => fallback.slideNumber),
+  ])].sort((left, right) => left - right);
+  const exportCleanupFailurePages = Array.isArray(exportProducerTiming.slides)
+    ? exportProducerTiming.slides.flatMap((value) => {
+        const slide = recordValue(value);
+        const recovery = recordValue(slide.recovery);
+        const slideNumber = numberValue(slide.n, slide.slideNumber);
+        return recovery.cleanupFailure === true &&
+          slideNumber !== undefined &&
+          slideNumber >= 1
+          ? [slideNumber]
+          : [];
+      })
+    : [];
+  const exportEditabilitySlides = Array.isArray(exportEditability.slides)
+    ? exportEditability.slides.flatMap((value) => {
+        const slide = recordValue(value);
+        const slideNumber = numberValue(slide.slideNumber);
+        if (slideNumber === undefined || slideNumber < 1) return [];
+        const verdict = stringValue(slide.verdict, slide.status) ?? "unknown";
+        const reasons = Array.isArray(slide.reasons)
+          ? slide.reasons.filter(
+              (reason): reason is string =>
+                typeof reason === "string" && reason.length > 0,
+            )
+          : [];
+        const imageOnly = slide.imageOnly === true;
+        const photoOnlyExempt = slide.photoOnlyExempt === true;
+        if (
+          !imageOnly &&
+          !photoOnlyExempt &&
+          !["partially-editable", "unknown", "not-editable"].includes(verdict) &&
+          reasons.length === 0
+        )
+          return [];
+        return [{ slideNumber, verdict, imageOnly, photoOnlyExempt, reasons }];
+      })
+    : [];
+  const editabilityReasonLabels: Record<string, string> = {
+    "source-role-unknown": "원본 역할을 확인할 수 없습니다.",
+    "native-correspondence-missing": "대응하는 편집 개체가 없습니다.",
+    "native-kind-mismatch": "편집 개체 종류가 원본과 다릅니다.",
+    "native-text-unverified": "편집 가능한 텍스트를 검증하지 못했습니다.",
+    "native-text-mismatch": "편집 개체의 텍스트가 원본과 다릅니다.",
+    "native-outside-canvas": "편집 개체가 캔버스 밖에 있습니다.",
+    "native-readback-unverified": "PowerPoint 재확인 증거가 부족합니다.",
+    "rasterized-required-target": "필수 편집 대상이 이미지로 남았습니다.",
+    "required-target-missing": "필수 편집 대상이 누락되었습니다.",
+    "selection-obstructed": "다른 이미지가 선택을 가립니다.",
+    raster_fragment_missing: "페이지 검증에 필요한 그림 조각이 없어 페이지 전체를 이미지로 대체했습니다.",
+    raster_fragment_digest_mismatch: "그림 조각의 식별값이 원본과 일치하지 않아 페이지 전체를 이미지로 대체했습니다.",
+    raster_fragment_placement_mismatch: "그림 조각의 위치 측정값이 일치하지 않아 페이지 전체를 이미지로 대체했습니다.",
+    digest_mismatch: "식별값이 일치하지 않아 페이지 이미지로 대체했습니다.",
+    placement_mismatch: "배치가 일치하지 않아 페이지 이미지로 대체했습니다.",
+    local_fit_readback_failed: "페이지 위치 측정 검증을 통과하지 못해 페이지 전체를 이미지로 대체했습니다.",
+    "photo-only-page": "원본 사진 페이지입니다.",
+    "no-required-targets": "필수 편집 대상이 없습니다.",
+  };
+  const editabilityReasonLabel = (reason: string) =>
+    editabilityReasonLabels[reason] ?? "세부 확인 필요";
+  const generationCompletion = isPresentationGeneration
+    ? generationCompletionSummary(result)
+    : undefined;
   const isQualityReview =
     operation.operationType === "quality.review" ||
     result.kind === "quality.review";
   const isExport =
     operation.operationType === "export.pptx" ||
     operation.operationType === "export.pdf";
+  const isPptxExport = operation.operationType === "export.pptx";
+  const exportEditabilityCompletion = !isPptxExport
+    ? undefined
+    : exportQualityStatus === "image-only" ||
+        exportEditabilityVerdict === "not-editable"
+      ? "image-only"
+      : exportImageFallbackPages.length > 0 ||
+          exportQualityStatus === "partially-editable" ||
+          exportEditabilityVerdict === "partially-editable"
+        ? "partially-editable"
+        : exportEditabilityVerdict === "fully-editable" &&
+            exportQualityStatus !== "partially-editable" &&
+            exportQualityStatus !== "image-only"
+          ? "fully-editable"
+          : "unknown";
+  const exportCompletionLabel: Record<string, string> = {
+    "fully-editable": "내보내기 완료 · 완전 편집형 PPTX",
+    "partially-editable": "내보내기 완료 · 일부 편집 가능",
+    "image-only": "내보내기 완료 · 이미지 전용 PPTX",
+    unknown: "내보내기 완료 · 편집성 확인 필요",
+  };
   const isVersionRestore =
     operation.operationType === "version.restore" ||
     result.kind === "version.restore";
@@ -659,11 +637,13 @@ export function WorkspaceOperationCard({
 
   return (
     <article
-      className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+      className="w-full text-[15px] leading-[1.6]"
       aria-label={`${operation.title} 작업`}
+      data-workspace-anchor-id={operation.id}
       data-operation-id={operation.operationId}
       data-operation-status={operation.status}
     >
+      <ConversationMessageFrame appearance="assistant">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold text-slate-900">
@@ -686,7 +666,7 @@ export function WorkspaceOperationCard({
               `지원되지 않는 상태 · ${operation.status}`}
           </p>
         </div>
-        {!TERMINAL.has(operation.status) &&
+        {!isPresentationGeneration && !TERMINAL.has(operation.status) &&
           !APPROVABLE.has(operation.status) && (
             <span
               aria-hidden="true"
@@ -715,19 +695,24 @@ export function WorkspaceOperationCard({
         </p>
       )}
       {operationMetadata.length > 0 && (
-        <dl
-          className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 rounded-lg bg-slate-50 px-2.5 py-2 text-xs"
-          data-testid="operation-metadata"
-        >
-          {operationMetadata.map(([label, value]) => (
-            <div key={label} className="contents">
-              <dt className="font-medium text-slate-500">{label}</dt>
-              <dd className="min-w-0 break-words text-slate-700">{value}</dd>
-            </div>
-          ))}
-        </dl>
+        <details className="mt-2 text-xs text-slate-600">
+          <summary className="cursor-pointer select-none font-medium">작업 내역 보기</summary>
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 rounded-lg bg-slate-50 px-2.5 py-2" data-testid="operation-metadata">
+            {operationMetadata.map(([label, value]) => (
+              <div key={label} className="contents">
+                <dt className="font-medium text-slate-500">{label}</dt>
+                <dd className="min-w-0 break-words text-slate-700">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          {progressEvidence.messages.length > 0 && <ol className="mt-2 space-y-1 text-slate-600">
+            {progressEvidence.messages.map((message, index) => <li key={`${index}-${message}`}>{message}</li>)}
+          </ol>}
+          {TERMINAL.has(operation.status) && progress !== undefined && <p className="mt-2">마지막 보고 진행률 · {Math.round(progress)}%</p>}
+        </details>
       )}
-      {displayedProgress !== undefined && (
+      {isPresentationGeneration && !TERMINAL.has(operation.status) && <WorkspaceGenerationProgress operation={operation} observation={observation} locale={locale} />}
+      {!isPresentationGeneration && !TERMINAL.has(operation.status) && displayedProgress !== undefined && (
         <div className="mt-3">
           <div
             className="h-1.5 overflow-hidden rounded-full bg-slate-100"
@@ -752,14 +737,6 @@ export function WorkspaceOperationCard({
               ? "결과 저장 중"
               : `${Math.round(displayedProgress)}%`}
           </p>
-          {isPresentationGeneration && latestProgressAt && (
-            <p
-              className="mt-1 text-xs text-slate-500"
-              data-testid="generation-last-progress-at"
-            >
-              {t("lastProgress", { time: latestProgressAt })}
-            </p>
-          )}
         </div>
       )}
       {qualityResultSaving && (
@@ -781,7 +758,7 @@ export function WorkspaceOperationCard({
           {capacityWaitMessage}
         </p>
       )}
-      {latestMessage && operation.status !== "succeeded" && !capacityWaiting && (
+      {latestMessage && !isPresentationGeneration && !TERMINAL.has(operation.status) && !operation.error && !capacityWaiting && (
         <p className="mt-2 text-xs text-slate-600">{latestMessage}</p>
       )}
       {isTemplateApply && !TERMINAL.has(operation.status) && (
@@ -797,6 +774,33 @@ export function WorkspaceOperationCard({
         <p className="mt-2 rounded-lg bg-emerald-50 px-2.5 py-2 text-xs text-emerald-800">
           {resultSummary}
         </p>
+      )}
+      {operation.status === "succeeded" && generationCompletion && (
+        <section
+          className={`mt-2 rounded-lg border px-2.5 py-2 text-xs ${
+            generationCompletion.reviewRequired > 0
+              ? "border-amber-200 bg-amber-50 text-amber-950"
+              : "border-emerald-100 bg-emerald-50 text-emerald-950"
+          }`}
+          aria-label="문서 생성 결과"
+          data-testid="generation-completion-summary"
+        >
+          <p className="font-semibold">
+            문서 생성 완료 — {generationCompletion.total}페이지 / 정상{" "}
+            {generationCompletion.normal} · 자동 수정{" "}
+            {generationCompletion.autoRepaired} · 검토 필요{" "}
+            {generationCompletion.reviewRequired}
+          </p>
+          {generationCompletion.reviewPages.length > 0 && (
+            <ul className="mt-2 space-y-1" data-testid="generation-review-pages">
+              {generationCompletion.reviewPages.map((page) => (
+                <li key={page.index}>
+                  {page.index + 1}페이지: {page.reasons.join(" · ")}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
       {operation.status === "succeeded" && remakeOfferSlideIndex !== undefined && (
         <section
@@ -1047,6 +1051,19 @@ export function WorkspaceOperationCard({
                   ? ` · 소스 리비전 ${sourceRevision}`
                   : ""}
               </p>
+              {exportEditabilityCompletion && (
+                <p
+                  className={
+                    exportEditabilityCompletion === "fully-editable"
+                      ? "mt-0.5 text-emerald-800"
+                      : "mt-0.5 font-medium text-amber-800"
+                  }
+                  role="status"
+                  data-testid="export-editability-verdict"
+                >
+                  {exportCompletionLabel[exportEditabilityCompletion]}
+                </p>
+              )}
             </div>
             {allowedAction("download") && (
               <button
@@ -1066,6 +1083,65 @@ export function WorkspaceOperationCard({
               </button>
             )}
           </div>
+          {(exportEditabilitySlides.length > 0 ||
+            exportImageFallbackPages.length > 0 ||
+            exportEditabilityReasons.length > 0) && (
+            <div
+              className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-amber-950"
+              data-testid="export-editability-evidence"
+            >
+              <p className="font-medium">편집성 확인</p>
+              {exportEditabilityReasons.length > 0 && (
+                <p className="mt-1">
+                  사유: {exportEditabilityReasons.map(editabilityReasonLabel).join(" · ")}
+                </p>
+              )}
+              {exportEditabilitySlides.length > 0 && (
+                <ul className="mt-1 space-y-0.5">
+                  {exportEditabilitySlides.map((slide) => (
+                    <li key={slide.slideNumber}>
+                      {slide.slideNumber}페이지: {slide.photoOnlyExempt
+                        ? "원본 사진 페이지"
+                        : slide.imageOnly
+                          ? "이미지 전용"
+                          : slide.verdict === "partially-editable"
+                            ? "부분 편집 가능"
+                            : "확인 필요"}
+                      {slide.reasons.length > 0
+                        ? ` · ${slide.reasons.map(editabilityReasonLabel).join(" · ")}`
+                        : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {exportImageFallbackPages.length > 0 && (
+                <p className="mt-1 font-medium" data-testid="export-image-fallback-pages">
+                  이미지로 대체된 페이지: {exportImageFallbackPages
+                    .map((page) => `${page}페이지`)
+                    .join(", ")}
+                </p>
+              )}
+              {exportQualitySlideFallbacks.length > 0 && (
+                <ul className="mt-1 space-y-0.5" data-testid="export-image-fallback-reasons">
+                  {exportQualitySlideFallbacks.map((fallback) => (
+                    <li key={`${fallback.slideNumber}:${fallback.code}`}>
+                      {fallback.slideNumber}페이지: {editabilityReasonLabel(fallback.code)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {exportCleanupFailurePages.length > 0 && (
+            <p
+              className="mt-2 rounded-md bg-slate-100 px-2 py-1.5 text-slate-700"
+              data-testid="export-cleanup-status"
+            >
+              내보내기 종료 정리: {exportCleanupFailurePages
+                .map((page) => `${page}페이지`)
+                .join(", ")} 작업의 임시 실행 환경 정리를 완료하지 못했습니다. 결과 파일과 페이지 측정 판정은 유지됩니다.
+            </p>
+          )}
           {!artifactId && (
             <p
               className="mt-2 rounded-md bg-red-100 px-2 py-1.5 text-red-800"
@@ -1125,12 +1201,13 @@ export function WorkspaceOperationCard({
           감사 이력은 유지됩니다. 후속 성공 작업 {operation.supersededByOperationId}이(가) 같은 revision과 형식의 현재 결과입니다.
         </p>
       )}
-      {operation.error && operation.status !== "succeeded" && !resolvedByLaterSuccess && (
+      {(failed || operation.error) && operation.status !== "succeeded" && !resolvedByLaterSuccess && (
         <p
-          className="mt-2 rounded-lg bg-red-50 px-2.5 py-2 text-xs text-red-700"
+          className="mt-3 flex items-start gap-2 text-sm text-slate-800"
           role="alert"
         >
-          {operation.error}
+          <span aria-hidden="true" className="font-semibold text-red-700">!</span>
+          {operationFailureMessage(operation)}
         </p>
       )}
       {actionError && (
@@ -1150,7 +1227,7 @@ export function WorkspaceOperationCard({
           승인 기한이 만료되었습니다. 작업을 다시 시도해 주세요.
         </p>
       )}
-      {retryUnavailable && !resolvedByLaterSuccess && (
+      {retryUnavailable && !isPresentationGeneration && !failed && !operation.error && !resolvedByLaterSuccess && (
         <p
           className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs text-amber-800"
           role="status"
@@ -1165,7 +1242,9 @@ export function WorkspaceOperationCard({
           .filter((action) =>
             ["retry", "approve", "reject", "cancel", "undo"].includes(
               action.id,
-            ) && !(resolvedByLaterSuccess && action.id === "retry"),
+            ) && !(resolvedByLaterSuccess && action.id === "retry") &&
+              !( !isExport && action.id === "cancel" && operation.operationId === composerCancelOperationId) &&
+              !(action.id === "retry" && (!action.enabled || operation.retryable === false)),
           )
           .map((action) => {
             const unavailable =
@@ -1221,6 +1300,7 @@ export function WorkspaceOperationCard({
             );
           })}
       </div>
+      </ConversationMessageFrame>
     </article>
   );
 }

@@ -1,0 +1,55 @@
+{
+  "id": "infrastructure-15-firewall",
+  "category": "infrastructure",
+  "tags": {
+    "ko": [
+      "인프라",
+      "방화벽"
+    ],
+    "en": [
+      "infrastructure",
+      "firewall"
+    ]
+  },
+  "alt": {
+    "ko": "방화벽 단색 벡터 인포그래픽",
+    "en": "firewall monochrome vector infographic"
+  },
+  "path": "originals/infrastructure-15-firewall.svg",
+  "thumbnail": "thumbnails/infrastructure-15-firewall.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 694,
+  "sha256": "3f41061270f9355a29d51a7435881efd8efe2927d8ec40569e0f1ad9bb42653c",
+  "geometry_sha256": "e3ab781bab58bd1d95bc8390fc7bf3c7f8ebd89d2e8b20d400efd470d66ea91d",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 53976,
+    "preview_opaque_pixels": 9627,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "BrickWall",
+      "Shield"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

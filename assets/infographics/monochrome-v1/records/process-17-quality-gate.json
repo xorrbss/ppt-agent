@@ -1,0 +1,56 @@
+{
+  "id": "process-17-quality-gate",
+  "category": "process",
+  "tags": {
+    "ko": [
+      "프로세스",
+      "품질관문"
+    ],
+    "en": [
+      "process",
+      "quality",
+      "gate"
+    ]
+  },
+  "alt": {
+    "ko": "품질관문 단색 벡터 인포그래픽",
+    "en": "quality gate monochrome vector infographic"
+  },
+  "path": "originals/process-17-quality-gate.svg",
+  "thumbnail": "thumbnails/process-17-quality-gate.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 633,
+  "sha256": "2bde2a0f25d2c68db55dabd13d30287c0afa0856918c3896a00f6e6b65824d79",
+  "geometry_sha256": "c49c82dfbcc610663be053adb3eddefefaf771db169c5d427ea90303060f7177",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 57724,
+    "preview_opaque_pixels": 6064,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "ShieldCheck",
+      "BetweenHorizontalStart"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

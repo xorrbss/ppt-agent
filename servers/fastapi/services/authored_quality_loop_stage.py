@@ -46,6 +46,7 @@ async def apply_slide_quality_loop(
     composition_profile: Any = None,
     slide_content: str = "",
     infographic: AuthoredSlideInfographic | None = None,
+    capture=None,
 ) -> tuple[str, dict[str, Any]]:
     """Return the slide's chosen HTML and the receipt describing the choice.
 
@@ -63,9 +64,32 @@ async def apply_slide_quality_loop(
         # the attempt that chose it and is not re-derived here.
         return reused, {}
     labels = tuple(node.label for node in infographic.nodes) if infographic else ()
+    prepared_candidates: dict[str, str] = {}
+
+    async def render_candidate(candidate: str):
+        # Every candidate render of this slide -- best-of variants and the one
+        # critique correction alike -- goes through the deck's capture owner,
+        # attributed to this slide.
+        from services.authored_admission_capture import capture_once
+        if capture is None:
+            from utils.slide_capture import render_html_to_png_with_metrics
+
+            capture_fn = render_html_to_png_with_metrics
+        else:
+            capture_fn = capture
+
+        result = await capture_once(
+            candidate, index=slide_index, capture=capture_fn
+        )
+        if result.prepared_html is None:
+            raise RuntimeError("authored quality capture preparation unavailable")
+        prepared_candidates[candidate] = result.prepared_html
+        return result
+
     try:
         outcome = await run_authored_quality_loop(
             html,
+            render=render_candidate,
             reference_mode=reference_mode,
             strict_structural_off_canvas=(
                 getattr(composition_profile, "profile_id", "ordinary") != "ordinary"
@@ -76,11 +100,11 @@ async def apply_slide_quality_loop(
         )
     except Exception as error:  # noqa: BLE001 - the loop is never load-bearing
         LOGGER.warning("[authored] quality loop failed, keeping the authored slide: %s", error)
-        return html, {}
+        return prepared_candidates.get(html, html), {}
     LOGGER.info(
         "[authored] slide %d quality loop: %s", slide_index + 1, outcome.receipt
     )
-    return outcome.html, dict(outcome.receipt)
+    return prepared_candidates.get(outcome.html, outcome.html), dict(outcome.receipt)
 
 
 __all__ = ["apply_slide_quality_loop"]

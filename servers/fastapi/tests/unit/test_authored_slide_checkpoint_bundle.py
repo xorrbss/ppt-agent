@@ -113,6 +113,41 @@ def test_interrupted_repair_keeps_old_db_pointer_bytes(monkeypatch, tmp_path: Pa
     assert read_valid_evidence(old_checkpoint).html == "old-html"
 
 
+def test_render_replacement_can_read_prior_revision_after_reauthor(
+    monkeypatch, tmp_path: Path
+):
+    monkeypatch.setenv("AUTHORED_CHECKPOINT_DIRECTORY", str(tmp_path))
+    job_id, token = uuid.uuid4(), "worker-token"
+    base_path = render_artifact_path(job_id, 0, token)
+    old_path = base_path.with_name(f"{base_path.stem}-r0-initial.png")
+    atomic_write(old_path, b"old-png")
+    write_valid_evidence(
+        old_path,
+        attempt_id=hashlib.sha256(token.encode()).hexdigest()[:32],
+        slide_index=0,
+        revision=0,
+        html="old-html",
+        png=b"old-png",
+        metrics={"visible": True},
+    )
+    checkpoint = AuthoredSlideCheckpoint(
+        job_id=job_id,
+        slide_index=0,
+        author_html="new-html",
+        illustrated_html="new-html",
+        render_path=str(old_path.relative_to(tmp_path)).replace("\\", "/"),
+        render_sha256=hashlib.sha256(b"old-png").hexdigest(),
+        attempt_token=token,
+    )
+
+    with pytest.raises(SlideCheckpointCorrupt, match="pointer_mismatch"):
+        read_valid_evidence(checkpoint)
+    prior = read_valid_evidence(checkpoint, require_current_html_match=False)
+    assert prior is not None
+    assert prior.revision == 0
+    assert prior.html == "old-html"
+
+
 def test_recover_promotes_committed_revision_after_pointer_crash(tmp_path: Path):
     store = AtomicSlideCheckpointStore(tmp_path)
     committed = store.commit(

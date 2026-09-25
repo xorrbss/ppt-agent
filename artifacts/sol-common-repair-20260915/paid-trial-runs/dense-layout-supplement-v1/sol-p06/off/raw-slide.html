@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#00140E;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:absolute;left:0;top:0;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:18px;width:840px}
+.eyebrow{height:21px;font-size:15px;line-height:21px;font-weight:700;letter-spacing:0;color:#08916E}
+.slide-title{margin-top:6px;max-width:840px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:924px;top:18px;width:300px;height:27px;display:flex;justify-content:flex-end;align-items:center}
+.requirements{height:27px;display:flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap}
+.req-label{font-size:13px;line-height:27px;font-weight:700;color:#00140E}
+.req-chip{height:27px;padding:0 9px;border:1px solid #08916E;border-radius:12px;background:#EAEDF2;font-family:"IBM Plex Mono","Consolas",monospace;font-size:13px;line-height:25px;font-weight:700;color:#00140E}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{height:573px;padding:0 64px}
+.claim-row{height:58px;display:flex;align-items:center;justify-content:space-between}
+.claim{font-size:24px;line-height:32px;font-weight:700;letter-spacing:-.02em;color:#00140E}
+.claim strong{color:#08916E}
+.scope{display:flex;align-items:center;gap:10px;font-size:15px;line-height:22px;font-weight:700;color:#00140E}
+.scope-mark{width:10px;height:10px;border-radius:12px;background:#08916E}
+.roadmap-panel{height:418px;padding:20px 24px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;box-shadow:0 8px 22px rgba(0,20,14,.06)}
+.roadmap-head{height:54px;display:grid;grid-template-columns:190px repeat(4,1fr);column-gap:12px;align-items:center}
+.head-label{font-size:15px;line-height:21px;font-weight:700;color:#00140E}
+.phase-head{height:40px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:12px;background:#EAEDF2;color:#00140E}
+.phase-no{font-family:"IBM Plex Mono","Consolas",monospace;font-size:15px;line-height:20px;font-weight:700;color:#08916E}
+.phase-name{font-size:17px;line-height:22px;font-weight:700;color:#00140E}
+.lane{position:relative;height:81px;display:grid;grid-template-columns:190px repeat(4,1fr);column-gap:12px;align-items:center;border-top:1px solid #E2E8F0}
+.lane-role{height:63px;padding:9px 14px;border-left:5px solid #08916E;border-radius:12px;background:#F9F9F9;display:flex;flex-direction:column;justify-content:center}
+.role-name{font-size:19px;line-height:25px;font-weight:700;color:#00140E}
+.role-scope{margin-top:2px;font-size:13px;line-height:18px;font-weight:700;color:#08916E}
+.stage{position:relative;height:63px;padding:8px 10px;border:1px solid #E2E8F0;border-radius:12px;background:#F9F9F9;display:flex;align-items:center;justify-content:center;text-align:center;font-size:18px;line-height:23px;font-weight:700;color:#00140E}
+.stage.key{border-color:#08916E;background:#EAF7F3;color:#00140E}
+.stage.restricted{border-style:dashed;border-color:#08916E;background:#FFFFFF}
+.takeaway{height:65px;margin-top:16px;padding:11px 20px;display:grid;grid-template-columns:112px 1fr;gap:18px;align-items:center;border-radius:12px;background:#EAF7F3;border:1px solid #08916E}
+.takeaway-label{font-size:15px;line-height:21px;font-weight:700;color:#08916E}
+.takeaway-text{font-size:18px;line-height:26px;font-weight:700;color:#00140E}
+</style>
+</head>
+<body>
+  <div data-header-part="band" data-header-band="101" class="header-band" style="height:101px">
+    <div class="header-left">
+      <div data-header-part="eyebrow" data-semantic-role="supporting" data-qid="s5-eyebrow" class="eyebrow">사용자 요구</div>
+      <div data-header-part="title" data-semantic-role="title" data-qid="s5-title" class="slide-title">사용자별 핵심 요구 이해</div>
+    </div>
+    <div data-header-part="right" class="header-right">
+      <div data-header-part="requirements" data-requirement-ids="SFR-002,SIR-006,SIR-007,SER-007" data-semantic-role="supporting" data-qid="s5-requirements" class="requirements">
+        <span data-semantic-role="supporting" data-qid="s5-req-label" class="req-label">요구사항 번호</span>
+        <span data-semantic-role="supporting" data-qid="s5-req-1" class="req-chip">SFR-002</span>
+        <span data-semantic-role="supporting" data-qid="s5-req-2" class="req-chip">SIR-006</span>
+        <span data-semantic-role="supporting" data-qid="s5-req-more" class="req-chip">+2</span>
+      </div>
+    </div>
+    <div data-header-part="divider" class="divider"></div>
+  </div>
+
+  <div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:115px">
+    <div class="claim-row">
+      <div data-semantic-role="body" data-qid="s5-claim" class="claim">역할별 <strong>권한 경계</strong>와 처리 순서를 하나의 업무 흐름으로 고정합니다.</div>
+      <div data-semantic-role="supporting" data-qid="s5-scope" class="scope"><span class="scope-mark"></span>4개 사용자 관점</div>
+    </div>
+
+    <div data-semantic-role="body" data-qid="s5-roadmap" class="roadmap-panel">
+      <div class="roadmap-head">
+        <div data-semantic-role="supporting" data-qid="s5-head-role" class="head-label">사용자 및 접근 범위</div>
+        <div data-semantic-role="supporting" data-qid="s5-phase-1" class="phase-head"><span class="phase-no">01</span><span class="phase-name">접근·배정</span></div>
+        <div data-semantic-role="supporting" data-qid="s5-phase-2" class="phase-head"><span class="phase-no">02</span><span class="phase-name">작성·처리</span></div>
+        <div data-semantic-role="supporting" data-qid="s5-phase-3" class="phase-head"><span class="phase-no">03</span><span class="phase-name">검증·변경</span></div>
+        <div data-semantic-role="supporting" data-qid="s5-phase-4" class="phase-head"><span class="phase-no">04</span><span class="phase-name">완료·확인</span></div>
+      </div>
+
+      <div data-semantic-role="body" data-qid="s5-lane-company" class="lane">
+        <div data-semantic-role="body" data-qid="s5-role-company" class="lane-role">
+          <div class="role-name">지원기업</div>
+          <div class="role-scope">본인 신청 건 전체 흐름</div>
+        </div>
+        <div data-semantic-role="body" data-qid="s5-company-1" class="stage">웹폼 신청</div>
+        <div data-semantic-role="body" data-qid="s5-company-2" class="stage">임시저장·<br>단계별 서류 제출</div>
+        <div data-semantic-role="body" data-qid="s5-company-3" class="stage">보완 대상 수정</div>
+        <div data-semantic-role="body" data-qid="s5-company-4" class="stage key">진행상태 조회·<br>결과 알림</div>
+      </div>
+
+      <div data-semantic-role="body" data-qid="s5-lane-reviewer" class="lane">
+        <div data-semantic-role="body" data-qid="s5-role-reviewer" class="lane-role">
+          <div class="role-name">평가위원</div>
+          <div class="role-scope">배정 기업·평가기간 한정</div>
+        </div>
+        <div data-semantic-role="body" data-qid="s5-reviewer-1" class="stage restricted">접근 범위 통제</div>
+        <div data-semantic-role="body" data-qid="s5-reviewer-2" class="stage">신청서류·<br>평가표 열람</div>
+        <div data-semantic-role="body" data-qid="s5-reviewer-3" class="stage">점수 검증·서명</div>
+        <div data-semantic-role="body" data-qid="s5-reviewer-4" class="stage key">제출 완료 후<br>수정 제한</div>
+      </div>
+
+      <div data-semantic-role="body" data-qid="s5-lane-agency" class="lane">
+        <div data-semantic-role="body" data-qid="s5-role-agency" class="lane-role">
+          <div class="role-name">수행·검증기관</div>
+          <div class="role-scope">배정 기업 정보만 처리</div>
+        </div>
+        <div data-semantic-role="body" data-qid="s5-agency-1" class="stage restricted">배정 기업 확인</div>
+        <div data-semantic-role="body" data-qid="s5-agency-2" class="stage">보고서 처리</div>
+        <div data-semantic-role="body" data-qid="s5-agency-3" class="stage">진행상태 갱신</div>
+        <div data-semantic-role="body" data-qid="s5-agency-4" class="stage key">배정 범위 내<br>처리 완료</div>
+      </div>
+
+      <div data-semantic-role="body" data-qid="s5-lane-admin" class="lane">
+        <div data-semantic-role="body" data-qid="s5-role-admin" class="lane-role">
+          <div class="role-name">관리자·업무담당자</div>
+          <div class="role-scope">권한별 통합 업무 통제</div>
+        </div>
+        <div data-semantic-role="body" data-qid="s5-admin-1" class="stage">기업·평가자·<br>기관 배정</div>
+        <div data-semantic-role="body" data-qid="s5-admin-2" class="stage">복수 건 상태변경</div>
+        <div data-semantic-role="body" data-qid="s5-admin-3" class="stage">접수·평가·알림·<br>정산·성과 통합 조회</div>
+        <div data-semantic-role="body" data-qid="s5-admin-4" class="stage key">미처리 업무·<br>기한 대시보드</div>
+      </div>
+    </div>
+
+    <div data-semantic-role="body" data-qid="s5-takeaway" class="takeaway">
+      <div data-semantic-role="supporting" data-qid="s5-takeaway-label" class="takeaway-label">설계 기준</div>
+      <div data-semantic-role="body" data-qid="s5-takeaway-text" class="takeaway-text">권한 범위와 완료 이후 변경 제한을 기록해 평가의 공정성·감사 가능성을 확보하고, 통합 조회로 수작업 대사와 처리 누락을 줄입니다.</div>
+    </div>
+  </div>
+</body>
+</html>

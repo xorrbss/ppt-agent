@@ -1,8 +1,11 @@
 import React, { forwardRef } from "react";
+import { useSelector } from "react-redux";
 import { GripVertical } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { Slide } from "../../types/slide";
 import { PresentationContentRender } from "../../components/PresentationContentRender";
+import { LEGACY_AUTHORED_CANVAS, resolveAuthoredCanvas } from "@/lib/authored-canvas";
+import type { RootState } from "@/store/store";
 import { FlaggedSlideBadge } from "./FlaggedSlideBadge";
 import type { FlaggedSlideBadge as FlaggedSlideBadgeModel } from "../utils/flaggedSlides";
 
@@ -35,6 +38,10 @@ export const SlideThumbnailCard = forwardRef<
   ...props
 }, ref) => {
   const t = useTranslations("slideNavigation");
+  const theme = useSelector((state: RootState) => state.presentationGeneration.presentationData?.theme);
+  const canvas = slide?.content?.__authored__ === true || slide?.layout_group === "authored" || slide?.layout_group === "svg"
+    ? resolveAuthoredCanvas(theme)
+    : LEGACY_AUTHORED_CANVAS;
   const handleDragButtonClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     dragHandleProps?.onClick?.(event);
@@ -79,18 +86,18 @@ export const SlideThumbnailCard = forwardRef<
           aria-hidden="true"
           inert
           className="relative pointer-events-none"
-          style={{ height: `${720 * previewScale}px`, overflow: "hidden" }}
+          style={{ height: `${canvas.heightPx * previewScale}px`, overflow: "hidden" }}
         >
           <div
             className="absolute top-0 left-0 rounded-[10px] overflow-hidden pointer-events-none"
             style={{
-              width: 1280,
-              height: 720,
+              width: canvas.widthPx,
+              height: canvas.heightPx,
               transformOrigin: "top left",
               transform: `scale(${previewScale})`,
             }}
           >
-            <PresentationContentRender slide={slide} />
+            <PresentationContentRender slide={slide} canvas={canvas} resolveSvgAssets={false} />
           </div>
         </div>
         {flag && (

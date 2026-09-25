@@ -1,0 +1,12 @@
+{
+  "status": "completed",
+  "clock": "time.perf_counter_ns",
+  "trialStartNs": 291961847937100,
+  "trialEndNs": 292048974724800,
+  "actualTotalMs": 87126.788,
+  "sharedAuthorThroughOffInspectionMs": 81100.457,
+  "offCaptureMs": 6736.69,
+  "offInspectionMs": 65.762,
+  "onAdditionalMs": 5925.01,
+  "branchTimingRule": "Shared author time and each branch additional time remain separate; branch sums are not completion latency."
+}

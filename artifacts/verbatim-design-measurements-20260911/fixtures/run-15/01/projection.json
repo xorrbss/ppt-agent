@@ -1,0 +1,260 @@
+{
+ "source-slide:2:text:3": {
+  "text": "이 강의는 무엇을 만드는가",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "이 강의는 무엇을 만드는가",
+    "begin": 0,
+    "end": 14,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:2:text:4": {
+  "text": "기술보다 ‘사업이 굴러가는 구조’를 먼저 만듭니다.",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "기술보다 ‘사업이 굴러가는 구조’를 먼저 만듭니다.",
+    "begin": 0,
+    "end": 28,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:2:text:5": {
+  "text": "02",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "02",
+    "begin": 0,
+    "end": 2,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:2:text:6": {
+  "text": "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "꿀벌쌤",
+    "begin": 0,
+    "end": 3,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 0,
+    "marker": "",
+    "body": "숏폼대행 1인사업자 홀로서기",
+    "begin": 6,
+    "end": 21,
+    "order_free_before": true
+   }
+  ]
+ },
+ "source-slide:2:text:9": {
+  "text": "① 세팅",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "① ",
+    "body": "세팅",
+    "begin": 0,
+    "end": 4,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:2:text:10": {
+  "text": "인스타 · 블로그 · 영업기지 내가 누구인지 보여주는 공간",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "인스타 · 블로그 · 영업기지",
+    "begin": 0,
+    "end": 16,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "내가 누구인지 보여주는 공간",
+    "begin": 17,
+    "end": 32,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:2:text:13": {
+  "text": "② 제작",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "② ",
+    "body": "제작",
+    "begin": 0,
+    "end": 4,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:2:text:14": {
+  "text": "기획 · 촬영 · AI · 캡컷 팔 수 있는 숏폼을 만든다",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "기획 · 촬영 · AI · 캡컷",
+    "begin": 0,
+    "end": 17,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "팔 수 있는 숏폼을 만든다",
+    "begin": 18,
+    "end": 32,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:2:text:17": {
+  "text": "③ 영업",
+  "run_count": 1,
+  "lines": [
+   [
+    0,
+    0
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "③ ",
+    "body": "영업",
+    "begin": 0,
+    "end": 4,
+    "order_free_before": false
+   }
+  ]
+ },
+ "source-slide:2:text:18": {
+  "text": "무료 샘플 · 전화 · DM 첫 고객을 만난다",
+  "run_count": 2,
+  "lines": [
+   [
+    0,
+    0
+   ],
+   [
+    1,
+    1
+   ]
+  ],
+  "runs": [
+   {
+    "index": 0,
+    "line": 0,
+    "marker": "",
+    "body": "무료 샘플 · 전화 · DM",
+    "begin": 0,
+    "end": 15,
+    "order_free_before": false
+   },
+   {
+    "index": 1,
+    "line": 1,
+    "marker": "",
+    "body": "첫 고객을 만난다",
+    "begin": 16,
+    "end": 25,
+    "order_free_before": false
+   }
+  ]
+ }
+}

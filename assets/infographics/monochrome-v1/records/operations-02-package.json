@@ -1,0 +1,54 @@
+{
+  "id": "operations-02-package",
+  "category": "operations",
+  "tags": {
+    "ko": [
+      "운영",
+      "포장"
+    ],
+    "en": [
+      "operations",
+      "package"
+    ]
+  },
+  "alt": {
+    "ko": "포장 단색 벡터 인포그래픽",
+    "en": "package monochrome vector infographic"
+  },
+  "path": "originals/operations-02-package.svg",
+  "thumbnail": "thumbnails/operations-02-package.png",
+  "format": "SVG",
+  "width": 128,
+  "height": 128,
+  "viewBox": "0 0 128 128",
+  "bytes": 474,
+  "sha256": "2e89518afc5d1533261ba7ef32fd4cc55efd32635da768492fae1a0a0d30a71c",
+  "geometry_sha256": "bbb16c01bad07f138b1d301982ffcbb1d0421310e7ce84d58bf896551bfe0582",
+  "background": "transparent",
+  "color_mode": "monochrome",
+  "themeable": true,
+  "default_ink": "#000000",
+  "recolor_method": "Set the root stroke attribute to the slide theme color; replace explicit #000000 on the rare filled detail.",
+  "alpha": {
+    "preview_transparent_pixels": 52114,
+    "preview_opaque_pixels": 11599,
+    "embedded_raster": false
+  },
+  "license": {
+    "status": "ISC-and-original-composition",
+    "provenance": "Lucide vector geometry from the locally installed lucide-react package, composed for this catalogue; custom symbol geometry where listed.",
+    "attribution_file": "LICENSE-lucide.txt"
+  },
+  "generator": {
+    "tool": "local-svg-composition",
+    "method": "Pure SVG geometry, composed from named vector symbols; not image_gen output",
+    "date": "2026-09-12",
+    "library": "lucide-react",
+    "version": "0.447.0",
+    "symbols": [
+      "Package"
+    ],
+    "custom_symbols": [],
+    "parallel_jobs": 10
+  }
+}

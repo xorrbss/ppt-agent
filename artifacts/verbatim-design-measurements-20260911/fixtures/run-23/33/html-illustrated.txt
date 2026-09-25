@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:32px;width:780px}
+.eyebrow{font-size:15px;line-height:18px;font-weight:700;letter-spacing:.06em;color:#08916E}
+.title{margin-top:12px;font-size:34px;line-height:45px;font-weight:800;color:#0F172A;max-width:780px}
+.divider{position:absolute;left:64px;right:64px;bottom:0;height:1px;background:#E2E8F0}
+.body-wrap{position:absolute;left:0;right:0;top:200px;height:448px}
+.inner{width:1152px;margin-left:64px}
+.context{height:38px;display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px}
+.context-name{font-size:20px;line-height:30px;font-weight:700;color:#002060}
+.context-tag{font-size:15px;line-height:24px;color:#08916E;font-weight:700;letter-spacing:.02em}
+.content-grid{display:grid;grid-template-columns:700px 428px;gap:24px;height:365px}
+.panel{background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.check-panel{padding:22px 28px 20px}
+.panel-label{font-size:15px;line-height:23px;font-weight:700;color:#219F88;letter-spacing:.06em;margin-bottom:13px}
+.check-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:28px;row-gap:8px}
+.check-row{height:36px;display:flex;align-items:center;border-bottom:1px solid #E2E8F0}
+.check-box{width:18px;height:18px;border:2px solid #08916E;border-radius:3px;margin-right:12px;flex:none}
+.check-text{font-size:18px;line-height:27px;color:#1D1D1B}
+.memory-panel{padding:24px 28px 22px;background:#E0F3FF;border-color:#CCECFF;display:flex;flex-direction:column}
+.memory-title{font-size:22px;line-height:32px;font-weight:800;color:#002060;margin-bottom:24px}
+.memory-rule{height:1px;background:#219F88;margin-bottom:22px}
+.memory-lines{display:flex;flex-direction:column;gap:10px}
+.memory-line{font-size:22px;line-height:32px;font-weight:700;color:#00140E}
+.memory-line.emphasis{color:#08916E}
+.memory-note{margin-top:auto;padding-top:18px;border-top:1px solid #CCECFF;font-size:16px;line-height:25px;color:#002060}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="180" style="height:180px" data-qid="q-div-54fdca616fb4" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="source-block-0d8ce11ed2b755dd" data-source-block-id="source-slide:34:text:3">마지막 체크리스트</div>
+    <div data-header-part="title" class="title" data-semantic-role="title" data-qid="source-block-c631fb4d39d0712d" data-source-block-id="source-slide:34:text:4">마지막 체크리스트 이제 혼자서 시작할 수 있는가?</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:200px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="inner" data-qid="q-div-c9c4d24a38ca" data-semantic-role="decoration">
+    <div class="context" data-qid="q-div-6e79a99c08ca" data-semantic-role="decoration">
+      <div class="context-name" data-semantic-role="supporting" data-qid="source-block-8c4949e2075a8cf3" data-source-block-id="source-slide:34:text:6">꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+      <div class="context-tag" data-semantic-role="supporting" data-qid="q-context-tag-33">스스로 점검하는 실행 기준</div>
+    </div>
+
+    <div class="content-grid" data-qid="q-div-fb5bd1098200" data-semantic-role="decoration">
+      <div class="panel check-panel" data-semantic-role="decoration" data-qid="q-check-panel-33">
+        <div class="panel-label" data-semantic-role="supporting" data-qid="q-check-label-33">시작 전 확인</div>
+        <div class="check-grid" data-qid="q-div-2a5c8bb6ef63" data-semantic-role="decoration">
+          <div class="check-row" data-semantic-role="decoration" data-qid="q-check-01-33"><span class="check-box" data-semantic-role="decoration" data-qid="q-span-acd61501c301"></span><span class="check-text" data-qid="source-block-2580b2c9f8243659" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:0">□ 누구에게 팔지 안다</span></div>
+          <div class="check-row" data-semantic-role="decoration" data-qid="q-check-02-33"><span class="check-box" data-semantic-role="decoration" data-qid="q-span-7b2a57107bd6"></span><span class="check-text" data-qid="source-block-419ba32807d0923b" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:1">□ 무엇을 팔지 안다</span></div>
+          <div class="check-row" data-semantic-role="decoration" data-qid="q-check-03-33"><span class="check-box" data-semantic-role="decoration" data-qid="q-span-99f5bdcd104d"></span><span class="check-text" data-qid="source-block-125dd57781b7222c" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:2">□ 가격을 말할 수 있다</span></div>
+          <div class="check-row" data-semantic-role="decoration" data-qid="q-check-04-33"><span class="check-box" data-semantic-role="decoration" data-qid="q-span-261d45706776"></span><span class="check-text" data-qid="source-block-6feae989aea88692" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:3">□ 숏폼 1개를 만들 수 있다</span></div>
+          <div class="check-row" data-semantic-role="decoration" data-qid="q-check-05-33"><span class="check-box" data-semantic-role="decoration" data-qid="q-span-21819a06fc55"></span><span class="check-text" data-qid="source-block-c22fea9f6e610db1" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:4">□ 영업할 곳을 찾을 수 있다</span></div>
+          <div class="check-row" data-semantic-role="decoration" data-qid="q-check-06-33"><span class="check-box" data-semantic-role="decoration" data-qid="q-span-b4a988854315"></span><span class="check-text" data-qid="source-block-ed50497f354f883c" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:5">□ 샘플을 제안할 수 있다</span></div>
+          <div class="check-row" data-semantic-role="decoration" data-qid="q-check-07-33"><span class="check-box" data-semantic-role="decoration" data-qid="q-span-2d58cdda4808"></span><span class="check-text" data-qid="source-block-a6de5e09c9cbedcc" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:6">□ 상담과 계약의 기본을 안다</span></div>
+          <div class="check-row" data-semantic-role="decoration" data-qid="q-check-08-33"><span class="check-box" data-semantic-role="decoration" data-qid="q-span-e61bc17f96f5"></span><span class="check-text" data-qid="source-block-fddd0c589ae94ce0" data-semantic-role="body" data-source-block-id="source-slide:34:text:7:run:7">□ 다음 달 콘텐츠를 제안할 수 있다</span></div>
+        </div>
+      </div>
+
+      <div class="panel memory-panel" data-semantic-role="decoration" data-qid="q-memory-panel-33">
+        <div class="memory-title" data-semantic-role="supporting" data-qid="source-block-5270538a9e5de870" data-source-block-id="source-slide:34:text:10">기억하세요</div>
+        <div class="memory-rule" data-semantic-role="decoration" data-qid="q-div-e9320c33a17a"></div>
+        <div class="memory-lines" data-qid="source-block-b412cef19381b555" data-semantic-role="decoration" data-source-block-id="source-slide:34:text:11">
+          <div class="memory-line" data-semantic-role="body" data-qid="q-memory-01-33">작게 시작하고</div>
+          <div class="memory-line" data-semantic-role="body" data-qid="q-memory-02-33">빠르게 만들고</div>
+          <div class="memory-line" data-semantic-role="body" data-qid="q-memory-03-33">많이 영업하고</div>
+          <div class="memory-line emphasis" data-semantic-role="body" data-qid="q-memory-04-33">한 명의 고객을</div>
+          <div class="memory-line emphasis" data-semantic-role="body" data-qid="q-memory-05-33">장기 고객으로.</div>
+        </div>
+        <div class="memory-note" data-semantic-role="supporting" data-qid="q-memory-note-33">체크가 끝났다면, 오늘 바로 한 곳에 제안하세요.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="source-block-92207b6a96ee25cd" data-source-block-id="source-slide:34:text:5">34</div>
+</body>
+</html>

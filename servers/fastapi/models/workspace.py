@@ -160,6 +160,9 @@ class WorkspaceBootstrapRequest(BaseModel):
     def reject_credentials_in_generation_settings(
         cls, value: dict[str, Any]
     ) -> dict[str, Any]:
+        from models.generate_presentation_request import GeneratePresentationRequest
+
+        GeneratePresentationRequest.validate_canvas_selectors(value)
         return _reject_sensitive_workspace_keys(value)
 
     @model_validator(mode="after")

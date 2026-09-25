@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#1D1D1B;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;height:106px;background:#FFFFFF;box-sizing:border-box}
+.header-left{position:absolute;left:64px;top:24px;width:960px}
+.eyebrow{font-size:15px;line-height:20px;font-weight:700;letter-spacing:.02em;color:#08916E}
+.title{margin-top:8px;font-size:30px;line-height:38px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{position:absolute;left:0;right:0;top:134px;height:514px}
+.content-inner{margin-left:64px;width:1152px}
+.subtitle{height:42px;font-size:22px;line-height:32px;font-weight:700;color:#002060}
+.subtitle-mark{display:inline-block;width:8px;height:24px;margin-right:12px;vertical-align:-4px;background:#08916E;border-radius:12px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:20px;height:382px}
+.card{height:382px;padding:0 22px 22px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.card-head{height:64px;margin:0 -22px 18px;padding:17px 22px;background:#219F88;border-radius:12px 12px 0 0;color:#FFFFFF;font-size:21px;line-height:30px;font-weight:700}
+.step-list{display:flex;flex-direction:column;gap:0}
+.step{height:64px;display:flex;align-items:center;padding:0 4px;border-bottom:1px solid #E2E8F0;font-size:19px;line-height:28px;font-weight:600;color:#1D1D1B}
+.step:last-child{border-bottom:0}
+.step-line{width:7px;height:7px;margin-right:13px;background:#08916E;border-radius:12px;flex:none}
+.step-arrow{width:18px;height:1px;margin:0 10px;background:#00828E;flex:none;position:relative}
+.step-arrow:after{;position:absolute;right:-1px;top:-3px;width:6px;height:6px;border-top:1px solid #00828E;border-right:1px solid #00828E;transform:rotate(45deg)}
+.footer-page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:15px;line-height:16px;font-weight:500;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="106" class="header-band" style="height:106px" data-qid="q-div-75dcf98740c9" data-semantic-role="decoration">
+  <div class="header-left" data-qid="q-div-76f0d626b7f0" data-semantic-role="decoration">
+    <div data-header-part="eyebrow" class="eyebrow" data-qid="q-eyebrow-19" data-semantic-role="supporting">핵심 영업</div>
+    <div data-header-part="title" class="title" data-qid="source-block-69c116e93defbdc5" data-semantic-role="title" data-source-block-id="source-slide:20:text:3">3주차 PART 2 | 핵심 영업 3종</div>
+  </div>
+  <div data-header-part="divider" class="divider" data-qid="q-div-59f86380b966" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="position:absolute;left:0;right:0;top:134px" data-qid="q-div-66757db28fba" data-semantic-role="decoration">
+  <div class="content-inner" data-qid="q-div-a985ffc51e86" data-semantic-role="decoration">
+    <div class="subtitle" data-qid="source-block-52f3ff5b7504ce76" data-semantic-role="body" data-source-block-id="source-slide:20:text:5"><span class="subtitle-mark" data-qid="q-span-bdeab93ed60e" data-semantic-role="decoration"></span>꿀벌쌤 | 숏폼대행 1인사업자 홀로서기</div>
+
+    <div class="cards" data-qid="q-div-beb8611456c7" data-semantic-role="decoration">
+      <div class="card" data-qid="q-card-phone-19" data-semantic-role="decoration">
+        <div class="card-head" data-qid="source-block-86b3b5d52d2f7fe6" data-semantic-role="body" data-source-block-id="source-slide:20:text:8">📞 전화</div>
+        <div class="step-list" data-qid="source-block-0d298484b20206a0" data-semantic-role="decoration" data-source-block-id="source-slide:20:text:9">
+          <div class="step" data-qid="q-phone-1-19" data-semantic-role="decoration"><span class="step-line" data-qid="q-span-20fdbf5a1935" data-semantic-role="decoration"></span><span data-semantic-role="body" data-qid="q-span-f32986c526a1">짧게 소개</span></div>
+          <div class="step" data-qid="q-phone-2-19" data-semantic-role="decoration"><span class="step-line" data-qid="q-span-cb6aea8e6475" data-semantic-role="decoration"></span><span data-semantic-role="body" data-qid="q-span-c83eac29f2ad">문제 제시</span></div>
+          <div class="step" data-qid="q-phone-3-19" data-semantic-role="decoration"><span class="step-line" data-qid="q-span-16ca7cc4da76" data-semantic-role="decoration"></span><span data-semantic-role="body" data-qid="q-span-eedec0ea8962">샘플 제안</span></div>
+          <div class="step" data-qid="q-phone-4-19" data-semantic-role="decoration"><span class="step-line" data-qid="q-span-051d034ad012" data-semantic-role="decoration"></span><span data-semantic-role="body" data-qid="q-span-2af01d53a93e">상담 약속</span></div>
+        </div>
+      </div>
+
+      <div class="card" data-qid="q-card-dm-19" data-semantic-role="decoration">
+        <div class="card-head" data-qid="source-block-bc9b99a313aeef8f" data-semantic-role="body" data-source-block-id="source-slide:20:text:12">💬 인스타 DM</div>
+        <div class="step-list" data-qid="source-block-cf8e278cddd926e4" data-semantic-role="decoration" data-source-block-id="source-slide:20:text:13">
+          <div class="step" data-qid="q-dm-1-19" data-semantic-role="decoration"><span class="step-line" data-qid="q-span-822ab3e6f1ec" data-semantic-role="decoration"></span><span data-semantic-role="body" data-qid="q-span-0856754b8eb9">가게 관찰</span></div>
+          <div class="step" data-qid="q-dm-2-19" data-semantic-role="decoration"><span class="step-line" data-qid="q-span-ecf941a9f176" data-semantic-role="decoration"></span><span data-semantic-role="body" data-qid="q-span-ff27a5abbc91">맞춤 제안</span></div>
+          <div class="step" data-qid="q-dm-3-19" data-semantic-role="decoration"><span class="step-line" data-qid="q-span-5e10cb0aaaef" data-semantic-role="decoration"></span><span data-semantic-role="body" data-qid="q-span-5fba4a1b38e4">샘플/포트폴리오</span></div>
+          <div class="step" data-qid="q-dm-4-19" data-semantic-role="decoration"><span class="step-line" data-qid="q-span-c528ea6286c6" data-semantic-role="decoration"></span><span data-semantic-role="body" data-qid="q-span-d7940611100c">답변 유도</span></div>
+        </div>
+      </div>
+
+      <div class="card" data-qid="q-card-visit-19" data-semantic-role="decoration">
+        <div class="card-head" data-qid="source-block-1e10c5bb5e08300c" data-semantic-role="body" data-source-block-id="source-slide:20:text:16">🏃 직접 방문</div>
+        <div class="step-list" data-qid="source-block-0b50ad5119aedc7f" data-semantic-role="decoration" data-source-block-id="source-slide:20:text:17">
+          <div class="step" data-qid="q-visit-1-19" data-semantic-role="decoration"><span class="step-line" data-qid="q-span-bacbdefbf29f" data-semantic-role="decoration"></span><span data-semantic-role="body" data-qid="q-span-ea628152fecd">짧게 인사</span></div>
+          <div class="step" data-qid="q-visit-2-19" data-semantic-role="decoration"><span class="step-line" data-qid="q-span-783adb399a16" data-semantic-role="decoration"></span><span data-semantic-role="body" data-qid="q-span-5ecaffe7eb14">포트폴리오 보여주기</span></div>
+          <div class="step" data-qid="q-visit-3-19" data-semantic-role="decoration"><span class="step-line" data-qid="q-span-90002d2b4434" data-semantic-role="decoration"></span><span data-semantic-role="body" data-qid="q-span-507a90f9003f">담당자 확인</span></div>
+          <div class="step" data-qid="q-visit-4-19" data-semantic-role="decoration"><span class="step-line" data-qid="q-span-20c81b8fb432" data-semantic-role="decoration"></span><span data-semantic-role="body" data-qid="q-span-fb09e90ad869">후속 연락</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-page" data-semantic-role="supporting" data-qid="source-block-c78ed5381f160ce0" data-source-block-id="source-slide:20:text:4">20</div>
+</body>
+</html>

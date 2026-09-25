@@ -1,0 +1,179 @@
+<!DOCTYPE html><html lang="ko"><head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#00140E;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:40px;top:20px;width:840px}
+.eyebrow{height:22px;font-size:16px;line-height:22px;font-weight:700;letter-spacing:0;color:#08916E}
+.slide-title{margin-top:8px;max-width:840px;font-size:32px;line-height:42px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:880px;top:20px;width:360px;text-align:right}
+.requirements{min-height:24px;font-size:14px;line-height:24px;font-weight:600;color:#1D1D1B}
+.header-note{margin-top:6px;font-size:16px;line-height:22px;font-weight:500;color:#00140E}
+.divider{position:absolute;left:40px;right:40px;bottom:0;height:2px;background:#08916E}
+.body-wrap{width:1152px;height:564px;margin-left:64px;display:grid;grid-template-rows:54px 332px 154px;row-gap:12px}
+.claim{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #E2E8F0}
+.claim-text{font-size:24px;line-height:32px;font-weight:700;color:#00140E;letter-spacing:-.01em}
+.claim-text strong{color:#08916E}
+.claim-guide{display:flex;align-items:center;gap:10px;font-size:15px;line-height:22px;font-weight:700;color:#08916E;white-space:nowrap}
+.guide-rule{width:34px;height:3px;background:#08916E}
+.roadmap{position:relative;display:grid;grid-template-rows:54px 278px}
+.roadmap-line{position:absolute;left:20px;right:20px;top:20px;height:2px;background:#219F88}
+.stage-heads,.stage-cards{position:relative;display:grid;grid-template-columns:188px 208px 178px 286px 196px;column-gap:24px}
+.stage-head{display:flex;align-items:flex-start;gap:10px}
+.stage-number{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border:2px solid #08916E;border-radius:12px;background:#FFFFFF;font-family:"IBM Plex Mono","Consolas",monospace;font-size:17px;line-height:22px;font-weight:700;color:#08916E}
+.stage-kicker{padding-top:1px;font-size:14px;line-height:19px;font-weight:700;color:#08916E}
+.stage-name{font-size:17px;line-height:22px;font-weight:700;color:#00140E}
+.stage-card{height:278px;padding:20px 18px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px}
+.stage-card.featured{border:2px solid #08916E;padding:19px 17px;background:#F2FBF8}
+.card-title{font-size:20px;line-height:28px;font-weight:700;color:#00140E}
+.card-rule{width:32px;height:3px;margin:10px 0 12px;background:#08916E}
+.metric-list{display:flex;flex-direction:column;gap:8px}
+.metric{display:grid;grid-template-columns:10px 1fr;column-gap:8px;align-items:start;font-size:18px;line-height:25px;font-weight:500;color:#00140E}
+.metric-mark{width:8px;height:8px;margin-top:8px;border-radius:12px;background:#219F88}
+.metric-compact{gap:4px}
+.metric-compact .metric{font-size:17px;line-height:22px}
+.metric-compact .metric-mark{margin-top:7px}
+.bottom-panel{display:grid;grid-template-columns:110px 1fr 292px;column-gap:24px;align-items:center;height:154px;padding:24px 28px;background:#00140E;border-radius:12px}
+.target-frame{display:flex;align-items:center;justify-content:center;width:106px;height:106px;border:1px solid #219F88;border-radius:12px;background:#00140E}
+.target-frame img{display:block;width:90px;height:90px;object-fit:contain}
+.devax-copy{align-self:center}
+.devax-title{font-size:21px;line-height:28px;font-weight:700;color:#FFFFFF}
+.devax-desc{margin-top:8px;font-size:18px;line-height:26px;font-weight:500;color:#FFFFFF}
+.principle{height:104px;padding:18px 20px;border:1px solid #219F88;border-radius:12px;background:#FFFFFF}
+.principle-label{font-size:15px;line-height:21px;font-weight:700;color:#08916E}
+.principle-text{margin-top:6px;font-size:18px;line-height:27px;font-weight:700;color:#00140E}
+</style>
+</head>
+<body>
+  <div class="header-band" data-header-band="108" data-header-part="band" style="height:108px">
+    <div class="header-left">
+      <div class="eyebrow" data-header-part="eyebrow" data-qid="s18-eyebrow" data-semantic-role="supporting">기대효과와 검증지표</div>
+      <div class="slide-title" data-header-part="title" data-qid="s18-title" data-semantic-role="title">기대효과를 5개 영역의 검증지표로 관리</div>
+    </div>
+    <div class="header-right" data-header-part="right">
+      <div class="requirements" data-header-part="requirements" data-qid="s18-requirements" data-requirement-ids="QUR-001~004,PMR-004" data-semantic-role="supporting">요구사항 QUR-001~004 · PMR-004</div>
+      <div class="header-note" data-qid="s18-header-note" data-semantic-role="supporting">기능·품질·가용성</div>
+    </div>
+    <div class="divider" data-header-part="divider" data-semantic-role="decoration"></div>
+  </div>
+
+  <div class="body-wrap" data-header-part="body" style="margin-top:16px">
+    <div class="claim">
+      <div class="claim-text" data-qid="s18-claim" data-semantic-role="body">기대효과는 주장보다 <strong>측정 가능한 지표</strong>로 판정합니다.</div>
+      <div class="claim-guide" data-qid="s18-guide" data-semantic-role="supporting"><span class="guide-rule" data-semantic-role="decoration"></span>5개 검증영역</div>
+    </div>
+
+    <div class="roadmap" data-qid="s18-roadmap">
+      <div class="roadmap-line" data-semantic-role="decoration"></div>
+
+      <div class="stage-heads">
+        <div class="stage-head">
+          <div class="stage-number" data-qid="s18-num01" data-semantic-role="supporting">01</div>
+          <div>
+            <div class="stage-kicker" data-qid="s18-kicker01" data-semantic-role="supporting">서비스</div>
+            <div class="stage-name" data-qid="s18-stage01" data-semantic-role="supporting">사용자 편의</div>
+          </div>
+        </div>
+        <div class="stage-head">
+          <div class="stage-number" data-qid="s18-num02" data-semantic-role="supporting">02</div>
+          <div>
+            <div class="stage-kicker" data-qid="s18-kicker02" data-semantic-role="supporting">업무</div>
+            <div class="stage-name" data-qid="s18-stage02" data-semantic-role="supporting">생산성</div>
+          </div>
+        </div>
+        <div class="stage-head">
+          <div class="stage-number" data-qid="s18-num03" data-semantic-role="supporting">03</div>
+          <div>
+            <div class="stage-kicker" data-qid="s18-kicker03" data-semantic-role="supporting">자산</div>
+            <div class="stage-name" data-qid="s18-stage03" data-semantic-role="supporting">데이터 활용</div>
+          </div>
+        </div>
+        <div class="stage-head">
+          <div class="stage-number" data-qid="s18-num04" data-semantic-role="supporting">04</div>
+          <div>
+            <div class="stage-kicker" data-qid="s18-kicker04" data-semantic-role="supporting">검증</div>
+            <div class="stage-name" data-qid="s18-stage04" data-semantic-role="supporting">품질</div>
+          </div>
+        </div>
+        <div class="stage-head">
+          <div class="stage-number" data-qid="s18-num05" data-semantic-role="supporting">05</div>
+          <div>
+            <div class="stage-kicker" data-qid="s18-kicker05" data-semantic-role="supporting">관리</div>
+            <div class="stage-name" data-qid="s18-stage05" data-semantic-role="supporting">운영 통제</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage-cards">
+        <div class="stage-card" data-qid="s18-card01">
+          <div class="card-title" data-qid="s18-card-title01" data-semantic-role="body">이용 여정의 마찰 확인</div>
+          <div class="card-rule" data-semantic-role="decoration"></div>
+          <div class="metric-list">
+            <div class="metric" data-qid="s18-metric01a" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>신청 완료율</span></div>
+            <div class="metric" data-qid="s18-metric01b" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>보완 건수</span></div>
+            <div class="metric" data-qid="s18-metric01c" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>단계별 이탈</span></div>
+            <div class="metric" data-qid="s18-metric01d" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>민원 유형</span></div>
+          </div>
+        </div>
+
+        <div class="stage-card" data-qid="s18-card02">
+          <div class="card-title" data-qid="s18-card-title02" data-semantic-role="body">처리 효율의 변화 확인</div>
+          <div class="card-rule" data-semantic-role="decoration"></div>
+          <div class="metric-list">
+            <div class="metric" data-qid="s18-metric02a" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>처리 리드타임</span></div>
+            <div class="metric" data-qid="s18-metric02b" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>평가 미완료</span></div>
+            <div class="metric" data-qid="s18-metric02c" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>다건처리 시간</span></div>
+            <div class="metric" data-qid="s18-metric02d" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>수작업 다운로드 횟수</span></div>
+          </div>
+        </div>
+
+        <div class="stage-card" data-qid="s18-card03">
+          <div class="card-title" data-qid="s18-card-title03" data-semantic-role="body">재사용·증적 활용 확인</div>
+          <div class="card-rule" data-semantic-role="decoration"></div>
+          <div class="metric-list">
+            <div class="metric" data-qid="s18-metric03a" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>재사용 모듈 비율</span></div>
+            <div class="metric" data-qid="s18-metric03b" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>자동 수집된 품질증적</span></div>
+          </div>
+        </div>
+
+        <div class="stage-card featured" data-qid="s18-card04">
+          <div class="card-title" data-qid="s18-card-title04" data-semantic-role="body">기능·성능·결함을 종합 판정</div>
+          <div class="card-rule" data-semantic-role="decoration"></div>
+          <div class="metric-list metric-compact">
+            <div class="metric" data-qid="s18-metric04a" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>요구사항 충족률</span></div>
+            <div class="metric" data-qid="s18-metric04b" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>최초 테스트 통과율</span></div>
+            <div class="metric" data-qid="s18-metric04c" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>중대 결함·회귀 결함</span></div>
+            <div class="metric" data-qid="s18-metric04d" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>3초 응답기준</span></div>
+            <div class="metric" data-qid="s18-metric04e" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>동시 로그인 300명 부하시험 결과</span></div>
+          </div>
+        </div>
+
+        <div class="stage-card" data-qid="s18-card05">
+          <div class="card-title" data-qid="s18-card-title05" data-semantic-role="body">변경 통제력 확인</div>
+          <div class="card-rule" data-semantic-role="decoration"></div>
+          <div class="metric-list">
+            <div class="metric" data-qid="s18-metric05a" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>요구-테스트 추적률</span></div>
+            <div class="metric" data-qid="s18-metric05b" data-semantic-role="body"><span class="metric-mark" data-semantic-role="decoration"></span><span>변경 재작업량</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom-panel" data-qid="s18-devax-panel">
+      <div class="target-frame">
+        <img alt="검증 목표를 나타내는 과녁" data-qid="s18-target-image" data-semantic-role="image" data-source-slot-id="source-slot-458435cdbfb150514f3b" style="width:90px;height:90px;object-fit:contain">
+      </div>
+      <div class="devax-copy">
+        <div class="devax-title" data-qid="s18-devax-title" data-semantic-role="body">DevAX 적용효과도 동일한 증적 원칙으로 확인</div>
+        <div class="devax-desc" data-qid="s18-devax-desc" data-semantic-role="body">재사용 모듈 비율 · 요구-테스트 추적률 · 자동 수집된 품질증적 · 변경 재작업량을 확인합니다.</div>
+      </div>
+      <div class="principle" data-qid="s18-principle-card">
+        <div class="principle-label" data-qid="s18-principle-label" data-semantic-role="supporting">성과 판정 원칙</div>
+        <div class="principle-text" data-qid="s18-principle-text" data-semantic-role="body">검증되지 않은 절감률은 계약 성과로 단정하지 않습니다.</div>
+      </div>
+    </div>
+  </div>
+
+</body></html>

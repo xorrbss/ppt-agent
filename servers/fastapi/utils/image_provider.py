@@ -44,6 +44,17 @@ def is_gpt_image_2_selected(settings: RuntimeSettings | None = None) -> bool:
     return ImageProvider.GPT_IMAGE_2 == get_selected_image_provider(settings)
 
 
+def is_gpt_image_2_5_selected(settings: RuntimeSettings | None = None) -> bool:
+    return get_selected_image_provider(settings) in {
+        ImageProvider.GPT_IMAGE_2_5_FLARE,
+        ImageProvider.GPT_IMAGE_2_5_SUNBURST,
+    }
+
+
+def is_codex_image_selected(settings: RuntimeSettings | None = None) -> bool:
+    return ImageProvider.CODEX_IMAGE == get_selected_image_provider(settings)
+
+
 def is_comfyui_selected(settings: RuntimeSettings | None = None) -> bool:
     return ImageProvider.COMFYUI == get_selected_image_provider(settings)
 

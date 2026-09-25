@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "key": "ui.sidebar-single-scroll",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "사이드바는 최근 발표자료 목록의 내부 스크롤 대신 메뉴와 목록 전체가 하나로 세로 스크롤된다.",
+  "scope": [
+    "frontend",
+    "ui",
+    "sidebar"
+  ],
+  "invariants": [
+    "최근 발표자료 목록에 별도 세로 스크롤 영역을 만들지 않는다."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "사용자 첨부 사이드바 화면 및 전체 스크롤 요청",
+    "servers/nextjs/app/globals.css"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-12T06:54:26.4965333+00:00"
+}

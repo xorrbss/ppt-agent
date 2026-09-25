@@ -12,20 +12,21 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Final, Literal, TypeAlias, cast
 
-PresentationDriverId: TypeAlias = Literal["template-v2", "authored"]
-ContentModel: TypeAlias = Literal["template-v2", "authored"]
-GenerationStrategy: TypeAlias = Literal["template", "authored"]
+PresentationDriverId: TypeAlias = Literal["template-v2", "authored", "svg-v1"]
+ContentModel: TypeAlias = Literal["template-v2", "authored", "svg"]
+GenerationStrategy: TypeAlias = Literal["template", "authored", "svg"]
 StyleSource: TypeAlias = Literal["imported", "authored"]
 LegacyGenerationMode: TypeAlias = Literal["standard"]
 
 PROFILE_SCHEMA_VERSION: Final = 1
 CAPABILITY_SCHEMA_VERSION: Final = 1
 _KNOWN_VERSIONS: Final = frozenset({"v1-standard", "v2-standard"})
-_KNOWN_MODES: Final = frozenset({None, "template", "authored"})
-_KNOWN_THEME_MODES: Final = frozenset({None, "template", "authored"})
+_KNOWN_MODES: Final = frozenset({None, "template", "authored", "svg"})
+_KNOWN_THEME_MODES: Final = frozenset({None, "template", "authored", "svg"})
 _DRIVER_IDS: Final[tuple[PresentationDriverId, ...]] = (
     "template-v2",
     "authored",
+    "svg-v1",
 )
 
 
@@ -59,7 +60,7 @@ class EditorCapabilities:
 
 @dataclass(frozen=True, slots=True)
 class PresentationCapabilities:
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
     driver_id: PresentationDriverId
     renderer_adapter_id: str
     editor_adapter_id: str
@@ -149,7 +150,7 @@ def _style_source(
     theme: Mapping[str, Any],
 ) -> StyleSource:
     del identity, theme
-    return "authored" if driver_id == "authored" else "imported"
+    return "authored" if driver_id in {"authored", "svg-v1"} else "imported"
 
 
 def _validate_common_identity(identity: PersistedIdentity) -> tuple[
@@ -207,6 +208,12 @@ def _validate_authored(profile: PresentationProfile, identity: PersistedIdentity
         raise PresentationProfileError("authored_content_model_conflict")
 
 
+def _validate_svg(profile: PresentationProfile, identity: PersistedIdentity) -> None:
+    _, mode, version, _ = _validate_common_identity(identity)
+    if mode != "svg" or version != "v1-standard" or profile.content_model != "svg":
+        raise PresentationProfileError("svg_identity_conflict")
+
+
 def _capabilities(
     driver_id: PresentationDriverId,
     *,
@@ -217,7 +224,7 @@ def _capabilities(
     export_editable_pptx: bool,
 ) -> PresentationCapabilities:
     return PresentationCapabilities(
-        schema_version=CAPABILITY_SCHEMA_VERSION,
+        schema_version=2 if driver_id == "svg-v1" else CAPABILITY_SCHEMA_VERSION,
         driver_id=driver_id,
         renderer_adapter_id=renderer,
         editor_adapter_id=editor_adapter,
@@ -261,6 +268,20 @@ _DRIVERS: dict[PresentationDriverId, PresentationDriver] = {
             export_editable_pptx=True,
         ),
     ),
+    "svg-v1": PresentationDriver(
+        driver_id="svg-v1",
+        content_model="svg",
+        generation_strategy="svg",
+        validate=_validate_svg,
+        capabilities=_capabilities(
+            "svg-v1",
+            renderer="svg-v1",
+            editor_adapter="svg-readonly",
+            editor=EditorCapabilities(False, False, False, False, False, True),
+            export_adapter="svg-v1",
+            export_editable_pptx=True,
+        ),
+    ),
 }
 if tuple(_DRIVERS) != _DRIVER_IDS:
     raise RuntimeError("presentation_driver_registry_incomplete")
@@ -288,6 +309,8 @@ def resolve_presentation_profile(identity: PersistedIdentity) -> PresentationPro
     canonical_driver = _canonical_driver_id(identity)
     if canonical_driver is not None:
         driver_id = canonical_driver
+    elif mode == "svg":
+        driver_id = "svg-v1"
     elif mode == "authored" or theme.get("mode") == "authored":
         driver_id = "authored"
     elif version == "v2-standard" and mode in {None, "template"}:

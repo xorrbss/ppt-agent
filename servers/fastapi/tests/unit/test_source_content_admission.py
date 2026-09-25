@@ -99,6 +99,9 @@ def _with_standard_presentation_metadata(source: Path, target: Path) -> None:
                     b'<Relationship Id="rIdRevisionMetadata" '
                     b'Type="http://schemas.microsoft.com/office/2011/relationships/revisionInfo" '
                     b'Target="revisionInfo.xml"/>'
+                    b'<Relationship Id="rId37" '
+                    b'Type="http://schemas.microsoft.com/office/2016/11/relationships/changesInfo" '
+                    b'Target="changesInfos/changesInfo1.xml"/>'
                     b"</Relationships>",
                 )
             elif info.filename == content_types_name:
@@ -108,6 +111,8 @@ def _with_standard_presentation_metadata(source: Path, target: Path) -> None:
                     b'ContentType="application/vnd.openxmlformats-officedocument.presentationml.handoutMaster+xml"/>'
                     b'<Override PartName="/ppt/revisionInfo.xml" '
                     b'ContentType="application/vnd.ms-powerpoint.revisioninfo+xml"/>'
+                    b'<Override PartName="/ppt/changesInfos/changesInfo1.xml" '
+                    b'ContentType="application/vnd.ms-powerpoint.changesinfo+xml"/>'
                     b"</Types>",
                 )
             output.writestr(info, payload)
@@ -118,6 +123,10 @@ def _with_standard_presentation_metadata(source: Path, target: Path) -> None:
         output.writestr(
             "ppt/revisionInfo.xml",
             b'<p1912:revisionInfo xmlns:p1912="http://schemas.microsoft.com/office/powerpoint/2011/main"/>',
+        )
+        output.writestr(
+            "ppt/changesInfos/changesInfo1.xml",
+            b'<p16:chgInfo xmlns:p16="http://schemas.microsoft.com/office/powerpoint/2016/11/main"/>',
         )
 
 
@@ -160,18 +169,22 @@ def test_pptx_manifest_is_deterministic_and_external_relationship_fails_closed(
         if block.kind == "text"
     )
     assert "".join(text_block.payload["runs"]) == text_block.payload["text"]
-    assert text_block.payload["paragraphs"][1] == {
+    paragraph = text_block.payload["paragraphs"][1]
+    assert {key: paragraph[key] for key in (
+        "runs", "text", "bullet", "bulletKind", "level"
+    )} == {
         "runs": ["원본 불릿 문구"],
-        # One style entry per run, so a restyle can set a paragraph at the size
-        # the source itself used.
-        "runStyles": [
-            {"sizePt": 18.0, "bold": False, "italic": False, "color": None}
-        ],
         "text": "원본 불릿 문구",
         "bullet": True,
         "bulletKind": "character",
         "level": 1,
     }
+    # Additional resolved typography must not invalidate the source-content contract.
+    assert len(paragraph["runStyles"]) == len(paragraph["runs"])
+    assert [
+        {key: style[key] for key in ("sizePt", "bold", "italic", "color")}
+        for style in paragraph["runStyles"]
+    ] == [{"sizePt": 18.0, "bold": False, "italic": False, "color": None}]
     table = next(
         block
         for unit in first.manifest.units
@@ -226,6 +239,16 @@ def test_pptx_manifest_accepts_standard_non_slide_metadata(tmp_path: Path) -> No
     }
     assert classifications["part:ppt/handoutMasters/handoutMaster1.xml"] == "package_metadata"
     assert classifications["part:ppt/revisionInfo.xml"] == "package_metadata"
+    assert classifications["part:ppt/changesInfos/changesInfo1.xml"] == "package_metadata"
+    assert classifications["rel:ppt/_rels/presentation.xml.rels:rId37"] == "supported_relationship"
+    assert all(
+        not item.content_bearing
+        for item in extracted.manifest.inventory_objects
+        if item.object_id in {
+            "part:ppt/changesInfos/changesInfo1.xml",
+            "rel:ppt/_rels/presentation.xml.rels:rId37",
+        }
+    )
     assert (
         classifications[
             "rel:ppt/_rels/presentation.xml.rels:rIdHandoutMetadata"

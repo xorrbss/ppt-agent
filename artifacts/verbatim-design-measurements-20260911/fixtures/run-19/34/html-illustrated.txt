@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden}
+body{
+  background:#00140E;
+  color:#FFFFFF;
+  font-family:"Noto Sans KR","Malgun Gothic",sans-serif;
+  word-break:keep-all;
+  overflow-wrap:break-word;
+}
+.canvas{
+  position:relative;
+  width:1280px;
+  height:720px;
+  overflow:hidden;
+  background:linear-gradient(135deg,#00140E 0%,#00291F 58%,#00140E 100%);
+}
+.field{
+  position:absolute;
+  inset:0;
+  background:linear-gradient(90deg,rgba(8,145,110,.08),rgba(0,20,14,0) 48%,rgba(33,159,136,.08));
+}
+.frame{
+  position:absolute;
+  left:64px;
+  right:64px;
+  top:54px;
+  bottom:54px;
+  border:1px solid rgba(33,159,136,.30);
+  border-radius:12px;
+}
+.mark{
+  position:absolute;
+  left:92px;
+  top:82px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+.mark-dot{
+  width:12px;
+  height:12px;
+  background:#219F88;
+  border-radius:12px;
+}
+.mark-text{
+  font-size:20px;
+  line-height:30px;
+  font-weight:700;
+  color:#FFFFFF;
+  letter-spacing:.02em;
+}
+.center{
+  position:absolute;
+  left:180px;
+  right:180px;
+  top:154px;
+  bottom:116px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  text-align:center;
+}
+.eyebrow{
+  margin-bottom:28px;
+  font-size:15px;
+  line-height:24px;
+  letter-spacing:.15em;
+  font-weight:700;
+  color:#219F88;
+}
+.title{
+  font-size:54px;
+  line-height:1.32;
+  font-weight:700;
+  letter-spacing:-.045em;
+  color:#FFFFFF;
+}
+.title-line{
+  display:block;
+}
+.title-line:first-child{
+  color:#B9E5D9;
+}
+.subtitle{
+  margin-top:30px;
+  font-size:21px;
+  line-height:32px;
+  font-weight:500;
+  color:#D8E9E3;
+}
+.path{
+  display:flex;
+  align-items:center;
+  gap:22px;
+  margin-top:54px;
+  padding:16px 28px;
+  border:1px solid rgba(33,159,136,.55);
+  border-radius:12px;
+  background:rgba(8,145,110,.12);
+  font-size:20px;
+  line-height:30px;
+  font-weight:700;
+  color:#FFFFFF;
+}
+.path-step{
+  white-space:nowrap;
+}
+.path-arrow{
+  color:#219F88;
+  font-size:24px;
+  line-height:30px;
+}
+.author{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:78px;
+  text-align:center;
+  font-size:17px;
+  line-height:26px;
+  font-weight:500;
+  color:#A7D9CC;
+}
+.page{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:14px;
+  text-align:center;
+  font-size:15px;
+  line-height:16px;
+  font-weight:500;
+  color:#A7ACB3;
+}
+.rule{
+  position:absolute;
+  left:92px;
+  right:92px;
+  bottom:54px;
+  height:1px;
+  background:rgba(33,159,136,.30);
+}
+</style>
+</head>
+<body>
+  <div class="canvas" data-qid="q-div-c1a1b4aa507c" data-semantic-role="decoration">
+    <div class="field" data-qid="q-div-f408ede2b546" data-semantic-role="decoration"></div>
+    <div class="frame" data-qid="q-div-8a2568219d64" data-semantic-role="decoration"></div>
+
+    <div class="mark" data-qid="q-div-683ac442adbd" data-semantic-role="decoration">
+      <div class="mark-dot" data-qid="q-div-2d3a444b7fd5" data-semantic-role="decoration"></div>
+      <div class="mark-text" data-semantic-role="title" data-qid="source-block-5137d489be601f9d" data-source-block-id="source-slide:35:text:3">🐝 꿀벌쌤</div>
+    </div>
+
+    <main class="center" data-qid="q-main-6f340f977bb0" data-semantic-role="decoration">
+      <div class="eyebrow" data-semantic-role="supporting" data-qid="q-eyebrow-34">마무리</div>
+      <div class="title" data-semantic-role="decoration" data-qid="source-block-396ed15ac83e4af0" data-source-block-id="source-slide:35:text:4">
+        <span class="title-line" data-qid="q-span-3fa79da04575" data-semantic-role="body">이제,</span>
+        <span class="title-line" data-qid="q-span-3b692f16ec0b" data-semantic-role="body">홀로서기 시작입니다.</span>
+      </div>
+      <div class="subtitle" data-semantic-role="body" data-qid="source-block-776ff9a28e9acf4f" data-source-block-id="source-slide:35:text:5">숏폼대행 1인사업자 홀로서기 · 4주 8시간</div>
+      <div class="path" data-qid="source-block-82c049ab0dbb1bbe" data-semantic-role="decoration" data-source-block-id="source-slide:35:text:6">
+        <span class="path-step" data-semantic-role="body" data-qid="q-path-step-1-34">실행</span>
+        <span class="path-arrow" data-semantic-role="supporting" data-qid="q-path-arrow-1-34">→</span>
+        <span class="path-step" data-semantic-role="body" data-qid="q-path-step-2-34">경험</span>
+        <span class="path-arrow" data-semantic-role="supporting" data-qid="q-path-arrow-2-34">→</span>
+        <span class="path-step" data-semantic-role="body" data-qid="q-path-step-3-34">고객</span>
+        <span class="path-arrow" data-semantic-role="supporting" data-qid="q-path-arrow-3-34">→</span>
+        <span class="path-step" data-semantic-role="body" data-qid="q-path-step-4-34">성장</span>
+      </div>
+    </main>
+
+    <div class="author" data-semantic-role="supporting" data-qid="source-block-c8d33f4e1c121d7a" data-source-block-id="source-slide:35:text:7">꿀벌쌤 강의용 마스터 PPT</div>
+    <div class="rule" data-qid="q-div-cbd8ff350888" data-semantic-role="decoration"></div>
+    <div class="page" data-semantic-role="supporting" data-qid="q-page-34">35</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#F9F9F9}
+body{font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#00140E;word-break:keep-all;overflow-wrap:break-word}
+.header-band{position:relative;width:1280px;background:#FFFFFF}
+.header-left{position:absolute;left:64px;top:18px;width:840px}
+.eyebrow{height:21px;font-size:15px;line-height:21px;font-weight:700;letter-spacing:0;color:#08916E}
+.slide-title{margin-top:6px;width:840px;font-size:34px;line-height:41px;font-weight:700;color:#1D1D1B}
+.header-right{position:absolute;left:924px;top:18px;width:300px;height:27px;display:flex;justify-content:flex-end;align-items:center}
+.requirements{display:flex;align-items:center;justify-content:flex-end;gap:6px;width:300px;height:27px;white-space:nowrap}
+.req-label{font-size:13px;line-height:27px;font-weight:700;color:#00140E}
+.req-chip{display:inline-flex;height:27px;padding:0 9px;align-items:center;justify-content:center;border:1px solid #08916E;border-radius:5px;background:#EAEDF2;font-family:"IBM Plex Mono","Consolas",monospace;font-size:13px;line-height:25px;font-weight:700;color:#1D1D1B}
+.divider{position:absolute;left:0;bottom:0;width:1280px;height:2px;background:#08916E}
+.body-wrap{width:1152px;margin-left:64px}
+.claim{height:52px;display:flex;align-items:center;justify-content:space-between}
+.claim-copy{font-size:24px;line-height:32px;font-weight:700;letter-spacing:-.02em;color:#00140E}
+.claim-copy strong{color:#08916E}
+.scope-note{display:flex;align-items:center;gap:8px;font-size:15px;line-height:22px;font-weight:700;color:#35534B}
+.scope-mark{width:8px;height:8px;border-radius:12px;background:#08916E}
+.roadmap{height:408px;border:1px solid #E2E8F0;border-radius:12px;background:#FFFFFF;overflow:hidden;box-shadow:0 8px 22px rgba(0,20,14,.05)}
+.stage-row{display:grid;grid-template-columns:170px repeat(5,1fr);height:48px;background:#EAF7F4;border-bottom:1px solid #CFE5DF}
+.stage-label{display:flex;align-items:center;padding-left:28px;font-size:15px;line-height:20px;font-weight:700;color:#35534B}
+.stage{display:flex;align-items:center;justify-content:center;border-left:1px solid #CFE5DF;font-size:15px;line-height:20px;font-weight:700;color:#00140E}
+.lane{display:grid;grid-template-columns:170px 1fr;height:90px;border-bottom:1px solid #E2E8F0}
+.lane:last-child{border-bottom:none}
+.role{display:flex;flex-direction:column;justify-content:center;padding:0 20px 0 28px;background:#F6FAF8}
+.role-index{font-family:"IBM Plex Mono","Consolas",monospace;font-size:14px;line-height:19px;font-weight:700;color:#08916E}
+.role-name{margin-top:3px;font-size:19px;line-height:26px;font-weight:700;color:#00140E}
+.track{position:relative;display:grid;grid-template-columns:repeat(5,1fr);align-items:center;padding:13px 14px;gap:10px}
+.track-line{position:absolute;left:36px;right:36px;top:44px;height:2px;background:#CFE5DF}
+.step{position:relative;z-index:1;min-height:62px;padding:9px 8px;display:flex;align-items:center;justify-content:center;text-align:center;border:1px solid #BFD9D2;border-radius:12px;background:#FFFFFF;font-size:16px;line-height:21px;font-weight:700;color:#1D1D1B}
+.step-key{border-color:#08916E;background:#EAF7F4;color:#006C53}
+.node{position:absolute;z-index:2;right:-7px;top:27px;width:6px;height:6px;background:#08916E}
+.takeaway{height:62px;margin-top:14px;display:grid;grid-template-columns:184px 1fr;align-items:center;border:1px solid #CFE5DF;border-radius:12px;background:#EAF7F4}
+.takeaway-label{height:100%;display:flex;align-items:center;padding-left:28px;border-right:1px solid #CFE5DF;font-size:16px;line-height:22px;font-weight:700;color:#006C53}
+.takeaway-copy{padding:0 24px;font-size:18px;line-height:27px;font-weight:700;color:#163C32}
+</style>
+</head>
+<body>
+<div data-header-part="band" data-header-band="101" class="header-band" style="height:101px">
+  <div class="header-left">
+    <div data-header-part="eyebrow" class="eyebrow" data-semantic-role="supporting" data-qid="s5-eyebrow">사용자 요구</div>
+    <div data-header-part="title" class="slide-title" data-semantic-role="title" data-qid="s5-title">사용자별 핵심 요구 이해</div>
+  </div>
+  <div data-header-part="right" class="header-right">
+    <div data-header-part="requirements" data-requirement-ids="SFR-002,SIR-006,SIR-007,SER-007" class="requirements">
+      <span class="req-label" data-semantic-role="supporting" data-qid="s5-req-label">요구사항 번호</span>
+      <span class="req-chip" data-semantic-role="supporting" data-qid="s5-req-1">SFR-002</span>
+      <span class="req-chip" data-semantic-role="supporting" data-qid="s5-req-2">SIR-006</span>
+      <span class="req-chip" data-semantic-role="supporting" data-qid="s5-req-3">SIR-007</span>
+      <span class="req-chip" data-semantic-role="supporting" data-qid="s5-req-more">+1</span>
+    </div>
+  </div>
+  <div data-header-part="divider" class="divider" data-semantic-role="decoration"></div>
+</div>
+
+<div data-header-part="body" class="body-wrap" style="margin-top:14px">
+  <div class="claim">
+    <div class="claim-copy" data-semantic-role="body" data-qid="s5-claim">사용자별 권한과 처리 단계를 하나의 흐름으로 연결해 <strong>누락 없는 업무 수행</strong>을 지원합니다.</div>
+    <div class="scope-note" data-semantic-role="supporting" data-qid="s5-scope"><span class="scope-mark"></span>역할별 접근·처리·통제 기준</div>
+  </div>
+
+  <div class="roadmap" data-qid="s5-roadmap">
+    <div class="stage-row">
+      <div class="stage-label" data-semantic-role="supporting" data-qid="s5-stage-label">사용자 여정</div>
+      <div class="stage" data-semantic-role="supporting" data-qid="s5-stage-1">진입</div>
+      <div class="stage" data-semantic-role="supporting" data-qid="s5-stage-2">작성·검토</div>
+      <div class="stage" data-semantic-role="supporting" data-qid="s5-stage-3">제출·처리</div>
+      <div class="stage" data-semantic-role="supporting" data-qid="s5-stage-4">권한 통제</div>
+      <div class="stage" data-semantic-role="supporting" data-qid="s5-stage-5">상태 확인</div>
+    </div>
+
+    <div class="lane">
+      <div class="role">
+        <div class="role-index" data-semantic-role="supporting" data-qid="s5-role-index-1">01</div>
+        <div class="role-name" data-semantic-role="body" data-qid="s5-role-1">지원기업</div>
+      </div>
+      <div class="track">
+        <div class="track-line"></div>
+        <div class="step" data-semantic-role="body" data-qid="s5-step-1-1">웹폼 신청<div class="node"></div></div>
+        <div class="step" data-semantic-role="body" data-qid="s5-step-1-2">임시저장<div class="node"></div></div>
+        <div class="step" data-semantic-role="body" data-qid="s5-step-1-3">단계별 서류 제출<div class="node"></div></div>
+        <div class="step" data-semantic-role="body" data-qid="s5-step-1-4">보완 대상 수정<div class="node"></div></div>
+        <div class="step step-key" data-semantic-role="body" data-qid="s5-step-1-5">진행상태·결과 알림</div>
+      </div>
+    </div>
+
+    <div class="lane">
+      <div class="role">
+        <div class="role-index" data-semantic-role="supporting" data-qid="s5-role-index-2">02</div>
+        <div class="role-name" data-semantic-role="body" data-qid="s5-role-2">평가위원</div>
+      </div>
+      <div class="track">
+        <div class="track-line"></div>
+        <div class="step step-key" data-semantic-role="body" data-qid="s5-step-2-1">배정 기업·기간 제한<div class="node"></div></div>
+        <div class="step" data-semantic-role="body" data-qid="s5-step-2-2">신청서류·평가표<div class="node"></div></div>
+        <div class="step" data-semantic-role="body" data-qid="s5-step-2-3">점수 검증<div class="node"></div></div>
+        <div class="step" data-semantic-role="body" data-qid="s5-step-2-4">서명·제출<div class="node"></div></div>
+        <div class="step step-key" data-semantic-role="body" data-qid="s5-step-2-5">완료 후 수정 제한</div>
+      </div>
+    </div>
+
+    <div class="lane">
+      <div class="role">
+        <div class="role-index" data-semantic-role="supporting" data-qid="s5-role-index-3">03</div>
+        <div class="role-name" data-semantic-role="body" data-qid="s5-role-3">수행·검증기관</div>
+      </div>
+      <div class="track">
+        <div class="track-line"></div>
+        <div class="step step-key" data-semantic-role="body" data-qid="s5-step-3-1">배정 기업만 접근<div class="node"></div></div>
+        <div class="step" data-semantic-role="body" data-qid="s5-step-3-2">보고서 검토<div class="node"></div></div>
+        <div class="step" data-semantic-role="body" data-qid="s5-step-3-3">보고서 처리<div class="node"></div></div>
+        <div class="step" data-semantic-role="body" data-qid="s5-step-3-4">처리 범위 통제<div class="node"></div></div>
+        <div class="step" data-semantic-role="body" data-qid="s5-step-3-5">진행상태 확인</div>
+      </div>
+    </div>
+
+    <div class="lane">
+      <div class="role">
+        <div class="role-index" data-semantic-role="supporting" data-qid="s5-role-index-4">04</div>
+        <div class="role-name" data-semantic-role="body" data-qid="s5-role-4">관리자·업무담당자</div>
+      </div>
+      <div class="track">
+        <div class="track-line"></div>
+        <div class="step" data-semantic-role="body" data-qid="s5-step-4-1">기업·평가자·기관 배정<div class="node"></div></div>
+        <div class="step" data-semantic-role="body" data-qid="s5-step-4-2">접수·서류 통합 조회<div class="node"></div></div>
+        <div class="step" data-semantic-role="body" data-qid="s5-step-4-3">평가·알림·정산<div class="node"></div></div>
+        <div class="step" data-semantic-role="body" data-qid="s5-step-4-4">복수 건 상태변경<div class="node"></div></div>
+        <div class="step step-key" data-semantic-role="body" data-qid="s5-step-4-5">미처리·기한 대시보드</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway" data-qid="s5-takeaway">
+    <div class="takeaway-label" data-semantic-role="supporting" data-qid="s5-takeaway-label">설계 판단</div>
+    <div class="takeaway-copy" data-semantic-role="body" data-qid="s5-takeaway-copy">역할·배정·기간에 따른 접근 제어와 상태 기반 수정 제한을 적용하고, 통합 조회로 수작업 대사와 처리 누락을 줄입니다.</div>
+  </div>
+</div>
+</body>
+</html>

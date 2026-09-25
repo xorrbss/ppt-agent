@@ -6,7 +6,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Pencil, Save, SlidersHorizontal, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import React, { useEffect, useState } from 'react';
+import CurrentConfig from "./CurrentConfig";
 import { PresentationConfig, ToneType, VerbosityType } from '../type';
+import { CODEX_GENERATION_PRESETS, type CodexGenerationPresetId } from '@/components/codex-config';
 
 interface ConfigurationSelectsProps {
     config: PresentationConfig;
@@ -47,6 +49,7 @@ const AdvanceSettings = ({
         includeTableOfContents: config.includeTableOfContents,
         includeTitleSlide: config.includeTitleSlide,
         webSearch: config.webSearch,
+        codexGenerationPreset: config.codexGenerationPreset,
     });
 
     const syncDraftFromConfig = () => {
@@ -57,6 +60,7 @@ const AdvanceSettings = ({
             includeTableOfContents: config.includeTableOfContents,
             includeTitleSlide: config.includeTitleSlide,
             webSearch: config.webSearch,
+            codexGenerationPreset: config.codexGenerationPreset,
         });
     };
 
@@ -76,6 +80,7 @@ const AdvanceSettings = ({
         onConfigChange('includeTableOfContents', advancedDraft.includeTableOfContents);
         onConfigChange('includeTitleSlide', advancedDraft.includeTitleSlide);
         onConfigChange('webSearch', advancedDraft.webSearch);
+        onConfigChange('codexGenerationPreset', advancedDraft.codexGenerationPreset);
         setOpenAdvanced(false);
     };
 
@@ -120,7 +125,7 @@ const AdvanceSettings = ({
 
             {openAdvanced && (
                 <div
-                    className="fixed inset-0 z-[70] bg-black/35 flex items-center justify-center"
+                    className="fixed inset-0 z-[70] bg-slate-950/35 backdrop-blur-[2px] flex items-center justify-center p-4"
                     onClick={handleCloseAdvanced}
                     role="presentation"
                 >
@@ -128,27 +133,27 @@ const AdvanceSettings = ({
                         role="dialog"
                         aria-modal="true"
                         aria-label={t('title')}
-                        className="relative mx-auto mt-[108px] w-[calc(100vw-2rem)] max-w-[640px] overflow-visible"
+                        className="relative mx-auto w-full max-w-[640px]"
                         onClick={(event) => event.stopPropagation()}
                     >
                         <button
                             type="button"
                             onClick={handleCloseAdvanced}
                             aria-label={t('close')}
-                            className="absolute -top-[62px] right-2 flex h-[50px] w-[50px] items-center justify-center rounded-full border border-[#E7E7EC] bg-white text-[#2C2B35] shadow-sm transition hover:bg-[#F8F8FB]"
+                            className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none z-10"
                         >
                             <X className="h-3.5 w-3.5" />
                         </button>
 
-                        <div className="overflow-hidden rounded-[24px] border border-[#E7E9F2] bg-[#F3F3F6] shadow-[0_24px_80px_rgba(15,23,42,0.20)]">
-                            <div className="flex items-start justify-between gap-4 bg-[#F8F8FA] px-6 py-[22px] ">
+                        <div className="max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl border border-gray-200/80 bg-white shadow-[0_12px_40px_-16px_rgba(15,23,42,0.18)]">
+                            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 px-6 py-6 pr-16">
                                 <div>
-                                    <h2 className="font-syne text-lg font-semibold leading-none text-[#191919]">
+                                    <h2 className="break-keep text-xl font-semibold leading-7 tracking-tight text-gray-900">
                                         {t('title')}
                                     </h2>
-                                    <p className="mt-1 text-sm text-[#808080]">{t('description')}</p>
+                                    <p className="mt-2 break-keep text-sm leading-6 text-gray-500">{t('description')}</p>
                                     {sourceContentMode ? <p className="mt-3 text-sm font-semibold text-[#1F1D2A]" data-testid="source-content-advanced-notice">
-                                        추가 디자인 지시만 적용합니다. 원문·수치·표·이미지는 변경하지 않습니다.
+                                        {t('sourceContentNotice')}
                                     </p> : null}
                                 </div>
 
@@ -164,7 +169,11 @@ const AdvanceSettings = ({
                                 </Button>
                             </div>
 
-                            <div className="bg-[#ECE8F6] px-6  py-5">
+                            <div className="border-b border-slate-100 bg-white px-6 py-4">
+                                <CurrentConfig />
+                            </div>
+
+                            <div className="border-b border-gray-100 bg-gray-50/70 px-6 py-5">
                                 <div className="flex items-start gap-2">
                                     <Pencil className="mt-[3px] h-3.5 w-3.5 text-[#1C1B24]" />
                                     <div className="w-full">
@@ -172,7 +181,7 @@ const AdvanceSettings = ({
                                             htmlFor="advanced-instructions"
                                             className="block font-syne text-sm font-semibold leading-none text-[#1F1D2A]"
                                         >
-                                            {sourceContentMode ? '추가 디자인 지시' : t('instructionsLabel')}
+                                            {sourceContentMode ? t('sourceContentInstructionsLabel') : t('instructionsLabel')}
                                         </label>
                                         <Textarea
                                             id="advanced-instructions"
@@ -233,6 +242,27 @@ const AdvanceSettings = ({
                                     </Select>
                                 </div>
 
+                                {advancedDraft.codexGenerationPreset ? <div className="flex items-center justify-between gap-3">
+                                    <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">{t('generationModelLabel')}</label>
+                                    <Select
+                                        value={advancedDraft.codexGenerationPreset}
+                                        onValueChange={(value) =>
+                                            setAdvancedDraft((prev) => ({ ...prev, codexGenerationPreset: value as CodexGenerationPresetId }))
+                                        }
+                                    >
+                                        <SelectTrigger aria-label={t('generationModelLabel')} className="p-2.5 w-[160px] rounded-xl border-[#DBDBE1] bg-white font-syne text-sm font-medium text-[#2C2B37] shadow-none focus:ring-0 focus-visible:ring-0">
+                                            <SelectValue placeholder={t('generationModelPlaceholder')} />
+                                        </SelectTrigger>
+                                        <SelectContent className="z-[120] font-syne">
+                                            {CODEX_GENERATION_PRESETS.map((preset) => (
+                                                <SelectItem key={preset.id} value={preset.id} className="text-sm font-medium">
+                                                    {preset.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div> : null}
+
                                 <div className="flex items-center justify-between gap-3">
                                     <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">
                                         {t('includeTableOfContents')}
@@ -271,7 +301,7 @@ const AdvanceSettings = ({
                                     />
                                 </div>
                             </div> : <p className="px-6 pb-5 pt-3.5 text-sm text-[#5E626A]" data-testid="source-content-fixed-options">
-                                슬라이드 수는 원본 기준이며 필요하면 자동으로 추가합니다. 언어는 원본에서 감지하고, tone·verbosity·목차·표지·웹 검색은 콘텐츠 보존을 위해 사용하지 않습니다.
+                                {t('sourceContentFixedOptions')}
                             </p>}
                         </div>
                     </div>
