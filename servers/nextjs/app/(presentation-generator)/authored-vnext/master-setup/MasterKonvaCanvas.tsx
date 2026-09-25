@@ -8,7 +8,7 @@ import { Ellipse, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Tr
 import { CanvasCoreGuides, type CanvasCoreGuide } from "@/components/canvas-core/CanvasCoreGuides";
 import { createCanvasCoreAlignmentTargets, snapCanvasCoreBounds } from "@/components/canvas-core/alignmentSnap";
 import { CanvasCoreZoomControls, useCanvasCoreViewport } from "@/components/canvas-core/CanvasCoreViewport";
-import { useTemplateImage } from "@/app/template-v2-studio/[templateId]/TemplateV2CanvasHelpers";
+import { useTemplateImage } from "@/app/hooks/useTemplateImage";
 
 import type {
   MasterCanvasElement,
