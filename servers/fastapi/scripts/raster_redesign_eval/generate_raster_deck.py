@@ -47,7 +47,7 @@ import json
 from pathlib import Path
 
 from raster_deck_analysis import create_presentation_shell, create_reference_snapshot, ensure_approved
-from raster_deck_analysis import start_raster_analysis, wait_for_analysis
+from raster_deck_analysis import save_analysis_result, start_raster_analysis, wait_for_analysis
 from raster_deck_evidence import fetch_slide_evidence
 from raster_deck_generate import download_artifact, follow_export_to_artifact, generate_async, request_export
 from raster_deck_run import DriverRun
@@ -89,6 +89,10 @@ def main() -> None:
         )
     with run.stage("raster_analysis_wait"):
         ready = wait_for_analysis(args.base, started["operation_id"])
+    # Saved before review/approve mutates region text: this is STRUCTURE's own
+    # classification (role/editable_fallback/review_reason), used offline by
+    # the eval suite's mockup-exclusion editable-text-ratio metric.
+    save_analysis_result(out_dir, ready.get("analysis"))
     with run.stage("raster_review_approve"):
         approved = ensure_approved(args.base, ready)
 

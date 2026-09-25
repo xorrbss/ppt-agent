@@ -25,8 +25,10 @@ scripts/raster_redesign_eval/
   suite_compare.py               # compare (markdown delta table between two scored runs)
   deck_scoring.py               # the actual per-deck scoring (both checker kinds)
   wrong_number_filter.py        # page-number-footer false-positive classification
+  mockup_regions.py             # mockup-region (screenshot/UI-mock) exclusion, from analysis_result.json
   generate_raster_deck.py     # product-path driver (thin facade)
   raster_deck_http.py / _upload.py / _analysis.py / _generate.py / _evidence.py / _run.py
+  # raster_deck_analysis.py also has save_analysis_result() -> RUN_DIR/<deck_id>/analysis_result.json
   checker.py                  # OCR-fixture checker (thin facade)
   checker_text.py / _slide.py / _pptx_report.py / _pdf_report.py
   ground_truth_checker.py     # exact-source-text checker (deck1-4)
@@ -237,6 +239,17 @@ from-scratch path, not for `--from-images`.
   slide's own ratio). For an OCR-fixture (`"checker": "checker"`) deck,
   these are **best-match** (see "Order-aware matching" below); the old
   positional numbers are kept as `*_positional`.
+- `editable_text_ratio_body_excl_mockup` -- the same body-mean ratio, but
+  with source text inside regions STRUCTURE classified as a genuine
+  screenshot/UI mock/image removed from each page's denominator (see
+  "Mockup exclusion" below). `None` when no `analysis_result.json` is
+  available for that run (older runs never saved it -- see "Mockup
+  exclusion"). Alongside it: `mockup_regions_count`, `mockup_text_chars`
+  (total OCR-derived chars across all mockup regions), `mockup_regions`
+  (per region: `page`, `region_id`, `bbox`, `reason`, `char_count`, for an
+  auditor to crop and eyeball each one), and `mockup_analysis_available`
+  (whether the file was found at all -- distinguishes "0 mockup regions"
+  from "not measured").
 - `char_recall_mean` / `char_precision_mean` (deck1-4, exact source text) or
   `char_recall_mean` / `numeric_recall_mean` (OCR-fixture decks, best-match;
   `*_positional` kept alongside)
@@ -310,6 +323,73 @@ These can disagree (the hash detector can under-count vs. the product's own
 evidence, e.g. when the exported picture differs visually from the naive
 bottom-crop the detector compares against); both numbers are reported side
 by side per deck.
+
+## Mockup exclusion (`editable_text_ratio_body_excl_mockup`, 2026-09-25)
+
+`editable_text_ratio_body_mean` (and `_overall`) penalize a deck for keeping
+a *genuine* screenshot/UI mock/image as a picture exactly the same as for
+keeping actual sentence/paragraph text as pixels -- but the first is a
+correct, deliberate STRUCTURE decision (there is no "editable text" for a
+real screenshot to become), while the second is the thing this suite is
+actually trying to measure. `editable_text_ratio_body_excl_mockup` removes
+only the first kind's source text from each page's denominator.
+
+**Where the classification comes from.** The raster analysis result (`GET
+/api/v1/ppt/source-content/raster/analysis/{operation_id}`, defined in
+`api/v1/ppt/endpoints/raster_reconstruction.py`) returns the full
+`RasterAnalysis` (see `services/source_content/raster_contracts.py`):
+per-page `regions`, each with `role`, `editable_fallback`, `review_reason`,
+`bbox`, and `ocr_token_indices` into that page's own `ocr_inventory` (OCR
+word boxes over the source image). `generate_raster_deck.py`'s
+`save_analysis_result()` (in `raster_deck_analysis.py`) now writes this
+payload to `RUN_DIR/<deck_id>/analysis_result.json` right after
+`wait_for_analysis()` returns -- before review/approve can touch region
+text, so it reflects STRUCTURE's own, unedited classification.
+
+**The exclusion rule** (`mockup_regions.py`, `_is_mockup_region`):
+`role == "screenshot" and not editable_fallback`. This is not a new
+heuristic -- it is the exact condition already used pervasively across the
+raster services to mean "a real capture" (see `raster_boundary.py`'s /
+`raster_crop_edges.py`'s own `real_capture = crop.role == "screenshot" and
+not crop.editable_fallback`), read here from the saved analysis instead of
+computed. `_screenshot()` in `raster_structure_emit.py` is the only place
+that creates a region this way, and it never sets `editable_fallback`, so
+this reliably means "structure decided this box is not text, full stop" --
+as opposed to:
+
+- `editable_fallback == True` (regardless of role) -- text structure
+  recognized as text but had to keep as pixels for a fidelity reason
+  (`review_reason` values include `low_confidence_text_pixels`,
+  `unreadable_text_pixels`, `unconfirmed_number`, `table_unstructured`,
+  `crop_text_boundary*`, etc. -- the exhaustive "paragraph_pixels" /
+  "line_pixels" family the coordinator's task named lives under this same
+  flag). Stays IN the denominator.
+- a `"page-content"` / `dense_group_pixel_fallback` render-time fallback
+  (`services/source_content/raster_redesign_fallback.py`): a LATER,
+  density-driven decision made during redesign layout, after analysis --
+  these synthetic union-crop regions are never part of the analysis result
+  at all (they're only visible as `rasterRenderAdvisories` on the exported
+  SVG, i.e. `page_content_fallback_pages_product` above), so they can never
+  be mistaken for a mockup region by this rule. Stays IN the denominator.
+
+**Char counts are read, not guessed.** For each mockup region,
+`mockup_regions.py` joins the OCR words at its `ocr_token_indices` (falling
+back to the region's own `text` if it has no token indices) and counts
+non-whitespace characters -- the same normalization `_norm_len` uses
+elsewhere in this suite. This is exact per the analysis's own OCR word
+boxes, not an area-proportion estimate.
+
+**Availability.** `mockup_analysis_available: false` (and all four new
+fields `None`/empty) whenever `RUN_DIR/<deck_id>/analysis_result.json`
+doesn't exist -- true for every run captured before this change (deck1,
+deck4, and the large external reference deck used for the original
+verification all predate `save_analysis_result()`; a fresh `launch` run
+will have it). Verified with a synthetic `analysis_result.json` against
+deck1's real output PPTX: one genuine mockup region (21 OCR chars) is
+counted and excluded, a second region with `editable_fallback: true` on the
+same page is correctly left out of the mockup count, and every pre-existing
+metric (`editable_text_ratio_overall`, `_body_mean`, `wrong_numbers`, ...)
+came back byte-identical to the no-analysis-file run.
 
 ## Order-aware matching (OCR-fixture decks)
 

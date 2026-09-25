@@ -2,12 +2,18 @@
 reference snapshot -> presentation shell -> raster/analysis -> review/approve.
 
 Split out of the original generate_raster_deck.py (2026-09-25 eval suite) to
-keep each module under the repo's file-size limit; behavior is unchanged.
+keep each module under the repo's file-size limit; behavior is unchanged
+except `save_analysis_result()`, added so offline scoring can read the
+analysis's region classifications (role/editable_fallback/review_reason,
+OCR inventory) without re-querying the backend -- see mockup_regions.py.
 """
 from __future__ import annotations
 
+import json
 import time
 import uuid
+from pathlib import Path
+from typing import Optional
 
 from raster_deck_http import request as _request
 
@@ -73,6 +79,19 @@ def wait_for_analysis(base: str, operation_id: str, max_wait_seconds: int = 1800
             raise RuntimeError(f"raster analysis {result['status']}: {result.get('error_code')}")
         print(f"[raster.analysis] waiting... status={result['status']} progress={result.get('progress')}")
         time.sleep(ANALYSIS_POLL_SECONDS)
+
+
+def save_analysis_result(out_dir: Path, analysis_payload: Optional[dict]) -> None:
+    """Persist the raster analysis result (each page's regions -- role,
+    editable_fallback, review_reason, bbox, ocr_token_indices -- plus its
+    ocr_inventory) to `out_dir/analysis_result.json`, so offline scoring can
+    compute region-based metrics (e.g. the mockup-exclusion editable-text
+    ratio, see mockup_regions.py) without re-querying the backend. No-op
+    when the payload isn't available."""
+    if analysis_payload is None:
+        return
+    (Path(out_dir) / "analysis_result.json").write_text(
+        json.dumps(analysis_payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def ensure_approved(base: str, operation: dict) -> dict:

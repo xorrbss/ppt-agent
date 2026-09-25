@@ -17,6 +17,7 @@ METRICS = [
     ("wrong_numbers.count", "wrong numbers", "lower_better"),
     ("editable_text_ratio_overall", "editable ratio (overall)", "higher_better"),
     ("editable_text_ratio_body_mean", "editable ratio (body mean)", "higher_better"),
+    ("editable_text_ratio_body_excl_mockup", "editable ratio (body, excl. mockup)", "higher_better"),
     ("char_recall_mean", "char recall (mean)", "higher_better"),
     ("char_precision_mean", "char precision (mean)", "higher_better"),
     ("table_cell_accuracy", "table cell accuracy", "higher_better"),
