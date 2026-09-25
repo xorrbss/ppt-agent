@@ -96,21 +96,30 @@ def _title_budget(*, available_width_px: float, font_px: float) -> int:
 
 
 def _wrap(text: str, *, max_em: float) -> list[str]:
-    """Greedy character-level wrap against a fixed em budget per line."""
+    """Greedy wrap against a fixed em budget per line, breaking at spaces.
+
+    A word wider than a whole line (a long URL, an unspaced run) is the only
+    thing broken mid-word; Korean words are never split across lines otherwise.
+    """
 
     if not text:
         return [""]
     lines: list[str] = []
     current = ""
-    current_em = 0.0
-    for ch in text:
-        width = _char_em(ch)
-        if current and current_em + width > max_em:
+    for word in text.split(" "):
+        candidate = f"{current} {word}" if current else word
+        if _text_em(candidate) <= max_em:
+            current = candidate
+            continue
+        if current:
             lines.append(current)
-            current, current_em = ch, width
-        else:
-            current += ch
-            current_em += width
+        current = ""
+        for ch in word:
+            if current and _text_em(current + ch) > max_em:
+                lines.append(current)
+                current = ch
+            else:
+                current += ch
     lines.append(current)
     return lines
 
