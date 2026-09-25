@@ -14,6 +14,7 @@ from services.source_content.raster_boundary import enforce_boundaries
 from services.source_content.raster_crop_edges import enforce_crop_edges, text_ink_clusters
 from services.source_content.raster_exactly_once import enforce_exactly_once
 from services.source_content.raster_exactly_once_repair import dissolve_composites
+from services.source_content.raster_heuristic_grounding import unconfirmed_text_as_pixels
 from services.source_content.raster_ink_coverage import cover_uncovered_ink
 from services.source_content.raster_number_guard import guard_numbers
 from services.source_content.raster_paragraphs import absorb_fragments
@@ -86,7 +87,9 @@ def card_reading_order(plan: PagePlan) -> PagePlan:
 
 def _structured_plan(image, gray, words, lines, structurer, executable, tessdata) -> PagePlan:
     clusters = text_ink_clusters(gray)
-    heuristic = guard_numbers(plan_page(image, words, lines), words, image, executable, tessdata)
+    # Without the vision reader no reading is independently confirmed: text stays pixels.
+    heuristic = unconfirmed_text_as_pixels(plan_page(image, words, lines))
+    heuristic = guard_numbers(heuristic, words, image, executable, tessdata)
     heuristic = _settle(_dissolved(heuristic, words, gray), words, gray, clusters)
     heuristic = _covered(heuristic, words, image, gray, clusters)
     heuristic = _exactly_once(heuristic, words, gray, clusters, image)

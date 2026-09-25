@@ -150,8 +150,11 @@ def test_redesign_end_to_end_with_local_ocr(tmp_path: Path):
     page = draft.analysis.pages[0]
     assert page.render_mode == "redesign" and page.approval_method == "automatic_redesign"
     assert page.reference_region is not None and page.reference_region.region_id in draft.crop_png_by_region
-    title = next(region for region in page.regions if region.role == "title")
-    assert "보안" in (title.text or "")
+    # Without the vision reader no reading is independently confirmed: the title keeps
+    # its pixels in the title band, its OCR reading only a suggestion.
+    assert not any(region.role in ("title", "body") for region in page.regions)
+    title = next(region for region in page.regions if region.group_id == "title")
+    assert title.role == "screenshot" and title.editable_fallback and "보안" in (title.text or "")
     assert redesign_content_ledger(draft.analysis, 1).lossless
     assert all(
         region.region_id in draft.crop_png_by_region
