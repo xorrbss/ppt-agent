@@ -18,6 +18,9 @@ from services.workspace_attempt_timing import (
 )
 from services.workspace_payload_sanitizers import project_generation_deck_ir, sanitize_worker_resource_samples
 from services.workspace_operation_principal import operation_principal, resolve_operation_tenant
+from services.workspace_requeue_guard import (
+    REQUEUE_REJECTED_DETAIL_KEY, claim_from_operation, run_guarded, try_requeue,
+)
 from services.workspace_quality_review_payload import (
     _normalize_quality_review_payload,
     _quality_review_count,
@@ -287,6 +290,7 @@ _SAFE_PAYLOAD_KEYS = frozenset(
         "checkpoint_reuse_count",
         "reclaimed_attempt_token_sha256",
         ATTEMPT_TIMING_KEY,
+        REQUEUE_REJECTED_DETAIL_KEY,
     }
 )
 
@@ -2067,7 +2071,11 @@ async def _transition_claim_failure(
         )
         event_fencing_token = claim.fencing_token
         if public_requeue:
-            requeued_fence = await _requeue_public_admission_for_claim(session, claim)
+            requeued_fence, rejected = await try_requeue(
+                session, _requeue_public_admission_for_claim(session, claim))
+            if rejected is not None:  # terminal instead; releases the reservation
+                return await _transition_claim_failure(claim, code=code, retryable=False, session_factory=session_factory,
+                    detail={**(detail or {}), REQUEUE_REJECTED_DETAIL_KEY: rejected})
             if requeued_fence is None:
                 raise PublicAdmissionRejected("public_operation_requeue_authority_unavailable")
             event_fencing_token = requeued_fence
@@ -3126,7 +3134,11 @@ async def release_workspace_operation_claim(
         }
         event_fencing_token = claim.fencing_token
         if public_requeue:
-            requeued_fence = await _requeue_public_admission_for_claim(session, claim)
+            requeued_fence, rejected = await try_requeue(
+                session, _requeue_public_admission_for_claim(session, claim))
+            if rejected is not None:
+                return await _transition_claim_failure(
+                    claim, code=rejected, retryable=False, session_factory=session_factory)
             if requeued_fence is None:
                 raise PublicAdmissionRejected("public_operation_requeue_authority_unavailable")
             event_fencing_token = requeued_fence
@@ -3276,7 +3288,11 @@ async def defer_workspace_operation_claim(
         }
         event_fencing_token = claim.fencing_token
         if public_requeue:
-            requeued_fence = await _requeue_public_admission_for_claim(session, claim)
+            requeued_fence, rejected = await try_requeue(
+                session, _requeue_public_admission_for_claim(session, claim))
+            if rejected is not None:
+                return await _transition_claim_failure(
+                    claim, code=rejected, retryable=False, session_factory=session_factory)
             if requeued_fence is None:
                 raise PublicAdmissionRejected("public_operation_requeue_authority_unavailable")
             event_fencing_token = requeued_fence
@@ -3799,12 +3815,15 @@ async def recover_expired_workspace_operations(
             )
             event_fencing_token = stale["fencing_token"]
             if next_state == "queued" and public_v2:
-                requeued = await requeue_public_operation_v2(
-                    session,
-                    admission_id=admission.id,
-                    expected_fence=stale["fencing_token"],
-                    expected_attempt=stale["attempt_number"],
-                )
+                recovery_claim = claim_from_operation(operation_authority)
+                requeued, rejected = await try_requeue(session, requeue_public_operation_v2(
+                    session, admission_id=admission.id, expected_fence=stale["fencing_token"],
+                    expected_attempt=stale["attempt_number"]))
+                if rejected is not None:
+                    if await _transition_claim_failure(
+                            recovery_claim, code=rejected, retryable=False, session_factory=session_factory):
+                        recovered += 1
+                    continue
                 event_fencing_token = int(requeued.fence)
             if (
                 stale["kind"] == "presentation.generate"
@@ -4402,6 +4421,10 @@ class WorkspaceOperationRunner:
                 )
 
     async def _execute(self, claim: WorkspaceOperationClaim) -> None:
+        await run_guarded(claim, lambda: self._execute_claim(claim), record_failure=lambda code: (
+            _transition_claim_failure(claim, code=code, retryable=False, session_factory=self.session_factory)))
+
+    async def _execute_claim(self, claim: WorkspaceOperationClaim) -> None:
         # asyncio tasks copy contextvars at creation time.  Establish the
         # durable operation owner before creating either task so ORM owner
         # criteria and all downstream generation services execute in the same
