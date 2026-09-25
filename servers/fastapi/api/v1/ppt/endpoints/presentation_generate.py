@@ -1152,7 +1152,7 @@ async def generate_presentation_handler(
                     "quality_gate_status": gate_status,
                     "quality_pages": pages,
                 }
-                async_status.error = None
+                async_status.error, async_status.updated_at = None, datetime.now(timezone.utc)
                 sql_session.add(async_status)
                 # Durable independent of the chained export below: a failure
                 # submitting export_as must never roll back "completed" too
