@@ -32,6 +32,7 @@ LINE_ART_SPAN = 25  # half-scale cells: a stroke at least this long ...
 LINE_ART_THICKNESS = 3  # ... holding at most this many cells per unit of (width + height)
 TEXT_LINE_ASPECT = 2.5  # a cluster this many times wider than tall is a line of text, not a pictogram ...
 MAX_TEXT_DENSITY = 0.6  # ... unless its ink fills its box like a solid bar
+LINE_GAP = 1.5  # uncovered clusters on one line this close (x their height) are one pixel line
 
 
 def _components(mask: np.ndarray) -> list[tuple[int, int, int, int, int]]:
@@ -194,7 +195,7 @@ def cover_uncovered_ink(plan, words, image: Image.Image):
     if not clusters:
         return plan
     added = []
-    for x, y, w, h in clusters:
+    for x, y, w, h in _join_lines(clusters, rendered):
         pad = 3
         box = (
             max(0, x - pad),
@@ -215,6 +216,38 @@ def cover_uncovered_ink(plan, words, image: Image.Image):
             )
         )
     return replace(plan, regions=plan.regions + tuple(added))
+
+
+def _join_lines(clusters: list[Box], rendered: list[Box]) -> list[Box]:
+    """Clusters on one text line (e.g. the words of a letter-spaced tagline) become one box.
+
+    Two clusters join when they overlap vertically by at least half the
+    shorter height and the horizontal gap is at most ``LINE_GAP`` times the
+    taller height, unless the joined box would reach into a rendered region
+    (its ink is carried there already).
+    """
+    boxes = sorted(clusters, key=lambda box: (box[0], box[1]))
+    joined = True
+    while joined:
+        joined = False
+        for i, a in enumerate(boxes):
+            for j in range(i + 1, len(boxes)):
+                b = boxes[j]
+                overlap = min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1])
+                gap = max(a[0], b[0]) - min(a[0] + a[2], b[0] + b[2])
+                if overlap < 0.5 * min(a[3], b[3]) or gap > LINE_GAP * max(a[3], b[3]):
+                    continue
+                x0, y0 = min(a[0], b[0]), min(a[1], b[1])
+                union = (x0, y0, max(a[0] + a[2], b[0] + b[2]) - x0, max(a[1] + a[3], b[1] + b[3]) - y0)
+                if any(_hits(union, other) for other in rendered):
+                    continue
+                boxes[i] = union
+                del boxes[j]
+                joined = True
+                break
+            if joined:
+                break
+    return boxes
 
 
 def _nearest_group(regions, box: Box) -> str | None:

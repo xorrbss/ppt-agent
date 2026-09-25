@@ -72,3 +72,19 @@ def test_small_text_with_touching_glyphs_in_the_footer_band_is_kept():
     _text(image, (1784, 1062), "09 / 15", 12, FAINT)
     found = uncovered_ink(image, [], [], [])
     assert len(found) == 1 and found[0][1] >= 1050
+
+
+def test_uncovered_words_of_one_line_become_one_pixel_line_region():
+    from services.source_content.raster_ink_coverage import cover_uncovered_ink
+    from services.source_content.raster_page_plan import PagePlan, PlannedRegion
+
+    image = Image.new("RGB", (1672, 941), (255, 255, 255))
+    for x, word in ((100, "F O R"), (160, "S A F E R"), (240, "T O D A Y ,")):
+        _text(image, (x, 690), word, 16, (120, 130, 150))
+    _text(image, (100, 740), "A SMARTER TOMORROW", 16, (40, 40, 60))
+    covered = PlannedRegion("body", (95, 735, 300, 30), (), "A SMARTER TOMORROW")
+    plan = cover_uncovered_ink(PagePlan((covered,), ()), (), image)
+    added = [region for region in plan.regions if region.review_reason == "uncovered_ink"]
+    assert len(added) == 1
+    x, y, w, h = added[0].bbox
+    assert x <= 100 and x + w >= 315 and y + h <= 735  # the whole tagline line, not the covered line below
