@@ -15,6 +15,9 @@ export const VISION_STRUCTURER_UNAVAILABLE = "advisory:vision_structurer_unavail
 /** Page-level reason prefix: the page used the heuristic plan (its text stays pixels). */
 const HEURISTIC_PLAN = "heuristic_plan:";
 const STRUCTURING_FAILED = "page_structuring_failed:";
+/** Page-level reason prefix: the second (transcription) reader failed, so no line was confirmed. */
+const TRANSCRIPTION_FAILED = "transcription_failed:";
+const PAGE_KEPT_AS_PIXELS = [HEURISTIC_PLAN, STRUCTURING_FAILED, TRANSCRIPTION_FAILED];
 
 export type RasterUnresolvedIssue = {
   code: "page_kept_as_pixels" | "unresolved_source_content";
@@ -42,7 +45,7 @@ export function pageUnresolvedIssues(unresolved: readonly string[], pageNumber: 
   for (const entry of unresolved) {
     const { page, reason, advisory } = pageOf(entry);
     if (page === null ? advisory : page !== pageNumber) continue;
-    if (reason.startsWith(HEURISTIC_PLAN) || reason.startsWith(STRUCTURING_FAILED)) {
+    if (PAGE_KEPT_AS_PIXELS.some((prefix) => reason.startsWith(prefix))) {
       if (!degraded) issues.push({ code: "page_kept_as_pixels", message: entry, severity: "warning" });
       degraded = true;
       continue;

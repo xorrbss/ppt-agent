@@ -17,6 +17,10 @@ Deterministic rules (the model only ever names ids):
   and any character of the published text that no reading holds must be grounded
   by a same-shape reading or by pixels of its own shape (``raster_symbol_grounding``).
   Otherwise its full line box is kept as pixels.
+* when a second, independent reader was requested for the page (``transcripts``
+  is not None), every line needs its agreement: a line without a transcription,
+  including every line of a page whose reader failed, keeps its pixels. The
+  older single-reading rules above apply only where no second reading was needed.
 """
 
 from __future__ import annotations
@@ -95,7 +99,9 @@ def _publish(build: Build, index: int, text: str, carried: tuple[int, ...], curr
     build.corrections.append(f"{current} => {text}")
 
 
-def _resolve_line(build: Build, index: int, proposed: str | None, verified: bool = False, title: bool = False) -> None:
+def _resolve_line(
+    build: Build, index: int, proposed: str | None, verified: bool = False, title: bool = False, *, agreement: bool
+) -> None:
     page = build.page
     line = page.lines[index]
     carried = [i for i in line.word_indices if i not in build.unpromoted]
@@ -116,7 +122,7 @@ def _resolve_line(build: Build, index: int, proposed: str | None, verified: bool
     patched = number_patched(current, targeted)
     swapped = _hangul_patched(build, index, carried)
     candidates = (current, full, *line.alternates, *(c for c in (patched, swapped) if c))
-    if build.transcripts:
+    if agreement:  # a second reader was requested: a missing reading is not agreement
         _resolve_by_agreement(build, index, candidates, carried, current, targeted)
         return
     corrected = accept_correction(candidates, proposed) if proposed else None
@@ -249,7 +255,10 @@ def apply_structure(
     hangul: dict | None = None,
     transcripts: dict | None = None,
 ) -> PagePlan | None:
-    """Build a plan from the model's id structure; None when it is unusable."""
+    """Build a plan from the model's id structure; None when it is unusable.
+
+    ``transcripts`` None: no second reading was needed; a dict (even empty): every
+    line needs its agreement."""
 
     count, by_id = len(page.lines), {c.candidate_id: c for c in candidates}
     placed: dict[int, tuple[str, int]] = {}  # line -> (slot kind, slot index)
@@ -333,7 +342,7 @@ def apply_structure(
     groups = [tuple([i for i in part if i not in noise] for part in group) for group in groups]
     for i in range(count):
         if i not in shot_lines and i not in noise:
-            _resolve_line(build, i, corrections.get(i), i in verified, i in title)
+            _resolve_line(build, i, corrections.get(i), i in verified, i in title, agreement=transcripts is not None)
     for i in noise:
         build.unpromoted.update(page.lines[i].word_indices)
     for i in shot_lines:

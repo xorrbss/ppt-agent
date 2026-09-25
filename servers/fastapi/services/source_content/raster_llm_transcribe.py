@@ -5,7 +5,9 @@ confidence cannot decide what is trusted. A second, independent reader is
 asked to transcribe each line from its pixels alone: the model receives
 labelled crops of the lines (never the OCR text), so its reading cannot
 copy the OCR. A line is published as editable text only when both readers
-agree (see ``raster_text_correction.transcription_agrees``).
+agree (see ``raster_text_correction.transcription_agrees``). A reader that
+fails or answers nothing usable raises, so its page is reported; the lines it
+should have read have no second reading and keep their pixels.
 """
 
 from __future__ import annotations
@@ -95,19 +97,30 @@ def _render(batch: list[tuple[str, Image.Image]]) -> bytes:
     return output.getvalue()
 
 
-def request_transcripts(page: PageContext, raw: dict | None, client) -> dict[int, str]:
-    """Line index -> the model's independent transcription (missing: not transcribed)."""
+class TranscriptionUnusable(ValueError):
+    """The reader answered, but with no transcription for any requested line."""
+
+
+def request_transcripts(page: PageContext, raw: dict | None, client) -> dict[int, str] | None:
+    """Line index -> the model's independent transcription.
+
+    None when no line needs a second reading (nothing is requested). Otherwise a
+    requested line missing from the result has no second reading; an answer with
+    none at all (no answer, invalid JSON, no usable entry) raises."""
 
     skip = _excluded(raw)
     indices = [n for n in range(len(page.lines)) if f"L{n + 1}" not in skip]
     if not indices:
-        return {}
+        return None
     sheets = _sheets(page, indices)
     note = f"Transcribe these ids: {', '.join(f'L{n + 1}' for n in indices)}"
     result = client(SYSTEM_PROMPT, [*sheets, note], SCHEMA, "line_transcripts")
     wanted = {f"L{n + 1}": n for n in indices}
     transcripts: dict[int, str] = {}
-    for entry in (result or {}).get("lines") or ():
+    entries = result.get("lines") if isinstance(result, dict) else None
+    for entry in entries if isinstance(entries, list) else ():
         if isinstance(entry, dict) and str(entry.get("id")) in wanted and isinstance(entry.get("text"), str):
             transcripts[wanted[str(entry["id"])]] = " ".join(entry["text"].split())
+    if not transcripts:
+        raise TranscriptionUnusable("no requested line was transcribed")
     return transcripts

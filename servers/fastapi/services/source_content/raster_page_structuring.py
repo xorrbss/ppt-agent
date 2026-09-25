@@ -32,6 +32,8 @@ from services.source_content.raster_structure_apply import apply_structure
 
 logger = logging.getLogger(__name__)
 HEURISTIC_ADVISORY = "heuristic_plan"
+# The second reader failed: the lines it should have read keep their pixels.
+TRANSCRIPTION_ADVISORY = "transcription_failed"
 
 
 def plan_is_lossless(plan: PagePlan, words: tuple[RedesignWord, ...]) -> bool:
@@ -111,7 +113,7 @@ def _structured_plan(image, gray, words, lines, structurer, executable, tessdata
         if raw:
             raw, candidates = _verified_captures(page, candidates, raw)
         targeted = targeted_number_reads(image, page.words, page.lines, executable=executable, tessdata=tessdata)
-        transcripts = _transcripts(page, raw, structurer)
+        transcripts, transcription_failure = _transcripts(page, raw, structurer)
         hangul = targeted_hangul_reads(image, page.words, page.lines, executable=executable, tessdata=tessdata)
         model = str(getattr(structurer, "model", "vision"))
         plan = apply_structure(page, candidates, raw, model, targeted, hangul, transcripts) if raw else None
@@ -130,7 +132,10 @@ def _structured_plan(image, gray, words, lines, structurer, executable, tessdata
         logger.warning("raster structuring rejected: plan not lossless")
         return _degraded(heuristic, "structuring_rejected:plan_not_lossless")
     covered = _covered(plan, plan.words or words, image, gray, clusters)
-    return _exactly_once(covered, plan.words or words, gray, clusters, image)
+    final = _exactly_once(covered, plan.words or words, gray, clusters, image)
+    if transcription_failure is None:
+        return final
+    return replace(final, advisories=(*final.advisories, transcription_failure))  # once per page
 
 
 def _degraded(plan: PagePlan, why: str) -> PagePlan:
@@ -179,14 +184,17 @@ def _verified_captures(page, candidates, raw):
     return verified, candidates_out
 
 
-def _transcripts(page, raw, structurer) -> dict[int, str]:
-    """Independent line transcriptions; empty (older grounding rules) if the call fails."""
+def _transcripts(page, raw, structurer) -> tuple[dict[int, str] | None, str | None]:
+    """Independent line transcriptions (None: no line needs one) and the failure advisory.
+
+    A failed reader yields no second reading for any line it should have read:
+    empty, never None, so none of those lines counts as agreed (they keep their pixels)."""
 
     try:
-        return request_transcripts(page, raw, structurer) if raw else {}
+        return (request_transcripts(page, raw, structurer) if raw else None), None
     except Exception as error:
         logger.warning("raster transcription failed: %s", type(error).__name__)
-        return {}
+        return {}, f"{TRANSCRIPTION_ADVISORY}:{type(error).__name__}"
 
 
 def _dissolved(plan: PagePlan, words, gray) -> PagePlan:

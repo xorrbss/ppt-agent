@@ -55,7 +55,7 @@ class _Stub:
         self.calls = 0
 
     def __call__(self, system, parts, schema, name):
-        if name == "line_transcripts":  # None: no transcription, the older grounding rules apply
+        if name == "line_transcripts":  # None: the reader failed, no line is confirmed
             assert all(isinstance(part, bytes) for part in parts[:-1]) and "L1" in parts[-1]
             return None if self.transcripts is None else {"lines": self.transcripts}
         self.calls += 1
@@ -93,7 +93,13 @@ def test_structured_plan_is_grounded_and_lossless():
             "groups": [{"heading": ["L2"], "body": ["L3", "L4"], "captures": [], "icons": []}],
             "screenshots": [{"captures": [], "lines": ["L5"]}],
             "corrections": [{"line": "L4", "text": "AI가 지원"}, {"line": "L3", "text": "영업이익은 99%"}],
-        }
+        },
+        [
+            {"id": "L1", "text": "매출 현황"},
+            {"id": "L2", "text": "핵심 요약"},
+            {"id": "L3", "text": "영업이익은 99%"},
+            {"id": "L4", "text": "AI가 지원"},
+        ],
     )
     plan = structured_plan(image, words, lines, stub)
     assert stub.calls == 1 and plan.structured_by == "stub-vision"
@@ -134,7 +140,7 @@ def test_provider_failure_or_bad_answer_keeps_heuristic_plan():
         raise RuntimeError("provider down")
 
     assert structured_plan(image, words, lines, failing).structured_by is None
-    untitled = structured_plan(image, words, lines, _Stub({"groups": []}))
+    untitled = structured_plan(image, words, lines, _Stub({"groups": []}, [{"id": "L1", "text": "매출 현황"}]))
     assert next(r for r in untitled.regions if r.role == "title").text == "매출 현황"  # top-band fallback title
     assert structured_plan(image, words, lines, None).structured_by is None
 
