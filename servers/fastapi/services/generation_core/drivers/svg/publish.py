@@ -22,7 +22,8 @@ from services.authored_presentation_artifacts import _save_slide_pngs, authored_
 from services.svg_presentation_checkpoint import _save_source_page_pngs
 
 
-async def _publish(request, presentation_id, outline, language, session, job, snapshot, roles, pages):
+async def _publish(request, presentation_id, outline, language, session, job, snapshot, roles, pages,
+                   *, quality_summary=None, advisory=None):
     source_preservation = None
     if getattr(request, "_source_content_svg_reflow", False):
         from services.svg_source_layout import source_pages, verify_source_receipt
@@ -31,6 +32,8 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
             raise ValueError("svg_source_page_count_mismatch")
         for index, (payload, _) in enumerate(pages):
             verify_source_receipt(payload["svg_content"], payload.get("source_preservation"), manifest, index)
+            if payload.get("terminal"):
+                continue  # flag-only: verbatim (checked above), flagged, reviewed as unverified
             if payload.get("quality", {}).get("passed") is not True:
                 raise ValueError("svg_source_quality_failed")
             if payload["source_preservation"].get("rendering_verified") is not True:
@@ -91,6 +94,11 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
                 **({"sourcePreservation": source_preservation} if source_preservation else {}),
                 "qualityStatus": "review_required" if review else "passed",
                 "reviewPages": review, "quality": quality,
+                **({"qualitySummary": {key: value for key, value in quality_summary.items()
+                                       if key != "flaggedSlides"},
+                    "flaggedSlides": quality_summary.get("flaggedSlides", [])}
+                   if quality_summary else {}),
+                **({"advisory": advisory} if advisory else {}),
                 "initialQuality": initial_quality,
                 **({"renderAdvisoryCount": render_advisory_count} if render_advisory_count else {}),
                 "codexGenerationPreset": request.codex_generation_preset},
@@ -117,6 +125,7 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
                                fencing_token=fencing_token)
     result = {"presentation_id": str(presentation_id), "source_format": "svg",
               "quality_status": "review_required" if review else "passed",
+              "quality_pages": {"passed": len(pages) - len(review), "flagged": len(review)},
               "edit_path": f"/presentation?id={presentation_id}", "path": ""}
     await publish_presentation_revision(session, presentation_id=presentation_id,
                                        expected_revision=expected_revision, operation_id=operation_id,
@@ -125,3 +134,20 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
     await session.commit()
     return PresentationPathAndEditPath(presentation_id=presentation_id, path="",
                                        edit_path=f"/presentation?id={presentation_id}")
+
+
+async def svg_completion_status(session, presentation_id):
+    """``(message, quality_gate_status, page_counts)`` for a published SVG deck.
+
+    Read back from what publication recorded, so the generation status can never
+    claim a verdict the deck does not carry.
+    """
+    theme = await session.scalar(select(PresentationModel.theme).where(PresentationModel.id == presentation_id))
+    svg = (theme or {}).get("svg") or {}
+    review = list(svg.get("reviewPages") or [])
+    total = len(svg.get("quality") or [])
+    pages = {"passed": total - len(review), "flagged": len(review)}
+    status = "review_required" if review else "passed"
+    detail = ("preservation verified" if svg.get("sourcePreservation") and not review
+              else f"{pages['passed']} passed, {pages['flagged']} flagged for review")
+    return f"SVG presentation generation completed; {detail}", status, pages
