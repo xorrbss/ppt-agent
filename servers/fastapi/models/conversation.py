@@ -50,7 +50,7 @@ class PresentationCapability(BaseModel):
     capabilities: PresentationCapabilities
     generation_mode: Literal["standard"]
     presentation_mode: Literal["template", "authored", "svg"]
-    tool_profile: Literal["authored", "template-v2", "svg-v1"]
+    tool_profile: Literal["authored", "svg-v1"]
     can_edit: bool
     supports_assets: bool = True
 

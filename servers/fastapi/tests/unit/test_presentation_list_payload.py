@@ -12,7 +12,6 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
 import uuid
 
 from fastapi.encoders import jsonable_encoder
@@ -63,32 +62,6 @@ STORED_THEME = {
 }
 
 
-def _native_ui() -> dict[str, Any]:
-    return {
-        "id": "title",
-        "description": "Native editable title slide",
-        "components": [
-            {
-                "id": "hero",
-                "description": "Editable hero title component",
-                "position": {"x": 0, "y": 0},
-                "elements": [
-                    {
-                        "type": "text",
-                        "position": {"x": 1, "y": 1},
-                        "size": {"width": 8, "height": 1},
-                        "runs": [{"text": "Native", "font": {"size": 18, "bold": True}}],
-                        "decorative": False,
-                        "name": "title",
-                        "min_length": 1,
-                        "max_length": 80,
-                    }
-                ],
-            }
-        ],
-    }
-
-
 async def _database(path: Path):
     engine = create_async_engine(f"sqlite+aiosqlite:///{path}")
     async with engine.begin() as connection:
@@ -102,10 +75,10 @@ async def _database(path: Path):
 
 
 async def _seed(maker) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
-    """One authored deck, one native deck, one staging deck that stays hidden."""
+    """One authored deck, one svg deck, one staging deck that stays hidden."""
 
     authored_id = uuid.uuid4()
-    native_id = uuid.uuid4()
+    svg_id = uuid.uuid4()
     staging_id = uuid.uuid4()
     async with maker() as session, session.begin():
         session.add_all(
@@ -121,15 +94,16 @@ async def _seed(maker) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
                     lifecycle_status=PRESENTATION_LIFECYCLE_PUBLISHED,
                 ),
                 PresentationModel(
-                    id=native_id,
-                    content="native prompt",
+                    id=svg_id,
+                    content="svg prompt",
                     n_slides=1,
                     language="en",
-                    title="Native deck",
-                    mode="template",
-                    # A template deck is v2; the default v1 with a template
-                    # mode is one of the retired React-template formats.
-                    version="v2-standard",
+                    title="SVG deck",
+                    # svg-v1 is the only currently-registered non-authored
+                    # driver; template-v2 was removed from the registry, so a
+                    # row with that identity no longer resolves a profile.
+                    mode="svg",
+                    theme={"mode": "svg"},
                     lifecycle_status=PRESENTATION_LIFECYCLE_PUBLISHED,
                 ),
                 PresentationModel(
@@ -165,14 +139,14 @@ async def _seed(maker) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
                     properties=None,
                 ),
                 SlideModel(
-                    presentation=native_id,
-                    layout_group="native",
-                    layout="title",
+                    presentation=svg_id,
+                    layout_group="svg",
+                    layout="svg",
                     index=0,
-                    content={"title": "Native cover"},
-                    ui=_native_ui(),
-                    speaker_note="native note",
-                    properties={"source": "template-v2"},
+                    content={"title": "SVG cover"},
+                    svg_content="<svg><text>SVG cover</text></svg>",
+                    speaker_note="svg note",
+                    properties={"source": "svg-v1"},
                 ),
                 SlideModel(
                     presentation=staging_id,
@@ -183,14 +157,14 @@ async def _seed(maker) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
                 ),
             ]
         )
-    return authored_id, native_id, staging_id
+    return authored_id, svg_id, staging_id
 
 
 def test_presentation_list_withholds_slide_html_and_never_selects_it(tmp_path: Path):
     async def scenario():
         engine, maker = await _database(tmp_path / "list-payload.db")
         try:
-            authored_id, native_id, staging_id = await _seed(maker)
+            authored_id, svg_id, staging_id = await _seed(maker)
 
             statements: list[str] = []
 
@@ -205,7 +179,7 @@ def test_presentation_list_withholds_slide_html_and_never_selects_it(tmp_path: P
             event.remove(engine.sync_engine, "before_cursor_execute", _record)
 
             by_id = {deck.id: deck for deck in decks}
-            assert set(by_id) == {authored_id, native_id}, "staging deck leaked"
+            assert set(by_id) == {authored_id, svg_id}, "staging deck leaked"
             assert staging_id not in by_id
 
             # The list withholds authored HTML for every deck, authored or not.
@@ -244,16 +218,15 @@ def test_presentation_list_withholds_slide_html_and_never_selects_it(tmp_path: P
             assert by_id[authored_id].title == "Authored deck"
             assert by_id[authored_id].mode == "authored"
             assert by_id[authored_id].theme == LIST_THEME
-            assert by_id[native_id].theme is None
+            assert by_id[svg_id].theme == {"mode": "svg"}
             # Both large JSON columns are reduced inside SQL, not after fetch.
             assert any("json_remove(presentations.theme" in sql for sql in statements)
             assert any("json_remove(slides.content" in sql for sql in statements)
 
-            native_slide = by_id[native_id].slides[0]
-            assert native_slide.content == {"title": "Native cover"}
-            assert native_slide.ui is not None
-            assert native_slide.ui["components"][0]["id"] == "hero"
-            assert native_slide.properties == {"source": "template-v2"}
+            svg_slide = by_id[svg_id].slides[0]
+            assert svg_slide.content == {"title": "SVG cover"}
+            assert svg_slide.svg_content == "<svg><text>SVG cover</text></svg>"
+            assert svg_slide.properties == {"source": "svg-v1"}
 
             # `html_content` stays in the response shape as an explicit null
             # rather than disappearing, so existing clients keep their key.

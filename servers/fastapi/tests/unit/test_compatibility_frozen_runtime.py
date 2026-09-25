@@ -10,10 +10,7 @@ from sqlmodel import SQLModel, select
 from api.v1.ppt.endpoints.compatibility_migration import (
     COMPATIBILITY_MIGRATION_ROUTER,
 )
-from models.compatibility_migration import (
-    FrozenCompatibilityOperation,
-    UpgradeForkRequest,
-)
+from models.compatibility_migration import UpgradeForkRequest
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services.compatibility_migration.archive import (
@@ -65,22 +62,28 @@ async def _session_maker(path):
     return engine, async_sessionmaker(engine, expire_on_commit=False)
 
 
-def _frozen_presentation(owner_id: uuid.UUID) -> PresentationModel:
-    """A deck that is not authored, and therefore frozen.
+def _non_authored_presentation(owner_id: uuid.UUID) -> PresentationModel:
+    """A deck that is not authored, but still resolves to a live driver.
 
-    Template-v2 is the only such format left: the React-template drivers these
-    fixtures used to describe were removed with their components, so a row in
-    one of those formats resolves no profile and is reported as corrupt rather
-    than as frozen.
+    ``svg-v1`` is now the only driver a persisted row can resolve to besides
+    ``authored``: Template V2 was removed from the driver registry in
+    ``services.presentation_profiles`` (2026-09-25), and the row it used to
+    describe (``mode="template"``, ``version="v2-standard"``) can no longer
+    even be committed -- ``services.database_owner_scope`` stamps every new
+    presentation's profile on flush, and that stamp now raises for such a
+    row instead of succeeding. So there is no more "frozen legacy" identity
+    a test fixture can construct; this fixture stands in for "any live,
+    non-authored driver" in tests that check mutation is blocked for one.
     """
     return PresentationModel(
         owner_id=owner_id,
-        content="private template source",
+        content="svg deck",
         n_slides=1,
         language="Korean",
-        title="Template deck",
-        mode="template",
-        version="v2-standard",
+        title="SVG deck",
+        mode="svg",
+        version="v1-standard",
+        theme={"mode": "svg"},
         generation_mode="standard",
     )
 
@@ -169,32 +172,48 @@ def test_archive_manifest_rejects_weak_signing_material():
         )
 
 
-def test_frozen_runtime_allows_only_declared_operations_and_is_owner_scoped(tmp_path):
+def test_frozen_runtime_is_never_applicable_to_a_live_driver_and_is_owner_scoped(
+    tmp_path,
+):
+    """No driver is ever "frozen" any more; every live profile is not_applicable.
+
+    The registry only ever lists live drivers (``authored``, ``svg-v1``), so a
+    profile that resolves at all can never be the retired ``template-v2``
+    identity ``FrozenRuntimeDescriptor`` used to describe. Both live drivers
+    below hit the same ``compatibility_runtime_not_applicable`` outcome.
+    """
+
     async def runner():
         engine, maker = await _session_maker(tmp_path / "runtime.db")
         owner_id = uuid.uuid4()
         other_owner_id = uuid.uuid4()
-        source = _frozen_presentation(owner_id)
+        authored = PresentationModel(
+            owner_id=owner_id,
+            content="authored",
+            n_slides=1,
+            language="en",
+            mode="authored",
+            theme={"mode": "authored"},
+        )
+        svg = _non_authored_presentation(owner_id)
         with _owner(owner_id):
             async with maker() as session:
-                session.add(source)
+                session.add_all((authored, svg))
                 await session.commit()
 
-                descriptor = await get_frozen_runtime_descriptor(session, source.id)
-                assert descriptor.source_driver_id == "template-v2"
-                assert set(descriptor.allowed_operations) == set(
-                    FrozenCompatibilityOperation
-                )
-                for operation in FrozenCompatibilityOperation:
-                    decision = await authorize_frozen_operation(
-                        session, source.id, operation.value
-                    )
-                    assert decision.allowed is True
-
-                with pytest.raises(
-                    FrozenCompatibilityError, match="legacy_presentation_frozen"
-                ):
-                    await authorize_frozen_operation(session, source.id, "update")
+                for presentation in (authored, svg):
+                    with pytest.raises(
+                        FrozenCompatibilityError,
+                        match="compatibility_runtime_not_applicable",
+                    ):
+                        await get_frozen_runtime_descriptor(session, presentation.id)
+                    with pytest.raises(
+                        FrozenCompatibilityError,
+                        match="compatibility_runtime_not_applicable",
+                    ):
+                        await authorize_frozen_operation(
+                            session, presentation.id, "open"
+                        )
 
         with _owner(other_owner_id):
             async with maker() as session:
@@ -202,7 +221,7 @@ def test_frozen_runtime_allows_only_declared_operations_and_is_owner_scoped(tmp_
                     FrozenCompatibilityError,
                     match="compatibility_presentation_not_found",
                 ):
-                    await get_frozen_runtime_descriptor(session, source.id)
+                    await get_frozen_runtime_descriptor(session, svg.id)
         await engine.dispose()
 
     _run(runner())
@@ -212,7 +231,7 @@ def test_workspace_chat_common_context_rejects_frozen_legacy_before_provider(tmp
     async def runner():
         engine, maker = await _session_maker(tmp_path / "workspace-gate.db")
         owner_id = uuid.uuid4()
-        source = _frozen_presentation(owner_id)
+        source = _non_authored_presentation(owner_id)
         claim = type(
             "Claim",
             (),
@@ -288,19 +307,26 @@ def test_upgrade_fork_is_authored_new_id_and_preserves_original(tmp_path):
     async def runner():
         engine, maker = await _session_maker(tmp_path / "upgrade.db")
         owner_id = uuid.uuid4()
-        source = _frozen_presentation(owner_id)
-        source_slide = _frozen_slide(owner_id, source.id)
+        source = _non_authored_presentation(owner_id)
+        source_slide = SlideModel(
+            owner_id=owner_id,
+            presentation=source.id,
+            layout_group="svg",
+            layout="svg",
+            index=0,
+            content={},
+            svg_content="<svg></svg>",
+        )
         key = b"archive-signing-key-for-focused-test"
         with _owner(owner_id):
             async with maker() as session:
                 session.add(source)
                 session.add(source_slide)
                 await session.commit()
-                # Read the rows back before snapshotting them. A template-v2
-                # slide's ``ui`` is canonicalised on the way to storage, so an
-                # in-memory snapshot would differ from the stored row for that
-                # reason alone and hide what this test is actually checking:
-                # that the upgrade leaves the source untouched.
+                # Read the rows back before snapshotting them so the in-memory
+                # snapshot matches what is actually stored, and the comparison
+                # below checks what this test is actually testing: that the
+                # upgrade leaves the source untouched.
                 await session.refresh(source)
                 await session.refresh(source_slide)
                 original_presentation = source.model_dump(
@@ -371,7 +397,7 @@ def test_upgrade_fork_rejects_stale_revision_and_other_owner(tmp_path):
         engine, maker = await _session_maker(tmp_path / "upgrade-errors.db")
         owner_id = uuid.uuid4()
         other_owner_id = uuid.uuid4()
-        source = _frozen_presentation(owner_id)
+        source = _non_authored_presentation(owner_id)
         with _owner(owner_id):
             async with maker() as session:
                 session.add(source)
@@ -412,11 +438,21 @@ def test_upgrade_fork_rejects_stale_revision_and_other_owner(tmp_path):
     _run(runner())
 
 
-def test_mixed_slide_evidence_is_quarantined_from_runtime_and_upgrade(tmp_path):
+def test_mixed_slide_evidence_is_quarantined_from_upgrade(tmp_path):
+    """A deck whose slides disagree with its resolved driver cannot be forked.
+
+    ``get_frozen_runtime_descriptor`` no longer performs this slide-evidence
+    cross-check itself: every profile that resolves is live, so it always
+    answers ``compatibility_runtime_not_applicable`` without needing to look
+    at slide evidence (see ``test_frozen_runtime_is_never_applicable_to_a_live_driver_and_is_owner_scoped``).
+    ``upgrade_presentation_fork`` still runs the census, and this is the path
+    that exercises it.
+    """
+
     async def runner():
         engine, maker = await _session_maker(tmp_path / "quarantine.db")
         owner_id = uuid.uuid4()
-        source = _frozen_presentation(owner_id)
+        source = _non_authored_presentation(owner_id)
         mixed_slide = SlideModel(
             owner_id=owner_id,
             presentation=source.id,
@@ -424,17 +460,12 @@ def test_mixed_slide_evidence_is_quarantined_from_runtime_and_upgrade(tmp_path):
             layout="authored:CONTENT",
             index=0,
             content={"__authored__": True},
-            html_content="<main>conflicts with legacy profile</main>",
+            html_content="<main>conflicts with the resolved svg profile</main>",
         )
         with _owner(owner_id):
             async with maker() as session:
                 session.add_all((source, mixed_slide))
                 await session.commit()
-                with pytest.raises(
-                    FrozenCompatibilityError,
-                    match="compatibility_presentation_quarantined",
-                ):
-                    await get_frozen_runtime_descriptor(session, source.id)
                 with pytest.raises(
                     CompatibilityUpgradeError,
                     match="compatibility_presentation_quarantined",

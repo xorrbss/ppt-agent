@@ -150,15 +150,16 @@ def _slide_evidence(slide: object) -> SlideEvidence:
 def _canonical_classification(driver_id: str) -> CensusClassification:
     """Name the format of a deck whose profile resolved.
 
-    Only these formats can. The retired React-template drivers this fork no
-    longer ships (``standard``, ``smart``) are not in the driver registry, so
-    a row in one of those formats never reaches here: its profile fails to
-    resolve and the caller reports it ``invalid``, which is what the census
-    exists to surface.
+    Only the currently-registered drivers can reach here. The retired
+    React-template drivers this fork no longer ships (``standard``,
+    ``smart``, and now ``template-v2`` itself) are not in the driver
+    registry, so a row in one of those formats never reaches here: its
+    profile fails to resolve and the caller reports it ``invalid``, which is
+    what the census exists to surface.
     """
     return cast(
         CensusClassification,
-        {"template-v2": "template_v2", "authored": "authored", "svg-v1": "svg"}[driver_id],
+        {"authored": "authored", "svg-v1": "svg"}[driver_id],
     )
 
 
@@ -202,7 +203,6 @@ def classify_presentation(
 
     canonical = _canonical_classification(profile.driver_id)
     expected_evidence = {
-        "template_v2": "template_v2",
         "authored": "authored",
         "svg": "svg",
     }[canonical]
