@@ -24,6 +24,8 @@ def _has_table(name: str) -> bool:
 
 
 def _has_column(table: str, column: str) -> bool:
+    if not _has_table(table):
+        return False
     inspector = sa.inspect(op.get_bind())
     return column in {row["name"] for row in inspector.get_columns(table)}
 
@@ -35,8 +37,7 @@ def upgrade() -> None:
             batch.drop_index(_CHAT_TEMPLATE_INDEX)
             batch.drop_column("template_v2_id")
     if _has_column("presentation_generation_jobs", "template_v2_target"):
-        with op.batch_alter_table("presentation_generation_jobs") as batch:
-            batch.drop_column("template_v2_target")
+        op.drop_column("presentation_generation_jobs", "template_v2_target")
     for table in (
         "template_v2_revisions",
         "template_v2_pptx_imports",

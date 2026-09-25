@@ -231,7 +231,7 @@ def _decode_json_value(value: object) -> object:
 
 def _has_invalid_slide_ui_row(connection) -> bool:
     # Import lazily so Alembic's script discovery remains application-neutral.
-    from templates.v2.persistence import canonicalize_slide_ui
+    from templates.native_ui.persistence import canonicalize_slide_ui
 
     # Do not set stream_results on Alembic's shared Connection. SQLAlchemy 2
     # applies execution_options in place, which would make Alembic's following
@@ -1157,7 +1157,7 @@ def normalize_chart_contract(
     if not isinstance(chart_type, str) or chart_type not in CHART_TYPES:
         return _contract_error("unsupported_chart_type")
 
-    # Mirrors the explicit legacy coercion in templates.v2.models.Chart.
+    # Mirrors the explicit legacy coercion in templates.native_ui.models.Chart.
     if cloned.get("data_labels") is True:
         cloned["data_labels"] = "top"
     elif cloned.get("data_labels") is False:
