@@ -12,6 +12,7 @@ import services.svg_trusted_fonts as trusted_fonts
 from services.svg_trusted_fonts import (
     BUNDLED_FACES,
     FONT_DIRECTORY,
+    declared_weights,
     read_trusted_pretendard_faces,
 )
 
@@ -40,6 +41,17 @@ def test_trusted_faces_never_come_from_a_windows_system_font() -> None:
     windows_fonts = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
     for _weight, _face, file_name in BUNDLED_FACES:
         assert windows_fonts not in (FONT_DIRECTORY / file_name).parents
+
+
+def test_declared_weights_matches_the_bundled_faces() -> None:
+    assert declared_weights("Pretendard") == {400, 700}
+    assert declared_weights("'Pretendard'") == {400, 700}
+    assert declared_weights("PRETENDARD") == {400, 700}
+
+
+def test_declared_weights_is_none_for_an_untrusted_family() -> None:
+    assert declared_weights("Poppins") is None
+    assert declared_weights("Malgun Gothic") is None
 
 
 def test_a_mislabelled_face_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:

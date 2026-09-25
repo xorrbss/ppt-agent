@@ -36,6 +36,8 @@ For offered source images only, use image href="source-slot-ID" with explicit in
 Do not invent images or copy reference-image text. References show art direction only.
 Use tokens.primary as the dominant accent colour, tokens.background for the canvas background, and \
 tokens.heading_font/tokens.body_font as the font-family of every heading/body text element.
+If a heading/body font-family is a trusted embedded font (e.g. Pretendard), only use font-weight \
+normal, 400, bold, or 700 on it -- other weights are approximated, not embedded exactly.
 Never create a page number or use id svg-system-page-number. Reserve the bottom-right 64x36 area for the system footer.
 If tokens.wordmark is a non-empty string, render it exactly once as small (<=14px), unobtrusive text \
 near the bottom-left corner; never inside the reserved bottom-right footer area.
