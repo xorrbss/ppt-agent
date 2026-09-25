@@ -89,3 +89,57 @@ def classify_wrong_numbers(slide, slide_height: int, page_number: int,
         else:
             remaining.extend([tok] * cnt)
     return filtered, remaining
+
+
+# --------------------------------------------------------------------------
+# source-side (ground-truth) footer exclusion, for the number-gate metrics
+# (source_numbers_total / correct_numbers_editable / correct_numbers_pixel,
+# 2026-09-25 follow-up)
+# --------------------------------------------------------------------------
+
+_FOOTER_FRACTION_RE = re.compile(r"(?<!\d)(\d{1,3})\s*/\s*(\d{1,3})(?!\d)")
+
+
+def gt_footer_token_counts(text: str, page_number: int, total_pages: int) -> Counter:
+    """Counts tokens belonging to a "N / total" page-footer stamp matching
+    THIS page's own position (e.g. "01 / 15" on page 1 of a 15-page deck --
+    the documented deck1 pattern, see README "Wrong-number footer false
+    positives"). ground_truth.json's `numeric_tokens` come from a flat,
+    position-blind whole-page regex over the source text (no shape/bbox
+    info survives into that fixture, unlike the output pptx's real shapes
+    `classify_wrong_numbers` can inspect), so this is a text-pattern
+    heuristic, not a structural one: only the exact "this page / this
+    deck's page count" fraction is excluded, not any number that merely
+    happens to equal the page number, so a real content number is never
+    dropped by coincidence."""
+    counts: Counter = Counter()
+    for m in _FOOTER_FRACTION_RE.finditer(text or ""):
+        left, right = m.group(1), m.group(2)
+        try:
+            left_n, right_n = int(left), int(right)
+        except ValueError:
+            continue
+        if left_n == page_number and right_n == total_pages:
+            counts[left] += 1
+            counts[right] += 1
+    return counts
+
+
+def number_gate_counts(gt_numeric_tokens: list, gt_text_normalized: str, page_number: int,
+                        total_pages: int, output_number_tokens: Counter) -> tuple:
+    """For the "how many correct numbers went to pixels" gate: returns
+    (source_numbers_total, correct_numbers_editable) for one page.
+    `source_numbers_total` is the page's real GT number-token count with its
+    own page-number footer excluded (`gt_footer_token_counts`).
+    `correct_numbers_editable` is how many of those are found, as a
+    multiset, in `output_number_tokens` (the output slide's own editable
+    text number tokens -- same matching as `ground_truth_checker.
+    numeric_exactness`, just against the footer-filtered source list, so a
+    footer digit is never counted as either a correct-editable or a
+    went-to-pixels number)."""
+    raw = Counter(gt_numeric_tokens)
+    footer = gt_footer_token_counts(gt_text_normalized, page_number, total_pages)
+    filtered = raw - footer  # Counter subtraction floors each count at 0
+    total = sum(filtered.values())
+    matched = sum(min(c, output_number_tokens.get(tok, 0)) for tok, c in filtered.items())
+    return total, matched

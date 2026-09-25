@@ -15,52 +15,20 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Optional
 
-from mockup_regions import load_analysis_result, mockup_summary
+from deck_mockup_metrics import excl_mockup_metrics_checker, excl_mockup_metrics_ground_truth
+from mockup_regions import load_analysis_result
 from run_timing import analysis_stage_totals, stage_durations
 from suite_paths import resolve_deck_path
 from wrong_number_candidates import find_candidates, save_candidate_crops
-from wrong_number_filter import classify_wrong_numbers
+from wrong_number_filter import classify_wrong_numbers, number_gate_counts
 
 
 def _norm_len(text: Optional[str]) -> int:
     return len(re.sub(r"\s+", "", text or ""))
-
-
-def _excl_mockup_metrics(pptx_path: Path, page_source_editable: list[tuple[int, int, int]]) -> dict:
-    """`page_source_editable`: (page_number, source_char_len, editable_text_chars)
-    per slide, where page_number is the ANALYSIS's own source page number (for
-    ground_truth_checker decks this is the same as the output slide's own
-    page_number; for checker-kind decks it's the best-match matched_source_page,
-    since the analysis is keyed by source order). Reads
-    `<pptx_path's own dir>/analysis_result.json` (written by
-    generate_raster_deck.py's save_analysis_result(), see raster_deck_analysis.py);
-    returns all-None/empty fields (mockup_analysis_available=False) when that
-    file isn't present -- older runs never saved it."""
-    analysis = load_analysis_result(pptx_path.parent)
-    if analysis is None:
-        return {
-            "editable_text_ratio_body_excl_mockup": None,
-            "mockup_regions_count": None,
-            "mockup_text_chars": None,
-            "mockup_regions": [],
-            "mockup_analysis_available": False,
-        }
-    summary = mockup_summary(analysis)
-    ratios = []
-    for page_number, src_len, editable in page_source_editable:
-        denom = src_len - summary["mockup_chars_by_page"].get(page_number, 0)
-        if denom > 0:
-            ratios.append(editable / denom)
-    return {
-        "editable_text_ratio_body_excl_mockup": (sum(ratios) / len(ratios)) if ratios else None,
-        "mockup_regions_count": summary["mockup_regions_count"],
-        "mockup_text_chars": summary["mockup_text_chars"],
-        "mockup_regions": summary["mockup_regions"],
-        "mockup_analysis_available": True,
-    }
 
 
 def _load_page_content_fallback_pages(evidence_path: Optional[Path]) -> Optional[list]:
@@ -123,6 +91,22 @@ def score_deck_ground_truth(deck_cfg: dict, decks_root: Path, pptx_path: Path,
     wrong_count_raw = sum(len(w["fabricated"]) for w in wrong_pages_raw)
     wrong_count_filtered = sum(len(w["fabricated"]) for w in wrong_pages_filtered)
 
+    # Number gate (2026-09-25 follow-up): how many of the page's real GT
+    # numbers (footer excluded) made it into editable text vs. stayed as
+    # pixels (or are otherwise absent) -- to price the number gate's cost.
+    source_numbers_total = correct_numbers_editable = 0
+    for page_number, gt_page in gt_pages_by_number.items():
+        if page_number > len(prs_slides):
+            continue
+        output_tokens = Counter(ck.NUMBER_RE.findall(ck.slide_text(prs_slides[page_number - 1])))
+        total, matched = number_gate_counts(
+            gt_page.get("numeric_tokens", []), gt_page.get("text_normalized", ""),
+            page_number, gt["page_count"], output_tokens,
+        )
+        source_numbers_total += total
+        correct_numbers_editable += matched
+    correct_numbers_pixel = source_numbers_total - correct_numbers_editable
+
     page_content_fallback_pages_product = _load_page_content_fallback_pages(evidence_path)
 
     total_editable = sum(s["editable_text_chars"] for s in report["slides"])
@@ -145,8 +129,10 @@ def score_deck_ground_truth(deck_cfg: dict, decks_root: Path, pptx_path: Path,
 
     # Page numbers here are already the analysis's own source page numbers
     # (this checker assumes positional identity, same as wrong_numbers above).
-    excl_mockup = _excl_mockup_metrics(
-        pptx_path, [(s["page_number"], s["source_char_count"], s["editable_text_chars"]) for s in report["slides"]]
+    excl_mockup = excl_mockup_metrics_ground_truth(
+        pptx_path,
+        [(s["page_number"], gt_pages_by_number.get(s["page_number"], {}).get("text_normalized", ""),
+          s["editable_text_chars"]) for s in report["slides"]],
     )
 
     return {
@@ -162,6 +148,13 @@ def score_deck_ground_truth(deck_cfg: dict, decks_root: Path, pptx_path: Path,
         "wrong_numbers": {"count": wrong_count_filtered, "pages": wrong_pages_filtered},
         "wrong_numbers_raw": {"count": wrong_count_raw, "pages": wrong_pages_raw},
         "wrong_numbers_filtered_as_page_number": filtered_as_page_number,
+        # Number gate: source_numbers_total (GT numbers, footer excluded) split
+        # into correct_numbers_editable (made it into editable text) and
+        # correct_numbers_pixel (didn't -- kept as pixels, or otherwise absent;
+        # see number_gate_counts docstring for the "or otherwise absent" caveat).
+        "source_numbers_total": source_numbers_total,
+        "correct_numbers_editable": correct_numbers_editable,
+        "correct_numbers_pixel": correct_numbers_pixel,
         "editable_text_ratio_overall": editable_overall,
         "editable_text_ratio_body_mean": editable_body,
         **excl_mockup,
@@ -302,18 +295,14 @@ def score_deck_checker(deck_cfg: dict, decks_root: Path, pptx_path: Path, pdf_pa
     # numbers too, under the *_positional keys, for continuity with earlier runs.
     best_match = _one_to_one_best_match(pptx_path, pptx_report, gt)
 
-    # Mockup exclusion uses the best-match mapping (analysis pages are keyed by
-    # SOURCE page number, same as `src_pages` here) so a reordered deck's mockup
-    # chars are still subtracted from the source page that was actually matched.
     slide_to_source = {p["output_slide"]: p["matched_source_page"] for p in best_match["order_mapping"]}
-    excl_mockup_input = []
-    for s in pptx_report["slides"]:
-        sj = slide_to_source.get(s["slide_number"])
-        if sj is None:
-            continue
-        src_len = _norm_len(src_pages.get(sj, {}).get("ocr_text_normalized", ""))
-        excl_mockup_input.append((sj, src_len, s["editable_text_chars"]))
-    excl_mockup = _excl_mockup_metrics(pptx_path, excl_mockup_input)
+
+    # editable_text_ratio_body_excl_mockup is computed entirely from the
+    # analysis's own OCR char counts for checker-kind decks (2026-09-25 fix:
+    # mixing the output pptx's measured editable chars with the analysis's
+    # mockup chars -- two different OCR passes -- could produce a >1.0 mean
+    # ratio; see mockup_regions.analysis_only_editable_ratio).
+    excl_mockup = excl_mockup_metrics_checker(pptx_path)
 
     # Candidate (not hard-fail: OCR ground truth is noisy) fabricated numbers --
     # see wrong_number_candidates.py. Checked against BOTH the positional and

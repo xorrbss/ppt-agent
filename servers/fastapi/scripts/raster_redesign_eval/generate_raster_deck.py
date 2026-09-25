@@ -64,10 +64,11 @@ def main() -> None:
                          choices=["auto_preserve", "reconstruct", "auto_redesign"])
     parser.add_argument("--skip-generate", action="store_true")
     parser.add_argument("--skip-pdf", action="store_true")
-    parser.add_argument("--include-export-as", action="store_true",
-                         help="send export_as in the generate request and verify the legacy "
-                              "status-endpoint reaches completed (observational; export is still "
-                              "also requested manually afterward)")
+    parser.add_argument("--force-explicit-pptx-export", action="store_true",
+                         help="also request a fresh export.pptx command even when the server's own "
+                              "chained export (its export_as default is \"pptx\") already produced one -- "
+                              "the pre-2026-09-25 behavior, which exports PPTX twice per run. Off by "
+                              "default; only useful as a fallback when the chain's own export failed")
     args = parser.parse_args()
 
     out_dir = Path(args.out)
@@ -116,22 +117,32 @@ def main() -> None:
         result = generate_async(
             args.base, presentation_id=presentation["id"], snapshot_id=snapshot["snapshot_id"],
             approval_pin=approved["approval_pin"], orientation=args.orientation,
-            include_export_as=args.include_export_as,
         )
     print(f"[generate] done presentation_id={result['presentation_id']}")
-    if "status_endpoint_check" in result:
+    status_check = result.get("status_endpoint_check")
+    if status_check is not None:
         (out_dir / "status_endpoint_check.json").write_text(
-            json.dumps(result["status_endpoint_check"], ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"[status-endpoint-check] {result['status_endpoint_check']}")
+            json.dumps(status_check, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"[status-endpoint-check] {status_check}")
 
     with run.stage("slide_evidence_fetch"):
         fetch_slide_evidence(args.base, result["presentation_id"], out_dir)
 
-    # Export is always ALSO requested explicitly here (regardless of
-    # --include-export-as) so every deck reliably gets its artifacts even if
-    # the chain's own export attempt failed or is still catching up.
-    with run.stage("export_pptx_request"):
-        pptx_op_id = request_export(args.base, result["presentation_id"], "pptx")
+    # The server's own generate/async default (export_as="pptx") already
+    # chains a PPTX export -- follow ITS operation id instead of requesting a
+    # second, redundant one (2026-09-25 fix: every run used to export PPTX
+    # twice). Falls back to an explicit request only if the chain didn't
+    # produce a usable operation id (chaining failed, or the status-endpoint
+    # check itself never reached "completed") or --force-explicit-pptx-export
+    # was passed.
+    chained_pptx_op_id = (status_check or {}).get("export_operation_id")
+    chain_export_error = (status_check or {}).get("export_error")
+    print(f"[generate] chained export_operation_id={chained_pptx_op_id} export_error={chain_export_error}")
+    if chained_pptx_op_id and not args.force_explicit_pptx_export:
+        pptx_op_id = chained_pptx_op_id
+    else:
+        with run.stage("export_pptx_request"):
+            pptx_op_id = request_export(args.base, result["presentation_id"], "pptx")
     if pptx_op_id:
         with run.stage("export_pptx_follow"):
             export_result = follow_export_to_artifact(

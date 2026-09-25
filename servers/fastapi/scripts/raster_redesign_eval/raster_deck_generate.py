@@ -32,26 +32,28 @@ def _find_timeline_operation(base: str, presentation_id: str, operation_id: str)
 
 def generate_async(base: str, *, presentation_id: str, snapshot_id: str,
                     approval_pin: dict, orientation: str, max_wait_seconds: int = 1800,
-                    include_export_as: bool = False, export_as_value: str = "pptx",
                     verify_status_endpoint_seconds: int = 180) -> dict:
     """Start generation and wait for the WORKSPACE OPERATION itself to reach
     a terminal state, polled directly off the timeline (authoritative, not
     the legacy compat endpoint -- see below).
 
-    include_export_as=False (default): omits `export_as` from the request so
-    the (previously broken) export chain never fires; export is requested
-    separately via request_export() once this returns.
-
-    include_export_as=True: sends `export_as` as before AND, once the
-    workspace operation succeeds, spends up to verify_status_endpoint_seconds
-    polling the legacy async-status endpoint (GET /presentation/status/{id})
-    to check the fix to the export-chain rollback bug: it must reach
-    "completed" with either an export_operation_id or an explicit export
-    error in its data -- never stay stuck at "running" or "error" forever
-    (that was the pre-fix defect). This check is purely observational: its
-    outcome is recorded in the returned dict's "status_endpoint_check" and
-    never raises -- generation success/failure is still decided solely by
-    the workspace timeline.
+    2026-09-25 fix: this used to omit `export_as` from the request body on
+    the theory that omitting it disables the chained export. It does not --
+    `GeneratePresentationRequest.export_as` defaults to `"pptx"` server-side
+    (see models/generate_presentation_request.py), so a chained PPTX export
+    was ALWAYS fired regardless of what this driver sent, and main() then
+    ALSO fired its own explicit export.pptx request afterward -- every run
+    was exporting PPTX twice, doubling export load. The request body no
+    longer mentions `export_as` at all (the server default already does
+    what this driver wants); instead, since the chain always fires,
+    `generate_async` now ALWAYS polls the legacy status endpoint
+    (GET /presentation/status/{task_id}) once the workspace operation
+    succeeds, to retrieve the chained export's own `export_operation_id`
+    (`status_endpoint_check.export_operation_id`) -- main() follows THAT
+    operation for the PPTX artifact instead of requesting a second one (see
+    --force-explicit-pptx-export to opt back into the old always-request
+    behavior, e.g. if the chain's own export_operation_id is None because
+    chaining failed).
     """
     body = {
         "presentation_id": presentation_id,
@@ -67,12 +69,10 @@ def generate_async(base: str, *, presentation_id: str, snapshot_id: str,
         "include_title_slide": False,
         "include_table_of_contents": False,
     }
-    if include_export_as:
-        body["export_as"] = export_as_value
     started = _request(base, "POST", "/api/v1/ppt/presentation/generate/async", json_body=body)
     task_id = started.get("id")
     operation_id = started.get("operation_id")
-    print(f"[generate] task_id={task_id} operation_id={operation_id} include_export_as={include_export_as}")
+    print(f"[generate] task_id={task_id} operation_id={operation_id}")
     if operation_id is None:
         raise RuntimeError(f"generate/async response carried no operation_id: {started}")
 
@@ -89,14 +89,14 @@ def generate_async(base: str, *, presentation_id: str, snapshot_id: str,
             print(f"[generate] workspace operation status={op_status} progress={op.get('progress') if op else None}")
         if op_status == "succeeded":
             result = {"presentation_id": presentation_id, "operation_id": operation_id, "result": op.get("result")}
-            if include_export_as and task_id:
+            if task_id:
                 result["status_endpoint_check"] = _verify_status_endpoint(base, task_id, verify_status_endpoint_seconds)
             return result
         if op_status in ("failed", "cancelled", "dead_letter"):
             raise RuntimeError(
                 f"generation failed (workspace operation terminal): status={op_status} "
-                f"retryCount={op.get('retryCount')} error={op.get('error')} "
-                f"error_message={op.get('error_message')}"
+                f"error_code={op.get('error')} error_detail={op.get('error_message')} "
+                f"retry_count={op.get('retryCount')} provider_attempt_count={op.get('providerAttemptCount')}"
             )
         time.sleep(STATUS_POLL_SECONDS)
 
@@ -141,7 +141,17 @@ def follow_export_to_artifact(base: str, *, presentation_id: str, operation_id: 
         )
         if item and item["status"] in ("succeeded", "failed", "cancelled", "dead_letter"):
             if item["status"] != "succeeded":
-                raise RuntimeError(f"export operation {item['status']}: {item.get('result')}")
+                # 2026-09-25 fix: `result` is always null on a failed/dead_letter
+                # operation (see project_workspace_timeline in
+                # services/workspace_api_contract.py) -- the failure detail lives
+                # in `error`/`error_message` (the public error code + safe
+                # message the timeline projection resolves), with `retryCount`/
+                # `providerAttemptCount` when exposed.
+                raise RuntimeError(
+                    f"export operation {item['status']}: error_code={item.get('error')} "
+                    f"error_detail={item.get('error_message')} retry_count={item.get('retryCount')} "
+                    f"provider_attempt_count={item.get('providerAttemptCount')}"
+                )
             return item["result"]
         print(f"[export] waiting... status={item['status'] if item else 'not_found'}")
         time.sleep(TIMELINE_POLL_SECONDS)

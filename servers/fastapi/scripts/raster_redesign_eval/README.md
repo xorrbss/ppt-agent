@@ -24,8 +24,10 @@ scripts/raster_redesign_eval/
   suite_baseline_cmd.py          # baseline (scores arbitrary output dirs via --map, no launch needed)
   suite_compare.py               # compare (markdown delta table between two scored runs)
   deck_scoring.py               # the actual per-deck scoring (both checker kinds)
-  wrong_number_filter.py        # page-number-footer false-positive classification
+  deck_mockup_metrics.py        # editable_text_ratio_body_excl_mockup (both checker kinds)
+  wrong_number_filter.py        # page-number-footer false-positive classification, number gate
   mockup_regions.py             # mockup-region (screenshot/UI-mock) exclusion, from analysis_result.json
+  wrong_number_candidates.py    # checker-kind wrong-number candidates (+ --crops)
   generate_raster_deck.py     # product-path driver (thin facade)
   raster_deck_http.py / _upload.py / _analysis.py / _generate.py / _evidence.py / _run.py
   # raster_deck_analysis.py also has save_analysis_result() -> RUN_DIR/<deck_id>/analysis_result.json
@@ -415,10 +417,72 @@ total) -- matching an independent audit script's count exactly (see
 `eval-runs/baseline-2144f5034-r2/<external-deck>/mockup_audit/` in the handoff
 tree). `editable_text_ratio_body_excl_mockup` can exceed 1.0 on a page
 where most of its source OCR text was classified as mockup but the product
-still rendered substantial editable content elsewhere on that page
-(observed on this same deck, e.g. page 2: `src_len=694, mockup=622,
-denom=72, editable=382` -> ratio 5.3) -- a real property of the
-mean-of-per-page-ratios formula on a mockup-dense page, not clamped.
+still rendered substantial editable content elsewhere on that page --
+this produced a mean ratio of **1.193** on the real baseline (impossible;
+see the next fix).
+
+**2026-09-25 third fix -- internally inconsistent ratio (still >1.0).**
+The fix above (subtracting mockup chars from a GT-derived denominator) was
+not enough on its own: for checker-kind decks the numerator (editable
+chars, measured on the OUTPUT pptx by `checker.py`) and the subtracted
+mockup chars (from the analysis's OWN OCR pass over the SOURCE image) still
+came from two different OCR passes / page-order correspondences, so the
+denominator could still shrink below the numerator.
+`mockup_regions.analysis_only_editable_ratio()` now computes BOTH sides of
+the ratio from the exact same source for checker-kind decks: per analysis
+page, numerator = chars of regions STRUCTURE published as editable text
+(`role` in title/body/table/unknown, `editable_fallback` False);
+denominator = chars of every OCR-text-bearing region on that page (any
+role) minus that page's own mockup chars. Since both sides use the same
+per-region char count, numerator is always a subset of denominator --
+`0 <= ratio <= 1` by construction, not by clamping. Trade-off: this now
+measures what STRUCTURE decided at analysis time, not what actually
+survived to the exported pptx (a later page-content/dense-group fallback
+isn't reflected). **Verified: the real baseline's mean dropped from the
+impossible 1.193 to 0.610.**
+
+For `ground_truth_checker` decks (deck1-4), the definition stays
+GT-based, but the mockup subtraction is now `mockup_regions.matched_gt_chars()`:
+a multiset (Counter) intersection between each mockup region's own OCR text
+and the page's EXACT GT text, consumed once across all of a page's mockup
+regions -- bounded to the page's own GT char count by construction, so it
+can never go negative. The numerator (OUTPUT-measured editable chars) can
+still in principle exceed that denominator for reasons unrelated to
+mockups (see below); `mockup_regions.validate_ratio()` raises a `ValueError`
+with the offending page/numbers rather than let an impossible ratio through
+silently. `excl_mockup_metrics_ground_truth()` in `deck_mockup_metrics.py`
+catches that per-page, and if ANY page fails, reports the WHOLE deck's
+`editable_text_ratio_body_excl_mockup` as `None` with the violating pages
+listed in `editable_text_ratio_body_excl_mockup_errors` (page, chars,
+denominator, message) -- visible as data rather than aborting the rest of
+that deck's scoring (`wrong_numbers`, the number gate below, etc., none of
+which depend on this one metric). **Observed on the real baseline: deck1
+page 2 (`editable_text_chars=256` vs `gt_chars=234`, ZERO mockup regions on
+that page) -- a pre-existing characteristic of `editable_text_chars`
+(counts every OUTPUT text shape, not cross-checked 1:1 against GT content)
+that predates this fix and also silently affects the un-asserted
+`editable_text_ratio_body_mean` there; out of scope for this fix to
+correct without changing how `editable_text_chars` itself is measured,
+which other metrics still rely on unchanged.** deck2/deck3 have no such
+violation and score cleanly.
+
+## Number gate (`source_numbers_total` / `correct_numbers_editable` /
+`correct_numbers_pixel`, ground-truth decks, 2026-09-25)
+
+How many of a page's real GT numbers (its own "N / total" page-footer
+excluded, see `wrong_number_filter.gt_footer_token_counts` -- the same
+"01 / 15" pattern documented above) made it into the output's editable
+text vs. stayed as pixels (or are otherwise unaccounted for).
+`source_numbers_total` is the footer-excluded GT number-token count for
+the deck; `correct_numbers_editable` is how many of those are found, as a
+multiset, in the matched (same-page-number) output slide's own editable
+text (`wrong_number_filter.number_gate_counts`, the same matching
+`ground_truth_checker.numeric_exactness` already uses); `correct_numbers_pixel
+= source_numbers_total - correct_numbers_editable` (not-found-editable --
+in practice dominated by numbers kept as pixels, but can't be cleanly told
+apart from a genuinely dropped number without deeper region-level tracing,
+so this is reported as the simpler difference per the task, not a fully
+separate "missing" bucket).
 
 ## Wrong number candidates (OCR-fixture decks, 2026-09-25)
 
@@ -474,6 +538,35 @@ for a run this suite didn't itself launch (e.g. an older run dir). It's
 written to the top level of `summary.json` (not per-deck) and shown by
 `compare` next to every timing metric's label, since it materially affects
 wall-clock duration.
+
+## Driver fixes (2026-09-25)
+
+- **Double PPTX export.** `generate_async()`'s request body used to omit
+  `export_as` on the theory that omitting it disables the server's chained
+  export. It does not: `GeneratePresentationRequest.export_as` defaults to
+  `"pptx"` server-side (`models/generate_presentation_request.py`), so a
+  chained PPTX export always fired regardless, and `main()` then ALSO fired
+  its own explicit `export.pptx` command afterward -- every run exported
+  PPTX twice. `generate_async()` no longer sends `export_as` at all (the
+  default already does what this driver wants) and now always polls the
+  legacy status endpoint once generation succeeds, to retrieve the chained
+  export's own `export_operation_id`; `main()` follows THAT operation for
+  the PPTX artifact instead of requesting a second one.
+  `--force-explicit-pptx-export` opts back into always requesting one (e.g.
+  if the chain itself failed and `export_operation_id` came back `None`).
+  PDF is unaffected -- it's never chained, so it's always requested
+  explicitly, same as before.
+- **Failed-export error reporting.** `follow_export_to_artifact()` used to
+  report a failed/dead_letter export operation via `item.get('result')`,
+  which the timeline projection (`services/workspace_api_contract.py`)
+  always sets to `null` on failure -- the message was always
+  `"export operation failed: None"`. Now reports `item['error']`
+  (public error code), `item['error_message']` (safe message),
+  `item['retryCount']`, and `item['providerAttemptCount']` -- the fields
+  that actually carry failure detail on a timeline operation item.
+  `generate_async()`'s own generation-failure message gained
+  `providerAttemptCount` for the same reason (it already had the other
+  three).
 
 ## Order-aware matching (OCR-fixture decks)
 
