@@ -106,7 +106,44 @@ def _plan_jobs(image: Image.Image, words, lines, min_height: float) -> list[_Job
         pad_y, pad_x = int(0.25 * line.height) + 2, int(0.3 * line.height) + 2
         origin = (max(0, x0 - pad_x), max(0, y0 - pad_y))
         jobs.append(_Job(tuple(members), box, origin, max(0.3, min(3.0, TARGET_GLYPH_PX / max(1.0, line.height)))))
-    return jobs
+    return _merge_row_overlaps(jobs)
+
+
+def _merge_row_overlaps(jobs: list[_Job]) -> list[_Job]:
+    """Two jobs whose boxes share pixels on one printed row become one job.
+
+    Reading the same glyphs twice yields two lines that overlap ("시스템 화면 소개" and
+    "소개 · 업무포털"); neither may then be published without duplicating or cutting
+    the sentence, so the whole row stays pixels. One reading of the joint row avoids it.
+    Jobs come tallest first, so the kept scale is the taller line's."""
+
+    merged = list(jobs)
+    changed = True
+    while changed:
+        changed = False
+        for a in range(len(merged)):
+            for b in range(a + 1, len(merged)):
+                first, second = merged[a], merged[b]
+                # Glyph size (the scale is set from each anchor line's glyph height), not
+                # box height: a box grows with descenders and stray marks.
+                low, high = sorted((first.scale, second.scale))
+                shared = min(first.box[0] + first.box[2], second.box[0] + second.box[2]) - max(
+                    first.box[0], second.box[0]
+                )
+                if shared <= 0 or high > 1.3 * low or not _same_row(first.box, second.box):
+                    continue
+                merged[a] = _Job(
+                    first.line_indices + second.line_indices,
+                    _union([first.box, second.box]),
+                    tuple(min(a, b) for a, b in zip(first.crop_origin, second.crop_origin, strict=True)),
+                    first.scale,
+                )
+                del merged[b]
+                changed = True
+                break
+            if changed:
+                break
+    return merged
 
 
 def _confident(line: RedesignLine, words) -> bool:
