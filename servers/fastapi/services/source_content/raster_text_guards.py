@@ -1,14 +1,16 @@
 """Guards that keep misreads out of editable text.
 
 Numbers. Two Korean+English Tesseract passes share failure modes ("83%" read
-as "8396" by both), so agreement between them is not proof. Every digit-
-bearing OCR word also gets a targeted re-read with the English model at a
-steady glyph height (and, for words without Hangul, a second read restricted
-to ``0-9 % . , + - ~``). A number token may be published as editable text only
-if a targeted read contains it (possibly followed by a digit the English model
-invented for a Hangul glyph), never if a targeted read shows the same leading
-digits with another ending (``83%`` vs ``8396``), and otherwise only when at
-least two line reads agree on it. Failing that the line stays pixels.
+as "8396" by both), so agreement between them is not proof. Every number is
+re-read as the WHOLE visual number it belongs to (``raster_number_units``: the
+adjacent glyphs of its row, including glyphs OCR dropped), once as one line with
+the English model at a steady glyph height and once restricted to digits and
+``% . , + - ~ / ( ) : $``. A reading's numbers may be published as editable text only
+when they equal, in order, the reads of their units (a digit the English model
+appends for a Hangul glyph right after the number is allowed). A fragment of a
+number never confirms itself ("0" of "01"), a number wrapped over rows is never
+confirmed, and line-read votes never substitute for the unit read. Failing that
+the line stays pixels.
 
 Glyph fragments. Line-edge tokens made only of symbols (icon misreads such as
 "-()-") are not text; a token gluing brackets or backslashes to letters or
@@ -27,13 +29,23 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
-NUMBER = re.compile(r"\d[\d,.]*%?")
+from services.source_content.raster_number_units import (
+    NUMBER,
+    UnitRead,
+    number_matches,
+    number_units,
+    sequence_confirmed,
+    text_numbers,
+)
+
 _HANGUL = re.compile(r"[가-힣]")
 _GLUE = re.compile(r"[\\\[\](){}|]")
 _BULLETS = set("•※·*▪■◆●○-–—→>")
-_WHITELIST = "0123456789%.,+-~"
+_WHITELIST = "0123456789%.,+-~/():$"
+HEURISTIC_MIN_CONFIDENCE = 0.7
 
 
 def _compact(value: str) -> str:
@@ -57,10 +69,10 @@ def glued_symbols(text: str) -> bool:
     return any(text.count(a) != text.count(b) for a, b in ("()", "[]", "{}"))
 
 
-def _number_ok(number: str, targeted: tuple[str, ...], votes: Counter) -> bool:
-    # The English re-read may append a digit for a Hangul glyph ("40,0008" for
-    # "40,000원"): a targeted number extending this one supports it.
-    if any(t == number or (t.startswith(number) and len(t) > len(number)) for t in targeted):
+def _number_ok(number: str, targeted: tuple[str, ...], votes: Counter, hangul_follows: bool = False) -> bool:
+    """Legacy per-number rule, for targeted reads given as a plain tuple of tokens."""
+
+    if any(number_matches(number, t, hangul_follows) for t in targeted):
         return True
     # A targeted read of the same leading digits with another ending is a
     # conflict ("83%" against "8396"): never publish either as text.
@@ -71,11 +83,20 @@ def _number_ok(number: str, targeted: tuple[str, ...], votes: Counter) -> bool:
 
 
 def numbers_supported(text: str, reads: tuple[str, ...], targeted: tuple[str, ...] | None) -> bool:
-    numbers = NUMBER.findall(_compact(text))
+    """Whether every number of ``text`` is confirmed.
+
+    With ``NumberReads`` (the product path) each number must equal, in order, the read
+    of the whole visual number it belongs to; votes of line reads never substitute
+    for that. A plain tuple of tokens keeps the per-token rule, and None (no local
+    OCR engine) falls back to two agreeing line reads."""
+
+    if isinstance(targeted, NumberReads):
+        return sequence_confirmed(text_numbers(text), targeted.units, allow_skip=True)
+    numbers = text_numbers(_compact(text))
     if not numbers:
         return True
     votes = Counter(number for read in reads for number in set(NUMBER.findall(_compact(read))))
-    return all(_number_ok(number, targeted or (), votes) for number in numbers)
+    return all(_number_ok(number, targeted or (), votes, follows) for number, follows in numbers)
 
 
 def number_patched(text: str, targeted: tuple[str, ...] | None) -> str | None:
@@ -138,44 +159,129 @@ def _read(
     return texts
 
 
-def targeted_number_reads(image: Image.Image, words, lines, *, executable: Path | None, tessdata: Path | None) -> dict:
-    """Line index -> number tokens read by targeted English reads of its digit words."""
+class NumberReads(tuple):
+    """A line's number tokens as its whole-number units read them, in reading order.
+
+    A plain tuple for callers that patch readings (``number_patched``); ``units``
+    carries the unit reads that ``numbers_supported`` verifies against."""
+
+    units: tuple[UnitRead, ...] = ()
+
+    def __new__(cls, units=()):
+        tokens = tuple(token for read in units for token in (read.readings() or ((),))[0])
+        value = super().__new__(cls, tokens)
+        value.units = tuple(units)
+        return value
+
+    def __reduce__(self):
+        return (NumberReads, (self.units,))
+
+
+def _crop_paths(gray: Image.Image, boxes, folder: Path, prefix: str) -> list[str]:
+    """Upscaled crops of ``boxes`` whose margins show background only (ink of the rows
+    above/below or the words beside a number is not part of its read), as dark
+    glyphs on a light ground."""
+
+    paths = []
+    for k, (x, y, w, h) in enumerate(boxes):
+        pad = max(3, int(0.3 * h))
+        x0, y0 = max(0, x - pad), max(0, y - pad)
+        right, bottom = min(gray.width, x + w + pad), min(gray.height, y + h + pad)
+        pixels = np.asarray(gray.crop((x0, y0, right, bottom))).copy()
+        keep_y, keep_x = max(1, int(0.12 * h)), max(2, int(0.15 * h))
+        inside = np.zeros(pixels.shape, dtype=bool)
+        inside[max(0, y - keep_y - y0) : y + h + keep_y - y0, max(0, x - keep_x - x0) : x + w + keep_x - x0] = True
+        if pixels.size and inside.any():
+            background = int(np.median(pixels[inside]))
+            pixels[~inside] = background
+            if background < 128:  # light text on a dark ground: the engine reads dark on light
+                pixels = 255 - pixels
+        crop = Image.fromarray(pixels)
+        factor = max(1.0, 48 / max(1, h))
+        crop = crop.resize((round(crop.width * factor), round(crop.height * factor)), Image.Resampling.LANCZOS)
+        path = folder / f"{prefix}-{k}.png"
+        crop.save(path)
+        paths.append(str(path))
+    return paths
+
+
+def read_number_units(image: Image.Image, words, seeds, *, executable: Path | None, tessdata: Path | None):
+    """Each whole visual number of the digit words ``seeds``, read once as one line.
+
+    None when the local OCR engine is unavailable (callers keep their older rules)."""
 
     if executable is None or tessdata is None or not Path(executable).is_file():
-        return {}
-    targets = [
-        (n, i) for n, line in enumerate(lines) for i in line.word_indices if any(ch.isdigit() for ch in words[i].text)
-    ]
-    if not targets:
-        return {}
+        return None
     gray = image.convert("L")
+    units = number_units(np.asarray(gray, dtype=np.int16), words, seeds)
+    if not units:
+        return ()
     try:
         with tempfile.TemporaryDirectory(prefix="raster-numbers-") as name:
             folder = Path(name)
-            paths = []
-            for k, (_, i) in enumerate(targets):
-                x, y, w, h = words[i].bbox
-                pad = max(3, int(0.3 * h))
-                crop = gray.crop(
-                    (max(0, x - pad), max(0, y - pad), min(image.width, x + w + pad), min(image.height, y + h + pad))
-                )
-                factor = max(1.0, 48 / max(1, h))
-                crop = crop.resize((round(crop.width * factor), round(crop.height * factor)), Image.Resampling.LANCZOS)
-                path = folder / f"n-{k}.png"
-                crop.save(path)
-                paths.append(str(path))
+            paths = _crop_paths(gray, [unit.box for unit in units], folder, "n")
             options = {"executable": executable, "tessdata": tessdata}
             plain = _read(paths, folder, [], "eng", **options)
             restricted = _read(paths, folder, ["-c", f"tessedit_char_whitelist={_WHITELIST}"], "digits", **options)
     except (RuntimeError, OSError, subprocess.TimeoutExpired):
+        return None
+    return tuple(
+        UnitRead(
+            unit,
+            tuple(NUMBER.findall(plain[k])),
+            tuple(NUMBER.findall(restricted[k])),
+        )
+        for k, unit in enumerate(units)
+    )
+
+
+def verify_number_units(
+    image: Image.Image,
+    words,
+    seeds,
+    *,
+    executable: Path | None,
+    tessdata: Path | None,
+    min_confidence: float = HEURISTIC_MIN_CONFIDENCE,
+):
+    """Digit word index -> confirmed, judged on the whole visual number it belongs to.
+
+    Every fragment of a unit shares the unit's verdict: confirmed only when the unit
+    is not wrapped over rows, its single read equals the unit's OCR numbers, and no
+    digit word of it has an engine confidence below ``min_confidence`` (without a
+    second reader, a doubtful primary reading and a read of the same pixels agreeing
+    is not proof). None when the local OCR engine is unavailable."""
+
+    reads = read_number_units(image, words, seeds, executable=executable, tessdata=tessdata)
+    if reads is None:
+        return None
+    verdict: dict[int, bool] = {}
+    for read in reads:
+        digits = [i for i in read.unit.words if any(ch.isdigit() for ch in words[i].text)]
+        sure = all(words[i].confidence is None or words[i].confidence >= min_confidence for i in digits)
+        ok = sure and sequence_confirmed(text_numbers(read.unit.text), (read,), allow_skip=False)
+        for i in digits:
+            verdict[i] = verdict.get(i, True) and ok
+    return verdict
+
+
+def targeted_number_reads(image: Image.Image, words, lines, *, executable: Path | None, tessdata: Path | None) -> dict:
+    """Line index -> ``NumberReads`` of the whole-number units of its digit words.
+
+    Every line gets an entry when the local OCR engine is available (a line without
+    digit units then confirms no number); an empty dict otherwise."""
+
+    seeds = sorted({i for line in lines for i in line.word_indices if any(ch.isdigit() for ch in words[i].text)})
+    reads = read_number_units(image, words, seeds, executable=executable, tessdata=tessdata)
+    if reads is None:
         return {}
-    result: dict[int, list[str]] = {}
-    for k, (n, i) in enumerate(targets):
-        found = NUMBER.findall(plain[k])
-        if not _HANGUL.search(words[i].text):
-            found += NUMBER.findall(restricted[k])
-        result.setdefault(n, []).extend(found)
-    return {n: tuple(dict.fromkeys(values)) for n, values in result.items()}
+    result = {}
+    for n, line in enumerate(lines):
+        mine = set(line.word_indices)
+        result[n] = NumberReads(
+            sorted((read for read in reads if mine & set(read.unit.words)), key=lambda read: read.unit.box[0])
+        )
+    return result
 
 
 def targeted_hangul_reads(image: Image.Image, words, lines, *, executable: Path | None, tessdata: Path | None) -> dict:
