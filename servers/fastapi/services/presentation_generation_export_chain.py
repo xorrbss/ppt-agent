@@ -184,6 +184,14 @@ async def chain_generation_export(
         )
 
 
+#: How many times the durable annotation write below is attempted. The first
+#: commit runs on whatever transactional state the generation pipeline left
+#: on the shared session; one retry after a rollback recovers from a
+#: transient conflict on that same, now-clean session instead of silently
+#: discarding a submission outcome that was already computed correctly.
+_ANNOTATION_COMMIT_ATTEMPTS = 2
+
+
 async def finalize_generation_export_chain(
     sql_session: AsyncSession,
     *,
@@ -212,26 +220,57 @@ async def finalize_generation_export_chain(
         }
     )
     if async_status is not None:
+        await _record_chained_export_outcome(
+            sql_session,
+            async_status,
+            chained,
+            presentation_id=response.presentation_id,
+        )
+    return enriched
+
+
+async def _record_chained_export_outcome(
+    sql_session: AsyncSession,
+    async_status: AsyncPresentationGenerationTaskModel,
+    chained: ChainedGenerationExport,
+    *,
+    presentation_id: uuid.UUID,
+) -> None:
+    """Durably annotate the async-task projection with the chain outcome.
+
+    ``chain_generation_export`` already guarantees a stable error code on a
+    *submission* failure. This annotation commit can fail independently of
+    that: it runs on the same long-lived session the whole generation ran on,
+    and some code paths leave that session holding row locks, mid-pipeline
+    commits or a savepoint-based revision CAS update that make one more
+    commit intermittently conflict. A rollback after that failure reverts
+    this row's in-memory ``.data`` to whatever was last committed -- the
+    snapshot taken *before* this chain ran -- so, without a retry, the
+    outcome the chain just computed (an operation id, or a stable error code)
+    is silently discarded instead of recorded, even though the module
+    docstring promises every submission outcome is recorded.
+
+    ``async_status.status`` ("completed"/"error") is set and committed by the
+    caller before this chain runs (see ``presentation_generate.py``),
+    independent of whether the chain itself succeeds -- this call only
+    annotates that already-durable outcome with the export result.
+    """
+
+    outcome = {
+        "export_operation_id": (
+            str(chained.operation_id) if chained.operation_id is not None else None
+        ),
+        "export_error": chained.error_code,
+    }
+    for attempt in range(1, _ANNOTATION_COMMIT_ATTEMPTS + 1):
         try:
-            # async_status.status ("completed"/"error") is set and committed by
-            # the caller before this chain runs (see presentation_generate.py),
-            # independent of whether the chain itself succeeds -- this call only
-            # annotates that already-durable outcome with the export result.
             data = dict(async_status.data or {})
-            data.update(
-                {
-                    "export_operation_id": (
-                        str(chained.operation_id)
-                        if chained.operation_id is not None
-                        else None
-                    ),
-                    "export_error": chained.error_code,
-                }
-            )
+            data.update(outcome)
             async_status.data = data
             async_status.updated_at = datetime.now(timezone.utc)
             sql_session.add(async_status)
             await sql_session.commit()
+            return
         except Exception:  # noqa: BLE001 - annotating the outcome must never fail generation
             try:
                 await sql_session.rollback()
@@ -239,13 +278,23 @@ async def finalize_generation_export_chain(
                 LOGGER.exception(
                     "Failed to roll back after failing to record the export "
                     "outcome for presentation %s",
-                    response.presentation_id,
+                    presentation_id,
                 )
-            LOGGER.exception(
-                "Failed to record chained export outcome for presentation %s",
-                response.presentation_id,
-            )
-    return enriched
+                return
+            if attempt == _ANNOTATION_COMMIT_ATTEMPTS:
+                LOGGER.exception(
+                    "Failed to record chained export outcome for presentation "
+                    "%s after %s attempt(s)",
+                    presentation_id,
+                    attempt,
+                )
+            else:
+                LOGGER.warning(
+                    "Retrying the chained export outcome annotation for "
+                    "presentation %s after a rolled-back commit (attempt %s)",
+                    presentation_id,
+                    attempt,
+                )
 
 
 __all__ = [
