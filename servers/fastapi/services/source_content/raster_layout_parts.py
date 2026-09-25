@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from services.source_content.raster_layout_anchor import anchor_items
 from services.source_content.raster_redesign_chrome import footer_layout, split_named_groups
 from services.source_content.raster_redesign_header import place_header_group, split_header_items
 from services.source_content.raster_redesign_plan import build_items
@@ -107,7 +108,7 @@ def page_parts(analysis, page) -> PageParts:
     members = footer_layout(footer, analysis.target_canvas.width_units, page_margin(analysis))
     if members is None:  # the footer does not fit on one line: keep it as content
         content, members = [*content, *footer], []
-    content = [_text_pixel_cap(item, analysis) for item in content]
+    content = [_text_pixel_cap(item, analysis) for item in anchor_items(content, size)]
     # The header group is placed by source position like any header-zone item
     # (kicker above, brand beside, subtitle below); nothing else leaves the header.
     h_kickers, h_subtitles, h_sides, h_images, _ = place_header_group(title, header, size)
