@@ -633,6 +633,7 @@ async def _fit_content_revision(
     slide_index: int,
     policy_revision: str | None = None,
     canvas: object | None = None,
+    physical_canvas: object | None = None,
 ) -> AcceptedLocalFit:
     """Run a provider content correction through the same local-fit boundary.
 
@@ -662,11 +663,14 @@ async def _fit_content_revision(
         render_html_to_png_with_metrics,
         **render_kwargs,
     )
+    from services.document_canvas_generation import export_size_points
+
+    export_width_pt, export_height_pt = export_size_points(canvas, physical_canvas)
     policy = local_fit_policy(
         author_revision=original_digest,
         original_html_digest=original_digest,
-        export_width_pt=canvas_width_px * 0.75,
-        export_height_pt=canvas_height_px * 0.75,
+        export_width_pt=export_width_pt,
+        export_height_pt=export_height_pt,
         viewport_width=canvas_width_px,
         viewport_height=canvas_height_px,
         slide_index=slide_index,
@@ -1660,6 +1664,8 @@ async def _generate_authored_presentation(
         )
     if _callable_accepts_keyword(_author_illustrate_render_pipeline, "canvas"):
         pipeline_kwargs["canvas"] = canvas
+    if getattr(request, "_document_canvas", None) is not None:
+        pipeline_kwargs["physical_canvas"] = request._document_canvas
     if source_text_bindings is not None:
         pipeline_kwargs["source_block_bindings"] = source_text_bindings
     if source_image_bindings is not None:
@@ -1870,6 +1876,7 @@ async def _generate_authored_presentation(
                     request, "_authored_local_fit_policy_revision", None
                 ),
                 canvas=canvas,
+                physical_canvas=getattr(request, "_document_canvas", None),
             )
         except AuthoredLocalFitRejected:
             return None
@@ -1892,6 +1899,7 @@ async def _generate_authored_presentation(
                 candidate_html, slide_index=slide_index,
                 policy_revision=getattr(request, "_authored_local_fit_policy_revision", None),
                 canvas=canvas,
+                physical_canvas=getattr(request, "_document_canvas", None),
             )
             source_repair_fit_receipts[(slide_index, digest_html(fitted.html))] = fitted.receipt
             cache_accepted_capture(
@@ -2726,6 +2734,7 @@ async def _generate_authored_presentation(
                                     None,
                                 ),
                                 canvas=canvas,
+                                physical_canvas=getattr(request, "_document_canvas", None),
                             )
                         except AuthoredLocalFitRejected as error:
                             LOGGER.warning(

@@ -921,6 +921,9 @@ class PresentationChatMemoryLayer:
             }
 
         previous_theme = copy.deepcopy(current_theme) if current_theme else None
+        from services.document_canvas import preserve_document_canvas
+
+        selected_theme = preserve_document_canvas(presentation.theme, selected_theme)
         presentation.theme = copy.deepcopy(selected_theme)
         self._sql_session.add(presentation)
         await self._sql_session.commit()

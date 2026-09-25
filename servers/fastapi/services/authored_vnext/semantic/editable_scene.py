@@ -355,7 +355,7 @@ def _bounds(node) -> Rect | None:
     bbox = node.bbox
     if bbox is None or bbox.width <= 0 or bbox.height <= 0:
         return None
-    # Scene geometry follows the canonical 1280 x 720 CSS-pixel coordinate
+    # Scene geometry follows the document's measured CSS-pixel coordinate
     # space.  The native PPTX adapter is the single authority that converts
     # those values to points/EMU.  Converting here as well compresses every
     # object to 75% on export and breaks the authored line wrapping.
@@ -559,6 +559,7 @@ def build_editable_hybrid_scene(
     slide_ids: Sequence[str] | None = None,
     source_digest_override: str | None = None,
     browser_metrics_by_slide: Sequence[Mapping[str, Any] | None] | None = None,
+    document_canvas: dict[str, Any] | None = None,
 ):
     """Create an immutable shadow Scene; identity/geometry failures block owners."""
 
@@ -984,6 +985,7 @@ def build_editable_hybrid_scene(
         revision=revision,
         composition_digest=composition_digest,
         source_digest=source_digest,
+        document_canvas=document_canvas,
         hybrid_profile_id=PROFILE_ID,
         slides=scene_slides,
         asset_manifest=sorted(assets_by_id.values(), key=lambda item: item.asset_id),

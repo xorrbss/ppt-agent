@@ -85,8 +85,13 @@ def _artifact_reference(
     )
 
 
+@pytest.mark.parametrize("schema_version", [
+    "public-svg-export-bundle/v2",
+    "public-svg-export-bundle/v3",
+])
 def test_svg_bundle_shared_assets_have_one_physical_staging_entry(
     tmp_path: Path,
+    schema_version: str,
 ) -> None:
     owner_id = uuid.uuid4()
     operation_id = uuid.uuid4()
@@ -130,7 +135,7 @@ def test_svg_bundle_shared_assets_have_one_physical_staging_entry(
         payload=b"shared-png",
     )
     bundle = {
-        "schemaVersion": "public-svg-export-bundle/v2",
+        "schemaVersion": schema_version,
         "slides": [
             {
                 "artifactRef": slide.to_wire(),

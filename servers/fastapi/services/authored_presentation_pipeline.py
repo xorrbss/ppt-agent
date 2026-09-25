@@ -137,6 +137,7 @@ async def _author_illustrate_render_pipeline(
     source_image_block_bindings: Sequence[Sequence[str]] | None = None,
     local_fit_policy_revision: str | None = None,
     canvas: object | None = None,
+    physical_canvas: object | None = None,
 ) -> AuthoredGenerationPipelineResult:
     """Pipeline slides through durable, fenced checkpoints with bounded workers."""
     started = time.monotonic()
@@ -151,8 +152,9 @@ async def _author_illustrate_render_pipeline(
     evidence_ledger = DeckEvidenceLedger(attempt_id=evidence_attempt_id)
     canvas_width_px = int(getattr(canvas, "width_px", 1280))
     canvas_height_px = int(getattr(canvas, "height_px", 720))
-    export_width_pt = canvas_width_px * 0.75
-    export_height_pt = canvas_height_px * 0.75
+    from services.document_canvas_generation import export_size_points
+
+    export_width_pt, export_height_pt = export_size_points(canvas, physical_canvas)
     render_kwargs = (
         {}
         if (canvas_width_px, canvas_height_px) == (1280, 720)
@@ -194,6 +196,7 @@ async def _author_illustrate_render_pipeline(
         instructions=instructions,
         composition_profile=composition_profile,
         canvas=canvas,
+        **({"physical_canvas": physical_canvas} if physical_canvas is not None else {}),
     )
     capacity_plan: AuthoredCapacityPlan | None = getattr(plan, "capacity_plan", None)
     if preplanned_source_images is not None and len(preplanned_source_images) != len(plan.contents):
@@ -328,7 +331,7 @@ async def _author_illustrate_render_pipeline(
     # F3: cooldown-wait seconds; the nested stages update this one-element list.
     authoring_cooldown_wait_seconds = [0.0]
     batch_state = new_authored_batch_policy_state()
-    if (canvas_width_px, canvas_height_px) == (720, 1280):
+    if canvas_height_px > canvas_width_px:
         portrait_profile = replace(
             batch_state.profile,
             slides_per_call=min(3, batch_state.profile.slides_per_call),

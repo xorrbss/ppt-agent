@@ -686,6 +686,7 @@ def _input_bundle_references(
         raise TrustedWorkerWireError("trusted_worker_render_bundle_invalid")
     svg_export = job.role == "export" and value.get("schemaVersion") in {
         "public-svg-export-bundle/v1", "public-svg-export-bundle/v2",
+        "public-svg-export-bundle/v3",
     }
     expected_kind = "slide-svg" if svg_export else ("slide-html" if job.role == "render" else "slide-png")
     expected_media_type = "image/svg+xml" if svg_export else ("text/html" if job.role == "render" else "image/png")
@@ -694,15 +695,19 @@ def _input_bundle_references(
     )
     if not 1 <= len(result) <= 100:
         raise TrustedWorkerWireError("trusted_worker_bundle_slide_count_invalid")
-    if svg_export and value.get("schemaVersion") == "public-svg-export-bundle/v2":
+    if svg_export and value.get("schemaVersion") in {
+        "public-svg-export-bundle/v2", "public-svg-export-bundle/v3",
+    }:
         asset_refs = []
         for entry in value["slides"]:
             assets = entry.get("assets")
             if assets is None:
                 continue
+            required_asset_keys = {"sourceManifestRef", "placementManifestRef", "sourceManifestDigest",
+                                   "placementManifestDigest", "pageIndex", "slideRevision", "derivatives"}
             if (not isinstance(assets, Mapping)
-                    or set(assets) != {"sourceManifestRef", "placementManifestRef", "sourceManifestDigest",
-                                      "placementManifestDigest", "pageIndex", "slideRevision", "derivatives"}
+                    or set(assets) not in (required_asset_keys, required_asset_keys | {"fullPagePreserve"})
+                    or ("fullPagePreserve" in assets and type(assets["fullPagePreserve"]) is not bool)
                     or not isinstance(assets["derivatives"], Mapping)
                     or len(assets["derivatives"]) > 4096):
                 raise TrustedWorkerWireError("trusted_worker_svg_asset_bundle_invalid")

@@ -191,6 +191,10 @@ async def _persist_master_pinned_editable_scene_deck(
         composition_digest=composition.digest,
         source_digest_override=scene_envelope.scene_digest,
         browser_metrics_by_slide=telemetry,
+        document_canvas=(
+            request._document_canvas.model_dump(mode="json", by_alias=True)
+            if getattr(request, "_document_canvas", None) is not None else None
+        ),
     )
     sealed_slides: list[ValidatedSlideSpecV2] = []
     for index, (html, scene_slide) in enumerate(

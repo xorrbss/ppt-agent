@@ -62,6 +62,7 @@ def _validate_request(value: Any) -> Mapping[str, Any]:
         "max_requests",
         "width_px",
         "height_px",
+        "preserved_raster_svg",
     }:
         raise RendererPolicyError("renderer request has an invalid shape")
     if value.get("schema_version") != "authored-render-request/v1":
@@ -69,6 +70,10 @@ def _validate_request(value: Any) -> Mapping[str, Any]:
     html = value.get("html")
     if not isinstance(html, str) or len(html.encode("utf-8")) > MAX_HTML_BYTES:
         raise RendererPolicyError("renderer HTML limit exceeded")
+    if "preserved_raster_svg" in fields:
+        raster = value["preserved_raster_svg"]
+        if not isinstance(raster, str) or len(raster.encode("utf-8")) > MAX_REQUEST_BYTES:
+            raise RendererPolicyError("renderer raster derivative limit exceeded")
     timeout = value.get("timeout")
     if not isinstance(timeout, int) or isinstance(timeout, bool) or not 1 <= timeout <= 120:
         raise RendererPolicyError("renderer timeout must be between 1 and 120 seconds")
@@ -111,13 +116,20 @@ async def _render(
     from utils import slide_capture
 
     source = str(request["html"])
-    try:
-        admitted = admit_authored_html(source)
-    except RendererPolicyError:
-        admitted = admit_static_output_html(source)
     timeout = int(request["timeout"])
     width_px = int(request.get("width_px", 1280))
     height_px = int(request.get("height_px", 720))
+    if request.get("preserved_raster_svg") is not None:
+        from services.svg_renderer import admit_preserved_raster_preview
+        admitted, _ = admit_preserved_raster_preview(
+            source, request["preserved_raster_svg"], width=width_px, height=height_px)
+    else:
+        try:
+            admitted = admit_authored_html(source)
+        except RendererPolicyError:
+            admitted = admit_static_output_html(source)
+        from services.svg_renderer import materialize_trusted_svg_fonts
+        admitted = materialize_trusted_svg_fonts(source, admitted)
     if session is None:
         png, metrics = await slide_capture._render_admitted_html_in_worker(
             admitted, timeout=timeout, width_px=width_px, height_px=height_px

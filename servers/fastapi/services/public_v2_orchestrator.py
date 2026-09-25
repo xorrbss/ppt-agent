@@ -190,6 +190,7 @@ async def _generation_admission_slide_count(
     request: PresentationGenerationRequestV2,
     *,
     owner_id: uuid.UUID,
+    tenant_id: str,
     reference_ids: list[uuid.UUID],
 ) -> int:
     """Resolve the count the worker will author before anything is admitted.
@@ -203,6 +204,9 @@ async def _generation_admission_slide_count(
         carrier = source_content_admission_carrier(
             source_mode=request.source_mode,
             source_content_manifest_pin=request.source_content_manifest_pin,
+            raster_approval_pin=request.raster_approval_pin,
+            strategy=request.strategy,
+            orientation=request.orientation,
             instructions=request.instructions,
             reference_snapshot_ids=[str(value) for value in reference_ids],
         )
@@ -211,6 +215,7 @@ async def _generation_admission_slide_count(
                 carrier,
                 sql_session=session,
                 owner_id=owner_id,
+                tenant_id=tenant_id,
             )
         except SourceContentError as error:
             raise _public_error(error.status_code, error.code) from error
@@ -282,7 +287,8 @@ async def _resolve_generation_route_receipt(
                 ),
                 source_mode=request.source_mode,
                 authored_style=request.authored_style,
-                aspect_ratio=request.aspect_ratio,
+                **({"page_size": request.page_size, "orientation": request.orientation}
+                   if request.page_size is not None else {"aspect_ratio": request.aspect_ratio}),
                 slide_count=slide_count,
             )
             if inspect.isawaitable(raw_resolution):
@@ -998,6 +1004,7 @@ class SqlPublicV2Orchestrator:
                 session,
                 request,
                 owner_id=actor.owner_id,
+                tenant_id=actor.tenant_id,
                 reference_ids=reference_ids,
             )
             generation_route_receipt = await _resolve_generation_route_receipt(
@@ -1019,7 +1026,7 @@ class SqlPublicV2Orchestrator:
                 "registered-template"
                 if source_native_route
                 else "free-design"
-                if request.source_mode == "source_content_restyle"
+                if request.source_mode in {"source_content_restyle", "raster_reconstruction"}
                 else request.generation_mode
             )
             internal_design_pack_pin = (
@@ -1043,7 +1050,8 @@ class SqlPublicV2Orchestrator:
                 visionQa=request.quality_policy == "release-v1",
                 reference_snapshot_ids=reference_ids,
                 authored_style=request.authored_style,
-                aspect_ratio=request.aspect_ratio,
+                **({"page_size": request.page_size, "orientation": request.orientation}
+                   if request.page_size is not None else {"aspect_ratio": request.aspect_ratio}),
                 masterPin=(
                     request.master_pin.model_dump(mode="json", by_alias=True)
                     if request.master_pin is not None
@@ -1056,6 +1064,11 @@ class SqlPublicV2Orchestrator:
                         by_alias=True,
                     )
                     if request.source_content_manifest_pin is not None
+                    else None
+                ),
+                rasterApprovalPin=(
+                    request.raster_approval_pin.model_dump(mode="json")
+                    if request.raster_approval_pin is not None
                     else None
                 ),
                 contentPolicy=(
@@ -1079,7 +1092,7 @@ class SqlPublicV2Orchestrator:
                     style_id=request.authored_style or "default",
                 )
             except ValueError as error:
-                if str(error).startswith("authored_canvas") or str(error).startswith(
+                if str(error).startswith("document_canvas") or str(error).startswith("authored_canvas") or str(error).startswith(
                     "authored_portrait"
                 ):
                     raise _public_error(422, str(error)) from error
@@ -1113,6 +1126,17 @@ class SqlPublicV2Orchestrator:
                 ),
             )
             pin_source_restyle_authoring(internal_request)
+            if internal_request.strategy == "svg" and internal_request.source_mode in {"source_content_restyle", "raster_reconstruction"}:
+                from services.source_content.pipeline import admit_source_content_request
+                from services.source_content.errors import SourceContentError
+
+                try:
+                    await admit_source_content_request(
+                        internal_request, sql_session=session, owner_id=actor.owner_id,
+                        tenant_id=actor.tenant_id,
+                    )
+                except SourceContentError as error:
+                    raise _public_error(error.status_code, error.code) from error
             generation_payload = _durable_request_payload(internal_request)
             generation_payload["generation_route_receipt"] = route_payload
             presentation_id = uuid.uuid5(
@@ -1153,7 +1177,8 @@ class SqlPublicV2Orchestrator:
                         "reference_snapshot_ids": [str(value) for value in reference_ids],
                         "quality_policy": request.quality_policy,
                         "authored_style": request.authored_style,
-                        "aspect_ratio": request.aspect_ratio,
+                        **({"page_size": request.page_size, "orientation": request.orientation}
+                           if request.page_size is not None else {"aspect_ratio": request.aspect_ratio}),
                         "master_pin": (
                             request.master_pin.model_dump(mode="json", by_alias=True)
                             if request.master_pin is not None
