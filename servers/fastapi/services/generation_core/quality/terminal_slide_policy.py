@@ -67,18 +67,34 @@ def terminal_fallback_active(
     default-off flag-only path because its verbatim text may not be re-authored.
     """
 
+    if not publish_flagged_allowed(
+        source_reflow=source_reflow,
+        exact_reconstruction=reference_mode == EXACT_RECONSTRUCTION,
+    ):
+        return False
     if source_reflow:
-        return (
-            is_authored_publish_flagged_slides_source_reflow_enabled()
-            and reference_mode != EXACT_RECONSTRUCTION
-            and _composition_switch(profile, "strict_dom_gate")
-        )
-    return (
-        is_authored_publish_flagged_slides_enabled()
-        and reference_mode != EXACT_RECONSTRUCTION
-        and _composition_switch(profile, "strict_dom_gate")
-        and _composition_switch(profile, "allow_summarization")
+        return _composition_switch(profile, "strict_dom_gate")
+    return _composition_switch(profile, "strict_dom_gate") and _composition_switch(
+        profile, "allow_summarization"
     )
+
+
+def publish_flagged_allowed(*, source_reflow: bool, exact_reconstruction: bool) -> bool:
+    """The format-neutral half of :func:`terminal_fallback_active`.
+
+    Whether this class of deck may publish a flagged page at all, read from the
+    rollout switches every driver shares: an exact reconstruction never may, a
+    source-reflow deck only behind its own default-off switch, and any other
+    deck behind the default-on one. ``terminal_fallback_active`` adds the HTML
+    driver's composition-profile switches on top; the SVG driver's
+    ``TerminalPolicy`` resolves from this alone.
+    """
+
+    if exact_reconstruction:
+        return False
+    if source_reflow:
+        return is_authored_publish_flagged_slides_source_reflow_enabled()
+    return is_authored_publish_flagged_slides_enabled()
 
 
 def declare_exhausted_repair_budget(
@@ -303,6 +319,7 @@ __all__ = [
     "flagged_slide_absorbs_capacity",
     "gate_repair_rejection_is_terminal_slide",
     "partition_residual_failures",
+    "publish_flagged_allowed",
     "recover_residual_repair_round",
     "terminal_fallback_active",
 ]
