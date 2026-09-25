@@ -209,7 +209,7 @@ async def _seed(
             language="en",
             title="Turn replay fixture",
             layout={"name": "native-v2", "slides": []},
-            version="v2-standard",
+            mode="authored",
             revision=presentation_revision,
         )
         session.add(presentation)
