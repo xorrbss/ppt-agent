@@ -87,6 +87,11 @@ electron/kor.traineddata
 electron/dist/
 test-artifacts/
 
+# Local run/benchmark output. Files already tracked under artifacts/ stay
+# tracked; new output is ignored.
+/artifacts/
+/servers/fastapi/artifacts/
+
 # Disposable packaged renderer probes are rebuilt from the checked-in probe,
 # policy, provenance, and compact JSON observations. Keep the hundreds-of-MB
 # Electron runtime out of Git while retaining its final evidence receipts.
