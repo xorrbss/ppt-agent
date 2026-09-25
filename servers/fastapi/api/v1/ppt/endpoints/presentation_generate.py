@@ -1153,7 +1153,7 @@ async def generate_presentation_handler(
                     **response.model_dump(mode="json"),
                     "quality_gate_status": "passed" if source_verified else "review_required",
                 }
-                async_status.error = None
+                async_status.error, async_status.updated_at = None, datetime.now(timezone.utc)
                 sql_session.add(async_status)
                 # Durable independent of the chained export below: a failure
                 # submitting export_as must never roll back "completed" too
