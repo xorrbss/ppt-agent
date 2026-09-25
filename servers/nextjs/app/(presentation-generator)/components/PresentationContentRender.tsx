@@ -11,10 +11,6 @@ import { resolveAuthoredImageUrl } from "@/utils/api";
 import { AuthoredSlidePreview } from "./AuthoredSlidePreview";
 import { SvgSlidePreview } from "./SvgSlidePreview";
 import SlideErrorBoundary from "./SlideErrorBoundary";
-import {
-  shouldRenderTemplateV2HtmlPreview,
-  TemplateV2HtmlSlidePreview,
-} from "./TemplateV2HtmlSlidePreview";
 
 type SlideRecord = Record<string, any>;
 
@@ -51,14 +47,6 @@ function AuthoredContent({
   );
 }
 
-function TemplateV2Content({ slide, fonts }: DriverRendererProps) {
-  return (
-    <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
-      <TemplateV2HtmlSlidePreview slide={slide} fonts={fonts} fixedSize />
-    </SlideErrorBoundary>
-  );
-}
-
 function SvgContent({ slide, canvas, resolveSvgAssets }: DriverRendererProps) {
   const imageRef = slide?.content?.image || slide?.properties?.image;
   const manifest = slide?.content?.svgAssetManifest;
@@ -69,21 +57,14 @@ function SvgContent({ slide, canvas, resolveSvgAssets }: DriverRendererProps) {
 const PRESENTATION_CONTENT_RENDERER_REGISTRY = Object.freeze({
   authored: AuthoredContent,
   "svg-v1": SvgContent,
-  "template-v2": TemplateV2Content,
 } satisfies Record<PresentationDriverId, React.ComponentType<DriverRendererProps>>);
 
-function inferSupportedDriver(
-  slide: SlideRecord,
-  presentationVersion: unknown,
-): PresentationDriverId | null {
+function inferSupportedDriver(slide: SlideRecord): PresentationDriverId | null {
   if (
     slide?.content?.__authored__ === true ||
     slide?.layout_group === "authored"
   ) {
     return "authored";
-  }
-  if (shouldRenderTemplateV2HtmlPreview(slide, presentationVersion)) {
-    return "template-v2";
   }
   return null;
 }
@@ -101,9 +82,9 @@ export function PresentationContentRender({
   const issuedDriver = presentationData?.profile?.driver_id;
   const resolvedDriver =
     driverId ??
-    (issuedDriver === "authored" || issuedDriver === "svg-v1" || issuedDriver === "template-v2"
+    (issuedDriver === "authored" || issuedDriver === "svg-v1"
       ? issuedDriver
-      : inferSupportedDriver(slide, presentationData?.version));
+      : inferSupportedDriver(slide));
 
   if (!resolvedDriver) {
     return (
