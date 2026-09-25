@@ -189,24 +189,16 @@ def _table(build: Build, rows: list[list[list[int]]], group: str | None) -> None
     width = max(len(row) for row in rows)
     box = _pad(_union([page.lines[i].bbox for i in members]), 4, page.size)
     tokens = tuple(t for i in members for t in build.tokens.get(i, ()))
+    # Native only when every cell line passed the text and number gates. An
+    # unverified cell never carries its OCR reading as editable text (an icon
+    # read as "A" or "[" would be published as content): the table stays source
+    # pixels.
+    native = all(build.texts.get(i) is not None for i in members)
     cells = tuple(
-        tuple("\n".join(build.texts[i] or "" for i in cell) for cell in row) + ("",) * (width - len(row))
+        tuple("\n".join(build.texts.get(i) or "" for i in cell) for cell in row)
+        + ("",) * (width - len(row))
         for row in rows
     )
-    ungrounded = [i for i in members if build.texts.get(i) is None]
-    # Native when at least 90% of cell lines are grounded; the rest keep their OCR
-    # reading with an advisory. Below that the table is kept as source pixels.
-    # An unconfirmed number never goes into an editable cell: the table stays pixels.
-    unconfirmed_number = any(any(ch.isdigit() for ch in build.readings.get(i, "")) for i in ungrounded)
-    native = len(ungrounded) <= 0.1 * len(members) and not unconfirmed_number
-    if native and ungrounded:
-        cells = tuple(
-            tuple("\n".join(build.texts.get(i) or build.readings.get(i, "") for i in cell) for cell in row)
-            + ("",) * (width - len(row))
-            for row in rows
-        )
-    partial = "table_cells_partially_unverified" if native else "table_cell_ocr_low_confidence"
-    reason = partial if ungrounded else None
     build.regions.append(
         PlannedRegion(
             "table",
@@ -215,7 +207,7 @@ def _table(build: Build, rows: list[list[list[int]]], group: str | None) -> None
             None if native else "\n".join("\t".join(row) for row in cells),
             table_cells=cells if native else None,
             confidence=0.9,
-            review_reason=reason,
+            review_reason=None if native else "table_cell_ocr_low_confidence",
             reason=f"llm_structure:{build.model}",
             editable_fallback=not native,
             group_id=group,
