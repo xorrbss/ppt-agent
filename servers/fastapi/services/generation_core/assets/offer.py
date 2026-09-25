@@ -237,10 +237,16 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
                if slide.has_figure and slide.archetype != "scene" and slide.nodes]
     failures: list[dict] = []
     # Scenes spend first, in page order; the icon sheets take what is left.
-    scene_slots = await asyncio.gather(*(
-        _scene_slot(slide.index, slide, contents[slide.index], style=style, context=context,
-                    image_service=image_service, spend=spend, failures=failures)
-        for slide in scenes))
+    async def scene(slide):
+        try:
+            return await _scene_slot(slide.index, slide, contents[slide.index], style=style,
+                                     context=context, image_service=image_service, spend=spend,
+                                     failures=failures)
+        except Exception as error:  # noqa: BLE001 - a picture is optional
+            failures.append({"page": slide.index, "reason": type(error).__name__})
+            return None
+
+    scene_slots = await asyncio.gather(*(scene(slide) for slide in scenes))
     icon_receipt: dict = {}
     style_id = (getattr(style, "id", None) or "").strip() or DEFAULT_PACK_KEY
     try:

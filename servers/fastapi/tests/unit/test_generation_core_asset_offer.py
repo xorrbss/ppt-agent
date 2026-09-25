@@ -234,3 +234,16 @@ def test_resolve_offer_replays_the_persisted_offer_without_building(fakes, monke
     assert asyncio.run(asset_slots.resolve_offer(request, _outline(), [], job, profile=profile,
                                                  checkpoint=checkpoint, durable=False)).receipt == {
         "status": "non_durable_job"}
+
+
+def test_an_unusable_picture_drops_its_slot_instead_of_failing_the_deck(fakes, monkeypatch, tmp_path):
+    async def webp(**_kwargs):
+        path = tmp_path / "cutout.webp"
+        Image.new("RGBA", (32, 32), (1, 2, 3, 255)).save(path, format="WEBP")
+        return SimpleNamespace(path=str(path))
+
+    monkeypatch.setattr(icon_pack, "generate_scene_cutout", webp)
+    offer = _build()
+    assert not [slot for slot in offer.slots if slot.kind == "illustration"]
+    assert {"page": 1, "reason": "ValueError"} in offer.receipt["failures"]
+    assert offer.receipt["icons"] == 3
