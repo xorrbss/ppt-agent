@@ -47,6 +47,8 @@ PUBLIC_WORKER_PROFILES = MappingProxyType(
                 "quality.review",
                 "slide.regenerate.preview",
                 "slide.regenerate",
+                "slide.regenerate.batch.preview",
+                "slide.regenerate.batch",
                 "template.apply",
                 "design.apply",
                 # Local, DB-only mutation (no provider calls, no browser/

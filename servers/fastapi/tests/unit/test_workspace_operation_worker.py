@@ -14,6 +14,9 @@ from services.workspace_operation_handler_registry import (
 )
 from services.workspace_operation_runner import claim_next_workspace_operation
 from services.workspace_runtime_profile import UnsupportedWorkspaceRuntimeError
+from services.workspace_authored_preview_operation_handlers import (
+    WorkspacePageRemakePreviewOperationHandler,
+)
 
 
 def test_workspace_worker_mode_defaults_to_embedded(monkeypatch) -> None:
@@ -140,6 +143,8 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
         "quality.review",
         "slide.regenerate.preview",
         "slide.regenerate",
+        "slide.regenerate.batch.preview",
+        "slide.regenerate.batch",
         "template.apply",
         "design.apply",
         "presentation.slides.reorder",
@@ -155,7 +160,7 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
     assert registry.recovery_policy("quality.review") == "automatic"
     assert isinstance(
         registry.resolve("slide.regenerate.preview"),
-        worker.WorkspacePageRemakePreviewOperationHandler,
+        WorkspacePageRemakePreviewOperationHandler,
     )
     assert registry.recovery_policy("slide.regenerate.preview") == "automatic"
     assert isinstance(
@@ -167,13 +172,15 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
         assert registry.resolve(kind) is not None
         assert registry.recovery_policy(kind) == "automatic"
     assert registry.resolve("presentation.slides.reorder") is not None
+    assert registry.resolve("slide.regenerate.batch.preview") is not None
+    assert registry.recovery_policy("slide.regenerate.batch.preview") == "automatic"
+    assert registry.resolve("slide.regenerate.batch") is not None
+    assert registry.recovery_policy("slide.regenerate.batch") == "automatic"
     # raster.analysis's own registration call in this same branch
     # (register_raster_analysis_operation_handler(replace=True), no explicit
     # registry= override) is a separate, pre-existing gap against this
     # test's swapped-in local registry -- out of scope here.
     assert registry.resolve("presentation.edit") is None
-    assert registry.resolve("slide.regenerate.batch.preview") is None
-    assert registry.resolve("slide.regenerate.batch") is None
     assert registry.resolve("export.pptx") is None
     assert registry.resolve("export.pdf") is None
     worker.start_workspace_worker_metrics_exporter.assert_awaited_once_with()
@@ -184,6 +191,8 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
             "quality.review",
             "slide.regenerate.preview",
             "slide.regenerate",
+            "slide.regenerate.batch.preview",
+            "slide.regenerate.batch",
             "template.apply",
             "design.apply",
             "presentation.slides.reorder",

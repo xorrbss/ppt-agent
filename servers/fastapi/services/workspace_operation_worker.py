@@ -84,6 +84,7 @@ from services.workspace_page_remake_operation_handler import (
     register_workspace_page_remake_operation_handler,
 )
 from services.workspace_batch_remake_operation_handler import (
+    OPERATION_KIND as BATCH_REMAKE_OPERATION_KIND,
     register_workspace_batch_remake_operation_handler,
 )
 from services.workspace_slide_order_operation_handler import (
@@ -94,8 +95,8 @@ from services.workspace_operation_handler_registry import (
     workspace_operation_handler_registry,
 )
 from services.workspace_authored_preview_operation_handlers import (
+    BATCH_PREVIEW_OPERATION_KIND,
     PAGE_PREVIEW_OPERATION_KIND,
-    WorkspacePageRemakePreviewOperationHandler,
     register_workspace_authored_preview_operation_handlers,
 )
 from services.workspace_authored_template_operation_handler import (
@@ -175,10 +176,12 @@ def external_workspace_operation_kinds(profile_role: str) -> tuple[str, ...]:
         # role, and this claims in well under a second there.
         return (
             PRESENTATION_GENERATION_OPERATION_KIND,
-        RASTER_ANALYSIS_OPERATION_KIND,
+            RASTER_ANALYSIS_OPERATION_KIND,
             QUALITY_REVIEW_OPERATION_KIND,
             PAGE_PREVIEW_OPERATION_KIND,
             PAGE_REMAKE_OPERATION_KIND,
+            BATCH_PREVIEW_OPERATION_KIND,
+            BATCH_REMAKE_OPERATION_KIND,
             TEMPLATE_APPLY_OPERATION_KIND,
             DESIGN_APPLY_OPERATION_KIND,
             SLIDE_ORDER_OPERATION_KIND,
@@ -251,17 +254,26 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
                 replace=True,
                 recovery_policy="automatic",
             )
-            workspace_operation_handler_registry.register(
-                PAGE_PREVIEW_OPERATION_KIND,
-                WorkspacePageRemakePreviewOperationHandler(),
+            # Registers both PAGE_PREVIEW_OPERATION_KIND and
+            # BATCH_PREVIEW_OPERATION_KIND; the batch variant was missing
+            # from this process's registrations entirely (found live
+            # 2026-09-26 -- a batch preview operation admitted here had no
+            # handler and sat "queued" forever). Kept as one call instead of
+            # two hand-written registry.register(...) calls so the two
+            # preview kinds cannot drift apart again.
+            register_workspace_authored_preview_operation_handlers(
+                registry=workspace_operation_handler_registry,
                 replace=True,
-                recovery_policy="automatic",
             )
             workspace_operation_handler_registry.register(
                 PAGE_REMAKE_OPERATION_KIND,
                 WorkspacePageRemakeOperationHandler(),
                 replace=True,
                 recovery_policy="automatic",
+            )
+            register_workspace_batch_remake_operation_handler(
+                registry=workspace_operation_handler_registry,
+                replace=True,
             )
             register_workspace_slide_order_operation_handler(
                 registry=workspace_operation_handler_registry,
