@@ -123,9 +123,36 @@ def page_content_fallback(analysis, page) -> FallbackGroup | None:
     return FallbackGroup(PAGE_CONTENT, region, ids, legible_min_scale(page, ids))
 
 
+REGION_PREFIX = "region-"
+
+
+def region_fallbacks(page) -> dict[str, FallbackGroup]:
+    """A pixel fallback for each editable region outside any content group.
+
+    Used by the source-geometry composition: an ungrouped text or table that
+    cannot stay editable in its source box is shown as a crop of its own box.
+    Keyed by region id; crops contained in the box are carried (drawn once).
+    """
+    reference = getattr(page, "reference_region", None)
+    result = {}
+    for region in page.regions:
+        group = getattr(region, "group_id", None)
+        if region.role not in {"body", "table", "unknown"} or (group and group not in NAMED_GROUPS - {"title"}):
+            continue
+        box = getattr(region, "source_pixel_bbox", None)
+        if not box or not (region.text or getattr(region, "table_cells", None)):
+            continue
+        key = f"{REGION_PREFIX}{region.region_id}"
+        crop = _union_region(page.page_number, key, [region], [box], reference)
+        inside = [other for other in page.regions if other is not region and _contained(other, crop.source_pixel_bbox)]
+        ids = (region.region_id, *(other.region_id for other in inside))
+        result[region.region_id] = FallbackGroup(key, crop, ids, legible_min_scale(page, ids))
+    return result
+
+
 def available_fallbacks(analysis, page) -> list[FallbackGroup]:
-    """Every pixel fallback the layout may use on this page (groups, then page content)."""
-    result = list(group_fallbacks(page).values())
+    """Every pixel fallback the layout may use on this page (groups, regions, then page content)."""
+    result = [*group_fallbacks(page).values(), *region_fallbacks(page).values()]
     content = page_content_fallback(analysis, page)
     return [*result, content] if content is not None else result
 
@@ -220,7 +247,7 @@ def advisories_from_svg(analysis, page, svg: str) -> tuple[dict, ...]:
     from services.raster_source_assets import raster_slot_id
 
     used = {node.attrib.get("href") for node in ET.fromstring(svg).iter("{http://www.w3.org/2000/svg}image")}
-    chosen = [fallback for fallback in group_fallbacks(page).values()
+    chosen = [fallback for fallback in (*group_fallbacks(page).values(), *region_fallbacks(page).values())
               if raster_slot_id(page.page_number, fallback.region.region_id) in used]
     if raster_slot_id(page.page_number, fallback_region_id(page.page_number, PAGE_CONTENT)) in used:
         content = page_content_fallback(analysis, page)  # only built when the SVG actually uses it

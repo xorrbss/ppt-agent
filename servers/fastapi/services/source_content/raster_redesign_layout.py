@@ -19,14 +19,17 @@ import re
 from dataclasses import dataclass
 from xml.sax.saxutils import escape
 
+from services.source_content.raster_layout_geometry import geometry_plan
 from services.source_content.raster_layout_parts import page_parts
 from services.source_content.raster_redesign_chrome import render_footer_members
 from services.source_content.raster_redesign_fallback import (
     PAGE_CONTENT,
     advisories,
     apply_fallbacks,
+    group_fallbacks,
     page_content_fallback,
     ranked_candidates,
+    region_fallbacks,
 )
 from services.source_content.raster_redesign_semantic import has_groups
 
@@ -98,7 +101,7 @@ def _content_xml(placed: Placed, page_number: int) -> list[str]:
     image_w = max(1, math.floor(placed.w))
     image_h = max(1, math.floor(placed.h))
     x = placed.x + (placed.w - image_w) / 2
-    if placed.item.inline:  # pixel line: part of the text flow, no frame
+    if placed.kind == "crop" or placed.item.inline:  # source-geometry crop or pixel line: no frame
         return [
             f'<image x="{placed.x:.2f}" y="{placed.y:.2f}" width="{image_w}" height="{image_h}" '
             f'href="{raster_slot_id(page_number, placed.item.region.region_id)}" preserveAspectRatio="xMidYMid meet"/>'
@@ -178,7 +181,14 @@ def render_redesign_page(analysis, page_number: int, *, instruction: str | None 
                 chosen.append(candidates[len(chosen)])
                 continue
             # Every group as pixels still overflows: keep the source's own dense
-            # arrangement as one crop of the content area (title stays editable).
+            # arrangement, block by block (editable where it fits, else each
+            # group as its crop); only when even that is not legible, as one
+            # crop of the content area (title stays editable).
+            geometry = _geometry_compose(analysis, page, items, page_number, geo, width, height,
+                                         title, header_images, kickers, subtitles, sides)
+            if geometry is not None:
+                header_xml, body, chosen = geometry
+                break
             content = page_content_fallback(analysis, page)
             if content is None:
                 raise
@@ -215,6 +225,22 @@ def _compose(analysis, items, page_number, geo, width, height, instruction,
             if compact or str(error) != "raster_redesign_content_overflow":
                 raise
     raise AssertionError("unreachable")
+
+def _geometry_compose(analysis, page, items, page_number, geo, width, height,
+                      title, header_images, kickers, subtitles, sides):
+    """(header, body, chosen fallbacks) of the source-geometry composition, or None."""
+    header_xml, header_bottom = render_header(
+        title=title, images=header_images, kickers=kickers, subtitles=subtitles, sides=sides,
+        page_number=page_number, width=width, margin=geo["margin"], top=geo["top"],
+    )
+    top, bottom = header_bottom + geo["gap"], height - geo["footer"] - 14.0
+    plan = geometry_plan(page, items, (geo["margin"], top, width - 2 * geo["margin"], bottom - top))
+    if plan is None:
+        return None
+    order = [f.region.region_id for f in (*group_fallbacks(page).values(), *region_fallbacks(page).values())]
+    chosen = sorted(plan.chosen, key=lambda fallback: order.index(fallback.region.region_id))
+    return header_xml, [xml for placed in plan.placements for xml in _content_xml(placed, page_number)], chosen
+
 
 def redesign_layout_issue(analysis, page_number: int, *, instruction: str | None = None) -> str | None:
     """Preview whether a redesign page fits; returns the error code or None."""

@@ -351,7 +351,7 @@ def test_group_crop_is_a_lossless_cut_of_the_reference_image():
         crop_png(buffer.getvalue(), (90, 70, 20, 20))
 
 
-def test_page_content_fallback_keeps_source_arrangement_as_one_crop():
+def test_dense_page_keeps_source_arrangement_group_by_group():
     from services.source_content.raster_redesign_layout import render_redesign_page
     from services.source_content.raster_svg_layout import raster_page_render_advisories
 
@@ -364,13 +364,17 @@ def test_page_content_fallback_keeps_source_arrangement_as_one_crop():
         regions.append(fx.region(1, f"shot{index}", "screenshot", (x, 540, 260, 340), group=f"g{index}"))
     analysis = fx.analysis(fx._page(1, fx._ordered(regions)))
     result = render_redesign_page(analysis, 1)
-    codes = {(a["code"], a["groupId"]) for a in result.advisories}
-    assert ("dense_group_pixel_fallback", "page-content") in codes
+    # Not one page-content picture: each group is its own crop, in the source arrangement.
+    assert [a["groupId"] for a in result.advisories] == [f"g{index}" for index in range(6)]
+    assert all(a["code"] == "dense_group_pixel_fallback" for a in result.advisories)
     assert raster_page_render_advisories(analysis, 1, result.svg) == result.advisories
     texts = dict(_texts(result.svg))
     assert _dense(texts["rd-title"]) == _dense("원본 배치를 유지하는 조밀한 페이지")  # title stays editable
     images = [n for n in ET.fromstring(result.svg).iter(f"{NS}image")]
-    assert len(images) == 1 and int(images[0].get("height")) >= 0.6 * 730 - 1  # union box is 1610x730 px
+    assert len(images) == 6
+    xs, ys = [float(n.get("x")) for n in images], {round(float(n.get("y")), 1) for n in images}
+    assert xs == sorted(xs) and len(ys) == 1  # one row, left to right, as in the source
+    assert all(int(n.get("height")) >= 0.6 * 730 - 1 for n in images)  # each group box is 260x730 px
 
 
 def test_uncovered_ink_crops_are_never_below_their_legibility_scale():
