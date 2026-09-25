@@ -57,7 +57,7 @@ async def deck_advisory(ctx, pages, *, job, read_png, run_advisory):
         # later slide's number, so no advisory is better than a misattributed one.
         return advisory_record({"skipped": "render_missing"}, digests)
     with provider_usage_scope(job_id=job.id if job else None, operation="authored_generation",
-                              stage="vision_advisory",
+                              stage="vqa",
                               attempt_number=job.attempt_number if job else 0):
         vision = await run_advisory(renders, slide_count=len(pages))
     return advisory_record(vision, digests)
