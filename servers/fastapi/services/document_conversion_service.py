@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from services.libreoffice_profile import unique_user_installation_arg
 from utils.runtime_limits import log_memory
 
 
@@ -151,65 +152,72 @@ class DocumentConversionService:
             p.name for p in Path(output_dir).glob("*.pdf") if p.is_file()
         }
 
-        try:
-            command = [
-                self.soffice_binary,
-                "--headless",
-                "--convert-to",
-                "pdf",
-                "--outdir",
-                output_dir,
-                file_path,
-            ]
-            LOGGER.info(
-                "[DocumentConversion] LibreOffice conversion start input=%s output_dir=%s",
-                file_path,
-                output_dir,
-            )
-            log_memory(LOGGER, "document_conversion.office.start", input=file_path)
-            subprocess.run(
-                command,
-                check=True,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout_seconds,
-                **_windows_hidden_subprocess_kwargs(),
-            )
-            LOGGER.info(
-                "[DocumentConversion] LibreOffice conversion complete input=%s",
-                file_path,
-            )
-            log_memory(LOGGER, "document_conversion.office.finish", input=file_path)
-        except subprocess.TimeoutExpired as exc:
-            LOGGER.error(
-                "[DocumentConversion] LibreOffice timed out command=%s",
-                _command_str(exc.cmd if isinstance(exc.cmd, list) else [str(exc.cmd)]),
-            )
-            raise DocumentConversionError(
-                f"LibreOffice conversion timed out for {os.path.basename(file_path)}"
-            ) from exc
-        except subprocess.CalledProcessError as exc:
-            stderr = (exc.stderr or "").strip()
-            stdout = (exc.stdout or "").strip()
-            details = stderr or stdout or str(exc)
-            LOGGER.error(
-                "[DocumentConversion] LibreOffice failed code=%s command=%s stderr=%s stdout=%s",
-                exc.returncode,
-                _command_str(exc.cmd if isinstance(exc.cmd, list) else [str(exc.cmd)]),
-                _snippet(stderr),
-                _snippet(stdout),
-            )
-            raise DocumentConversionError(
-                f"LibreOffice conversion failed for {os.path.basename(file_path)}: {details} "
-                f"(stderr={_snippet(stderr)}; stdout={_snippet(stdout)})"
-            ) from exc
-        except Exception as exc:
-            LOGGER.exception("[DocumentConversion] LibreOffice conversion unexpected error")
-            raise DocumentConversionError(
-                f"LibreOffice conversion failed for {os.path.basename(file_path)}: {exc}"
-            ) from exc
+        # Every invocation gets its own LibreOffice user profile. LibreOffice
+        # shares one profile per OS user by default, so two concurrent
+        # conversions on the shared default profile either serialize onto
+        # the first instance or make the second exit non-zero with empty
+        # stdout/stderr (see services/libreoffice_profile.py for detail).
+        with unique_user_installation_arg() as user_installation_arg:
+            try:
+                command = [
+                    self.soffice_binary,
+                    "--headless",
+                    user_installation_arg,
+                    "--convert-to",
+                    "pdf",
+                    "--outdir",
+                    output_dir,
+                    file_path,
+                ]
+                LOGGER.info(
+                    "[DocumentConversion] LibreOffice conversion start input=%s output_dir=%s",
+                    file_path,
+                    output_dir,
+                )
+                log_memory(LOGGER, "document_conversion.office.start", input=file_path)
+                subprocess.run(
+                    command,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=timeout_seconds,
+                    **_windows_hidden_subprocess_kwargs(),
+                )
+                LOGGER.info(
+                    "[DocumentConversion] LibreOffice conversion complete input=%s",
+                    file_path,
+                )
+                log_memory(LOGGER, "document_conversion.office.finish", input=file_path)
+            except subprocess.TimeoutExpired as exc:
+                LOGGER.error(
+                    "[DocumentConversion] LibreOffice timed out command=%s",
+                    _command_str(exc.cmd if isinstance(exc.cmd, list) else [str(exc.cmd)]),
+                )
+                raise DocumentConversionError(
+                    f"LibreOffice conversion timed out for {os.path.basename(file_path)}"
+                ) from exc
+            except subprocess.CalledProcessError as exc:
+                stderr = (exc.stderr or "").strip()
+                stdout = (exc.stdout or "").strip()
+                details = stderr or stdout or str(exc)
+                LOGGER.error(
+                    "[DocumentConversion] LibreOffice failed code=%s command=%s stderr=%s stdout=%s",
+                    exc.returncode,
+                    _command_str(exc.cmd if isinstance(exc.cmd, list) else [str(exc.cmd)]),
+                    _snippet(stderr),
+                    _snippet(stdout),
+                )
+                raise DocumentConversionError(
+                    f"LibreOffice conversion failed for {os.path.basename(file_path)}: {details} "
+                    f"(stderr={_snippet(stderr)}; stdout={_snippet(stdout)}; exit_code={exc.returncode})"
+                ) from exc
+            except Exception as exc:
+                LOGGER.exception("[DocumentConversion] LibreOffice conversion unexpected error")
+                raise DocumentConversionError(
+                    f"LibreOffice conversion failed for {os.path.basename(file_path)}: {exc}"
+                ) from exc
 
         expected_pdf = Path(output_dir) / f"{Path(file_path).stem}.pdf"
         if expected_pdf.is_file():
