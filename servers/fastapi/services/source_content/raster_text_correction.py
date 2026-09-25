@@ -86,11 +86,17 @@ _VARIANTS = str.maketrans(
 )
 
 
-def normalized(value: str) -> str:
-    """Whitespace and separator bars removed, punctuation variants unified (a bar
-    between title parts is often a drawn rule that one reader skips)."""
+def canonical(value: str) -> str:
+    """Whitespace removed and punctuation variants unified (bullets are middle dots)."""
 
-    return _compact(value).translate(_VARIANTS).replace("|", "")
+    return _compact(value).translate(_VARIANTS)
+
+
+def normalized(value: str) -> str:
+    """``canonical`` with separator bars removed too (a bar between title parts is
+    often a drawn rule that one reader skips)."""
+
+    return canonical(value).replace("|", "")
 
 
 def _edit_cost(a: str, b: str) -> int:

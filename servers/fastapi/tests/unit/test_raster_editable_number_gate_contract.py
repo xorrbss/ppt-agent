@@ -28,10 +28,16 @@ class _Page:
         self.lines: list[RedesignLine] = []
 
     def line(self, y: int, parts: list[tuple[str, str]]) -> int:
-        """Word boxes left to right; each part is (text, what follows it: "dot" or "")."""
+        """Word boxes left to right; each part is (text, what follows it: "dot" or "").
+        A one-symbol word is drawn as a small middle dot in a tight box, as OCR boxes it."""
 
         start, x = len(self.words), 60
         for k, (text, after) in enumerate(parts):
+            if len(text) == 1 and not text.isalnum():
+                self.draw.ellipse((x + 10, y + 13, x + 14, y + 17), fill="black")
+                self.words.append(RedesignWord(text, (x + 10, y + 13, 5, 5), 0.96, "test", k > 0))
+                x += 64
+                continue
             width = 24 * max(2, len(text))
             self.draw.rectangle((x, y, x + width - 1, y + H - 1), fill="black")
             self.words.append(RedesignWord(text, (x, y, width, H), 0.96, "test", k > 0))

@@ -13,7 +13,9 @@ Deterministic rules (the model only ever names ids):
   reading the model verified, or a model correction grounded in the OCR
   (``raster_text_correction``) that stays within 40% of the primary reading.
   A separator mark (middle dot, bullet, colon) the OCR dropped or read as another
-  symbol counts as agreed only where the pixels show it (``raster_editable_marks``).
+  symbol counts as agreed only where the pixels show it (``raster_editable_marks``),
+  and any character of the published text that no reading holds must be grounded
+  by a same-shape reading or by pixels of its own shape (``raster_symbol_grounding``).
   Otherwise its full line box is kept as pixels.
 """
 
@@ -28,6 +30,7 @@ from services.source_content.raster_llm_structure import Candidate
 from services.source_content.raster_page_plan import PagePlan, _unpromoted, line_needs_help
 from services.source_content.raster_redesign_ocr import RedesignWord, line_text
 from services.source_content.raster_structure_emit import Build, emit, is_noise
+from services.source_content.raster_symbol_grounding import unread_glyphs_grounded
 from services.source_content.raster_text_guards import (
     corner_fragment,
     glued_symbols,
@@ -76,10 +79,15 @@ def _majority(readings: tuple[str, ...]) -> str | None:
     return next(value for value in readings if _compact(value) == best)
 
 
-def _publish(build: Build, index: int, text: str, carried: tuple[int, ...], current: str) -> None:
+def _publish(build: Build, index: int, text: str, carried: tuple[int, ...], current: str, readings) -> None:
+    """Publish ``text`` for the line; a character no reading holds needs its own pixels."""
+
     line = build.page.lines[index]
     if _compact(text) == _compact(current) and carried:
         build.tokens[index], build.texts[index] = carried, current
+        return
+    if not unread_glyphs_grounded(build.page, carried, readings, text):
+        build.tokens[index], build.texts[index] = carried, None  # a guess, not a reading: pixels
         return
     build.unpromoted.update(carried)  # superseded readings of the same pixels
     build.words.append(RedesignWord(text, line.bbox, CORRECTED_CONFIDENCE, f"llm-structure:{build.model}", True))
@@ -121,7 +129,7 @@ def _resolve_line(build: Build, index: int, proposed: str | None, verified: bool
         if not title and jump > MAX_JUMP_FROM_PRIMARY and not script_swaps_only(_compact(current), _compact(corrected)):
             corrected, rejected = None, True  # too far from what the primary pass saw to be trusted
     if corrected is not None:
-        _publish(build, index, corrected, carried, current)
+        _publish(build, index, corrected, carried, current, candidates)
         return
     build.tokens[index] = carried
     if not carried or (rejected and _compact(proposed or "") != _compact(current)):
@@ -132,7 +140,7 @@ def _resolve_line(build: Build, index: int, proposed: str | None, verified: bool
         return
     agreed = _majority(line.alternates)
     if agreed is not None and _publishable(agreed, line.alternates, targeted):
-        _publish(build, index, agreed, carried, current)
+        _publish(build, index, agreed, carried, current, candidates)
         return
     build.texts[index] = None
 
@@ -154,7 +162,7 @@ def _resolve_by_agreement(build: Build, index: int, candidates, carried, current
         and edge_glyphs_grounded(spaced, candidates)
         and _publishable(spaced, line.alternates, targeted)
     ):
-        _publish(build, index, spaced, carried, current)
+        _publish(build, index, spaced, carried, current, candidates)
     else:
         build.texts[index] = None  # the readers disagree: the line keeps its pixels
 
