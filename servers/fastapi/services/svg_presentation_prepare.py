@@ -50,6 +50,7 @@ class GenerationContext:
     semaphore: "asyncio.Semaphore"
     render_semaphore: "asyncio.Semaphore"
     runtime_profile: object = None
+    asset_offer: object = None
 
 
 async def _prepare_generation(request, presentation_id, outline, session, job) -> GenerationContext:
@@ -157,6 +158,10 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
     if job is not None:
         await initialize_checkpoints(job_id=job.id, attempt_token=job.attempt_token, roles=roles,
                                      fencing_token=getattr(job, "_workspace_fencing_token", None))
+    asset_offer = None
+    if not source_reflow and not raster_reconstruction:
+        asset_offer = await _offer_assets(request, presentation_id, outline, roles, job, planned,
+                                          manifests, canonical_assets=canonical_assets)
     source_manifest = source_pointer = asset_context = asset_revision = None
     service = None
     if canonical_assets:
@@ -201,4 +206,38 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         source_pointer=source_pointer, asset_context=asset_context, asset_revision=asset_revision,
         service=service, semaphore=semaphore, render_semaphore=render_semaphore,
         runtime_profile=runtime_profile,
+        asset_offer=asset_offer,
     )
+
+
+async def _offer_assets(request, presentation_id, outline, roles, job, planned, manifests, *,
+                        canonical_assets):
+    """Add the deck's planned illustrations/icons to every page's image offer.
+
+    Raster slots join ``planned`` (and the inline manifests on the
+    non-canonical path) exactly like source images; vector icons stay on the
+    returned projection for the author step to flatten in place.
+    """
+    from services import svg_presentation_service as _facade
+    from services.generation_core.drivers.svg.asset_slots import (
+        SvgAssetOffer, legacy_manifest, project_offer, resolve_offer,
+    )
+    from services.generation_core.runtime.profile import resolve_svg_runtime_profile
+
+    offer = await resolve_offer(request, outline, roles, job,
+                                profile=resolve_svg_runtime_profile(source_reflow=False),
+                                checkpoint=_facade._checkpoint, durable=canonical_assets)
+    if not offer.slots:
+        return SvgAssetOffer(raster=[{} for _ in planned], vector=[{} for _ in planned],
+                             slots=[{} for _ in planned], receipt=dict(offer.receipt))
+    async with _facade.async_session_maker() as offer_session:
+        projected = await project_offer(offer_session, offer, presentation_id=presentation_id,
+                                        count=len(planned))
+        await offer_session.commit()
+    for index, page in enumerate(projected.raster):
+        if not page:
+            continue
+        planned[index] = {**planned[index], **page}
+        if not canonical_assets:
+            manifests[index].update(legacy_manifest(page))
+    return projected

@@ -8,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Sequence
 
-_LIBRARY = Path(__file__).resolve().parents[4] / "assets" / "infographics" / "monochrome-v1"
+_LIBRARY = Path(__file__).resolve().parents[6] / "assets" / "infographics" / "monochrome-v1"
 
 
 def _normalize(value: str) -> str:

@@ -9,9 +9,10 @@ authored driver (``utils/get_env_concurrency.py``). The defaults below are
 exactly the values the hard-coded semaphores used, so resolving with no
 overrides set is behaviour-identical to before this module existed.
 
-``illustration_budget`` / ``illustration_timeout_seconds`` are named for
-c3-assets: once the illustration stage moves into ``generation_core/assets/``
-it reads the same fields instead of its own constants.
+``illustration_budget`` caps the image-provider calls one deck's AssetOffer
+may spend (a scene illustration or an icon sprite sheet is one call).
+``illustration_timeout_seconds`` bounds each such call and defaults to the
+authored ``IMAGE_GENERATION_TIMEOUT_SECONDS`` knob.
 
 ``terminal_policy`` and ``vision_advisory`` are the page-quality decisions a
 deck attempt pins (c1-quality): what the collector does with a page that ran
@@ -31,6 +32,7 @@ from services.generation_core.quality.terminal_policy import (
 )
 
 from utils.get_env import (
+    get_image_generation_timeout_seconds,
     get_svg_author_concurrency_env,
     get_svg_author_concurrency_source_reflow_env,
     get_svg_illustration_budget_env,
@@ -44,7 +46,6 @@ DEFAULT_AUTHOR_CONCURRENCY_SOURCE_REFLOW = 2
 DEFAULT_RENDER_CONCURRENCY = 3
 DEFAULT_RENDER_CONCURRENCY_SOURCE_REFLOW = 1
 DEFAULT_ILLUSTRATION_BUDGET = 4
-DEFAULT_ILLUSTRATION_TIMEOUT_SECONDS = 60
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +93,10 @@ def resolve_svg_runtime_profile(
         ),
         illustration_timeout_seconds=(
             get_svg_illustration_timeout_seconds_env()
-            or DEFAULT_ILLUSTRATION_TIMEOUT_SECONDS
+            # The authored image knob (IMAGE_GENERATION_TIMEOUT_SECONDS) is the
+            # per-call default, so one picture is bounded identically in both
+            # drivers unless an operator narrows it for svg.
+            or int(get_image_generation_timeout_seconds())
         ),
         terminal_policy=resolve_terminal_policy(
             source_reflow=source_reflow, exact_reconstruction=raster_reconstruction

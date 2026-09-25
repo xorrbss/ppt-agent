@@ -33,7 +33,7 @@ from typing import Literal, Sequence
 
 from PIL import Image
 
-from services.authored_icon_pack.sheet import (
+from services.generation_core.assets.icon_pack.sheet import (
     has_alpha_channel,
     open_rgba,
     transparent_fraction,

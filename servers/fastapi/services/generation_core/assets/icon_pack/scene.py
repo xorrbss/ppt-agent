@@ -18,9 +18,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Sequence
 
-from services.authored_icon_pack.checks import check_no_text, check_transparency
-from services.authored_icon_pack.inline import cutout_data_uri
-from services.authored_icon_pack.provider import (
+from services.generation_core.assets.icon_pack.checks import check_no_text, check_transparency
+from services.generation_core.assets.icon_pack.inline import cutout_data_uri
+from services.generation_core.assets.icon_pack.provider import (
     TransparentPngProvider,
     TransparentPngUnsupported,
 )
@@ -128,7 +128,7 @@ async def generate_scene_cutout(
         if raise_on_failure:
             raise RuntimeError("scene cutout could not be inlined")
         return None
-    from services.authored_icon_pack.sheet import open_rgba
+    from services.generation_core.assets.icon_pack.sheet import open_rgba
 
     width, height = open_rgba(payload).size
     return SceneCutout(

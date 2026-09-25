@@ -1,7 +1,8 @@
 """Everything that produces an SVG string for one SVG-driver page: the
 pre-loop raster-reconstruction synthesis, the local template-layout attempt,
 the ``author_source_svg_layout`` / ``author_slide_svg`` dispatch, source-image
-asset offers, and inflight/ordinal bookkeeping around a single author attempt.
+and AssetOffer slots (planned illustrations/icons, see ``asset_slots.py``), and
+inflight/ordinal bookkeeping around a single author attempt.
 
 Split out of ``services/svg_presentation_generate.py`` (P0 split, see
 ``docs/generation-core-architecture-20260925.md``); ``collect.py`` owns the
@@ -64,6 +65,8 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
         async with async_session_maker() as asset_session:
             offered_images = await author_images(asset_session, ctx.service, context=ctx.asset_context,
                 manifest=ctx.source_manifest, page_index=index)
+    offer = getattr(ctx, "asset_offer", None)
+    vector_icons = offer.vector[index] if offer is not None else {}
     local_authored = None
     hint = payload.get("repair_hint")
     if ctx.source_reflow and not payload.get("local_layout_attempted"):
@@ -143,7 +146,7 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                     index=index, n=count, instructions=request.instructions,
                     correction_hint=hint,
                     receipt_attempt_ordinal=provider_ordinal,
-                    source_images=offered_images,
+                    source_images={**offered_images, **vector_icons},
                     before_dispatch=before_dispatch,
                     canonical_source_images=ctx.canonical_assets,
                     **ctx.physical_kwargs,
@@ -172,6 +175,11 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
     payload["model_attempt_count"] = _provider_attempt_count(payload)
     payload["inflight"] = None
     payload["svg_content"] = svg
+    if offer is not None and offer.slots[index]:
+        # Per-page AssetOffer receipt; raster slots are also accounted for by
+        # the render step's sourceImages check, vector icons only here.
+        payload["assetOffer"] = {"slots": offer.slots[index], "vectorIcons": {
+            "offered": sorted(vector_icons), "used": authored.receipt.get("vector_icons_used", [])}}
     if ctx.source_reflow:
         payload["source_preservation"] = authored.receipt.get("source_preservation")
         if payload["source_preservation"] is not None:

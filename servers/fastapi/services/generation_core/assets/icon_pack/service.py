@@ -19,10 +19,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Sequence
 
-from services.authored_icon_pack.library import lookup_reusable_icons
-from services.authored_icon_pack.checks import check_no_text, check_transparency
-from services.authored_icon_pack.provider import TransparentPngProvider
-from services.authored_icon_pack.sheet import (
+from services.generation_core.assets.icon_pack.library import lookup_reusable_icons
+from services.generation_core.assets.icon_pack.checks import check_no_text, check_transparency
+from services.generation_core.assets.icon_pack.provider import TransparentPngProvider
+from services.generation_core.assets.icon_pack.sheet import (
     MAX_CONCEPTS_PER_SHEET,
     analyze_sheet,
     build_sheet_prompt,
@@ -32,7 +32,7 @@ from services.authored_icon_pack.sheet import (
     split_cells,
     trim_cell,
 )
-from services.authored_icon_pack.store import (
+from services.generation_core.assets.icon_pack.store import (
     IconEntry,
     IconPack,
     concept_key,

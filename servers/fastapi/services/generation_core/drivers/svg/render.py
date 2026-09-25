@@ -168,6 +168,8 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             rendered.quality.setdefault("failures", []).append({
                 "kind": "source_image_omitted", "slotIds": omitted,
             })
+    from services.generation_core.drivers.svg.embed_assets import apply_vector_icon_quality
+    apply_vector_icon_quality(rendered.quality, payload)
     payload.update(svg_content=final, source_digest=sha256(final.encode()).hexdigest(),
                    quality=rendered.quality, **write_png(rendered.png))
     if ctx.source_reflow:
