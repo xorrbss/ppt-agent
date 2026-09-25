@@ -5,13 +5,14 @@ These replace two blanket guards in ``execute_svg_workspace_export``:
 ``svg_release_quality_review_not_supported``, and any ``font_embedding``
 request used to always raise ``svg_font_embedding_not_supported`` -- neither
 looked at the actual request or receipt content. See C1-quality.md (session
-design folder) for the ``visual_review`` field contract this gate reads.
+design folder) for the ``visualReview`` field contract this gate reads.
 """
 
 from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from types import SimpleNamespace
 import uuid
 
@@ -21,19 +22,23 @@ from services import svg_export_operation
 from services.document_canvas import document_canvas_for_orientation
 from services.public_export_errors import PublicExportOperationError
 from services.svg_export_release_gate import require_release_v1_receipt as _require_release_v1_receipt
+from services.workspace_export_quality_evidence import _legacy_fidelity_public_quality_receipt
 from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
 
 OWNER = uuid.uuid4()
 
 
 def _passing_receipt(**overrides) -> dict:
+    # Wire keys, not the QualityReceiptV3 model's Python field names: both
+    # receipt builders this gate reads dump with by_alias=True (see
+    # svg_export_release_gate.py's docstring for the live bug this caught).
     base = {
-        "visual_review": {
+        "visualReview": {
             "required": True,
             "status": "passed",
             "evidence": {"advisoryDigest": "sha256:" + "a" * 64},
         },
-        "release_readiness": "ready",
+        "releaseReadiness": "ready",
     }
     base.update(overrides)
     return base
@@ -45,19 +50,19 @@ def test_require_release_v1_receipt_accepts_a_passed_advisory_with_digest():
 
 def test_require_release_v1_receipt_rejects_missing_visual_review():
     with pytest.raises(NonRetryableWorkspaceOperationError, match="svg_release_quality_receipt_invalid"):
-        _require_release_v1_receipt({"release_readiness": "ready"})
+        _require_release_v1_receipt({"releaseReadiness": "ready"})
 
 
 def test_require_release_v1_receipt_rejects_a_status_other_than_passed():
-    receipt = _passing_receipt(visual_review={"required": True, "status": "failed",
-                                              "reasonCode": "svg_template_visual_review_required"})
+    receipt = _passing_receipt(visualReview={"required": True, "status": "failed",
+                                             "reasonCode": "svg_template_visual_review_required"})
     with pytest.raises(NonRetryableWorkspaceOperationError,
                         match="svg_release_quality_visual_review_not_passed"):
         _require_release_v1_receipt(receipt)
 
 
 def test_require_release_v1_receipt_rejects_a_passed_status_without_advisory_digest():
-    receipt = _passing_receipt(visual_review={"required": True, "status": "passed"})
+    receipt = _passing_receipt(visualReview={"required": True, "status": "passed"})
     with pytest.raises(NonRetryableWorkspaceOperationError,
                         match="svg_release_quality_advisory_evidence_missing"):
         _require_release_v1_receipt(receipt)
@@ -65,7 +70,30 @@ def test_require_release_v1_receipt_rejects_a_passed_status_without_advisory_dig
 
 def test_require_release_v1_receipt_rejects_a_blocked_release_readiness():
     with pytest.raises(NonRetryableWorkspaceOperationError, match="svg_release_quality_not_release_ready"):
-        _require_release_v1_receipt(_passing_receipt(release_readiness="blocked"))
+        _require_release_v1_receipt(_passing_receipt(releaseReadiness="blocked"))
+
+
+def test_require_release_v1_receipt_reads_a_real_receipt_without_a_shape_error():
+    """Regression: a hand-typed snake_case fixture (visual_review/
+    release_readiness) previously matched this gate's own bug instead of
+    the real wire shape, so the unit tests passed while every live request
+    failed with svg_release_quality_receipt_invalid before ever reading the
+    advisory status. Exercise the actual receipt builder instead."""
+    receipt = _legacy_fidelity_public_quality_receipt(
+        quality_receipt_id="quality:test:test",
+        operation_id=str(uuid.uuid4()),
+        presentation_id=str(uuid.uuid4()),
+        artifact_digest="sha256:" + "a" * 64,
+        source_revision=1,
+        scene_digest="sha256:" + "b" * 64,
+        evaluated_at=datetime.now(timezone.utc),
+    )
+    # The real (unfixed, pre-c1-quality) receipt reports visualReview as
+    # unavailable/failed -- it must reach that check, not fail the shape
+    # check first.
+    with pytest.raises(NonRetryableWorkspaceOperationError) as caught:
+        _require_release_v1_receipt(receipt)
+    assert caught.value.code != "svg_release_quality_receipt_invalid"
 
 
 def _canvas() -> dict:
