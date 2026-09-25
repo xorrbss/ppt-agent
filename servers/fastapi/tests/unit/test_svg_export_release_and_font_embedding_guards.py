@@ -27,13 +27,14 @@ OWNER = uuid.uuid4()
 
 
 def _passing_receipt(**overrides) -> dict:
+    # The public wire dump: camelCase keys, advisory digest inside measurements.
     base = {
-        "visual_review": {
+        "visualReview": {
             "required": True,
             "status": "passed",
-            "evidence": {"advisoryDigest": "sha256:" + "a" * 64},
+            "evidence": {"measurements": {"advisoryDigest": "sha256:" + "a" * 64}},
         },
-        "release_readiness": "ready",
+        "releaseReadiness": "ready",
     }
     base.update(overrides)
     return base
@@ -45,19 +46,19 @@ def test_require_release_v1_receipt_accepts_a_passed_advisory_with_digest():
 
 def test_require_release_v1_receipt_rejects_missing_visual_review():
     with pytest.raises(NonRetryableWorkspaceOperationError, match="svg_release_quality_receipt_invalid"):
-        _require_release_v1_receipt({"release_readiness": "ready"})
+        _require_release_v1_receipt({"releaseReadiness": "ready"})
 
 
 def test_require_release_v1_receipt_rejects_a_status_other_than_passed():
-    receipt = _passing_receipt(visual_review={"required": True, "status": "failed",
-                                              "reasonCode": "svg_template_visual_review_required"})
+    receipt = _passing_receipt(visualReview={"required": True, "status": "failed",
+                                             "reasonCode": "svg_visual_review_flagged"})
     with pytest.raises(NonRetryableWorkspaceOperationError,
                         match="svg_release_quality_visual_review_not_passed"):
         _require_release_v1_receipt(receipt)
 
 
 def test_require_release_v1_receipt_rejects_a_passed_status_without_advisory_digest():
-    receipt = _passing_receipt(visual_review={"required": True, "status": "passed"})
+    receipt = _passing_receipt(visualReview={"required": True, "status": "passed"})
     with pytest.raises(NonRetryableWorkspaceOperationError,
                         match="svg_release_quality_advisory_evidence_missing"):
         _require_release_v1_receipt(receipt)
@@ -65,7 +66,7 @@ def test_require_release_v1_receipt_rejects_a_passed_status_without_advisory_dig
 
 def test_require_release_v1_receipt_rejects_a_blocked_release_readiness():
     with pytest.raises(NonRetryableWorkspaceOperationError, match="svg_release_quality_not_release_ready"):
-        _require_release_v1_receipt(_passing_receipt(release_readiness="blocked"))
+        _require_release_v1_receipt(_passing_receipt(releaseReadiness="blocked"))
 
 
 def _canvas() -> dict:
