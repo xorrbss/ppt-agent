@@ -268,10 +268,10 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         raise NonRetryableWorkspaceOperationError("presentation_not_found")
     if presentation.revision != claim.expected_revision:
         raise NonRetryableWorkspaceOperationError("stale_presentation_revision")
-    quality_policy = claim.request_payload.get("quality_policy")
+    command_context = claim.request_payload.get("context") or {}
+    quality_policy = command_context.get("quality_policy") or claim.request_payload.get("quality_policy")
     if quality_policy not in (None, "release-v1"):
         raise NonRetryableWorkspaceOperationError("svg_quality_policy_invalid")
-    command_context = claim.request_payload.get("context") or {}
     font_embedding = bool(
         command_context.get("font_embedding") is True
         or claim.request_payload.get("font_embedding") is True
