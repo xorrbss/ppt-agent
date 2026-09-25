@@ -110,12 +110,21 @@ def _resolve_workspace_export_options(
     claim_payload: Mapping[str, Any],
     *,
     export_format: str,
+    is_svg: bool = False,
 ) -> tuple[Literal["fidelity", "hybrid"], bool | None]:
     """Resolve existing workspace wire values without implicit Hybrid opt-in.
 
     ``font_embedding=None`` means the command context named no such key, so
     the caller can apply I1's CJK default once the language is known;
     ``True``/``False`` is explicit and always wins.
+
+    ``pptx_mode`` (fidelity/hybrid) and the "font embedding requires hybrid"
+    rule below are authored-only: svg has no pptx_mode concept at all (its
+    own native conversion is neither fidelity-raster nor editable-hybrid),
+    and its font_embedding request is validated separately inside
+    ``execute_svg_workspace_export``/``render_and_export_svgs``. ``is_svg``
+    skips the authored-only rule so a real svg font_embedding request is not
+    rejected before it ever reaches that svg-side validation.
     """
 
     command_context = _context(claim_payload)
@@ -130,7 +139,11 @@ def _resolve_workspace_export_options(
     font_embedding: bool | None = command_context.get("font_embedding", None)
     if font_embedding is not None and not isinstance(font_embedding, bool):
         raise NonRetryableWorkspaceOperationError("workspace_export_font_embedding_invalid")
-    if font_embedding and (export_format != "pptx" or pptx_mode != "hybrid"):
+    if (
+        font_embedding
+        and not is_svg
+        and (export_format != "pptx" or pptx_mode != "hybrid")
+    ):
         raise NonRetryableWorkspaceOperationError("workspace_export_font_embedding_requires_hybrid")
     return pptx_mode, font_embedding
 
@@ -204,10 +217,6 @@ class WorkspaceExportOperationHandler:
             raise NonRetryableWorkspaceOperationError("workspace_export_format_invalid")
         if claim.expected_revision is None:
             raise NonRetryableWorkspaceOperationError("workspace_expected_revision_required")
-        pptx_mode, font_embedding_requested = _resolve_workspace_export_options(
-            claim.request_payload,
-            export_format=export_format,
-        )
 
         await context.raise_if_cancelled()
         public_tenant_id: str | None = None
@@ -224,6 +233,17 @@ class WorkspaceExportOperationHandler:
             presentation = await session.get(PresentationModel, claim.presentation_id)
             if presentation is None:
                 raise NonRetryableWorkspaceOperationError("presentation_not_found")
+            # "hybrid" pptx_mode and the font-embedding-requires-hybrid rule
+            # below are authored-only concepts (svg has no pptx_mode at all --
+            # its own font_embedding request is validated inside
+            # execute_svg_workspace_export/render_and_export_svgs instead),
+            # so this needs presentation.mode, which is why it now runs after
+            # the presentation load below rather than before it.
+            pptx_mode, font_embedding_requested = _resolve_workspace_export_options(
+                claim.request_payload,
+                export_format=export_format,
+                is_svg=presentation.mode == "svg",
+            )
             # I1 (D21): default True for a CJK deck's hybrid PPTX export when
             # the caller said nothing; an explicit value above always wins.
             font_embedding = resolve_font_embedding_default(

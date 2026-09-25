@@ -64,6 +64,30 @@ def test_workspace_export_rejects_invalid_or_implicit_hybrid_options(
     assert caught.value.code == error_code
 
 
+def test_svg_font_embedding_does_not_require_hybrid_mode() -> None:
+    """svg has no pptx_mode concept; its own font_embedding request is
+    validated inside execute_svg_workspace_export/render_and_export_svgs,
+    not here. Regression: this used to reject every real svg font_embedding
+    request with workspace_export_font_embedding_requires_hybrid, since svg
+    never sets pptx_mode="hybrid" (an authored-only value) -- found live on
+    a real request (2026-09-26)."""
+    assert _resolve_workspace_export_options(
+        {"context": {"font_embedding": True}},
+        export_format="pptx",
+        is_svg=True,
+    ) == ("fidelity", True)
+
+
+def test_authored_font_embedding_still_requires_hybrid_mode_when_is_svg_is_false() -> None:
+    with pytest.raises(NonRetryableWorkspaceOperationError) as caught:
+        _resolve_workspace_export_options(
+            {"context": {"font_embedding": True}},
+            export_format="pptx",
+            is_svg=False,
+        )
+    assert caught.value.code == "workspace_export_font_embedding_requires_hybrid"
+
+
 def test_native_master_export_requires_exact_sealed_pin_and_fidelity_mode() -> None:
     digest = f"sha256:{'a' * 64}"
     layout_digest = f"sha256:{'b' * 64}"
