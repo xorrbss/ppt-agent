@@ -6,8 +6,9 @@ own arrangement instead, block by block, at the uniform scale that picture
 would have had (so it fits whenever the picture fits):
 
 * a group is laid out in its scaled source boxes: editable when every text
-  member fits its box at or above the 9.5 pt floor and every capture stays
-  legible, otherwise as its group crop (``dense_group_pixel_fallback``);
+  member fits at or above the 9.5 pt floor (in its box, or grown into the
+  free space right of and below it) and every capture stays legible,
+  otherwise as its group crop (``dense_group_pixel_fallback``);
 * an ungrouped text or table is editable in its box, otherwise a crop of its
   own box; an ungrouped capture is its own crop in its box;
 * an editable block whose text would touch any other placement (a crop that
@@ -38,6 +39,7 @@ from services.source_content.raster_redesign_tree import Item, Placed
 
 # Laid-out text may use this much more height than its source box (our line height is looser).
 TEXT_SLACK = 1.15
+ROOM_GAP = 4.0  # units kept free between text grown into free space and the next content
 
 
 @dataclass
@@ -58,9 +60,12 @@ class _Block:
 
 def _blocks(page, items) -> list[_Block]:
     groups, regions = group_fallbacks(page), region_fallbacks(page)
+    source_group = {region.region_id: getattr(region, "group_id", None) for region in page.regions}
     blocks: dict[str, _Block] = {}
     for item in items:
-        group = getattr(item.region, "group_id", None)
+        # The analysis' own groups (a reflow may have anchored loose items to a group; the
+        # group crop does not show them, so here they stay their own blocks).
+        group = source_group.get(item.region.region_id)
         if group and group not in NAMED_GROUPS:
             key = f"group:{group}"
             fallback = groups.get(group)
@@ -69,6 +74,10 @@ def _blocks(page, items) -> list[_Block]:
             fallback = regions.get(item.region.region_id) if item.kind != "image" else None
         blocks.setdefault(key, _Block(key, [], fallback)).items.append(item)
     return list(blocks.values())
+
+
+def _corners(r):
+    return r[0], r[1], r[0] + r[2], r[1] + r[3]
 
 
 def _union(boxes):
@@ -89,8 +98,8 @@ def _legible(item, scale) -> bool:
     return units_per_px + 1e-6 >= minimum
 
 
-def _fit_text(item, w, h):
-    for size in TEXT_FONTS:
+def _fit_text(item, w, h, fonts=TEXT_FONTS):
+    for size in fonts:
         try:
             lines, height = layout_paragraphs(list(item.paragraphs), w, size, body_color=BODY_TEXT, heading_color=NAVY)
         except ValueError:
@@ -108,12 +117,25 @@ def _fit_table(item, w, h):
     return None
 
 
-def _editable(block, rect, scale) -> list[Placed] | None:
+def _room(item, rect, obstacles, edges):
+    """(width, height) free to the right of and below an item's box, up to the next content or the edge."""
+    x, y, w, h = rect(item.region.bbox)
+    others = [o for key, o in obstacles if key != id(item)]
+    right = min([o[0] for o in others if o[0] >= x + w - 0.5 and o[1] < y + h and o[3] > y] + [edges[0]])
+    width = max(w, right - x - ROOM_GAP)
+    bottom = min([o[1] for o in others if o[1] >= y + h - 0.5 and o[0] < x + width and o[2] > x] + [edges[1]])
+    return width, max(h, bottom - y - ROOM_GAP)
+
+
+def _editable(block, rect, scale, room) -> list[Placed] | None:
     placements = []
     for item in block.items:
         x, y, w, h = rect(item.region.bbox)
         if item.kind == "text":
             fitted = _fit_text(item, w, h)
+            if fitted is None:  # the floor font needs more room: use the free space beside/below it
+                w, free = room(item)
+                fitted = _fit_text(item, w, free / TEXT_SLACK, (FLOOR_FONT,))  # grown text stays small
             if fitted is None:
                 return None
             placements.append(Placed("text", x, y, w, fitted[1], item, lines=fitted[0]))
@@ -202,11 +224,16 @@ def geometry_plan(page, items, box) -> GeometryPlan | None:
     def rect(source):
         return left + (source.x - ux) * scale, by + (source.y - uy) * scale, source.width * scale, source.height * scale
 
+    obstacles = [(id(item), _corners(rect(item.region.bbox))) for item in items]
+
+    def room(item):
+        return _room(item, rect, obstacles, (bx + bw, by + bh))
+
     blocks = _blocks(page, items)
     for _ in range(len(blocks) + 1):
         carried = set()
         for block in blocks:
-            placements = None if block.pixels else _editable(block, rect, scale)
+            placements = None if block.pixels else _editable(block, rect, scale, room)
             if placements is None:
                 block.pixels = True
                 placements = _pixels(block, rect, scale)

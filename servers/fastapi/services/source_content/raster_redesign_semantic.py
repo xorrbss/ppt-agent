@@ -76,7 +76,8 @@ def blocks(items, headings: bool = False) -> list[Block]:
         if headings and candidates[index] and not peers:
             # A heading-only group introduces the next cards: a plain heading band.
             result.extend(Block("text", (member,)) for member in members)
-        elif any(member.kind == "text" or member.inline for member in members):  # pixel lines are text too
+        elif any(member.kind == "text" or member.inline or member.min_scale for member in members):
+            # pixel lines and pixel-carried text (a group crop, an unresolved table) are text too
             result.append(Block("card", _visual_order(members)))
         else:  # a group without text is a set of captures/tables
             result.extend(Block("inline" if member.inline else member.kind, (member,)) for member in members)

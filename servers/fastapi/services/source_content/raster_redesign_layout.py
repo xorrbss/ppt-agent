@@ -19,6 +19,8 @@ import re
 from dataclasses import dataclass
 from xml.sax.saxutils import escape
 
+from services.source_content.raster_layout_coherence import coherence_issue
+from services.source_content.raster_layout_evidence import background_id, layout_advisories
 from services.source_content.raster_layout_geometry import geometry_plan
 from services.source_content.raster_layout_parts import page_parts
 from services.source_content.raster_redesign_chrome import render_footer_members
@@ -57,6 +59,7 @@ __all__ = ["RedesignRender", "render_redesign_page", "render_redesign_page_svg",
            "redesign_layout_issue", "instruction_density"]
 
 WHITE, PANEL = "#FFFFFF", "#F7FBFF"
+INCOHERENT = "raster_redesign_incoherent:"
 PAGE_NUMBER_FONT = 14.0
 _COMPACT = re.compile(r"compact|dense|concise|촘촘|간결|압축|빽빽", re.IGNORECASE)
 
@@ -114,7 +117,7 @@ def _content_xml(placed: Placed, page_number: int) -> list[str]:
 
 
 def _body(analysis, items, page_number, top, width, height, geo, instruction, semantic=None,
-          compact=False) -> list[str]:
+          compact=False, accept=None) -> list[str]:
     bottom = height - geo["footer"] - (8.0 if compact else 14.0)
     box = (geo["margin"], top, width - 2 * geo["margin"], bottom - top)
     if box[3] <= 0:
@@ -123,7 +126,7 @@ def _body(analysis, items, page_number, top, width, height, geo, instruction, se
     if items:
         plan = plan_content(
             items, box, source_size=(analysis.source.canvas_width_emu, analysis.source.canvas_height_emu),
-            density=instruction_density(instruction), semantic=semantic,
+            density=instruction_density(instruction), semantic=semantic, accept=accept,
         )
         for placed in plan.placements:
             if placed.y + placed.h > bottom + 0.5 or placed.x + placed.w > width - geo["margin"] + 0.5:
@@ -136,6 +139,8 @@ def _body(analysis, items, page_number, top, width, height, geo, instruction, se
 class RedesignRender:
     svg: str
     advisories: tuple[dict, ...] = ()  # e.g. dense_group_pixel_fallback per replaced group
+    composition: str = "reflow"  # "reflow" | "geometry" | "page-content"
+    incoherence: str | None = None  # the coherence rule a rejected reflow violated
 
 
 def render_redesign_page_svg(analysis, page_number: int, *, instruction: str | None = None) -> str:
@@ -164,13 +169,22 @@ def render_redesign_page(analysis, page_number: int, *, instruction: str | None 
     title, members, items = parts.title, parts.footer, parts.items
     kickers, subtitles, sides, header_images = parts.kickers, parts.subtitles, parts.sides, parts.header_images
     chosen, candidates, semantic = [], None, has_groups(items)
+    composition, incoherence, reason = "reflow", None, None
+    args = (analysis, page_number, geo, width, height, instruction, title, header_images, kickers, subtitles, sides)
     while True:
         attempt = apply_fallbacks(items, chosen)
+        # A reflow must keep the source's structure (sections, order, labels,
+        # composites): only admissible compositions are chosen.
+        accept = _coherence(analysis, page, chosen)
         try:
-            header_xml, body = _compose(analysis, attempt, page_number, geo, width, height, instruction,
-                                        title, header_images, kickers, subtitles, sides, semantic)
+            header_xml, body = _compose(*args, attempt, semantic, accept)
+            composition = "page-content" if chosen and chosen[0].group_id == PAGE_CONTENT else "reflow"
             break
         except ValueError as error:
+            if str(error).startswith(INCOHERENT):
+                incoherence = reason = str(error)[len(INCOHERENT):]
+                header_xml, body, chosen, composition = _faithful(analysis, page, items, chosen, semantic, args)
+                break
             if str(error) != "raster_redesign_content_overflow":
                 raise
             if candidates is None:
@@ -184,19 +198,21 @@ def render_redesign_page(analysis, page_number: int, *, instruction: str | None 
             # arrangement, block by block (editable where it fits, else each
             # group as its crop); only when even that is not legible, as one
             # crop of the content area (title stays editable).
-            geometry = _geometry_compose(analysis, page, items, page_number, geo, width, height,
-                                         title, header_images, kickers, subtitles, sides)
+            reason = "content_overflow"
+            geometry = _geometry_compose(analysis, page, items, *args[1:5], *args[6:])
             if geometry is not None:
-                header_xml, body, chosen = geometry
+                (header_xml, body, chosen), composition = geometry, "geometry"
                 break
             content = page_content_fallback(analysis, page)
             if content is None:
                 raise
             chosen = [content]
+    marker = background_id(composition, reason)  # receipt evidence of a fallback composition
+    marker = f' id="{marker}"' if marker else ""
     xml = [
         f'<svg xmlns="http://www.w3.org/2000/svg" id="{RASTER_REDESIGN_ROOT_ID}" width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}">',
-        f'<rect width="{width}" height="{height}" fill="{WHITE}"/>',
+        f'<rect{marker} width="{width}" height="{height}" fill="{WHITE}"/>',
         *header_xml, *body, *_footer(page_number, width, height, geo, members), "</svg>",
     ]
     result = "".join(xml)
@@ -205,12 +221,13 @@ def render_redesign_page(analysis, page_number: int, *, instruction: str | None 
         raise ValueError("raster_redesign_region_drawn_twice")  # every region is drawn at most once
     if len(result.encode("utf-8")) >= 2 * 1024 * 1024:
         raise ValueError("raster_svg_size_limit")
-    return RedesignRender(result, advisories(chosen))
+    return RedesignRender(result, advisories(chosen) + layout_advisories(composition, reason), composition,
+                          incoherence)
 
 
-def _compose(analysis, items, page_number, geo, width, height, instruction,
-             title, header_images, kickers, subtitles, sides, semantic=None):
-    """Regular header first, then a compact one; raises on overflow."""
+def _compose(analysis, page_number, geo, width, height, instruction,
+             title, header_images, kickers, subtitles, sides, items, semantic=None, accept=None):
+    """Regular header first, then a compact one; raises on overflow (or when nothing is admissible)."""
     for compact in (False, True):
         header_xml, header_bottom = render_header(
             title=title, images=header_images, kickers=kickers, subtitles=subtitles, sides=sides,
@@ -219,12 +236,36 @@ def _compose(analysis, items, page_number, geo, width, height, instruction,
         try:
             gap = geo["gap"] * (0.6 if compact else 1.0)  # compact header: tighter gap under the rule
             body = _body(analysis, items, page_number, header_bottom + gap, width, height, geo, instruction,
-                         semantic, compact)
+                         semantic, compact, accept)
             return header_xml, body
         except ValueError as error:
             if compact or str(error) != "raster_redesign_content_overflow":
                 raise
     raise AssertionError("unreachable")
+
+
+def _coherence(analysis, page, chosen):
+    """``accept`` for plan_content: None when a composition keeps the source structure."""
+    return lambda placements: coherence_issue(analysis, page, placements, chosen)
+
+
+def _faithful(analysis, page, items, chosen, semantic, args):
+    """No admissible reflow: the source arrangement, else one page-content crop, else the best reflow.
+
+    Returns (header, body, chosen, composition).
+    """
+    geometry = _geometry_compose(analysis, page, items, *args[1:5], *args[6:])
+    if geometry is not None:
+        return (*geometry, "geometry")
+    content = page_content_fallback(analysis, page)
+    if content is not None:
+        try:
+            return (*_compose(*args, apply_fallbacks(items, [content]), semantic), [content], "page-content")
+        except ValueError as error:
+            if str(error) != "raster_redesign_content_overflow":
+                raise
+    return (*_compose(*args, apply_fallbacks(items, chosen), semantic), chosen, "reflow")
+
 
 def _geometry_compose(analysis, page, items, page_number, geo, width, height,
                       title, header_images, kickers, subtitles, sides):

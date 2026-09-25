@@ -55,14 +55,15 @@ def group_fallbacks(page) -> dict[str, FallbackGroup]:
         boxes = [region.source_pixel_bbox for region in regions if getattr(region, "source_pixel_bbox", None)]
         if len(boxes) != len(regions):
             continue
-        region = _union_region(page.page_number, group, regions, boxes, reference)
+        # The crop stays a member of its group, so a reflow keeps it at the group's place.
+        region = _union_region(page.page_number, group, regions, boxes, reference, group_id=group)
         inside = [other for other in page.regions if _contained(other, region.source_pixel_bbox)]
         ids = tuple(r.region_id for r in [*regions, *inside])
         result[group] = FallbackGroup(group, region, ids, legible_min_scale(page, ids))
     return result
 
 
-def _union_region(page_number, group, regions, boxes, reference) -> RasterRegion:
+def _union_region(page_number, group, regions, boxes, reference, group_id=None) -> RasterRegion:
     left, top = min(b[0] for b in boxes), min(b[1] for b in boxes)
     right, bottom = max(b[0] + b[2] for b in boxes), max(b[1] + b[3] for b in boxes)
     emu = [region.bbox for region in regions]
@@ -71,7 +72,7 @@ def _union_region(page_number, group, regions, boxes, reference) -> RasterRegion
         region_id=fallback_region_id(page_number, group), page_number=page_number, role="screenshot",
         bbox=RasterBox(x=ex, y=ey, width=max(b.x + b.width for b in emu) - ex,
                        height=max(b.y + b.height for b in emu) - ey),
-        z_order=0, review_required=False,
+        z_order=0, review_required=False, group_id=group_id,
         source_occurrence_id=getattr(reference, "source_occurrence_id", None),
         source_media_part=getattr(reference, "source_media_part", None),
         crop_source_sha256=getattr(reference, "crop_source_sha256", None),
@@ -117,8 +118,10 @@ def page_content_fallback(analysis, page) -> FallbackGroup | None:
         return None
     region = _union_region(page.page_number, PAGE_CONTENT, regions,
                            [region.source_pixel_bbox for region in regions], getattr(page, "reference_region", None))
-    inside = [other for other in page.regions if other not in regions and _contained(other, region.source_pixel_bbox)
-              and other.region_id not in {item.region.region_id for item in header_images}]
+    own = {r.region_id for r in regions}
+    own |= {item.region.region_id for item in header_images}
+    inside = [other for other in page.regions
+              if other.region_id not in own and _contained(other, region.source_pixel_bbox)]
     ids = tuple(r.region_id for r in [*regions, *inside])
     return FallbackGroup(PAGE_CONTENT, region, ids, legible_min_scale(page, ids))
 
@@ -259,4 +262,6 @@ def advisories_from_svg(analysis, page, svg: str) -> tuple[dict, ...]:
     if raster_slot_id(page.page_number, fallback_region_id(page.page_number, PAGE_CONTENT)) in used:
         content = page_content_fallback(analysis, page)  # only built when the SVG actually uses it
         chosen += [content] if content is not None else []
-    return advisories(chosen)
+    from services.source_content.raster_layout_evidence import layout_advisories_from_svg
+
+    return advisories(chosen) + layout_advisories_from_svg(svg)

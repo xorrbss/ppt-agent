@@ -423,16 +423,25 @@ def _grid_penalty(runs, columns) -> float:
 
 
 def plan_content(items, box, *, source_size: tuple[float, float], density: str = "regular",
-                 semantic: bool | None = None) -> Plan:
-    """Choose the best fitting composition for ``items`` inside ``box``."""
+                 semantic: bool | None = None, accept=None) -> Plan:
+    """Choose the best fitting composition for ``items`` inside ``box``.
+
+    ``accept(placements)`` returns None for an admissible composition or the
+    reason it is not (the source-coherence check). When compositions fit but
+    none is admissible, raises ``raster_redesign_incoherent:<reason>``.
+    """
+
+    from services.source_content.raster_layout_composite import expand_composites, merge_composites
 
     x, y, w, h = box
+    items = merge_composites(items, source_size)  # touching source tiles stay one picture
     cache = _Cache()
     has_text = any(item.kind == "text" for item in items)
     has_table = any(item.kind == "table" for item in items)
     single_text = sum(item.kind == "text" for item in items) == 1
     fonts = TEXT_FONTS if density != "compact" else tuple(s for s in TEXT_FONTS if s <= 16.9)
     best: Plan | None = None
+    rejected = None
     # A structured page stays semantic even after every group became pixels.
     semantic = has_groups(items) if semantic is None else semantic
     configs = semantic_configs(items) if semantic else _configs(items)
@@ -464,9 +473,14 @@ def plan_content(items, box, *, source_size: tuple[float, float], density: str =
                     - (_split_imbalance(node, t, h) if mode == "semantic-split" else 0.0)
                 )
                 if best is None or score > best.score + 1e-9:
+                    issue = accept(expand_composites(placements)) if accept is not None else None
+                    if issue is not None:
+                        rejected = rejected or issue
+                        continue
                     best = Plan(placements, score, used, f"{mode}-k{k}-r{per_row}-{ratio}-f{f:.1f}-t{tf:.1f}")
     if best is None:
-        raise ValueError("raster_redesign_content_overflow")
+        raise ValueError(f"raster_redesign_incoherent:{rejected}" if rejected else "raster_redesign_content_overflow")
+    best.placements = expand_composites(best.placements)
     for placed in best.placements:
         placed.y += y
     return best

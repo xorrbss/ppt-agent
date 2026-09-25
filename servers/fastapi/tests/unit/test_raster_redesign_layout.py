@@ -301,7 +301,9 @@ def test_dense_page_uses_minimal_group_pixel_fallback_with_advisories():
     analysis = fx.analysis(_dense_grouped_page())
     result = render_redesign_page(analysis, 1)
     assert result.advisories and all(a["code"] == "dense_group_pixel_fallback" for a in result.advisories)
-    assert len(result.advisories) < 8  # minimal set, not every group
+    # The fewest groups that give a fitting reflow which keeps the source order
+    # (crops in their groups' places, never a side gallery of cards).
+    assert result.composition == "reflow" and result.incoherence is None
     assert raster_page_render_advisories(analysis, 1, result.svg) == result.advisories
     root = ET.fromstring(result.svg)
     images = {node.get("href"): node for node in root.iter(f"{NS}image")}
@@ -365,8 +367,9 @@ def test_dense_page_keeps_source_arrangement_group_by_group():
     analysis = fx.analysis(fx._page(1, fx._ordered(regions)))
     result = render_redesign_page(analysis, 1)
     # Not one page-content picture: each group is its own crop, in the source arrangement.
-    assert [a["groupId"] for a in result.advisories] == [f"g{index}" for index in range(6)]
-    assert all(a["code"] == "dense_group_pixel_fallback" for a in result.advisories)
+    assert [a["groupId"] for a in result.advisories] == [*(f"g{index}" for index in range(6)), "source-geometry"]
+    assert all(a["code"] == "dense_group_pixel_fallback" for a in result.advisories[:-1])
+    assert result.advisories[-1]["reason"] == "content_overflow"
     assert raster_page_render_advisories(analysis, 1, result.svg) == result.advisories
     texts = dict(_texts(result.svg))
     assert _dense(texts["rd-title"]) == _dense("원본 배치를 유지하는 조밀한 페이지")  # title stays editable
