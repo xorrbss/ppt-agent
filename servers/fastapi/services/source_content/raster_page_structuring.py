@@ -18,6 +18,7 @@ from services.source_content.raster_ink_coverage import cover_uncovered_ink
 from services.source_content.raster_number_guard import guard_numbers
 from services.source_content.raster_paragraphs import absorb_fragments
 from services.source_content.raster_captures import PageContext, detect_captures
+from services.source_content.raster_capture_evidence import released_line_count, verify_screenshot_claims
 from services.source_content.raster_llm_tables import restructure_tables
 from services.source_content.raster_llm_transcribe import request_transcripts
 from services.source_content.raster_tight_boxes import tighten
@@ -102,6 +103,8 @@ def _structured_plan(image, gray, words, lines, structurer, executable, tessdata
                 if attempt:
                     raise
         raw = restructure_tables(page, raw, structurer) if raw else None
+        if raw:
+            raw, candidates = _verified_captures(page, candidates, raw)
         targeted = targeted_number_reads(image, page.words, page.lines, executable=executable, tessdata=tessdata)
         transcripts = _transcripts(page, raw, structurer)
         hangul = targeted_hangul_reads(image, page.words, page.lines, executable=executable, tessdata=tessdata)
@@ -147,6 +150,22 @@ def _exactly_once(plan: PagePlan, words, gray, clusters, image) -> PagePlan:
         logger.warning("raster exactly-once repair rejected: plan not lossless")
         return plan
     return current
+
+
+def _verified_captures(page, candidates, raw):
+    """Screenshot claims checked against layout evidence (``raster_capture_evidence``).
+
+    A verification bug keeps the model's claims as they were: never fail the page."""
+
+    try:
+        verified, candidates_out, reviews = verify_screenshot_claims(page, candidates, raw)
+    except Exception as error:
+        logger.warning("raster capture verification failed: %s", type(error).__name__)
+        return raw, candidates
+    released = released_line_count(reviews)
+    if released:
+        logger.info("raster capture verification released %d screenshot line(s) as slide text", released)
+    return verified, candidates_out
 
 
 def _transcripts(page, raw, structurer) -> dict[int, str]:
