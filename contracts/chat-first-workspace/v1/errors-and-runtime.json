@@ -781,6 +781,48 @@
       "retryable": true
     },
     {
+      "code": "raster_authenticated_scope_required",
+      "status_code": 422,
+      "safe_message": "This analysis could not be authenticated. Sign in and try again.",
+      "retryable": false
+    },
+    {
+      "code": "raster_analysis_mode_invalid",
+      "status_code": 422,
+      "safe_message": "Choose a supported analysis mode.",
+      "retryable": false
+    },
+    {
+      "code": "raster_source_binding_invalid",
+      "status_code": 409,
+      "safe_message": "The uploaded file no longer matches this request. Upload it again.",
+      "retryable": false
+    },
+    {
+      "code": "raster_review_scope_mismatch",
+      "status_code": 409,
+      "safe_message": "This analysis belongs to a different workspace. Start a new analysis.",
+      "retryable": false
+    },
+    {
+      "code": "raster_auto_review_binding_invalid",
+      "status_code": 409,
+      "safe_message": "The analysis mode changed since this review started. Start a new analysis.",
+      "retryable": false
+    },
+    {
+      "code": "raster_auto_review_modified",
+      "status_code": 409,
+      "safe_message": "The analysis changed since it was last reviewed. Start a new analysis.",
+      "retryable": false
+    },
+    {
+      "code": "raster_source_digest_mismatch",
+      "status_code": 422,
+      "safe_message": "The uploaded file changed during analysis. Upload it again.",
+      "retryable": false
+    },
+    {
       "code": "authored_batch_remake_preview_incomplete",
       "status_code": 503,
       "safe_message": "The operation could not finish. Try again.",
