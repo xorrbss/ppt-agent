@@ -6,14 +6,13 @@
 
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, LayoutTemplate } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { LayoutTemplate } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useDispatch, useSelector } from "react-redux";
 
 import Wrapper from "@/components/Wrapper";
 import { Button } from "@/components/ui/button";
-import { notify } from "@/components/ui/sonner";
 import { useUploadLimits } from "@/lib/use-upload-limits";
 import { cn } from "@/lib/utils";
 import {
@@ -22,31 +21,30 @@ import {
 } from "@/store/slices/presentationGenUpload";
 import type { RootState } from "@/store/store";
 import { isAuthoredVnextMasterEnabled } from "@/lib/authored-vnext/master/contracts";
-import type { MasterRevisionEnvelope } from "@/lib/authored-vnext/master/contracts";
 import { AuthoredVnextMasterClient } from "@/lib/authored-vnext/master/client";
-import {
-  clearLastUsedMasterId,
-  masterSelectionFromPublished,
-} from "@/lib/authored-vnext/master/selection-storage";
+import { clearLastUsedMasterId } from "@/lib/authored-vnext/master/selection-storage";
 
 import TemplateSelection from "../../outline/components/TemplateSelection";
 import MasterCatalogDialog from "../../authored-vnext/master-setup/MasterCatalogDialog";
-import type { MasterCatalogEntryMode } from "../../authored-vnext/master-setup/MasterCatalogDialog";
 import { ConfigurationSelects } from "./ConfigurationSelects";
 import { PromptInput } from "./PromptInput";
-import SupportingDoc, { MAX_SUPPORTED_FILES } from "./SupportingDoc";
+import SupportingDoc from "./SupportingDoc";
 import { abortDocumentProcessing } from "./upload-page/abortDocumentProcessing";
 import { useSupportingFiles } from "./upload-page/useSupportingFiles";
 import SourceContentLossDialog from "./upload-page/SourceContentLossDialog";
 import RasterSourceReview from "./upload-page/RasterSourceReview";
 import { useUploadPageState } from "./upload-page/useUploadPageState";
+import { useMasterCatalogController } from "./upload-page/useMasterCatalogController";
+import { useSourceSvgCapability } from "./upload-page/useSourceSvgCapability";
+import { useDashboardPromptHandoff } from "./upload-page/useDashboardPromptHandoff";
+import { SourceContentSummaryPanel } from "./upload-page/SourceContentSummaryPanel";
+import { GenerationStrategySelector } from "./upload-page/GenerationStrategySelector";
+import { GenerateActionRow } from "./upload-page/GenerateActionRow";
 import UploadDesignGallery from "./UploadDesignGallery";
 import { GenerationPreparation } from "../../generation-workspace/GenerationPreparation";
 import { PreviousAttemptNotice } from "./upload-page/PreviousAttemptNotice";
-import AuthoredStylesApi from "../../services/api/authored";
 
 const masterClient = new AuthoredVnextMasterClient();
-const LAST_AI_MASTER_ANALYSIS_KEY = "presenton.authored-vnext.ai-master-analysis.v1";
 
 export interface UploadPageProps {
   /** Component harness seam; production keeps the environment feature gate. */
@@ -74,52 +72,8 @@ const UploadPage = ({
   const generationStrategy = useSelector(
     (state: RootState) => state.pptGenUpload.generationStrategy,
   );
-  const [sourceSvgCapability, setSourceSvgCapability] = useState<boolean | null>(null);
   const [reviewBeforeGeneration, setReviewBeforeGeneration] = useState(false);
-  const [masterCatalogOpen, setMasterCatalogOpen] = useState(false);
-  const [masterCatalogEntryMode, setMasterCatalogEntryMode] =
-    useState<MasterCatalogEntryMode>("catalog");
-  const [lastAnalysisId, setLastAnalysisId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const value = window.localStorage.getItem(LAST_AI_MASTER_ANALYSIS_KEY);
-      return value && /^[0-9a-f]{32}$/.test(value) ? value : null;
-    } catch {
-      return null;
-    }
-  });
-  const [analyzedSourceSignature, setAnalyzedSourceSignature] = useState<string | null>(null);
-  const masterSelectionEpochRef = useRef(0);
-
-  useEffect(() => {
-    if (!masterFeatureEnabled) return;
-    // Company-standard selection is document-scoped. A fresh upload must never
-    // inherit browser state created by another user, automation, or document.
-    ++masterSelectionEpochRef.current;
-    dispatch(setPptGenUploadState({ companyStandard: null }));
-    clearLastUsedMasterId();
-  }, [dispatch, masterFeatureEnabled]);
-
-  useEffect(() => {
-    if (!sourceContentMode) {
-      setSourceSvgCapability(null);
-      return;
-    }
-    let cancelled = false;
-    setSourceSvgCapability(null);
-    void AuthoredStylesApi.getDocumentCanvasCapabilities({
-      generationStrategy: "svg",
-      authoredStyle,
-      sourceContentMode: true,
-      // Company-standard masters are Authored-only and are omitted from this route.
-      hasCompanyStandard: false,
-    }).then((capability) => {
-      if (!cancelled) setSourceSvgCapability(capability.sourceContentSvg.enabled);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [authoredStyle, sourceContentMode]);
+  const sourceSvgCapability = useSourceSvgCapability(sourceContentMode, authoredStyle);
 
   const {
     files,
@@ -140,16 +94,35 @@ const UploadPage = ({
     () => files.find((file) => /\.(?:ppt|pptx)$/i.test(file.name)) ?? null,
     [files],
   );
-  const analysisSourceSignature = analysisSourceFile
-    ? `${analysisSourceFile.name}:${analysisSourceFile.size}:${analysisSourceFile.lastModified}`
-    : null;
-  // A remembered analysis may only be restored while the PPTX it was produced
-  // from is still staged here. Without that guard, "create from PPT" silently
-  // reopens an unrelated analysis left over from an earlier document.
-  const resumeAnalysisId =
-    analysisSourceFile && analyzedSourceSignature === analysisSourceSignature
-      ? lastAnalysisId
-      : null;
+
+  const {
+    masterCatalogOpen,
+    setMasterCatalogOpen,
+    masterCatalogEntryMode,
+    resumeAnalysisId,
+    openMasterCatalog,
+    openAiMasterImport,
+    selectAiMasterSource,
+    rememberAnalysis,
+    applyMaster,
+    clearMaster,
+    masterSelectionEpochRef,
+  } = useMasterCatalogController({
+    dispatch,
+    files,
+    replaceFiles,
+    analysisSourceFile,
+    uploadLimits,
+  });
+
+  useEffect(() => {
+    if (!masterFeatureEnabled) return;
+    // Company-standard selection is document-scoped. A fresh upload must never
+    // inherit browser state created by another user, automation, or document.
+    ++masterSelectionEpochRef.current;
+    dispatch(setPptGenUploadState({ companyStandard: null }));
+    clearLastUsedMasterId();
+  }, [dispatch, masterFeatureEnabled, masterSelectionEpochRef]);
 
   const {
     config,
@@ -192,65 +165,13 @@ const UploadPage = ({
     filesRef,
     selectedThemeId,
     masterFeatureEnabled,
-    onMasterRequired: () => {
-      setMasterCatalogEntryMode("catalog");
-      setMasterCatalogOpen(true);
-    },
+    onMasterRequired: () => openMasterCatalog(),
   });
   useEffect(() => {
     if (!generationAttemptActive && files.length === 0 && sourceContentMode) {
       dispatch(setSourceContentMode(false));
     }
   }, [dispatch, files.length, sourceContentMode, generationAttemptActive]);
-
-  const openMasterCatalog = useCallback(() => {
-    setMasterCatalogEntryMode("catalog");
-    setMasterCatalogOpen(true);
-  }, []);
-
-  // The catalog lists published masters and opens the blank designer; the only
-  // way into the PPTX analysis is this entry mode, so without this control the
-  // whole AI-import flow is unreachable from the app.
-  const openAiMasterImport = useCallback(() => {
-    setMasterCatalogEntryMode("ai-import");
-    setMasterCatalogOpen(true);
-  }, []);
-
-  const selectAiMasterSource = useCallback((file: File) => {
-    if (!/\.(?:ppt|pptx)$/i.test(file.name)) return;
-    if (file.size > uploadLimits.document.bytes) {
-      notify.error(
-        "파일이 너무 큽니다",
-        `파일당 최대 크기는 ${uploadLimits.document.mb}MB입니다.`,
-      );
-      return;
-    }
-    if (!analysisSourceFile && files.length >= MAX_SUPPORTED_FILES) {
-      notify.warning(
-        "최대 파일 수 초과",
-        `문서는 최대 ${MAX_SUPPORTED_FILES}개까지만 업로드할 수 있습니다.`,
-      );
-      return;
-    }
-    const sourceIndex = files.findIndex((item) => /\.(?:ppt|pptx)$/i.test(item.name));
-    if (sourceIndex < 0) replaceFiles([...files, file]);
-    else {
-      const next = [...files];
-      next[sourceIndex] = file;
-      replaceFiles(next);
-    }
-  }, [analysisSourceFile, files, replaceFiles, uploadLimits.document.bytes, uploadLimits.document.mb]);
-
-  const rememberAnalysis = useCallback((analysisId: string | null) => {
-    setLastAnalysisId(analysisId);
-    setAnalyzedSourceSignature(analysisId ? analysisSourceSignature : null);
-    try {
-      if (analysisId) window.localStorage.setItem(LAST_AI_MASTER_ANALYSIS_KEY, analysisId);
-      else window.localStorage.removeItem(LAST_AI_MASTER_ANALYSIS_KEY);
-    } catch {
-      // Server persistence remains authoritative when browser storage is unavailable.
-    }
-  }, [analysisSourceSignature]);
 
   // A master is optional.  Only a previously selected master that failed
   // published-head resolution blocks retrying the authored request.
@@ -286,45 +207,7 @@ const UploadPage = ({
     reviewBeforeGeneration,
   ]);
 
-  const applyMaster = useCallback(
-    (published: MasterRevisionEnvelope) => {
-      // A manual Apply always wins over an in-flight preference restoration.
-      ++masterSelectionEpochRef.current;
-      dispatch(
-        setPptGenUploadState({
-          companyStandard: masterSelectionFromPublished(published),
-        })
-      );
-    },
-    [dispatch]
-  );
-
-  const clearMaster = useCallback(() => {
-    ++masterSelectionEpochRef.current;
-    dispatch(setPptGenUploadState({ companyStandard: null }));
-    clearLastUsedMasterId();
-  }, [dispatch]);
-
-  const dashboardPromptHandoff = useRef<string | null | undefined>(undefined);
-  useEffect(() => {
-    if (previousGenerationAttempt.requestedId) return;
-    try {
-      if (dashboardPromptHandoff.current === undefined) {
-        dashboardPromptHandoff.current = window.sessionStorage.getItem("devax:dashboard-prompt");
-      }
-      const dashboardPrompt = dashboardPromptHandoff.current;
-      if (!dashboardPrompt) return;
-      if (config.prompt !== dashboardPrompt) {
-        handleConfigChange("prompt", dashboardPrompt);
-        return;
-      }
-      // Consume only after the controlled input has committed the transferred value.
-      window.sessionStorage.removeItem("devax:dashboard-prompt");
-      dashboardPromptHandoff.current = null;
-    } catch {
-      // A blocked session storage should not interrupt the normal upload flow.
-    }
-  }, [config.prompt, handleConfigChange, previousGenerationAttempt.requestedId]);
+  useDashboardPromptHandoff(config.prompt, handleConfigChange, previousGenerationAttempt.requestedId);
 
   if (generationAttemptActive && rasterReview) return (
     <Wrapper className="max-w-none pb-20">
@@ -446,45 +329,23 @@ const UploadPage = ({
               ) : null}
             </div>
 
-            <fieldset className="mt-4" data-testid="generation-strategy-selector">
-              <legend className="mb-2 text-sm font-semibold text-[#242629]">생성 방식</legend>
-              <div className="flex flex-wrap gap-2">
-                {([
-                  ["authored", "AI 저작", "기본 방식"],
-                  ["svg", "SVG", sourceContentMode ? "이미지형 원본 화면을 A4로 보존" : "벡터 원본으로 생성"],
-                ] as const).map(([strategy, label, description]) => (
-                  <label key={strategy} className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm">
-                    <input
-                      type="radio"
-                      name="generation-strategy"
-                      value={strategy}
-                      checked={generationStrategy === strategy}
-                      onChange={() => dispatch(setPptGenUploadState({ generationStrategy: strategy }))}
-                      disabled={sourceContentMode && strategy === "svg" && sourceSvgCapability !== true && config.pageSize !== "A4"}
-                      data-testid={`generation-strategy-${strategy}`}
-                    />
-                    <span><span className="font-medium">{label}</span><span className="ml-1 text-xs text-slate-500">{description}</span></span>
-                  </label>
-                ))}
-              </div>
-              {sourceContentMode && sourceSvgCapability === null && config.pageSize !== "A4" ? (
-                <p className="mt-2 text-xs text-slate-500" role="status">SVG 원본 보존 지원을 확인하고 있습니다.</p>
-              ) : sourceContentMode && sourceSvgCapability === false && config.pageSize !== "A4" ? (
-                <p className="mt-2 text-xs text-amber-700" role="status">이 서버에서는 원본 콘텐츠 유지 SVG 생성을 아직 사용할 수 없습니다.</p>
-              ) : null}
-            </fieldset>
+            <GenerationStrategySelector
+              sourceContentMode={sourceContentMode}
+              generationStrategy={generationStrategy}
+              onChangeStrategy={(strategy) => dispatch(setPptGenUploadState({ generationStrategy: strategy }))}
+              sourceSvgCapability={sourceSvgCapability}
+              pageSize={config.pageSize}
+            />
 
-            {sourceContentMode ? <div className="mt-4 rounded-xl border border-[#E4E6E9] bg-[#FAFAFB] px-3 py-3 text-sm text-[#33363A]" data-testid="source-content-selection-summary">
-              <p className="font-semibold">콘텐츠 · 원본 유지</p>
-              <p className="mt-1 text-[#5E626A]">{generationStrategy === "svg" ? `생성 방식 · SVG · 선택 템플릿 ${authoredStyle}` : `AI 저작 스타일 · ${authoredStyle}`}</p>
-              {generationStrategy === "authored" ? <p className="mt-1 text-[#5E626A]">회사 표준 · {companyStandard ? `${companyStandard.name} v${companyStandard.revision}` : "사용 안 함"}</p> : null}
-              {generationStrategy === "svg" ? <p className="mt-1 text-[#5E626A]">이미지형 입력은 원본 화면을 편집 가능한 텍스트와 표로 A4에 재구성합니다. 화면 캡처만 이미지로 남습니다. 서버가 확신하지 못한 소수 항목만 생성 전에 확인을 요청할 수 있습니다.</p> : null}
-              <p className="mt-1 text-[#5E626A]">원본 페이지 순서와 페이지 수를 유지합니다.</p>
-              {isSourceContentAnalyzing ? <p className="mt-2 text-xs text-[#737780]">원본 콘텐츠를 안전하게 분석하는 중입니다.</p> : null}
-              {sourceContentSummary ? <p className="mt-2 text-xs text-[#737780]" data-testid="source-content-analysis-summary">
-                {sourceContentSummary.sourceType.toUpperCase()} {sourceContentSummary.sourceUnits}페이지 · 텍스트 {sourceContentSummary.textBlocks}개 · 표 {sourceContentSummary.tables}개 · 제외된 차트 {sourceContentSummary.charts}개 · 이미지 {sourceContentSummary.uniqueImages}종(표시 {sourceContentSummary.imageOccurrences}회) · 이미지로 보관 {sourceContentSummary.rasterFallbackBlocks}개
-              </p> : null}
-            </div> : null}
+            {sourceContentMode ? (
+              <SourceContentSummaryPanel
+                generationStrategy={generationStrategy}
+                authoredStyle={authoredStyle}
+                companyStandard={companyStandard}
+                isSourceContentAnalyzing={isSourceContentAnalyzing}
+                sourceContentSummary={sourceContentSummary}
+              />
+            ) : null}
 
             {sourceContentMode && generationStrategy === "svg" && config.pageSize === "A4" && authoredStyle === "screenshot-blue" &&
               <details className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
@@ -510,41 +371,13 @@ const UploadPage = ({
                   />
                 </>
               </div>
-              <label className="flex min-w-0 cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
-                <input
-                  type="checkbox"
-                  checked={reviewBeforeGeneration}
-                  onChange={(event) =>
-                    setReviewBeforeGeneration(event.target.checked)
-                  }
-                  data-testid="review-outline-checkbox"
-                  className="mt-0.5 h-4 w-4 shrink-0 accent-violet-600"
-                />
-                <span className="min-w-0">
-                  <span className="block font-medium">
-                    {t("simplify.reviewBeforeCreate")}
-                  </span>
-                  <span className="block text-xs text-slate-500 dark:text-slate-400">
-                    {t("simplify.reviewBeforeCreateDescription")}
-                  </span>
-                </span>
-              </label>
-              <Button
-                type="button"
-                variant="toolbar"
-                size="toolbar"
-                onClick={handlePrimaryGenerate}
+              <GenerateActionRow
+                reviewBeforeGeneration={reviewBeforeGeneration}
+                onReviewBeforeGenerationChange={setReviewBeforeGeneration}
+                onGenerate={handlePrimaryGenerate}
                 disabled={generationBusy || previousGenerationAttempt.blocked}
-                data-testid="generate-presentation-button"
-                className="h-11 shrink-0 rounded-xl bg-slate-900 px-5 text-white shadow-sm hover:bg-slate-800 focus-visible:ring-violet-400 disabled:cursor-not-allowed"
-              >
-                <ArrowUp className="h-4 w-4" aria-hidden="true" />
-                <span>
-                  {loadingState.isLoading
-                    ? t("generating")
-                    : t("simplify.createPresentation")}
-                </span>
-              </Button>
+                generating={loadingState.isLoading}
+              />
             </div>
 
             {generationStrategy === "authored" && masterAdmissionError ? (

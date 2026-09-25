@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -43,72 +43,15 @@ import { PresentationGenerationApi } from "../../../services/api/presentation-ge
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
 import { AUTH_SESSION_EXPIRED_EVENT } from "../../../services/api/api-error-handler";
 import { usePreviousGenerationAttempt } from "./usePreviousGenerationAttempt";
-import {
-  RasterSourceApi,
-  rasterApprovalForUi,
-  rasterCasBody,
-  rasterPageDetail,
-  rasterReviewPin,
-  rasterReviewSummary,
-  type RasterOperationWire,
-  type RasterReviewPageDetail,
-  type RasterReviewSaveRequest,
-  type RasterAnalysisPin,
-  type RasterAnalysisMode,
-  type RasterPageModeRequest,
-  type RasterPendingOperationWire,
-} from "../../../services/api/source-content/raster-contract";
-import { createDurableGenerationTask, saveDurableGenerationTask } from "../../../outline/hooks/durableGenerationTask";
-import { resolveDeckTheme } from "../applyDeckTheme";
-import { clearRasterOriginalPreserveResult, rememberRasterOriginalPreserveResult } from "../../../services/api/source-content/raster-result-hint";
+import { rasterReviewSummary } from "../../../services/api/source-content/raster-contract";
+import type { RasterReviewRecovery } from "./raster-review-recovery";
+import { useRasterHandoff } from "./useRasterHandoff";
+import { useRasterReviewActions } from "./useRasterReviewActions";
+import { useRasterBatchPreserve } from "./useRasterBatchPreserve";
+import { useRasterSessionRecovery } from "./useRasterSessionRecovery";
+import { createRasterRedesignStarter } from "./createRasterRedesignStarter";
 
 const masterClient = new AuthoredVnextMasterClient();
-const RASTER_REVIEW_RECOVERY_KEY = "presenton:raster-review-operation:v1";
-
-type RasterReviewRecovery = {
-  presentationId: string;
-  operationId: string;
-  referenceSnapshotId?: string;
-  analysisMode?: RasterAnalysisMode;
-  orientation: "landscape" | "portrait";
-  authoredStyle: string;
-  instructions: string | null;
-};
-
-const rememberRasterReview = (value: RasterReviewRecovery) => {
-  try { window.sessionStorage.setItem(RASTER_REVIEW_RECOVERY_KEY, JSON.stringify(value)); } catch { /* Browser storage may be unavailable. */ }
-};
-
-const forgetRasterReview = () => {
-  try { window.sessionStorage.removeItem(RASTER_REVIEW_RECOVERY_KEY); } catch { /* Browser storage may be unavailable. */ }
-};
-
-const isRasterPollTimeout = (error: unknown) =>
-  error instanceof Error && error.message === "raster_analysis_timed_out";
-
-// The server reports incremental, elapsed-time progress (analyze_redesign_pptx
-// runs OCR plus a vision-LLM call per page and can take minutes on a large
-// deck); prefer that live text over the generic queued/running fallback so a
-// long wait keeps showing real progress instead of one static message.
-const rasterWaitMessage = (
-  pending: RasterPendingOperationWire,
-  queuedText: string,
-  runningText: string,
-) => pending.progress?.message || (pending.status === "queued" ? queuedText : runningText);
-
-// Non-blocking: advisory items never gate approval (raster_review_blockers
-// excludes them) and generation proceeds regardless. Only surfaced when the
-// count is small enough to skim as a toast, not a review workflow.
-const RASTER_ADVISORY_NOTICE_MAX = 20;
-
-const notifyRasterAdvisories = (operation: RasterOperationWire) => {
-  const count = operation.advisory_count ?? 0;
-  if (count <= 0 || count > RASTER_ADVISORY_NOTICE_MAX) return;
-  notify.info(
-    "검토를 권장하는 항목이 있습니다",
-    `서버가 확신하지 못한 항목 ${count}개가 있습니다. 생성은 그대로 진행되며, 결과에서 해당 부분을 확인해 주세요.`,
-  );
-};
 
 export type UploadMasterAdmissionError = "required" | "unavailable";
 
@@ -122,7 +65,10 @@ interface UseUploadPageStateArgs {
 
 /**
  * Owns the presentation configuration form state and the generation workflow
- * (validation, document processing, direct generation, error handling).
+ * (validation, document processing, direct generation, error handling). The
+ * raster-review (image-only source redesign) sub-flow is split across
+ * useRasterHandoff, useRasterReviewActions, useRasterBatchPreserve,
+ * useRasterSessionRecovery and createRasterRedesignStarter.
  */
 export const useUploadPageState = ({
   files,
@@ -139,12 +85,8 @@ export const useUploadPageState = ({
   const router = useRouter();
   const workspace = useGenerationWorkspace();
   const [generationAttemptActive, setGenerationAttemptActive] = useState(false);
-  const [rasterOperation, setRasterOperation] = useState<RasterOperationWire | null>(null);
   const [rasterRecovery, setRasterRecovery] = useState<RasterReviewRecovery | null>(null);
-  const [rasterRetryAvailable, setRasterRetryAvailable] = useState(false);
   const [rasterAdvancedReview, setRasterAdvancedReview] = useState(false);
-  const [rasterPage, setRasterPage] = useState<RasterReviewPageDetail | null>(null);
-  const [isRasterPageLoading, setIsRasterPageLoading] = useState(false);
   const recoverCreateRef = useRef<(() => Promise<void>) | null>(null);
   const previousAttemptIdRef = useRef<string | null>(null);
   const recoveringPersistedAdmissionRef = useRef(false);
@@ -212,74 +154,7 @@ export const useUploadPageState = ({
   });
   const previousGenerationAttempt = usePreviousGenerationAttempt(setConfig, Boolean(workspace?.pendingAdmission));
 
-  const handoffRasterGeneration = useCallback((operation: RasterOperationWire, recovery: RasterReviewRecovery) => {
-    const pin = operation.approval_pin;
-    const referenceSnapshotId = recovery.referenceSnapshotId ?? operation.reference_snapshot_id;
-    if (!pin || pin.operation_id !== operation.operation_id ||
-        pin.analysis_id !== operation.analysis.analysis_id ||
-        pin.analysis_revision !== operation.analysis.revision ||
-        pin.analysis_digest !== operation.analysis.digest ||
-        pin.source_sha256 !== operation.analysis.source.source_sha256 || !referenceSnapshotId) {
-      throw new Error("raster_approval_pin_invalid");
-    }
-    if (recovery.analysisMode === "auto_preserve") {
-      const pages = operation.analysis.pages;
-      const expectedPageNumbers = pages.map((page) => page.page_number).sort((a, b) => a - b);
-      const approvedPageNumbers = [...pin.full_page_preserve_pages].sort((a, b) => a - b);
-      const automaticPageNumbers = [...(pin.automatic_preserve_pages ?? [])].sort((a, b) => a - b);
-      const expectedRegionIds = pages.map((page) => page.full_page_region?.region_id ?? "").sort();
-      const approvedRegionIds = [...pin.approved_region_ids].sort();
-      if (pages.length !== operation.analysis.source.page_count ||
-          pages.some((page) => page.render_mode !== "full_page_preserve" || !page.full_page_region) ||
-          approvedPageNumbers.length !== pages.length || automaticPageNumbers.length !== pages.length ||
-          approvedRegionIds.length !== pages.length ||
-          expectedPageNumbers.some((number, index) => number !== index + 1 ||
-            number !== approvedPageNumbers[index] || number !== automaticPageNumbers[index]) ||
-          expectedRegionIds.some((id, index) => id !== approvedRegionIds[index])) {
-        throw new Error("raster_auto_preserve_incomplete");
-      }
-    } else if (recovery.analysisMode === "auto_redesign") {
-      // Only reachable once every page cleared analysis with zero
-      // low-confidence regions; the server never issues this pin otherwise.
-      const pages = operation.analysis.pages;
-      const expectedPageNumbers = pages.map((page) => page.page_number).sort((a, b) => a - b);
-      const automaticPageNumbers = [...(pin.automatic_redesign_pages ?? [])].sort((a, b) => a - b);
-      if (pages.length !== operation.analysis.source.page_count ||
-          pages.some((page) => page.render_mode !== "redesign") ||
-          automaticPageNumbers.length !== pages.length ||
-          expectedPageNumbers.some((number, index) => number !== index + 1 || number !== automaticPageNumbers[index])) {
-        throw new Error("raster_auto_redesign_incomplete");
-      }
-    }
-    saveDurableGenerationTask({
-      ...createDurableGenerationTask({
-        mode: "svg",
-        sourcePresentationId: recovery.presentationId,
-        timeoutMs: 30 * 60 * 1000,
-        progressDurationSeconds: Math.min(600, operation.analysis.source.page_count * 25),
-      }),
-      authoredRequest: {
-        strategy: "svg",
-        language: null,
-        instructions: recovery.instructions,
-        visionQa: false,
-        authoredStyle: recovery.authoredStyle,
-        pageSize: "A4",
-        orientation: recovery.orientation,
-        sourceMode: "raster_reconstruction",
-        rasterApprovalPin: pin,
-        referenceSnapshotIds: [referenceSnapshotId],
-      },
-    });
-    if (recovery.analysisMode === "auto_preserve") {
-      rememberRasterOriginalPreserveResult(recovery.presentationId);
-    } else {
-      clearRasterOriginalPreserveResult(recovery.presentationId);
-    }
-    forgetRasterReview();
-    setRasterRecovery(null);
-    router.push(`/outline?auto=1&id=${encodeURIComponent(recovery.presentationId)}`);
-  }, [router]);
+  const handoffRasterGeneration = useRasterHandoff(router, setRasterRecovery);
 
   useEffect(() => {
     if (
@@ -313,66 +188,103 @@ export const useUploadPageState = ({
   const decomposeAbortControllerRef = useRef<AbortController | null>(null);
   const companyStandardRef = useRef(companyStandard);
 
-  useEffect(() => {
-    let saved: RasterReviewRecovery | null = null;
-    try {
-      const raw = window.sessionStorage.getItem(RASTER_REVIEW_RECOVERY_KEY);
-      if (raw) saved = JSON.parse(raw) as RasterReviewRecovery;
-    } catch { forgetRasterReview(); }
-    if (!saved?.operationId || !saved.presentationId || saved.authoredStyle !== "screenshot-blue") return;
-    const recovery = saved;
-    const controller = new AbortController();
-    setRasterAdvancedReview(recovery.analysisMode === "reconstruct");
-    setPendingPresentationId(recovery.presentationId);
-    setRasterRecovery(recovery);
-    setConfig((previous) => ({ ...previous, pageSize: "A4", orientation: recovery.orientation }));
-    dispatch(setPptGenUploadState({ authoredStyle: recovery.authoredStyle, generationStrategy: "svg", sourceContentMode: true }));
-    setGenerationAttemptActive(true);
-    setLoadingState({ isLoading: true, message: "이전 원본 분석을 다시 불러오는 중…", showProgress: true });
-    void (async () => {
-      try {
-        const pending = await RasterSourceApi.get(recovery.operationId);
-        const operation = await RasterSourceApi.waitForReady(pending, undefined, controller.signal);
-        if (controller.signal.aborted) return;
-        const resumedRecovery = {
-          ...recovery,
-          operationId: operation.operation_id,
-          referenceSnapshotId: recovery.referenceSnapshotId ?? operation.reference_snapshot_id ?? undefined,
-        };
-        if (recovery.analysisMode === "auto_preserve" ||
-            (recovery.analysisMode === "auto_redesign" && operation.approval_pin)) {
-          notifyRasterAdvisories(operation);
-          handoffRasterGeneration(operation, resumedRecovery);
-          return;
-        }
-        const detail = await RasterSourceApi.page(operation.operation_id, 1);
-        if (controller.signal.aborted) return;
-        rememberRasterReview(resumedRecovery);
-        setRasterRecovery(resumedRecovery);
-        setRasterOperation(operation);
-        setRasterPage(rasterPageDetail(operation, detail));
-        setLoadingState({ isLoading: false, message: "원본 화면과 인식 내용을 검토해 주세요.", showProgress: false });
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        if (isRasterPollTimeout(error)) {
-          setRasterRetryAvailable(true);
-          setLoadingState({ isLoading: false, message: "원본 화면 분석이 오래 걸리고 있습니다. 분석 상태를 다시 확인해 주세요.", showProgress: false });
-          return;
-        }
-        forgetRasterReview();
-        setRasterRecovery(null);
-        setGenerationAttemptActive(false);
-        setLoadingState({ isLoading: false, message: "", showProgress: false });
-        notify.error("이전 원본 분석을 불러오지 못했습니다", "소유 권한이나 분석 상태를 확인해 주세요.");
-      }
-    })();
-    return () => controller.abort();
-    // Recovery is intentionally keyed to this browser tab's saved operation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const startInFlightRef = useRef(false);
   const [canCancelDocumentProcessing, setCanCancelDocumentProcessing] =
     useState(false);
+
+  const getUploadSnapshotProps = (
+    selectedFiles: File[] = filesRef?.current ?? files,
+  ) => {
+    const trimmedPrompt = config.prompt.trim();
+    const trimmedInstructions = (config.instructions || "").trim();
+    const attachmentCategories = Array.from(
+      new Set(selectedFiles.map(getFileCategory)),
+    ).sort();
+    const imageGenerationEnabled = !llmConfig?.DISABLE_IMAGE_GENERATION;
+    const parsedSlides =
+      config.slides && /^\d+$/.test(config.slides) ? Number(config.slides) : null;
+
+    return {
+      pathname,
+      generation_path: selectedFiles.length > 0 ? "documents" : "prompt_only",
+      slides_selected: parsedSlides,
+      slides_mode: config.slides ? "selected" : "auto",
+      language: config.language || "",
+      tone: config.tone,
+      verbosity: config.verbosity,
+      include_table_of_contents: !!config.includeTableOfContents,
+      include_title_slide: !!config.includeTitleSlide,
+      web_search: !!config.webSearch,
+      has_prompt: Boolean(trimmedPrompt),
+      prompt_char_count: trimmedPrompt.length,
+      prompt_word_count: trimmedPrompt ? trimmedPrompt.split(/\s+/).filter(Boolean).length : 0,
+      has_instructions: Boolean(trimmedInstructions),
+      instructions_char_count: trimmedInstructions.length,
+      has_attachments: selectedFiles.length > 0,
+      attachments_count: selectedFiles.length,
+      attachment_categories: attachmentCategories.join(","),
+      text_provider: llmConfig?.LLM || "",
+      text_model: getSelectedTextModel(llmConfig),
+      image_generation_enabled: imageGenerationEnabled,
+      image_provider: imageGenerationEnabled ? (llmConfig?.IMAGE_PROVIDER || "") : "disabled",
+      image_quality: imageGenerationEnabled ? getSelectedImageQuality(llmConfig) : "",
+    };
+  };
+
+  const trackUploadValidationFailure = (reason: string) => {
+    trackEvent(MixpanelEvent.Upload_Configuration_Invalid, {
+      ...getUploadSnapshotProps(),
+      reason,
+    });
+  };
+
+  const { handleDocumentProcessing, handleDirectPresentationGeneration,
+    handleGenerationError, ensureStockImageProviderReady } = createUploadGenerationHandlers({
+      config, sourceContentMode, pendingPresentationId, selectedThemeId,
+      previousPresentationId: previousGenerationAttempt.presentationId,
+      generationStrategy, authoredVisionQa, authoredStyle, llmConfig, router, pathname,
+      dispatch, setLoadingState, setCanCancelDocumentProcessing, decomposeAbortControllerRef,
+      setPendingPresentationId, getUploadSnapshotProps, recoverCreateRef,
+      onPresentationCreated: workspace?.bindPresentation,
+      saveAdmission: workspace?.saveAdmission,
+      captureLiveness: () => {
+        const epoch = lifecycleEpochRef.current;
+        return () => aliveRef.current && lifecycleEpochRef.current === epoch;
+      },
+    });
+
+  const rasterReviewState = useRasterReviewActions({
+    rasterRecovery,
+    setRasterRecovery,
+    pendingPresentationId,
+    config,
+    authoredStyle,
+    aliveRef,
+    startInFlightRef,
+    setLoadingState,
+    handoffRasterGeneration,
+    handleGenerationError,
+  });
+  const { selectRecommendedRasterPages, preserveRasterDeck } = useRasterBatchPreserve({
+    rasterOperation: rasterReviewState.rasterOperation,
+    setRasterOperation: rasterReviewState.setRasterOperation,
+    rasterPage: rasterReviewState.rasterPage,
+    setRasterPage: rasterReviewState.setRasterPage,
+  });
+
+  useRasterSessionRecovery({
+    setRasterAdvancedReview,
+    setPendingPresentationId,
+    setRasterRecovery,
+    setConfig,
+    dispatch,
+    setGenerationAttemptActive,
+    setLoadingState,
+    setRasterRetryAvailable: rasterReviewState.setRasterRetryAvailable,
+    setRasterOperation: rasterReviewState.setRasterOperation,
+    setRasterPage: rasterReviewState.setRasterPage,
+    handoffRasterGeneration,
+  });
 
   useEffect(() => {
     const recovery = workspace?.pendingAdmission;
@@ -407,8 +319,8 @@ export const useUploadPageState = ({
   useEffect(() => {
     if (recoveringPersistedAdmissionRef.current) return;
     sourceContentGate.reset();
-    setRasterOperation(null);
-    setRasterPage(null);
+    rasterReviewState.setRasterOperation(null);
+    rasterReviewState.setRasterPage(null);
     dispatch(setPptGenUploadState({ sourceContentAdmission: null }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, selectedFileIdentity, sourceContentMode]);
@@ -466,52 +378,6 @@ export const useUploadPageState = ({
     } finally {
       setIsMasterResolving(false);
     }
-  };
-
-  const getUploadSnapshotProps = (
-    selectedFiles: File[] = filesRef?.current ?? files,
-  ) => {
-    const trimmedPrompt = config.prompt.trim();
-    const trimmedInstructions = (config.instructions || "").trim();
-    const attachmentCategories = Array.from(
-      new Set(selectedFiles.map(getFileCategory)),
-    ).sort();
-    const imageGenerationEnabled = !llmConfig?.DISABLE_IMAGE_GENERATION;
-    const parsedSlides =
-      config.slides && /^\d+$/.test(config.slides) ? Number(config.slides) : null;
-
-    return {
-      pathname,
-      generation_path: selectedFiles.length > 0 ? "documents" : "prompt_only",
-      slides_selected: parsedSlides,
-      slides_mode: config.slides ? "selected" : "auto",
-      language: config.language || "",
-      tone: config.tone,
-      verbosity: config.verbosity,
-      include_table_of_contents: !!config.includeTableOfContents,
-      include_title_slide: !!config.includeTitleSlide,
-      web_search: !!config.webSearch,
-      has_prompt: Boolean(trimmedPrompt),
-      prompt_char_count: trimmedPrompt.length,
-      prompt_word_count: trimmedPrompt ? trimmedPrompt.split(/\s+/).filter(Boolean).length : 0,
-      has_instructions: Boolean(trimmedInstructions),
-      instructions_char_count: trimmedInstructions.length,
-      has_attachments: selectedFiles.length > 0,
-      attachments_count: selectedFiles.length,
-      attachment_categories: attachmentCategories.join(","),
-      text_provider: llmConfig?.LLM || "",
-      text_model: getSelectedTextModel(llmConfig),
-      image_generation_enabled: imageGenerationEnabled,
-      image_provider: imageGenerationEnabled ? (llmConfig?.IMAGE_PROVIDER || "") : "disabled",
-      image_quality: imageGenerationEnabled ? getSelectedImageQuality(llmConfig) : "",
-    };
-  };
-
-  const trackUploadValidationFailure = (reason: string) => {
-    trackEvent(MixpanelEvent.Upload_Configuration_Invalid, {
-      ...getUploadSnapshotProps(),
-      reason,
-    });
   };
 
   const handleConfigChange = (key: keyof PresentationConfig, value: unknown) => {
@@ -687,108 +553,26 @@ export const useUploadPageState = ({
       admitted.analysis.summary.charts === 0 &&
       admitted.analysis.summary.imageOccurrences >= admitted.analysis.summary.sourceUnits);
     if (sourceContentMode && generationStrategy === "svg" && config.pageSize === "A4" && imageOnlySource && admitted) {
-      if (authoredStyle !== "screenshot-blue") {
-        notify.warning("템플릿을 확인해 주세요", "이미지형 A4 SVG 재구성은 현재 screenshot-blue 템플릿에서 지원합니다. 템플릿을 선택한 뒤 다시 시작해 주세요.");
-        abandonRun("이미지형 A4 SVG 재구성에 필요한 screenshot-blue 템플릿을 선택해 주세요.");
-        return;
-      }
-      try {
-        setRasterOperation(null);
-        setRasterPage(null);
-        // "auto_redesign" is the product default: a real, editable A4 rebuild.
-        // The advanced-options toggle is the only way back to the fully
-        // manual, region-by-region "reconstruct" review.
-        // Only two of the three backend-accepted modes are reachable from this
-        // toggle; the cast keeps `analysisMode` typed as the full union so the
-        // "auto_preserve" branches below (shared with the recovery/retry flows)
-        // still type-check against every mode the backend accepts.
-        const analysisMode = (rasterAdvancedReview ? "reconstruct" : "auto_redesign") as RasterAnalysisMode;
-        setLoadingState({
-          isLoading: true,
-          message: analysisMode === "auto_redesign"
-            ? "원본 화면을 편집 가능한 A4 슬라이드로 재구성할 준비를 하는 중…"
-            : "원본 화면의 영역과 인식 내용을 분석하는 중…",
-          showProgress: true,
-        });
-        const theme = await resolveDeckTheme(selectedThemeId);
-        const created = await PresentationGenerationApi.createPresentation({
-          presentation_id: pendingPresentationId,
-          previous_presentation_id: previousGenerationAttempt.presentationId ?? undefined,
-          idempotency_key: `presentation-create:${pendingPresentationId}`,
-          content: "",
-          n_slides: null,
-          reference_snapshot_ids: [admitted.documentAdmission.referenceSnapshotId],
-          language: null,
-          instructions: [config.prompt, config.instructions].map((part) => part?.trim()).filter(Boolean).join("\n") || null,
-          include_table_of_contents: false,
-          include_title_slide: false,
-          web_search: false,
-          page_size: "A4",
-          orientation: config.orientation ?? "landscape",
-          theme,
-          strategy: "svg",
-        });
-        workspace?.bindPresentation(created.id);
-        dispatch(setPresentationId(created.id));
-        dispatch(clearOutlines());
-        const pending = await RasterSourceApi.start({
-          reference_snapshot_id: admitted.documentAdmission.referenceSnapshotId,
-          presentation_id: created.id,
-          orientation: config.orientation ?? "landscape",
-          analysis_mode: analysisMode,
-          style_id: "screenshot-blue",
-        });
-        const recovery = {
-          presentationId: created.id,
-          operationId: pending.operation_id,
-          referenceSnapshotId: admitted.documentAdmission.referenceSnapshotId,
-          analysisMode,
-          orientation: config.orientation ?? "landscape",
-          authoredStyle,
-          instructions: [config.prompt, config.instructions].map((part) => part?.trim()).filter(Boolean).join("\n") || null,
-        } satisfies RasterReviewRecovery;
-        rememberRasterReview(recovery);
-        setRasterRecovery(recovery);
-        const operation = await RasterSourceApi.waitForReady(pending, (progress) => {
-          if (!aliveRef.current) return;
-          setLoadingState({
-            isLoading: true,
-            message: analysisMode === "auto_preserve"
-              ? rasterWaitMessage(progress, "원본 화면 보존을 기다리는 중…", "원본 화면을 A4로 보존하는 중…")
-              : analysisMode === "auto_redesign"
-              ? rasterWaitMessage(progress, "원본 화면 재구성을 기다리는 중…", "원본 화면을 편집 가능한 텍스트와 표로 재구성하는 중…")
-              : rasterWaitMessage(progress, "원본 화면 분석을 기다리는 중…", "원본 화면의 영역과 인식 내용을 분석하는 중…"),
-            showProgress: true,
-          });
-        });
-        if (!aliveRef.current) return;
-        rememberRasterReview({ ...recovery, operationId: operation.operation_id });
-        setRasterRecovery({ ...recovery, operationId: operation.operation_id });
-        if (analysisMode === "auto_preserve" ||
-            (analysisMode === "auto_redesign" && operation.approval_pin)) {
-          // Zero low-confidence regions: proceed straight to generation with
-          // no extra confirmation, exactly as auto_preserve already does.
-          notifyRasterAdvisories(operation);
-          handoffRasterGeneration(operation, { ...recovery, operationId: operation.operation_id });
-          return;
-        }
-        const detail = await RasterSourceApi.page(operation.operation_id, 1);
-        setRasterOperation(operation);
-        setRasterPage(rasterPageDetail(operation, detail));
-        setRasterRetryAvailable(false);
-        setLoadingState({ isLoading: false, message: "원본 화면과 인식 내용을 검토해 주세요.", showProgress: false });
-      } catch (error) {
-        if (isRasterPollTimeout(error)) {
-          setRasterRetryAvailable(true);
-          setLoadingState({ isLoading: false, message: "원본 화면 분석이 오래 걸리고 있습니다. 분석 상태를 다시 확인해 주세요.", showProgress: false });
-        } else {
-          forgetRasterReview();
-          setRasterRecovery(null);
-          handleGenerationError(error);
-        }
-      } finally {
-        startInFlightRef.current = false;
-      }
+      await createRasterRedesignStarter({
+        config,
+        authoredStyle,
+        rasterAdvancedReview,
+        selectedThemeId,
+        pendingPresentationId,
+        previousPresentationId: previousGenerationAttempt.presentationId,
+        bindPresentation: workspace?.bindPresentation,
+        dispatch,
+        setRasterOperation: rasterReviewState.setRasterOperation,
+        setRasterPage: rasterReviewState.setRasterPage,
+        setRasterRecovery,
+        setRasterRetryAvailable: rasterReviewState.setRasterRetryAvailable,
+        setLoadingState,
+        aliveRef,
+        handoffRasterGeneration,
+        handleGenerationError,
+        abandonRun,
+      })(admitted);
+      startInFlightRef.current = false;
       return;
     }
     if (sourceContentMode && generationStrategy === "svg" && config.pageSize === "A4") {
@@ -899,341 +683,6 @@ export const useUploadPageState = ({
   const handleGeneratePresentation = () => startPresentation(true);
   const handleReviewOutline = () => startPresentation(false);
 
-  const loadRasterPage = useCallback(async (pageIndex: number) => {
-    if (!rasterOperation) return;
-    setIsRasterPageLoading(true);
-    try {
-      const detail = await RasterSourceApi.page(rasterOperation.operation_id, pageIndex + 1);
-      setRasterPage(rasterPageDetail(rasterOperation, detail));
-    } catch {
-      notify.error("원본 페이지를 불러오지 못했습니다", "다시 시도해 주세요.");
-    } finally {
-      setIsRasterPageLoading(false);
-    }
-  }, [rasterOperation]);
-
-  const saveRasterReview = useCallback(async (request: RasterReviewSaveRequest) => {
-    if (!rasterOperation || request.operationId !== rasterOperation.operation_id ||
-        request.revision !== rasterOperation.analysis.revision ||
-        request.operationVersion !== rasterOperation.operation_version) {
-      throw new Error("raster_review_stale");
-    }
-    const updated = await RasterSourceApi.correct(request.operationId, {
-      ...rasterCasBody(request),
-      region_edits: request.edits.map((edit) => ({
-        region_id: edit.regionId,
-        ...(edit.kind ? { role: edit.kind } : {}),
-        ...(edit.confirmedText !== undefined ? { text: edit.confirmedText } : {}),
-        ...(edit.sourcePixelBox ? { source_pixel_bbox: [
-          edit.sourcePixelBox.x,
-          edit.sourcePixelBox.y,
-          edit.sourcePixelBox.width,
-          edit.sourcePixelBox.height,
-        ] as [number, number, number, number] } : {}),
-        reviewed: edit.reviewed,
-      })),
-      page_edits: [],
-      review_ocr: false,
-      resolve_unresolved: false,
-    });
-    const detail = await RasterSourceApi.page(updated.operation_id, request.pageIndex + 1);
-    setRasterOperation(updated);
-    setRasterPage(rasterPageDetail(updated, detail));
-  }, [rasterOperation]);
-
-  const setRasterPageMode = useCallback(async (request: RasterPageModeRequest) => {
-    if (!rasterOperation || request.operationId !== rasterOperation.operation_id ||
-        request.revision !== rasterOperation.analysis.revision ||
-        request.operationVersion !== rasterOperation.operation_version) {
-      throw new Error("raster_review_stale");
-    }
-    const updated = await RasterSourceApi.correct(request.operationId, {
-      ...rasterCasBody(request),
-      region_edits: [],
-      page_edits: [{
-        page_number: request.pageIndex + 1,
-        render_mode: request.renderMode,
-        reviewed: request.reviewed,
-        acknowledge_image_only: request.acknowledgeImageOnly,
-        acknowledge_legibility: request.acknowledgeLegibility,
-      }],
-      review_ocr: false,
-      resolve_unresolved: false,
-    });
-    const detail = await RasterSourceApi.page(updated.operation_id, request.pageIndex + 1);
-    setRasterOperation(updated);
-    setRasterPage(rasterPageDetail(updated, detail));
-  }, [rasterOperation]);
-
-  const selectRecommendedRasterPages = useCallback(async (
-    pin: RasterAnalysisPin,
-    pageIndexes: number[],
-    onProgress: (selected: number, total: number) => void,
-  ) => {
-    if (!rasterOperation || pin.operationId !== rasterOperation.operation_id ||
-        pin.revision !== rasterOperation.analysis.revision ||
-        pin.operationVersion !== rasterOperation.operation_version) {
-      throw new Error("raster_review_stale");
-    }
-    const eligible = new Set(rasterOperation.analysis.pages
-      .filter((page) => page.render_mode === "reconstruct" && page.recommended_render_mode === "full_page_preserve")
-      .map((page) => page.page_number - 1));
-    const targets = [...new Set(pageIndexes)].filter((index) => eligible.has(index)).sort((a, b) => a - b);
-    let current = rasterOperation;
-    let selected = 0;
-    let failure: unknown = null;
-    try {
-      for (let index = 0; index < targets.length; index += 5) {
-        const batch = targets.slice(index, index + 5);
-        current = await RasterSourceApi.correct(current.operation_id, {
-          ...rasterCasBody(rasterReviewPin(current)),
-          region_edits: [],
-          page_edits: batch.map((pageIndex) => ({
-            page_number: pageIndex + 1,
-            render_mode: "full_page_preserve" as const,
-            reviewed: false,
-            acknowledge_image_only: false,
-            acknowledge_legibility: false,
-          })),
-          review_ocr: false,
-          resolve_unresolved: false,
-        });
-        selected += batch.length;
-        onProgress(selected, targets.length);
-      }
-    } catch (error) {
-      failure = error;
-    }
-    try {
-      const latest = await RasterSourceApi.get(current.operation_id);
-      if (latest.analysis) current = latest;
-      const detail = await RasterSourceApi.page(current.operation_id, (rasterPage?.pageIndex ?? 0) + 1);
-      setRasterOperation(current);
-      setRasterPage(rasterPageDetail(current, detail));
-    } catch (error) {
-      if (!failure) failure = error;
-    }
-    if (failure) throw failure;
-  }, [rasterOperation, rasterPage?.pageIndex]);
-
-  const preserveRasterDeck = useCallback(async (
-    pin: RasterAnalysisPin,
-    stage: "select" | "confirm",
-    onProgress: (completed: number, total: number) => void,
-  ) => {
-    if (!rasterOperation || pin.operationId !== rasterOperation.operation_id ||
-        pin.revision !== rasterOperation.analysis.revision ||
-        pin.operationVersion !== rasterOperation.operation_version) {
-      throw new Error("raster_review_stale");
-    }
-    const pages = rasterOperation.analysis.pages;
-    const total = rasterOperation.analysis.source.page_count;
-    if (pages.length !== total || new Set(pages.map((page) => page.page_number)).size !== total ||
-        pages.some((page) => page.page_number < 1 || page.page_number > total) ||
-        (stage === "confirm" && pages.some((page) =>
-          page.render_mode !== "full_page_preserve" || !page.full_page_region))) {
-      throw new Error("raster_deck_pages_incomplete");
-    }
-    const isConfirmed = (page: typeof pages[number]) =>
-      page.render_mode === "full_page_preserve" && page.full_page_region?.review_required === false &&
-      page.full_page_preserve_acknowledgements.includes("image_only") &&
-      page.full_page_preserve_acknowledgements.includes("legibility");
-    const targets = pages.filter((page) => stage === "select"
-      ? page.render_mode !== "full_page_preserve"
-      : !isConfirmed(page)).map((page) => page.page_number);
-    let current = rasterOperation;
-    let failure: unknown = null;
-    onProgress(total - targets.length, total);
-    try {
-      for (let index = 0; index < targets.length; index += 5) {
-        const batch = targets.slice(index, index + 5);
-        current = await RasterSourceApi.correct(current.operation_id, {
-          ...rasterCasBody(rasterReviewPin(current)),
-          region_edits: [],
-          page_edits: batch.map((pageNumber) => ({
-            page_number: pageNumber,
-            render_mode: "full_page_preserve" as const,
-            reviewed: stage === "confirm",
-            acknowledge_image_only: stage === "confirm",
-            acknowledge_legibility: stage === "confirm",
-          })),
-          review_ocr: false,
-          resolve_unresolved: false,
-        });
-        const verified = current.analysis.pages.filter((page) => stage === "select"
-          ? page.render_mode === "full_page_preserve" && Boolean(page.full_page_region)
-          : isConfirmed(page)).length;
-        if (batch.some((pageNumber) => {
-          const page = current.analysis.pages.find((item) => item.page_number === pageNumber);
-          return !page || (stage === "select"
-            ? page.render_mode !== "full_page_preserve" || !page.full_page_region
-            : !isConfirmed(page));
-        })) throw new Error("raster_deck_batch_incomplete");
-        onProgress(verified, total);
-      }
-      if (current.analysis.pages.length !== total || current.analysis.pages.some((page) => stage === "select"
-        ? page.render_mode !== "full_page_preserve" || !page.full_page_region
-        : !isConfirmed(page)) || (stage === "confirm" && !current.can_approve)) {
-        throw new Error("raster_deck_review_incomplete");
-      }
-    } catch (error) {
-      failure = error;
-    }
-    try {
-      const latest = await RasterSourceApi.get(current.operation_id);
-      if (latest.analysis) current = latest;
-      const detail = await RasterSourceApi.page(current.operation_id, (rasterPage?.pageIndex ?? 0) + 1);
-      setRasterOperation(current);
-      setRasterPage(rasterPageDetail(current, detail));
-    } catch (error) {
-      if (!failure) failure = error;
-    }
-    if (failure) throw failure;
-  }, [rasterOperation, rasterPage?.pageIndex]);
-
-  const confirmRasterInventory = useCallback(async (pin: RasterAnalysisPin) => {
-    if (!rasterOperation || pin.operationId !== rasterOperation.operation_id ||
-        pin.revision !== rasterOperation.analysis.revision ||
-        pin.operationVersion !== rasterOperation.operation_version) {
-      throw new Error("raster_review_stale");
-    }
-    const updated = await RasterSourceApi.correct(pin.operationId, {
-      ...rasterCasBody(pin),
-      region_edits: [],
-      page_edits: [],
-      review_ocr: true,
-      resolve_unresolved: true,
-    });
-    const detail = await RasterSourceApi.page(updated.operation_id, (rasterPage?.pageIndex ?? 0) + 1);
-    setRasterOperation(updated);
-    setRasterPage(rasterPageDetail(updated, detail));
-  }, [rasterOperation, rasterPage?.pageIndex]);
-
-  const approveRasterReview = useCallback(async (pin: RasterAnalysisPin) => {
-    if (!rasterOperation || pin.operationId !== rasterOperation.operation_id ||
-        pin.revision !== rasterOperation.analysis.revision ||
-        pin.operationVersion !== rasterOperation.operation_version) {
-      throw new Error("raster_review_stale");
-    }
-    const approved = await RasterSourceApi.approve(pin.operationId, rasterCasBody(pin));
-    if (!approved.approval_pin || approved.analysis.digest !== rasterOperation.analysis.digest) {
-      throw new Error("raster_approval_pin_invalid");
-    }
-    setRasterOperation(approved);
-    handoffRasterGeneration(approved, rasterRecovery ?? {
-      presentationId: pendingPresentationId,
-      operationId: approved.operation_id,
-      analysisMode: "reconstruct",
-      orientation: approved.analysis.target_canvas.orientation,
-      authoredStyle,
-      instructions: [config.prompt, config.instructions].map((part) => part?.trim()).filter(Boolean).join("\n") || null,
-    });
-    return rasterApprovalForUi(approved);
-  }, [rasterOperation, rasterRecovery, pendingPresentationId, config.prompt, config.instructions, authoredStyle, handoffRasterGeneration]);
-
-  const autoPreserveExistingRaster = async () => {
-    const operation = rasterOperation;
-    const recovery = rasterRecovery;
-    const snapshotId = recovery?.referenceSnapshotId ?? operation?.reference_snapshot_id;
-    if (!operation || !recovery || !snapshotId || recovery.analysisMode === "auto_preserve" ||
-        startInFlightRef.current) return;
-    startInFlightRef.current = true;
-    setLoadingState({ isLoading: true, message: "원본 화면 그대로 A4 생성을 준비하는 중…", showProgress: true });
-    try {
-      const pending = await RasterSourceApi.start({
-        reference_snapshot_id: snapshotId,
-        presentation_id: recovery.presentationId,
-        orientation: recovery.orientation,
-        analysis_mode: "auto_preserve",
-        style_id: "screenshot-blue",
-      });
-      const autoRecovery = { ...recovery, referenceSnapshotId: snapshotId,
-        analysisMode: "auto_preserve" as const, operationId: pending.operation_id };
-      rememberRasterReview(autoRecovery);
-      setRasterRecovery(autoRecovery);
-      setRasterOperation(null);
-      setRasterRetryAvailable(false);
-      const approved = await RasterSourceApi.waitForReady(pending, (progress) => {
-        if (aliveRef.current) setLoadingState({ isLoading: true,
-          message: rasterWaitMessage(progress, "원본 화면 보존을 기다리는 중…", "원본 화면을 A4로 보존하는 중…"),
-          showProgress: true });
-      });
-      if (!aliveRef.current) return;
-      handoffRasterGeneration(approved, { ...autoRecovery, operationId: approved.operation_id });
-    } catch (error) {
-      if (isRasterPollTimeout(error)) {
-        setRasterRetryAvailable(true);
-        setLoadingState({ isLoading: false, message: "원본 화면 보존이 오래 걸리고 있습니다. 상태를 다시 확인해 주세요.", showProgress: false });
-      } else {
-        rememberRasterReview(recovery);
-        setRasterRecovery(recovery);
-        setRasterOperation(operation);
-        setLoadingState({ isLoading: false, message: "원본 보존으로 전환하지 못했습니다. 기존 검토 상태를 유지합니다.", showProgress: false });
-        notify.error("원본 화면 보존을 시작하지 못했습니다", "기존 검토 내용은 그대로 유지됩니다.");
-      }
-    } finally {
-      startInFlightRef.current = false;
-    }
-  };
-
-
-  const { handleDocumentProcessing, handleDirectPresentationGeneration,
-    handleGenerationError, ensureStockImageProviderReady } = createUploadGenerationHandlers({
-      config, sourceContentMode, pendingPresentationId, selectedThemeId,
-      previousPresentationId: previousGenerationAttempt.presentationId,
-      generationStrategy, authoredVisionQa, authoredStyle, llmConfig, router, pathname,
-      dispatch, setLoadingState, setCanCancelDocumentProcessing, decomposeAbortControllerRef,
-      setPendingPresentationId, getUploadSnapshotProps, recoverCreateRef,
-      onPresentationCreated: workspace?.bindPresentation,
-      saveAdmission: workspace?.saveAdmission,
-      captureLiveness: () => {
-        const epoch = lifecycleEpochRef.current;
-        return () => aliveRef.current && lifecycleEpochRef.current === epoch;
-      },
-    });
-
-  const retryRasterAnalysis = async () => {
-    if (!rasterRecovery || startInFlightRef.current) return;
-    startInFlightRef.current = true;
-    setRasterRetryAvailable(false);
-    setLoadingState({ isLoading: true, message: "원본 화면 분석 상태를 확인하는 중…", showProgress: true });
-    try {
-      const pending = await RasterSourceApi.get(rasterRecovery.operationId);
-      const operation = await RasterSourceApi.waitForReady(pending, (progress) => {
-        if (!aliveRef.current) return;
-        setLoadingState({
-          isLoading: true,
-          message: rasterWaitMessage(progress, "원본 화면 분석을 기다리는 중…", "원본 화면의 영역과 인식 내용을 분석하는 중…"),
-          showProgress: true,
-        });
-      });
-      if (!aliveRef.current) return;
-      if (rasterRecovery.analysisMode === "auto_preserve" ||
-          (rasterRecovery.analysisMode === "auto_redesign" && operation.approval_pin)) {
-        notifyRasterAdvisories(operation);
-        handoffRasterGeneration(operation, { ...rasterRecovery, operationId: operation.operation_id });
-        return;
-      }
-      const detail = await RasterSourceApi.page(operation.operation_id, 1);
-      if (!aliveRef.current) return;
-      setRasterOperation(operation);
-      setRasterPage(rasterPageDetail(operation, detail));
-      setLoadingState({ isLoading: false, message: "원본 화면과 인식 내용을 검토해 주세요.", showProgress: false });
-    } catch (error) {
-      if (!aliveRef.current) return;
-      if (isRasterPollTimeout(error)) {
-        setRasterRetryAvailable(true);
-        setLoadingState({ isLoading: false, message: "원본 화면 분석이 오래 걸리고 있습니다. 분석 상태를 다시 확인해 주세요.", showProgress: false });
-      } else {
-        forgetRasterReview();
-        setRasterRecovery(null);
-        handleGenerationError(error);
-      }
-    } finally {
-      startInFlightRef.current = false;
-    }
-  };
-
   const recoverCreate = async () => {
     if (!aliveRef.current || startInFlightRef.current || !recoverCreateRef.current) return;
     startInFlightRef.current = true;
@@ -1253,10 +702,10 @@ export const useUploadPageState = ({
     previousGenerationAttempt,
     generationAttemptActive,
     recoverCreate,
-    rasterRetryAvailable,
+    rasterRetryAvailable: rasterReviewState.rasterRetryAvailable,
     rasterAdvancedReview,
     setRasterAdvancedReview,
-    retryRasterAnalysis,
+    retryRasterAnalysis: rasterReviewState.retryRasterAnalysis,
     editGenerationRequest,
     handleConfigChange,
     loadingState,
@@ -1271,20 +720,20 @@ export const useUploadPageState = ({
     isSourceContentAnalyzing: sourceContentGate.isAnalyzing,
     sourceContentLossPrompt: sourceContentGate.lossPrompt,
     resolveSourceContentLossPrompt: sourceContentGate.resolveLossPrompt,
-    rasterReview: rasterOperation ? rasterReviewSummary(rasterOperation) : null,
+    rasterReview: rasterReviewState.rasterOperation ? rasterReviewSummary(rasterReviewState.rasterOperation) : null,
     rasterAnalysisMode: rasterRecovery?.analysisMode ?? null,
-    canAutoPreserveExistingRaster: Boolean(rasterOperation && rasterRecovery &&
-      (rasterRecovery.referenceSnapshotId || rasterOperation.reference_snapshot_id) &&
+    canAutoPreserveExistingRaster: Boolean(rasterReviewState.rasterOperation && rasterRecovery &&
+      (rasterRecovery.referenceSnapshotId || rasterReviewState.rasterOperation.reference_snapshot_id) &&
       rasterRecovery.analysisMode !== "auto_preserve"),
-    autoPreserveExistingRaster,
-    rasterPage,
-    isRasterPageLoading,
-    loadRasterPage,
-    saveRasterReview,
-    setRasterPageMode,
+    autoPreserveExistingRaster: rasterReviewState.autoPreserveExistingRaster,
+    rasterPage: rasterReviewState.rasterPage,
+    isRasterPageLoading: rasterReviewState.isRasterPageLoading,
+    loadRasterPage: rasterReviewState.loadRasterPage,
+    saveRasterReview: rasterReviewState.saveRasterReview,
+    setRasterPageMode: rasterReviewState.setRasterPageMode,
     selectRecommendedRasterPages,
     preserveRasterDeck,
-    confirmRasterInventory,
-    approveRasterReview,
+    confirmRasterInventory: rasterReviewState.confirmRasterInventory,
+    approveRasterReview: rasterReviewState.approveRasterReview,
   };
 };
