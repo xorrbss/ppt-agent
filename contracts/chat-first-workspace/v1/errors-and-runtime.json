@@ -1109,6 +1109,12 @@
       "status_code": 409,
       "safe_message": "Another request is saving the same files. Try again.",
       "retryable": true
+    },
+    {
+      "code": "workspace_operation_principal_conflict",
+      "status_code": 403,
+      "safe_message": "This operation does not match the account that started it.",
+      "retryable": false
     }
   ],
   "privacy": {

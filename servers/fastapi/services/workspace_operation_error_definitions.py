@@ -66,6 +66,9 @@ _GROUPS = (
     (409, True, "Another request is saving the same files. Try again.", (
         "artifact_key_busy",
     )),
+    (403, False, "This operation does not match the account that started it.", (
+        "workspace_operation_principal_conflict",
+    )),
 )
 
 

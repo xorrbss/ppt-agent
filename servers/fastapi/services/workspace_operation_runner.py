@@ -17,6 +17,7 @@ from services.workspace_attempt_timing import (
     ATTEMPT_TIMING_KEY, attempt_timing, sanitize_attempt_timing, with_attempt_timing,
 )
 from services.workspace_payload_sanitizers import project_generation_deck_ir, sanitize_worker_resource_samples
+from services.workspace_operation_principal import operation_principal, resolve_operation_tenant
 from services.workspace_quality_review_payload import (
     _normalize_quality_review_payload,
     _quality_review_count,
@@ -4336,9 +4337,12 @@ class WorkspaceOperationRunner:
         context: _ExecutionContext,
     ) -> WorkspaceOperationResult:
         target = handler.execute if hasattr(handler, "execute") else handler
-        value = target(context)
-        if inspect.isawaitable(value):
-            value = await value
+        # Inside the handler task only: the runner's own bookkeeping keeps its scoping.
+        tenant_id = await resolve_operation_tenant(context.claim, session_factory=self.session_factory)
+        with operation_principal(context.claim.owner_id, tenant_id):
+            value = target(context)
+            if inspect.isawaitable(value):
+                value = await value
         if value is None:
             return WorkspaceOperationResult()
         if isinstance(value, WorkspaceOperationResult):

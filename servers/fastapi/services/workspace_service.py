@@ -69,7 +69,8 @@ from services.public_operation_admission import (
 )
 from services.workspace_operation_titles import workspace_operation_title
 from utils.datetime_utils import get_current_utc_datetime
-from utils.owner_context import get_current_owner_id
+from services.workspace_operation_principal import submitting_principal_tenant
+from utils.owner_context import get_current_owner_id, get_current_tenant_id
 
 
 _ASSET_WAIT_STATES = {"uploaded", "scanning", "processing"}
@@ -1246,8 +1247,6 @@ async def _verify_raster_tenant_handoff_retry(session: AsyncSession, operation: 
         return False
     from api.v1.ppt.endpoints.presentation_generate import _request_from_durable_payload
     from services.source_content.pipeline import SourceContentError, admit_source_content_request
-    from utils.owner_context import get_current_tenant_id
-
     owner, tenant = get_current_owner_id(), get_current_tenant_id()
     if owner is None or owner != operation.owner_id or not tenant:
         return False
@@ -1950,6 +1949,7 @@ async def create_workspace_command(
             # Asset transitions must restore this state after every referenced
             # asset becomes ready instead of bypassing destructive approval.
             "initial_operation_state": initial_state,
+            **submitting_principal_tenant(),  # the handler's tenant; not hashed
         },
         expected_revision=expected_revision,
         approval_expires_at=approval_expires_at,
@@ -2253,11 +2253,9 @@ async def apply_workspace_action(
                 "request_payload": retry_payload,
             }
         )
+        retry_payload = {**submitting_principal_tenant(), **retry_payload}  # the source's wins
         retry_operation_key_hash = sha256(
-            (
-                f"presenton.workspace.retry/v1:{idempotency_hash}:"
-                f"{source_operation.id}"
-            ).encode("utf-8")
+            f"presenton.workspace.retry/v1:{idempotency_hash}:{source_operation.id}".encode("utf-8")
         ).hexdigest()
         retry_requires_approval = source_operation.kind in _DESTRUCTIVE_OPERATION_KINDS
         retry_approval_expires_at = (
