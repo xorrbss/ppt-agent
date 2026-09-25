@@ -1056,10 +1056,10 @@ test("developer documentation matches the executable lint and test workflow", ()
   assert.match(rootPackage.scripts["test:next-ci"], /test:ci-node/u);
   assert.match(pyproject, /select = \["E", "F", "B", "ASYNC"\]/u);
   assert.match(nodeRunner, /const ROOTS = \["app", "components", "i18n", "lib", "scripts", "store", "tests", "utils"\]/u);
-  assert.equal(specList?.length, 22);
+  assert.equal(specList?.length, 12);
   assert.match(claude, /Ruff is locked/u);
   assert.match(claude, /tests\/?`, and `utils\//u);
-  assert.match(claude, /22 named Cypress specs/u);
+  assert.match(claude, /12 named Cypress specs/u);
   assert.doesNotMatch(claude, /There is \*\*no ruff/u);
   assert.doesNotMatch(claude, /does \*\*not\*\* include `servers\/nextjs\/tests\/`/u);
 });
