@@ -5,7 +5,7 @@ import asyncio
 import hashlib
 import io
 import uuid
-from typing import Literal
+from typing import Annotated, Literal
 from zipfile import ZipFile
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -19,7 +19,7 @@ from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
 from services.artifact_store import configured_public_artifact_service
 from services.database import get_async_session
 from services.references import ReferenceProviderError, admit_reference_snapshot
-from services.source_content.raster_contracts import RasterAnalysis, RasterRegion, raster_digest, seal_analysis
+from services.source_content.raster_contracts import RasterAnalysis, raster_digest, seal_analysis
 from services.source_content.raster_reconstruction_store import (
     RasterReviewError, _operation, _retain_live_pointer, approve_raster_analysis,
     load_raster_analysis, persist_raster_analysis, reserve_raster_operation_position,
@@ -82,7 +82,10 @@ class ReviewRasterRequest(RasterReviewVersion):
     resolve_unresolved: bool = False
 
 
-async def _analysis_retry_target(session: AsyncSession, existing: WorkspaceOperation, *, owner_id: uuid.UUID, tenant_id: str, presentation_id: uuid.UUID) -> WorkspaceOperation:
+async def _analysis_retry_target(
+    session: AsyncSession, existing: WorkspaceOperation, *,
+    owner_id: uuid.UUID, tenant_id: str, presentation_id: uuid.UUID,
+) -> WorkspaceOperation:
     """Follow the unique retry chain while the caller holds the conversation lock."""
     seen = set()
     while True:
@@ -140,7 +143,10 @@ async def _response(session: AsyncSession, operation_id: uuid.UUID, analysis: Ra
         if operation.state == "succeeded":
             # Older results lost this pointer to the workspace result allowlist.
             # The review ID is deterministically derived by the analysis handler.
-            return await _response(session, uuid.UUID(review_id) if review_id else uuid.uuid5(operation.id, "raster-review/v1"))
+            review_operation_id = (
+                uuid.UUID(review_id) if review_id else uuid.uuid5(operation.id, "raster-review/v1")
+            )
+            return await _response(session, review_operation_id)
         return {"analysis": None, "operation_id": str(operation.id), "operation_version": operation.version,
                 "status": operation.state, "progress": operation.progress,
                 "error_code": operation.error_code, "approval_pin": None, "can_approve": False, "review_blockers": [],
@@ -169,7 +175,9 @@ async def _response(session: AsyncSession, operation_id: uuid.UUID, analysis: Ra
 
 
 @RASTER_RECONSTRUCTION_ROUTER.post("/analysis")
-async def analyze_raster(request: AnalyzeRasterRequest, session: AsyncSession = Depends(get_async_session)):
+async def analyze_raster(
+    request: AnalyzeRasterRequest, session: Annotated[AsyncSession, Depends(get_async_session)],
+):
     from services.workspace_operation_runner import wake_workspace_operation_runner
 
     owner, tenant = _scope()
@@ -184,7 +192,9 @@ async def analyze_raster(request: AnalyzeRasterRequest, session: AsyncSession = 
         snapshot = await admit_reference_snapshot(session, snapshot_id=request.reference_snapshot_id)
         if len(snapshot.asset_bindings) != 1:
             raise RasterReviewError("raster_single_source_required")
-        asset, source_path = await resolve_workspace_asset_download(session, asset_id=snapshot.asset_bindings[0].asset_id)
+        asset, source_path = await resolve_workspace_asset_download(
+            session, asset_id=snapshot.asset_bindings[0].asset_id,
+        )
         if source_path.stat().st_size > 128 * 1024 * 1024:
             raise RasterReviewError("raster_source_too_large")
         source_bytes = await asyncio.to_thread(source_path.read_bytes)
@@ -198,7 +208,9 @@ async def analyze_raster(request: AnalyzeRasterRequest, session: AsyncSession = 
             WorkspaceConversation.owner_scope == str(owner),
         ).with_for_update())
         request_payload = request.model_dump(mode="json") | {"tenant_id": tenant}
-        idempotency_hash = raster_digest(request_payload | {"owner_id": str(owner), "source_sha256": source_sha})
+        idempotency_hash = raster_digest(
+            request_payload | {"owner_id": str(owner), "source_sha256": source_sha},
+        )
         existing = await session.scalar(select(WorkspaceOperation).where(
             WorkspaceOperation.owner_id == owner,
             WorkspaceOperation.owner_scope == str(owner),
@@ -208,15 +220,21 @@ async def analyze_raster(request: AnalyzeRasterRequest, session: AsyncSession = 
         ))
         retry_of_operation_id = None
         if existing is not None:
-            existing = await _analysis_retry_target(session, existing, owner_id=owner, tenant_id=tenant, presentation_id=presentation.id)
+            existing = await _analysis_retry_target(
+                session, existing, owner_id=owner, tenant_id=tenant, presentation_id=presentation.id,
+            )
             if existing.state not in _RETRYABLE_ANALYSIS_STATES:
                 existing_id = existing.id
                 await session.commit()
                 return await _response(session, existing_id)
             await _claim_analysis_retry(session, existing, owner_id=owner)
             retry_of_operation_id = existing.id
-            idempotency_hash = raster_digest({"raster_request_key": idempotency_hash, "retry_of_operation_id": str(existing.id)})
-        anchor_position = await reserve_raster_operation_position(session, conversation_id=conversation.id, owner_id=owner)
+            idempotency_hash = raster_digest(
+                {"raster_request_key": idempotency_hash, "retry_of_operation_id": str(existing.id)},
+            )
+        anchor_position = await reserve_raster_operation_position(
+            session, conversation_id=conversation.id, owner_id=owner,
+        )
         operation_id = uuid.uuid4()
         operation = WorkspaceOperation(
             id=operation_id, owner_id=owner, owner_scope=str(owner),
@@ -231,8 +249,14 @@ async def analyze_raster(request: AnalyzeRasterRequest, session: AsyncSession = 
         session.add(operation)
         await session.flush()
         service = configured_public_artifact_service()
-        source_ref = await service.persist_bytes(session, owner_id=owner, tenant_id=tenant, kind="presentation-pptx", payload=source_bytes, media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation", created_by_operation_id=operation_id, retention_class="published")
-        operation.request_payload = request_payload | {"source_artifact_ref": source_ref.model_dump(mode="json"), "source_sha256": source_sha}
+        source_ref = await service.persist_bytes(
+            session, owner_id=owner, tenant_id=tenant, kind="presentation-pptx", payload=source_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            created_by_operation_id=operation_id, retention_class="published",
+        )
+        operation.request_payload = request_payload | {
+            "source_artifact_ref": source_ref.model_dump(mode="json"), "source_sha256": source_sha,
+        }
         operation.request_hash = raster_digest(operation.request_payload)
         operation.request_payload = operation.request_payload | {PRINCIPAL_TENANT_PAYLOAD_KEY: tenant}  # not hashed
         session.add(operation)
@@ -246,7 +270,9 @@ async def analyze_raster(request: AnalyzeRasterRequest, session: AsyncSession = 
 
 
 @RASTER_RECONSTRUCTION_ROUTER.get("/analysis/{operation_id}")
-async def get_raster_analysis(operation_id: uuid.UUID, session: AsyncSession = Depends(get_async_session)):
+async def get_raster_analysis(
+    operation_id: uuid.UUID, session: Annotated[AsyncSession, Depends(get_async_session)],
+):
     try:
         return await _response(session, operation_id)
     except (RasterReviewError, ValueError) as exc:
@@ -254,7 +280,9 @@ async def get_raster_analysis(operation_id: uuid.UUID, session: AsyncSession = D
 
 
 @RASTER_RECONSTRUCTION_ROUTER.get("/analysis/{operation_id}/pages/{page_number}")
-async def get_raster_page(operation_id: uuid.UUID, page_number: int, session: AsyncSession = Depends(get_async_session)):
+async def get_raster_page(
+    operation_id: uuid.UUID, page_number: int, session: Annotated[AsyncSession, Depends(get_async_session)],
+):
     owner, tenant = _scope()
     try:
         analysis = await load_raster_analysis(session, operation_id=operation_id, owner_id=owner, tenant_id=tenant)
@@ -265,16 +293,27 @@ async def get_raster_page(operation_id: uuid.UUID, page_number: int, session: As
         reference = analysis.source.source_artifact_ref
         pixel_size = None
         if media_part and reference:
-            source = await configured_public_artifact_service().read_bytes(session, artifact_id=reference.artifact_id, owner_id=owner, tenant_id=tenant, expected_digest=reference.sha256)
+            source = await configured_public_artifact_service().read_bytes(
+                session, artifact_id=reference.artifact_id, owner_id=owner, tenant_id=tenant,
+                expected_digest=reference.sha256,
+            )
             width, height = await asyncio.to_thread(_source_pixel_size, source, media_part)
             pixel_size = {"width": width, "height": height}
-        return {"page": page.model_dump(mode="json"), "source_canvas": analysis.source.model_dump(mode="json"), "source_pixel_size": pixel_size, "preview_url": f"/api/v1/ppt/source-content/raster/analysis/{operation_id}/pages/{page_number}/preview"}
+        return {
+            "page": page.model_dump(mode="json"),
+            "source_canvas": analysis.source.model_dump(mode="json"),
+            "source_pixel_size": pixel_size,
+            "preview_url": f"/api/v1/ppt/source-content/raster/analysis/{operation_id}/pages/{page_number}/preview",
+        }
     except (RasterReviewError, ValueError) as exc:
         raise _error(exc) from exc
 
 
 @RASTER_RECONSTRUCTION_ROUTER.patch("/analysis/{operation_id}")
-async def review_raster_analysis(operation_id: uuid.UUID, request: ReviewRasterRequest, session: AsyncSession = Depends(get_async_session)):
+async def review_raster_analysis(
+    operation_id: uuid.UUID, request: ReviewRasterRequest,
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+):
     owner, tenant = _scope()
     try:
         analysis = await load_raster_analysis(session, operation_id=operation_id, owner_id=owner, tenant_id=tenant)
@@ -290,10 +329,23 @@ async def review_raster_analysis(operation_id: uuid.UUID, request: ReviewRasterR
         operation = await _operation(session, operation_id=operation_id, owner_id=owner, tenant_id=tenant)
         if operation.version != request.expected_operation_version:
             raise RasterReviewError("raster_review_version_conflict")
-        pixel_boxes = {edit.region_id: edit.source_pixel_bbox for edit in request.region_edits if edit.source_pixel_bbox is not None}
-        corrected = await derive_raster_crop_corrections(session, operation_id=operation_id, owner_id=owner, tenant_id=tenant, analysis=analysis, pixel_boxes=pixel_boxes)
-        preserve_pages = tuple(number for number, edit in page_edits.items() if edit.render_mode == "full_page_preserve" and analysis.pages[number - 1].render_mode != "full_page_preserve")
-        preserved = await derive_full_page_preserve_regions(session, operation_id=operation_id, owner_id=owner, tenant_id=tenant, analysis=analysis, page_numbers=preserve_pages)
+        pixel_boxes = {
+            edit.region_id: edit.source_pixel_bbox
+            for edit in request.region_edits if edit.source_pixel_bbox is not None
+        }
+        corrected = await derive_raster_crop_corrections(
+            session, operation_id=operation_id, owner_id=owner, tenant_id=tenant,
+            analysis=analysis, pixel_boxes=pixel_boxes,
+        )
+        preserve_pages = tuple(
+            number for number, edit in page_edits.items()
+            if edit.render_mode == "full_page_preserve"
+            and analysis.pages[number - 1].render_mode != "full_page_preserve"
+        )
+        preserved = await derive_full_page_preserve_regions(
+            session, operation_id=operation_id, owner_id=owner, tenant_id=tenant,
+            analysis=analysis, page_numbers=preserve_pages,
+        )
         pages = []
         for page in analysis.pages:
             regions = []
@@ -315,7 +367,10 @@ async def review_raster_analysis(operation_id: uuid.UUID, request: ReviewRasterR
                 if request.review_ocr and region.ocr is not None:
                     changes["ocr"] = region.ocr.model_copy(update={"review_required": False})
                 regions.append(region.model_copy(update=changes))
-            inventory = tuple(o.model_copy(update={"review_required": False}) for o in page.ocr_inventory) if request.review_ocr else page.ocr_inventory
+            inventory = (
+                tuple(o.model_copy(update={"review_required": False}) for o in page.ocr_inventory)
+                if request.review_ocr else page.ocr_inventory
+            )
             page_changes = {"regions": tuple(regions), "ocr_inventory": inventory}
             page_edit = page_edits.get(page.page_number)
             if page_edit is not None:
@@ -326,13 +381,24 @@ async def review_raster_analysis(operation_id: uuid.UUID, request: ReviewRasterR
                 elif page_edit.render_mode == "full_page_preserve":
                     if page.full_page_region is None:
                         raise RasterReviewError("raster_full_page_region_required")
-                    acknowledged = page_edit.reviewed and page_edit.acknowledge_image_only and page_edit.acknowledge_legibility
-                    page_changes["full_page_region"] = page.full_page_region.model_copy(update={"review_required": not acknowledged})
+                    acknowledged = (
+                        page_edit.reviewed and page_edit.acknowledge_image_only and page_edit.acknowledge_legibility
+                    )
+                    page_changes["full_page_region"] = page.full_page_region.model_copy(
+                        update={"review_required": not acknowledged},
+                    )
                     if acknowledged:
                         page_changes["full_page_preserve_acknowledgements"] = ("image_only", "legibility")
             pages.append(page.model_copy(update=page_changes))
-        analysis = seal_analysis(analysis.model_copy(update={"revision": analysis.revision + 1, "pages": tuple(pages), "unresolved": () if request.resolve_unresolved else analysis.unresolved}))
-        await persist_raster_analysis(session, operation_id=operation_id, owner_id=owner, tenant_id=tenant, analysis=analysis, expected_operation_version=request.expected_operation_version)
+        analysis = seal_analysis(analysis.model_copy(update={
+            "revision": analysis.revision + 1,
+            "pages": tuple(pages),
+            "unresolved": () if request.resolve_unresolved else analysis.unresolved,
+        }))
+        await persist_raster_analysis(
+            session, operation_id=operation_id, owner_id=owner, tenant_id=tenant,
+            analysis=analysis, expected_operation_version=request.expected_operation_version,
+        )
         await session.commit()
         return await _response(session, operation_id, analysis)
     except (RasterReviewError, ValueError) as exc:
@@ -341,10 +407,17 @@ async def review_raster_analysis(operation_id: uuid.UUID, request: ReviewRasterR
 
 
 @RASTER_RECONSTRUCTION_ROUTER.post("/analysis/{operation_id}/approve")
-async def approve_raster(operation_id: uuid.UUID, request: RasterReviewVersion, session: AsyncSession = Depends(get_async_session)):
+async def approve_raster(
+    operation_id: uuid.UUID, request: RasterReviewVersion,
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+):
     owner, tenant = _scope()
     try:
-        await approve_raster_analysis(session, operation_id=operation_id, owner_id=owner, tenant_id=tenant, analysis_digest=request.analysis_digest, expected_revision=request.expected_revision, expected_operation_version=request.expected_operation_version)
+        await approve_raster_analysis(
+            session, operation_id=operation_id, owner_id=owner, tenant_id=tenant,
+            analysis_digest=request.analysis_digest, expected_revision=request.expected_revision,
+            expected_operation_version=request.expected_operation_version,
+        )
         await session.commit()
         return await _response(session, operation_id)
     except (RasterReviewError, ValueError) as exc:
@@ -370,33 +443,58 @@ def _source_pixel_size(source_bytes: bytes, media_part: str) -> tuple[int, int]:
 
 
 @RASTER_RECONSTRUCTION_ROUTER.get("/analysis/{operation_id}/pages/{page_number}/preview")
-async def preview_raster_page(operation_id: uuid.UUID, page_number: int, session: AsyncSession = Depends(get_async_session)):
+async def preview_raster_page(
+    operation_id: uuid.UUID, page_number: int, session: Annotated[AsyncSession, Depends(get_async_session)],
+):
     owner, tenant = _scope()
     try:
         analysis = await load_raster_analysis(session, operation_id=operation_id, owner_id=owner, tenant_id=tenant)
         if page_number < 1 or page_number > len(analysis.pages):
             raise HTTPException(404, detail={"code": "raster_page_not_found"})
-        media_part = next((r.source_media_part for r in analysis.pages[page_number - 1].regions if r.source_media_part), None)
+        media_part = next(
+            (r.source_media_part for r in analysis.pages[page_number - 1].regions if r.source_media_part), None,
+        )
         reference = analysis.source.source_artifact_ref
         if not media_part or reference is None:
             raise RasterReviewError("raster_preview_not_found")
-        source = await configured_public_artifact_service().read_bytes(session, artifact_id=reference.artifact_id, owner_id=owner, tenant_id=tenant, expected_digest=reference.sha256)
+        source = await configured_public_artifact_service().read_bytes(
+            session, artifact_id=reference.artifact_id, owner_id=owner, tenant_id=tenant,
+            expected_digest=reference.sha256,
+        )
         payload = await asyncio.to_thread(_preview_png, source, media_part)
-        return Response(payload, media_type="image/png", headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+        return Response(
+            payload, media_type="image/png",
+            headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+        )
     except (RasterReviewError, ValueError) as exc:
         raise _error(exc) from exc
 
 
 @RASTER_RECONSTRUCTION_ROUTER.get("/analysis/{operation_id}/regions/{region_id}/crop")
-async def preview_raster_crop(operation_id: uuid.UUID, region_id: str, session: AsyncSession = Depends(get_async_session)):
+async def preview_raster_crop(
+    operation_id: uuid.UUID, region_id: str, session: Annotated[AsyncSession, Depends(get_async_session)],
+):
     owner, tenant = _scope()
     try:
         analysis = await load_raster_analysis(session, operation_id=operation_id, owner_id=owner, tenant_id=tenant)
-        region = next((r for p in analysis.pages for r in (*p.regions, *((p.full_page_region,) if p.full_page_region else ())) if r.region_id == region_id), None)
+        region = next(
+            (
+                r for p in analysis.pages
+                for r in (*p.regions, *((p.full_page_region,) if p.full_page_region else ()))
+                if r.region_id == region_id
+            ),
+            None,
+        )
         if region is None or region.crop_artifact_ref is None:
             raise HTTPException(404, detail={"code": "raster_crop_not_found"})
         reference = region.crop_artifact_ref
-        payload = await configured_public_artifact_service().read_bytes(session, artifact_id=reference.artifact_id, owner_id=owner, tenant_id=tenant, expected_digest=reference.sha256)
-        return Response(payload, media_type="image/png", headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+        payload = await configured_public_artifact_service().read_bytes(
+            session, artifact_id=reference.artifact_id, owner_id=owner, tenant_id=tenant,
+            expected_digest=reference.sha256,
+        )
+        return Response(
+            payload, media_type="image/png",
+            headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+        )
     except (RasterReviewError, ValueError) as exc:
         raise _error(exc) from exc
