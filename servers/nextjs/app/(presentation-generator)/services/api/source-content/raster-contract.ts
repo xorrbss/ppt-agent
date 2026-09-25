@@ -7,6 +7,9 @@ const ROOT = "/api/v1/ppt/source-content/raster/analysis";
 
 export type RasterPageMode = "reconstruct" | "full_page_preserve" | "redesign";
 
+/** Every source-content analysis mode the backend `analysis_mode` field accepts. */
+export type RasterAnalysisMode = "auto_preserve" | "reconstruct" | "auto_redesign";
+
 export type RasterAnalysisWire = {
   contract_version: "raster-reconstruction-analysis/v1";
   analysis_id: string;
@@ -95,7 +98,7 @@ export type RasterPageWire = {
 };
 
 export class RasterSourceApi {
-  static async start(request: { reference_snapshot_id: string; presentation_id: string; orientation: "landscape" | "portrait"; analysis_mode: "auto_preserve" | "reconstruct" | "auto_redesign"; style_id: "screenshot-blue" }): Promise<RasterOperationResponse> {
+  static async start(request: { reference_snapshot_id: string; presentation_id: string; orientation: "landscape" | "portrait"; analysis_mode: RasterAnalysisMode; style_id: "screenshot-blue" }): Promise<RasterOperationResponse> {
     return RasterSourceApi.request<RasterOperationResponse>(ROOT, "POST", request);
   }
 

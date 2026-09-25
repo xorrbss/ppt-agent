@@ -745,6 +745,42 @@
       "retryable": false
     },
     {
+      "code": "slide_order_request_invalid",
+      "status_code": 422,
+      "safe_message": "The slide order request is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "slide_order_id_set_mismatch",
+      "status_code": 409,
+      "safe_message": "The requested slide order does not match the presentation's current slides. Reload and try again.",
+      "retryable": true
+    },
+    {
+      "code": "slide_order_duplicate_id",
+      "status_code": 422,
+      "safe_message": "The requested slide order lists the same slide more than once.",
+      "retryable": false
+    },
+    {
+      "code": "slide_order_requires_slide",
+      "status_code": 409,
+      "safe_message": "The presentation has no slides to reorder.",
+      "retryable": false
+    },
+    {
+      "code": "slide_order_publish_failed",
+      "status_code": 500,
+      "safe_message": "The slide order could not be saved. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "slide_order_still_running",
+      "status_code": 503,
+      "safe_message": "The slide order is still being saved.",
+      "retryable": true
+    },
+    {
       "code": "authored_batch_remake_preview_incomplete",
       "status_code": 503,
       "safe_message": "The operation could not finish. Try again.",

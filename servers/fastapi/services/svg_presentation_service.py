@@ -509,16 +509,16 @@ async def _generate(request, presentation_id, outline, language, session, job):
                         from services.svg_generation_assets import publication_context
 
                         async with async_session_maker() as asset_session:
-                            asset_context, asset_revision = await publication_context(asset_session, job)
+                            raster_asset_context, raster_asset_revision = await publication_context(asset_session, job)
                             raster_assets = await prepare_raster_page_assets(
                                 asset_session, configured_public_artifact_service(),
                                 approval_pin=raster_pin,
-                                owner_id=asset_context.owner_id,
-                                tenant_id=asset_context.tenant_id,
-                                publication_context=asset_context,
+                                owner_id=raster_asset_context.owner_id,
+                                tenant_id=raster_asset_context.tenant_id,
+                                publication_context=raster_asset_context,
                                 presentation_id=presentation_id,
-                                source_revision=asset_revision,
-                                slide_revision=asset_revision,
+                                source_revision=raster_asset_revision,
+                                slide_revision=raster_asset_revision,
                                 page_number=index + 1,
                                 output_page_index=index,
                                 canonical_svg=final,

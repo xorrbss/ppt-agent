@@ -54,6 +54,7 @@ import {
   type RasterReviewPageDetail,
   type RasterReviewSaveRequest,
   type RasterAnalysisPin,
+  type RasterAnalysisMode,
   type RasterPageModeRequest,
   type RasterPendingOperationWire,
 } from "../../../services/api/source-content/raster-contract";
@@ -68,7 +69,7 @@ type RasterReviewRecovery = {
   presentationId: string;
   operationId: string;
   referenceSnapshotId?: string;
-  analysisMode?: "auto_preserve" | "reconstruct" | "auto_redesign";
+  analysisMode?: RasterAnalysisMode;
   orientation: "landscape" | "portrait";
   authoredStyle: string;
   instructions: string | null;
@@ -697,7 +698,11 @@ export const useUploadPageState = ({
         // "auto_redesign" is the product default: a real, editable A4 rebuild.
         // The advanced-options toggle is the only way back to the fully
         // manual, region-by-region "reconstruct" review.
-        const analysisMode = rasterAdvancedReview ? "reconstruct" : "auto_redesign";
+        // Only two of the three backend-accepted modes are reachable from this
+        // toggle; the cast keeps `analysisMode` typed as the full union so the
+        // "auto_preserve" branches below (shared with the recovery/retry flows)
+        // still type-check against every mode the backend accepts.
+        const analysisMode = (rasterAdvancedReview ? "reconstruct" : "auto_redesign") as RasterAnalysisMode;
         setLoadingState({
           isLoading: true,
           message: analysisMode === "auto_redesign"
