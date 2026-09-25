@@ -39,8 +39,17 @@ from utils.owner_context import get_current_owner_id, get_current_tenant_id
 PRESENTATION_SLIDE_ORDER_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation Slide Order"])
 
 _TERMINAL_STATES = {"succeeded", "failed", "cancelled", "deadline_exceeded", "dead_letter"}
+# A retry of the *same* submit (same order, same revision) must still land on
+# this set for the endpoint's own duplicate-terminal-failure handling below to
+# ever fire.
+_TERMINAL_FAILURE_STATES = _TERMINAL_STATES - {"succeeded"}
 _POLL_INTERVAL_SECONDS = 0.15
 _POLL_BUDGET_SECONDS = 6.0
+# Bounds the in-request key-escalation loop below; each iteration only runs
+# when create_workspace_command just told us the previous key's operation is
+# a fresh terminal failure, so more than one or two per request would only
+# happen under a pathological retry storm within a single poll budget.
+_MAX_RETRY_KEY_ESCALATIONS = 3
 
 
 class SlideOrderRequest(BaseModel):
@@ -103,9 +112,41 @@ async def reorder_presentation_slides(
     )
     try:
         # create_workspace_command commits (or rolls back) on its own session.
-        operation, _duplicate = await create_workspace_command(
+        operation, duplicate = await create_workspace_command(
             session, presentation_id=presentation_id, request=command,
         )
+        # An idempotency key stays permanently bound to whichever operation
+        # first claimed it -- create_workspace_command never lets a fresh
+        # submit reclaim a key from an existing operation as long as the
+        # payload still hashes the same, and that rule is generic to the
+        # workspace command layer (presentation.generate's bootstrap admission
+        # has the identical "existing + matching request_hash -> return the
+        # existing row" behavior in services/workspace_service.py). The
+        # layer's own answer to "retry a terminal failure" is the separate,
+        # explicit retry action (apply_workspace_action, POST .../operations/
+        # {id}/actions) keyed off the operation id rather than resubmission --
+        # not available here since a first-ever submit has no operation id to
+        # retry against, and the editor only ever calls this narrow PATCH.
+        # So a real retry of a terminal failure escalates the key itself,
+        # deterministically, from the failed operation's own id: two truly
+        # concurrent submits of the same order still race onto the same base
+        # key (existing dedupe, unchanged), while a submit that lands after
+        # the previous attempt is already a terminal failure gets a new
+        # operation and an actual re-execution instead of replaying the old
+        # error forever.
+        escalations = 0
+        while (
+            duplicate
+            and operation.state in _TERMINAL_FAILURE_STATES
+            and escalations < _MAX_RETRY_KEY_ESCALATIONS
+        ):
+            escalations += 1
+            command = command.model_copy(
+                update={"idempotency_key": f"{idempotency_key}:retry:{operation.id}"},
+            )
+            operation, duplicate = await create_workspace_command(
+                session, presentation_id=presentation_id, request=command,
+            )
     except WorkspaceServiceError as error:
         _raise_service_error(error)
     wake_workspace_operation_runner()

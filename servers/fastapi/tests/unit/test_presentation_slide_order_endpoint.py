@@ -39,9 +39,14 @@ from models.sql.slide import SlideModel
 from models.sql.user import User
 from models.sql.workspace import WorkspaceOperation
 from services.database import get_async_session
-from services.workspace_operation_handler_registry import WorkspaceOperationHandlerRegistry
+from services.workspace_operation_handler_registry import (
+    NonRetryableWorkspaceOperationError,
+    WorkspaceOperationHandlerRegistry,
+)
 from services.workspace_operation_runner import WorkspaceOperationRunner
 from services.workspace_slide_order_operation_handler import (
+    OPERATION_KIND,
+    WorkspaceSlideOrderOperationHandler,
     register_workspace_slide_order_operation_handler,
 )
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
@@ -244,3 +249,121 @@ async def test_invalid_body_is_rejected_with_422_not_500(harness):
     assert missing_revision.status_code == 422, missing_revision.text
     assert unknown_field.status_code == 422, unknown_field.text
     assert not_a_uuid.status_code == 422, not_a_uuid.text
+
+
+class _FailFirstAttemptHandler:
+    """Wraps the real handler so the first operation submitted for a given
+    presentation fails terminally (NonRetryableWorkspaceOperationError) and
+    every operation after that runs for real. Models a transient failure
+    (e.g. the publish conflict path WorkspaceSlideOrderOperationHandler's own
+    ``except Exception`` branch reports as ``slide_order_publish_failed``)
+    that has cleared by the time the editor resubmits, without depending on
+    the runner's own internal attempt/backoff machinery to reach a terminal
+    state deterministically in a test."""
+
+    def __init__(self, real: WorkspaceSlideOrderOperationHandler) -> None:
+        self._real = real
+        self._failed_presentations: set[uuid.UUID] = set()
+
+    async def execute(self, context):
+        presentation_id = context.claim.presentation_id
+        if presentation_id not in self._failed_presentations:
+            self._failed_presentations.add(presentation_id)
+            raise NonRetryableWorkspaceOperationError("slide_order_publish_failed")
+        return await self._real.execute(context)
+
+
+@pytest.mark.anyio
+async def test_retry_with_same_payload_after_terminal_failure_succeeds(tmp_path):
+    """D: a failed slide-order op used to block a retry with the same key at
+    the same revision (idempotency_key_payload_conflict / stale error
+    replay) -- create_workspace_command's idempotency lookup returns the
+    same already-terminal operation for any resubmit that hashes the same,
+    and that is intentional, generic workspace-command-layer behavior (the
+    bootstrap admission path for presentation.generate has the identical
+    rule). So the fix lives here, at the caller: when the base key's
+    operation is a fresh terminal failure, escalate to a key derived from
+    that failed operation's id and submit again, producing a genuinely new
+    operation that actually re-executes the command."""
+    engine, maker = await _database(tmp_path / "slide-order-retry.db")
+    registry = WorkspaceOperationHandlerRegistry()
+    flaky = _FailFirstAttemptHandler(WorkspaceSlideOrderOperationHandler(session_factory=maker))
+    registry.register(OPERATION_KIND, flaky, recovery_policy="automatic")
+    runner = WorkspaceOperationRunner(
+        session_factory=maker, registry=registry, max_concurrency=4,
+        heartbeat_seconds=60, poll_seconds=0.01,
+    )
+    app = _app(maker)
+    stop = asyncio.Event()
+    drain_task = asyncio.create_task(_drain_forever(runner, stop))
+    try:
+        presentation_id, slide_ids = await _seed_presentation(maker, n_slides=3)
+        new_order = list(reversed(slide_ids))
+        body = {"slide_ids": [str(s) for s in new_order], "expected_revision": 1}
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
+            first = await client.patch(
+                f"/api/v1/ppt/presentation/{presentation_id}/slides/order", json=body,
+            )
+            # Same idempotency inputs as `first`: same presentation, same
+            # expected_revision, same requested order. Before the fix this
+            # kept returning `first`'s own stale failure forever instead of
+            # ever running the command again.
+            second = await client.patch(
+                f"/api/v1/ppt/presentation/{presentation_id}/slides/order", json=body,
+            )
+
+        assert first.status_code == 422, first.text
+        assert second.status_code == 200, second.text
+        assert second.json()["order"] == [str(s) for s in new_order]
+
+        async with maker() as session:
+            operations = (await session.scalars(
+                select(WorkspaceOperation)
+                .where(WorkspaceOperation.presentation_id == presentation_id)
+                .order_by(WorkspaceOperation.created_at)
+            )).all()
+            slides = (await session.scalars(
+                select(SlideModel).where(SlideModel.presentation == presentation_id).order_by(SlideModel.index)
+            )).all()
+        assert len(operations) == 2
+        assert operations[0].state == "failed"
+        assert operations[1].state == "succeeded"
+        assert operations[0].idempotency_key_hash != operations[1].idempotency_key_hash
+        assert [slide.id for slide in slides] == new_order
+    finally:
+        stop.set()
+        await drain_task
+        await engine.dispose()
+
+
+@pytest.mark.anyio
+async def test_concurrent_duplicate_submits_still_dedupe_onto_one_operation(harness):
+    """The retry-key escalation only fires once the base key's operation is
+    already a terminal failure. Two genuinely concurrent submits of the
+    identical order/revision (no prior failure yet) must still collapse onto
+    a single operation, exactly as before this change."""
+    maker, app = harness
+    presentation_id, slide_ids = await _seed_presentation(maker, n_slides=3)
+    new_order = list(reversed(slide_ids))
+    body = {"slide_ids": [str(s) for s in new_order], "expected_revision": 1}
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        first, second = await asyncio.gather(
+            client.patch(f"/api/v1/ppt/presentation/{presentation_id}/slides/order", json=body),
+            client.patch(f"/api/v1/ppt/presentation/{presentation_id}/slides/order", json=body),
+        )
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert first.json()["operation_id"] == second.json()["operation_id"]
+    assert first.json()["order"] == [str(s) for s in new_order]
+    assert second.json()["order"] == [str(s) for s in new_order]
+
+    async with maker() as session:
+        operations = (await session.scalars(
+            select(WorkspaceOperation).where(WorkspaceOperation.presentation_id == presentation_id)
+        )).all()
+    assert len(operations) == 1
