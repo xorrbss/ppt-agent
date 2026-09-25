@@ -194,6 +194,32 @@ async def test_queue_creates_durable_parent_and_children_without_background_task
 
 
 @async_test
+async def test_queue_accepts_svg_targets_without_html_content(tmp_path, monkeypatch):
+    engine = await _engine(tmp_path / "svg.sqlite")
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        presentation = await _seed_deck(session, 2)
+        svg_slide = (
+            await session.execute(select(SlideModel).where(SlideModel.index == 1))
+        ).scalars().one()
+        svg_slide.html_content = None
+        svg_slide.svg_content = "<svg xmlns='http://www.w3.org/2000/svg'></svg>"
+        svg_slide.source_format = "svg"
+        session.add(svg_slide)
+        await session.commit()
+        _patch_durable_admission(monkeypatch)
+
+        parent = await batch.queue_authored_batch_remake_preview(
+            presentation.id,
+            AuthoredBatchRemakePreviewRequest(slide_indexes=[1]),
+            BackgroundTasks(),
+            session,
+        )
+        assert parent.status == "processing"
+        assert parent.data["total"] == 1
+    await engine.dispose()
+
+
+@async_test
 async def test_queue_rejects_out_of_range_and_unauthored_targets(tmp_path):
     engine = await _engine(tmp_path / "reject.sqlite")
     async with AsyncSession(engine, expire_on_commit=False) as session:

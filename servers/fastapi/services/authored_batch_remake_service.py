@@ -237,8 +237,9 @@ async def queue_authored_batch_remake_preview(
             raise HTTPException(
                 status_code=400, detail="Slide index is outside the presentation"
             )
-        if not slides[slide_index].html_content:
-            raise HTTPException(status_code=400, detail="Slide has no authored HTML")
+        target = slides[slide_index]
+        if not target.html_content and not target.is_svg():
+            raise HTTPException(status_code=400, detail="Slide has no authored source")
 
     presentation = await session.get(PresentationModel, presentation_id)
     if presentation is None:
