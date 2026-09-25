@@ -141,3 +141,11 @@ def test_model_may_not_collapse_unread_glyph_slots():
     # One unreadable glyph read as one letter is a misread, not lost content.
     assert not collapses_unread_glyphs(normalized("거의 = 배."), normalized("거의 두 배."))
     assert transcription_agrees(["$1B+ 이벤트는 거의 = 배."], "$1B+ 이벤트는 거의 두 배.")
+
+
+def test_model_space_after_a_dropped_mark_is_kept():
+    from services.source_content.raster_text_correction import respace
+
+    model = "표준화 강화 · 고부가가치 업무 집중"
+    assert respace(model, "표준화 강화고부가가치 업무 집중") == model
+    assert respace("조회·다운로드", "조회다운로드") == "조회·다운로드"  # no space where the model has none

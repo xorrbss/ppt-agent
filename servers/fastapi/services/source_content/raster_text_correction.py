@@ -174,9 +174,10 @@ def respace(text: str, reading: str) -> str | None:
             if tag == "equal":
                 space = (i1 + offset) in ocr_spaces
                 # Between two Hangul letters both readers agree on, a space the OCR
-                # dropped ("제안은기존의") is kept from the model.
+                # dropped ("제안은기존의") is kept from the model; so is one after a
+                # separator mark the OCR dropped ("강화 · 고부가가치").
                 if not space and j in model_spaces and j and _HANGUL.match(model[j]) and (
-                    _HANGUL.match(model[j - 1]) or model[j - 1] in ",.)"
+                    _HANGUL.match(model[j - 1]) or model[j - 1] in ",.)·ㆍ・•∙:;"
                 ):
                     space = offset > 0 or (i1 > 0 and j1 > 0)
             else:
