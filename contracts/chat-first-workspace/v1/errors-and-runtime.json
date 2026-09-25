@@ -1057,6 +1057,12 @@
       "retryable": false
     },
     {
+      "code": "artifact_store_failed",
+      "status_code": 503,
+      "safe_message": "The operation could not finish. Try again later.",
+      "retryable": false
+    },
+    {
       "code": "authored_manifest_publication_failed",
       "status_code": 503,
       "safe_message": "The operation could not finish. Try again later.",
@@ -1097,6 +1103,12 @@
       "status_code": 408,
       "safe_message": "The operation deadline has passed.",
       "retryable": false
+    },
+    {
+      "code": "artifact_key_busy",
+      "status_code": 409,
+      "safe_message": "Another request is saving the same files. Try again.",
+      "retryable": true
     }
   ],
   "privacy": {

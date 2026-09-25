@@ -52,6 +52,7 @@ _GROUPS = (
         "svg_export_incomplete_presentation",
     )),
     (503, False, "The operation could not finish. Try again later.", (
+        "artifact_store_failed",
         "authored_manifest_publication_failed",
         "generation_timing_receipt_persistence_failed",
         "generation_timing_receipt_projection_invalid",
@@ -61,6 +62,9 @@ _GROUPS = (
     )),
     (408, False, "The operation deadline has passed.", (
         "public_deadline_exceeded",
+    )),
+    (409, True, "Another request is saving the same files. Try again.", (
+        "artifact_key_busy",
     )),
 )
 

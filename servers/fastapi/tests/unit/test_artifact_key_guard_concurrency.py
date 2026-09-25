@@ -264,3 +264,110 @@ def test_postgresql_holders_share_the_key_and_delete_is_excluded() -> None:
             await engine.dispose()
 
     asyncio.run(scenario())
+
+
+def test_postgresql_concurrent_registrations_are_idempotent(tmp_path: Path) -> None:
+    """Opt-in: both holders reach the INSERT; no unique violation, no lost row.
+
+    Idempotency comes from ``uq_public_artifact_operation_digest`` (owner,
+    tenant, kind, sha256, operation, retention) plus ``register_ref``'s
+    savepoint + ``IntegrityError`` replay: different operations insert distinct
+    rows; the same operation's second writer waits on the unique index and then
+    replays the committed row.
+    """
+
+    configured_url = os.getenv("PPT_AGENT_ARTIFACT_REGISTRATION_RACE_TEST_URL")
+    if not configured_url:
+        pytest.skip("PPT_AGENT_ARTIFACT_REGISTRATION_RACE_TEST_URL is not set")
+
+    from sqlalchemy import func, select
+    from sqlalchemy.engine import make_url
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from models.sql.public_artifact import PublicArtifact
+    from utils.owner_context import reset_current_owner_id, set_current_owner_id
+
+    parsed = make_url(configured_url)
+    assert parsed.get_backend_name() == "postgresql" and parsed.host == "127.0.0.1"
+    assert parsed.port == 21001 and parsed.database == "cas_registration_race_test"
+
+    async def scenario() -> None:
+        engine = create_async_engine(
+            parsed.set(drivername="postgresql+asyncpg"), isolation_level="READ COMMITTED",
+            connect_args={"server_settings": {"lock_timeout": "5000"}},
+        )
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        owner_id = uuid.uuid4()
+        token = set_current_owner_id(owner_id)
+        store = LocalDevelopmentArtifactObjectStore(tmp_path / "objects")
+        service = DurableArtifactService(store)
+        table = PublicArtifact.__table__
+        try:
+            async with engine.begin() as connection:
+                await connection.run_sync(lambda sync: table.drop(sync, checkfirst=True))
+                await connection.run_sync(lambda sync: table.create(sync))
+            deck1, deck2 = _ref(owner_id), _ref(owner_id)
+            await store.put_stream(deck1, io.BytesIO(PAYLOAD))
+
+            async def rows() -> list[PublicArtifact]:
+                async with maker() as reader:
+                    return list((await reader.scalars(
+                        select(PublicArtifact).where(PublicArtifact.storage_key == deck1.storage_key)
+                    )).all())
+
+            # Two operations (two decks): both INSERTs land, neither waits.
+            async with maker() as first, maker() as second:
+                await first.begin()
+                await second.begin()
+                assert await service.register_ref(first, deck1) == deck1
+                assert await asyncio.wait_for(service.register_ref(second, deck2), timeout=3) == deck2
+                await first.commit()
+                await second.commit()
+            registered = await rows()
+            assert {row.id for row in registered} == {deck1.artifact_id, deck2.artifact_id}
+            assert all(row.refcount == 0 and row.lifecycle_state == "committed" for row in registered)
+
+            # One operation twice (a duplicated attempt): the second waits on the
+            # unique index, then replays the committed row instead of raising.
+            again = deck1.model_copy(update={"artifact_id": uuid.uuid4()})
+            replay = deck2.model_copy(update={"artifact_id": uuid.uuid4()})
+            async with maker() as first, maker() as second:
+                await first.begin()
+                await second.begin()
+                # deck1's operation already has its row: replay without waiting.
+                assert await service.register_ref(first, again) == deck1
+                fresh_op = replay.model_copy(update={"created_by_operation_id": uuid.uuid4()})
+                assert await service.register_ref(first, fresh_op) == fresh_op
+                racing = asyncio.create_task(service.register_ref(
+                    second, fresh_op.model_copy(update={"artifact_id": uuid.uuid4()}),
+                ))
+                await asyncio.sleep(0.5)
+                assert not racing.done(), "second writer should wait on the unique index"
+                await first.commit()
+                assert await asyncio.wait_for(racing, timeout=5) == fresh_op
+                await second.commit()
+
+            # Two consumers bind the same producer bytes concurrently.
+            async with maker() as first, maker() as second:
+                await first.begin()
+                await second.begin()
+                bound = await asyncio.gather(
+                    service.register_consumer_ref(first, deck1, created_by_operation_id=uuid.uuid4()),
+                    service.register_consumer_ref(second, deck1, created_by_operation_id=uuid.uuid4()),
+                )
+                await first.commit()
+                await second.commit()
+            assert len({ref.artifact_id for ref in bound}) == 2
+            async with maker() as reader:
+                assert await reader.scalar(
+                    select(func.count()).select_from(PublicArtifact)
+                    .where(PublicArtifact.storage_key == deck1.storage_key)
+                ) == 5
+                assert await reader.scalar(select(func.sum(PublicArtifact.refcount))) == 0
+        finally:
+            reset_current_owner_id(token)
+            async with engine.begin() as connection:
+                await connection.run_sync(lambda sync: table.drop(sync, checkfirst=True))
+            await engine.dispose()
+
+    asyncio.run(scenario())

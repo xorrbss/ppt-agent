@@ -54,6 +54,7 @@ from api.v1.ppt.endpoints.presentation_generate_admission import (
     _require_local_legacy_async_generation,
     _require_local_sync_generation,
 )
+from api.v1.ppt.endpoints.presentation_generate_errors import generation_admission_http_error
 from constants.presentation import (
     DEFAULT_ATTACHMENT_GENERATION_PROMPT,
     MAX_NUMBER_OF_SLIDES,
@@ -2299,12 +2300,11 @@ async def generate_presentation_async(
             operation_id=operation_id,
         )
 
-    except Exception as e:
-        if not isinstance(e, HTTPException):
-            print(e)
-            e = HTTPException(status_code=500, detail="Presentation generation failed")
-
-        raise e
+    except Exception as error:
+        mapped = generation_admission_http_error(error, request_id=request._request_id)
+        if mapped is error:
+            raise
+        raise mapped from error
 
 
 @PRESENTATION_GENERATE_ROUTER.get(
