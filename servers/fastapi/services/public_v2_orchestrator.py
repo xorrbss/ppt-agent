@@ -135,6 +135,7 @@ from services.workspace_quality_operation_handler import (
     validate_release_review_base_receipts,
 )
 from services.workspace_db_adapter import reserve_conversation_positions
+from services.workspace_operation_principal import PRINCIPAL_TENANT_PAYLOAD_KEY
 from services.workspace_service import (
     WorkspaceServiceError,
     bootstrap_workspace,
@@ -1092,9 +1093,7 @@ class SqlPublicV2Orchestrator:
                     style_id=request.authored_style or "default",
                 )
             except ValueError as error:
-                if str(error).startswith("document_canvas") or str(error).startswith("authored_canvas") or str(error).startswith(
-                    "authored_portrait"
-                ):
+                if str(error).startswith(("document_canvas", "authored_canvas", "authored_portrait")):
                     raise _public_error(422, str(error)) from error
                 raise
             # This has no provider side effect.  It must remain ahead of the
@@ -1126,7 +1125,8 @@ class SqlPublicV2Orchestrator:
                 ),
             )
             pin_source_restyle_authoring(internal_request)
-            if internal_request.strategy == "svg" and internal_request.source_mode in {"source_content_restyle", "raster_reconstruction"}:
+            if internal_request.strategy == "svg" and internal_request.source_mode in {
+                    "source_content_restyle", "raster_reconstruction"}:
                 from services.source_content.pipeline import admit_source_content_request
                 from services.source_content.errors import SourceContentError
 
@@ -1272,6 +1272,7 @@ class SqlPublicV2Orchestrator:
                 "quality_policy": request.quality_policy,
                 "generation_strategy": strategy_receipt,
                 "generation_route_receipt": route_payload,
+                PRINCIPAL_TENANT_PAYLOAD_KEY: actor.tenant_id,  # stored, not hashed
             }
             operation.expected_revision = presentation.revision
             operation.next_attempt_at = get_current_utc_datetime()
@@ -1375,10 +1376,7 @@ class SqlPublicV2Orchestrator:
         export_format = request.output.format
         kind = f"export.{export_format}"
         key_hash = _idempotency_hash(actor, kind=kind, key=idempotency_key)
-        request_payload = {
-            "presentationId": presentation_id,
-            **request.model_dump(mode="json", by_alias=True),
-        }
+        request_payload = {"presentationId": presentation_id, **request.model_dump(mode="json", by_alias=True)}
         request_hash = _canonical_hash(request_payload)
         async with self._session_factory() as session:
             existing = await self._operation_for_key(
@@ -1752,7 +1750,7 @@ class SqlPublicV2Orchestrator:
                     state="queued",
                     idempotency_key_hash=review_key_hash,
                     request_hash=review_request_hash,
-                    request_payload=review_payload,
+                    request_payload={**review_payload, PRINCIPAL_TENANT_PAYLOAD_KEY: actor.tenant_id},
                     expected_revision=request.source_revision,
                     next_attempt_at=now,
                 )
@@ -1802,7 +1800,7 @@ class SqlPublicV2Orchestrator:
                 state="queued",
                 idempotency_key_hash=key_hash,
                 request_hash=request_hash,
-                request_payload=export_payload,
+                request_payload={**export_payload, PRINCIPAL_TENANT_PAYLOAD_KEY: actor.tenant_id},
                 expected_revision=request.source_revision,
                 # The review is the durable predecessor. Its earlier anchor and
                 # immediate readiness normally claim first; this short delay is
@@ -1891,10 +1889,7 @@ class SqlPublicV2Orchestrator:
         kind = f"export.{request.output.format}"
         key_hash = _idempotency_hash(actor, kind=kind, key=idempotency_key)
         request_hash = _canonical_hash(
-            {
-                "presentationId": presentation_id,
-                **request.model_dump(mode="json", by_alias=True),
-            }
+            {"presentationId": presentation_id, **request.model_dump(mode="json", by_alias=True)}
         )
         async with self._session_factory() as session:
             operation = await self._operation_for_key(

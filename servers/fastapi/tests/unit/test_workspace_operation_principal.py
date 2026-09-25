@@ -223,3 +223,30 @@ def test_submission_captures_the_tenant_outside_the_idempotency_hash(tmp_path: P
             await engine.dispose()
 
     asyncio.run(scenario())
+
+
+def test_bootstrap_turn_captures_the_tenant_outside_the_idempotency_hash(tmp_path: Path) -> None:
+    from services.workspace_service import bootstrap_workspace
+
+    async def scenario() -> None:
+        engine, maker = await service_test._database(tmp_path / "bootstrap.db")
+        try:
+            presentation = await service_test._create_presentation(maker)
+            request = service_test._bootstrap_request(key="principal-bootstrap")
+            token = set_current_tenant_id("tenant-b")
+            try:
+                async with maker() as session:
+                    _, _, operation, duplicate = await bootstrap_workspace(
+                        session, presentation_id=presentation.id, request=request)
+                async with maker() as session:
+                    _, _, replay, replay_duplicate = await bootstrap_workspace(
+                        session, presentation_id=presentation.id, request=request)
+            finally:
+                reset_current_tenant_id(token)
+            assert duplicate is False and replay_duplicate is True
+            assert replay.id == operation.id and replay.request_hash == operation.request_hash
+            assert operation.request_payload[PRINCIPAL_TENANT_PAYLOAD_KEY] == "tenant-b"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())

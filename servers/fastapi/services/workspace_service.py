@@ -827,7 +827,7 @@ async def _bootstrap_workspace_once(
         else None
     )
     operation.request_payload = {
-        **operation_payload,
+        **operation.request_payload,  # keeps the principal the turn captured
         "asset_ids": [str(asset.id) for asset in assets],
     }
     await _append_message_created_event(

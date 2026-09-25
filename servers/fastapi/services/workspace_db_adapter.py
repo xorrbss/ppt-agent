@@ -12,6 +12,7 @@ from models.sql.workspace import (
     WorkspaceMessage,
     WorkspaceOperation,
 )
+from services.workspace_operation_principal import submitting_principal_tenant
 from utils.datetime_utils import get_current_utc_datetime
 from utils.owner_context import get_current_owner_id
 
@@ -95,8 +96,15 @@ async def bootstrap_workspace_turn(
         position=first_position,
         role="user",
     )
+    operation_values = dict(operation)
+    # The submitting principal's tenant for the runner; the caller hashed its
+    # request before this, so it never affects idempotent resubmission.
+    operation_values["request_payload"] = {
+        **submitting_principal_tenant(),
+        **dict(operation_values.get("request_payload") or {}),
+    }
     workspace_operation = WorkspaceOperation(
-        **dict(operation),
+        **operation_values,
         conversation_id=conversation_id,
         anchor_position=operation_position,
     )

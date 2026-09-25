@@ -26,6 +26,7 @@ from services.source_content.raster_reconstruction_store import (
     derive_raster_crop_corrections, derive_full_page_preserve_regions, raster_review_blockers,
 )
 from services.workspace_asset_service import resolve_workspace_asset_download
+from services.workspace_operation_principal import PRINCIPAL_TENANT_PAYLOAD_KEY
 from services.workspace_service import _get_or_create_conversation
 from utils.owner_context import get_current_owner_id, get_current_tenant_id
 
@@ -233,6 +234,7 @@ async def analyze_raster(request: AnalyzeRasterRequest, session: AsyncSession = 
         source_ref = await service.persist_bytes(session, owner_id=owner, tenant_id=tenant, kind="presentation-pptx", payload=source_bytes, media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation", created_by_operation_id=operation_id, retention_class="published")
         operation.request_payload = request_payload | {"source_artifact_ref": source_ref.model_dump(mode="json"), "source_sha256": source_sha}
         operation.request_hash = raster_digest(operation.request_payload)
+        operation.request_payload = operation.request_payload | {PRINCIPAL_TENANT_PAYLOAD_KEY: tenant}  # not hashed
         session.add(operation)
         await _retain_live_pointer(session, operation=operation, reference=source_ref, revision=1, kind="raster.source")
         await session.commit()
