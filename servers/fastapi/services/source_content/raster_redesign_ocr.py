@@ -23,6 +23,7 @@ from PIL import Image, ImageChops
 
 OCR_SCALE = 2
 LAYOUT_ENGINE = "tesseract-kor+eng-psm3-x2"
+LAYOUT_PSM = 3
 SPARSE_ENGINE = "tesseract-kor+eng-psm11-x2"
 # Glyph height (source px per 941 px of page height) at or below which text is
 # application-UI micro text; at slide scale it is also below the 9.5pt floor.
@@ -90,6 +91,10 @@ def _run_tesseract(
             "tessedit_create_tsv=1",
             "-c",
             "tessedit_create_txt=1",
+            # Slides are never set vertically, but the page layout analysis classifies
+            # tightly set Korean blocks (a table of contents) as vertical text and
+            # returns column-shaped garbage words that suppress the sparse pass.
+            *(("-c", "textord_tabfind_vertical_text=0") if psm == LAYOUT_PSM else ()),
         ]
         # Pages are recognised in parallel; one engine thread each avoids
         # oversubscribing the CPU with OpenMP workers.
@@ -258,7 +263,7 @@ def redesign_ocr(
     """Return words (inventory order) and visual lines with agreement scores."""
 
     options = {"executable": executable, "tessdata": tessdata, "timeout_seconds": timeout_seconds}
-    layout = _words_from_pass(image, psm=3, variant="luma", engine=LAYOUT_ENGINE, **options)
+    layout = _words_from_pass(image, psm=LAYOUT_PSM, variant="luma", engine=LAYOUT_ENGINE, **options)
     sparse = _words_from_pass(image, psm=11, variant="luma", engine=SPARSE_ENGINE, **options)
     words: list[RedesignWord] = []
     groups: dict[tuple[int, int, int, int], list[int]] = {}
