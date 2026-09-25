@@ -182,7 +182,16 @@ def analysis_only_editable_ratio(analysis: Optional[dict]) -> Optional[dict]:
             if role == "screenshot" and not fallback:
                 mockup += chars
             elif role in _TEXT_ROLES and not fallback:
-                numerator += chars
+                # 2026-09-25 fix: a "table" region with no table_cells is
+                # kept as a PICTURE (no native cells at all) -- it must not
+                # enter the numerator as "published editable text" just
+                # because editable_fallback happened to be False (observed:
+                # a 120-char cell-less table region on the large external
+                # reference deck's page 23). It still counts in
+                # all_text_bearing (denominator), same as any other
+                # pixel-kept text-bearing region.
+                if role != "table" or region.get("table_cells") is not None:
+                    numerator += chars
         denom = all_text_bearing - mockup
         if denom > 0:
             ratio = validate_ratio(numerator / denom, context=f"analysis page {page.get('page_number')}")

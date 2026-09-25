@@ -35,29 +35,53 @@ LOW_RECALL_THRESHOLD = 0.70
 PICTURE_SHAPE_TYPE = 13
 
 
+def _text_frame_runs(text_frame):
+    for para in text_frame.paragraphs:
+        for run in para.runs:
+            yield run
+
+
 def slide_editable_text_stats(slide) -> dict:
+    """2026-09-25 fix: native PPTX table cell text now counts toward
+    `chars` (and `text_shapes`/`font_sizes_pt`/`runs_without_explicit_size`)
+    the same as any other text shape -- it used to be silently excluded
+    here (while `slide_text()` in checker_text.py, used for char recall/
+    precision, already included it), which hid a native table's real cost
+    or gain from every `editable_text_ratio_*` metric that reads this
+    function's `chars`."""
     text_shapes = 0
     chars = 0
     font_sizes_pt = []
     runs_without_explicit_size = 0
+
+    def _count_runs(runs) -> bool:
+        nonlocal chars, runs_without_explicit_size
+        has_text = False
+        for run in runs:
+            if run.text and run.text.strip():
+                has_text = True
+                chars += len(run.text)
+                try:
+                    size = run.font.size
+                except Exception:
+                    size = None
+                if size is not None:
+                    font_sizes_pt.append(size.pt)
+                else:
+                    runs_without_explicit_size += 1
+        return has_text
+
     for shape in slide.shapes:
         if shape.has_text_frame:
-            frame_has_text = False
-            for para in shape.text_frame.paragraphs:
-                for run in para.runs:
-                    if run.text and run.text.strip():
-                        frame_has_text = True
-                        chars += len(run.text)
-                        size = None
-                        try:
-                            size = run.font.size
-                        except Exception:
-                            size = None
-                        if size is not None:
-                            font_sizes_pt.append(size.pt)
-                        else:
-                            runs_without_explicit_size += 1
-            if frame_has_text:
+            if _count_runs(_text_frame_runs(shape.text_frame)):
+                text_shapes += 1
+        if getattr(shape, "has_table", False):
+            table_has_text = False
+            for row in shape.table.rows:
+                for cell in row.cells:
+                    if _count_runs(_text_frame_runs(cell.text_frame)):
+                        table_has_text = True
+            if table_has_text:
                 text_shapes += 1
     return {
         "text_shapes": text_shapes,

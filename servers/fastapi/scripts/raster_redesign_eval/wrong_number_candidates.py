@@ -17,14 +17,12 @@ given output slide isn't always obvious from position alone.
 baseline, 25 of 27 raw candidates were exactly the output slide's own page-number
 footer stamp ("02" on slide 2, "17" on slide 17, ...) -- the same false
 positive `wrong_number_filter.classify_wrong_numbers` already exists to
-remove from `ground_truth_checker`'s `wrong_numbers` (deck1-4). Condition 2
-of that filter ("the token isn't a real source number") is automatically
-satisfied here -- a token only becomes a raw candidate because it's already
-absent from both source texts -- so `find_candidates` reuses the same
-function with an empty source-token list, applying only its structural
-conditions (matches the slide's own page number; sits in a standalone
-page-number-shaped shape/run). `find_candidates` returns the FILTERED list;
-`find_raw_candidates` (unfiltered) and the filtered-out audit are also
+remove from `ground_truth_checker`'s `wrong_numbers` (deck1-4). Every
+candidate here is already a raw excess (absent from both source texts), so
+`find_candidates` reuses that same function directly, applying its
+structural conditions (matches the slide's own page number; sits in a
+standalone page-number-shaped shape/run). `find_candidates` returns the
+FILTERED list; `find_raw_candidates` (unfiltered) and the filtered-out audit are also
 exposed for callers that want to see what was excluded and why.
 """
 from __future__ import annotations
@@ -113,7 +111,7 @@ def find_candidates(prs, positional_source_text: dict, best_match_source_text: d
         if not page_candidates:
             continue
         tokens = [c["token"] for c in page_candidates]
-        filtered_tokens, remaining_tokens = classify_wrong_numbers(slide, prs.slide_height, idx, tokens, [])
+        filtered_tokens, remaining_tokens = classify_wrong_numbers(slide, prs.slide_height, idx, tokens)
         for token in filtered_tokens:
             filtered_out.append({"page": idx, "token": token})
         remaining_counter = Counter(remaining_tokens)

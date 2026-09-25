@@ -82,9 +82,8 @@ def score_deck_ground_truth(deck_cfg: dict, decks_root: Path, pptx_path: Path,
         page_number = s["page_number"]
         wrong_pages_raw.append({"page": page_number, "fabricated": fab})
         slide_obj = prs_slides[page_number - 1]
-        source_tokens = gt_pages_by_number.get(page_number, {}).get("numeric_tokens", [])
         filtered_tokens, remaining_tokens = classify_wrong_numbers(
-            slide_obj, prs.slide_height, page_number, fab, source_tokens)
+            slide_obj, prs.slide_height, page_number, fab)
         if filtered_tokens:
             filtered_as_page_number.append({"page": page_number, "tokens": filtered_tokens})
         if remaining_tokens:

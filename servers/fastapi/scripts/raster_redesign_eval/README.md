@@ -279,6 +279,57 @@ from-scratch path, not for `--from-images`.
 - run-level (top of `summary.json`, not per-deck): `concurrent_harness` --
   see "Concurrent harness flag" below
 
+## Three checker fixes (2026-09-26)
+
+**Count-based page-number filter.** `classify_wrong_numbers()` used to also
+require a token to be entirely absent from the page's source numeric
+tokens (`tok not in set(source_numeric_tokens)`) before filtering it as a
+page-number-footer artefact -- double-counting `numeric_exactness()`'s own
+multiset accounting (`fabricated_numbers` is already the per-token EXCESS,
+output count minus matched-to-source count, not the raw output count). A
+legitimately-repeated source number with an ADDITIONAL genuine footer
+digit broke this: deck3 slide 14's editable text has "14" three times
+(the "PART IV - REVENUE BRIDGE - 14" kicker, "14 / 20", and the redesign's
+own bottom-right page-number stamp) while source has it twice (kicker +
+"14 / 20") -- `fabricated_numbers` already correctly narrowed this to one
+excess "14", but the set-membership check refused to filter it since "14"
+*is* present in source (just not three times). The now-unnecessary
+source-membership condition is removed; `classify_wrong_numbers()` lost
+its `source_numeric_tokens` parameter (see `wrong_number_filter.py`'s
+docstring for the full reasoning). **Verified on `int2-baf2b8097`'s real
+deck3 output:** page 14's `fabricated_numbers = ["14"]` (single excess,
+exactly as predicted), now filtered (`wrong_numbers_filtered_as_page_number:
+[{"page": 14, "tokens": ["14"]}]`), and deck3's `wrong_numbers.count` drops
+to **0**.
+
+**Native table text now counts toward `editable_text_ratio_*` / char
+recall-precision.** `slide_editable_text_stats()` (in `checker_slide.py`
+for the repo copy, inline in `checker.py` for the out-of-repo copy) only
+ever iterated `shape.has_text_frame` shapes -- a native PPTX table's cell
+text was silently excluded from `editable_text_chars` (feeding
+`editable_text_ratio_overall`/`_body_mean`/`min_font_pt`), even though
+`slide_text()` (used for `char_recall_mean`/`char_precision_mean`) already
+counted it. This hid a native table's real editable-text cost or gain from
+every ratio metric. Now counts table cell runs identically to text-frame
+runs (chars, font sizes, a `text_shapes` increment per table with content).
+
+**Cell-less tables excluded from `editable_text_ratio_body_excl_mockup`'s
+numerator.** `mockup_regions.analysis_only_editable_ratio()` (checker-kind
+decks) counted any `role == "table"` region with `editable_fallback ==
+False` as "published editable text" -- but a table region with
+`table_cells is None` has NO native cells at all; it's a picture, and
+`editable_fallback` isn't reliably `True` for one (observed: a 120-char
+`role="table"`, `table_cells=None`, `editable_fallback=False` region on
+the large external reference deck's page 23, in `int2-baf2b8097`'s
+analysis). Now a `role=="table"` region only enters the numerator when it
+actually has `table_cells`; it still counts in the denominator
+(`all_text_bearing`) like any other pixel-kept text-bearing region.
+**Verified:** the same page-23 region (120 chars) is now excluded from the
+numerator; the large external reference deck's
+`editable_text_ratio_body_excl_mockup` on `int2-baf2b8097` came out
+`0.5059` with the fix in place (byte-identical between this repo copy and
+the out-of-repo one).
+
 ## Wrong-number footer false positives (2026-09-25, fixed at the summarization layer)
 
 **`ground_truth_checker.py`'s `numeric_exactness` over-reports "fabricated"

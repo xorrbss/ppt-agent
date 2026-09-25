@@ -6,17 +6,39 @@ footer (e.g. "01", "02", ...) that wasn't already baked into the *original*
 deck's text. `ground_truth_checker.py` itself is left unmodified (scoring
 logic stays identical); `classify_wrong_numbers()` here splits each page's
 raw `fabricated_numbers` into `filtered` (excluded false positives) and
-`remaining` (kept, real hard fails), applying all three conditions together,
-never on value alone:
+`remaining` (kept, real hard fails).
 
-  1. the token equals the *output slide's own* 1-based page number, zero-
-     padded or not (e.g. "4" or "04" for slide 4);
-  2. that page's real source ground truth does NOT contain the token (so a
-     deck whose original text legitimately included that number, e.g. as
-     part of a real page range, is not filtered); and
-  3. the token appears as a standalone page-number-shaped shape/run on that
-     slide -- either the *entire* text of some shape, or a short (<=4 char)
-     run inside a shape sitting in the top/bottom 12% band of the slide.
+`fabricated` is `numeric_exactness()`'s own multiset EXCESS -- for a token
+that appears N times in the output and M times in source, `fabricated`
+already contains it exactly `max(0, N-M)` times, not N times (`missing`
+gets the opposite excess, `max(0, M-N)`). So `classify_wrong_numbers` is
+**count-based by construction**: it filters only up to that excess count,
+never touching the M occurrences that already matched real source content.
+A token is filtered from that excess, one occurrence at a time, when it:
+
+  1. equals the *output slide's own* 1-based page number, zero-padded or
+     not (e.g. "4" or "04" for slide 4); and
+  2. appears as a standalone page-number-shaped shape/run on that slide --
+     either the *entire* text of some shape, or a short (<=4 char) run
+     inside a shape sitting in the top/bottom 12% band of the slide
+     (`_footer_candidate_counter`), capped at `min(available candidates,
+     excess count)` so a legitimately-repeated source number is never
+     over-filtered.
+
+**2026-09-25 count-based fix:** an earlier version of condition 1 above
+also required the token to be ABSENT from the page's source numeric tokens
+at all (`tok not in set(source_numeric_tokens)`), on the theory that a
+token appearing anywhere in source must be a legitimate repeat. That
+double-counted `numeric_exactness()`'s own multiset accounting and broke
+on a real case: deck3 slide 14's editable text has "14" three times ("PART
+IV - REVENUE BRIDGE - 14" kicker, "14 / 20", and the redesign's own
+bottom-right page-number stamp) while the source page has it twice (the
+kicker and "14 / 20" only) -- `fabricated_numbers` already correctly
+narrows this to a single excess "14" (3-2), but the old set-membership
+check refused to filter it at all, since "14" is *present* in source (just
+not three times). Removed: `fabricated`'s own multiset excess already
+means "not explained by source count", so no additional source-membership
+check is needed or correct here.
 
 See README.md for the reasoning and worked examples.
 """
@@ -66,22 +88,21 @@ def _footer_candidate_counter(slide, slide_height: int) -> Counter:
     return counter
 
 
-def classify_wrong_numbers(slide, slide_height: int, page_number: int,
-                            fabricated: list, source_numeric_tokens: list) -> tuple:
-    """Splits a slide's raw `fabricated_numbers` list into (filtered, remaining):
-    `filtered` are tokens that equal the slide's own 1-based page number (zero-
-    padded or not), are NOT present in that page's real source numeric tokens,
-    AND appear as a standalone page-number-shaped shape/run per
-    `_footer_candidate_counter`. Everything else stays in `remaining` (a real
-    hard fail)."""
+def classify_wrong_numbers(slide, slide_height: int, page_number: int, fabricated: list) -> tuple:
+    """Splits a slide's raw `fabricated_numbers` EXCESS list (see module
+    docstring -- already source-count-aware) into (filtered, remaining):
+    `filtered` is the portion of each token's excess that equals the
+    slide's own 1-based page number AND is explained by a standalone
+    page-number-shaped shape/run (`_footer_candidate_counter`), capped at
+    however many such candidates actually exist. Everything else stays in
+    `remaining` (a real hard fail)."""
     forms = _page_number_forms(page_number)
-    src_set = set(source_numeric_tokens)
     candidates = _footer_candidate_counter(slide, slide_height)
     fab_counter = Counter(fabricated)
     filtered: list = []
     remaining: list = []
     for tok, cnt in fab_counter.items():
-        if tok in forms and tok not in src_set:
+        if tok in forms:
             avail = candidates.get(tok, 0)
             take = min(avail, cnt)
             filtered.extend([tok] * take)
