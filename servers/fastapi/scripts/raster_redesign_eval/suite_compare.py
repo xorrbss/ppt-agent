@@ -75,6 +75,34 @@ def _harness_note(base: dict, new: dict) -> str:
     return f" [concurrent_harness: base={bh}, new={nh}]"
 
 
+def _pixel_cause_table(base_decks: dict, new_decks: dict, deck_ids: list) -> list:
+    """Compact `pixel_text_by_cause` table (2026-09-25 follow-up, see
+    pixel_text_causes.py): one row per (deck, category) with base/new chars
+    and region counts side by side. Skipped for a deck missing the field
+    entirely (an older run, predating this metric)."""
+    from pixel_text_causes import CATEGORIES
+
+    lines = ["", "### Pixel text by cause", "",
+              "| deck | category | base chars | new chars | base regions | new regions |",
+              "|---|---|---|---|---|---|"]
+    any_row = False
+    for deck_id in deck_ids:
+        b = (base_decks.get(deck_id, {}).get("pixel_text_by_cause") or {}).get("categories", {})
+        n = (new_decks.get(deck_id, {}).get("pixel_text_by_cause") or {}).get("categories", {})
+        if not b and not n:
+            continue
+        for cat in CATEGORIES:
+            bc, nc = b.get(cat, {}), n.get(cat, {})
+            if not bc and not nc:
+                continue
+            any_row = True
+            lines.append(
+                f"| {deck_id} | {cat} | {bc.get('chars')} | {nc.get('chars')} | "
+                f"{bc.get('region_count')} | {nc.get('region_count')} |"
+            )
+    return lines if any_row else []
+
+
 def cmd_compare(args: argparse.Namespace) -> None:
     base = _load_summary(args.base_run)
     new = _load_summary(args.run)
@@ -114,6 +142,9 @@ def cmd_compare(args: argparse.Namespace) -> None:
             lines.append(f"| {deck_id} | {label} | {bv} | {nv} | {delta} | {flag} |")
 
     print("\n".join(lines))
+    pixel_cause_lines = _pixel_cause_table(base_decks, new_decks, deck_ids)
+    if pixel_cause_lines:
+        print("\n".join(pixel_cause_lines))
     if flags:
         print("\n### Flags\n")
         for f in flags:

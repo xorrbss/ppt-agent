@@ -28,6 +28,7 @@ scripts/raster_redesign_eval/
   wrong_number_filter.py        # page-number-footer false-positive classification, number gate
   mockup_regions.py             # mockup-region (screenshot/UI-mock) exclusion, from analysis_result.json
   wrong_number_candidates.py    # checker-kind wrong-number candidates (+ --crops)
+  pixel_text_causes.py          # pixel_text_by_cause: why pixel-kept text isn't editable
   generate_raster_deck.py     # product-path driver (thin facade)
   raster_deck_http.py / _upload.py / _analysis.py / _generate.py / _evidence.py / _run.py
   # raster_deck_analysis.py also has save_analysis_result() -> RUN_DIR/<deck_id>/analysis_result.json
@@ -483,6 +484,85 @@ in practice dominated by numbers kept as pixels, but can't be cleanly told
 apart from a genuinely dropped number without deeper region-level tracing,
 so this is reported as the simpler difference per the task, not a fully
 separate "missing" bucket).
+
+## Pixel text by cause (`pixel_text_by_cause`, all decks, 2026-09-25)
+
+Per deck: every pixel-kept text region's chars, split into WHY it's not
+editable text -- to distinguish "product limitation we can fix" from
+"structurally correct" pixel content. Computed entirely from
+`analysis_result.json` (same single source and per-region char-counting as
+`editable_text_ratio_body_excl_mockup`; see `pixel_text_causes.py`), plus
+`slide_evidence_report.json` only for `page_or_group_fallback`'s region
+count (see below). `pixel_text_by_cause.categories`: `mark_disagreement`,
+`number_unconfirmed`, `table`, `mockup_screenshot`, `page_or_group_fallback`,
+`other` -- each `{"chars": int|None, "region_count": int}`.
+`pixel_text_by_cause.other_raw_reasons`: `{review_reason: chars}` for
+whatever landed in `other`, so a new/unmapped reason code is never silently
+absorbed. `compare` prints a compact `deck x category` table (base vs. new
+chars/regions) after the main metrics table.
+
+**Category rules** (`pixel_text_causes.py`'s `REASON_CATEGORY` +
+`_categorize`): two ROLE-based rules take priority over any `review_reason`
+lookup --
+
+1. `role == "screenshot" and not editable_fallback` -> `mockup_screenshot`
+   (STRUCTURE's own screenshot/UI-mock classification; the exact same set
+   `editable_text_ratio_body_excl_mockup` excludes).
+2. `role == "table"` -> `table` (a pixel-kept table, whatever the reason --
+   observed on the real baseline: one region carries `role="table"` with
+   `review_reason="crop_text_boundary_line"`, which would otherwise map to
+   `mark_disagreement`).
+
+Otherwise, `review_reason` is looked up in a mapping built from **every
+review_reason actually observed on a pixel-kept region across the 5 real
+baseline decks on 2026-09-25** (deck1-4 + a large external reference deck),
+plus same-family codes from `services/source_content/*.py` not observed in
+that specific run:
+
+| raw `review_reason` | category | observed this run? |
+|---|---|---|
+| `low_confidence_text_pixels` | `mark_disagreement` | yes (dominant on every deck) |
+| `unreadable_text_pixels` | `mark_disagreement` | no |
+| `unreadable_glyphs` | `mark_disagreement` | no |
+| `uncovered_ink` | `mark_disagreement` | yes |
+| `crop_text_boundary` | `mark_disagreement` | yes |
+| `crop_text_boundary_line` | `mark_disagreement` | yes |
+| `crop_text_boundary_card` | `mark_disagreement` | yes |
+| `crop_edge_line` | `mark_disagreement` | no |
+| `unconfirmed_number` | `number_unconfirmed` | no (0 on all 5 decks) |
+| `table_unstructured` | `table` | no |
+| `table_cells_partially_unverified` | `table` | no |
+| `table_cell_ocr_low_confidence` | `table` | yes |
+| `page_structuring_failed` | `page_or_group_fallback` | no |
+| *(anything else)* | `other` | `exactly_once_merge` observed once on the external reference deck (476 chars) |
+
+**`page_or_group_fallback` needs a different source.** A page-content/dense-
+group density fallback (`services/source_content/raster_redesign_fallback.py`)
+is a RENDER-TIME decision made during redesign layout, AFTER analysis --
+it never appears as a region in `analysis_result.json` at all (confirmed:
+0 occurrences across all 5 real decks). So this category's `chars` is
+always `None`; its `region_count` instead comes from
+`slide_evidence_report.json`'s own `advisories_by_code["dense_group_pixel_fallback"]`
+totals (the same advisory `page_content_fallback_pages_product` reads
+elsewhere in this suite), when that file is available.
+
+**Verified baseline breakdown (`baseline-2144f5034[-r2]`, 2026-09-25):**
+
+| deck | mark_disagreement | number_unconfirmed | table | mockup_screenshot | page_or_group_fallback | other |
+|---|---|---|---|---|---|---|
+| deck1 | 405 chars / 23 | 0 / 0 | 313 / 2 | 217 / 4 | 0 / 0 | 0 / 0 |
+| deck2 | 474 / 22 | 0 / 0 | 81 / 1 | 322 / 5 | 0 / 0 | 0 / 0 |
+| deck3 | 1735 / 73 | 0 / 0 | 242 / 2 | 514 / 6 | None / 1 | 0 / 0 |
+| deck4 | 605 / 12 | 0 / 0 | 0 / 0 | 180 / 2 | 0 / 0 | 0 / 0 |
+| large external reference deck | 4224 / 147 | 0 / 0 | 961 / 9 | 13152 / 65 | None / 4 | 476 / 1 (`exactly_once_merge`) |
+
+("chars / region_count" per cell.) `mark_disagreement` dominates every
+deck by a wide margin -- consistent with HANDOFF.md's own finding that
+paragraph/line-confidence pixelation, not tables or numbers, is the
+biggest lever for the editable-ratio gap. Cross-checked: each deck's
+`mark_disagreement` + `table` + `mockup_screenshot` + `other` chars sum
+exactly matches an independent manual tally of every pixel-kept region
+with `char_count > 0` grouped by `(role, editable_fallback, review_reason)`.
 
 ## Wrong number candidates (OCR-fixture decks, 2026-09-25)
 

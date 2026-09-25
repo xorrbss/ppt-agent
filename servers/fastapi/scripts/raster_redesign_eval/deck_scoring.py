@@ -21,6 +21,7 @@ from typing import Optional
 
 from deck_mockup_metrics import excl_mockup_metrics_checker, excl_mockup_metrics_ground_truth
 from mockup_regions import load_analysis_result
+from pixel_text_causes import load_evidence, pixel_text_by_cause
 from run_timing import analysis_stage_totals, stage_durations
 from suite_paths import resolve_deck_path
 from wrong_number_candidates import find_candidates, save_candidate_crops
@@ -125,7 +126,9 @@ def score_deck_ground_truth(deck_cfg: dict, decks_root: Path, pptx_path: Path,
     table_cell_accuracy = (correct / total) if total else None
 
     timing = stage_durations(run_report_path)
-    stage_totals = analysis_stage_totals(load_analysis_result(pptx_path.parent))
+    analysis_for_deck = load_analysis_result(pptx_path.parent)
+    stage_totals = analysis_stage_totals(analysis_for_deck)
+    pixel_causes = pixel_text_by_cause(analysis_for_deck, load_evidence(evidence_path))
 
     # Page numbers here are already the analysis's own source page numbers
     # (this checker assumes positional identity, same as wrong_numbers above).
@@ -167,6 +170,7 @@ def score_deck_ground_truth(deck_cfg: dict, decks_root: Path, pptx_path: Path,
         "page_content_fallback_pages_product": page_content_fallback_pages_product,
         "min_font_pt": min_font_pt,
         "exactly_once_pptx_text_duplicate_pages": report["summary"]["pages_with_duplicated_tokens"],
+        "pixel_text_by_cause": pixel_causes,
         **timing,
         "analysis_stage_totals_seconds": stage_totals,
         "_raw": report,
@@ -332,7 +336,9 @@ def score_deck_checker(deck_cfg: dict, decks_root: Path, pptx_path: Path, pdf_pa
 
     summary = pptx_report["summary"]
     timing = stage_durations(run_report_path)
-    stage_totals = analysis_stage_totals(load_analysis_result(pptx_path.parent))
+    analysis_for_deck = load_analysis_result(pptx_path.parent)
+    stage_totals = analysis_stage_totals(analysis_for_deck)
+    pixel_causes = pixel_text_by_cause(analysis_for_deck, load_evidence(evidence_path))
 
     page_content_fallback_pages_product = _load_page_content_fallback_pages(evidence_path)
 
@@ -372,6 +378,7 @@ def score_deck_checker(deck_cfg: dict, decks_root: Path, pptx_path: Path, pdf_pa
         "min_font_pt": summary["deck_min_explicit_font_pt"],
         "exactly_once": None,
         "fitz_available": fitz_available,
+        "pixel_text_by_cause": pixel_causes,
         **timing,
         "analysis_stage_totals_seconds": stage_totals,
         "_raw": {"pptx": pptx_report, "pdf": pdf_report, "exactly_once": eo_report},
