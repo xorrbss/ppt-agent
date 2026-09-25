@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import os
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -100,14 +99,10 @@ async def reorder_presentation_slides(
         ).encode("utf-8"),
     ).hexdigest()
     idempotency_key = f"slide-order:{order_digest}"
-    # The durable runner executes this command outside any HTTP request, so
-    # SessionAuthMiddleware's per-request tenant contextvar (api/middlewares.py)
-    # is never set there -- renumbering a raster-redesign page's footer after
-    # a reorder needs a trusted tenant (services/svg_raster_renumber.py's
-    # _fenced_operation), so it has to be captured here and threaded through
-    # the command, the same way raster analysis threads tenant_id through its
-    # own request_payload (services/raster_analysis_operation_handler.py).
-    tenant_id = get_current_tenant_id() or (os.getenv("PPT_SERVICE_TENANT_ID") or "default").strip()
+    # The runner restores the submitting principal for the handler
+    # (services/workspace_operation_principal.py). Only the request's own
+    # tenant is recorded; without one (DISABLE_AUTH) none is invented.
+    tenant_id = get_current_tenant_id()
     command = WorkspaceCommandRequest(
         command="Reorder slides",
         command_type=SLIDE_ORDER_OPERATION_KIND,
@@ -115,7 +110,7 @@ async def reorder_presentation_slides(
         expected_revision=request.expected_revision,
         context={
             "slide_ids": [str(slide_id) for slide_id in request.slide_ids],
-            "tenant_id": tenant_id,
+            **({"tenant_id": tenant_id} if tenant_id else {}),
         },
     )
     try:

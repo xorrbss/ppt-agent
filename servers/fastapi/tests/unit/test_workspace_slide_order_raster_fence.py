@@ -23,12 +23,11 @@ test_svg_raster_renumber.py / test_raster_redesign_layout_assets.py) and
 reorders it via the real create_workspace_command -> WorkspaceOperationRunner
 -> WorkspaceSlideOrderOperationHandler -> publish_presentation_revision path,
 with no tenant contextvar set anywhere in the test itself -- exactly the
-runner's real execution environment. Fixed by threading tenant_id through
-the command payload at submission time
-(api/v1/ppt/endpoints/presentation_slide_order.py), the same pattern
-services/raster_analysis_operation_handler.py already uses for the same
-problem, and having the handler set it into the tenant contextvar for the
-duration of the publish (services/workspace_slide_order_operation_handler.py).
+runner's real execution environment. Fixed by recording the submitting
+request's tenant in the command payload
+(api/v1/ppt/endpoints/presentation_slide_order.py) and having the runner run
+every handler as the operation's owner and tenant
+(services/workspace_operation_principal.py); no default tenant is invented.
 """
 from __future__ import annotations
 

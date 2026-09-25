@@ -499,3 +499,50 @@ async def test_retry_chain_exhaustion_surfaces_an_explicit_error(tmp_path, monke
         stop.set()
         await drain_task
         await engine.dispose()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("request_tenant", [None, "tenant-order"])
+async def test_endpoint_records_only_the_request_tenant(tmp_path, monkeypatch, request_tenant):
+    """No ``PPT_SERVICE_TENANT_ID``/``"default"`` fallback: a request without a
+    tenant (DISABLE_AUTH) records none; one with a tenant records exactly it."""
+    import api.v1.ppt.endpoints.presentation_slide_order as endpoint
+    from utils.owner_context import reset_current_tenant_id, set_current_tenant_id
+
+    monkeypatch.setattr(endpoint, "_POLL_BUDGET_SECONDS", 0.2)  # no runner: only the command is under test
+    engine, maker = await _database(tmp_path / "slide-order-tenant.db")
+    try:
+        presentation_id, slide_ids = await _seed_presentation(maker, n_slides=2)
+        app = FastAPI()
+        app.include_router(PRESENTATION_SLIDE_ORDER_ROUTER, prefix="/api/v1/ppt")
+
+        async def session_dependency():
+            owner = set_current_owner_id(OWNER_ID)
+            tenant = set_current_tenant_id(request_tenant)
+            try:
+                async with maker() as session:
+                    yield session
+            finally:
+                reset_current_tenant_id(tenant)
+                reset_current_owner_id(owner)
+
+        app.dependency_overrides[get_async_session] = session_dependency
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
+            await client.patch(
+                f"/api/v1/ppt/presentation/{presentation_id}/slides/order",
+                json={"slide_ids": [str(s) for s in reversed(slide_ids)], "expected_revision": 1},
+            )
+        async with maker() as session:
+            operation = (await session.scalars(
+                select(WorkspaceOperation).where(WorkspaceOperation.presentation_id == presentation_id)
+            )).one()
+        payload = operation.request_payload
+        if request_tenant is None:
+            assert "tenant_id" not in payload["context"]
+            assert "principal_tenant_id" not in payload
+        else:
+            assert payload["context"]["tenant_id"] == request_tenant
+            assert payload["principal_tenant_id"] == request_tenant
+    finally:
+        await engine.dispose()

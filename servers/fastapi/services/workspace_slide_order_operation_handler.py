@@ -11,7 +11,6 @@ versions/receipts contract is the same one every other mutation uses.
 from __future__ import annotations
 
 import logging
-import os
 import uuid
 from collections.abc import Mapping
 
@@ -33,7 +32,6 @@ from services.workspace_operation_handler_registry import (
     WorkspaceOperationResult,
     workspace_operation_handler_registry,
 )
-from utils.owner_context import reset_current_tenant_id, set_current_tenant_id
 
 OPERATION_KIND = "presentation.slides.reorder"
 
@@ -49,27 +47,6 @@ def _requested_slide_ids(payload: Mapping[str, object]) -> tuple[uuid.UUID, ...]
         return tuple(uuid.UUID(str(item)) for item in raw)
     except (TypeError, ValueError) as error:
         raise NonRetryableWorkspaceOperationError("slide_order_request_invalid") from error
-
-
-def _requested_tenant_id(payload: Mapping[str, object]) -> str:
-    """The tenant the reorder was submitted under.
-
-    The runner executes this handler outside any HTTP request, so
-    SessionAuthMiddleware's per-request tenant contextvar
-    (api/middlewares.py) is never set here. Renumbering a raster-redesign
-    page's footer after an index change needs a trusted tenant
-    (services/svg_raster_renumber.py's _fenced_operation), so the submitting
-    endpoint captures it into the command payload -- the same pattern
-    services/raster_analysis_operation_handler.py already uses for the same
-    problem. Older, already-submitted commands predate that endpoint change
-    and won't carry it, so this falls back to the same default
-    SessionAuthMiddleware itself uses when no per-principal tenant is set.
-    """
-    context = payload.get("context")
-    raw = context.get("tenant_id") if isinstance(context, Mapping) else None
-    if isinstance(raw, str) and raw.strip():
-        return raw.strip()
-    return (os.getenv("PPT_SERVICE_TENANT_ID") or "default").strip()
 
 
 class WorkspaceSlideOrderOperationHandler:
@@ -88,11 +65,10 @@ class WorkspaceSlideOrderOperationHandler:
         if len(set(requested_order)) != len(requested_order):
             raise NonRetryableWorkspaceOperationError("slide_order_duplicate_id")
         await context.raise_if_cancelled()
-        tenant_token = set_current_tenant_id(_requested_tenant_id(claim.request_payload))
-        try:
-            return await self._reorder_and_publish(claim, requested_order)
-        finally:
-            reset_current_tenant_id(tenant_token)
+        # The runner runs this as the submitting principal (owner and tenant,
+        # services/workspace_operation_principal.py); without a tenant, the
+        # raster footer renumbering fails with its own explicit code.
+        return await self._reorder_and_publish(claim, requested_order)
 
     async def _reorder_and_publish(
         self, claim: WorkspaceOperationClaim, requested_order: tuple[uuid.UUID, ...],
