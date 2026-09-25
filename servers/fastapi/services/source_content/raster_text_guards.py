@@ -7,7 +7,9 @@ adjacent glyphs of its row, including glyphs OCR dropped), once as one line with
 the English model at a steady glyph height and once restricted to digits and
 ``% . , + - ~ / ( ) : $``. A reading's numbers may be published as editable text only
 when they equal, in order, the reads of their units (a digit the English model
-appends for a Hangul glyph right after the number is allowed). A fragment of a
+appends for a Hangul glyph right after the number is allowed, and a number with a
+unit word written after it may be confirmed by its head read plus a Korean read of
+the unit word; ``raster_number_suffix``). A fragment of a
 number never confirms itself ("0" of "01"), a number wrapped over rows is never
 confirmed, and line-read votes never substitute for the unit read. Failing that
 the line stays pixels.
@@ -27,6 +29,7 @@ import re
 import subprocess
 import tempfile
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -39,6 +42,13 @@ from services.source_content.raster_number_units import (
     number_units,
     sequence_confirmed,
     text_numbers,
+)
+from services.source_content.raster_number_suffix import (
+    SplitRead,
+    glyph_runs,
+    glyph_shape,
+    suffix_splits,
+    tail_suffix,
 )
 from services.source_content.raster_stage_timing import stage
 
@@ -129,6 +139,16 @@ def corner_fragment(box: tuple[int, int, int, int], text: str, size: tuple[int, 
 def _read(
     paths: list[str], folder: Path, extra: list[str], tag: str, *, executable: Path, tessdata: Path, lang: str = "eng"
 ) -> list[str]:
+    joiner = "" if lang == "eng" else " "
+    reads = _read_words(paths, folder, extra, tag, executable=executable, tessdata=tessdata, lang=lang)
+    return [joiner.join(text for text, _, _ in words) for words in reads]
+
+
+def _read_words(
+    paths: list[str], folder: Path, extra: list[str], tag: str, *, executable: Path, tessdata: Path, lang: str = "eng"
+) -> list[list[tuple[str, int, int]]]:
+    """Each crop's words as (text, left, width) in crop pixels, in reading order."""
+
     listing = folder / f"{tag}.txt"
     listing.write_text("\n".join(paths), encoding="utf-8")
     base = folder / f"{tag}-out"
@@ -150,14 +170,14 @@ def _read(
     completed = subprocess.run(command, capture_output=True, timeout=120, check=False, env=environment)
     if completed.returncode:
         raise RuntimeError("local_ocr_failed")
-    texts = [""] * len(paths)
+    words: list[list[tuple[str, int, int]]] = [[] for _ in paths]
     tsv = base.with_suffix(".tsv").read_text(encoding="utf-8-sig", errors="replace")
     for row in csv.DictReader(io.StringIO(tsv), delimiter="\t", quoting=csv.QUOTE_NONE):
         if row.get("level") == "5" and (row.get("text") or "").strip():
             page = int(row["page_num"]) - 1
-            if 0 <= page < len(texts):
-                texts[page] += ("" if not texts[page] or lang == "eng" else " ") + row["text"].strip()
-    return texts
+            if 0 <= page < len(words):
+                words[page].append((row["text"].strip(), int(row["left"]), int(row["width"])))
+    return words
 
 
 class NumberReads(tuple):
@@ -169,7 +189,11 @@ class NumberReads(tuple):
     units: tuple[UnitRead, ...] = ()
 
     def __new__(cls, units=()):
-        tokens = tuple(token for read in units for token in (read.readings() or ((),))[0])
+        tokens = tuple(
+            token
+            for read in units
+            for token in (read.readings() or tuple(option[0] for option in read.suffixed()) or ((),))[0]
+        )
         value = super().__new__(cls, tokens)
         value.units = tuple(units)
         return value
@@ -178,27 +202,38 @@ class NumberReads(tuple):
         return (NumberReads, (self.units,))
 
 
-def _crop_paths(gray: Image.Image, boxes, folder: Path, prefix: str) -> list[str]:
+def _crop_origin(box) -> tuple[int, float]:
+    """Left edge and scale factor of a box's crop (``_crop_paths``)."""
+
+    x, _, _, h = box
+    return max(0, x - max(3, int(0.3 * h))), max(1.0, 48 / max(1, h))
+
+
+def _crop_paths(gray: Image.Image, boxes, folder: Path, prefix: str, closed: str = "") -> list[str]:
     """Upscaled crops of ``boxes`` whose margins show background only (ink of the rows
     above/below or the words beside a number is not part of its read), as dark
-    glyphs on a light ground."""
+    glyphs on a light ground. A ``closed`` edge ("left"/"right") is a cut between
+    glyphs: nothing beyond it is kept."""
 
     paths = []
     for k, (x, y, w, h) in enumerate(boxes):
         pad = max(3, int(0.3 * h))
-        x0, y0 = max(0, x - pad), max(0, y - pad)
+        x0, y0 = _crop_origin((x, y, w, h))[0], max(0, y - pad)
         right, bottom = min(gray.width, x + w + pad), min(gray.height, y + h + pad)
         pixels = np.asarray(gray.crop((x0, y0, right, bottom))).copy()
         keep_y, keep_x = max(1, int(0.12 * h)), max(2, int(0.15 * h))
+        left_keep, right_keep = (0 if closed == "left" else keep_x), (0 if closed == "right" else keep_x)
         inside = np.zeros(pixels.shape, dtype=bool)
-        inside[max(0, y - keep_y - y0) : y + h + keep_y - y0, max(0, x - keep_x - x0) : x + w + keep_x - x0] = True
+        inside[max(0, y - keep_y - y0) : y + h + keep_y - y0, max(0, x - left_keep - x0) : x + w + right_keep - x0] = (
+            True
+        )
         if pixels.size and inside.any():
             background = int(np.median(pixels[inside]))
             pixels[~inside] = background
             if background < 128:  # light text on a dark ground: the engine reads dark on light
                 pixels = 255 - pixels
         crop = Image.fromarray(pixels)
-        factor = max(1.0, 48 / max(1, h))
+        factor = _crop_origin((x, y, w, h))[1]
         crop = crop.resize((round(crop.width * factor), round(crop.height * factor)), Image.Resampling.LANCZOS)
         path = folder / f"{prefix}-{k}.png"
         crop.save(path)
@@ -219,7 +254,8 @@ def _read_number_units(image: Image.Image, words, seeds, *, executable: Path | N
     if executable is None or tessdata is None or not Path(executable).is_file():
         return None
     gray = image.convert("L")
-    units = number_units(np.asarray(gray, dtype=np.int16), words, seeds)
+    array = np.asarray(gray, dtype=np.int16)
+    units = number_units(array, words, seeds)
     if not units:
         return ()
     try:
@@ -229,16 +265,41 @@ def _read_number_units(image: Image.Image, words, seeds, *, executable: Path | N
             options = {"executable": executable, "tessdata": tessdata}
             plain = _read(paths, folder, [], "eng", **options)
             restricted = _read(paths, folder, ["-c", f"tessedit_char_whitelist={_WHITELIST}"], "digits", **options)
+            reads = tuple(
+                UnitRead(unit, tuple(NUMBER.findall(plain[k])), tuple(NUMBER.findall(restricted[k])))
+                for k, unit in enumerate(units)
+            )
+            return _with_splits(gray, array, words, reads, folder, options)
     except (RuntimeError, OSError, subprocess.TimeoutExpired):
         return None
-    return tuple(
-        UnitRead(
-            unit,
-            tuple(NUMBER.findall(plain[k])),
-            tuple(NUMBER.findall(restricted[k])),
-        )
-        for k, unit in enumerate(units)
-    )
+
+
+def _with_splits(gray: Image.Image, array: np.ndarray, words, reads, folder: Path, options: dict):
+    """Unit reads with the suffix splits of every unit that holds Hangul or whose read
+    does not confirm its own OCR text ("7.9억원" read "7922"): head read by the English
+    and the digit-only reader, tail by the Korean reader (``raster_number_suffix``)."""
+
+    pending = [
+        (k, split)
+        for k, read in enumerate(reads)
+        if _HANGUL.search(read.unit.text)
+        or not sequence_confirmed(text_numbers(read.unit.text), (read,), allow_skip=False)
+        for split in suffix_splits(array, read.unit, words)
+    ]
+    if not pending:
+        return reads
+    heads = _crop_paths(gray, [split.head for _, split in pending], folder, "h", closed="right")
+    tails = _crop_paths(gray, [split.tail for _, split in pending], folder, "t", closed="left")
+    plain = _read(heads, folder, [], "split-eng", **options)
+    restricted = _read(heads, folder, ["-c", f"tessedit_char_whitelist={_WHITELIST}"], "split-digits", **options)
+    korean = _read_words(tails, folder, [], "split-kor", lang="kor", **options)
+    splits: dict[int, list[SplitRead]] = {}
+    for n, (k, split) in enumerate(pending):
+        origin, factor = _crop_origin(split.tail)
+        suffix = tail_suffix(korean[n], origin, factor, glyph_runs(array, split.tail), split.tail[3])
+        head = (tuple(NUMBER.findall(plain[n])), tuple(NUMBER.findall(restricted[n])))
+        splits.setdefault(k, []).append(SplitRead(*head, suffix, glyph_shape(array, split.head)))
+    return tuple(replace(read, splits=tuple(splits.get(k, ()))) for k, read in enumerate(reads))
 
 
 def verify_number_units(

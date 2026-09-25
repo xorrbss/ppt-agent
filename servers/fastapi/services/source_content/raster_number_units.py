@@ -25,6 +25,9 @@ the WHOLE visual number.
 * The unit is read once, as one line, from the crop of its whole box (English, and
   restricted to digits and separators; see ``raster_text_guards``). Ink below
   ``MIN_HEIGHT`` pixels is too small for any read to confirm.
+* A unit whose read does not confirm its own OCR text may also be read split before
+  a unit word written right after the number ("7.9" | "억원"; ``raster_number_suffix``).
+  Matching a reading against the reads lives in ``raster_number_match``.
 """
 
 from __future__ import annotations
@@ -34,6 +37,13 @@ from dataclasses import dataclass
 from typing import Iterable, Sequence
 
 import numpy as np
+
+from services.source_content.raster_number_match import (  # noqa: F401  (re-exported)
+    NUMBER,
+    number_matches,
+    sequence_confirmed,
+    text_numbers,
+)
 
 Box = tuple[int, int, int, int]
 
@@ -48,7 +58,6 @@ MIN_HEIGHT = 5  # pixels: smaller ink cannot be verified as glyphs
 LEVEL = 48  # ink: differs from the local background by more than this (as raster_tight_boxes)
 MIN_LEVEL = 16  # ... or, for faint text, by more than this at least
 SEPARATORS = set(",.%·'")
-NUMBER = re.compile(r"\d[\d,.]*%?")
 _HANGUL = re.compile(r"[가-힣]")
 _LETTER = re.compile(r"[A-Za-z가-힣]")
 _OPEN_END = re.compile(r"\d[.,]$")  # "18." / "2,": a number that goes on elsewhere
@@ -67,6 +76,7 @@ class UnitRead:
     unit: NumberUnit
     plain: tuple[str, ...]  # number tokens of the English single-line read
     restricted: tuple[str, ...] | None  # of the digit-whitelist read (None: not read)
+    splits: tuple = ()  # ``raster_number_suffix.SplitRead`` of the unit split before a unit word
 
     def readings(self) -> tuple[tuple[str, ...], ...]:
         """Number sequences this read confirms (empty: it confirms nothing)."""
@@ -94,6 +104,14 @@ class UnitRead:
         if tuple(t.replace("%", "96") for t in restricted) == tuple(t.replace("%", "96") for t in plain):
             return (restricted,)
         return ()
+
+    def suffixed(self) -> tuple[tuple[tuple[str, ...], str, str], ...]:
+        """(head numbers, tail Hangul, head glyph shape) of each split whose head both
+        readers read alike and whose tail the Korean reader read as Hangul only."""
+
+        if self.unit.wrapped or self.unit.box[3] < MIN_HEIGHT:
+            return ()
+        return tuple(option for split in self.splits if (option := split.option()) is not None)
 
 
 def _union(boxes: Sequence[Box]) -> Box:
@@ -438,49 +456,3 @@ def number_units(gray: np.ndarray, words, seeds: Iterable[int]) -> tuple[NumberU
         stacked = _wraps(gray, box, text, words, alone=not left and not right)
         units.append(NumberUnit(tuple(group), box, text, truncated or stacked))
     return tuple(sorted(units, key=lambda unit: (unit.box[1], unit.box[0])))
-
-
-def text_numbers(text: str) -> list[tuple[str, bool]]:
-    """Number tokens of a reading in order, with whether a Hangul glyph follows each.
-
-    Spaces OCR put inside a number next to a separator ("9, 860") are ignored;
-    other spaces separate numbers ("Q3 2025" holds two)."""
-
-    value = re.sub(r"(?<=\d)\s+(?=[,.%]\d?)|(?<=\d[,.])\s+(?=\d)", "", text)
-    return [(m.group(), bool(_HANGUL.match(value[m.end() : m.end() + 1]))) for m in NUMBER.finditer(value)]
-
-
-def number_matches(number: str, read: str, hangul_follows: bool) -> bool:
-    """A read confirms a number when equal; the English model may append digits for a
-    Hangul glyph right after the number ("40,000원" read "40,0008")."""
-
-    if read == number:
-        return True
-    return hangul_follows and read.startswith(number) and read[len(number) :].rstrip(",.").isdigit()
-
-
-def sequence_confirmed(numbers: Sequence[tuple[str, bool]], reads: Sequence[UnitRead], *, allow_skip: bool) -> bool:
-    """The numbers of a reading equal, in order, the numbers of its units' reads.
-
-    Each unit confirms a contiguous run of the numbers; a wrapped or unreadable unit
-    confirms nothing. With ``allow_skip`` a unit may be left out (the reading omits
-    that number), but every number of the reading must be confirmed by a unit."""
-
-    options = [read.readings() for read in reads]
-
-    def match(position: int, unit: int) -> bool:
-        if unit == len(options):
-            return position == len(numbers)
-        if allow_skip and match(position, unit + 1):
-            return True
-        for sequence in options[unit]:
-            end = position + len(sequence)
-            if end <= len(numbers) and all(
-                number_matches(numbers[position + k][0], token, numbers[position + k][1])
-                for k, token in enumerate(sequence)
-            ):
-                if match(end, unit + 1):
-                    return True
-        return False
-
-    return match(0, 0)
