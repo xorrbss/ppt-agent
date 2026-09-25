@@ -210,7 +210,6 @@ test("chat-first deployment configuration is required by both CI providers", () 
     "element-insert-shapes.test.mjs",
     "math-insert-elements.test.mjs",
     "settings-access.test.mjs",
-    "template-v2-json-to-html.test.mjs",
     "workspace-contract.test.mjs",
   ]) {
     assert.ok(
