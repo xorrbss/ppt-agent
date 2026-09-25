@@ -121,10 +121,9 @@
       "localRevisions": [],
       "disposition": "intentionally-untranslated",
       "evidenceFiles": [
-        "servers/fastapi/models/sql/slide.py",
-        "servers/fastapi/templates/v2/persistence.py"
+        "servers/fastapi/models/sql/slide.py"
       ],
-      "note": "The local flow persists canonical slide UI under presentation ownership and has no demonstrated multi-chat/template association that requires the upstream chat-scope foreign key. Hydration uses the existing SlideModel.ui field; it does not justify a migration."
+      "note": "The local flow persists canonical slide UI under presentation ownership and has no demonstrated multi-chat/template association that requires the upstream chat-scope foreign key. Hydration uses the existing SlideModel.ui field; it does not justify a migration. (The Template V2 persistence layer this note originally also cited, servers/fastapi/templates/v2/persistence.py, was removed with the Template V2 studio; the reasoning above does not depend on it.)"
     },
     {
       "upstreamRevision": "2c8f4a1b9d7e",
