@@ -61,7 +61,14 @@ async def _database(path: Path):
     @event.listens_for(engine.sync_engine, "connect")
     def _sqlite_safety(connection, _record):
         connection.execute("PRAGMA foreign_keys=ON")
-        connection.execute("PRAGMA busy_timeout=5000")
+        # WAL lets the request coroutine's own session and the background
+        # drain loop's session (test_retry_after_several_consecutive_*/
+        # test_retry_chain_exhaustion_* fire several sequential round trips
+        # against one always-running drain task) write without the
+        # rollback-journal's whole-database lock -- a bare busy_timeout alone
+        # still surfaced sporadic "database is locked" under that load.
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA busy_timeout=15000")
 
     async with engine.begin() as connection:
         await connection.run_sync(SQLModel.metadata.create_all)
@@ -251,24 +258,27 @@ async def test_invalid_body_is_rejected_with_422_not_500(harness):
     assert not_a_uuid.status_code == 422, not_a_uuid.text
 
 
-class _FailFirstAttemptHandler:
-    """Wraps the real handler so the first operation submitted for a given
-    presentation fails terminally (NonRetryableWorkspaceOperationError) and
-    every operation after that runs for real. Models a transient failure
-    (e.g. the publish conflict path WorkspaceSlideOrderOperationHandler's own
-    ``except Exception`` branch reports as ``slide_order_publish_failed``)
-    that has cleared by the time the editor resubmits, without depending on
-    the runner's own internal attempt/backoff machinery to reach a terminal
-    state deterministically in a test."""
+class _FailNTimesHandler:
+    """Wraps the real handler so the first ``fail_count`` operations
+    submitted for a given presentation fail terminally
+    (NonRetryableWorkspaceOperationError) and every operation after that runs
+    for real. Models a transient failure (e.g. the publish conflict path
+    WorkspaceSlideOrderOperationHandler's own ``except Exception`` branch
+    reports as ``slide_order_publish_failed``) that clears after N
+    consecutive attempts, without depending on the runner's own internal
+    attempt/backoff machinery to reach a terminal state deterministically in
+    a test."""
 
-    def __init__(self, real: WorkspaceSlideOrderOperationHandler) -> None:
+    def __init__(self, real: WorkspaceSlideOrderOperationHandler, fail_count: int = 1) -> None:
         self._real = real
-        self._failed_presentations: set[uuid.UUID] = set()
+        self._fail_count = fail_count
+        self._attempts: dict[uuid.UUID, int] = {}
 
     async def execute(self, context):
         presentation_id = context.claim.presentation_id
-        if presentation_id not in self._failed_presentations:
-            self._failed_presentations.add(presentation_id)
+        attempts = self._attempts.get(presentation_id, 0) + 1
+        self._attempts[presentation_id] = attempts
+        if attempts <= self._fail_count:
             raise NonRetryableWorkspaceOperationError("slide_order_publish_failed")
         return await self._real.execute(context)
 
@@ -287,7 +297,7 @@ async def test_retry_with_same_payload_after_terminal_failure_succeeds(tmp_path)
     operation that actually re-executes the command."""
     engine, maker = await _database(tmp_path / "slide-order-retry.db")
     registry = WorkspaceOperationHandlerRegistry()
-    flaky = _FailFirstAttemptHandler(WorkspaceSlideOrderOperationHandler(session_factory=maker))
+    flaky = _FailNTimesHandler(WorkspaceSlideOrderOperationHandler(session_factory=maker), fail_count=1)
     registry.register(OPERATION_KIND, flaky, recovery_policy="automatic")
     runner = WorkspaceOperationRunner(
         session_factory=maker, registry=registry, max_concurrency=4,
@@ -343,11 +353,20 @@ async def test_concurrent_duplicate_submits_still_dedupe_onto_one_operation(harn
     """The retry-key escalation only fires once the base key's operation is
     already a terminal failure. Two genuinely concurrent submits of the
     identical order/revision (no prior failure yet) must still collapse onto
-    a single operation, exactly as before this change."""
+    a single operation, exactly as before this change.
+
+    Submits the *current* order (a no-op reorder) rather than a real move:
+    WorkspaceSlideOrderOperationHandler never advances the deck revision for
+    a no-op (``advance_revision=changed``), so both requests keep expecting
+    revision 1 no matter how the live background runner (this harness's own
+    drain loop) interleaves with them. A real move would race the two
+    requests against the runner completing the first one and bumping the
+    revision before the second's own admission check runs -- a legitimate,
+    differently-shaped 409 (``revision_conflict``) this test does not exist
+    to cover."""
     maker, app = harness
     presentation_id, slide_ids = await _seed_presentation(maker, n_slides=3)
-    new_order = list(reversed(slide_ids))
-    body = {"slide_ids": [str(s) for s in new_order], "expected_revision": 1}
+    body = {"slide_ids": [str(s) for s in slide_ids], "expected_revision": 1}
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
@@ -359,11 +378,124 @@ async def test_concurrent_duplicate_submits_still_dedupe_onto_one_operation(harn
     assert first.status_code == 200, first.text
     assert second.status_code == 200, second.text
     assert first.json()["operation_id"] == second.json()["operation_id"]
-    assert first.json()["order"] == [str(s) for s in new_order]
-    assert second.json()["order"] == [str(s) for s in new_order]
+    assert first.json()["order"] == [str(s) for s in slide_ids]
+    assert second.json()["order"] == [str(s) for s in slide_ids]
 
     async with maker() as session:
         operations = (await session.scalars(
             select(WorkspaceOperation).where(WorkspaceOperation.presentation_id == presentation_id)
         )).all()
     assert len(operations) == 1
+
+
+@pytest.mark.anyio
+async def test_retry_after_several_consecutive_terminal_failures_still_succeeds(tmp_path):
+    """Review follow-up on the fix above: the idempotency key is recomputed
+    from the payload alone on every submit (no memory of a prior request), so
+    a submit arriving after N consecutive terminal failures of the identical
+    payload must walk the whole retry chain (base key, then retry:op1,
+    retry:op2, ...) within itself before it can mint a fresh operation. A
+    too-small escalation cap (the original fix used 3) stops that walk
+    partway through and silently replays a stale failure instead -- the same
+    permanent block, just delayed a few more retries. Reproduces 4
+    consecutive terminal failures (one more than that original cap) and
+    confirms the 5th submit still walks the whole chain, mints a new
+    operation, and succeeds."""
+    engine, maker = await _database(tmp_path / "slide-order-retry-chain.db")
+    registry = WorkspaceOperationHandlerRegistry()
+    flaky = _FailNTimesHandler(WorkspaceSlideOrderOperationHandler(session_factory=maker), fail_count=4)
+    registry.register(OPERATION_KIND, flaky, recovery_policy="automatic")
+    runner = WorkspaceOperationRunner(
+        session_factory=maker, registry=registry, max_concurrency=4,
+        heartbeat_seconds=60, poll_seconds=0.01,
+    )
+    app = _app(maker)
+    stop = asyncio.Event()
+    drain_task = asyncio.create_task(_drain_forever(runner, stop))
+    try:
+        presentation_id, slide_ids = await _seed_presentation(maker, n_slides=3)
+        new_order = list(reversed(slide_ids))
+        body = {"slide_ids": [str(s) for s in new_order], "expected_revision": 1}
+
+        transport = httpx.ASGITransport(app=app)
+        responses = []
+        async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
+            for _ in range(5):
+                responses.append(await client.patch(
+                    f"/api/v1/ppt/presentation/{presentation_id}/slides/order", json=body,
+                ))
+
+        for response in responses[:4]:
+            assert response.status_code == 422, response.text
+        assert responses[4].status_code == 200, responses[4].text
+        assert responses[4].json()["order"] == [str(s) for s in new_order]
+
+        async with maker() as session:
+            operations = (await session.scalars(
+                select(WorkspaceOperation)
+                .where(WorkspaceOperation.presentation_id == presentation_id)
+                .order_by(WorkspaceOperation.created_at)
+            )).all()
+        assert len(operations) == 5
+        assert [op.state for op in operations] == ["failed", "failed", "failed", "failed", "succeeded"]
+        assert len({op.idempotency_key_hash for op in operations}) == 5
+    finally:
+        stop.set()
+        await drain_task
+        await engine.dispose()
+
+
+@pytest.mark.anyio
+async def test_retry_chain_exhaustion_surfaces_an_explicit_error(tmp_path, monkeypatch):
+    """When the escalation loop's safety bound is actually hit (something
+    keeps failing terminally far beyond a normal retry), the endpoint must
+    surface a distinct, explicit error rather than silently replaying
+    whichever stale failure the walk stopped on. Lowers the bound via
+    monkeypatch so this stays fast instead of driving 64+ real HTTP round
+    trips."""
+    import api.v1.ppt.endpoints.presentation_slide_order as slide_order_module
+    monkeypatch.setattr(slide_order_module, "_MAX_RETRY_KEY_ESCALATIONS", 2)
+
+    engine, maker = await _database(tmp_path / "slide-order-retry-exhausted.db")
+    registry = WorkspaceOperationHandlerRegistry()
+    flaky = _FailNTimesHandler(WorkspaceSlideOrderOperationHandler(session_factory=maker), fail_count=10)
+    registry.register(OPERATION_KIND, flaky, recovery_policy="automatic")
+    runner = WorkspaceOperationRunner(
+        session_factory=maker, registry=registry, max_concurrency=4,
+        heartbeat_seconds=60, poll_seconds=0.01,
+    )
+    app = _app(maker)
+    stop = asyncio.Event()
+    drain_task = asyncio.create_task(_drain_forever(runner, stop))
+    try:
+        presentation_id, slide_ids = await _seed_presentation(maker, n_slides=3)
+        new_order = list(reversed(slide_ids))
+        body = {"slide_ids": [str(s) for s in new_order], "expected_revision": 1}
+
+        transport = httpx.ASGITransport(app=app)
+        responses = []
+        async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
+            # 1st submit: base key, fails. 2nd: 1 escalation (retry:op1),
+            # fails. 3rd: 2 escalations (retry:op1 -> retry:op2), fails --
+            # exactly the lowered cap. The 4th submit's walk needs a 3rd
+            # escalation to mint a new operation and hits the cap first.
+            for _ in range(4):
+                responses.append(await client.patch(
+                    f"/api/v1/ppt/presentation/{presentation_id}/slides/order", json=body,
+                ))
+
+        for response in responses[:3]:
+            assert response.status_code == 422, response.text
+        assert responses[3].status_code == 409, responses[3].text
+        assert responses[3].json()["detail"]["code"] == "slide_order_retry_chain_exhausted"
+
+        async with maker() as session:
+            operations = (await session.scalars(
+                select(WorkspaceOperation).where(WorkspaceOperation.presentation_id == presentation_id)
+            )).all()
+        # The exhausted 4th request must not have minted a new operation.
+        assert len(operations) == 3
+    finally:
+        stop.set()
+        await drain_task
+        await engine.dispose()

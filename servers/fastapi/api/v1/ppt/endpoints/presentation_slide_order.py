@@ -45,11 +45,19 @@ _TERMINAL_STATES = {"succeeded", "failed", "cancelled", "deadline_exceeded", "de
 _TERMINAL_FAILURE_STATES = _TERMINAL_STATES - {"succeeded"}
 _POLL_INTERVAL_SECONDS = 0.15
 _POLL_BUDGET_SECONDS = 6.0
-# Bounds the in-request key-escalation loop below; each iteration only runs
-# when create_workspace_command just told us the previous key's operation is
-# a fresh terminal failure, so more than one or two per request would only
-# happen under a pathological retry storm within a single poll budget.
-_MAX_RETRY_KEY_ESCALATIONS = 3
+# The idempotency key is recomputed from scratch (payload only, no memory of
+# a prior request) on every submit, so a request arriving after N consecutive
+# terminal failures of the identical payload must walk the whole chain --
+# base key, then retry:op1, retry:op2, ... -- within itself before it can
+# mint a fresh operation. Each step either creates a new operation
+# (duplicate=False, loop stops) or finds an existing one, and existing
+# operations are finite, so this walk is bounded by construction; it never
+# loops forever. This cap is therefore only a safety bound against something
+# pathological (e.g. every attempt failing terminally for the same
+# persistent reason), not a limit on how many real retries are supported --
+# hitting it raises an explicit error below instead of silently returning
+# whichever stale failure the walk stopped on.
+_MAX_RETRY_KEY_ESCALATIONS = 64
 
 
 class SlideOrderRequest(BaseModel):
@@ -149,6 +157,17 @@ async def reorder_presentation_slides(
             )
     except WorkspaceServiceError as error:
         _raise_service_error(error)
+    if duplicate and operation.state in _TERMINAL_FAILURE_STATES:
+        # The walk above hit its safety bound without ever minting a fresh
+        # operation: the identical payload has now failed terminally
+        # _MAX_RETRY_KEY_ESCALATIONS + 1 times in a row. That is not a normal
+        # transient-failure retry any more, so this is a distinct, explicit
+        # error rather than a 422/409 that looks like a plain replay of
+        # whichever operation the walk stopped on.
+        raise HTTPException(
+            409,
+            detail={"code": "slide_order_retry_chain_exhausted", "retryable": False},
+        )
     wake_workspace_operation_runner()
 
     deadline = asyncio.get_running_loop().time() + _POLL_BUDGET_SECONDS
