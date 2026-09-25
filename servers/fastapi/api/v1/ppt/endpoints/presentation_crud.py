@@ -58,6 +58,7 @@ from services.presentation_deletion_service import (
     is_retryable_sqlite_lock,
 )
 from services.presentation_access_service import require_live_presentation
+from services.presentation_profiles import PresentationProfileError, resolve_presentation_driver
 from services.presentation_export_projection import (
     PRESENTATION_EXPORT_PROJECTION,
     PRESENTATION_EXPORT_PROJECTION_HEADER,
@@ -105,14 +106,15 @@ def _chat_first_create_enabled() -> bool:
 
 
 from api.v1.ppt.endpoints.presentation_list_projection import (
-    PresentationListPage, _escaped_like_fragment, _list_slide_without_html,
+    PresentationListItem, PresentationListPage, UnsupportedPresentationListItem,
+    _escaped_like_fragment, _list_slide_without_html,
     _list_theme_projection, _list_content_projection,
 )
 
 
 @PRESENTATION_CRUD_ROUTER.get(
     "/all",
-    response_model=List[PresentationWithSlides] | PresentationListPage,
+    response_model=List[PresentationListItem] | PresentationListPage,
 )
 async def get_all_presentations(
     sql_session: AsyncSession = Depends(get_async_session),
@@ -189,18 +191,31 @@ async def get_all_presentations(
                 cover.presentation, _list_slide_without_html(cover, content=content)
             )
 
-    presentations_with_slides = []
+    presentations_with_slides: list[PresentationListItem] = []
     for presentation, theme in presentations:
         first_slide = cover_by_presentation.get(presentation.id)
         slides = [] if first_slide is None else [first_slide]
+        identity = presentation.model_dump(exclude={"fonts", "theme"})
+        identity["theme"] = theme
+        try:
+            resolve_presentation_driver(identity)
+        except PresentationProfileError:
+            # A pre-removal row (e.g. an old Template V2 deck) has no
+            # supported driver. Mark this row instead of failing the whole
+            # dashboard list for every other, resolvable presentation.
+            presentations_with_slides.append(
+                UnsupportedPresentationListItem(
+                    id=presentation.id,
+                    title=presentation.title,
+                    created_at=presentation.created_at,
+                    updated_at=presentation.updated_at,
+                    lifecycle_status=presentation.lifecycle_status,
+                )
+            )
+            continue
         fonts = await resolve_presentation_fonts(presentation, slides, sql_session)
         presentations_with_slides.append(
-            PresentationWithSlides(
-                **presentation.model_dump(exclude={"fonts", "theme"}),
-                theme=theme,
-                slides=slides,
-                fonts=fonts,
-            )
+            PresentationWithSlides(**identity, slides=slides, fonts=fonts)
         )
 
     if legacy_response:
@@ -231,12 +246,16 @@ async def _get_presentation_with_slides(
         .order_by(SlideModel.index)
     )
     slides = list(slides_result)
+    identity = presentation.model_dump(exclude={"fonts"})
+    try:
+        resolve_presentation_driver(identity)
+    except PresentationProfileError as error:
+        # Fail closed with a clean 4xx instead of letting the profile
+        # resolution ValueError surface from PresentationWithSlides's model
+        # validator as an uncaught 500.
+        raise HTTPException(status_code=422, detail=error.code) from error
     fonts = await resolve_presentation_fonts(presentation, slides, sql_session)
-    return PresentationWithSlides(
-        **presentation.model_dump(exclude={"fonts"}),
-        slides=slides,
-        fonts=fonts,
-    )
+    return PresentationWithSlides(**identity, slides=slides, fonts=fonts)
 
 
 @PRESENTATION_CRUD_ROUTER.get("/{id}", response_model=PresentationWithSlides)
