@@ -19,7 +19,8 @@ import re
 from dataclasses import dataclass
 from xml.sax.saxutils import escape
 
-from services.source_content.raster_redesign_chrome import footer_layout, render_footer_members, split_named_groups
+from services.source_content.raster_layout_parts import page_parts
+from services.source_content.raster_redesign_chrome import render_footer_members
 from services.source_content.raster_redesign_fallback import (
     PAGE_CONTENT,
     advisories,
@@ -37,8 +38,6 @@ from services.source_content.raster_redesign_header import (
     SURFACE,
     element_tag,
     render_header,
-    place_header_group,
-    split_header_items,
     text_xml,
 )
 from services.source_content.raster_redesign_plan import (
@@ -155,25 +154,12 @@ def render_redesign_page(analysis, page_number: int, *, instruction: str | None 
     page = analysis.pages[page_number - 1]
     width, height = analysis.target_canvas.width_units, analysis.target_canvas.height_units
     geo = _geometry(width, height)
-    title, logos, items = build_items(page)
+    title, _, items = build_items(page)
     if title is None and not items:
         raise ValueError("raster_page_has_no_approved_content")
-    header_group, footer_group, items = split_named_groups([*logos, *items])
-    members = footer_layout(footer_group, width, geo["margin"])
-    if members is None:  # the footer does not fit on one line: keep it as content
-        items, members = [*items, *footer_group], []
-    kickers, subtitles, sides, header_images, items = split_header_items(
-        title, items, (analysis.source.canvas_width_emu, analysis.source.canvas_height_emu),
-    )
-    # The analysis' header group is placed by source position like any header
-    # zone item (kicker above, brand beside, subtitle below); nothing leaves the header.
-    h_kickers, h_subtitles, h_sides, h_images, h_rest = place_header_group(
-        title, header_group, (analysis.source.canvas_width_emu, analysis.source.canvas_height_emu),
-    )
-    kickers = h_kickers + kickers
-    sides = h_sides + sides
-    subtitles = h_subtitles + [item for item in h_rest if item.kind == "text"] + subtitles
-    header_images += h_images + [item for item in h_rest if item.kind == "image"]
+    parts = page_parts(analysis, page)
+    title, members, items = parts.title, parts.footer, parts.items
+    kickers, subtitles, sides, header_images = parts.kickers, parts.subtitles, parts.sides, parts.header_images
     chosen, candidates, semantic = [], None, has_groups(items)
     while True:
         attempt = apply_fallbacks(items, chosen)

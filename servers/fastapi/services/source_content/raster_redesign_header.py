@@ -119,7 +119,9 @@ def place_header_group(title, items, source_size):
     """Place the analysis' ``header`` group by source position; nothing leaves the header.
 
     Right-half items (brand block, motto) join the top-right cluster; items
-    above the title are kickers; the rest are subtitles under the title.
+    above the title are kickers; the rest are subtitles under the title. A
+    text line kept as pixels (``inline``) is a text line, not a logo: on the
+    left it is a kicker or subtitle drawn at text scale.
     """
     kickers, subtitles, sides, images = [], [], [], []
     title_top = title.bbox.y if title is not None else source_size[1] * 0.045
@@ -128,7 +130,7 @@ def place_header_group(title, items, source_size):
         right_half = box.x + box.width / 2 > source_size[0] * 0.6
         if right_half:
             (sides if item.kind == "text" else images).append(item)
-        elif item.kind != "text":
+        elif item.kind != "text" and not item.inline:
             images.append(item)
         elif box.y + box.height <= title_top + 2:
             kickers.append(item)
@@ -147,9 +149,16 @@ def _title_lines(title, width, fonts=TITLE_FONTS):
 
 
 def _cluster_members(images, sides):
+    from services.source_content.raster_redesign_pixel_lines import line_scale
+
     members = []
     for item in images:
         aspect = item.aspect
+        if item.inline:  # a text line kept as pixels: text-sized, never shrunk to a logo
+            native, scale, _ = line_scale(item, SIDE_FONT)
+            height = native * scale
+            members.append(("image", item, max(1, math.floor(height / aspect)), max(1, math.floor(height)), None))
+            continue
         height = min(LOGO_HEIGHT, (item.native_height or LOGO_HEIGHT) * 1.25)
         height = max(height, item.min_scale * (item.native_height or 0.0))  # pixel text stays legible
         width = max(1, math.floor(min(LOGO_MAX_WIDTH, height / aspect)))
@@ -201,6 +210,16 @@ def title_image_xml(placements, top, page_number):
     ]
 
 
+def _pixel_line_xml(item, x, width, font, top, page_number):
+    """(svg fragments, height) of one header text line kept as pixels, at ``font`` text scale."""
+    from services.source_content.raster_redesign_pixel_lines import pixel_line
+
+    block = pixel_line([item], x, width, font)
+    if block is None:
+        raise ValueError("raster_redesign_content_overflow")
+    return title_image_xml(block.placements, top, page_number), block.height
+
+
 def render_header(*, title, images, kickers, subtitles, sides, page_number, width, margin, top, compact=False):
     """Return (svg fragments, header bottom y)."""
 
@@ -210,6 +229,11 @@ def render_header(*, title, images, kickers, subtitles, sides, page_number, widt
     text_width = width - 2 * margin - max(cluster_width, 150.0) - 42.0
     cursor = top
     for item in kickers:
+        if item.kind == "image":  # a kicker kept as pixels
+            fragment, height = _pixel_line_xml(item, margin, text_width, KICKER_FONT, cursor, page_number)
+            xml.extend(fragment)
+            cursor += height + (3.0 if compact else 6.0)
+            continue
         lines, height = layout_paragraphs(_flat(item.region.text), text_width, KICKER_FONT,
                                           body_color=COBALT, heading_color=COBALT)
         xml.append(text_xml(f"rd-{element_tag(item.region.region_id)}-0", margin, cursor, lines, bold_all=True))
@@ -231,9 +255,15 @@ def render_header(*, title, images, kickers, subtitles, sides, page_number, widt
         xml.append(text_xml("rd-title", margin + 18.0, cursor, lines, bold_all=True))
         cursor += title_height
     for item in subtitles:
-        lines, height = layout_paragraphs(_flat(item.region.text), text_width, 15.5 if compact else SUBTITLE_FONT,
-                                          body_color=SLATE, heading_color=SLATE)
+        font = 15.5 if compact else SUBTITLE_FONT
         cursor += 4.0 if compact else 8.0
+        if item.kind == "image":  # a subtitle kept as pixels: drawn at subtitle text scale
+            fragment, height = _pixel_line_xml(item, margin, text_width, font, cursor, page_number)
+            xml.extend(fragment)
+            cursor += height
+            continue
+        lines, height = layout_paragraphs(_flat(item.region.text), text_width, font,
+                                          body_color=SLATE, heading_color=SLATE)
         xml.append(text_xml(f"rd-{element_tag(item.region.region_id)}-0", margin, cursor, lines))
         cursor += height
     bottom = max(top + 62.0, cursor + (8.0 if compact else 14.0), cluster_bottom + 8.0)

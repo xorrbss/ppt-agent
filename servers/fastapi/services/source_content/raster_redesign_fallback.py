@@ -108,19 +108,11 @@ def page_content_fallback(analysis, page) -> FallbackGroup | None:
     It keeps the source's own dense arrangement, which is the most compact
     lossless form. Title, header/footer groups and header-zone text stay editable.
     """
-    from services.source_content.raster_redesign_chrome import footer_layout, split_named_groups
-    from services.source_content.raster_redesign_header import split_header_items
-    from services.source_content.raster_redesign_plan import build_items
+    from services.source_content.raster_layout_parts import page_parts
 
-    title, _, items = build_items(page)
-    _, footer, items = split_named_groups(items)
-    width = analysis.target_canvas.width_units
-    margin = 48.0 * min(width, analysis.target_canvas.height_units) / 840.0
-    if footer_layout(footer, width, margin) is None:  # same rule as the layout: it joins the content
-        items = [*items, *footer]
-    size = (analysis.source.canvas_width_emu, analysis.source.canvas_height_emu)
-    *_, header_images, items = split_header_items(title, items, size)
-    regions = [item.region for item in items]
+    parts = page_parts(analysis, page)  # the same zones as the layout: each region drawn once
+    header_images = parts.header_images
+    regions = [item.region for item in parts.items]
     if len(regions) < 2 or any(not getattr(region, "source_pixel_bbox", None) for region in regions):
         return None
     region = _union_region(page.page_number, PAGE_CONTENT, regions,

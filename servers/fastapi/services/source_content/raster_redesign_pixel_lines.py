@@ -31,6 +31,11 @@ def _scales(item, f):
     return native, scale, minimum
 
 
+def line_scale(item, f) -> tuple[float, float, float]:
+    """(native px height, text-matched scale, legibility minimum scale) of one pixel line."""
+    return _scales(item, f)
+
+
 def pixel_line(items, x, w, f):
     """One line of pixel pieces (reading order), wrapping only between pieces.
 
