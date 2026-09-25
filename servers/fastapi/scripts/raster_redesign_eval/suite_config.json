@@ -1,0 +1,50 @@
+{
+  "_comment": "Raster-redesign eval suite config. All deck paths (source_pptx, ground_truth, source_pages_dir, fixtures_dir) are relative to a 'decks root' directory -- default the decks/ folder next to run_suite.py, overridable per-invocation with --decks-root or the RASTER_EVAL_DECKS_ROOT env var (see README.md). 'checker' selects which scoring tool run_suite.py score uses for this deck: 'ground_truth_checker' (exact python-pptx source text, precise wrong-number hard-fail) or 'checker' (OCR-based fixtures, for a deck with no exact python-pptx ground truth). This file intentionally ships with NO customer/large-external-reference-deck entry: add one to a private copy of this file (kept outside the repo) and pass it with --config, with --decks-root pointing at wherever its fixtures actually live.",
+  "decks": [
+    {
+      "id": "deck1",
+      "name": "deck1_executive_report",
+      "checker": "ground_truth_checker",
+      "source_pptx": "deck1_executive_report/image_only.pptx",
+      "ground_truth": "deck1_executive_report/ground_truth.json",
+      "source_pages_dir": "deck1_executive_report/source_pages",
+      "expected_page_count": 15,
+      "note": "Synthetic EN deck built from a ppt-master executive-report template (docs/artifacts). No customer data. ground_truth.json + source_pages/ are checked in (the original source template isn't, so build_image_only_deck.py can't regenerate them); image_only.pptx is NOT checked in -- rebuild it with `build_image_only_deck.py --from-images` (see README.md)."
+    },
+    {
+      "id": "deck2",
+      "name": "deck2_business_proposal",
+      "checker": "ground_truth_checker",
+      "source_pptx": "deck2_business_proposal/image_only.pptx",
+      "ground_truth": "deck2_business_proposal/ground_truth.json",
+      "source_pages_dir": "deck2_business_proposal/source_pages",
+      "expected_page_count": 15,
+      "note": "Synthetic EN deck built from a ppt-master business-proposal template. No customer data. Same checked-in/rebuild split as deck1."
+    },
+    {
+      "id": "deck3",
+      "name": "deck3_data_journalism",
+      "checker": "ground_truth_checker",
+      "source_pptx": "deck3_data_journalism/image_only.pptx",
+      "ground_truth": "deck3_data_journalism/ground_truth.json",
+      "source_pages_dir": "deck3_data_journalism/source_pages",
+      "expected_page_count": 15,
+      "note": "Synthetic EN deck built from an AI-capital data-journalism deck. No customer data. Same checked-in/rebuild split as deck1."
+    },
+    {
+      "id": "deck4",
+      "name": "deck4_korean_tables",
+      "checker": "ground_truth_checker",
+      "source_pptx": "deck4_korean_tables/image_only.pptx",
+      "ground_truth": "deck4_korean_tables/ground_truth.json",
+      "source_pages_dir": "deck4_korean_tables/source_pages",
+      "expected_page_count": 10,
+      "note": "Fictional Korean deck with native tables, built for the fork's Korean UI/table coverage. No customer data. Nothing under decks/deck4_korean_tables/ is checked in -- it is fully regenerable from code: run decks/build_deck4.py then decks/build_image_only_deck.py (see README.md)."
+    }
+  ],
+  "product_defaults": {
+    "base_url": "http://localhost:5000",
+    "orientation": "landscape",
+    "analysis_mode": "auto_redesign"
+  }
+}

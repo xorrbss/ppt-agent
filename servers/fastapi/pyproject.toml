@@ -155,6 +155,10 @@ select = ["E", "F", "B", "ASYNC"]
 # Their compressed operator style predates the audit; only line length
 # and statement packing stay here, and every real finding was fixed.
 "scripts/public_service_malicious_corpus_evidence.py" = ["ASYNC240", "E501"]
+# Synthetic Korean deck-content string literals (labels/captions); wrapping
+# them would require string concatenation with no behavior change, so this
+# is a plain line-length exception rather than a real finding.
+"scripts/raster_redesign_eval/decks/build_deck4.py" = ["E501"]
 "scripts/seed_public_v2_export_snapshot.py" = ["E501"]
 "scripts/slidespec_human_labeled_replayer.py" = ["ASYNC240", "E501"]
 "scripts/validate_public_fidelity_readback.py" = ["E501"]
