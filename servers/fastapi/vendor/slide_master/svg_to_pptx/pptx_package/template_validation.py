@@ -36,6 +36,7 @@ if __name__ == "__main__":
     raise SystemExit(1)
 
 from ..drawingml.utils import EMU_PER_PX
+from ..conversion_context import current_conversion_context
 from .template_structure import (
     OOXML_UINT32_MAX,
     TemplatePlaceholderBinding,
@@ -1145,7 +1146,7 @@ def validate_pptx_template_package(
                     )
                     if binding.element.placeholder_bounds is not None:
                         expected_bounds = tuple(
-                            round(value * EMU_PER_PX)
+                            round(value * current_conversion_context().emu_per_unit)
                             for value in binding.element.placeholder_bounds
                         )
                     elif prototype_placeholder is not None:

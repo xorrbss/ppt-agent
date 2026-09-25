@@ -4,7 +4,8 @@ import {
   ImageGenerate,
   PreviousGeneratedImagesResponse,
 } from "./params";
-import { apiErrorFromPayload, ApiResponseHandler } from "./api-error-handler";
+import type { SourceContentPolicy } from "./source-content/contract";
+import { ApiError, apiErrorFromPayload, ApiResponseHandler } from "./api-error-handler";
 import { getApiUrl, resolveBackendAssetUrl } from "@/utils/api";
 import { fetchWithNetworkRetry } from "@/utils/fetchWithNetworkRetry";
 import {
@@ -344,6 +345,7 @@ export class PresentationGenerationApi {
   }
   static async createPresentation({
     presentation_id,
+    previous_presentation_id,
     idempotency_key,
     content,
     n_slides,
@@ -357,10 +359,13 @@ export class PresentationGenerationApi {
     include_title_slide,
     web_search,
     aspect_ratio,
+    page_size,
+    orientation,
     theme,
     strategy = "authored",
   }: {
     presentation_id: string;
+    previous_presentation_id?: string | null;
     idempotency_key: string;
     content: string;
     n_slides: number | null;
@@ -374,6 +379,8 @@ export class PresentationGenerationApi {
     include_title_slide?: boolean;
     web_search?: boolean;
     aspect_ratio?: "16:9" | "9:16" | "9:13";
+    page_size?: "A4";
+    orientation?: "landscape" | "portrait";
     theme?: PresentationThemePayload | null;
     /** Server persists this before the async generation job is admitted. */
     strategy?: "authored" | "svg";
@@ -389,6 +396,7 @@ export class PresentationGenerationApi {
           },
           body: JSON.stringify({
             presentation_id,
+            ...(previous_presentation_id ? { previous_presentation_id } : {}),
             content,
             n_slides,
             file_paths,
@@ -400,7 +408,9 @@ export class PresentationGenerationApi {
             include_table_of_contents,
             include_title_slide,
             web_search,
-            aspect_ratio,
+            ...(page_size && orientation
+              ? { page_size, orientation }
+              : { aspect_ratio }),
             theme,
             strategy,
           }),
@@ -417,10 +427,14 @@ export class PresentationGenerationApi {
       }
       return created;
     } catch (error) {
-      for (const snapshotId of reference_snapshot_ids ?? []) {
-        await PresentationGenerationApi.cleanupDocumentAdmission({
-          referenceSnapshotId: snapshotId,
-        });
+      // A lost response or server error can follow a committed create. Keep
+      // immutable document admissions usable for an exact same-key replay.
+      if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+        for (const snapshotId of reference_snapshot_ids ?? []) {
+          await PresentationGenerationApi.cleanupDocumentAdmission({
+            referenceSnapshotId: snapshotId,
+          });
+        }
       }
       console.error("error in presentation creation", error);
       throw error;
@@ -500,13 +514,40 @@ export class PresentationGenerationApi {
     }
   }
 
+  // The drag reorder in SidePanel.tsx used to rely on the generic autosave
+  // PATCH above (`/presentation/update`), which has no backend handler, so
+  // reorder never persisted for any deck. This calls the narrow slide-order
+  // endpoint instead; other autosave behavior is unchanged.
+  static async reorderSlides(
+    presentationId: string,
+    body: { slide_ids: string[]; expected_revision: number },
+  ): Promise<{ presentation_id: string; revision: number; order: string[]; operation_id: string }> {
+    const response = await fetch(
+      getApiUrl(`/api/v1/ppt/presentation/${presentationId}/slides/order`),
+      {
+        method: "PATCH",
+        headers: getHeader(),
+        body: JSON.stringify(body),
+        cache: "no-cache",
+      },
+    );
+
+    return await ApiResponseHandler.handleResponse(
+      response,
+      "Failed to save the new slide order",
+    );
+  }
+
   static async getPresentationVersions(presentationId: string) {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/${presentationId}/versions`),
         {
           method: "GET",
-          headers: getHeader(),
+          headers: {
+            ...getHeader(),
+            "X-Document-Canvas-Contracts": "document-canvas/v1",
+          },
           cache: "no-cache",
         },
       );
@@ -532,7 +573,10 @@ export class PresentationGenerationApi {
         ),
         {
           method: "POST",
-          headers: getHeader(),
+          headers: {
+            ...getHeader(),
+            "X-Document-Canvas-Contracts": "document-canvas/v1",
+          },
           cache: "no-cache",
         },
       );
@@ -610,27 +654,21 @@ export class PresentationGenerationApi {
       strategy?: "authored" | "svg";
       authored_style?: string;
       aspect_ratio?: "16:9" | "9:16" | "9:13";
+      page_size?: "A4";
+      orientation?: "landscape" | "portrait";
       masterPin?: {
         masterId: string;
         revision: number;
         digest: `sha256:${string}`;
       };
-      sourceMode?: "source_content_restyle";
+      sourceMode?: "source_content_restyle" | "raster_reconstruction";
+      rasterApprovalPin?: import("./source-content/raster-contract").RasterApprovalPinWire;
+      referenceSnapshotIds?: string[];
       sourceContentManifestPin?: {
         manifestId: string;
         digest: `sha256:${string}`;
       };
-      contentPolicy?: {
-        text: "verbatim" | "outline";
-        preserveAllTableCells: false;
-        preserveAllChartValues: false;
-        preserveAllImageOccurrences: true;
-        preserveSourceOrder: true;
-        preserveSourceSlideCount: true;
-        allowSlideExpansion: false;
-        allowSummarization: boolean;
-        overflowPolicy: "same_page_recompose_or_fail";
-      };
+      contentPolicy?: SourceContentPolicy;
       idempotency_key?: string;
     },
   ): Promise<StartGenerationResponse> {
@@ -661,9 +699,16 @@ export class PresentationGenerationApi {
             // a max-quality, slower pass.
             vision_qa: body.strategy === "svg" ? false : (body.vision_qa ?? false),
             authored_style: body.authored_style ?? "default",
-            aspect_ratio: body.aspect_ratio ?? "16:9",
+            ...(body.sourceMode === "source_content_restyle" && body.strategy === "svg"
+              ? {}
+              : body.page_size && body.orientation
+                ? { page_size: body.page_size, orientation: body.orientation }
+                : { aspect_ratio: body.aspect_ratio ?? "16:9" }),
             ...(body.masterPin ? { masterPin: body.masterPin } : {}),
             ...(body.sourceMode ? { sourceMode: body.sourceMode } : {}),
+            ...(body.rasterApprovalPin ? { rasterApprovalPin: body.rasterApprovalPin } : {}),
+            ...(body.sourceMode === "raster_reconstruction" && body.referenceSnapshotIds
+              ? { reference_snapshot_ids: body.referenceSnapshotIds } : {}),
             ...(body.sourceContentManifestPin
               ? { sourceContentManifestPin: body.sourceContentManifestPin }
               : {}),

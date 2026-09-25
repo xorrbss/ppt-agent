@@ -8,10 +8,11 @@ from models.sql.presentation_generation_job import PresentationGenerationJob
 SVG_IMAGE_POLICY_RECOVERY = "svg-reference-image-policy/v2"
 SVG_COMMENT_RECOVERY = "svg-comment-normalization/v1"
 SVG_PROVIDER_RECOVERY = "svg-provider-overload-recovery/v1"
+RASTER_CAPTURE_RECOVERY = "raster-approved-capture/v1"
 
 
 async def verified_svg_recovery_checkpoints(session, operation, request):
-    if (request.action != "retry" or request.recovery_revision not in {SVG_IMAGE_POLICY_RECOVERY, SVG_COMMENT_RECOVERY, SVG_PROVIDER_RECOVERY}
+    if (request.action != "retry" or request.recovery_revision not in {SVG_IMAGE_POLICY_RECOVERY, SVG_COMMENT_RECOVERY, SVG_PROVIDER_RECOVERY, RASTER_CAPTURE_RECOVERY}
             or operation.kind != "presentation.generate"
             or operation.state != "failed" or operation.error_code != (
                 "public_provider_overload" if request.recovery_revision == SVG_PROVIDER_RECOVERY
@@ -26,6 +27,19 @@ async def verified_svg_recovery_checkpoints(session, operation, request):
     rows = list(await session.scalars(select(AuthoredSlideCheckpoint).where(
         AuthoredSlideCheckpoint.job_id == job.id,
     ).with_for_update()))
+    if request.recovery_revision == RASTER_CAPTURE_RECOVERY:
+        candidates = [row for row in rows if (row.svg_checkpoint or {}).get("quality", {}).get("passed") is not True]
+        witnesses = [row.svg_checkpoint or {} for row in candidates]
+        if (not any(
+                payload.get("rasterSourcePageNumber") in
+                (payload.get("rasterApprovalPin") or {}).get("full_page_preserve_pages", ())
+                and any(attempt.get("validation_error") in {
+                    "svg_contract_size_limit", "svg_contract_visible_text_required"
+                } for attempt in payload.get("attempts", []))
+                for payload in witnesses)
+                or any(payload.get("recovery_revision") == RASTER_CAPTURE_RECOVERY for payload in witnesses)):
+            return None
+        return candidates
     expected_error = ("svg_required_source_image_missing" if request.recovery_revision == SVG_IMAGE_POLICY_RECOVERY
                       else "svg_contract_declaration_forbidden")
     if request.recovery_revision != SVG_PROVIDER_RECOVERY and not any(any(
@@ -57,7 +71,7 @@ def reset_svg_recovery_checkpoints(session, rows, *, operation_id, now, recovery
             "recovery_operation_id": str(operation_id),
             "previous_checkpoint": previous,
         }
-        if recovery_revision != SVG_IMAGE_POLICY_RECOVERY:
+        if recovery_revision not in {SVG_IMAGE_POLICY_RECOVERY, RASTER_CAPTURE_RECOVERY}:
             from copy import deepcopy
             from services.svg_contract import normalize_svg_response
             payload = {**deepcopy(previous or {}), **payload, "inflight": None}

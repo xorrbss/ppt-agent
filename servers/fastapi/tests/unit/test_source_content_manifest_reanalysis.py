@@ -53,7 +53,7 @@ def _fixture_pptx(path: Path) -> None:
     deck.save(path)
 
 
-def _neutered_run_style(_chain: Any) -> dict[str, Any]:
+def _neutered_run_style(_chain: Any, **_kwargs: Any) -> dict[str, Any]:
     """Stand-in for the pre-enrichment extractor, which captured no typography."""
 
     return {"sizePt": None, "bold": False, "italic": False, "color": None}

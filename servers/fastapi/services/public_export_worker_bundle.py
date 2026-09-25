@@ -30,7 +30,11 @@ BUNDLE_SOURCE_FILES = "worker-bundle-files"
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 _WORKER_ENTRYPOINT = ("scripts", "public-hybrid-export-worker.mjs")
 #: Imported by the entrypoint from outside ``authored-hybrid``.
-_WORKER_SIBLING_SOURCES = (("lib", "presentation-export-quality.ts"),)
+_WORKER_SIBLING_SOURCES = (
+    ("lib", "presentation-export-quality.ts"),
+    ("lib", "authored-canvas.ts"),
+    ("lib", "document-canvas.ts"),
+)
 _WORKER_SOURCE_DIRECTORIES = (
     (("scripts", "lib"), False),
     (("lib", "authored-hybrid"), True),

@@ -289,6 +289,10 @@ class WorkspaceExportOperationHandler:
                         context, presentation=presentation, admission=admission,
                         session_factory=self._session_factory,
                     )
+                except PublicExportOperationError as error:
+                    if str(error) == "svg_source_export_format_unsupported":
+                        raise NonRetryableWorkspaceOperationError(str(error)) from error
+                    raise
                 except Exception:
                     LOGGER.exception("SVG export failed for operation %s", claim.operation_id)
                     raise

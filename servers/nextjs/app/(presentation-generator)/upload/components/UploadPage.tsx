@@ -13,7 +13,6 @@ import { useDispatch, useSelector } from "react-redux";
 
 import Wrapper from "@/components/Wrapper";
 import { Button } from "@/components/ui/button";
-import { OverlayLoader } from "@/components/ui/overlay-loader";
 import { notify } from "@/components/ui/sonner";
 import { useUploadLimits } from "@/lib/use-upload-limits";
 import { cn } from "@/lib/utils";
@@ -39,8 +38,12 @@ import SupportingDoc, { MAX_SUPPORTED_FILES } from "./SupportingDoc";
 import { abortDocumentProcessing } from "./upload-page/abortDocumentProcessing";
 import { useSupportingFiles } from "./upload-page/useSupportingFiles";
 import SourceContentLossDialog from "./upload-page/SourceContentLossDialog";
+import RasterSourceReview from "./upload-page/RasterSourceReview";
 import { useUploadPageState } from "./upload-page/useUploadPageState";
 import UploadDesignGallery from "./UploadDesignGallery";
+import { GenerationPreparation } from "../../generation-workspace/GenerationPreparation";
+import { PreviousAttemptNotice } from "./upload-page/PreviousAttemptNotice";
+import AuthoredStylesApi from "../../services/api/authored";
 
 const masterClient = new AuthoredVnextMasterClient();
 const LAST_AI_MASTER_ANALYSIS_KEY = "presenton.authored-vnext.ai-master-analysis.v1";
@@ -71,6 +74,7 @@ const UploadPage = ({
   const generationStrategy = useSelector(
     (state: RootState) => state.pptGenUpload.generationStrategy,
   );
+  const [sourceSvgCapability, setSourceSvgCapability] = useState<boolean | null>(null);
   const [reviewBeforeGeneration, setReviewBeforeGeneration] = useState(false);
   const [masterCatalogOpen, setMasterCatalogOpen] = useState(false);
   const [masterCatalogEntryMode, setMasterCatalogEntryMode] =
@@ -96,6 +100,27 @@ const UploadPage = ({
     clearLastUsedMasterId();
   }, [dispatch, masterFeatureEnabled]);
 
+  useEffect(() => {
+    if (!sourceContentMode) {
+      setSourceSvgCapability(null);
+      return;
+    }
+    let cancelled = false;
+    setSourceSvgCapability(null);
+    void AuthoredStylesApi.getDocumentCanvasCapabilities({
+      generationStrategy: "svg",
+      authoredStyle,
+      sourceContentMode: true,
+      // Company-standard masters are Authored-only and are omitted from this route.
+      hasCompanyStandard: false,
+    }).then((capability) => {
+      if (!cancelled) setSourceSvgCapability(capability.sourceContentSvg.enabled);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [authoredStyle, sourceContentMode]);
+
   const {
     files,
     filesRef,
@@ -111,11 +136,6 @@ const UploadPage = ({
       dispatch(setSourceContentMode(isSinglePptx));
     },
   });
-  useEffect(() => {
-    if (files.length === 0 && sourceContentMode) {
-      dispatch(setSourceContentMode(false));
-    }
-  }, [dispatch, files.length, sourceContentMode]);
   const analysisSourceFile = useMemo(
     () => files.find((file) => /\.(?:ppt|pptx)$/i.test(file.name)) ?? null,
     [files],
@@ -130,6 +150,14 @@ const UploadPage = ({
 
   const {
     config,
+    previousGenerationAttempt,
+    generationAttemptActive,
+    recoverCreate,
+    rasterRetryAvailable,
+    rasterAdvancedReview,
+    setRasterAdvancedReview,
+    retryRasterAnalysis,
+    editGenerationRequest,
     handleConfigChange,
     loadingState,
     canCancelDocumentProcessing,
@@ -139,9 +167,23 @@ const UploadPage = ({
     isMasterResolving,
     masterAdmissionError,
     sourceContentSummary,
+    sourceContentCanvas,
     isSourceContentAnalyzing,
     sourceContentLossPrompt,
     resolveSourceContentLossPrompt,
+    rasterReview,
+    rasterAnalysisMode,
+    canAutoPreserveExistingRaster,
+    autoPreserveExistingRaster,
+    rasterPage,
+    isRasterPageLoading,
+    loadRasterPage,
+    saveRasterReview,
+    setRasterPageMode,
+    selectRecommendedRasterPages,
+    preserveRasterDeck,
+    confirmRasterInventory,
+    approveRasterReview,
   } = useUploadPageState({
     files,
     filesRef,
@@ -152,6 +194,11 @@ const UploadPage = ({
       setMasterCatalogOpen(true);
     },
   });
+  useEffect(() => {
+    if (!generationAttemptActive && files.length === 0 && sourceContentMode) {
+      dispatch(setSourceContentMode(false));
+    }
+  }, [dispatch, files.length, sourceContentMode, generationAttemptActive]);
 
   const openMasterCatalog = useCallback(() => {
     setMasterCatalogEntryMode("catalog");
@@ -249,6 +296,7 @@ const UploadPage = ({
 
   const dashboardPromptHandoff = useRef<string | null | undefined>(undefined);
   useEffect(() => {
+    if (previousGenerationAttempt.requestedId) return;
     try {
       if (dashboardPromptHandoff.current === undefined) {
         dashboardPromptHandoff.current = window.sessionStorage.getItem("devax:dashboard-prompt");
@@ -265,26 +313,53 @@ const UploadPage = ({
     } catch {
       // A blocked session storage should not interrupt the normal upload flow.
     }
-  }, [config.prompt, handleConfigChange]);
+  }, [config.prompt, handleConfigChange, previousGenerationAttempt.requestedId]);
+
+  if (generationAttemptActive && rasterReview) return (
+    <Wrapper className="max-w-none pb-20">
+      <main className="mx-auto max-w-7xl px-4 pt-8 sm:px-6">
+        <RasterSourceReview
+          analysis={rasterReview}
+          variant={rasterAnalysisMode === "auto_redesign" ? "redesign" : "manual"}
+          page={rasterPage}
+          isLoadingPage={isRasterPageLoading}
+          onLoadPage={loadRasterPage}
+          onSaveReview={saveRasterReview}
+          onSetPageMode={setRasterPageMode}
+          onSelectRecommendedPages={selectRecommendedRasterPages}
+          onPreserveDeck={preserveRasterDeck}
+          onAutoPreserveAndGenerate={canAutoPreserveExistingRaster ? autoPreserveExistingRaster : undefined}
+          onConfirmInventory={confirmRasterInventory}
+          onApprove={approveRasterReview}
+        />
+      </main>
+    </Wrapper>
+  );
+
+  if (generationAttemptActive) return (
+    <GenerationPreparation
+      status={sourceContentLossPrompt ? "원본 처리 방법을 확인해 주세요." : loadingState.message || "발표자료를 준비하고 있습니다."}
+      busy={loadingState.isLoading && !sourceContentLossPrompt}
+      progressLabel={loadingState.progressLabel}
+      detail={loadingState.extra_info}
+      actions={<>
+        {canCancelDocumentProcessing && <Button variant="outline" onClick={() => abortDocumentProcessing(decomposeAbortControllerRef.current)}>자료 처리 취소</Button>}
+        {!generationBusy && !sourceContentLossPrompt && (rasterRetryAvailable
+          ? <Button onClick={() => void retryRasterAnalysis()}>분석 상태 다시 확인</Button>
+          : loadingState.awaitingReceipt
+            ? <Button onClick={() => void recoverCreate()}>접수 확인·계속</Button>
+            : <Button variant="outline" onClick={editGenerationRequest}>요청 수정</Button>)}
+      </>}
+    >
+      <SourceContentLossDialog inline prompt={sourceContentLossPrompt} onDecide={resolveSourceContentLossPrompt} />
+    </GenerationPreparation>
+  );
 
   return (
     <Wrapper className="max-w-none pb-20">
-      <OverlayLoader
-        show={loadingState.isLoading}
-        text={loadingState.message}
-        showProgress={loadingState.showProgress}
-        duration={loadingState.duration}
-        progress={loadingState.progress}
-        progressLabel={loadingState.progressLabel}
-        extra_info={loadingState.extra_info}
-        onCancel={
-          canCancelDocumentProcessing
-            ? () => abortDocumentProcessing(decomposeAbortControllerRef.current)
-            : undefined
-        }
-      />
+      <PreviousAttemptNotice attempt={previousGenerationAttempt} />
 
-      <main className="px-4 sm:px-6 lg:px-10">
+      <main className="px-4 sm:px-6 lg:px-10" inert={previousGenerationAttempt.blocked} aria-busy={previousGenerationAttempt.blocked && !previousGenerationAttempt.error}>
         <section
           className="flex flex-col items-center pt-10 md:pt-16"
           aria-labelledby="upload-hero-title"
@@ -365,7 +440,7 @@ const UploadPage = ({
               <div className="flex flex-wrap gap-2">
                 {([
                   ["authored", "AI 저작", "기본 방식"],
-                  ["svg", "SVG", "벡터 원본으로 생성"],
+                  ["svg", "SVG", sourceContentMode ? "이미지형 원본 화면을 A4로 보존" : "벡터 원본으로 생성"],
                 ] as const).map(([strategy, label, description]) => (
                   <label key={strategy} className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm">
                     <input
@@ -374,24 +449,41 @@ const UploadPage = ({
                       value={strategy}
                       checked={generationStrategy === strategy}
                       onChange={() => dispatch(setPptGenUploadState({ generationStrategy: strategy }))}
-                      disabled={sourceContentMode && strategy === "svg"}
+                      disabled={sourceContentMode && strategy === "svg" && sourceSvgCapability !== true && config.pageSize !== "A4"}
+                      data-testid={`generation-strategy-${strategy}`}
                     />
                     <span><span className="font-medium">{label}</span><span className="ml-1 text-xs text-slate-500">{description}</span></span>
                   </label>
                 ))}
               </div>
+              {sourceContentMode && sourceSvgCapability === null && config.pageSize !== "A4" ? (
+                <p className="mt-2 text-xs text-slate-500" role="status">SVG 원본 보존 지원을 확인하고 있습니다.</p>
+              ) : sourceContentMode && sourceSvgCapability === false && config.pageSize !== "A4" ? (
+                <p className="mt-2 text-xs text-amber-700" role="status">이 서버에서는 원본 콘텐츠 유지 SVG 생성을 아직 사용할 수 없습니다.</p>
+              ) : null}
             </fieldset>
 
             {sourceContentMode ? <div className="mt-4 rounded-xl border border-[#E4E6E9] bg-[#FAFAFB] px-3 py-3 text-sm text-[#33363A]" data-testid="source-content-selection-summary">
               <p className="font-semibold">콘텐츠 · 원본 유지</p>
-              <p className="mt-1 text-[#5E626A]">AI 저작 스타일 · {authoredStyle}</p>
-              <p className="mt-1 text-[#5E626A]">회사 표준 · {companyStandard ? `${companyStandard.name} v${companyStandard.revision}` : "사용 안 함"}</p>
-              <p className="mt-1 text-[#5E626A]">페이지 수 고정 · 같은 페이지에서 다시 구성할 수 없으면 생성하지 않음</p>
+              <p className="mt-1 text-[#5E626A]">{generationStrategy === "svg" ? `생성 방식 · SVG · 선택 템플릿 ${authoredStyle}` : `AI 저작 스타일 · ${authoredStyle}`}</p>
+              {generationStrategy === "authored" ? <p className="mt-1 text-[#5E626A]">회사 표준 · {companyStandard ? `${companyStandard.name} v${companyStandard.revision}` : "사용 안 함"}</p> : null}
+              {generationStrategy === "svg" ? <p className="mt-1 text-[#5E626A]">이미지형 입력은 원본 화면을 편집 가능한 텍스트와 표로 A4에 재구성합니다. 화면 캡처만 이미지로 남습니다. 서버가 확신하지 못한 소수 항목만 생성 전에 확인을 요청할 수 있습니다.</p> : null}
+              <p className="mt-1 text-[#5E626A]">원본 페이지 순서와 페이지 수를 유지합니다.</p>
               {isSourceContentAnalyzing ? <p className="mt-2 text-xs text-[#737780]">원본 콘텐츠를 안전하게 분석하는 중입니다.</p> : null}
               {sourceContentSummary ? <p className="mt-2 text-xs text-[#737780]" data-testid="source-content-analysis-summary">
                 {sourceContentSummary.sourceType.toUpperCase()} {sourceContentSummary.sourceUnits}페이지 · 텍스트 {sourceContentSummary.textBlocks}개 · 표 {sourceContentSummary.tables}개 · 제외된 차트 {sourceContentSummary.charts}개 · 이미지 {sourceContentSummary.uniqueImages}종(표시 {sourceContentSummary.imageOccurrences}회) · 이미지로 보관 {sourceContentSummary.rasterFallbackBlocks}개
               </p> : null}
             </div> : null}
+
+            {sourceContentMode && generationStrategy === "svg" && config.pageSize === "A4" && authoredStyle === "screenshot-blue" &&
+              <details className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                <summary className="cursor-pointer font-medium">고급 옵션 · 모든 영역을 직접 검토</summary>
+                <label className="mt-3 flex items-start gap-2">
+                  <input type="checkbox" className="mt-1" checked={rasterAdvancedReview}
+                    onChange={(event) => setRasterAdvancedReview(event.target.checked)} />
+                  <span>기본값은 서버가 자동으로 재구성하고 확신이 낮은 소수 항목만 확인을 요청합니다. 이 옵션을 켜면 모든 영역과 인식 문자를 페이지별로 직접 검토합니다.</span>
+                </label>
+              </details>}
 
             <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
@@ -401,7 +493,9 @@ const UploadPage = ({
                     onConfigChange={handleConfigChange}
                     sourceContentMode={sourceContentMode}
                     authoredStyle={authoredStyle}
-                    hasCompanyStandard={Boolean(companyStandard)}
+                    hasCompanyStandard={Boolean(companyStandard) && !sourceContentMode}
+                    generationStrategy={generationStrategy}
+                    sourceDocumentCanvas={sourceContentCanvas}
                   />
                 </>
               </div>
@@ -429,7 +523,7 @@ const UploadPage = ({
                 variant="toolbar"
                 size="toolbar"
                 onClick={handlePrimaryGenerate}
-                disabled={generationBusy}
+                disabled={generationBusy || previousGenerationAttempt.blocked}
                 data-testid="generate-presentation-button"
                 className="h-11 shrink-0 rounded-xl bg-slate-900 px-5 text-white shadow-sm hover:bg-slate-800 focus-visible:ring-violet-400 disabled:cursor-not-allowed"
               >
@@ -442,7 +536,7 @@ const UploadPage = ({
               </Button>
             </div>
 
-            {masterAdmissionError ? (
+            {generationStrategy === "authored" && masterAdmissionError ? (
               <div
                 className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-900"
                 role="alert"
@@ -464,7 +558,7 @@ const UploadPage = ({
         </section>
 
         <UploadDesignGallery>
-        {masterFeatureEnabled ? (
+        {masterFeatureEnabled && generationStrategy === "authored" ? (
           <section
             className="mx-auto mt-6 max-w-[1080px]"
             aria-labelledby="upload-master-title"
@@ -498,6 +592,14 @@ const UploadPage = ({
                 <Button
                   type="button"
                   variant="outline"
+                  onClick={() => { rememberAnalysis(null); setMasterCatalogEntryMode("ai-import"); setMasterCatalogOpen(true); }}
+                  data-testid="ppt-ai-master-create"
+                >
+                  AI 마스터 만들기
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={openMasterCatalog}
                   data-testid="open-master-catalog"
                 >
@@ -512,7 +614,7 @@ const UploadPage = ({
           <TemplateSelection />
         </section>
         </UploadDesignGallery>
-        {masterFeatureEnabled ? (
+        {masterFeatureEnabled && generationStrategy === "authored" ? (
           <MasterCatalogDialog
             analysisSourceFile={analysisSourceFile}
             entryMode={masterCatalogEntryMode}

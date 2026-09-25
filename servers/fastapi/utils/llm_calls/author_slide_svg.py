@@ -75,13 +75,13 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                            reasoning_effort: str | None = None, correction_hint: str | None = None,
                            source_images=(), receipt_attempt_ordinal: int = 1,
                            before_dispatch: Callable[[], Awaitable[None]] | None = None,
+                           physical_canvas: object | None = None,
                            canonical_source_images: bool = False) -> SvgAuthorResult:
     manifest = preflight_svg_source_images(source_images)
     preflight_svg_style_images(style_snapshot, [role] if not reference_images else [])
     design = json.dumps({k: v for k, v in style_snapshot.items() if k not in {"references", "diagnostics"}}, ensure_ascii=False)
-    from utils.authored_font_policy import MIN_AUTHORED_FONT_SIZE_PX, requested_font_floor_px
-    requested_floor = requested_font_floor_px(instructions)
-    body_floor = requested_floor if requested_floor else MIN_AUTHORED_FONT_SIZE_PX
+    from services.document_canvas_generation import generation_font_floor
+    body_floor = generation_font_floor(instructions, physical_canvas)
     prompt = design + "\n\n" + json.dumps({"role": role, "index": index, "slide_count": n, "instructions": instructions or "", "source_content": content, "correction": correction_hint or "", "source_images": {k: {"description": v.get("description", ""), "required": v.get("required", False)} for k, v in manifest.items()}}, ensure_ascii=False)
     images = reference_parts(reference_images)
     if not images:

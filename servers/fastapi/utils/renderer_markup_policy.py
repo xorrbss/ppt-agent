@@ -40,6 +40,7 @@ GLOBAL_ATTRIBUTES = {
     "data-source-fit-policy",
     "data-composer-canvas-width",
     "data-composer-canvas-height",
+    "data-document-canvas-contain", "data-document-canvas-coordinate-space",
     "data-composer-style-profile",
     "data-composer-style-role", "data-source-font-floor-px", "data-source-row", "data-source-column", "data-source-paragraph", "data-source-run", "data-qid-ignore", "data-allow-overlap",
     # Inert browser-readback classification. Capacity and receipt gates validate

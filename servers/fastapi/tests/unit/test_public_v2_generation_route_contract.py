@@ -79,6 +79,7 @@ def test_generation_mode_contract_and_server_owned_route_receipt(
         "source_mode": None,
         "authored_style": None,
         "slide_count": 10,
+        "aspect_ratio": "16:9",
     }
     assert receipt.selected_route == "source-native"
     assert receipt.output_capability == "fidelity"
@@ -319,17 +320,10 @@ def test_public_terminal_contract_requires_safe_error_reason_codes() -> None:
         )
 
 
-def test_legacy_async_generation_is_local_only() -> None:
+def test_legacy_async_generation_accepts_supported_workspace_runtimes() -> None:
     _require_local_legacy_async_generation("sqlite")
+    _require_local_legacy_async_generation("postgresql")
 
     with pytest.raises(HTTPException) as rejected:
-        _require_local_legacy_async_generation("postgresql")
-    assert rejected.value.status_code == 410
-    assert rejected.value.detail == {
-        "reasonCode": "public_v2_generation_required",
-        "replacement": "/api/v2/presentations/generations",
-    }
-    assert rejected.value.headers == {
-        "Deprecation": "true",
-        "Link": '</api/v2/presentations/generations>; rel="successor-version"',
-    }
+        _require_local_legacy_async_generation("mysql")
+    assert rejected.value.status_code == 501

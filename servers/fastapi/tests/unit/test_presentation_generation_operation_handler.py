@@ -18,6 +18,7 @@ from models.sql.async_presentation_generation_status import (
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.public_admission import PublicOperationAdmission
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceActionReceipt,
@@ -66,6 +67,7 @@ GENERATION_TABLES = [
     WorkspaceActionReceipt.__table__,
     AsyncPresentationGenerationTaskModel.__table__,
     PresentationGenerationJob.__table__,
+    PublicOperationAdmission.__table__,
 ]
 
 
@@ -127,7 +129,7 @@ async def _seed_linked_generation(maker, *, owner_id: uuid.UUID | None):
                 idempotency_key_hash="1" * 64,
                 request_hash="2" * 64,
                 request_payload={
-                    "strategy": "template",
+                    "strategy": "authored",
                     "job_id": str(job_id),
                 },
                 expected_revision=0,
@@ -143,7 +145,7 @@ async def _seed_linked_generation(maker, *, owner_id: uuid.UUID | None):
                 presentation_id=presentation.id,
                 workspace_operation_id=operation.id,
                 request_sha256="3" * 64,
-                request_payload={"strategy": "template"},
+                request_payload={"strategy": "authored", "content": "generation handler test"},
                 export_cookie_required=False,
             )
             session.add(job)
@@ -169,7 +171,7 @@ async def _drain_once(runner: WorkspaceOperationRunner) -> int:
         (None, {}, None),
     ],
 )
-def test_generation_handler_mints_cookie_in_owner_context_without_persisting_it(
+def test_generation_handler_keeps_browser_cookie_out_of_sessionless_worker(
     tmp_path: Path,
     monkeypatch,
     owner_id,
@@ -249,8 +251,8 @@ async def _generation_handler_uses_ephemeral_cookie(
             is None
         )
         assert await _drain_once(runner) == 1
-        assert observed_owner_ids == [owner_id]
-        assert observed_cookies == [expected_cookie]
+        assert observed_owner_ids == []
+        assert observed_cookies == [None]
         assert get_current_owner_id() is None
 
         async with maker() as session:
@@ -571,6 +573,7 @@ async def _expired_generation_lease_projects_linked_status(
             operation.attempt_number = 1
             operation.attempt_token = "expired-linked-attempt"
             operation.fencing_token = 1
+            operation.progress = {"public_state": "outlining"}
             operation.lease_expires_at = expired
             operation.heartbeat_at = expired
             if cancel_requested:
@@ -615,6 +618,13 @@ def test_terminal_retry_rebinds_and_runs_the_linked_generation_job(
 
 async def _terminal_retry_rebinds_linked_job(tmp_path: Path, monkeypatch):
     engine, maker = await _database(tmp_path / "generation-retry.db", monkeypatch)
+    async def admitted_retry(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        "api.v1.ppt.endpoints.presentation_generate._admit_generation_operation_v2_compatible",
+        admitted_retry,
+    )
     try:
         _, source_operation_id, task_id, job_id = await _seed_linked_generation(
             maker,
@@ -731,6 +741,13 @@ async def _explicit_capacity_recovery_rebinds_only_supported_authored_revision(
     engine, maker = await _database(
         tmp_path / "generation-capacity-recovery.db",
         monkeypatch,
+    )
+    async def admitted_retry(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        "api.v1.ppt.endpoints.presentation_generate._admit_generation_operation_v2_compatible",
+        admitted_retry,
     )
     try:
         _, source_operation_id, task_id, job_id = await _seed_linked_generation(
@@ -1086,10 +1103,10 @@ async def _default_pipeline_merges_publication_result(
                 assert len(receipts) == 1
                 receipt = receipts[0]
                 assert receipt.outcome == "failed"
-                assert receipt.failure_stage == "quality"
-                assert dict(receipt.stage_timings_ms)["quality"] >= 23
-                assert dict(receipt.causes)["retryReason"] == "terminal_failure"
-                assert dict(receipt.causes)["stageReason"] == terminal_error.code
+                assert receipt.schema_version == "generation-attempt-timing-receipt/v2"
+                assert dict(receipt.stages)["chromiumReview"]["state"] in {"observed", "invalid"}
+                assert receipt.retry_reason == "terminal_failure"
+                assert receipt.terminal_error == terminal_error.code
                 async with maker() as session:
                     operation = await session.get(WorkspaceOperation, operation_id)
                     if failure_mode == "projection":
@@ -1103,12 +1120,13 @@ async def _default_pipeline_merges_publication_result(
         finally:
             reset_current_owner_id(owner_token)
         assert result.result_revision == 1
-        assert result.payload == {
+        assert {key: result.payload[key] for key in ("status", "task_id", "job_id", "artifact_id")} == {
             "status": "completed",
             "task_id": task_id,
             "job_id": str(job_id),
             "artifact_id": "immutable-artifact-id",
         }
+        assert result.payload["generation_timing_receipt"]["schemaVersion"] == "generation-attempt-timing-receipt/v2"
     finally:
         await engine.dispose()
 

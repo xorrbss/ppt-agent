@@ -25,7 +25,7 @@ from models.sql.public_admission import (
     PublicProviderLogicalCall,
     PublicQuotaCounter,
 )
-from migration_revision_contract import (
+from services.migration_revision_contract import (
     PUBLIC_CONTROL_PLANE_AUTHORITY_PROBE_SQL,
     REVISION_PUBLIC_CONTROL_PLANE,
 )

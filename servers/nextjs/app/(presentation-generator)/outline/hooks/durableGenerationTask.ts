@@ -4,6 +4,8 @@ import type {
 } from "../../services/api/presentation-generation";
 import type { SourceContentPolicy } from "../../services/api/source-content/contract";
 import type { CodexGenerationPresetId } from "@/components/codex-config";
+import type { DocumentCanvas } from "@/lib/document-canvas";
+import type { RasterApprovalPinWire } from "../../services/api/source-content/raster-contract";
 
 export type DurableGenerationMode = "authored" | "svg" | "template-v2";
 
@@ -36,14 +38,21 @@ export interface DurableGenerationTask {
     instructions?: string | null;
     visionQa: boolean;
     authoredStyle: string;
-    aspectRatio: "16:9" | "9:16" | "9:13";
+    /** Legacy selector, omitted for common physical-canvas documents. */
+    aspectRatio?: "16:9" | "9:16" | "9:13";
+    pageSize?: "A4";
+    orientation?: "landscape" | "portrait";
+    /** Server-derived source geometry retained for UI/resume identity only. */
+    documentCanvas?: DocumentCanvas;
     codexGenerationPreset?: CodexGenerationPresetId;
     masterPin?: {
       masterId: string;
       revision: number;
       digest: `sha256:${string}`;
     };
-    sourceMode?: "source_content_restyle";
+    sourceMode?: "source_content_restyle" | "raster_reconstruction";
+    rasterApprovalPin?: RasterApprovalPinWire;
+    referenceSnapshotIds?: string[];
     sourceContentManifestPin?: {
       manifestId: string;
       digest: `sha256:${string}`;

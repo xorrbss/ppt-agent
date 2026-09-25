@@ -48,6 +48,8 @@ def _worker_tree(root: Path) -> Path:
     (nextjs / "lib" / "presentation-export-quality.ts").write_text(
         "export const quality = 1;\n", encoding="utf-8"
     )
+    for name in ("authored-canvas.ts", "document-canvas.ts"):
+        (nextjs / "lib" / name).write_text("export const canvas = 1;\n", encoding="utf-8")
     (nextjs / "lib" / "authored-hybrid" / "pptx-assembler.ts").write_text(
         "export const assemble = 1;\n", encoding="utf-8"
     )
@@ -63,7 +65,7 @@ def test_identical_worker_sources_keep_one_identity(tmp_path: Path) -> None:
     second = compute_public_export_worker_bundle(PROTOCOL, repository_root=b)
 
     assert first.source == BUNDLE_SOURCE_FILES
-    assert first.file_count == 4
+    assert first.file_count == 6
     # Two checkouts of the same code must reuse: the digest is content, not path.
     assert first.digest == second.digest
 
@@ -74,6 +76,8 @@ def test_identical_worker_sources_keep_one_identity(tmp_path: Path) -> None:
         ("scripts", "public-hybrid-export-worker.mjs"),
         ("scripts", "lib", "hybrid-slide-fallback-code.mjs"),
         ("lib", "presentation-export-quality.ts"),
+        ("lib", "authored-canvas.ts"),
+        ("lib", "document-canvas.ts"),
         ("lib", "authored-hybrid", "pptx-assembler.ts"),
     ],
 )
@@ -130,6 +134,8 @@ def test_a_new_protocol_version_splits_the_identity(tmp_path: Path) -> None:
     [
         (("scripts", "public-hybrid-export-worker.mjs"), "worker_entrypoint_missing"),
         (("lib", "presentation-export-quality.ts"), "worker_source_missing"),
+        (("lib", "authored-canvas.ts"), "worker_source_missing"),
+        (("lib", "document-canvas.ts"), "worker_source_missing"),
     ],
 )
 def test_missing_sources_fall_back_deterministically(
@@ -261,6 +267,25 @@ def test_a_worker_code_change_yields_a_re_exportable_identity(tmp_path: Path) ->
     # Every column of `uq_public_export_identity` except the exporter digest is
     # unchanged, so the digest alone has to carry the split.
     assert after.evidence.exporter_digest != before.evidence.exporter_digest
+
+
+@pytest.mark.parametrize("orientation", ["landscape", "portrait"])
+def test_render_and_export_producers_preserve_document_canvas(orientation: str) -> None:
+    import json
+    from services.document_canvas import document_canvas_for_orientation
+    from services.public_export_operation import (
+        build_public_render_bundle, build_validated_checkpoint_export_bundle,
+    )
+
+    canvas = document_canvas_for_orientation(orientation).model_dump(mode="json", by_alias=True)
+    identity = _identity("a" * 64)
+    source = identity.slides[0].artifact.model_copy(update={"kind": "slide-html", "media_type": "text/html"})
+    render = json.loads(build_public_render_bundle([source], canvas=canvas))
+    export = json.loads(build_validated_checkpoint_export_bundle(
+        identity, canvas=canvas, source_slides=[source],
+    ))
+    assert render["canvas"] == export["canvas"] == canvas
+    assert "widthPx" not in render["canvas"]
 
 
 def test_unchanged_worker_code_keeps_the_reusable_identity(tmp_path: Path) -> None:

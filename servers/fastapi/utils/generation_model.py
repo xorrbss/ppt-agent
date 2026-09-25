@@ -22,6 +22,9 @@ CODEX_GENERATION_PRESETS: dict[str, tuple[str, str]] = {
     "sol-low": ("gpt-5.6-sol", "low"),
     "sol-medium": ("gpt-5.6-sol", "medium"),
     "sol-high": ("gpt-5.6-sol", "high"),
+    "sol6-low": ("gpt-6-sol", "low"),
+    "sol6-medium": ("gpt-6-sol", "medium"),
+    "sol6-high": ("gpt-6-sol", "high"),
     "astra-low": ("gpt-6-astra", "low"),
     "astra-medium": ("gpt-6-astra", "medium"),
 }

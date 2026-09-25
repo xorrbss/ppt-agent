@@ -78,6 +78,18 @@ _SPECS = (
         "export.pdf", True, True, False,
         "Export PDF", "PDF export", "PDF export",
     ),
+    WorkspaceOperationKindSpec(
+        "presentation.slides.reorder", True, True, False,
+        "Reorder slides", "All slides", "Slide reordering",
+    ),
+    WorkspaceOperationKindSpec(
+        "raster.analysis", False, False, False,
+        "원본 화면 분석", "원본 페이지 영역 분석", "원본 분석",
+    ),
+    WorkspaceOperationKindSpec(
+        "raster.review", False, False, False,
+        "원본 영역 검토", "원본 영역 분류 및 OCR 검토", "영역 검토",
+    ),
 )
 
 WORKSPACE_OPERATION_KIND_REGISTRY = MappingProxyType(

@@ -390,6 +390,9 @@ function toAuthoredStyleSummary(value: unknown): AuthoredStyleSummary | null {
   };
 }
 
+import { normalizeDocumentCanvasCapabilities, unavailableDocumentCanvasCapabilities, type DocumentCanvasCapabilities, type DocumentCanvasSelection } from "./document-canvas-capabilities";
+export type { DocumentCanvasCapabilities, DocumentCanvasSelection } from "./document-canvas-capabilities";
+
 export function canonicalAuthoredStyleId(
   styles: AuthoredStyleSummary[],
   styleId: string,
@@ -439,6 +442,29 @@ class AuthoredStylesApi {
     } catch (error) {
       console.error("Error getting authored styles:", error);
       throw error;
+    }
+  }
+
+  /** The server alone decides which selected route is ready for A4. */
+  static async getDocumentCanvasCapabilities(selection?: DocumentCanvasSelection): Promise<DocumentCanvasCapabilities> {
+    try {
+      const query = selection ? `?${new URLSearchParams({
+        generation_strategy: selection.generationStrategy,
+        authored_style: selection.authoredStyle,
+        source_content_mode: String(selection.sourceContentMode),
+        has_company_standard: String(selection.hasCompanyStandard),
+      }).toString()}` : "";
+      const response = await fetch(
+        getApiUrl(`/api/v1/ppt/authored/canvas-capabilities${query}`),
+        { method: "GET", headers: getHeader(), cache: "no-store" },
+      );
+      const payload: unknown = await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to get document canvas capabilities",
+      );
+      return normalizeDocumentCanvasCapabilities(payload);
+    } catch {
+      return unavailableDocumentCanvasCapabilities();
     }
   }
 }

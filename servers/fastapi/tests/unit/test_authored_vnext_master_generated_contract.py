@@ -102,6 +102,13 @@ def test_api_wire_manifest_is_camel_case_feature_gated_and_complete() -> None:
         for endpoint in manifest["endpoints"]
     }
     assert set(endpoints) == {
+        ("POST", "/authored-vnext/master/ai-import/analyses"),
+        ("GET", "/authored-vnext/master/ai-import/analyses/{analysis_id}"),
+        ("PATCH", "/authored-vnext/master/ai-import/analyses/{analysis_id}"),
+        ("POST", "/authored-vnext/master/ai-import/analyses/{analysis_id}/save"),
+        ("POST", "/authored-vnext/master/ai-import/analyses/{analysis_id}/validate"),
+        ("POST", "/authored-vnext/master/assets/body-image"),
+        ("GET", "/authored-vnext/master/company-standard/default"),
         ("GET", "/authored-vnext/master/status"),
         ("GET", "/authored-vnext/master/assets/{asset_id}"),
         ("GET", "/authored-vnext/master/masters"),

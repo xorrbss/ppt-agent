@@ -519,7 +519,8 @@ def test_a_losing_racer_joins_and_publishes_no_second_artifact(
         _drive_join(monkeypatch)
         identity = export.identity(font_manifest_digest=_digest("fonts"))
         source_checkpoint = await export.source_checkpoint(identity)
-        started = datetime(2026, 9, 12, tzinfo=timezone.utc)
+        # Completion checks the real lease clock; an historical claim is expired.
+        started = datetime.now(timezone.utc)
 
         operations = [
             _operation_claim(

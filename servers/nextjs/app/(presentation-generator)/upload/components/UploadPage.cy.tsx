@@ -54,6 +54,19 @@ describe("<UploadPage /> authored-only creation", () => {
       statusCode: 200,
       body: [],
     });
+    cy.intercept("GET", "**/api/v1/ppt/authored/canvas-capabilities*", {
+      statusCode: 200,
+      body: {
+        a4: { enabled: false, reason: "document_canvas_a4_not_available" },
+        sourceContentSvg: {
+          enabled: true,
+          reason: null,
+          canvasSource: "source-manifest",
+          inputFormats: ["pptx"],
+          productVerified: false,
+        },
+      },
+    }).as("canvasCapabilities");
   });
 
   it("shows only authored style selection for new generation", () => {
@@ -82,6 +95,33 @@ describe("<UploadPage /> authored-only creation", () => {
     cy.get('[data-testid="rendered-file-count"]').should("have.text", "1");
   });
 
+  it("enables the supported source-preserving landscape SVG flow", () => {
+    mount(
+      <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
+        <AppRouterContext.Provider value={router as any}>
+          <Provider store={makeStore()}>
+            <UploadPage masterFeatureEnabled />
+            <Toaster />
+          </Provider>
+        </AppRouterContext.Provider>
+      </NextIntlClientProvider>,
+    );
+
+    cy.get('[data-testid="file-upload-input"]').selectFile({
+      contents: Cypress.Buffer.from("pptx"),
+      fileName: "source.pptx",
+      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    });
+    cy.get('[data-testid="generation-strategy-svg"]').should("be.enabled").click();
+
+    cy.get('[data-testid="source-content-selection-summary"]')
+      .should("contain", "SVG 원본 크기 재배치")
+      .and("contain", "원문·표·이미지 유지")
+      .and("contain", "요약 및 페이지 추가 안 함");
+    cy.get('[data-testid="source-svg-landscape-canvas"]').should("contain", "원본 크기 · 분석 후 유지");
+    cy.get('[data-testid="upload-master-selection"]').should("not.exist");
+  });
+
   it("starts without a company standard and discards a stale browser preference", () => {
     cy.window().then((browserWindow) => {
       browserWindow.localStorage.setItem(
@@ -102,7 +142,7 @@ describe("<UploadPage /> authored-only creation", () => {
     );
 
     cy.get('[data-testid="upload-master-selection"]')
-      .should("contain", "선택하지 않으면 회사 표준 없이 생성합니다.")
+      .should("contain", koMessages.upload.simplify.companyTemplateDescription)
       .and("not.contain", "데이터 인사이트");
     cy.window().then((browserWindow) => {
       expect(

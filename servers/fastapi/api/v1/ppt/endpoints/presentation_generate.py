@@ -116,6 +116,7 @@ from services.source_content.pipeline import (
     SOURCE_MODE as SOURCE_CONTENT_RESTYLE_MODE,
     admit_source_content_request,
     prepare_source_content_authored_reflow,
+    prepare_source_content_svg_reflow,
 )
 from services.database import async_session_maker, get_async_session, sql_engine
 from services.documents_loader import DocumentsLoader
@@ -216,7 +217,7 @@ from utils.outline_citations import strip_outline_citations
 from utils.outline_utils import (
     get_no_of_outlines_to_generate_for_n_slides,
 )
-from utils.owner_context import get_current_owner_id
+from utils.owner_context import get_current_owner_id, get_current_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -380,7 +381,7 @@ async def _admit_source_content_generation(
     request: GeneratePresentationRequest,
     sql_session: AsyncSession,
 ) -> None:
-    if request.source_mode != SOURCE_CONTENT_RESTYLE_MODE:
+    if request.source_mode not in {SOURCE_CONTENT_RESTYLE_MODE, "raster_reconstruction"}:
         return
     if request._authored_style_snapshot is None:
         request._authored_style_snapshot = resolve_authored_style(request.authored_style)
@@ -393,6 +394,7 @@ async def _admit_source_content_generation(
             request,
             sql_session=sql_session,
             owner_id=get_current_owner_id(),
+            tenant_id=get_current_tenant_id() or request._raster_tenant_id,
         )
     except SourceContentError as error:
         raise _source_content_http_exception(error) from error
@@ -472,7 +474,7 @@ async def check_if_api_request_is_valid(
             snapshot.snapshot_id,
         ]
 
-    if request.source_mode != SOURCE_CONTENT_RESTYLE_MODE:
+    if request.source_mode not in {SOURCE_CONTENT_RESTYLE_MODE, "raster_reconstruction"}:
         await _admit_generation_references(request, sql_session)
 
     if request.n_slides is not None and request.n_slides <= 0:
@@ -524,7 +526,7 @@ async def check_if_api_request_is_valid(
         )
         validate_authored_canvas_admission(request, style_id=canvas_style_id)
     except ValueError as error:
-        if str(error).startswith("authored_canvas") or str(error).startswith(
+        if str(error).startswith("document_canvas") or str(error).startswith("authored_canvas") or str(error).startswith(
             "authored_portrait"
         ):
             raise HTTPException(status_code=422, detail=str(error)) from error
@@ -712,8 +714,7 @@ async def _record_chat_first_generation_admission_failure(
         "retryable": retryable,
         "stage": "admission",
     }
-    payload = _durable_request_payload(request)
-    payload[_INTERNAL_ADMISSION_RETRY_KEY] = True
+    payload = _durable_request_payload(request, admission_retry=True)
     status = AsyncPresentationGenerationTaskModel(
         status="error",
         message="Generation request was not admitted",
@@ -839,7 +840,7 @@ async def generate_presentation_handler(
 ):
     # Internal callers can bypass validation, so re-run owner, expiry, asset
     # state and digest admission before generation.
-    if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+    if request.source_mode in {SOURCE_CONTENT_RESTYLE_MODE, "raster_reconstruction"}:
         if generation_job is not None:
             from services.public_generation_route import restore_source_restyle_route
 
@@ -848,8 +849,12 @@ async def generate_presentation_handler(
         # Re-resolve owner scope and the immutable pin before any authoring work.
         await _validate_authored_master_pin_admission(request)
         await _admit_source_content_generation(request, sql_session)
-        await _admit_source_content_reference_snapshot(request, sql_session)
-        prepare_source_content_authored_reflow(request)
+        if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+            await _admit_source_content_reference_snapshot(request, sql_session)
+        if request.strategy == "svg":
+            prepare_source_content_svg_reflow(request)
+        else:
+            prepare_source_content_authored_reflow(request)
         if getattr(request, "_composer_restyle", False):
             from services.composer.pipeline import run_composer_restyle
 
@@ -1148,11 +1153,26 @@ async def generate_presentation_handler(
             # requested" is decided, for the synchronous and the durable path
             # alike: this is the one successful completion of the handler.
             if request.strategy == "svg" and async_status is not None:
+                # Source SVG publication returns only after every preservation
+                # receipt and rendered page passed its enforced quality gate.
+                source_verified = bool(request._source_content_svg_reflow)
                 async_status.status = "completed"
-                async_status.message = "SVG presentation generation completed; review required"
-                async_status.data = {**response.model_dump(mode="json"), "quality_gate_status": "review_required"}
+                async_status.message = (
+                    "SVG source presentation generation completed; preservation verified"
+                    if source_verified else "SVG presentation generation completed; review required"
+                )
+                async_status.data = {
+                    **response.model_dump(mode="json"),
+                    "quality_gate_status": "passed" if source_verified else "review_required",
+                }
                 async_status.error = None
                 sql_session.add(async_status)
+                # Durable independent of the chained export below: a failure
+                # submitting export_as must never roll back "completed" too
+                # (it used to -- chain_generation_export rolls back the
+                # session on a submission error, discarding whatever else was
+                # pending on it). Commit "completed" on its own first.
+                await sql_session.commit()
             response = await finalize_generation_export_chain(
                 sql_session,
                 response=response,
@@ -1363,7 +1383,7 @@ async def run_generation_job(
                 raise RuntimeError("presentation_generation_job_missing")
             request = _request_from_durable_payload(job.request_payload)
             request._request_id = job.request_id
-            if request.source_mode != SOURCE_CONTENT_RESTYLE_MODE:
+            if request.source_mode not in {SOURCE_CONTENT_RESTYLE_MODE, "raster_reconstruction"}:
                 await _admit_generation_references(request, session)
             # Recheck rollout and source validity on the worker too. A private
             # exact preset may have changed after admission; it must become a
@@ -1599,7 +1619,8 @@ async def _bootstrap_generation_workspace(
                     "include_table_of_contents": request.include_table_of_contents,
                     "include_title_slide": request.include_title_slide,
                     "web_search": request.web_search,
-                    "aspect_ratio": request.aspect_ratio,
+                    **({"page_size": request.page_size, "orientation": request.orientation}
+                       if request.page_size is not None else {"aspect_ratio": request.aspect_ratio}),
                     "reference_snapshot_ids": [
                         str(snapshot_id)
                         for snapshot_id in request.reference_snapshot_ids
@@ -1752,7 +1773,7 @@ async def queue_presentation_generation(
         )
         validate_authored_canvas_admission(request, style_id=canvas_style_id)
     except ValueError as error:
-        if str(error).startswith("authored_canvas") or str(error).startswith(
+        if str(error).startswith("document_canvas") or str(error).startswith("authored_canvas") or str(error).startswith(
             "authored_portrait"
         ):
             raise HTTPException(status_code=422, detail=str(error)) from error
@@ -1771,9 +1792,10 @@ async def queue_presentation_generation(
         or request.source_mode == SOURCE_CONTENT_RESTYLE_MODE
     ):
         await _validate_authored_master_pin_admission(request)
-    if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+    if request.source_mode in {SOURCE_CONTENT_RESTYLE_MODE, "raster_reconstruction"}:
         await _admit_source_content_generation(request, sql_session)
-        await _admit_source_content_reference_snapshot(request, sql_session)
+        if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+            await _admit_source_content_reference_snapshot(request, sql_session)
     # The fingerprint is taken before any deck is minted, so a replay under the
     # same idempotency key matches the stored job instead of bootstrapping a
     # second deck. It now includes the resolved pins/rule/style snapshots.

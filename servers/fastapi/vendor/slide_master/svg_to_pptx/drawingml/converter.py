@@ -27,6 +27,7 @@ from pptx_to_svg.preset_authoring import (
 from resource_paths import icon_search_dirs_for_svg
 
 from .context import ConvertContext, ShapeResult
+from ..conversion_context import current_conversion_context
 from .theme_colors import ThemeColorSpec
 from .theme_fonts import ThemeFontSpec
 from .utils import (
@@ -512,8 +513,8 @@ def convert_g(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
     off_y = group_y
     if rotate_pivot is not None and angle_deg:
         cx_svg, cy_svg = rotate_pivot
-        pivot_ex = (cx_svg + ctx.translate_x) * EMU_PER_PX
-        pivot_ey = (cy_svg + ctx.translate_y) * EMU_PER_PX
+        pivot_ex = (cx_svg + ctx.translate_x) * current_conversion_context().emu_per_unit
+        pivot_ey = (cy_svg + ctx.translate_y) * current_conversion_context().emu_per_unit
         bbox_cx = group_x + group_w / 2
         bbox_cy = group_y + group_h / 2
         theta = math.radians(angle_deg)

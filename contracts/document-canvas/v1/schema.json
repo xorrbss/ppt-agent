@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "document-canvas/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "logicalSize", "physicalSize", "safeArea"],
+  "properties": {
+    "contractVersion": {"const": "document-canvas/v1"},
+    "logicalSize": {
+      "type": "object", "additionalProperties": false, "required": ["width", "height"],
+      "properties": {"width": {"type": "integer", "minimum": 1, "maximum": 7680}, "height": {"type": "integer", "minimum": 1, "maximum": 7680}}
+    },
+    "physicalSize": {
+      "type": "object", "additionalProperties": false, "required": ["widthEmu", "heightEmu"],
+      "properties": {"widthEmu": {"type": "integer", "minimum": 1, "maximum": 2147483647}, "heightEmu": {"type": "integer", "minimum": 1, "maximum": 2147483647}}
+    },
+    "safeArea": {
+      "type": "object", "additionalProperties": false, "required": ["x", "y", "width", "height"],
+      "properties": {"x": {"type": "number", "minimum": 0, "multipleOf": 0.000001}, "y": {"type": "number", "minimum": 0, "multipleOf": 0.000001}, "width": {"type": "number", "exclusiveMinimum": 0, "multipleOf": 0.000001}, "height": {"type": "number", "exclusiveMinimum": 0, "multipleOf": 0.000001}}
+    }
+  },
+  "$comment": "Runtime validators additionally require exact cross-product uniform scale and safeArea containment. No coercion. Digest SHA256 UTF8 compact JSON string-array: version, logical W/H, physical W/H, safe x/y/w/h as integer micro units."
+}

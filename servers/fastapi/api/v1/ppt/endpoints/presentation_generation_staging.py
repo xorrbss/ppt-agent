@@ -80,14 +80,30 @@ def _durable_style_snapshot(style: AuthoredStyle) -> dict[str, Any]:
         "composer_profile": dict(style.composer_profile) if style.composer_profile is not None else None,
     }
 
-def _durable_request_payload(request: GeneratePresentationRequest) -> dict:
+def _durable_request_payload(
+    request: GeneratePresentationRequest, *, admission_retry: bool = False
+) -> dict:
     """Persist canonical identities only, never admission-time raw paths."""
 
     payload = request.model_dump(mode="json")
+    incomplete_source_retry = (
+        admission_retry
+        and request.strategy == "svg"
+        and request.source_mode == "source_content_restyle"
+        and (
+            getattr(request, "_document_canvas", None) is None
+            or getattr(request, "_svg_source_binding", None) is None
+        )
+    )
+    if admission_retry:
+        payload[INTERNAL_ADMISSION_RETRY_KEY] = True
     if request.strategy == "svg":
-        from services.svg_generation_admission import pin_svg_style
+        if not incomplete_source_retry:
+            from services.svg_generation_admission import pin_svg_style
 
-        payload["_internal_svg_style_snapshot"] = pin_svg_style(request)
+            payload["_internal_svg_style_snapshot"] = pin_svg_style(request)
+        if request.source_mode == "source_content_restyle" and request._svg_source_binding is not None:
+            payload["_internal_svg_source_binding"] = dict(request._svg_source_binding)
     # ``files`` is a compatibility-only admission field. Validation has already
     # converted it to an immutable uploaded-document snapshot. Preserve the
     # optional field's wire shape for old workers while ensuring its value can
@@ -99,7 +115,12 @@ def _durable_request_payload(request: GeneratePresentationRequest) -> dict:
 
         payload[COMPOSER_FIT_POLICY_KEY] = dict(composer_policy)
     if request.strategy == "authored" or str(request.template or "").lower() == "authored":
-        payload[INTERNAL_CANVAS_KEY] = request_canvas_metadata(request)
+        if not incomplete_source_retry:
+            payload[INTERNAL_CANVAS_KEY] = request_canvas_metadata(request)
+            if getattr(request, "_document_canvas", None) is not None:
+                from services.document_canvas import canvas_digest
+
+                payload["_internal_canvas_digest"] = canvas_digest(payload[INTERNAL_CANVAS_KEY])
         policy_revision = (
             request._authored_local_fit_policy_revision or POLICY_REVISION
         )
@@ -290,6 +311,7 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     resolved_master_payload = values.pop(INTERNAL_RESOLVED_MASTER_PIN_KEY, None)
     style_snapshot_payload = values.pop(INTERNAL_STYLE_SNAPSHOT_KEY, None)
     svg_style_snapshot = values.pop("_internal_svg_style_snapshot", None)
+    svg_source_binding = values.pop("_internal_svg_source_binding", None)
     design_replay = values.pop(INTERNAL_DESIGN_REPLAY_KEY, False)
     deck_metadata_payload = values.pop(INTERNAL_DECK_METADATA_KEY, None)
     source_semantic_snapshot = values.pop(
@@ -300,6 +322,7 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     )
     rollout_profile_payload = values.pop(INTERNAL_ROLLOUT_PROFILE_KEY, None)
     canvas_payload = values.pop(INTERNAL_CANVAS_KEY, _MISSING_CANVAS_PAYLOAD)
+    frozen_canvas_digest = values.pop("_internal_canvas_digest", None)
     # Internal runner metadata is deliberately outside the public request
     # schema. It remains on the durable job across operation rebinds, but must
     # never be passed to Pydantic as caller input.
@@ -309,11 +332,20 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     values.pop(COMPOSER_FIT_POLICY_KEY, None)
     request = GeneratePresentationRequest.model_validate(values)
     request._svg_style_snapshot = svg_style_snapshot
+    request._svg_source_binding = svg_source_binding
+    if request.strategy == "svg" and request.source_mode == "source_content_restyle":
+        if not isinstance(svg_source_binding, dict) and not payload.get(INTERNAL_ADMISSION_RETRY_KEY):
+            raise ValueError("svg_source_input_binding_required")
     restore_request_canvas_metadata(
         request,
         canvas_payload,
         present=canvas_payload is not _MISSING_CANVAS_PAYLOAD,
     )
+    if getattr(request, "_document_canvas", None) is not None:
+        from services.document_canvas import canvas_digest
+
+        if frozen_canvas_digest != canvas_digest(canvas_payload):
+            raise ValueError("document_canvas_digest_mismatch")
     if snapshot_id is not None:
         request._authored_exact_snapshot_id = str(snapshot_id)
     if composition_payload is not None:

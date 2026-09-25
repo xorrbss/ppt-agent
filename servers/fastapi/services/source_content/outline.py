@@ -84,6 +84,7 @@ class SourceDocumentOutlineBuilder:
         *,
         manifest: Any,
         manifest_pin: SourceContentManifestPin,
+        include_tables: bool = False,
     ) -> SourceDocumentOutline:
         value = _mapping(manifest)
         if (
@@ -132,7 +133,7 @@ class SourceDocumentOutlineBuilder:
                 if not block_id or block_id in all_manifest_blocks:
                     raise ValueError("source_content_manifest_invalid")
                 all_manifest_blocks.add(block_id)
-                if kind not in {"text", "image"}:
+                if kind not in ({"text", "image", "table", "chart", "shape"} if include_tables else {"text", "image"}):
                     # The selected authored template owns the new visual
                     # composition. Tables, charts, shapes, and notes from the
                     # source are not part of the re-authoring outline.
@@ -146,6 +147,10 @@ class SourceDocumentOutlineBuilder:
                     # Each source image block is an occurrence, even when its
                     # asset bytes are deduplicated in the manifest store.
                     images.append(block_id)
+                elif kind == "table":
+                    tables.append(block_id)
+                elif kind == "chart":
+                    charts.append(block_id)
             slides.append(
                 SourceDocumentOutlineSlide(
                     source_unit_id=unit_id,

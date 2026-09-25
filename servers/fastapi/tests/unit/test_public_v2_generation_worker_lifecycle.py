@@ -306,6 +306,7 @@ def test_isolated_worker_executor_cannot_outlive_sealed_job_deadline():
 
 
 def test_export_gate_rejects_content_integrity_receipt_from_another_operation():
+    from services.authored_vnext.narrative_ir.contracts import ProviderCallBudgetV1
     operation_id = uuid.uuid4()
     route_unsigned = {
         "schemaVersion": "generation-route-receipt/v1",
@@ -324,8 +325,12 @@ def test_export_gate_rejects_content_integrity_receipt_from_another_operation():
         {**route_unsigned, "receiptDigest": _digest(route_unsigned)}
     )
     unit_digest = "sha256:" + "a" * 64
+    budget = model_payload(ProviderCallBudgetV1(actual_logical_calls=0, actual_physical_calls=0))
     receipt = seal_content_integrity_receipt(
         operation_id=operation_id,
+        attempt_binding_digest=_digest({"operationId": str(operation_id), "jobId": "", "attemptId": "", "fencingToken": None}),
+        preserve_source_input_digest=None,
+        provider_call_budget=budget,
         source_revision=7,
         result_revision=8,
         generation_lane="new-authoring",
@@ -342,6 +347,9 @@ def test_export_gate_rejects_content_integrity_receipt_from_another_operation():
                 "boundDigest": unit_digest,
                 "renderedDigest": unit_digest,
                 "sourceOwnershipDigest": "sha256:" + "d" * 64,
+                "expectedProtectedChromeDigest": "sha256:" + "e" * 64,
+                "observedProtectedChromeDigest": "sha256:" + "e" * 64,
+                "browserReadbackDigest": "sha256:" + "f" * 64,
             }
         ],
     )
@@ -351,7 +359,8 @@ def test_export_gate_rejects_content_integrity_receipt_from_another_operation():
             "generation_route_receipt": route.model_dump(mode="json", by_alias=True),
             "narrative_checkpoint": {
                 "operationId": str(operation_id),
-                "narrative": {"contentGraphDigest": "sha256:" + "b" * 64},
+                "providerCallBudget": budget,
+                "narrative": {"contentGraphDigest": "sha256:" + "b" * 64, "narrativeDigest": "sha256:" + "c" * 64},
             },
         },
         state="succeeded",

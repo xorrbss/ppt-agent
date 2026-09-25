@@ -10,6 +10,7 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from ..drawingml.context import ConvertContext, IDENTITY_MATRIX
+from ..conversion_context import current_conversion_context
 from ..drawingml.utils import (
     EMU_PER_PX,
     FONT_PX_TO_HUNDREDTHS_PT,
@@ -224,7 +225,7 @@ def _powerpoint_emu_value(
 def _powerpoint_emu(value: Any, field_name: str, *, positive: bool = False) -> int:
     """Convert SVG px to an EMU value that PowerPoint can represent."""
     number = _number(value, field_name)
-    scaled = number * EMU_PER_PX
+    scaled = number * current_conversion_context().emu_per_unit
     if not math.isfinite(scaled):
         raise RuntimeError(f"Native PPTX object {field_name} exceeds PowerPoint coordinates")
     return _powerpoint_emu_value(round(scaled), field_name, positive=positive)
@@ -820,7 +821,7 @@ def _font_size_hpt(value: Any, default_px: int = 18) -> int:
             px = float(raw)
         except (TypeError, ValueError, OverflowError):
             return None
-        scaled = px * FONT_PX_TO_HUNDREDTHS_PT
+        scaled = px * current_conversion_context().hundredths_pt_per_unit
         if not math.isfinite(scaled):
             return None
         size = font_px_to_hpt(px)

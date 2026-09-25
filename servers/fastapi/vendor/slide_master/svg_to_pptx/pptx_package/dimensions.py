@@ -6,6 +6,7 @@ import re
 import sys
 from pathlib import Path
 from xml.etree import ElementTree as ET
+from ..conversion_context import current_conversion_context
 
 # Import project utility modules
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -64,6 +65,11 @@ def get_slide_dimensions(
         else:
             width_px, height_px = 1280, 720
 
+    context = current_conversion_context()
+    if not context.legacy:
+        if (width_px, height_px) != (context.width_units, context.height_units):
+            raise ValueError("svg_conversion_context_canvas_mismatch")
+        return context.width_emu, context.height_emu
     return int(width_px * EMU_PER_PIXEL), int(height_px * EMU_PER_PIXEL)
 
 

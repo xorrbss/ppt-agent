@@ -12,3 +12,7 @@ templates/**/template.json text eol=lf
 templates/**/*.svg text eol=lf
 templates/manifests/*.json text eol=lf
 contracts/template_package/engines/*.json text eol=lf
+
+# Converter manifests and replay patches pin exact bytes, including on Windows.
+servers/fastapi/vendor/slide_master/** -text
+compatibility/slide-master/patches/*.patch -text

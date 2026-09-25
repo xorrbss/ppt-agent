@@ -20,6 +20,7 @@ from models.sql.presentation import (
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
+from models.sql.account_deletion_request import AccountDeletionRequest
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.public_artifact import PublicArtifact
@@ -41,6 +42,7 @@ from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
 TABLES = [
     User.__table__,
+    AccountDeletionRequest.__table__,
     PresentationModel.__table__,
     SlideModel.__table__,
     WorkspaceConversation.__table__,
@@ -1355,6 +1357,7 @@ def test_authored_publication_failure_reports_snapshotted_job_after_rollback(
                     "slide_index": 0,
                     "stage": "persist",
                     "attempt_token": "attempt-1",
+                    "fencing_token": None,
                     "error": caught.value,
                     "request_id": "publication-error-correlation",
                 }

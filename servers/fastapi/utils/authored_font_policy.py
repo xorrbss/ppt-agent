@@ -20,13 +20,15 @@ MIN_AUTHORED_FONT_SIZE_PX = AUTHORED_FONT_FLOOR_PX
 MIN_AUTHORED_FONT_SIZE_PT = AUTHORED_FONT_FLOOR_PT
 
 
-def requested_font_floor_px(instructions: str | None) -> float | None:
+def requested_font_floor_px(instructions: str | None, *, point_per_unit: float = 0.75) -> float | None:
     """Read explicit, unit-bearing typography values from the user's request only.
 
     This is permission to preserve a requested size, not a replacement for the
     author's interpretation of which typography role the request addresses.
     Never pass extracted source documents or generated HTML here.
     """
+    if not math.isfinite(point_per_unit) or point_per_unit <= 0:
+        raise ValueError("document_canvas_point_scale_invalid")
     values = []
     pattern = (
         r"(?:본문|기본|전체|글자|글씨|글짜|폰트|body|base|default|font)"
@@ -44,7 +46,7 @@ def requested_font_floor_px(instructions: str | None) -> float | None:
             continue
         value = float(match.group("size"))
         if match.group("unit").lower() in {"pt", "포인트"}:
-            value /= 0.75
+            value /= point_per_unit
         if math.isfinite(value) and value > 0:
             values.append(value)
     return min(values) if values else None

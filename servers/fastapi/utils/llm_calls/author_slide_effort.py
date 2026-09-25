@@ -45,6 +45,7 @@ CODEX_REASONING_CAPABILITIES = {
     # gpt-6-astra (probed 2026-09-05) rejects "minimal" and "none" alike:
     # "Supported values are: 'low', 'medium', 'high', 'xhigh', and 'max'."
     "gpt-6-astra": frozenset(("low", "medium", "high", "xhigh", "max")),
+    "gpt-6-sol": frozenset(("low", "medium", "high", "xhigh", "max", "ultra")),
 }
 # The provider's own order, cheapest first.
 _LEVELS_CHEAPEST_FIRST = (

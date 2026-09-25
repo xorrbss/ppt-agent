@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote_to_bytes
 from xml.etree import ElementTree as ET
+from ..conversion_context import current_conversion_context
 
 from pptx_shapes import (
     CONNECTOR_PRESET_TYPES,
@@ -1702,7 +1703,7 @@ def _letter_spacing_to_drawingml_spc(letter_spacing_px: float) -> str:
     """Convert SVG px letter spacing into DrawingML rPr@spc."""
     if abs(letter_spacing_px) < 1e-9:
         return ''
-    spc_val = round(letter_spacing_px * FONT_PX_TO_HUNDREDTHS_PT)
+    spc_val = round(letter_spacing_px * current_conversion_context().hundredths_pt_per_unit)
     return f' spc="{spc_val}"'
 
 
@@ -2432,13 +2433,13 @@ def convert_text(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
 
     if paragraph_runs is not None:
         # SVG dy(px) -> hundredths-of-a-point: dy_pt = dy_px * 0.75, then x100.
-        line_spc_val = round(line_height_px * FONT_PX_TO_HUNDREDTHS_PT)
+        line_spc_val = round(line_height_px * current_conversion_context().hundredths_pt_per_unit)
         ln_spc_xml = f'<a:lnSpc><a:spcPts val="{line_spc_val}"/></a:lnSpc>'
         paragraph_xml_chunks = []
         for line, extra_px, bullet in zip(paragraph_runs, paragraph_space_before, paragraph_bullets):
             spc_bef_xml = ''
             if extra_px > 0:
-                spc_bef_val = round(extra_px * FONT_PX_TO_HUNDREDTHS_PT)
+                spc_bef_val = round(extra_px * current_conversion_context().hundredths_pt_per_unit)
                 spc_bef_xml = f'<a:spcBef><a:spcPts val="{spc_bef_val}"/></a:spcBef>'
             runs_inner = '\n'.join(_build_run_xml(r, fonts, ctx, text_effect_xml) for r in line)
             p_pr_xml = _paragraph_pr_xml(

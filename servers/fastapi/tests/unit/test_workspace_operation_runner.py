@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import replace
 from datetime import timedelta
+import logging
 from pathlib import Path
 import uuid
 
@@ -769,5 +770,59 @@ async def _runner_backfills_result_event_after_publication(tmp_path: Path):
                 if event.event_type == "operation.result"
             ]
         ) == 1
+    finally:
+        await engine.dispose()
+
+
+def test_runner_logs_traceback_for_an_unexpected_handler_exception(
+    tmp_path: Path, caplog
+):
+    asyncio.run(_runner_logs_unexpected_handler_exception(tmp_path, caplog))
+
+
+async def _runner_logs_unexpected_handler_exception(tmp_path: Path, caplog):
+    # A handler raising anything other than one of the typed workspace
+    # operation errors falls into _execute's generic `except Exception`
+    # branch, which converts it into the opaque "workspace_operation_internal_
+    # error" code. Before this test the branch never logged, so the real
+    # traceback never reached any log -- only the generic code survived.
+    engine, maker = await _database(tmp_path / "internal-error.db")
+    try:
+        _, operation_ids = await _seed_operations(maker)
+
+        async def handler(_context):
+            raise RuntimeError("boom: not a typed workspace operation error")
+
+        registry = WorkspaceOperationHandlerRegistry()
+        registry.register("test.operation", handler)
+        runner = WorkspaceOperationRunner(
+            session_factory=maker,
+            registry=registry,
+            max_concurrency=1,
+            heartbeat_seconds=60,
+        )
+        with caplog.at_level(
+            logging.ERROR, logger="services.workspace_operation_runner"
+        ):
+            assert await _drain_once(runner) == 1
+        operation = await _operation(maker, operation_ids[0])
+        # Retryable: requeued (not terminally failed) on the first attempt.
+        assert operation.state == "queued"
+        assert operation.error_code == "workspace_operation_internal_error"
+
+        matching = [
+            record
+            for record in caplog.records
+            if record.name == "services.workspace_operation_runner"
+            and record.levelno == logging.ERROR
+            and record.exc_info is not None
+        ]
+        assert matching, "expected the handler traceback to be logged"
+        assert any(
+            "test.operation" in record.getMessage()
+            and str(operation_ids[0]) in record.getMessage()
+            for record in matching
+        )
+        assert any(record.exc_info[0] is RuntimeError for record in matching)
     finally:
         await engine.dispose()

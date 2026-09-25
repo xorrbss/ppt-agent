@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
-from utils.authored_styles import load_authored_styles
+from utils.authored_styles import load_authored_styles, resolve_authored_style
 from utils.authored_style_catalogue import (
     authored_style_catalogue,
     canonical_authored_style_id,
@@ -37,6 +37,60 @@ class AuthoredStyleSummary(BaseModel):
 
 
 AUTHORED_ROUTER = APIRouter(prefix="/authored", tags=["Authored"])
+
+
+@AUTHORED_ROUTER.get("/canvas-capabilities")
+def get_canvas_capabilities(
+    generation_strategy: Literal["authored", "svg"] | None = None,
+    authored_style: str | None = None,
+    source_content_mode: bool | None = None,
+    has_company_standard: bool | None = None,
+) -> dict:
+    from services.document_canvas_capabilities import (
+        a4_canvas_capabilities,
+        select_a4_route,
+    )
+
+    selectors = (
+        generation_strategy,
+        authored_style,
+        source_content_mode,
+        has_company_standard,
+    )
+    if all(selector is not None for selector in selectors):
+        style = resolve_authored_style(authored_style)
+        selection = select_a4_route(
+            strategy=generation_strategy,
+            source_content=bool(source_content_mode),
+            has_fixed_master=bool(has_company_standard),
+            exact_source=getattr(style, "reference_mode", None) == "exact_reconstruction",
+        )
+        a4 = a4_canvas_capabilities(selection)
+    else:
+        a4 = a4_canvas_capabilities()
+        a4["selection"] = {
+            "routeId": None,
+            "enabled": False,
+            "reason": "document_canvas_selection_required",
+        }
+
+    from services.svg_generation_admission import source_svg_capability
+
+    source_svg = source_svg_capability(
+        strategy=generation_strategy,
+        source_content=source_content_mode,
+        has_company_standard=has_company_standard,
+        style_id=authored_style,
+        reference_mode=(
+            getattr(resolve_authored_style(authored_style), "reference_mode", None)
+            if authored_style else None
+        ),
+    )
+    return {
+        "contractVersions": ["authored-canvas/v1", "document-canvas/v1"],
+        "a4": a4,
+        "sourceContentSvg": source_svg,
+    }
 
 
 @AUTHORED_ROUTER.get(

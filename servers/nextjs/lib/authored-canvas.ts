@@ -1,3 +1,5 @@
+import { parseDocumentCanvas, documentCanvasPhysicalSize, type DocumentCanvas } from "./document-canvas.ts";
+
 export const AUTHORED_CANVAS_CONTRACT_VERSION = "authored-canvas/v1" as const;
 
 export type AuthoredAspectRatio = "16:9" | "9:16" | "9:13";
@@ -14,6 +16,8 @@ export interface AuthoredCanvasContract {
   widthPx: number;
   heightPx: number;
   locale: string;
+  /** Internal compatibility view; never serialize this as legacy wire metadata. */
+  documentCanvas?: DocumentCanvas;
   safeArea: {
     x: number;
     y: number;
@@ -161,7 +165,21 @@ function parseCanvas(value: Record<string, unknown>): AuthoredCanvasContract | n
 
 /** Resolve the durable document canvas. Only a missing canvas is legacy 16:9. */
 export function resolveAuthoredCanvas(theme: unknown): AuthoredCanvasContract {
-  const authored = record(record(theme)?.authored_vnext);
+  const root = record(theme);
+  const authored = record(root?.authored_vnext);
+  if (root && "documentCanvas" in root) {
+    const canvas = authoredCanvasForDocument(parseDocumentCanvas(root.documentCanvas));
+    if (authored && "canvas" in authored) {
+      const legacy = record(authored.canvas);
+      const parsed = legacy ? parseCanvas(legacy) : null;
+      if (!parsed || JSON.stringify(authoredCanvasPhysicalSize(parsed)) !== JSON.stringify(authoredCanvasPhysicalSize(canvas)) ||
+          parsed.widthPx !== canvas.widthPx || parsed.heightPx !== canvas.heightPx ||
+          ["x", "y", "width", "height"].some(key => parsed.safeArea[key as keyof typeof parsed.safeArea] !== canvas.safeArea[key as keyof typeof canvas.safeArea])) {
+        throw new Error("document_canvas_legacy_conflict");
+      }
+    }
+    return canvas;
+  }
   if (!authored || !("canvas" in authored)) return LEGACY_AUTHORED_CANVAS;
   const canvas = record(authored.canvas);
   const parsed = canvas ? parseCanvas(canvas) : null;
@@ -175,10 +193,32 @@ export function authoredCanvasPhysicalSize(canvas: AuthoredCanvasContract): {
   widthPt: number;
   heightPt: number;
 } {
+  if (canvas.documentCanvas) return documentCanvasPhysicalSize(canvas.documentCanvas);
   return {
     widthEmu: canvas.widthPx * 9_525,
     heightEmu: canvas.heightPx * 9_525,
     widthPt: canvas.widthPx * 0.75,
     heightPt: canvas.heightPx * 0.75,
   };
+}
+
+export function authoredCanvasForDocument(value: DocumentCanvas): AuthoredCanvasContract {
+  const documentCanvas = parseDocumentCanvas(value);
+  return Object.freeze({
+    contractVersion: AUTHORED_CANVAS_CONTRACT_VERSION,
+    aspectRatio: aspectRatioForSize(documentCanvas.logicalSize.width, documentCanvas.logicalSize.height),
+    widthPx: documentCanvas.logicalSize.width,
+    heightPx: documentCanvas.logicalSize.height,
+    locale: "ko-KR",
+    safeArea: documentCanvas.safeArea,
+    documentCanvas,
+  });
+}
+
+export function canvasEmuPerUnit(canvas: AuthoredCanvasContract): number {
+  return authoredCanvasPhysicalSize(canvas).widthEmu / canvas.widthPx;
+}
+
+export function canvasPointsPerUnit(canvas: AuthoredCanvasContract): number {
+  return canvasEmuPerUnit(canvas) / 12700;
 }

@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from pathlib import Path
 
 import pytest
-from sqlalchemy import event, select
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel
 
 from models.generate_presentation_request import GeneratePresentationRequest
@@ -24,6 +27,15 @@ from models.sql.presentation import (
     PresentationModel,
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.public_admission import AuthoredDeckPlanCheckpoint
+from models.sql.public_artifact import PublicArtifact
+from models.sql.authored_canonical_revision import AuthoredCanonicalRevision
+from models.sql.authored_exact_provenance import AuthoredExactProvenance
+from models.sql.authored_semantic_bundle import (
+    AuthoredSemanticArtifact, AuthoredEmissionBundleRecord,
+    AuthoredDeckEmissionManifestRecord, AuthoredDeckEmissionActivePointer,
+    AuthoredSemanticExportBinding,
+)
 from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.slide import SlideModel
 from models.sql.user import User
@@ -35,8 +47,13 @@ from models.sql.workspace import (
     WorkspaceOutbox,
 )
 from services import authored_presentation_service as authored
-from services.authored_checkpoint_service import AuthoredStageError
+from services.authored_deck_plan_checkpoint import AuthoredDeckPlanCheckpointError
+from services.authored_local_fit_policy import POLICY_REVISION, html_digest
+from services.compatibility_migration.admission import stamp_new_authored_presentation
 from utils.llm_calls.author_deck import AuthoredDeckResult
+from utils.authored_semantic_role_repair import canonicalize_authored_roles
+from utils.authored_dom_quality import build_compact_dom_map
+from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
 
 TABLES = [
@@ -51,6 +68,15 @@ TABLES = [
     WorkspaceArtifact.__table__,
     AsyncPresentationGenerationTaskModel.__table__,
     PresentationGenerationJob.__table__,
+    AuthoredDeckPlanCheckpoint.__table__,
+    PublicArtifact.__table__,
+    AuthoredCanonicalRevision.__table__,
+    AuthoredExactProvenance.__table__,
+    AuthoredSemanticArtifact.__table__,
+    AuthoredEmissionBundleRecord.__table__,
+    AuthoredDeckEmissionManifestRecord.__table__,
+    AuthoredDeckEmissionActivePointer.__table__,
+    AuthoredSemanticExportBinding.__table__,
 ]
 
 ATTEMPT_TOKEN = "authored-attempt-1"
@@ -65,7 +91,7 @@ PNGS = [b"rendered-png-one", b"rendered-png-two"]
 EXPORT_BYTES = b"durable-authored-pptx"
 
 
-async def _database(path: Path):
+async def _database(path: Path, monkeypatch):
     engine = create_async_engine(
         f"sqlite+aiosqlite:///{path}",
         connect_args={"timeout": 10},
@@ -84,7 +110,22 @@ async def _database(path: Path):
                 tables=TABLES,
             )
         )
-    return engine, async_sessionmaker(engine, expire_on_commit=False)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    monkeypatch.setattr("services.database.async_session_maker", maker)
+    # The durable Scene CAS uses synchronous SQL sessions on a worker thread.
+    # Bind both views to this same isolated database, retaining real owner fences.
+    from models.sql.account_deletion_request import AccountDeletionRequest
+    from services.authored_vnext.integration.sql_repository import AuthoredVNextSqlRepository
+
+    sync_engine = create_engine(f"sqlite:///{path}", poolclass=NullPool)
+    AccountDeletionRequest.__table__.create(sync_engine, checkfirst=True)
+    AuthoredVNextSqlRepository.create_schema(sync_engine)
+    monkeypatch.setattr("services.database.get_sync_engine", lambda: sync_engine)
+    monkeypatch.setattr(
+        "services.database.sync_session_maker",
+        lambda: sessionmaker(sync_engine, expire_on_commit=False),
+    )
+    return engine, maker
 
 
 async def _seed_publication(
@@ -93,20 +134,26 @@ async def _seed_publication(
     operation_attempt_token: str = ATTEMPT_TOKEN,
 ):
     presentation_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
     async with maker() as session, session.begin():
+        session.add(User(id=owner_id, username=f"owner-{owner_id.hex}", hashed_password="test-only"))
         presentation = PresentationModel(
             id=presentation_id,
+            owner_id=owner_id,
             content="Durable authored workbench",
             n_slides=2,
             language="English",
             lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
             revision=0,
         )
+        stamp_new_authored_presentation(presentation)
         session.add(presentation)
         await session.flush()
 
         conversation = WorkspaceConversation(
             presentation_id=presentation_id,
+            owner_id=owner_id,
+            owner_scope=str(owner_id),
             next_position=2,
         )
         session.add(conversation)
@@ -115,6 +162,8 @@ async def _seed_publication(
         operation = WorkspaceOperation(
             conversation_id=conversation.id,
             presentation_id=presentation_id,
+            owner_id=owner_id,
+            owner_scope=str(owner_id),
             anchor_position=1,
             kind="presentation.generate",
             state="running",
@@ -125,11 +174,13 @@ async def _seed_publication(
             attempt_number=1,
             attempt_token=operation_attempt_token,
             fencing_token=1,
+            lease_expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
         )
         session.add(operation)
         await session.flush()
 
         task = AsyncPresentationGenerationTaskModel(
+            owner_id=owner_id,
             status="processing",
             message="Generating authored presentation",
         )
@@ -152,7 +203,7 @@ async def _seed_publication(
         )
         session.add(job)
         await session.flush()
-        return presentation_id, operation.id, task.id, job.id
+        return presentation_id, operation.id, task.id, job.id, set_current_owner_id(owner_id)
 
 
 def _request(presentation_id: uuid.UUID) -> GeneratePresentationRequest:
@@ -188,6 +239,13 @@ def _mock_external_generation(monkeypatch, app_data: Path) -> None:
             author_work=0.01,
             illustration_work=0.0,
             render_work=0.01,
+            local_fit_receipts=tuple({
+                "policy_revision": POLICY_REVISION,
+                "finalHtmlDigest": html_digest(canonicalize_authored_roles(html)),
+                "qualityStatus": "passed",
+                "unresolvedReasons": [],
+                "changed": False,
+            } for html in HTMLS),
         )
 
     def fake_export(*_args, **_kwargs):
@@ -199,6 +257,40 @@ def _mock_external_generation(monkeypatch, app_data: Path) -> None:
     async def skip_checkpoint_cleanup(_job_id):
         return None
 
+    async def fixture_browser_metrics(htmls, **_kwargs):
+        return [
+            {
+                "dom_metrics_version": "authored-dom-metrics-v16-owned-text",
+                "width": 1280,
+                "height": 720,
+                "fonts_ready": True,
+                "source_digest": "sha256:" + sha256(html.encode()).hexdigest(),
+                "elements": [
+                    {
+                        "qid": node.qid,
+                        "tag": node.tag,
+                        "bbox": {"x": 40, "y": 60 + index * 100, "width": 600, "height": 50},
+                        "clientWidth": 600,
+                        "clientHeight": 50,
+                        "scrollWidth": 600,
+                        "scrollHeight": 50,
+                        "fontSize": 30,
+                        "font_loaded": True,
+                        "rendered_text": node.text,
+                        "computed_style": {
+                            "fontFamily": "Arial",
+                            "fontSize": "30px",
+                            "lineHeight": "38px",
+                            "color": "#111111",
+                            "backgroundColor": "#ffffff",
+                        },
+                    }
+                    for index, node in enumerate(build_compact_dom_map(html))
+                ],
+            }
+            for html in htmls
+        ]
+
     monkeypatch.setattr(authored, "find_chrome", lambda: "fixture-chrome")
     monkeypatch.setattr(
         authored,
@@ -206,6 +298,10 @@ def _mock_external_generation(monkeypatch, app_data: Path) -> None:
         fake_pipeline,
     )
     monkeypatch.setattr(authored, "_build_authored_export", fake_export)
+    monkeypatch.setattr(
+        "services.authored_presentation_generation.resolve_final_browser_metrics",
+        fixture_browser_metrics,
+    )
     monkeypatch.setattr(
         authored,
         "_cleanup_published_checkpoints",
@@ -222,14 +318,16 @@ def test_authored_workspace_publication_commits_one_sqlite_tuple(
         monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
         monkeypatch.setenv("LLM", "openai")
         _mock_external_generation(monkeypatch, app_data)
-        engine, maker = await _database(tmp_path / "authored-success.db")
+        engine, maker = await _database(tmp_path / "authored-success.db", monkeypatch)
+        owner_token = None
         try:
-            presentation_id, operation_id, task_id, job_id = (
+            presentation_id, operation_id, task_id, job_id, owner_token = (
                 await _seed_publication(maker)
             )
             async with maker() as session:
                 job = await session.get(PresentationGenerationJob, job_id)
                 assert job is not None
+                object.__setattr__(job, "_workspace_fencing_token", 1)
                 result = await authored.generate_authored_presentation(
                     _request(presentation_id),
                     presentation_id,
@@ -290,7 +388,7 @@ def test_authored_workspace_publication_commits_one_sqlite_tuple(
             assert len(slides) == 2
             assert [slide.index for slide in slides] == [0, 1]
             assert [slide.html_content for slide in slides] == [
-                authored.ensure_authored_qids(html) for html in HTMLS
+                authored.ensure_authored_qids(canonicalize_authored_roles(html)) for html in HTMLS
             ]
             image_refs = [slide.content["image"] for slide in slides]
             assert all("/sets/" in image_ref for image_ref in image_refs)
@@ -310,7 +408,12 @@ def test_authored_workspace_publication_commits_one_sqlite_tuple(
             assert operation.state == "succeeded"
             assert operation.result_revision == 1
             assert operation.attempt_token is None
-            assert operation.result == {
+            operation_result = dict(operation.result)
+            quality_result = operation_result.pop("generationQualityReceipt")
+            quality_receipt = presentation.theme["authoredQualityGate"]
+            assert quality_result["schemaVersion"] == quality_receipt["schemaVersion"]
+            assert quality_result["documentStatus"] == "completed"
+            assert operation_result == {
                 "artifact_id": str(artifact.id),
                 "artifact_kind": artifact.kind,
                 "artifact_sha256": artifact.sha256,
@@ -326,7 +429,11 @@ def test_authored_workspace_publication_commits_one_sqlite_tuple(
             assert task is not None
             assert task.status == "completed"
             assert task.error is None
-            assert task.data == result.model_dump(mode="json")
+            assert task.data == {
+                **result.model_dump(mode="json"),
+                "quality_gate_status": quality_receipt["status"],
+                "quality_gate_receipt": quality_receipt,
+            }
 
             assert terminal_event.sequence == 1
             assert terminal_event.payload["state"] == "succeeded"
@@ -336,6 +443,8 @@ def test_authored_workspace_publication_commits_one_sqlite_tuple(
             assert outbox.payload["event_cursor"] == terminal_event.cursor
             assert outbox.payload["status"] == "succeeded"
         finally:
+            if owner_token is not None:
+                reset_current_owner_id(owner_token)
             await engine.dispose()
 
     asyncio.run(scenario())
@@ -350,9 +459,10 @@ def test_authored_workspace_fence_loss_preserves_hidden_sqlite_state(
         monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
         monkeypatch.setenv("LLM", "openai")
         _mock_external_generation(monkeypatch, app_data)
-        engine, maker = await _database(tmp_path / "authored-fence-loss.db")
+        engine, maker = await _database(tmp_path / "authored-fence-loss.db", monkeypatch)
+        owner_token = None
         try:
-            presentation_id, operation_id, task_id, job_id = (
+            presentation_id, operation_id, task_id, job_id, owner_token = (
                 await _seed_publication(
                     maker,
                     operation_attempt_token="new-operation-owner",
@@ -361,7 +471,8 @@ def test_authored_workspace_fence_loss_preserves_hidden_sqlite_state(
             async with maker() as session:
                 job = await session.get(PresentationGenerationJob, job_id)
                 assert job is not None
-                with pytest.raises(AuthoredStageError) as caught:
+                with pytest.raises(AuthoredDeckPlanCheckpointError) as caught:
+                    object.__setattr__(job, "_workspace_fencing_token", 1)
                     await authored.generate_authored_presentation(
                         _request(presentation_id),
                         presentation_id,
@@ -370,7 +481,7 @@ def test_authored_workspace_fence_loss_preserves_hidden_sqlite_state(
                         session,
                         job,
                     )
-                assert caught.value.code == "authored_attempt_lost"
+                assert str(caught.value) == "authored_deck_checkpoint_workspace_fence_lost"
 
             async with maker() as verification:
                 presentation = await verification.get(
@@ -415,7 +526,7 @@ def test_authored_workspace_fence_loss_preserves_hidden_sqlite_state(
             assert presentation is not None
             assert presentation.lifecycle_status == PRESENTATION_LIFECYCLE_STAGING
             assert presentation.revision == 0
-            assert presentation.mode is None
+            assert presentation.mode == "authored"
             assert slides == []
             assert operation is not None
             assert operation.state == "running"
@@ -431,13 +542,12 @@ def test_authored_workspace_fence_loss_preserves_hidden_sqlite_state(
             assert events == []
             assert outbox == []
 
-            assert len(artifacts) == 1
-            assert artifacts[0].status == "deleted"
-            artifact_path = app_data.joinpath(*Path(artifacts[0].storage_key).parts)
-            assert not artifact_path.exists()
+            assert artifacts == []
             image_sets = app_data / "images" / "authored" / str(presentation_id) / "sets"
             assert not image_sets.exists() or not any(image_sets.iterdir())
         finally:
+            if owner_token is not None:
+                reset_current_owner_id(owner_token)
             await engine.dispose()
 
     asyncio.run(scenario())

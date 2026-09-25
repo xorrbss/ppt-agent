@@ -85,7 +85,7 @@ _BLOCKED_RENDERER_URL_PATTERNS = [
 # is insufficient: local font/image/CSS files and the resolved Chromium binary
 # may change without changing the authored Scene payload.
 CACHE_IDENTITY_VERSION = "authored-render-cache-identity/v2-capability-registry"
-MEASUREMENT_CACHE_VERSION = "authored-measurement/v13-font-stack-fallback"
+MEASUREMENT_CACHE_VERSION = "authored-measurement/v14-source-viewport-effective-font"
 _SCENE_DIGEST_PATTERN = re.compile(
     r'(?:data-scene-digest|data-scene-hash|name\s*=\s*["\']scene-digest["\'])'
     r'\s*=\s*["\']([^"\']+)["\']',
@@ -208,7 +208,11 @@ def _admit_render_source(source: str) -> AdmittedHtml:
     The selection lives in ``utils.renderer_profile``, so the checkpoint gate
     judges these bytes under the policy the renderer accepted them under.
     """
-    return select_render_profile(source, internal_capability=lambda: _take_probe_capability(source)).require()
+    admitted = select_render_profile(
+        source, internal_capability=lambda: _take_probe_capability(source)
+    ).require()
+    from services.svg_renderer import materialize_trusted_svg_fonts
+    return materialize_trusted_svg_fonts(source, admitted)
 
 
 def _source_render_digests(html: str) -> tuple[str, str]:
@@ -309,6 +313,8 @@ def _instrument_authored_html(
     )
     from utils.slide_capture_local_fit import policy_from_request, observation_script
     from utils.slide_capture_fit import fit_probe_prelude
+    from utils.source_canvas_normalization import normalization_probe_js
+    from utils.slide_capture_font_paint import FONT_AND_PAINT_JS
     policy = policy_from_request(html)
     if policy:
         # The compatibility renderer adds QIDs only to its disposable measurement
@@ -319,141 +325,11 @@ def _instrument_authored_html(
     script = rf"""<script data-codex-dom-probe{nonce_attribute}>
 (() => {{
   {fit_prelude}
+  {normalization_probe_js()}
   const done = (pass = 'final') => {{
     const fit = __codexFitPass(pass);
     const px = (value) => {{ const parsed = parseFloat(value || '0'); return Number.isFinite(parsed) ? parsed : 0; }};
-    const fontFamilies = (value) => {{
-      const families = []; let current = '', quote = null, escaped = false;
-      for (const character of String(value || '')) {{
-        if (escaped) {{ current += character; escaped = false; continue; }}
-        if (character === '\\') {{ current += character; escaped = true; continue; }}
-        if (quote) {{
-          current += character;
-          if (character === quote) quote = null;
-          continue;
-        }}
-        if (character === '"' || character === "'") {{ current += character; quote = character; continue; }}
-        if (character === ',') {{
-          if (current.trim()) families.push(current.trim().replace(/^['"]|['"]$/g, ''));
-          current = ''; continue;
-        }}
-        current += character;
-      }}
-      if (current.trim()) families.push(current.trim().replace(/^['"]|['"]$/g, ''));
-      return families;
-    }};
-    const familyAvailable = (family, text) => {{
-      const canvas = document.createElement('canvas'), context = canvas.getContext('2d');
-      if (!context) return false;
-      const sample = String(text || '').trim() || 'AaMmWw09\uD55C\uAE00\u6F22\u5B57';
-      return ['monospace', 'serif', 'sans-serif'].some((fallback) => {{
-        context.font = '72px ' + fallback; const base = context.measureText(sample).width;
-        context.font = '72px "__codex_missing_font__",' + fallback;
-        const missing = context.measureText(sample).width;
-        context.font = '72px ' + JSON.stringify(family) + ',' + fallback;
-        const actual = context.measureText(sample).width;
-        return Math.abs(actual - base) > 0.01 && Math.abs(actual - missing) > 0.01;
-      }});
-    }};
-    const fontEvidence = (style, text) => {{
-      if (!document.fonts) return {{loaded: true, family: null, source: 'font-api-unavailable'}};
-      try {{
-        if (document.fonts.status !== 'loaded') return {{loaded: false, family: null, source: 'fonts-pending'}};
-        const generic = new Set(['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui']);
-        for (const family of fontFamilies(style.fontFamily)) {{
-          const normalized = family.toLowerCase();
-          if (generic.has(normalized)) return {{loaded: true, family, source: 'generic-fallback'}};
-          const loadedFace = Array.from(document.fonts).some((font) =>
-            String(font.family || '').replace(/^['"]|['"]$/g, '').toLowerCase() === normalized &&
-            font.status === 'loaded');
-          if (loadedFace) {{
-            const descriptor = [style.fontStyle, style.fontWeight, style.fontSize,
-              JSON.stringify(family)].join(' ');
-            if (document.fonts.check(descriptor, String(text || '').trim() || 'M'))
-              return {{loaded: true, family, source: 'loaded-font-face'}};
-          }}
-          if (familyAvailable(family, text))
-            return {{loaded: true, family, source: 'installed-local-font'}};
-        }}
-        return {{loaded: false, family: null, source: 'no-available-family'}};
-      }} catch (_) {{ return {{loaded: false, family: null, source: 'font-probe-error'}}; }}
-    }};
-    const rgba = (value) => {{
-      const match = String(value || '').match(/rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)/i);
-      return match ? [Number(match[1]), Number(match[2]), Number(match[3]), match[4] === undefined ? 1 : Number(match[4])] : null;
-    }};
-    const composite = (front, back) => {{
-      const alpha = front[3] + back[3] * (1 - front[3]);
-      if (alpha <= 0) return [255, 255, 255, 1];
-      return [0, 1, 2].map((index) => (front[index] * front[3] + back[index] * back[3] * (1 - front[3])) / alpha).concat(alpha);
-    }};
-    const effectiveBackground = (node) => {{
-      const layers = [];
-      for (let current = node; current; current = current.parentElement) {{
-        const style = getComputedStyle(current);
-        // A single sampled color is not sound evidence for gradients, images,
-        // blend modes, filters, or backdrop effects.  Return unknown so hard
-        // readability constraints fail closed instead of accepting a guessed
-        // white background.
-        if (style.backgroundImage !== 'none' || style.mixBlendMode !== 'normal' ||
-            style.backgroundBlendMode !== 'normal' || style.filter !== 'none' ||
-            style.backdropFilter !== 'none') return null;
-        const color = rgba(style.backgroundColor);
-        if (color && color[3] > 0) layers.push(color);
-      }}
-      return layers.reverse().reduce((back, front) => composite(front, back), [255, 255, 255, 1]);
-    }};
-    const luminance = (color) => {{
-      const channel = (value) => {{ value /= 255; return value <= .04045 ? value / 12.92 : Math.pow((value + .055) / 1.055, 2.4); }};
-      return .2126 * channel(color[0]) + .7152 * channel(color[1]) + .0722 * channel(color[2]);
-    }};
-    const contrastRatio = (node, style) => {{
-      const foreground = rgba(style.color); const background = effectiveBackground(node);
-      if (!foreground || !background) return null;
-      const paintedForeground = composite(foreground, background);
-      const first = luminance(paintedForeground), second = luminance(background);
-      return (Math.max(first, second) + .05) / (Math.min(first, second) + .05);
-    }};
-    const ownedTextNodes = (node) => {{
-      const result = [];
-      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
-      for (let text = walker.nextNode(); text; text = walker.nextNode()) {{
-        if (!String(text.textContent || '').trim()) continue;
-        if (text.parentElement?.closest('[data-qid]') !== node) continue;
-        result.push(text);
-      }}
-      return result;
-    }};
-    const ownedTextRectCache = new WeakMap();
-    const ownedTextRects = (node) => {{
-      const cached = ownedTextRectCache.get(node);
-      if (cached) return cached;
-      const rects = [];
-      for (const text of ownedTextNodes(node)) {{
-        const range = document.createRange(); range.selectNodeContents(text);
-        for (const rect of range.getClientRects()) {{
-          if (rect.width > 0 && rect.height > 0) rects.push({{x: rect.x, y: rect.y, width: rect.width, height: rect.height}});
-        }}
-      }}
-      ownedTextRectCache.set(node, rects);
-      return rects;
-    }};
-    const replacedPaintTags = new Set(['IMG', 'PICTURE', 'SVG', 'CANVAS', 'VIDEO', 'OBJECT', 'EMBED']);
-    const visibleColor = (value) => {{
-      const color = rgba(value);
-      return color !== null && color[3] > .001;
-    }};
-    const ownsSurfacePaint = (node, style = getComputedStyle(node)) => {{
-      if (style.visibility === 'hidden' || Number(style.opacity || 1) <= .001) return false;
-      if (replacedPaintTags.has(node.tagName)) return true;
-      if (style.backgroundImage !== 'none' || visibleColor(style.backgroundColor)) return true;
-      if (style.boxShadow !== 'none' || style.outlineStyle !== 'none') return true;
-      return ['Top', 'Right', 'Bottom', 'Left'].some((side) =>
-        px(style[`border${{side}}Width`]) > 0 &&
-        !['none', 'hidden'].includes(style[`border${{side}}Style`]) &&
-        visibleColor(style[`border${{side}}Color`])
-      );
-    }};
+    {FONT_AND_PAINT_JS}
     {ROUNDED_PAINT_DOMAIN_JS}
     {POLYGON_PAINT_DOMAIN_JS}
     const ownedSurfaceRectCache = new WeakMap();
@@ -1007,7 +883,7 @@ def _instrument_authored_html(
         font_resolution_source: resolvedFont.source, image,
         connector_geometry: connector,
         static_translation_probe: staticTranslationProbe,
-        font_size: px(style.fontSize),
+        font_size: px(style.fontSize), effective_font_size: effectiveOwnedFontSize(node, ownedTextNodes(node)), owned_text_length: ownedTextNodes(node).reduce((sum, text) => sum + String(text.textContent || '').replace(/\s/g, '').length, 0),
         computed_style: {{
           color: style.color, backgroundColor: style.backgroundColor,
           backgroundImage: style.backgroundImage, backgroundBlendMode: style.backgroundBlendMode,
@@ -1053,7 +929,7 @@ def _instrument_authored_html(
       capabilityRegistry: {registry_metadata},
       source_digest: '{source_digest}', render_digest: '{render_digest}',
       dom_metrics_version: '{DOM_METRICS_VERSION}', metrics_cache_key: '{key}', fit, elements,
-      observation_state: pass
+      observation_state: pass, source_viewport_normalization: freezeSourceViewport()
     }};
     let marker = document.getElementById('{_METRICS_ELEMENT_ID}');
     if (!marker) {{ marker = document.createElement('meta'); marker.id = '{_METRICS_ELEMENT_ID}'; document.head.appendChild(marker); }}
@@ -2086,7 +1962,7 @@ CAPTURE_CACHE_BYTE_BUDGET = _env_nonnegative_int(
 _capture_cache: "OrderedDict[tuple[str, str, str], RenderCapture]" = OrderedDict()
 OCCLUSION_PROBE_CONTRACT_VERSION = "owned-paint-v3"
 OCCLUSION_SENSOR_VERSION = "owned-paint-v14-source-image-alpha"
-DOM_METRICS_VERSION = "authored-dom-metrics-v26-font-stack-fallback"
+DOM_METRICS_VERSION = "authored-dom-metrics-v27-source-viewport-effective-font"
 DOM_METRICS_CACHE_SIZE = max(1, RENDER_CACHE_SIZE)
 DOM_METRICS_CACHE_BYTE_BUDGET = _env_nonnegative_int(
     "AUTHORED_DOM_METRICS_CACHE_BYTE_BUDGET", 32 * 1024 * 1024

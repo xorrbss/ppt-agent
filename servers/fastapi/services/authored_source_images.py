@@ -216,7 +216,7 @@ async def collect_source_image_candidates(
     Storage, resolution and integrity failures raise instead of masquerading as
     a relevance exclusion. Admission filters are recorded in registration_report.
     """
-    if request._source_content_authored_reflow:
+    if request._source_content_authored_reflow or getattr(request, "_source_content_svg_reflow", False):
         # Source-content admission already selected and sealed the image set.
         # It is a preservation contract, not the optional ordinary-authored
         # image-reuse feature, so feature gates and best-effort degradation do

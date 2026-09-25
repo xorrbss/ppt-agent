@@ -85,6 +85,20 @@ def _analysis_receipt(
     source_revision: str,
 ) -> SourceContentAnalysisReceipt:
     blocks = [block for unit in manifest.units for block in unit.blocks]
+    document_canvas = None
+    if manifest.slide_size is not None:
+        from services.document_canvas import document_canvas_from_source_slide_size
+
+        try:
+            document_canvas = document_canvas_from_source_slide_size(
+                width_emu=manifest.slide_size.cx,
+                height_emu=manifest.slide_size.cy,
+            )
+        except ValueError:
+            # Analysis still reports the immutable source inventory.  SVG
+            # source-restyle admission later fails closed for unsupported
+            # physical canvases instead of replacing them with 16:9.
+            document_canvas = None
     return SourceContentAnalysisReceipt(
         manifest_pin=SourceContentManifestPin(
             manifest_id=manifest.manifest_id,
@@ -95,6 +109,7 @@ def _analysis_receipt(
             provider_id=provider_id,
             source_revision=source_revision,
         ),
+        document_canvas=document_canvas,
         summary=SourceContentAnalysisSummary(
             source_type="pptx",
             source_units=manifest.counts.source_units,

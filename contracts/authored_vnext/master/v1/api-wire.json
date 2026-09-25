@@ -1,12 +1,52 @@
 {
   "endpoints": [
     {
-      "method": "GET",
-      "operation": "company_standard_default",
-      "path": "/authored-vnext/master/company-standard/default",
+      "method": "POST",
+      "operation": "analyze_pptx_for_master",
+      "path": "/authored-vnext/master/ai-import/analyses",
       "requestModel": null,
-      "responseModel": "CompanyStandardDefaultResponse",
+      "responseModel": "AiMasterAnalysis",
+      "successStatus": 201
+    },
+    {
+      "method": "GET",
+      "operation": "get_ai_master_analysis",
+      "path": "/authored-vnext/master/ai-import/analyses/{analysis_id}",
+      "requestModel": null,
+      "responseModel": "AiMasterAnalysis",
       "successStatus": 200
+    },
+    {
+      "method": "PATCH",
+      "operation": "update_ai_master_analysis",
+      "path": "/authored-vnext/master/ai-import/analyses/{analysis_id}",
+      "requestModel": "UpdateAiMasterAnalysisRequest",
+      "responseModel": "AiMasterAnalysis",
+      "successStatus": 200
+    },
+    {
+      "method": "POST",
+      "operation": "save_ai_master_analysis",
+      "path": "/authored-vnext/master/ai-import/analyses/{analysis_id}/save",
+      "requestModel": "SaveAiMasterAnalysisRequest",
+      "responseModel": "AiMasterAnalysis",
+      "successStatus": 200
+    },
+    {
+      "method": "POST",
+      "operation": "validate_ai_master_analysis",
+      "path": "/authored-vnext/master/ai-import/analyses/{analysis_id}/validate",
+      "requestModel": null,
+      "responseModel": "AiMasterAnalysis",
+      "successStatus": 200
+    },
+    {
+      "method": "POST",
+      "operation": "upload_authored_body_image",
+      "path": "/authored-vnext/master/assets/body-image",
+      "requestModel": "UploadFile",
+      "responseModel": "MasterAssetReceipt",
+      "successStatus": 201
     },
     {
       "method": "POST",
@@ -22,6 +62,14 @@
       "path": "/authored-vnext/master/assets/{asset_id}",
       "requestModel": null,
       "responseModel": null,
+      "successStatus": 200
+    },
+    {
+      "method": "GET",
+      "operation": "company_standard_default",
+      "path": "/authored-vnext/master/company-standard/default",
+      "requestModel": null,
+      "responseModel": "CompanyStandardDefaultResponse",
       "successStatus": 200
     },
     {

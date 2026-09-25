@@ -188,6 +188,11 @@ class PresentationGenerationOperationHandler:
                 context.claim.fencing_token,
             )
             request = _request_from_durable_payload(job.request_payload)
+            if request.source_mode == "raster_reconstruction":
+                from services.svg_generation_assets import publication_context
+
+                raster_publication, _ = await publication_context(session, job)
+                request._raster_tenant_id = raster_publication.tenant_id
             object.__setattr__(
                 request,
                 "_workspace_operation_attempt_token",
@@ -239,16 +244,20 @@ class PresentationGenerationOperationHandler:
                     public_operation_scope,
                 )
                 from services.source_content.pipeline import (
+                    RASTER_SOURCE_MODE,
                     SOURCE_MODE as SOURCE_CONTENT_RESTYLE_MODE,
                     admit_source_content_request,
                 )
                 from utils.llm_provider import generation_provider_policy
 
-                if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
+                if request.source_mode in {SOURCE_CONTENT_RESTYLE_MODE, RASTER_SOURCE_MODE}:
+                    from utils.owner_context import get_current_tenant_id
+
                     await admit_source_content_request(
                         request,
                         sql_session=session,
                         owner_id=str(context.claim.owner_id),
+                        tenant_id=(request._raster_tenant_id if request.source_mode == RASTER_SOURCE_MODE else get_current_tenant_id()),
                     )
 
                 status_error = _snapshot_status_error(status)

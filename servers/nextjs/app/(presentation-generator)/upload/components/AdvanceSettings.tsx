@@ -153,7 +153,7 @@ const AdvanceSettings = ({
                                     </h2>
                                     <p className="mt-2 break-keep text-sm leading-6 text-gray-500">{t('description')}</p>
                                     {sourceContentMode ? <p className="mt-3 text-sm font-semibold text-[#1F1D2A]" data-testid="source-content-advanced-notice">
-                                        추가 디자인 지시만 적용합니다. 원문·수치·표·이미지는 변경하지 않습니다.
+                                        {t('sourceContentNotice')}
                                     </p> : null}
                                 </div>
 
@@ -181,7 +181,7 @@ const AdvanceSettings = ({
                                             htmlFor="advanced-instructions"
                                             className="block font-syne text-sm font-semibold leading-none text-[#1F1D2A]"
                                         >
-                                            {sourceContentMode ? '추가 디자인 지시' : t('instructionsLabel')}
+                                            {sourceContentMode ? t('sourceContentInstructionsLabel') : t('instructionsLabel')}
                                         </label>
                                         <Textarea
                                             id="advanced-instructions"
@@ -243,15 +243,15 @@ const AdvanceSettings = ({
                                 </div>
 
                                 {advancedDraft.codexGenerationPreset ? <div className="flex items-center justify-between gap-3">
-                                    <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">생성 모델</label>
+                                    <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">{t('generationModelLabel')}</label>
                                     <Select
                                         value={advancedDraft.codexGenerationPreset}
                                         onValueChange={(value) =>
                                             setAdvancedDraft((prev) => ({ ...prev, codexGenerationPreset: value as CodexGenerationPresetId }))
                                         }
                                     >
-                                        <SelectTrigger aria-label="생성 모델" className="p-2.5 w-[160px] rounded-xl border-[#DBDBE1] bg-white font-syne text-sm font-medium text-[#2C2B37] shadow-none focus:ring-0 focus-visible:ring-0">
-                                            <SelectValue placeholder="생성 모델 선택" />
+                                        <SelectTrigger aria-label={t('generationModelLabel')} className="p-2.5 w-[160px] rounded-xl border-[#DBDBE1] bg-white font-syne text-sm font-medium text-[#2C2B37] shadow-none focus:ring-0 focus-visible:ring-0">
+                                            <SelectValue placeholder={t('generationModelPlaceholder')} />
                                         </SelectTrigger>
                                         <SelectContent className="z-[120] font-syne">
                                             {CODEX_GENERATION_PRESETS.map((preset) => (
@@ -301,7 +301,7 @@ const AdvanceSettings = ({
                                     />
                                 </div>
                             </div> : <p className="px-6 pb-5 pt-3.5 text-sm text-[#5E626A]" data-testid="source-content-fixed-options">
-                                슬라이드 수는 원본 기준이며 필요하면 자동으로 추가합니다. 언어는 원본에서 감지하고, tone·verbosity·목차·표지·웹 검색은 콘텐츠 보존을 위해 사용하지 않습니다.
+                                {t('sourceContentFixedOptions')}
                             </p>}
                         </div>
                     </div>

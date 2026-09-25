@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import {
   authoredCanvasPhysicalSize,
+  canvasPointsPerUnit,
   LEGACY_AUTHORED_CANVAS,
   type AuthoredCanvasContract,
 } from "../authored-canvas.ts";
@@ -20,7 +21,8 @@ function durableObservation(observation?: LocalFitObservation) {
   const { local_image_sources: _pixels, ...evidence } = observation;
   return evidence;
 }
-export function localFitImageEvidence(slide: AuthoredHybridSlideV1, elements: readonly PreparedNativeElement[]) {
+export function localFitImageEvidence(slide: AuthoredHybridSlideV1, elements: readonly PreparedNativeElement[], canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS) {
+  const pointScale = canvasPointsPerUnit(canvas);
   const observation = sourceObservations.get(slide);
   const result: { pngDigest: string; ownerQids: string[];
     placement: { x: number; y: number; widthPt: number; heightPt: number };
@@ -36,7 +38,7 @@ export function localFitImageEvidence(slide: AuthoredHybridSlideV1, elements: re
     const bounds = element.source.bounds.px;
     result.push({ pngDigest: localFitDigest(element.png),
       ownerQids: [...new Set(source.run_indices.map((index) => observation.runs[index]?.owner_qid).filter((qid): qid is string => Boolean(qid)))],
-      placement: { x: bounds.x * .75, y: bounds.y * .75, widthPt: bounds.width * .75, heightPt: bounds.height * .75 },
+      placement: { x: bounds.x * pointScale, y: bounds.y * pointScale, widthPt: bounds.width * pointScale, heightPt: bounds.height * pointScale },
       sourceBoundsPx: source.sourceBoundsPx, textPaint: source.text_paint,
       observation: durableObservation(observation) });
   };

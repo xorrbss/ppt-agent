@@ -100,6 +100,7 @@ def build_design_system(
     header_system: str = "",
     canvas_width_px: int = 1280,
     canvas_height_px: int = 720,
+    canvas_safe_area: object | None = None,
 ) -> str:
     """Build the concrete shared brief for a brand and optional authored style."""
     if style is None or style.id == "default":
@@ -185,13 +186,16 @@ def build_design_system(
     # is last because it is the longest and the most concrete: everything above
     # it is the contract it is an instance of. None of the three existed on
     # 2026-08-19, so the ``august-0819`` profile states the rules and stops.
+    from utils.llm_calls.document_canvas_prompt import canvas_clause
+    document_clause = canvas_clause(canvas_width_px, canvas_height_px, canvas_safe_area)
     if not current_prompt_sections().deck_invariant_tail:
-        return rules
+        return rules + document_clause
     return (
         rules
         + prompt_capability_clause()
         + deck_tokens_block(style, brand)
         + exemplar_block(getattr(style, "id", None) if style is not None else None)
+        + document_clause
     )
 
 

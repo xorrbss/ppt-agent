@@ -873,6 +873,7 @@ async def bootstrap_workspace(
     commit: bool = True,
     initial_operation_state: Optional[str] = None,
     initial_state: Optional[str] = None,
+    previous_presentation_id: Optional[uuid.UUID] = None,
 ) -> tuple[WorkspaceConversation, WorkspaceMessage, WorkspaceOperation, bool]:
     """Create the durable first user message and operation anchor exactly once.
 
@@ -915,6 +916,10 @@ async def bootstrap_workspace(
         "expected_revision": request.expected_revision,
         "initial_operation_state": effective_initial_state,
     }
+    if previous_presentation_id is not None:
+        # Only the create admission supplies this after an owner/terminal fence.
+        # Keeping it in the immutable hash prevents a replay changing ancestry.
+        admitted_payload["previous_presentation_id"] = str(previous_presentation_id)
     request_hash = canonical_payload_hash(admitted_payload)
 
     attempts = 1 if not commit else 2
@@ -1222,11 +1227,55 @@ def _is_retryable_template_v2_outline_admission(operation: WorkspaceOperation) -
     )
 
 
+def _is_retryable_raster_tenant_handoff(operation: WorkspaceOperation) -> bool:
+    if operation.kind != "presentation.generate" or operation.error_code != "raster_tenant_required":
+        return False
+    payload = operation.request_payload
+    generation_request = payload.get("generation_request") if isinstance(payload, dict) else None
+    return bool(
+        isinstance(generation_request, dict)
+        and generation_request.get("source_mode") == "raster_reconstruction"
+        and generation_request.get("strategy") == "svg"
+        and isinstance(generation_request.get("raster_approval_pin"), dict)
+        and len(generation_request.get("reference_snapshot_ids") or ()) == 1
+    )
+
+
+async def _verify_raster_tenant_handoff_retry(session: AsyncSession, operation: WorkspaceOperation) -> bool:
+    if not _is_retryable_raster_tenant_handoff(operation):
+        return False
+    from api.v1.ppt.endpoints.presentation_generate import _request_from_durable_payload
+    from services.source_content.pipeline import SourceContentError, admit_source_content_request
+    from utils.owner_context import get_current_tenant_id
+
+    owner, tenant = get_current_owner_id(), get_current_tenant_id()
+    if owner is None or owner != operation.owner_id or not tenant:
+        return False
+    job = await session.scalar(select(PresentationGenerationJob).where(
+        PresentationGenerationJob.workspace_operation_id == operation.id,
+        PresentationGenerationJob.presentation_id == operation.presentation_id,
+        PresentationGenerationJob.state == "failed",
+    ))
+    linked_id = _linked_generation_job_id(operation)
+    if (job is None or linked_id is None or job.id != linked_id
+            or job.request_payload != operation.request_payload.get("generation_request")):
+        return False
+    try:
+        request = _request_from_durable_payload(job.request_payload)
+        await admit_source_content_request(
+            request, sql_session=session, owner_id=str(owner), tenant_id=tenant,
+        )
+    except (SourceContentError, ValueError, TypeError):
+        return False
+    return True
+
+
 def _operation_retryable(operation: WorkspaceOperation) -> bool | None:
     """Project only the safe retry decision, never raw error details."""
 
     if operation.state in {"failed", "dead_letter"}:
-        if _is_retryable_template_v2_outline_admission(operation):
+        if (_is_retryable_template_v2_outline_admission(operation)
+                or _is_retryable_raster_tenant_handoff(operation)):
             return True
         detail = operation.error_detail
         return not (isinstance(detail, dict) and detail.get("retryable") is False)
@@ -2127,6 +2176,11 @@ async def apply_workspace_action(
         "cancelled",
         "dead_letter",
     }
+    raster_tenant_recovery = (
+        await _verify_raster_tenant_handoff_retry(session, operation)
+        if terminal_retry and _is_retryable_raster_tenant_handoff(operation)
+        else False
+    )
     explicit_capacity_recovery = _is_explicit_authored_capacity_recovery(
         operation,
         request,
@@ -2157,6 +2211,7 @@ async def apply_workspace_action(
             and isinstance(operation.error_detail, dict)
             and operation.error_detail.get("retryable") is False
             and not _is_retryable_template_v2_outline_admission(operation)
+            and not raster_tenant_recovery
             and not explicit_capacity_recovery
             and not explicit_checkpoint_recovery
             and svg_recovery is None

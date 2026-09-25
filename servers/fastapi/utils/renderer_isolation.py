@@ -114,7 +114,7 @@ class AdmittedHtml:
 
 
 def admit_authorized_svg_materialized(canonical_svg: str, materialized_svg: str, *,
-                                      source_manifest: dict, width_px: int, height_px: int) -> AdmittedHtml:
+                                      source_manifest: dict, width_px: int, height_px: int, allow_image_only: bool = False) -> AdmittedHtml:
     """Worker-only derivative admission after authenticated artifact resolution.
 
     Canonical SVG keeps the normal source/structure limits. Only exact image
@@ -126,7 +126,7 @@ def admit_authorized_svg_materialized(canonical_svg: str, materialized_svg: str,
     import xml.etree.ElementTree as ET
     from PIL import Image
     from services.svg_contract import validate_svg
-    validate_svg(canonical_svg, width=width_px, height=height_px, source_manifest=source_manifest)
+    validate_svg(canonical_svg, width=width_px, height=height_px, source_manifest=source_manifest, allow_image_only=allow_image_only)
     if not isinstance(materialized_svg, str) or len(materialized_svg.encode("utf-8")) > 96 * 1024 * 1024:
         raise RendererPolicyError("authorized SVG page wire budget exceeded")
     if re.search(r"<!|<\?", materialized_svg):
@@ -517,7 +517,8 @@ def admit_internal_instrumented_html(source: str, capability: str) -> AdmittedHt
 
 
 def encode_request(
-    html: str, timeout: int, *, width_px: int = 1280, height_px: int = 720
+    html: str, timeout: int, *, width_px: int = 1280, height_px: int = 720,
+    preserved_raster_svg: str | None = None,
 ) -> bytes:
     wire = json.dumps(
         {
@@ -526,6 +527,7 @@ def encode_request(
             "timeout": timeout,
             "width_px": int(width_px),
             "height_px": int(height_px),
+            **({"preserved_raster_svg": preserved_raster_svg} if preserved_raster_svg is not None else {}),
         },
         ensure_ascii=True,
         separators=(",", ":"),

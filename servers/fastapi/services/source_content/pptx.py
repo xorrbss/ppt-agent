@@ -41,6 +41,7 @@ from services.source_content.pptx_text_body import (
     placeholder_payload,
 )
 from services.source_content.pptx_typography import MANIFEST_ID_EXTRACTOR_REVISION, PptxTypographyResolver
+from services.source_content.pptx_custom_geometry import extract_custom_geometry
 from services.source_content.security import (
     REL_NS,
     PackageSecurityReport,
@@ -84,6 +85,7 @@ _SUPPORTED_REL_SUFFIXES = {
     "/customXmlProps",
     "/printerSettings",
     "/revisionInfo",
+    "/changesInfo",
     "/font",
     "/tags",
     "/audio",
@@ -217,6 +219,7 @@ def _part_classification(name: str) -> tuple[str, bool]:
             "ppt/handoutmasters/",
             "ppt/presprops.xml",
             "ppt/revisioninfo.xml",
+            "ppt/changesinfos/",
             "ppt/viewprops.xml",
             "ppt/tablestyles.xml",
             "ppt/commentauthors.xml",
@@ -901,11 +904,13 @@ def _extract_unit(
                             **source_payload(),
                             "shapeName": shape_name,
                             "preset": preset.get("prst") if preset is not None else None,
+                            **({"customGeometry": extract_custom_geometry(element)} if preset is None else {}),
                             "geometry": geometry_for(block_id),
                         },
                     )
             elif local == "cxnSp":
                 block_id = f"{source_unit_id}:shape:{shape_id}"
+                connector_preset = element.find(".//a:prstGeom", namespaces=NS)
                 new_block = _block(
                     block_id=block_id,
                     kind="shape",
@@ -914,6 +919,7 @@ def _extract_unit(
                     payload={
                         **source_payload(),
                         "shapeName": shape_name,
+                        "preset": connector_preset.get("prst") if connector_preset is not None else None,
                         "geometry": geometry_for(block_id),
                     },
                 )

@@ -37,6 +37,7 @@ from services.authored_quality_receipt_v2 import (
     QualityReceiptLedger,
     create_quality_receipt_v2,
 )
+from services.public_export_operation import PublicExportOperationError
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     WorkspaceOperationClaim,
@@ -432,6 +433,15 @@ async def _seed_quality_operation(
         )
         session.add(presentation)
         await session.flush()
+        session.add(SlideModel(
+            presentation=presentation.id,
+            layout_group="authored",
+            layout="authored:content",
+            index=0,
+            content={"__authored__": True},
+            html_content="<html><body>Quality fixture</body></html>",
+            properties={},
+        ))
         conversation = WorkspaceConversation(presentation_id=presentation.id)
         session.add(conversation)
         await session.flush()
@@ -1506,6 +1516,60 @@ def test_export_publication_is_immutable_fenced_and_revision_neutral(
                 )
                 assert resolved.absolute_path == artifact.absolute_path
                 assert resolved.absolute_path.is_file()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    ("error_code", "expected_error"),
+    [
+        ("svg_source_export_format_unsupported", NonRetryableWorkspaceOperationError),
+        ("public_export_worker_failed", PublicExportOperationError),
+    ],
+)
+def test_svg_export_classifies_only_unsupported_format_as_nonretryable(
+    tmp_path: Path, monkeypatch, error_code: str, expected_error: type[Exception]
+) -> None:
+    async def scenario() -> None:
+        engine, maker = await _database(tmp_path / "svg-export-error.db")
+        try:
+            presentation_id, operation_id = await _seed_export(maker)
+            async with maker() as session, session.begin():
+                presentation = await session.get(PresentationModel, presentation_id)
+                presentation.mode = "svg"
+                operation = await session.get(WorkspaceOperation, operation_id)
+
+            async def fail_svg_export(*_args, **_kwargs):
+                raise PublicExportOperationError(error_code)
+
+            monkeypatch.setattr(
+                "services.svg_export_operation.execute_svg_workspace_export",
+                fail_svg_export,
+            )
+            claim = WorkspaceOperationClaim(
+                operation_id=operation_id,
+                owner_id=None,
+                owner_scope="anonymous",
+                conversation_id=operation.conversation_id,
+                presentation_id=presentation_id,
+                kind="export.pdf",
+                request_payload={},
+                expected_revision=7,
+                attempt_number=1,
+                attempt_token="attempt-1",
+                fencing_token=3,
+            )
+            context = SimpleNamespace(
+                claim=claim,
+                raise_if_cancelled=lambda: asyncio.sleep(0),
+            )
+            with pytest.raises(expected_error, match=error_code):
+                await WorkspaceExportOperationHandler(
+                    session_factory=maker,
+                    internal_header_provider=lambda: None,
+                ).execute(context)
         finally:
             await engine.dispose()
 

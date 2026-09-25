@@ -10,6 +10,9 @@ export type CodexGenerationPresetId =
   | "sol-low"
   | "sol-medium"
   | "sol-high"
+  | "sol6-low"
+  | "sol6-medium"
+  | "sol6-high"
   | "astra-low"
   | "astra-medium";
 
@@ -25,6 +28,7 @@ export const CHATGPT_MODELS: CodexModel[] = [
   // "gpt-6-astra" (not gpt-6.0-astra / gpt-6.0 / gpt-6); reasoning effort
   // levels low, medium, high, xhigh, max.
   { id: "gpt-6-astra", name: "GPT-6.0 Astra" },
+  { id: "gpt-6-sol", name: "GPT-6 Sol" },
   { id: "gpt-5.6-sol", name: "GPT-5.6 Sol" },
   { id: "gpt-5.6-luna", name: "GPT-5.6 Luna" },
   { id: "gpt-5.5", name: "GPT-5.5" },
@@ -42,6 +46,9 @@ export const CODEX_GENERATION_PRESETS: CodexGenerationPreset[] = [
   { id: "sol-low", modelId: "gpt-5.6-sol", effort: "low", name: "Sol · Low" },
   { id: "sol-medium", modelId: "gpt-5.6-sol", effort: "medium", name: "Sol · Medium" },
   { id: "sol-high", modelId: "gpt-5.6-sol", effort: "high", name: "Sol · High" },
+  { id: "sol6-low", modelId: "gpt-6-sol", effort: "low", name: "Sol 6 · Low" },
+  { id: "sol6-medium", modelId: "gpt-6-sol", effort: "medium", name: "Sol 6 · Medium" },
+  { id: "sol6-high", modelId: "gpt-6-sol", effort: "high", name: "Sol 6 · High" },
   { id: "astra-low", modelId: "gpt-6-astra", effort: "low", name: "Astra · Low" },
   { id: "astra-medium", modelId: "gpt-6-astra", effort: "medium", name: "Astra · Medium" },
 ];

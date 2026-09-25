@@ -1,6 +1,7 @@
 """Static allow-listed workspace error definitions."""
 
 from services.workspace_asset_error_definitions import ASSET_ERROR_DEFINITIONS
+from services.workspace_operation_error_definitions import OPERATION_ERROR_DEFINITIONS
 from services.workspace_error_types import WorkspaceErrorDefinition, definition
 
 
@@ -9,6 +10,11 @@ from services.workspace_error_types import WorkspaceErrorDefinition, definition
 WORKSPACE_ERROR_REGISTRY: dict[str, WorkspaceErrorDefinition] = {
     item.code: item
     for item in (
+        definition(
+            "svg_source_export_format_unsupported",
+            "원본 보존 SVG는 현재 PPTX로만 내보낼 수 있습니다. PPTX를 선택해 주세요.",
+            status_code=422,
+        ),
         definition(
             "chat_first_feature_disabled",
             "Workspace operations are not enabled.",
@@ -491,5 +497,39 @@ WORKSPACE_ERROR_REGISTRY: dict[str, WorkspaceErrorDefinition] = {
             "None of the selected pages could be applied.",
             status_code=409,
         ),
+        definition(
+            "slide_order_request_invalid",
+            "The slide order request is invalid.",
+            status_code=422,
+        ),
+        definition(
+            "slide_order_id_set_mismatch",
+            "The requested slide order does not match the presentation's current slides. Reload and try again.",
+            retryable=True,
+            status_code=409,
+        ),
+        definition(
+            "slide_order_duplicate_id",
+            "The requested slide order lists the same slide more than once.",
+            status_code=422,
+        ),
+        definition(
+            "slide_order_requires_slide",
+            "The presentation has no slides to reorder.",
+            status_code=409,
+        ),
+        definition(
+            "slide_order_publish_failed",
+            "The slide order could not be saved. Try again.",
+            retryable=True,
+            status_code=500,
+        ),
+        definition(
+            "slide_order_still_running",
+            "The slide order is still being saved.",
+            retryable=True,
+            status_code=503,
+        ),
     )
 }
+WORKSPACE_ERROR_REGISTRY.update(OPERATION_ERROR_DEFINITIONS)

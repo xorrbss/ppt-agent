@@ -60,6 +60,7 @@ from ..drawingml.theme_fonts import (
     apply_theme_font_spec,
 )
 from ..drawingml.utils import EMU_PER_PX
+from ..conversion_context import ConversionContext, current_conversion_context, scoped_conversion_context
 from ..semantic_markers import (
     chrome_token_from_markers,
     page_layout_name_from_svg,
@@ -1936,7 +1937,7 @@ def _shape_bounds_emu(
     if override_px is not None:
         x, y, width, height = override_px
         return tuple(
-            round(value * EMU_PER_PX)
+            round(value * current_conversion_context().emu_per_unit)
             for value in (x, y, width, height)
         )
 
@@ -3842,6 +3843,7 @@ def _clear_preserved_slide_collections(extract_dir: Path) -> None:
     _write_xml_tree(presentation_path, tree)
 
 
+@scoped_conversion_context
 def create_pptx_with_native_svg(
     svg_files: list[Path],
     output_path: Path,
@@ -3881,6 +3883,7 @@ def create_pptx_with_native_svg(
     theme_color_spec: ThemeColorSpec | None = None,
     structured_baseline: bool = False,
     baseline_layout_specs: list[TemplateSlideSpec] | None = None,
+    conversion_context: ConversionContext | None = None,
 ) -> bool:
     """Create a PPTX file with native DrawingML shapes.
 

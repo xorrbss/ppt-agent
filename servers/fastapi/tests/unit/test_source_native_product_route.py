@@ -234,7 +234,7 @@ def test_source_native_mixed_layout_selects_vertical_row_and_preserves_images() 
     )
 
 
-def test_source_native_table_cells_share_data_driven_estimator_columns() -> None:
+def test_source_native_unstructured_table_cells_share_renderer_estimator_columns() -> None:
     cells = [
         SealedContentUnit(
             content_unit_id=f"source-page-042:table-cell-{index + 1:03d}",
@@ -281,7 +281,9 @@ def test_source_native_table_cells_share_data_driven_estimator_columns() -> None
         column_width=column_width,
     )
 
-    assert 4 < selected_columns <= 8
+    # Without source matrix metadata, the canonical renderer uses at most four
+    # columns. The estimator must describe that grid, not invent a denser one.
+    assert selected_columns == 4
     assert _estimated_flow_block_height(
         cells,
         slot=slot,
@@ -289,13 +291,15 @@ def test_source_native_table_cells_share_data_driven_estimator_columns() -> None
         role="body",
         column_width=column_width,
     ) == selected_height
-    grids = parent.xpath("./div[starts-with(@data-qid, 'source-flow-table:')]")
+    grids = parent.xpath("./div[div[@data-source-boundary-kind='table-cell']]")
     assert len(grids) == 1
     assert (
         f"grid-template-columns:repeat({selected_columns},minmax(0,1fr))"
         in str(grids[0].get("style") or "")
     )
-    assert len(grids[0].xpath("./span")) == 36
+    assert [cell.get("data-source-flow-unit-id") for cell in grids[0].xpath("./div")] == [
+        cell.content_unit_id for cell in cells
+    ]
 
 
 def test_source_native_flow_text_inherits_container_color_without_pack_override() -> None:

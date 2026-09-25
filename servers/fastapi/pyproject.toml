@@ -32,6 +32,7 @@ dependencies = [
     "python-pptx>=1.0.2",
     "fonttools>=4.55.0",
     "html5lib==1.1",
+    "tinycss2>=1.4,<2",
 ]
 
 [tool.uv]

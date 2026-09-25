@@ -628,8 +628,10 @@ def test_create_persists_theme_but_only_safe_theme_metadata_in_first_message(
                 )
             # The server stamps its own authored mode marker on top of the
             # admitted theme; nothing else about the caller theme changes.
-            stamped_theme = {**theme, "mode": "authored"}
-            assert first.theme == stamped_theme
+            stamped_theme = first.theme
+            assert {key: stamped_theme[key] for key in theme} == theme
+            assert stamped_theme["mode"] == "authored"
+            assert stamped_theme["authored_vnext"]["canvas"]["contractVersion"] == "authored-canvas/v1"
 
             async with maker() as session:
                 stored = await session.get(PresentationModel, presentation_id)
@@ -721,7 +723,8 @@ def test_legacy_create_ignores_chat_first_theme_admission(tmp_path: Path, monkey
             assert created.lifecycle_status == PRESENTATION_LIFECYCLE_PUBLISHED
             # The legacy path drops the caller theme entirely: what remains is
             # only the server-issued authored marker.
-            assert created.theme == {"mode": "authored"}
+            assert created.theme["mode"] == "authored"
+            assert created.theme["authored_vnext"]["canvas"]["contractVersion"] == "authored-canvas/v1"
             async with maker() as session:
                 assert await session.scalar(
                     select(func.count()).select_from(WorkspaceMessage)
@@ -1079,7 +1082,8 @@ def test_bare_generate_bootstrap_persists_and_claims_reference_snapshots(
                 assert presentation.profile_schema_version == 1
                 assert presentation.mode == "authored"
                 assert presentation.version == "v1-standard"
-                assert presentation.theme == {"mode": "authored"}
+                assert presentation.theme["mode"] == "authored"
+                assert presentation.theme["authored_vnext"]["canvas"]["contractVersion"] == "authored-canvas/v1"
                 assert operation.request_payload["asset_ids"] == [str(asset_id)]
                 assert operation.request_payload["generation_settings"][
                     "reference_snapshot_ids"
@@ -1207,6 +1211,7 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
                     "include_table_of_contents": True,
                     "include_title_slide": True,
                     "web_search": False,
+                    "aspect_ratio": "16:9",
                 }
                 assert operation.state == "failed"
                 assert operation.error_code == "template_v2_generation_invalid"

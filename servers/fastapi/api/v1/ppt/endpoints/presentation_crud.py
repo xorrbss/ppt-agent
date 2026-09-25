@@ -7,8 +7,7 @@ operations on a PresentationModel (no generation or export pipeline).
 import uuid
 from typing import Annotated, List, Literal, Optional
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Response
-from pydantic import BaseModel
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +15,10 @@ from sqlalchemy.orm import defer
 from sqlmodel import select
 
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
+from api.v1.ppt.endpoints.presentation_generation_context import (
+    generation_context_fields,
+    validate_previous_attempt,
+)
 from api.v1.ppt.endpoints.presentation_create_contracts import (
     attachment_file_name as _attachment_file_name,
     normalize_presentation_create_theme as _normalize_presentation_create_theme,
@@ -44,10 +47,7 @@ from models.sql.workspace import (
 )
 from models.workspace import WorkspaceBootstrapRequest
 from services.database import get_async_session, sql_engine
-from services.authored_canvas import (
-    canvas_metadata_for_aspect_ratio,
-    merge_presentation_canvas,
-)
+from services.authored_canvas import merge_presentation_canvas
 from services.compatibility_migration.admission import (
     stamp_new_authored_presentation,
 )
@@ -104,39 +104,10 @@ def _chat_first_create_enabled() -> bool:
     return True
 
 
-# The deck list renders each cover slide from ``content``/``properties``; it has
-# never read ``SlideModel.html_content``.  Authored decks store a whole HTML
-# document there, so carrying it made the list response ~93% authored HTML that
-# no caller used.  Every other column is carried by name, so a column added to
-# SlideModel later still reaches the list response.
-_LIST_SLIDE_CARRIED_FIELDS = tuple(
-    name for name in SlideModel.model_fields if name != "html_content"
+from api.v1.ppt.endpoints.presentation_list_projection import (
+    PresentationListPage, _escaped_like_fragment, _list_slide_without_html,
+    _list_theme_projection, _list_content_projection,
 )
-
-
-def _list_slide_without_html(slide: SlideModel) -> SlideModel:
-    """Copy a cover slide for the list response, withholding authored HTML.
-
-    Returns a transient row instead of blanking the loaded one: assigning to a
-    persistent instance marks it dirty, and the next query on the same session
-    autoflushes ``UPDATE slides SET html_content=NULL`` — a read endpoint one
-    stray commit away from erasing authored decks.  ``html_content`` is never
-    read here, so the deferred column is never lazily loaded either.
-    """
-
-    carried = {name: getattr(slide, name) for name in _LIST_SLIDE_CARRIED_FIELDS}
-    return SlideModel(**carried, html_content=None)
-
-
-class PresentationListPage(BaseModel):
-    items: List[PresentationWithSlides]
-    total: int
-    page: int
-    page_size: int
-
-
-def _escaped_like_fragment(value: str) -> str:
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 @PRESENTATION_CRUD_ROUTER.get(
@@ -182,39 +153,51 @@ async def get_all_presentations(
         if resolved_sort == "asc"
         else (PresentationModel.updated_at.desc(), PresentationModel.id.desc())
     )
-    presentation_query = select(PresentationModel).where(*filters).order_by(*order_columns)
+    dialect = sql_session.get_bind().dialect.name
+    presentation_query = (
+        select(PresentationModel, _list_theme_projection(dialect))
+        .where(*filters)
+        .order_by(*order_columns)
+        .options(defer(PresentationModel.theme, raiseload=True))
+    )
     if not legacy_response:
         presentation_query = presentation_query.offset(
             (resolved_page - 1) * resolved_page_size
         ).limit(resolved_page_size)
 
-    presentations = list(await sql_session.scalars(presentation_query))
+    presentations = list((await sql_session.execute(presentation_query)).all())
     cover_by_presentation: dict[uuid.UUID, SlideModel] = {}
     if presentations:
         cover_query = (
-            select(SlideModel)
+            select(SlideModel, _list_content_projection(dialect))
             .where(
                 SlideModel.presentation.in_(
-                    [presentation.id for presentation in presentations]
+                    [presentation.id for presentation, _theme in presentations]
                 ),
                 SlideModel.index == 0,
             )
             .order_by(SlideModel.presentation, SlideModel.id)
             # Keep the column out of the SELECT rather than fetching and
             # discarding it. ``raiseload`` makes accidental reads fail loudly.
-            .options(defer(SlideModel.html_content, raiseload=True))
+            .options(
+                defer(SlideModel.html_content, raiseload=True),
+                defer(SlideModel.content, raiseload=True),
+            )
         )
-        for cover in await sql_session.scalars(cover_query):
-            cover_by_presentation.setdefault(cover.presentation, cover)
+        for cover, content in (await sql_session.execute(cover_query)).all():
+            cover_by_presentation.setdefault(
+                cover.presentation, _list_slide_without_html(cover, content=content)
+            )
 
     presentations_with_slides = []
-    for presentation in presentations:
+    for presentation, theme in presentations:
         first_slide = cover_by_presentation.get(presentation.id)
-        slides = [] if first_slide is None else [_list_slide_without_html(first_slide)]
+        slides = [] if first_slide is None else [first_slide]
         fonts = await resolve_presentation_fonts(presentation, slides, sql_session)
         presentations_with_slides.append(
             PresentationWithSlides(
-                **presentation.model_dump(exclude={"fonts"}),
+                **presentation.model_dump(exclude={"fonts", "theme"}),
+                theme=theme,
                 slides=slides,
                 fonts=fonts,
             )
@@ -258,9 +241,14 @@ async def _get_presentation_with_slides(
 
 @PRESENTATION_CRUD_ROUTER.get("/{id}", response_model=PresentationWithSlides)
 async def get_presentation(
-    id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
+    id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session),
+    canvas_contracts: Annotated[Optional[str], Header(alias="X-Document-Canvas-Contracts")] = None,
 ):
-    return await _get_presentation_with_slides(id, sql_session)
+    from services.document_canvas import require_canvas_capability
+
+    presentation = await _get_presentation_with_slides(id, sql_session)
+    require_canvas_capability(presentation.theme, canvas_contracts)
+    return presentation
 
 
 @PRESENTATION_CRUD_ROUTER.get(
@@ -271,8 +259,12 @@ async def get_presentation_export_projection(
     id: uuid.UUID,
     response: Response,
     sql_session: AsyncSession = Depends(get_async_session),
+    canvas_contracts: Annotated[Optional[str], Header(alias="X-Document-Canvas-Contracts")] = None,
 ):
+    from services.document_canvas import require_canvas_capability
+
     presentation = await _get_presentation_with_slides(id, sql_session)
+    require_canvas_capability(presentation.theme, canvas_contracts)
     response.headers[PRESENTATION_EXPORT_PROJECTION_HEADER] = (
         PRESENTATION_EXPORT_PROJECTION
     )
@@ -296,6 +288,7 @@ async def get_presentation_generation_info(
         .where(
             WorkspaceOperation.presentation_id == id,
             WorkspaceOperation.kind == "presentation.generate",
+            WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
         )
         .order_by(
             WorkspaceOperation.anchor_position.asc(),
@@ -342,6 +335,7 @@ async def get_presentation_generation_info(
             if (file_name := _attachment_file_name(file_path))
         ]
     return PresentationGenerationInfo(
+        **await generation_context_fields(sql_session, presentation_id=id, operation=generation_operation),
         prompt=prompt,
         attachment_file_names=attachment_file_names,
         settings=PresentationGenerationSettings(
@@ -419,6 +413,7 @@ async def delete_presentation(
 async def create_presentation(
     content: Annotated[str, Body()],
     presentation_id: Annotated[Optional[uuid.UUID], Body()] = None,
+    previous_presentation_id: Annotated[Optional[uuid.UUID], Body()] = None,
     n_slides: Annotated[Optional[int], Body()] = None,
     language: Annotated[Optional[str], Body()] = None,
     file_paths: Annotated[Optional[List[str]], Body()] = None,
@@ -432,13 +427,21 @@ async def create_presentation(
     strategy: Annotated[Literal["authored", "svg"], Body()] = "authored",
     theme: Annotated[Optional[dict], Body()] = None,
     aspect_ratio: Annotated[Literal["16:9", "9:16", "9:13"], Body()] = "16:9",
+    page_size: Annotated[Optional[Literal["A4"]], Body()] = None,
+    orientation: Annotated[Optional[Literal["landscape", "portrait"]], Body()] = None,
+    http_request: Request = None,
     idempotency_key: Annotated[
         Optional[str], Header(alias="Idempotency-Key")
     ] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    from api.v1.ppt.endpoints.presentation_create_canvas import admitted_create_canvas
+
+    create_canvas = await admitted_create_canvas(http_request, page_size, orientation, aspect_ratio)
     proposed_presentation_id = presentation_id or uuid.uuid4()
     chat_first_enabled = _chat_first_create_enabled()
+    if previous_presentation_id is not None and not chat_first_enabled:
+        raise HTTPException(status_code=409, detail="generation_attempt_link_unavailable")
     resolved_theme = (
         _normalize_presentation_create_theme(theme) if chat_first_enabled else None
     )
@@ -547,9 +550,7 @@ async def create_presentation(
         stamp_new_authored_presentation(presentation)
     presentation.theme = merge_presentation_canvas(
         presentation.theme,
-        canvas_metadata_for_aspect_ratio(aspect_ratio).model_dump(
-            mode="json", by_alias=True
-        ),
+        create_canvas,
     )
     # Idempotency comparisons and workspace settings must use the same
     # server-issued theme identity that will be persisted.
@@ -567,6 +568,9 @@ async def create_presentation(
             "web_search": web_search,
             "aspect_ratio": aspect_ratio,
         }
+        if page_size == "A4":
+            settings.pop("aspect_ratio")
+            settings.update({"page_size": page_size, "orientation": orientation})
         # Authored-only admission stamps a theme-less presentation with the
         # internal {"mode": "authored"} marker. That marker is not a catalog
         # theme and therefore has no public id/name/user metadata.
@@ -630,6 +634,10 @@ async def create_presentation(
                         status_code=409,
                         detail="idempotency_record_incomplete",
                     )
+                if existing_operation.request_payload.get("previous_presentation_id") != (
+                    str(previous_presentation_id) if previous_presentation_id else None
+                ):
+                    raise HTTPException(status_code=409, detail="idempotency_key_payload_conflict")
                 existing_asset_ids = [
                     uuid.UUID(asset_id)
                     for asset_id in existing_operation.request_payload.get(
@@ -698,6 +706,11 @@ async def create_presentation(
                 asset_ids = existing_asset_ids
                 presentation = existing_presentation
             else:
+                await validate_previous_attempt(
+                    sql_session,
+                    previous_presentation_id=previous_presentation_id,
+                    presentation_id=resolved_presentation_id,
+                )
                 durable_file_paths: list[str] = []
                 asset_ids.extend(canonical_asset_ids)
                 for path in file_paths or []:
@@ -728,6 +741,7 @@ async def create_presentation(
                     expected_revision=presentation.revision,
                 ),
                 initial_state="awaiting_approval",
+                previous_presentation_id=previous_presentation_id,
                 commit=False,
             )
             if reference_snapshot_ids:

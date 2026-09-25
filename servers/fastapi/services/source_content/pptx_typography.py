@@ -56,7 +56,7 @@ MAX_LIST_LEVEL = 8
 MANIFEST_ID_EXTRACTOR_REVISION = (
     "typography-run-styles-v7+document-identity-v1+group-shapes-v1"
     "+placeholder-geometry-v1+source-layout-v2+table-grid-v1+manifest-capability-v1"
-    "+source-bullets-v1+image-effects-v2"
+    "+source-bullets-v1+image-effects-v2+numeric-custom-path-v1"
 )
 
 _HEX_RE = re.compile(r"^[0-9A-Fa-f]{6}$")

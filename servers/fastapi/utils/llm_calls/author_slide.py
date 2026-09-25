@@ -289,6 +289,7 @@ def build_design_system(
     header_contract: Optional[AuthoredHeaderContract] = None,
     canvas_width_px: int = 1280,
     canvas_height_px: int = 720,
+    canvas_safe_area: object | None = None,
 ) -> str:
     """Build the concrete shared brief for a brand and optional authored style.
 
@@ -330,6 +331,7 @@ def build_design_system(
         ),
         canvas_width_px=canvas_width_px,
         canvas_height_px=canvas_height_px,
+        canvas_safe_area=canvas_safe_area,
     )
 
 

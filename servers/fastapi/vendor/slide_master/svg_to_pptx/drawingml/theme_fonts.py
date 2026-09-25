@@ -9,6 +9,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from .utils import FONT_PX_TO_HUNDREDTHS_PT, font_px_to_hpt, parse_font_family
+from ..conversion_context import current_conversion_context
 
 
 DML_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -110,7 +111,7 @@ def _font_size_hpt(raw: str, field: str) -> int:
         raise ThemeFontError(
             f"spec_lock.md typography {field} must be a numeric px value: {raw!r}"
         ) from exc
-    scaled = px * FONT_PX_TO_HUNDREDTHS_PT
+    scaled = px * current_conversion_context().hundredths_pt_per_unit
     if not math.isfinite(scaled):
         raise ThemeFontError(
             f"spec_lock.md typography {field} must be finite: {raw!r}"

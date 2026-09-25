@@ -1184,6 +1184,7 @@ def prepare_authored_deck(
     instructions: Optional[str] = None,
     composition_profile: CompositionProfile | None = None,
     canvas: object | None = None,
+    physical_canvas: object | None = None,
 ) -> AuthoredDeckPlan:
     """Prepare the shared prompt inputs once, before slide-level pipelining starts.
 
@@ -1254,7 +1255,9 @@ def prepare_authored_deck(
         "ordinary", "authored", True, True, 1
     )
     capacity_plan = build_authored_capacity_plan(contents, roles, profile)
-    requested_font_px = requested_font_floor_px(instructions)
+    requested_font_px = requested_font_floor_px(
+        instructions, point_per_unit=float(getattr(physical_canvas, "point_per_unit", 0.75))
+    )
     if requested_font_px is not None and reference_mode != EXACT_RECONSTRUCTION:
         capacity_plan = replace(capacity_plan, slides=tuple(
             replace(slide, min_font_px=min(slide.min_font_px, requested_font_px))
@@ -1312,6 +1315,19 @@ def prepare_authored_deck(
         if _visual_story_plan_applies(reference_mode, structured=structured)
         else None
     )
+    physical_type_clause = ""
+    if physical_canvas is not None:
+        from services.document_canvas_generation import generation_font_floor
+
+        floor = generation_font_floor(instructions, physical_canvas)
+        point_scale = physical_canvas.point_per_unit
+        physical_type_clause = (
+            f"\nOUTPUT TYPOGRAPHY: one logical px prints as {point_scale:.12g} pt. "
+            f"Body text minimum is {floor:.12g} logical px. "
+            "For user-specified physical pt sizes, divide by this scale and author "
+            "that logical px size; CSS pt and printed pt are different units here. "
+            "Honor per-role larger sizes and reflow content rather than clipping.\n"
+        )
     return AuthoredDeckPlan(
         contents=contents,
         roles=roles,
@@ -1325,7 +1341,9 @@ def prepare_authored_deck(
             header_contract=effective_contract,
             canvas_width_px=canvas_width_px,
             canvas_height_px=canvas_height_px,
-        ),
+            **({"canvas_safe_area": canvas.safe_area}
+               if canvas is not None and (canvas_width_px, canvas_height_px) not in {(1280, 720), (720, 1280), (720, 1040)} else {}),
+        ) + physical_type_clause,
         structured_contexts=structured_contexts,
         page_number_mode=page_number_mode,
         header_contract=effective_contract,
@@ -1852,6 +1870,7 @@ async def author_deck(
 def build_image_pptx(
     images: List[bytes], out_path: str, *,
     canvas_width_px: int = 1280, canvas_height_px: int = 720,
+    physical_size_emu: tuple[int, int] | None = None,
 ) -> str:
     """Assemble rendered slide PNGs into a PPTX, one full-bleed picture per
     slide (perfect fidelity, opens in PowerPoint). Returns the saved path."""
@@ -1867,8 +1886,11 @@ def build_image_pptx(
     # 1280x720 CSS px at 96dpi maps to an exact 960x540pt page.  The former
     # decimal-inch approximation was 0.024pt narrow and could not share the
     # local-fit export-scale identity.
-    prs.slide_width = Emu(int(canvas_width_px) * 9_525)
-    prs.slide_height = Emu(int(canvas_height_px) * 9_525)
+    physical_width, physical_height = physical_size_emu or (int(canvas_width_px) * 9_525, int(canvas_height_px) * 9_525)
+    if physical_width <= 0 or physical_height <= 0 or physical_width * canvas_height_px != physical_height * canvas_width_px:
+        raise ValueError("document_canvas_geometry_mismatch")
+    prs.slide_width = Emu(physical_width)
+    prs.slide_height = Emu(physical_height)
     blank = prs.slide_layouts[6]
     for img in images:
         slide = prs.slides.add_slide(blank)

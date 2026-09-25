@@ -28,6 +28,8 @@ import { SortableSlide } from "./SortableSlide";
 import type { Slide } from "../../types/slide";
 import { Separator } from "@/components/ui/separator";
 import { notify } from "@/components/ui/sonner";
+import { PresentationGenerationApi } from "../../services/api/presentation-generation";
+import { ApiError } from "../../services/api/api-error-handler";
 import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { SlideThumbnailCard } from "./SlideThumbnailCard";
@@ -156,6 +158,55 @@ const SidePanel = ({
     }),
   );
 
+  // Fire-and-forget: the Redux state update above already reflects the new
+  // order for the UI. This persists it through the narrow slide-order
+  // endpoint (see presentation-generation.ts). A stale expected_revision
+  // (someone else changed the deck since this view last loaded it) comes
+  // back as 409; reload so the editor picks up the current state rather
+  // than silently diverging from what the server actually saved.
+  const persistSlideOrder = (updatedSlides: Slide[], expectedRevision?: number) => {
+    if (typeof expectedRevision !== "number") return;
+    // Captured here (rather than read again inside the .then below) so
+    // TypeScript's null-narrowing holds across the async boundary: the
+    // component-scope `presentationData` is still `PresentationData | null`
+    // at the point the promise resolves.
+    const basePresentationData = presentationData;
+    if (!basePresentationData) return;
+    const slideIds: string[] = [];
+    for (const slide of updatedSlides) {
+      if (slide.id === null) return;
+      slideIds.push(slide.id);
+    }
+    void PresentationGenerationApi.reorderSlides(presentationId, {
+      slide_ids: slideIds,
+      expected_revision: expectedRevision,
+    })
+      .then((result) => {
+        dispatch(
+          setPresentationData({
+            ...basePresentationData,
+            slides: updatedSlides,
+            revision: result.revision,
+          }),
+        );
+      })
+      .catch((error) => {
+        if (error instanceof ApiError && error.status === 409) {
+          notify.error(
+            "슬라이드 순서를 저장하지 못했습니다",
+            "다른 곳에서 프레젠테이션이 변경되어 새로고침합니다.",
+          );
+          window.location.reload();
+          return;
+        }
+        console.error("Failed to save slide order", error);
+        notify.error(
+          "슬라이드 순서를 저장하지 못했습니다",
+          "네트워크 연결을 확인하고 다시 시도해 주세요.",
+        );
+      });
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     if (!canManageSlides) return;
     const { active, over } = event;
@@ -204,6 +255,7 @@ const SidePanel = ({
         to_index: newIndex,
         slide_count: updatedArray.length,
       });
+      persistSlideOrder(updatedArray, presentationData.revision);
     }
   };
 

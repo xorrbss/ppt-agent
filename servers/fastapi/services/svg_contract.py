@@ -11,6 +11,11 @@ import xml.etree.ElementTree as ET
 SVG_CONTRACT_VERSION = "svg-static/v1"
 SVG_NS = "http://www.w3.org/2000/svg"
 PAGE_NUMBER_ID = "svg-system-page-number"
+# Root id of a deterministic raster-redesign page. Only such pages may use
+# ``dy`` on <tspan> (paragraph line spacing that the PPTX export merges into
+# one editable text frame per block).
+RASTER_REDESIGN_ROOT_ID = "svg-raster-redesign"
+_MAX_TSPAN_DY = 1000.0
 ET.register_namespace("", SVG_NS)
 _NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
 _NUMERIC = {"x", "y", "width", "height", "rx", "ry", "cx", "cy", "r", "x1", "x2", "y1", "y2", "font-size", "stroke-width", "opacity", "fill-opacity", "stroke-opacity"}
@@ -71,7 +76,7 @@ def _numbers(value: str) -> list[float]:
 
 def validate_svg(svg: str, *, width: int = 1280, height: int = 720,
                  allow_system_page_number: bool = True,
-                 source_manifest: dict | None = None) -> dict:
+                 source_manifest: dict | None = None, allow_image_only: bool = False) -> dict:
     if not isinstance(svg, str) or len(svg.encode("utf-8")) > 2 * 1024 * 1024:
         raise ValueError("svg_contract_size_limit")
     if re.search(r"<!|<\?", svg):
@@ -88,6 +93,7 @@ def validate_svg(svg: str, *, width: int = 1280, height: int = 720,
         raise ValueError("svg_contract_canvas_mismatch")
     ids, text_runs, used_slots = set(), [], set()
     count, asset_bytes = 0, 0
+    paragraph_dy = root.get("id") == RASTER_REDESIGN_ROOT_ID
 
     def visit(node, parent=None, depth=0):
         nonlocal count, asset_bytes
@@ -104,6 +110,11 @@ def validate_svg(svg: str, *, width: int = 1280, height: int = 720,
         if parent not in {None, "svg", "g", "text"}:
             raise ValueError("svg_contract_invalid_parent")
         for key, value in node.attrib.items():
+            if paragraph_dy and name == "tspan" and key == "dy":
+                values = _numbers(value)
+                if len(values) != 1 or not 0 < values[0] <= _MAX_TSPAN_DY:
+                    raise ValueError("svg_contract_invalid_dy")
+                continue
             if key not in ELEMENT_ATTRIBUTES[name] | _COMMON:
                 raise ValueError("svg_contract_unsupported_attribute:" + key[:40])
             if key in _NUMERIC:
@@ -188,7 +199,7 @@ def validate_svg(svg: str, *, width: int = 1280, height: int = 720,
         for slot, item in source_manifest.items()
     ):
         raise ValueError("svg_required_source_image_missing")
-    if not any(t.strip() for t in text_runs):
+    if not any(t.strip() for t in text_runs) and not (allow_image_only and any(str(node.tag).endswith('}image') or str(node.tag) == 'image' for node in root.iter())):
         raise ValueError("svg_contract_visible_text_required")
     return {"contract_version": SVG_CONTRACT_VERSION, "source_digest": source_digest(svg),
             "element_count": count, "text": "\n".join(text_runs), "syntax_valid": True}
@@ -196,8 +207,8 @@ def validate_svg(svg: str, *, width: int = 1280, height: int = 720,
 
 def finalize_svg(svg: str, *, index: int, n: int, width: int = 1280, height: int = 720,
                  style_snapshot: dict | None = None, page_number_mode: str = "template",
-                 source_manifest: dict | None = None) -> str:
-    validate_svg(svg, width=width, height=height, source_manifest=source_manifest)
+                 source_manifest: dict | None = None, allow_image_only: bool = False) -> str:
+    validate_svg(svg, width=width, height=height, source_manifest=source_manifest, allow_image_only=allow_image_only)
     if not 0 <= index < n:
         raise ValueError("svg_page_index_invalid")
     root = ET.fromstring(svg)
@@ -213,5 +224,5 @@ def finalize_svg(svg: str, *, index: int, n: int, width: int = 1280, height: int
             "fill": tokens.get("primary") or "#2563EB", "text-anchor": "end"})
         node.text = str(index + 1).zfill(2)
     result = ET.tostring(root, encoding="unicode")
-    validate_svg(result, width=width, height=height, source_manifest=source_manifest)
+    validate_svg(result, width=width, height=height, source_manifest=source_manifest, allow_image_only=allow_image_only)
     return result

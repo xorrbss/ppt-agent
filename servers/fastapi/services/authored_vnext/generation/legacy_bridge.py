@@ -1367,18 +1367,12 @@ async def regenerate_legacy_master_body(
             presentation_revision=expected_presentation_revision + 1,
         )
     item = result.deck.slides[slide_index]
-    preview_contract = (
-        materialize_authored_composition(master.contract, result.deck.composition)
-        if result.deck.composition is not None
-        else master.contract
+    from services.document_canvas_scene_layout import scene_revision_preview
+
+    html, png = await scene_revision_preview(
+        master=master, deck=result.deck, slide_index=slide_index,
+        preview_builder=build_preview, capture=render_html_to_png,
     )
-    html = build_preview(
-        preview_contract,
-        master.revision,
-        item.slide,
-        page_number=slide_index + 1,
-    ).html
-    png = await render_html_to_png(html)
     image_ref = (
         await asyncio.to_thread(
             _save_slide_pngs,

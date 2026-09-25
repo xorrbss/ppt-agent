@@ -51,7 +51,8 @@ def _read_render_bundle(
     elif schema_version == RENDER_BUNDLE_SCHEMA:
         expected_keys = {"schemaVersion", "canvas", "slides"}
         try:
-            canvas = AuthoredCanvasMetadata.model_validate(value.get("canvas"))
+            from services.document_canvas import parse_canvas_metadata
+            canvas = parse_canvas_metadata(value.get("canvas"))
         except (TypeError, ValueError) as error:
             raise PublicWorkerExecutionError(
                 "public_render_canvas_contract_invalid"
@@ -105,14 +106,19 @@ def _admit_html(html: str):
     )
 
     try:
-        return admit_authored_html(html)
+        admitted = admit_authored_html(html)
     except RendererPolicyError:
         try:
-            return admit_static_output_html(html)
+            admitted = admit_static_output_html(html)
         except RendererPolicyError as static_error:
             raise PublicWorkerExecutionError(
                 "public_render_policy_rejected"
             ) from static_error
+    try:
+        from services.svg_renderer import materialize_trusted_svg_fonts
+        return materialize_trusted_svg_fonts(html, admitted)
+    except ValueError as error:
+        raise PublicWorkerExecutionError("public_render_trusted_font_invalid") from error
 
 
 async def execute_render(

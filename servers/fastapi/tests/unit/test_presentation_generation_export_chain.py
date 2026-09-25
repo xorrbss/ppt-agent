@@ -14,8 +14,9 @@ from services.workspace_service import WorkspaceServiceError
 class _Session:
     """Minimal stand-in for the generation's AsyncSession."""
 
-    def __init__(self, presentation) -> None:
+    def __init__(self, presentation, *, fail_commit_on: frozenset[int] = frozenset()) -> None:
         self._presentation = presentation
+        self._fail_commit_on = fail_commit_on
         self.commits = 0
         self.rollbacks = 0
         self.added: list[object] = []
@@ -25,6 +26,8 @@ class _Session:
 
     async def commit(self) -> None:
         self.commits += 1
+        if self.commits in self._fail_commit_on:
+            raise RuntimeError("simulated commit failure")
 
     async def rollback(self) -> None:
         self.rollbacks += 1
@@ -187,3 +190,69 @@ def test_async_task_projection_carries_the_export_operation(
     assert async_status.data["export_error"] is None
     assert async_status.data["path"] == "/app_data/x.pptx"
     assert async_status in session.added
+
+
+def test_chained_export_failure_does_not_revert_an_already_completed_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: a submission failure used to roll back the whole session,
+    discarding "completed" if the caller had set it earlier on the same,
+    still-uncommitted session. finalize_generation_export_chain itself never
+    writes .status -- callers must commit "completed" before invoking the
+    chain (api/v1/ppt/endpoints/presentation_generate.py does this now). This
+    locks the contract: the chain only ever annotates .data, never .status.
+    """
+    presentation_id = uuid.uuid4()
+    session = _Session(SimpleNamespace(id=presentation_id, revision=1))
+    async_status = SimpleNamespace(status="completed", data={}, updated_at=None)
+
+    async def create(_session, *, presentation_id, request):
+        raise WorkspaceServiceError("workspace_mutation_admission_conflict", status_code=409, retryable=True)
+
+    monkeypatch.setattr(chain, "create_workspace_command", create)
+    monkeypatch.setattr(chain, "wake_workspace_operation_runner", lambda: None)
+
+    enriched = asyncio.run(
+        chain.finalize_generation_export_chain(
+            session, response=_response(presentation_id), export_as="pptx", async_status=async_status,
+        )
+    )
+
+    assert async_status.status == "completed"
+    assert async_status.data["export_error"] == "workspace_mutation_admission_conflict"
+    assert async_status.data["export_operation_id"] is None
+    assert enriched.export_error == "workspace_mutation_admission_conflict"
+    assert enriched.export_operation_id is None
+
+
+def test_failing_to_record_the_export_outcome_does_not_raise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The export-outcome annotation commit must never turn a successful,
+    already-published generation into a failed request (same philosophy as
+    a refused submission itself)."""
+    presentation_id = uuid.uuid4()
+    operation_id = uuid.uuid4()
+    # Commit #1 is the successful chain submission inside _submit_chained_export;
+    # commit #2 is finalize_generation_export_chain's own data-annotation commit.
+    session = _Session(SimpleNamespace(id=presentation_id, revision=1), fail_commit_on=frozenset({2}))
+    async_status = SimpleNamespace(status="completed", data={}, updated_at=None)
+
+    async def create(_session, *, presentation_id, request):
+        return SimpleNamespace(id=operation_id), False
+
+    monkeypatch.setattr(chain, "create_workspace_command", create)
+    monkeypatch.setattr(chain, "wake_workspace_operation_runner", lambda: None)
+
+    enriched = asyncio.run(
+        chain.finalize_generation_export_chain(
+            session, response=_response(presentation_id), export_as="pptx", async_status=async_status,
+        )
+    )
+
+    # No exception propagated; the caller-set "completed" status is untouched;
+    # the enriched response still carries the operation id even though the
+    # durable annotation of it failed.
+    assert async_status.status == "completed"
+    assert enriched.export_operation_id == operation_id
+    assert session.rollbacks == 1

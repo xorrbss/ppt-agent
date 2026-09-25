@@ -10,6 +10,7 @@ from xml.etree import ElementTree as ET
 from pptx_shapes import validate_ooxml_xfrm
 
 from .context import AffineMatrix, ConvertContext, IDENTITY_MATRIX
+from ..conversion_context import current_conversion_context
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -154,12 +155,15 @@ DASH_PRESETS = {
 
 def px_to_emu(px: float) -> int:
     """Convert SVG pixels to EMU."""
-    return round(px * EMU_PER_PX)
+    return round(px * current_conversion_context().emu_per_unit)
 
 
 def font_px_to_hpt(font_size_px: float) -> int:
     """Convert SVG px to DrawingML hundredths-of-a-point at 0.1pt precision."""
-    return int(round(font_size_px * FONT_PX_TO_HUNDREDTHS_PT / 10.0)) * 10
+    context = current_conversion_context()
+    value = font_size_px * context.hundredths_pt_per_unit
+    # Preserve upstream legacy rounding; the new contract uses OOXML's 0.01pt grid.
+    return int(round(value / 10.0)) * 10 if context.legacy else round(value)
 
 
 def _f(val: str | None, default: float = 0.0) -> float:

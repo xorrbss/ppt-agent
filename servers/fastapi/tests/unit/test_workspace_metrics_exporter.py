@@ -134,6 +134,8 @@ def test_authored_render_runtime_metrics_are_metadata_only() -> None:
         "domMetrics",
         "occlusionSensor",
         "chromeReuseEnabled",
+        "capabilityRegistryDigest",
+        "clippingSensor",
     }
     assert "render_cache_hits" in payload["counters"]
     assert "metrics_recollection_requests" in payload["counters"]

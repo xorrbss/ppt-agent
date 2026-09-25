@@ -20,9 +20,9 @@ from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 
 from services.authored_canvas import (
-    AuthoredCanvasMetadata,
     presentation_canvas_metadata,
 )
+from services.document_canvas import DocumentCanvasMetadata, canvas_digest, parse_canvas_metadata
 from models.sql.public_artifact import (
     ArtifactRef as PublicArtifactRef,
     normalize_sha256,
@@ -524,7 +524,7 @@ def build_validated_checkpoint_export_bundle(
         resolved_canvas = presentation_canvas_metadata({})
     else:
         try:
-            resolved_canvas = AuthoredCanvasMetadata.model_validate(canvas).model_dump(
+            resolved_canvas = parse_canvas_metadata(dict(canvas)).model_dump(
                 mode="json", by_alias=True
             )
         except (TypeError, ValueError) as error:
@@ -619,7 +619,7 @@ def build_public_render_bundle(
         resolved_canvas = presentation_canvas_metadata({})
     else:
         try:
-            resolved_canvas = AuthoredCanvasMetadata.model_validate(canvas).model_dump(
+            resolved_canvas = parse_canvas_metadata(dict(canvas)).model_dump(
                 mode="json", by_alias=True
             )
         except (TypeError, ValueError) as error:
@@ -1321,8 +1321,11 @@ async def render_and_export_authored_htmls(
         ).encode("utf-8")
     ).hexdigest()
     render_runtime_binding = public_render_runtime_binding()
+    parsed_canvas = parse_canvas_metadata(canvas)
     canvas_discriminator = (
-        f"{canvas['contractVersion']}:{canvas['widthPx']}x{canvas['heightPx']}"
+        canvas_digest(parsed_canvas)
+        if isinstance(parsed_canvas, DocumentCanvasMetadata)
+        else f"{canvas['contractVersion']}:{parsed_canvas.width_px}x{parsed_canvas.height_px}"
     )
     render_runtime_binding_digest = public_render_runtime_binding_digest(
         render_runtime_binding

@@ -2,6 +2,7 @@ import { getHeaderForFormData } from "../header";
 import { ApiResponseHandler } from "../api-error-handler";
 import { getApiUrl } from "@/utils/api";
 import { fetchWithNetworkRetry } from "@/utils/fetchWithNetworkRetry";
+import type { DocumentCanvas } from "@/lib/document-canvas";
 
 export const SOURCE_CONTENT_RESTYLE_CONTRACT_VERSION =
   "source-content-analysis-request/v1" as const;
@@ -32,6 +33,7 @@ export type SourceContentAnalysisResponseV1 = {
     ppt: false;
   };
   manifestPin: SourceContentManifestPin;
+  documentCanvas: DocumentCanvas | null;
   referenceSnapshotBinding: {
     referenceSnapshotId: string;
     providerId: string;

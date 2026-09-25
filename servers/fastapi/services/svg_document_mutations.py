@@ -9,6 +9,87 @@ from services.svg_contract import finalize_svg
 from services.svg_renderer import render_svg_with_metrics
 
 
+def _preserve_source_pages(presentation, slides, canvas):
+    """A preservation receipt forbids implicit numbering and page mutations."""
+    marker = presentation.theme.get("svg", {}).get("sourcePreservation")
+    receipts = [(slide.content or {}).get("svgReceipt", {}).get("source_preservation")
+                for slide in slides]
+    if marker is None and not any(receipt is not None for receipt in receipts):
+        return False
+    if (not isinstance(marker, dict)
+            or marker.get("schemaVersion") != "svg-source-preservation/v1"
+            or marker.get("pageCount") != len(slides)):
+        raise ValueError("svg_source_publication_binding_invalid")
+    from services.svg_contract import source_digest
+
+    page_ids = set()
+    for index, (slide, receipt) in enumerate(zip(slides, receipts, strict=True)):
+        expected = {
+            "contract_version": "svg-source-preservation/v1",
+            "manifest_digest": marker.get("manifestDigest"),
+            "source_page_index": index,
+            "page_count": len(slides),
+            "svg_digest": source_digest(slide.svg_content or ""),
+            "canvas": {"width": canvas.width_px, "height": canvas.height_px},
+            "rendering_verified": True,
+        }
+        if (not slide.is_svg() or slide.index != index or not isinstance(receipt, dict)
+                or any(receipt.get(key) != value for key, value in expected.items())):
+            raise ValueError("svg_source_publication_binding_invalid")
+        page_id = receipt.get("source_page_id")
+        checks = receipt.get("checks")
+        if (not isinstance(page_id, str) or not page_id or page_id in page_ids
+                or not isinstance(checks, dict)
+                or any(checks.get(key) is not True for key in (
+                    "source_ids_exact", "text_exact", "table_structure_exact", "image_occurrences_exact"))):
+            raise ValueError("svg_source_publication_binding_invalid")
+        page_ids.add(page_id)
+    return True
+
+
+def _raster_pin(slide):
+    """Any raster page's approval pin, strictly bound to this slide's current
+    position and the analysis it was approved from. None for a non-raster page."""
+    from services.source_content.raster_contracts import RasterApprovalPin, approval_digest_matches
+    receipt = (slide.content or {}).get("svgReceipt") or {}
+    value = receipt.get("rasterApprovalPin")
+    if value is None:
+        return None
+    pin = RasterApprovalPin.model_validate(value)
+    page = receipt.get("rasterSourcePageNumber")
+    # The source page (provenance) is bound to the asset envelope's offered page,
+    # not to the slide's current deck position, which a reorder may change.
+    envelope = (slide.content or {}).get("svgAssetManifest") or {}
+    source_index = envelope.get("sourcePageIndex", slide.index) if isinstance(envelope, dict) else slide.index
+    if (not approval_digest_matches(pin) or page != source_index + 1
+            or receipt.get("rasterAnalysisDigest") != pin.analysis_digest):
+        raise ValueError("raster_publication_page_binding_invalid")
+    return pin
+
+
+def _raster_preserve_pin(slide):
+    pin = _raster_pin(slide)
+    receipt = (slide.content or {}).get("svgReceipt") or {}
+    return pin if pin is not None and receipt.get("rasterSourcePageNumber") in pin.full_page_preserve_pages else None
+
+
+def _raster_redesign_pin(slide):
+    """A redesign page's own footer (raster_redesign_layout.py, PAGE_NUMBER_ID)
+    is already baked in at the correct page number by generation -- unlike a
+    reconstruct page, which has no footer of its own and still needs
+    finalize_svg's generic stamp. Re-running finalize_svg on a redesign page
+    would strip that footer and re-stamp it with the deck's generic
+    styleSnapshot tokens (wrong font/colour for this style), and then
+    re-measuring the resulting materialized SVG through the ordinary
+    (non-authorized) preview path is exactly what produced the dead-lettered
+    svg_contract_size_limit publish failure: refresh_svg_page_numbers must
+    never send a redesign page through that generic path.
+    """
+    pin = _raster_pin(slide)
+    receipt = (slide.content or {}).get("svgReceipt") or {}
+    return pin if pin is not None and receipt.get("rasterSourcePageNumber") in pin.automatic_redesign_pages else None
+
+
 async def read_svg_slide_assets(session, presentation, slide):
     """Read v2 asset bindings using the current authenticated principal."""
     metadata = (slide.content or {}).get("svgAssetManifest")
@@ -37,15 +118,32 @@ async def read_svg_slide_assets(session, presentation, slide):
         raise ValueError("svg_asset_revision_binding_invalid")
     placement.validate_source(source, page_index=metadata.get("sourcePageIndex", slide.index))
     canvas = presentation_canvas_contract(presentation.theme)
+    preserve_pin = _raster_preserve_pin(slide)
+    if preserve_pin is not None:
+        from services.source_content.raster_reconstruction_store import admit_approved_raster_analysis
+        from services.source_content.raster_svg_layout import render_raster_page_svg
+        analysis = await admit_approved_raster_analysis(
+            session, operation_id=preserve_pin.operation_id, owner_id=owner,
+            tenant_id=tenant, pin=preserve_pin, artifact_service=service,
+        )
+        expected = render_raster_page_svg(
+            analysis, slide.index + 1,
+            style_id=presentation.theme.get("style") or "screenshot-blue",
+            approved_region_ids=preserve_pin.approved_region_ids,
+        )
+        if slide.svg_content != expected:
+            raise ValueError("raster_publication_source_geometry_changed")
     derivatives = {item.slot_id: item.derivative for item in placement.placements}
     materialized = await resolve_svg_for_render(slide.svg_content, manifest=source,
         derivatives=derivatives, session=session, owner_id=owner, tenant_id=tenant,
         width=canvas.width_px, height=canvas.height_px, service=service,
-        page_index=metadata.get("sourcePageIndex", slide.index), placement_manifest=placement)
+        page_index=metadata.get("sourcePageIndex", slide.index), placement_manifest=placement,
+        allow_image_only=preserve_pin is not None)
     return source, placement, materialized
 
 
-async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, attempt_token=None, expected_revision=None):
+async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, attempt_token=None,
+                                   expected_revision=None):
     if not presentation.is_svg():
         return
     await session.flush()
@@ -54,19 +152,38 @@ async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, 
     if not slides:
         raise ValueError("svg_document_requires_slide")
     canvas = presentation_canvas_contract(presentation.theme)
+    if _preserve_source_pages(presentation, slides, canvas):
+        return
     snapshot = presentation.theme.get("svg", {}).get("styleSnapshot")
     if not snapshot:
         raise ValueError("svg_style_snapshot_required")
     for index, slide in enumerate(slides):
         if not slide.is_svg() or not slide.svg_content:
             raise ValueError("svg_document_mixed_source")
+        if _raster_redesign_pin(slide) is not None:
+            # Never the generic finalize/rebind/measure pipeline (see
+            # _raster_redesign_pin). The footer page number follows the deck
+            # position; source page, crops and offered page stay unchanged.
+            from services.svg_raster_renumber import renumber_redesign_page
+
+            await renumber_redesign_page(
+                session, presentation, slide, index, width=canvas.width_px, height=canvas.height_px,
+                operation_id=operation_id, attempt_token=attempt_token, expected_revision=expected_revision)
+            slide.index = index
+            session.add(slide)
+            continue
         assets = await read_svg_slide_assets(session, presentation, slide)
+        if _raster_preserve_pin(slide) is not None:
+            if assets is None or slide.index != index:
+                raise ValueError("raster_publication_page_binding_invalid")
+            continue
         source_manifest = None
         if assets is not None:
             from services.svg_asset_resolver import _contract_manifest
             offered = next(page.slot_ids for page in assets[0].offered_pages
                 if page.page_index == (slide.content["svgAssetManifest"].get("sourcePageIndex", slide.index)))
-            source_manifest = {slot: policy for slot, policy in _contract_manifest(assets[0]).items() if slot in offered}
+            source_manifest = {slot: policy for slot, policy in _contract_manifest(assets[0]).items()
+                               if slot in offered}
         final = finalize_svg(slide.svg_content, index=index, n=len(slides), width=canvas.width_px,
                              height=canvas.height_px, style_snapshot=snapshot,
                              source_manifest=source_manifest)
@@ -158,7 +275,8 @@ async def rebind_svg_assets(session, presentation, slide, svg, assets, *, page_i
     from services.svg_asset_manifest import SourceManifest
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
     owner, tenant = get_current_owner_id(), get_current_tenant_id()
-    if not operation_id or not attempt_token or expected_revision is None or not tenant or owner != presentation.owner_id:
+    if (not operation_id or not attempt_token or expected_revision is None or not tenant
+            or owner != presentation.owner_id):
         raise ValueError("svg_asset_mutation_fence_required")
     operation = await session.scalar(select(WorkspaceOperation).where(
         WorkspaceOperation.id == operation_id, WorkspaceOperation.owner_id == owner,

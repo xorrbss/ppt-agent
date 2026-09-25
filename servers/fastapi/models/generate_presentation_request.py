@@ -8,7 +8,9 @@ from pydantic import (
     PrivateAttr,
     field_validator,
     model_validator,
+    model_serializer,
 )
+from pydantic.alias_generators import to_camel
 
 from enums.tone import Tone
 from enums.verbosity import Verbosity
@@ -30,6 +32,9 @@ CodexGenerationPreset = Literal[
     "sol-low",
     "sol-medium",
     "sol-high",
+    "sol6-low",
+    "sol6-medium",
+    "sol6-high",
     "astra-low",
     "astra-medium",
 ]
@@ -72,6 +77,21 @@ class SourceContentManifestPinInput(StrictCamelModel):
     digest: Digest
 
 
+class RasterApprovalPinInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True, alias_generator=to_camel)
+    contract_version: Literal["raster-reconstruction-approval/v1"] = "raster-reconstruction-approval/v1"
+    operation_id: uuid.UUID
+    analysis_id: uuid.UUID
+    analysis_revision: int = Field(ge=1)
+    analysis_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    approved_region_ids: tuple[str, ...]
+    full_page_preserve_pages: tuple[int, ...] = ()
+    automatic_preserve_pages: tuple[int, ...] = ()
+    automatic_redesign_pages: tuple[int, ...] = ()
+    approval_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class DesignPackPinInput(StrictCamelModel):
     design_pack_id: str = Field(
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
@@ -97,6 +117,13 @@ class GeneratePresentationRequest(BaseModel):
     _source_content_manifest: Any = PrivateAttr(default=None)
     _source_document_outline: Any = PrivateAttr(default=None)
     _source_content_authored_reflow: bool = PrivateAttr(default=False)
+    _source_content_svg_reflow: bool = PrivateAttr(default=False)
+    _svg_source_binding: Any = PrivateAttr(default=None)
+    _raster_approval_pin: Any = PrivateAttr(default=None)
+    _raster_analysis: Any = PrivateAttr(default=None)
+    _raster_reflow: bool = PrivateAttr(default=False)
+    _raster_reconstruction: bool = PrivateAttr(default=False)
+    _raster_tenant_id: Optional[str] = PrivateAttr(default=None)
     # Set at admission when COMPOSER_RESTYLE_ENABLED routes a restyle to the
     # server-owned Composer; the request then keeps its source_mode and skips
     # the authored rewrite.
@@ -113,6 +140,7 @@ class GeneratePresentationRequest(BaseModel):
     # through ``contentPolicy``; the server owns the effective profile.
     _authored_composition_profile: Any = PrivateAttr(default=None)
     _authored_canvas: Any = PrivateAttr(default=None)
+    _document_canvas: Any = PrivateAttr(default=None)
     _svg_style_snapshot: Any = PrivateAttr(default=None)
 
     # Chat-first async generation reuses the durable presentation shell and
@@ -151,6 +179,36 @@ class GeneratePresentationRequest(BaseModel):
         default="16:9",
         description="Authored presentation canvas aspect ratio.",
     )
+    page_size: Optional[Literal["A4"]] = None
+    orientation: Optional[Literal["landscape", "portrait"]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_canvas_selectors(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            present = {key for key in ("page_size", "orientation") if key in value}
+            if present:
+                if present != {"page_size", "orientation"}:
+                    raise ValueError("document_canvas_selectors_incomplete")
+                if "aspect_ratio" in value:
+                    raise ValueError("document_canvas_selectors_conflict")
+                if value["page_size"] is None or value["orientation"] is None:
+                    raise ValueError("document_canvas_selectors_null")
+                if value["page_size"] != "A4":
+                    raise ValueError("document_canvas_page_size_invalid")
+                if value["orientation"] not in ("landscape", "portrait"):
+                    raise ValueError("document_canvas_orientation_invalid")
+        return value
+
+    @model_serializer(mode="wrap")
+    def serialize_canvas_selectors(self, handler):
+        payload = handler(self)
+        if self.page_size is not None:
+            payload.pop("aspect_ratio", None)
+        else:
+            payload.pop("page_size", None)
+            payload.pop("orientation", None)
+        return payload
     quality_profile: Literal["development", "release"] = Field(
         default="development",
         alias="qualityProfile",
@@ -182,7 +240,7 @@ class GeneratePresentationRequest(BaseModel):
             "by generationMode and its durable route receipt."
         ),
     )
-    source_mode: Optional[Literal["source_content_restyle"]] = Field(
+    source_mode: Optional[Literal["source_content_restyle", "raster_reconstruction"]] = Field(
         default=None,
         alias="sourceMode",
         description=(
@@ -193,6 +251,10 @@ class GeneratePresentationRequest(BaseModel):
     source_content_manifest_pin: Optional[SourceContentManifestPinInput] = Field(
         default=None,
         alias="sourceContentManifestPin",
+    )
+    raster_approval_pin: Optional[RasterApprovalPinInput] = Field(
+        default=None,
+        alias="rasterApprovalPin",
     )
     content_policy: Optional[SourceContentPolicy] = Field(
         default=None,
@@ -295,9 +357,37 @@ class GeneratePresentationRequest(BaseModel):
     @model_validator(mode="after")
     def validate_source_content_mode(self) -> "GeneratePresentationRequest":
         if self.source_mode is None:
-            if self.source_content_manifest_pin is not None or self.content_policy is not None:
+            if self.source_content_manifest_pin is not None or self.content_policy is not None or self.raster_approval_pin is not None:
                 raise ValueError("source_content_mode_required")
             return self
+        if self.source_mode == "raster_reconstruction":
+            if self.raster_approval_pin is None:
+                raise ValueError("raster_approval_pin_required")
+            if self.source_content_manifest_pin is not None:
+                raise ValueError("raster_native_manifest_not_expected")
+            if len(self.reference_snapshot_ids) != 1:
+                raise ValueError("raster_single_source_snapshot_required")
+            if self.strategy != "svg" or self.page_size != "A4" or self.orientation is None:
+                raise ValueError("raster_a4_svg_required")
+            if self.template.strip().lower() != "authored" or self.authored_style != "screenshot-blue":
+                raise ValueError("source_content_template_required")
+            # Both formats are supported: the isolated export worker routes any
+            # svg-mode presentation (raster-reconstructed decks included)
+            # through execute_svg_workspace_export for export.pptx/export.pdf
+            # alike. Only the source-content *reflow* pathway's byte-for-byte
+            # sourcePreservation receipts are pptx-only (svg_export_operation.py
+            # raises svg_source_export_format_unsupported for those), and raster
+            # reconstruction never sets that marker.
+            if (
+                self.export_as not in ("pptx", "pdf")
+                or self.web_search or self.vision_qa or self.slides_markdown is not None
+            ):
+                raise ValueError("source_content_generation_option_conflict")
+            self.include_title_slide = False
+            self.include_table_of_contents = False
+            return self
+        if self.raster_approval_pin is not None:
+            raise ValueError("raster_source_mode_required")
         if self.source_content_manifest_pin is None:
             raise ValueError("source_content_manifest_pin_required")
         if self.content_policy is None:

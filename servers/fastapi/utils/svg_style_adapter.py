@@ -12,12 +12,13 @@ SVG_STYLE_ADAPTER_VERSION = "svg-style/v1"
 _COMMON_SECTIONS = {"MOOD", "PALETTE", "TYPOGRAPHY", "LAYOUT SYSTEM", "SIGNATURE ELEMENTS", "DATA VISUALIZATION", "IMAGE DIRECTION", "SLIDE ARCHETYPES", "AVOID"}
 _FORMAT_TERMS = re.compile(r"\b(?:HTML|CSS|DOM|flexbox|flex|grid-template|position:absolute|exemplar)\b|<[/a-zA-Z]", re.I)
 _MAPPINGS = {
+    "default": "Cool white canvas; dark ink headings; blue editorial rules; shared left edges and a dominant evidence field with restrained supporting annotations.",
     "osb-smart-banking": "Deep navy titles; cobalt blue table headers; pale blue surfaces; restrained red emphasis. Connectors only for source-supported relations.",
     "hyundai-culture-center": "Emerald top band with a right tag, strong numbered heading hierarchy, teal tables and deep green cover. Section numbers must come from content; page number is system-owned.",
 }
 
 
-def adapt_svg_style(style, *, width: int = 1280, height: int = 720) -> dict:
+def adapt_svg_style(style, *, width: int = 1280, height: int = 720, source_template: bool = False) -> dict:
     if width <= 0 or height <= 0 or max(width, height) > 4096:
         raise ValueError("svg_style_canvas_unsupported")
     if getattr(style, "reference_mode", "style_reference") == "exact_reconstruction":
@@ -71,5 +72,11 @@ def adapt_svg_style(style, *, width: int = 1280, height: int = 720) -> dict:
               "common_guidance": sections, "mapped_guidance": _MAPPINGS.get(style_id, ""),
               "overrides": overrides, "diagnostics": diagnostics, "unresolved": [], "references": references,
               "provenance": {"tokens": "authored_style_fields", "brief_digest": "sha256:" + hashlib.sha256(brief.encode()).hexdigest(), "references": "authored_style_role_images"}}
+    from utils.authored_styles import AUTHORED_STYLE_ASSETS_DIRECTORY
+    if getattr(style, "assets_root", None) == AUTHORED_STYLE_ASSETS_DIRECTORY.resolve():
+        result["provenance"]["registry_authority"] = "packaged-authored-catalogue"
     result["digest"] = "sha256:" + hashlib.sha256(json.dumps(result, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+    if source_template:
+        from utils.svg_template_rules import template_snapshot
+        result["source_template"] = template_snapshot(result, width, height)
     return result

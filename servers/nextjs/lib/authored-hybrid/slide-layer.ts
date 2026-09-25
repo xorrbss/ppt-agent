@@ -335,7 +335,7 @@ export async function prepareSlideLayer(
     const merged = mergePowerPointTextLayout(
       contract.elements,
       layoutContract.elements,
-      { embeddedTypefaceFamilies, embeddedTypefaceFaces, canvas }
+      { embeddedTypefaceFamilies, embeddedTypefaceFaces }
     );
     nativeLayoutElements = merged.elements;
   } catch {
@@ -745,7 +745,7 @@ export async function prepareSlideLayer(
       backplatePng: backplate.backplatePng,
       localFitCapture: {
         observation: backplate.localFitObservation,
-        localImages: localFitImageEvidence(contract, selected),
+        localImages: localFitImageEvidence(contract, selected, canvas),
         rasterObservations: [{ pngDigest: `sha256:${createHash("sha256").update(backplate.backplatePng).digest("hex")}`,
           observation: backplate.localFitObservation }, ...rasterPaintBands.map((band) => ({
           pngDigest: band.artifactDigest, observation: band.localFitObservation,

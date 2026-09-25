@@ -13,7 +13,7 @@ PLACEMENT_MIME = "application/json"
 
 
 def validate_export_placement(svg, source, placement, *, page_index, slide_revision,
-                              presentation_id, export_format, width, height):
+                              presentation_id, export_format, width, height, allow_image_only=False):
     if str(source.presentation_id) != str(presentation_id):
         raise ValueError("svg_export_manifest_presentation_mismatch")
     if placement.purpose not in {"export", f"export-{export_format}"}:
@@ -23,10 +23,17 @@ def validate_export_placement(svg, source, placement, *, page_index, slide_revis
     placement.validate_source(source, page_index=page_index)
     page = next(p for p in source.offered_pages if p.page_index == page_index)
     slots = {s.slot_id: s for s in source.slots}
+    if allow_image_only:
+        verified_full_page_preserve_export(
+            {"fullPagePreserve": True}, canonical_svg=svg, source_contract={
+                slot: {"required": slots[slot].policy.required, "allowOmit": slots[slot].policy.allow_omit}
+                for slot in page.slot_ids
+            }
+        )
     validate_svg(svg, width=width, height=height, source_manifest={
         slot: {"required": slots[slot].policy.required, "allowOmit": slots[slot].policy.allow_omit}
         for slot in page.slot_ids
-    })
+    }, allow_image_only=allow_image_only)
     images = _positioned_images(svg)
     if len(images) != len(placement.placements):
         raise ValueError("svg_export_placement_count_mismatch")
@@ -74,7 +81,110 @@ def _positioned_images(svg):
     return images
 
 
-async def _load_original_bytes(slot, *, session, owner_id, tenant_id):
+async def _load_sealed_source_bytes(
+    slot, *, session, row, owner_id, presentation_id, page_index, receipt
+):
+    """Read a source-preserving image only from its sealed source manifest."""
+    import hashlib
+    from sqlalchemy import select
+    from models.sql.source_content import SourceContentManifestRecord
+    from services.source_content.manifest_store import (
+        _manifest_from_record,
+        load_source_content_manifest_asset,
+    )
+    from services.source_images.registry import source_image_occurrence_asset_id
+    from services.svg_source_layout import source_pages
+
+    if not isinstance(receipt, dict):
+        raise ValueError("svg_export_source_receipt_invalid")
+    manifest_digest = receipt.get("manifest_digest")
+    source_file_digest = receipt.get("source_digest")
+    image_bindings = [
+        binding for binding in receipt.get("bindings", [])
+        if isinstance(binding, dict)
+        and binding.get("kind") == "image"
+        and binding.get("slot_id") == slot.slot_id
+    ]
+    expected_asset_digest = "sha256:" + slot.source_sha256
+    if (
+        receipt.get("source_page_index") != page_index
+        or not isinstance(manifest_digest, str)
+        or not isinstance(source_file_digest, str)
+        or len(image_bindings) != 1
+        or image_bindings[0].get("asset_digest") != expected_asset_digest
+    ):
+        raise ValueError("svg_export_source_asset_receipt_mismatch")
+
+    owner_scope = str(owner_id) if owner_id is not None else "anonymous"
+    owner_predicate = (
+        SourceContentManifestRecord.owner_id == owner_id
+        if owner_id is not None
+        else SourceContentManifestRecord.owner_id.is_(None)
+    )
+    records = list((await session.scalars(
+        select(SourceContentManifestRecord)
+        .where(
+            SourceContentManifestRecord.owner_scope == owner_scope,
+            owner_predicate,
+            SourceContentManifestRecord.manifest_digest == manifest_digest,
+            SourceContentManifestRecord.source_digest == source_file_digest,
+        )
+    )).unique().all())
+    if len(records) != 1:
+        raise ValueError("svg_export_source_manifest_binding_invalid")
+    manifest = _manifest_from_record(records[0], owner_id=owner_id)
+    pages = source_pages(manifest)
+    if not 0 <= page_index < len(pages):
+        raise ValueError("svg_export_source_page_missing")
+    page = pages[page_index]
+    source_id = image_bindings[0].get("source_id")
+    block = next(
+        (item for item in page.blocks if item.source_block_id == source_id),
+        None,
+    )
+    asset_id = block.payload.get("assetId") if block is not None else None
+    block_digest = block.payload.get("contentDigest") if block is not None else None
+    if (
+        receipt.get("source_page_id") != page.source_unit_id
+        or block is None
+        or block.kind != "image"
+        or not isinstance(asset_id, str)
+        or block_digest != expected_asset_digest
+        or source_image_occurrence_asset_id(
+            presentation_id, block.source_block_id, slot.source_sha256
+        ) != row.id
+        or row.id != slot.source_asset_id
+    ):
+        raise ValueError("svg_export_source_occurrence_binding_invalid")
+    extras = row.extras if isinstance(row.extras, dict) else {}
+    if (
+        extras.get("presentation_id") != str(presentation_id)
+        or extras.get("source_occurrence_id") != block.source_block_id
+        or extras.get("source_slide_index") != page_index
+        or extras.get("digest") != slot.source_sha256
+    ):
+        raise ValueError("svg_export_source_occurrence_binding_invalid")
+
+    sealed = await load_source_content_manifest_asset(
+        session,
+        owner_id=owner_id,
+        manifest_id=manifest.manifest_id,
+        asset_id=asset_id,
+    )
+    payload = bytes(sealed.payload)
+    if (
+        sealed.content_digest != expected_asset_digest
+        or len(payload) > 32 * 1024 * 1024
+        or hashlib.sha256(payload).hexdigest() != slot.source_sha256
+    ):
+        raise ValueError("svg_export_source_asset_digest_mismatch")
+    return payload
+
+
+async def _load_original_bytes(
+    slot, *, session, owner_id, tenant_id, presentation_id=None,
+    page_index=None, source_preservation=None,
+):
     import asyncio
     import hashlib
     from sqlalchemy import select
@@ -90,6 +200,18 @@ async def _load_original_bytes(slot, *, session, owner_id, tenant_id):
     owner_token = set_current_owner_id(owner_id)
     tenant_token = set_current_tenant_id(tenant_id)
     try:
+        if source_preservation is not None:
+            if presentation_id is None or type(page_index) is not int:
+                raise ValueError("svg_export_source_context_invalid")
+            return await _load_sealed_source_bytes(
+                slot,
+                session=session,
+                row=row,
+                owner_id=owner_id,
+                presentation_id=presentation_id,
+                page_index=page_index,
+                receipt=source_preservation,
+            )
         binding = await canonicalize_legacy_image_asset(session, image=row,
                                                        image_root=get_images_directory())
         gateway = AssetGateway()
@@ -141,16 +263,51 @@ async def build_slide_export_assets(slide, *, service, session, claim, tenant_id
         tenant_id=tenant_id, attempt_number=claim.attempt_number, attempt_token=claim.attempt_token,
         fencing_token=claim.fencing_token, operation_kind="export")
     slots = {slot.slot_id: slot for slot in source.slots}
-    validate_svg(slide.svg_content, width=canvas["widthPx"], height=canvas["heightPx"],
+    from services.document_canvas import parse_canvas_metadata
+    resolved_canvas = parse_canvas_metadata(canvas)
+    raster_receipt = (slide.content or {}).get("svgReceipt")
+    if isinstance(raster_receipt, dict) and raster_receipt.get("rasterApprovalPin") is not None:
+        from services.raster_source_assets import build_raster_page_export_assets
+        from services.source_content.raster_contracts import RasterApprovalPin
+
+        source_page_number = raster_receipt.get("rasterSourcePageNumber")
+        if source_page_number != page_index + 1:
+            raise ValueError("raster_export_source_page_mismatch")
+        return await build_raster_page_export_assets(
+            session, service,
+            approval_pin=RasterApprovalPin.model_validate(raster_receipt["rasterApprovalPin"]),
+            owner_id=claim.owner_id, tenant_id=tenant_id,
+            publication_context=context, presentation_id=source.presentation_id,
+            source_pointer=envelope["sourceManifest"], slide_revision=revision,
+            page_number=source_page_number, output_page_index=page_index,
+            canonical_svg=slide.svg_content,
+            width=resolved_canvas.width_px, height=resolved_canvas.height_px,
+            export_format=export_format,
+        )
+    validate_svg(slide.svg_content, width=resolved_canvas.width_px, height=resolved_canvas.height_px,
         source_manifest={s: {"required": slots[s].policy.required, "allowOmit": slots[s].policy.allow_omit}
                          for s in page.slot_ids})
     placements = []
+    svg_receipt = (slide.content or {}).get("svgReceipt")
+    source_preservation = (
+        svg_receipt.get("source_preservation")
+        if isinstance(svg_receipt, dict)
+        else None
+    )
     for index, (node, tx, ty) in enumerate(_positioned_images(slide.svg_content)):
         slot_id = node.get("href", "")
         if slot_id not in page.slot_ids:
             raise ValueError("svg_export_slot_not_offered")
         slot = slots[slot_id]
-        payload = await _load_original_bytes(slot, session=session, owner_id=claim.owner_id, tenant_id=tenant_id)
+        payload = await _load_original_bytes(
+            slot,
+            session=session,
+            owner_id=claim.owner_id,
+            tenant_id=tenant_id,
+            presentation_id=claim.presentation_id,
+            page_index=page_index,
+            source_preservation=source_preservation,
+        )
         preview = await asyncio.to_thread(build_purpose_derivative, payload, purpose="export",
             width_css_px=float(node.get("width", "0")), height_css_px=float(node.get("height", "0")),
             fit=slot.export_policy.fit, semantic_kind="unknown")
@@ -171,7 +328,7 @@ async def build_slide_export_assets(slide, *, service, session, claim, tenant_id
     manifest.validate_source(source, page_index=page_index)
     validate_export_placement(slide.svg_content, source, manifest, page_index=page_index,
         slide_revision=revision, presentation_id=claim.presentation_id, export_format=export_format,
-        width=canvas["widthPx"], height=canvas["heightPx"])
+        width=resolved_canvas.width_px, height=resolved_canvas.height_px)
     pointer = await persist_manifest_if_current(session, service, context=context, manifest=manifest,
         publication_name=f"svg-exp-{slide.id.hex[:16]}-manifest", revision=revision)
     if pointer is None:
@@ -183,7 +340,10 @@ async def build_slide_export_assets(slide, *, service, session, claim, tenant_id
 
 async def prepare_export_assets(binding, *, svg, service, session, claim, tenant_id,
                                 export_format, width, height):
-    if set(binding) != {"sourceManifest", "placementManifest", "pageIndex", "slideRevision"}:
+    base_keys = {"sourceManifest", "placementManifest", "pageIndex", "slideRevision"}
+    if set(binding) not in (base_keys, base_keys | {"fullPagePreserve"}) or (
+        "fullPagePreserve" in binding and type(binding["fullPagePreserve"]) is not bool
+    ):
         raise ValueError("svg_export_asset_binding_invalid")
     refs = []
     manifests = []
@@ -203,7 +363,7 @@ async def prepare_export_assets(binding, *, svg, service, session, claim, tenant
     source, placement = manifests
     derivatives = validate_export_placement(svg, source, placement,
         page_index=binding["pageIndex"], slide_revision=binding["slideRevision"],
-        presentation_id=claim.presentation_id, export_format=export_format, width=width, height=height)
+        presentation_id=claim.presentation_id, export_format=export_format, width=width, height=height, allow_image_only=binding.get("fullPagePreserve") is True)
     from services.svg_asset_resolver import bind_export_derivatives
     from services.public_export_operation import _worker_ref
     derivative_refs = await bind_export_derivatives(derivatives=derivatives, session=session,
@@ -213,6 +373,8 @@ async def prepare_export_assets(binding, *, svg, service, session, claim, tenant
             "sourceManifestDigest": source.digest, "placementManifestDigest": placement.digest,
             "pageIndex": binding["pageIndex"], "slideRevision": binding["slideRevision"],
             "derivatives": {slot: _worker_ref(ref).to_wire() for slot, ref in derivative_refs.items()}}
+    if binding.get("fullPagePreserve") is True:
+        wire["fullPagePreserve"] = True
     return wire, [*refs, *derivative_refs.values()]
 
 
@@ -220,8 +382,11 @@ def materialize_export_assets(binding, *, svg, job, store, presentation_id,
                               export_format, width, height):
     from services.isolated_worker_contracts import ArtifactRef
     from services.svg_asset_resolver import materialize_svg
-    if set(binding) != {"sourceManifestRef", "placementManifestRef", "sourceManifestDigest",
-                        "placementManifestDigest", "pageIndex", "slideRevision", "derivatives"}:
+    binding_keys = {"sourceManifestRef", "placementManifestRef", "sourceManifestDigest",
+                    "placementManifestDigest", "pageIndex", "slideRevision", "derivatives"}
+    if set(binding) not in (binding_keys, binding_keys | {"fullPagePreserve"}) or (
+        "fullPagePreserve" in binding and type(binding["fullPagePreserve"]) is not bool
+    ):
         raise ValueError("svg_export_asset_transport_invalid")
 
     def read(wire, kind, mime):
@@ -239,7 +404,7 @@ def materialize_export_assets(binding, *, svg, job, store, presentation_id,
         raise ValueError("svg_export_manifest_digest_mismatch")
     derivatives = validate_export_placement(svg, source, placement,
         page_index=binding["pageIndex"], slide_revision=binding["slideRevision"], presentation_id=presentation_id,
-        export_format=export_format, width=width, height=height)
+        export_format=export_format, width=width, height=height, allow_image_only=binding.get("fullPagePreserve") is True)
     if set(binding["derivatives"]) != set(derivatives):
         raise ValueError("svg_export_derivative_slot_mismatch")
     if (sum(d.byte_size for d in derivatives.values()) > 64 * 1024 * 1024
@@ -252,10 +417,23 @@ def materialize_export_assets(binding, *, svg, job, store, presentation_id,
         if ref.sha256 != derivative.sha256 or ref.size_bytes != derivative.byte_size:
             raise ValueError("svg_export_derivative_metadata_mismatch")
         payloads[slot] = payload
-    resolved = materialize_svg(svg, manifest=source, placement_manifest=placement,
-        page_index=binding["pageIndex"], derivatives=derivatives, payloads=payloads, width=width, height=height)
     page = next(p for p in source.offered_pages if p.page_index == binding["pageIndex"])
     slots = {s.slot_id: s for s in source.slots}
     contract = {s: {"required": slots[s].policy.required, "allowOmit": slots[s].policy.allow_omit}
                 for s in page.slot_ids}
+    resolved = materialize_svg(svg, manifest=source, placement_manifest=placement,
+        page_index=binding["pageIndex"], derivatives=derivatives, payloads=payloads, width=width, height=height, allow_image_only=verified_full_page_preserve_export(binding, canonical_svg=svg, source_contract=contract))
     return resolved, contract
+
+def verified_full_page_preserve_export(binding, *, canonical_svg: str, source_contract: dict) -> bool:
+    """Accept image-only export only from a sealed, singleton raster asset binding."""
+    if not isinstance(binding, dict) or binding.get("fullPagePreserve") is not True:
+        return False
+    if len(source_contract) != 1:
+        raise ValueError("svg_export_full_page_preserve_binding_invalid")
+    slot_id, policy = next(iter(source_contract.items()))
+    if policy.get("required") is not True or policy.get("allowOmit") is not False:
+        raise ValueError("svg_export_full_page_preserve_binding_invalid")
+    from services.raster_source_assets import validate_full_page_preserve_svg_structure
+    validate_full_page_preserve_svg_structure(canonical_svg, slot_id)
+    return True

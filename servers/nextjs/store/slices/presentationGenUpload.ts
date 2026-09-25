@@ -1,5 +1,6 @@
 import { PresentationConfig } from "@/app/(presentation-generator)/upload/type";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import type { DocumentCanvas } from "@/lib/document-canvas";
 
 /** Immutable published company-standard revision selected for a new deck. */
 export interface CompanyStandardSelection {
@@ -19,6 +20,7 @@ export interface SourceContentAdmissionSelection {
     digest: `sha256:${string}`;
   };
   referenceSnapshotId: string;
+  documentCanvas?: DocumentCanvas;
 }
 
 export type PresentationGenerationStrategy = "authored" | "svg";

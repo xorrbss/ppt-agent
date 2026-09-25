@@ -162,6 +162,7 @@ def _remove_partial_slide_pngs(
 def _build_image_pdf(
     pngs: List[bytes], out_path: str, *,
     canvas_width_px: int = 1280, canvas_height_px: int = 720,
+    physical_size_emu: tuple[int, int] | None = None,
 ) -> str:
     from PIL import Image
 
@@ -169,11 +170,17 @@ def _build_image_pdf(
     expected_size = (int(canvas_width_px), int(canvas_height_px))
     if any(image.size != expected_size for image in imgs):
         raise ValueError("authored export image canvas mismatch")
+    resolution = 96.0
+    if physical_size_emu is not None:
+        width_emu, height_emu = physical_size_emu
+        if width_emu <= 0 or height_emu <= 0 or width_emu * canvas_height_px != height_emu * canvas_width_px:
+            raise ValueError("document_canvas_geometry_mismatch")
+        resolution = canvas_width_px * 914400 / width_emu
     imgs[0].save(
         out_path,
         save_all=True,
         append_images=imgs[1:],
-        resolution=96.0,
+        resolution=resolution,
     )
     return out_path
 
@@ -195,6 +202,14 @@ def _build_authored_export(
     os.makedirs(exports, exist_ok=True)
     canvas_width_px = int(getattr(canvas, "width_px", 1280))
     canvas_height_px = int(getattr(canvas, "height_px", 720))
+    physical_kwargs = {}
+    document_canvas = getattr(request, "_document_canvas", None)
+    if document_canvas is not None:
+        from services.document_canvas import canvas_physical_size
+        from services.document_canvas_generation import export_size_points
+
+        export_size_points(canvas, document_canvas)
+        physical_kwargs["physical_size_emu"] = canvas_physical_size(document_canvas)
     if extension == ".pdf":
         from PIL import Image
 
@@ -205,6 +220,7 @@ def _build_authored_export(
                 temporary,
                 canvas_width_px=canvas_width_px,
                 canvas_height_px=canvas_height_px,
+                **physical_kwargs,
             )
             with Image.open(temporary) as exported_pdf:
                 if getattr(exported_pdf, "n_frames", 1) != len(pngs):
@@ -221,6 +237,7 @@ def _build_authored_export(
             temporary,
             canvas_width_px=canvas_width_px,
             canvas_height_px=canvas_height_px,
+            **physical_kwargs,
         )
         from pptx import Presentation as PptxPresentation
 

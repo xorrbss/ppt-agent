@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Annotated, Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, Header, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import func, or_, update
@@ -409,7 +409,8 @@ async def disable_share(
     "/public/{share_token}", response_model=PublicPresentationWithSlides
 )
 async def get_shared_presentation(
-    share_token: str, sql_session: AsyncSession = Depends(get_async_session)
+    share_token: str, sql_session: AsyncSession = Depends(get_async_session),
+    canvas_contracts: Annotated[Optional[str], Header(alias="X-Document-Canvas-Contracts")] = None,
 ):
     """Public, read-only view of a shared deck. Reached ONLY by an unguessable
     token (never by presentation id), and exempt from the admin session in
@@ -418,6 +419,9 @@ async def get_shared_presentation(
     presentation = await _increment_shared_presentation_view(
         share_token, sql_session
     )
+    from services.document_canvas import require_canvas_capability
+
+    require_canvas_capability(presentation.theme, canvas_contracts)
     projection = await _public_presentation_projection(presentation, sql_session)
     rewritten = _rewrite_public_image_references(
         projection.model_dump(mode="json"),

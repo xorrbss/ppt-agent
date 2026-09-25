@@ -12,6 +12,7 @@ export interface TextSize {
 }
 
 interface SlideContent {
+  __authored__?: boolean;
   title: string;
   body: string | Array<{ heading: string; description: string }>;
   description?: string;
@@ -23,6 +24,7 @@ interface SlideContent {
 }
 
 export interface Slide {
+  layout_group?: string | null;
   id: string | null;
   index: number;
   type: number;

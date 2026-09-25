@@ -16,6 +16,7 @@ from xml.etree import ElementTree as ET
 
 from PIL import Image
 import pypdfium2 as pdfium
+from services.document_canvas import parse_canvas_metadata, canvas_physical_size
 from pptx import Presentation
 from pptx.util import Emu
 
@@ -44,8 +45,6 @@ EXPORT_CHECKPOINT_BUNDLE_SCHEMA = "public-export-bundle/v2"
 FIDELITY_RASTER_MODE = "fidelity-raster"
 EDITABLE_HYBRID_MODE = "editable-hybrid"
 MAX_SLIDES = 100
-EMU_PER_CSS_PX = 9_525
-POINTS_PER_CSS_PX = 0.75
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _PREFIXED_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 _REL_NS = "{http://schemas.openxmlformats.org/package/2006/relationships}"
@@ -322,7 +321,7 @@ def _read_bundle(
         raise PublicWorkerExecutionError("public_export_bundle_invalid_shape")
     if "canvas" in value:
         try:
-            canvas = AuthoredCanvasMetadata.model_validate(value["canvas"])
+            canvas = parse_canvas_metadata(value["canvas"])
         except (TypeError, ValueError) as error:
             raise PublicWorkerExecutionError(
                 "public_export_canvas_contract_invalid"
@@ -530,8 +529,9 @@ def _build_pptx(
     canvas: AuthoredCanvasMetadata,
 ) -> None:
     deck = Presentation()
-    deck.slide_width = Emu(canvas.width_px * EMU_PER_CSS_PX)
-    deck.slide_height = Emu(canvas.height_px * EMU_PER_CSS_PX)
+    width_emu, height_emu = canvas_physical_size(canvas)
+    deck.slide_width = Emu(width_emu)
+    deck.slide_height = Emu(height_emu)
     blank = deck.slide_layouts[6]
     while deck.slides:
         relationship_id = deck.slides._sldIdLst[-1].rId
@@ -560,8 +560,8 @@ def _build_pptx(
                 "[Content_Types].xml" not in names
                 or "ppt/presentation.xml" not in names
                 or len(slide_parts) != len(slides)
-                or int(readback.slide_width or 0) != canvas.width_px * EMU_PER_CSS_PX
-                or int(readback.slide_height or 0) != canvas.height_px * EMU_PER_CSS_PX
+                or int(readback.slide_width or 0) != width_emu
+                or int(readback.slide_height or 0) != height_emu
             ):
                 raise PublicWorkerExecutionError("public_export_pptx_readback_failed")
     except zipfile.BadZipFile as error:
@@ -574,8 +574,9 @@ def _build_pdf(
     target: Path,
     canvas: AuthoredCanvasMetadata,
 ) -> None:
-    width_pt = canvas.width_px * POINTS_PER_CSS_PX
-    height_pt = canvas.height_px * POINTS_PER_CSS_PX
+    width_emu, height_emu = canvas_physical_size(canvas)
+    width_pt = width_emu / 12700
+    height_pt = height_emu / 12700
     document = pdfium.PdfDocument.new()
     try:
         for reference in slides:

@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 
 from sqlalchemy import update
 from models.sql.slide import SlideModel
-from services.authored_canvas import presentation_canvas_contract
+from services.authored_canvas import presentation_canvas_contract, presentation_canvas_metadata
 from services.authored_presentation_artifacts import _save_slide_pngs
 from services.svg_contract import finalize_svg
 from services.svg_renderer import render_svg_with_metrics
@@ -20,6 +20,9 @@ async def preview_svg(presentation, slides, index, request, task, session):
     from services.svg_document_mutations import read_svg_slide_assets, rebound_placement, materialize_rebound_svg
     assets = await read_svg_slide_assets(session, presentation, target)
     canvas = presentation_canvas_contract(presentation.theme)
+    from services.document_canvas import DocumentCanvasMetadata, parse_canvas_metadata
+    metadata = parse_canvas_metadata(presentation_canvas_metadata(presentation.theme))
+    physical_kwargs = {"physical_canvas": metadata} if isinstance(metadata, DocumentCanvasMetadata) else {}
     snapshot = presentation.theme["svg"]["styleSnapshot"]
     manifest = {}
     for number, node in enumerate(ET.fromstring(target.svg_content).iter()):
@@ -46,7 +49,7 @@ async def preview_svg(presentation, slides, index, request, task, session):
     with generation_model_context(presentation.theme["svg"].get("codexGenerationPreset")):
         result = await author_slide_svg(source, snapshot, target.content.get("role", "content"), index, len(slides),
                                         instructions=instruction, source_images=manifest,
-                                        canonical_source_images=assets is not None)
+                                        canonical_source_images=assets is not None, **physical_kwargs)
     if result.receipt.get("validation_error"):
         raise ValueError(result.receipt["validation_error"])
     final = finalize_svg(result.svg_content, index=index, n=len(slides), width=canvas.width_px,
@@ -55,7 +58,7 @@ async def preview_svg(presentation, slides, index, request, task, session):
     if assets is not None:
         placement = rebound_placement(final, assets[0], assets[1], revision=presentation.revision + 1)
         render_source = await materialize_rebound_svg(session, presentation, final, assets[0], placement, source_index)
-    render = await render_svg_with_metrics(render_source, width=canvas.width_px, height=canvas.height_px, instructions=instruction)
+    render = await render_svg_with_metrics(render_source, width=canvas.width_px, height=canvas.height_px, instructions=instruction, **physical_kwargs)
     image = _save_slide_pngs(presentation.id, [render.png], str(task.id))[0]
     digest = _canonical_digest({"svg": final, "image": image})
     await _set_task(session, task, status="completed", message=f"{index + 1}페이지 SVG 미리보기가 준비되었습니다.", data={
@@ -99,7 +102,10 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
         envelope, render_source = await rebind_svg_assets(session, presentation, target, svg, assets,
             page_index=index, operation_id=operation_id, attempt_token=attempt_token,
             expected_revision=expected_revision)
-    rendered = await render_svg_with_metrics(render_source, width=canvas.width_px, height=canvas.height_px, instructions=data.get("instruction"))
+    from services.document_canvas import DocumentCanvasMetadata, parse_canvas_metadata
+    metadata = parse_canvas_metadata(presentation_canvas_metadata(presentation.theme))
+    physical_kwargs = {"physical_canvas": metadata} if isinstance(metadata, DocumentCanvasMetadata) else {}
+    rendered = await render_svg_with_metrics(render_source, width=canvas.width_px, height=canvas.height_px, instructions=data.get("instruction"), **physical_kwargs)
     if not image.endswith(f"-{sha256(rendered.png).hexdigest()}.png"):
         raise AuthoredPageRemakeError("svg_page_remake_capture_changed", stage="publish_validation")
     if snapshot:

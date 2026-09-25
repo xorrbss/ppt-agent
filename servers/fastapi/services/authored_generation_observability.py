@@ -224,11 +224,12 @@ def log_authored_slide_failure_observation(
     Stable identifiers propagate unchanged; arbitrary exception text is refused.
     """
 
+    safe_code = code if isinstance(code, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,127}", code) else "authored_unexpected_failure"
     return log_authored_generation_observation(
         logger=logger,
         name="slide_failure",
         stage=stage,
-        code=code,
+        code=safe_code,
         slide_number=slide_number,
         retryable=retryable,
         provider_attempt_count=provider_attempt_count,

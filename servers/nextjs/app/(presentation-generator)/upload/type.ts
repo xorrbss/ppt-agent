@@ -130,7 +130,27 @@ export interface PresentationConfig {
   includeTitleSlide: boolean;
   webSearch: boolean;
   aspectRatio: "16:9" | "9:16" | "9:13";
+  /** Present only for newly created documents using the common physical canvas. */
+  pageSize?: "A4";
+  orientation?: "landscape" | "portrait";
   codexGenerationPreset: import("@/components/codex-config").CodexGenerationPresetId | null;
+}
+
+export type DocumentCanvasRequest =
+  | { page_size: "A4"; orientation: "landscape" | "portrait" }
+  | { aspect_ratio: PresentationConfig["aspectRatio"] };
+
+/**
+ * Keep the legacy selector out of every new A4 payload. The backend rejects a
+ * request that contains both selector families, including a defaulted ratio.
+ */
+export function documentCanvasRequestForConfig(
+  config: PresentationConfig,
+): DocumentCanvasRequest {
+  if (config.pageSize === "A4" && config.orientation) {
+    return { page_size: "A4", orientation: config.orientation };
+  }
+  return { aspect_ratio: config.aspectRatio };
 }
 
 export enum ToneType {

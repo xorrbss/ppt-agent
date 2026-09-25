@@ -3,6 +3,7 @@ import React from "react";
 import UploadPage from "./components/UploadPage";
 import Header from "@/app/(presentation-generator)/(dashboard)/dashboard/components/Header";
 import { Metadata } from "next";
+import { GenerationPageFrame } from "../generation-workspace/GenerationPageFrame";
 
 export const metadata: Metadata = {
   title: "DevAX | AI 발표자료 생성기",
@@ -43,10 +44,9 @@ export const metadata: Metadata = {
 
 const page = () => {
   return (
-    <div className="devax-upload relative min-h-dvh bg-[#F8F9FB]">
-      <Header />
+    <GenerationPageFrame header={<Header />}>
       <UploadPage />
-    </div>
+    </GenerationPageFrame>
   );
 };
 

@@ -37,6 +37,9 @@ def pin_source_restyle_authoring(
 ) -> dict[str, object] | None:
     """Pin new source restyles to Composer; resumed jobs keep their stored policy."""
     route_receipt: dict[str, object] | None = None
+    if request.strategy == "svg":
+        request._composer_restyle = False
+        return None
     if request.source_mode == "source_content_restyle":
         from utils.authored_styles import resolve_authored_style
 
@@ -86,6 +89,9 @@ def restore_source_restyle_route(
     """Restore the durable source-restyle route before live admission switches."""
     sealed_authored = False
     sealed_composer = False
+    if request.strategy == "svg":
+        request._composer_restyle = False
+        return
     raw_receipt = payload.get("generation_route_receipt")
     if request.source_mode == "source_content_restyle" and raw_receipt is not None:
         receipt = GenerationRouteReceiptV1.model_validate(raw_receipt)

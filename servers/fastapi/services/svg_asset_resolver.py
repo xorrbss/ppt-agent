@@ -66,7 +66,7 @@ def _contract_manifest(manifest: SourceManifest) -> dict[str, dict]:
 def materialize_svg(svg: str, *, manifest: SourceManifest, derivatives: dict,
                     payloads: dict[str, bytes], width: int, height: int,
                     placement_manifest: PlacementManifest | None = None,
-                    page_index: int | None = None) -> str:
+                    page_index: int | None = None, allow_image_only: bool = False) -> str:
     contract = _contract_manifest(manifest)
     if placement_manifest is not None:
         from services.svg_contract import source_digest
@@ -79,7 +79,7 @@ def materialize_svg(svg: str, *, manifest: SourceManifest, derivatives: dict,
         if {k: RasterDerivative.model_validate(v) for k, v in derivatives.items()} != expected:
             raise ValueError("svg_asset_placement_derivative_mismatch")
     validate_svg(svg, width=width, height=height,
-                 source_manifest=contract)
+                 source_manifest=contract, allow_image_only=allow_image_only)
     root = ET.fromstring(svg)
     for node in root.iter():
         if node.tag.rsplit("}", 1)[-1] != "image":
@@ -104,7 +104,7 @@ async def resolve_svg_for_render(svg: str, *, manifest: SourceManifest, derivati
                                  session, owner_id, tenant_id: str, width: int, height: int,
                                  service=None,
                                  placement_manifest: PlacementManifest | None = None,
-                                 page_index: int | None = None) -> str:
+                                 page_index: int | None = None, allow_image_only: bool = False) -> str:
     """Resolve opaque derivative refs under the current authenticated principal."""
     if service is None:
         from services.artifact_store import configured_public_artifact_service
@@ -118,7 +118,7 @@ async def resolve_svg_for_render(svg: str, *, manifest: SourceManifest, derivati
         if page is None:
             raise ValueError("svg_asset_placement_page_not_offered")
         contract = {key: value for key, value in contract.items() if key in page.slot_ids}
-    validate_svg(svg, width=width, height=height, source_manifest=contract)
+    validate_svg(svg, width=width, height=height, source_manifest=contract, allow_image_only=allow_image_only)
     used = {node.get("href") for node in ET.fromstring(svg).iter()
             if node.tag.rsplit("}", 1)[-1] == "image"}
     if set(derivatives) != used:
@@ -133,7 +133,7 @@ async def resolve_svg_for_render(svg: str, *, manifest: SourceManifest, derivati
         payloads[slot_id] = await service.read_ref_bytes(reference)
     return materialize_svg(svg, manifest=manifest, derivatives=derivatives,
                            payloads=payloads, width=width, height=height,
-                           placement_manifest=placement_manifest, page_index=page_index)
+                           placement_manifest=placement_manifest, page_index=page_index, allow_image_only=allow_image_only)
 
 
 async def bind_export_derivatives(*, derivatives: dict, session, service,

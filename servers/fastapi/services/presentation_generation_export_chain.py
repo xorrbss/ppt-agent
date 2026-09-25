@@ -212,21 +212,39 @@ async def finalize_generation_export_chain(
         }
     )
     if async_status is not None:
-        data = dict(async_status.data or {})
-        data.update(
-            {
-                "export_operation_id": (
-                    str(chained.operation_id)
-                    if chained.operation_id is not None
-                    else None
-                ),
-                "export_error": chained.error_code,
-            }
-        )
-        async_status.data = data
-        async_status.updated_at = datetime.now(timezone.utc)
-        sql_session.add(async_status)
-        await sql_session.commit()
+        try:
+            # async_status.status ("completed"/"error") is set and committed by
+            # the caller before this chain runs (see presentation_generate.py),
+            # independent of whether the chain itself succeeds -- this call only
+            # annotates that already-durable outcome with the export result.
+            data = dict(async_status.data or {})
+            data.update(
+                {
+                    "export_operation_id": (
+                        str(chained.operation_id)
+                        if chained.operation_id is not None
+                        else None
+                    ),
+                    "export_error": chained.error_code,
+                }
+            )
+            async_status.data = data
+            async_status.updated_at = datetime.now(timezone.utc)
+            sql_session.add(async_status)
+            await sql_session.commit()
+        except Exception:  # noqa: BLE001 - annotating the outcome must never fail generation
+            try:
+                await sql_session.rollback()
+            except Exception:  # noqa: BLE001
+                LOGGER.exception(
+                    "Failed to roll back after failing to record the export "
+                    "outcome for presentation %s",
+                    response.presentation_id,
+                )
+            LOGGER.exception(
+                "Failed to record chained export outcome for presentation %s",
+                response.presentation_id,
+            )
     return enriched
 
 

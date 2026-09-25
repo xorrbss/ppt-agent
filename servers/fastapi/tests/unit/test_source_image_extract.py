@@ -228,7 +228,7 @@ def test_repeated_image_is_reported_once_per_slide(tmp_path: Path) -> None:
     assert [image.source_slide_index for image in images] == [0, 1, 2]
 
 
-def test_same_image_placed_twice_on_one_slide_counts_once(tmp_path: Path) -> None:
+def test_same_image_placed_twice_on_one_slide_retains_both_occurrences(tmp_path: Path) -> None:
     payload = _png_bytes(400, 400, "purple")
     path = _deck(
         tmp_path / "twice.pptx",
@@ -243,8 +243,9 @@ def test_same_image_placed_twice_on_one_slide_counts_once(tmp_path: Path) -> Non
 
     images = extract_pptx_images(path)
 
-    assert len(images) == 1
-    assert images[0].source_slide_index == 0
+    assert len(images) == 2
+    assert [image.source_slide_index for image in images] == [0, 0]
+    assert [image.digest for image in images] == [hashlib.sha256(payload).hexdigest()] * 2
 
 
 def test_slide_order_follows_the_slide_id_list(tmp_path: Path) -> None:

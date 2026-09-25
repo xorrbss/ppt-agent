@@ -316,6 +316,8 @@ def _assert_worker_readback(
                 if not isinstance(text, str):
                     raise ExportServiceError("authored_vnext_scene_read_back_invalid")
                 identity["textDigest"] = prefixed_sha256({"text": text})
+                style = element.get("style")
+                identity["autoFit"] = style.get("autoFit", "none") if isinstance(style, dict) else "none"
             elif kind == "image":
                 identity["assetDigest"] = element.get("assetDigest")
             elif kind in {"table", "chart"}:
@@ -896,9 +898,9 @@ class AuthoredVNextExportService:
         if master.contract.font_manifest.digest != command.expected_font_digest:
             raise ExportServiceError("authored_vnext_font_digest_mismatch")
         expected_asset_manifest = source_digests["assetManifest"]
-        actual_asset_digests = sorted(
+        actual_asset_digests = sorted({
             f"sha256:{asset['sha256']}" for asset in assets
-        )
+        })
         if sorted(set(command.expected_asset_digests)) != actual_asset_digests:
             raise ExportServiceError("authored_vnext_asset_digest_mismatch")
         active = self.repository.get_active_artifact(deck.deck_id)

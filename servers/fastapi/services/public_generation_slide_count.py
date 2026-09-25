@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from services.source_content.pipeline import (
+    RASTER_SOURCE_MODE,
     SOURCE_MODE as SOURCE_CONTENT_RESTYLE_MODE,
     admit_source_content_request,
 )
@@ -35,6 +36,9 @@ def source_content_admission_carrier(
     source_content_manifest_pin: Any,
     instructions: str | None,
     reference_snapshot_ids: list[str],
+    raster_approval_pin: Any = None,
+    strategy: str | None = None,
+    orientation: str | None = None,
 ) -> SimpleNamespace:
     """Build the minimal request shape ``admit_source_content_request`` reads.
 
@@ -46,6 +50,9 @@ def source_content_admission_carrier(
     return SimpleNamespace(
         source_mode=source_mode,
         source_content_manifest_pin=source_content_manifest_pin,
+        raster_approval_pin=raster_approval_pin,
+        strategy=strategy,
+        orientation=orientation,
         instructions=instructions,
         web_search=False,
         vision_qa=False,
@@ -59,6 +66,7 @@ async def resolve_source_content_admission_slide_count(
     *,
     sql_session: Any,
     owner_id: Any,
+    tenant_id: str | None = None,
 ) -> int | None:
     """Return the page-locked count for a restyle request, else ``None``.
 
@@ -67,12 +75,13 @@ async def resolve_source_content_admission_slide_count(
     request validation would set them.
     """
 
-    if getattr(request, "source_mode", None) != SOURCE_CONTENT_RESTYLE_MODE:
+    if getattr(request, "source_mode", None) not in {SOURCE_CONTENT_RESTYLE_MODE, RASTER_SOURCE_MODE}:
         return None
     if getattr(request, "_source_document_outline", None) is None:
         await admit_source_content_request(
             request,
             sql_session=sql_session,
             owner_id=owner_id,
+            tenant_id=tenant_id,
         )
     return source_outline_slide_count(request)

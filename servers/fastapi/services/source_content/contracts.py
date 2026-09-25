@@ -11,6 +11,7 @@ from pydantic import (
     SerializerFunctionWrapHandler,
     model_serializer,
 )
+from services.document_canvas import DocumentCanvasMetadata
 
 
 # Source geometry is part of the authored substance for template restyling.
@@ -188,5 +189,6 @@ class SourceContentAnalysisReceipt(ContractModel):
     capabilities: SourceContentCapabilities = SourceContentCapabilities()
     manifest_pin: SourceContentManifestPin
     reference_snapshot_binding: ReferenceSnapshotBinding
+    document_canvas: DocumentCanvasMetadata | None = None
     summary: SourceContentAnalysisSummary
     object_inventory: SourceObjectInventorySummary

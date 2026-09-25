@@ -253,6 +253,33 @@ def test_source_verbatim_capacity_admission_preserves_exact_43_pages_and_fails_c
     ]
 
 
+def test_source_verbatim_capacity_applies_target_font_floor_before_selection() -> None:
+    graph = _graph(page_count=1)
+    frames = _frames(frame_count=1)
+    common = {
+        "content_graph": graph,
+        "frames": frames,
+        "frame_structure_digest": canonical_digest(frames),
+        "expected_slide_count": 1,
+        "target_contain_scale": 0.5625,
+        "target_font_policy_id": "dense-source-7px",
+        "target_canvas_digest": "sha256:" + "a" * 64,
+    }
+    accepted = build_source_verbatim_capacity_admission(
+        **common, minimum_effective_font_px=7,
+    )
+    assert accepted["status"] == "passed"
+    # Fixture body font is 22 CSS px; contain applies exactly 22 * 0.5625.
+    assert accepted["pages"][0]["minimumEffectiveFontPx"] == 12.375
+    rejected = build_source_verbatim_capacity_admission(
+        **common, minimum_effective_font_px=13,
+    )
+    assert rejected["status"] == "failed"
+    assert rejected["pages"][0]["rendererGeometryFailures"] == [
+        {"slotId": "*", "reasonCode": "document_canvas_contain_css_font_floor"}
+    ]
+
+
 def test_source_verbatim_frame_ranking_prefers_content_fit_before_variety() -> None:
     graph = _graph(page_count=2)
     for page in graph["pages"]:

@@ -309,6 +309,14 @@ _MAX_TOOL_SUMMARY_LENGTH = 500
 # these out of the general event allowlist prevents an unrelated handler from
 # publishing fields that only make sense for another operation's result card.
 _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
+    "raster.analysis": frozenset(
+        {
+            "review_operation_id",
+            "analysis_id",
+            "analysis_digest",
+            "page_count",
+        }
+    ),
     "presentation.generate": frozenset(
         {
             "stage_timings_ms",
@@ -4578,6 +4586,17 @@ class WorkspaceOperationRunner:
                 await asyncio.shield(release_workspace_operation_claim(claim, session_factory=self.session_factory))
             raise
         except Exception:
+            # This is the catch-all for anything a handler (or the execution
+            # scaffolding around it) didn't raise as one of the typed
+            # workspace-operation errors above. Without logging here the
+            # traceback never reaches any log -- the operation row only
+            # records the generic "workspace_operation_internal_error" code,
+            # so a real bug is indistinguishable from routine retry noise.
+            LOGGER.exception(
+                "workspace_operation_internal_error kind=%s operation_id=%s",
+                claim.kind,
+                claim.operation_id,
+            )
             await _transition_claim_failure(
                 claim,
                 code="workspace_operation_internal_error",
