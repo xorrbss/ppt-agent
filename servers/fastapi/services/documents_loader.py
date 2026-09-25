@@ -421,8 +421,7 @@ class DocumentsLoader:
             LOGGER.warning(
                 "[DocumentsLoader] LibreOffice conversion failed; trying native "
                 "office text extraction file=%s error=%s",
-                filename,
-                conversion_error,
+                filename, conversion_error,
             )
             try:
                 document = self.document_service.parse_to_markdown(file_path)
