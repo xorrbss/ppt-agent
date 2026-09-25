@@ -2,7 +2,6 @@ from services.generation_core.runtime.profile import (
     DEFAULT_AUTHOR_CONCURRENCY,
     DEFAULT_AUTHOR_CONCURRENCY_SOURCE_REFLOW,
     DEFAULT_ILLUSTRATION_BUDGET,
-    DEFAULT_ILLUSTRATION_TIMEOUT_SECONDS,
     DEFAULT_RENDER_CONCURRENCY,
     DEFAULT_RENDER_CONCURRENCY_SOURCE_REFLOW,
     resolve_svg_runtime_profile,
@@ -17,6 +16,7 @@ def test_defaults_match_the_previous_hard_coded_semaphores(monkeypatch):
         "SVG_RENDER_CONCURRENCY_SOURCE_REFLOW",
         "SVG_ILLUSTRATION_BUDGET",
         "SVG_ILLUSTRATION_TIMEOUT_SECONDS",
+        "IMAGE_GENERATION_TIMEOUT_SECONDS",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -29,7 +29,16 @@ def test_defaults_match_the_previous_hard_coded_semaphores(monkeypatch):
     assert reflow.render_concurrency == DEFAULT_RENDER_CONCURRENCY_SOURCE_REFLOW == 1
 
     assert ordinary.illustration_budget == DEFAULT_ILLUSTRATION_BUDGET
-    assert ordinary.illustration_timeout_seconds == DEFAULT_ILLUSTRATION_TIMEOUT_SECONDS
+    # No svg override: the authored image knob's default (180 s) applies.
+    assert ordinary.illustration_timeout_seconds == 180
+
+
+def test_illustration_timeout_follows_the_authored_image_knob(monkeypatch):
+    monkeypatch.delenv("SVG_ILLUSTRATION_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.setenv("IMAGE_GENERATION_TIMEOUT_SECONDS", "90")
+    assert resolve_svg_runtime_profile(source_reflow=False).illustration_timeout_seconds == 90
+    monkeypatch.setenv("SVG_ILLUSTRATION_TIMEOUT_SECONDS", "30")
+    assert resolve_svg_runtime_profile(source_reflow=False).illustration_timeout_seconds == 30
 
 
 def test_explicit_env_overrides_win_over_defaults(monkeypatch):

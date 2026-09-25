@@ -93,7 +93,8 @@ async def prepare_source_manifest(session, service, *, context, revision, presen
         source_format = original_locator.get("sourceFormat", "image")
         locator = dict(sourceFormat=source_format,
             coordinateSpace=original_locator.get("coordinateSpace") or
-                ("document-order" if source_format == "docx" else "page-normalized" if source_format in {"pptx", "pdf"} else "intrinsic"),
+                ("document-order" if source_format == "docx"
+                 else "page-normalized" if source_format in {"pptx", "pdf"} else "intrinsic"),
             pageIndex=original_locator.get("pageIndex", candidate.source_slide_index),
             objectId=original_locator.get("objectId", original_locator.get("objectLocator")),
             blockPath=original_locator.get("blockPath"))
@@ -106,11 +107,16 @@ async def prepare_source_manifest(session, service, *, context, revision, presen
             sourceSha256=candidate.digest.removeprefix("sha256:"),
             sourceWidth=candidate.width, sourceHeight=candidate.height,
             semanticDescription=candidate.semantic_description or candidate.source_heading or "Source image",
-            sourceLocator=locator, extractionKind=original_locator.get("extractionKind", "direct_image" if not candidate.source_locator else "embedded_raster"),
+            sourceLocator=locator, extractionKind=original_locator.get(
+                "extractionKind", "direct_image" if not candidate.source_locator else "embedded_raster"),
             sourceAppearanceSha256=preview.source_appearance_sha256, preservationClass="supporting",
+            # A planned illustration/icon (AssetOffer) is never a source to preserve.
             policy=decide_preservation_policy(selected=True, preservation_class="supporting",
-                                              source_preservation_required=source_preservation_required),
-            selectionReason="existing_source_image_plan", modelDerivative=derivative))
+                                              source_preservation_required=source_preservation_required
+                                              and not original_locator.get("assetOffer")),
+            selectionReason=(f"asset_offer_{original_locator['assetOffer']}"
+                             if original_locator.get("assetOffer") else "existing_source_image_plan"),
+            modelDerivative=derivative))
     manifest = SourceManifest.seal(dict(presentationId=presentation_id, sourceRevision=revision, slots=slots,
         offeredPages=[dict(pageIndex=i, slotIds=list(page)) for i, page in enumerate(planned)]))
     pointer = await persist_manifest_if_current(session, service, context=context, manifest=manifest,
@@ -130,8 +136,11 @@ async def author_images(session, service, *, context, manifest, page_index):
         derivative = slot.model_derivative
         payload = await read_derivative_bytes(artifact_service=service, session=session, derivative=derivative,
             owner_id=context.owner_id, tenant_id=context.tenant_id, max_bytes=1536 * 1024, max_pixels=16_777_216)
-        result[slot.slot_id] = dict(data_url=f"data:{derivative.media_type};base64," + base64.b64encode(payload).decode(),
-            description=slot.semantic_description, required=slot.policy.required, allowOmit=slot.policy.allow_omit)
+        data_url = f"data:{derivative.media_type};base64," + base64.b64encode(payload).decode()
+        result[slot.slot_id] = dict(data_url=data_url,
+            description=slot.semantic_description, required=slot.policy.required, allowOmit=slot.policy.allow_omit,
+            **({"kind": slot.selection_reason.removeprefix("asset_offer_")}
+               if slot.selection_reason.startswith("asset_offer_") else {}))
     return result
 
 
@@ -176,7 +185,8 @@ async def screen_placement(session, service, *, context, revision, manifest, sou
         preview = build_purpose_derivative(_source_bytes(candidate), purpose="screen",
             width_css_px=float(node.get("width")), height_css_px=float(node.get("height")))
         derivative = await persist_derivative_if_current(session, service, context=context, preview=preview,
-            publication_name=f"svg-screen-{page_index}-{ordinal}-{sha256(svg.encode()).hexdigest()[:12]}", revision=revision)
+            publication_name=f"svg-screen-{page_index}-{ordinal}-{sha256(svg.encode()).hexdigest()[:12]}",
+            revision=revision)
         if derivative is None:
             raise ValueError("svg_asset_publication_fence_lost")
         placements.append(dict(slotId=slot_id, occurrenceId=slot.occurrence_id,
