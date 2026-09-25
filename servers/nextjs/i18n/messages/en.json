@@ -3106,6 +3106,7 @@
       "featuredLast": "Featured last"
     },
     "unsupportedProfile": "Unsupported presentation profile",
+    "unsupportedTemplateFormat": "This template format is no longer supported",
     "selectedForAi": "Selected for AI",
     "presentationEditor": "Presentation editor",
     "loadFailureTitle": "Something went wrong",
