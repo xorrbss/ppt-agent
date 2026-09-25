@@ -28,6 +28,7 @@ from utils.renderer_markup_policy import (
     ALLOWED_TAGS,
     DROP_TAGS,
     GLOBAL_ATTRIBUTES,
+    SVG_PRESENTATION_TAGS,
     TAG_ATTRIBUTES,
     VOID_TAGS,
 )
@@ -114,7 +115,8 @@ class AdmittedHtml:
 
 
 def admit_authorized_svg_materialized(canonical_svg: str, materialized_svg: str, *,
-                                      source_manifest: dict, width_px: int, height_px: int, allow_image_only: bool = False) -> AdmittedHtml:
+                                      source_manifest: dict, width_px: int, height_px: int,
+                                      allow_image_only: bool = False) -> AdmittedHtml:
     """Worker-only derivative admission after authenticated artifact resolution.
 
     Canonical SVG keeps the normal source/structure limits. Only exact image
@@ -126,7 +128,8 @@ def admit_authorized_svg_materialized(canonical_svg: str, materialized_svg: str,
     import xml.etree.ElementTree as ET
     from PIL import Image
     from services.svg_contract import validate_svg
-    validate_svg(canonical_svg, width=width_px, height=height_px, source_manifest=source_manifest, allow_image_only=allow_image_only)
+    validate_svg(canonical_svg, width=width_px, height=height_px, source_manifest=source_manifest,
+                 allow_image_only=allow_image_only)
     if not isinstance(materialized_svg, str) or len(materialized_svg.encode("utf-8")) > 96 * 1024 * 1024:
         raise RendererPolicyError("authorized SVG page wire budget exceeded")
     if re.search(r"<!|<\?", materialized_svg):
@@ -139,7 +142,7 @@ def admit_authorized_svg_materialized(canonical_svg: str, materialized_svg: str,
         raise RendererPolicyError("authorized SVG image count mismatch")
     asset_digests = []
     total_bytes = total_pixels = 0
-    for original, image_node in zip(canonical_images, resolved_images):
+    for original, image_node in zip(canonical_images, resolved_images, strict=True):
         href = image_node.get("href", "")
         match = re.fullmatch(r"data:image/(png|jpeg);base64,([A-Za-z0-9+/=]+)", href)
         if match is None:
@@ -281,10 +284,7 @@ class _PolicyParser(HTMLParser):
             values[name] = value
             if name == "xmlns" and (tag != "svg" or value != _SVG_NAMESPACE):
                 raise RendererPolicyError("inline SVG namespace is not allowed")
-            if name in _SVG_OPACITY_ATTRIBUTES and tag in {
-                "svg", "g", "path", "rect", "circle", "ellipse", "line",
-                "polyline", "polygon", "text", "tspan", "stop",
-            }:
+            if name in _SVG_OPACITY_ATTRIBUTES and (tag in SVG_PRESENTATION_TAGS or tag == "stop"):
                 if _SVG_OPACITY.fullmatch(value.strip()) is None:
                     raise RendererPolicyError(
                         f"SVG {name} must be a number between 0 and 1"
@@ -301,10 +301,7 @@ class _PolicyParser(HTMLParser):
                 raise RendererPolicyError("SVG focusable is invalid")
             if name == "vector-effect" and value.strip().lower() not in _SVG_VECTOR_EFFECTS:
                 raise RendererPolicyError("SVG vector-effect is invalid")
-            if tag in {
-                "svg", "g", "path", "rect", "circle", "ellipse", "line",
-                "polyline", "polygon", "text", "tspan",
-            } and name in _SVG_PAINT_ATTRIBUTES:
+            if tag in SVG_PRESENTATION_TAGS and name in _SVG_PAINT_ATTRIBUTES:
                 normalized_paint = value.strip()
                 if (
                     "\\" in normalized_paint
@@ -321,7 +318,8 @@ class _PolicyParser(HTMLParser):
                 families = _validate_css(value)
                 self.font_declarations += value.lower().count("font-family")
                 self.font_families.update(families)
-            if name in {"href", "action", "formaction", "poster", "data", "xlink:href", "srcdoc"} and not (tag == "image" and name == "href" and "svg" in self._stack):
+            svg_href = tag == "image" and name == "href" and "svg" in self._stack
+            if name in {"href", "action", "formaction", "poster", "data", "xlink:href", "srcdoc"} and not svg_href:
                 raise RendererPolicyError(f"URL-bearing attribute is not allowed: {name}")
             if re.search(r"(?:^|[/\\])\.\.(?:[/\\]|%2f|%5c)", value, re.IGNORECASE):
                 raise RendererPolicyError("path traversal marker is not allowed")

@@ -42,7 +42,9 @@ GLOBAL_ATTRIBUTES = {
     "data-composer-canvas-height",
     "data-document-canvas-contain", "data-document-canvas-coordinate-space",
     "data-composer-style-profile",
-    "data-composer-style-role", "data-source-font-floor-px", "data-source-row", "data-source-column", "data-source-paragraph", "data-source-run", "data-qid-ignore", "data-allow-overlap",
+    "data-composer-style-role", "data-source-font-floor-px", "data-source-row",
+    "data-source-column", "data-source-paragraph", "data-source-run",
+    "data-qid-ignore", "data-allow-overlap",
     # Inert browser-readback classification. Capacity and receipt gates validate
     # the value; admitting the attribute keeps model-declared and deterministic
     # post-processed semantic roles on the same renderer-safe path.
@@ -143,6 +145,17 @@ TAG_ATTRIBUTES: Mapping[str, set[str]] = {
     },
 }
 
+#: Every element that carries the shared presentation set. The validator
+#: applies its paint (local ``#fragment`` only) and opacity checks to exactly
+#: these tags, so an element gaining the set also gains the checks. A
+#: hand-written list here had left ``<image>`` out: it admitted
+#: ``clip-path``/``mask``/``fill`` pointing at an external document, which
+#: Chromium fetches wherever the page CSP is absent.
+SVG_PRESENTATION_TAGS = frozenset(
+    tag for tag, attributes in TAG_ATTRIBUTES.items()
+    if _SVG_PRESENTATION <= attributes
+)
+
 
 # Origin inventory, not permission for model output. GLOBAL_ATTRIBUTES remains
 # the renderer-facing allowlist, including these identities where already allowed.
@@ -160,6 +173,7 @@ __all__ = [
     "DROP_TAGS",
     "GLOBAL_ATTRIBUTES",
     "SERVER_STAMPED_ATTRIBUTES",
+    "SVG_PRESENTATION_TAGS",
     "TAG_ATTRIBUTES",
     "VOID_TAGS",
 ]
