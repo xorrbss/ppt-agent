@@ -264,7 +264,9 @@ def test_generation_info_correlates_only_the_owned_operation_message(tmp_path):
         async with AsyncSession(engine, expire_on_commit=False) as session:
             presentation, conversation, message, operation = await _seed_generation_attempt(session)
             info = await get_presentation_generation_info(presentation.id, session)
-            assert (info.conversation_id, info.operation_id, info.first_user_message_id) == (conversation.id, operation.id, message.id)
+            assert (
+                info.conversation_id, info.operation_id, info.first_user_message_id
+            ) == (conversation.id, operation.id, message.id)
             assert info.can_start_new_attempt is True
             _, _, other_message, _ = await _seed_generation_attempt(session)
             operation.request_payload = {**operation.request_payload, "user_message_id": str(other_message.id)}

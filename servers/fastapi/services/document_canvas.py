@@ -159,7 +159,9 @@ def parse_canvas_metadata(value: object):
 
     if isinstance(value, (DocumentCanvasMetadata, AuthoredCanvasMetadata)):
         return value
-    if isinstance(value, dict) and value.get("contractVersion", value.get("contract_version")) == DOCUMENT_CANVAS_CONTRACT_VERSION:
+    contract_version = DOCUMENT_CANVAS_CONTRACT_VERSION
+    if (isinstance(value, dict) and
+            (value.get("contractVersion") or value.get("contract_version")) == contract_version):
         return DocumentCanvasMetadata.model_validate(value)
     return AuthoredCanvasMetadata.model_validate(value)
 

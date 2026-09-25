@@ -1,4 +1,4 @@
-"""Read-only export of ``provider_usage_receipts`` for one generation job.
+﻿"""Read-only export of ``provider_usage_receipts`` for one generation job.
 
 Built for the authored verbatim placeholder-authoring live validation series
 (``docs/authored-verbatim-placeholder-authoring-design-20260911.md`` section 4;
@@ -28,6 +28,9 @@ import sys
 import uuid
 from pathlib import Path
 
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
 FASTAPI_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(FASTAPI_ROOT))
 
@@ -41,9 +44,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 if __name__ == "__main__" and any(arg in {"-h", "--help"} for arg in sys.argv[1:]):
     build_parser().parse_args()
-
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 
 def require_database_url() -> str:
@@ -129,3 +129,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

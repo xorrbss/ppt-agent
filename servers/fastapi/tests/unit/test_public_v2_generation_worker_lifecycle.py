@@ -326,9 +326,15 @@ def test_export_gate_rejects_content_integrity_receipt_from_another_operation():
     )
     unit_digest = "sha256:" + "a" * 64
     budget = model_payload(ProviderCallBudgetV1(actual_logical_calls=0, actual_physical_calls=0))
+    binding_data = {
+        "operationId": str(operation_id),
+        "jobId": "",
+        "attemptId": "",
+        "fencingToken": None,
+    }
     receipt = seal_content_integrity_receipt(
         operation_id=operation_id,
-        attempt_binding_digest=_digest({"operationId": str(operation_id), "jobId": "", "attemptId": "", "fencingToken": None}),
+        attempt_binding_digest=_digest(binding_data),
         preserve_source_input_digest=None,
         provider_call_budget=budget,
         source_revision=7,

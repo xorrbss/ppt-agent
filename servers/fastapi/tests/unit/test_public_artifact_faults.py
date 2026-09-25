@@ -54,10 +54,14 @@ def test_checkpoint_operation_kind_preserves_authority(tmp_path, monkeypatch, op
             sessions = async_sessionmaker(engine, expire_on_commit=False)
             owner, op_id = uuid.uuid4(), uuid.uuid4()
             async with sessions() as session:
+                kind = (
+                    "presentation.generate" if operation_kind == "generation"
+                    else "export.pptx"
+                )
                 operation = WorkspaceOperation(
                     id=op_id, owner_id=owner, owner_scope=str(owner),
                     conversation_id=uuid.uuid4(), presentation_id=uuid.uuid4(),
-                    anchor_position=1, kind="presentation.generate" if operation_kind == "generation" else "export.pptx",
+                    anchor_position=1, kind=kind,
                     state="running", idempotency_key_hash="a" * 64,
                     request_hash="b" * 64, request_payload={},
                     attempt_number=1, attempt_token="current", fencing_token=3,

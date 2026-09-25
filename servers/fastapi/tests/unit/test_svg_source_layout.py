@@ -235,7 +235,10 @@ def test_template_server_path_resolves_korean_table_and_image_without_provider(s
         from utils.svg_style_adapter import adapt_svg_style
         from utils.svg_template_rules import resolve_source_template_style
         width, height = 1188, 840
-        style = adapt_svg_style(resolve_source_template_style(style_id), width=width, height=height, source_template=True)
+        style = adapt_svg_style(
+            resolve_source_template_style(style_id),
+            width=width, height=height, source_template=True,
+        )
         manifest = manifest_for([("text", {"text": "업무 화면 안내", "dominantSizePt": 32}),
             ("text", {"text": "제공된 화면을 확인합니다.", "dominantSizePt": 10}),
             ("image", {"contentDigest": "sha256:image", "geometry": {"cx": 1600, "cy": 900}})])

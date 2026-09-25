@@ -89,6 +89,10 @@ from utils.owner_context import get_current_owner_id
 from api.v1.ppt.endpoints.presentation_export_attempts import (
     PRESENTATION_EXPORT_ATTEMPT_ROUTER,
 )
+from api.v1.ppt.endpoints.presentation_list_projection import (
+    PresentationListPage, _escaped_like_fragment, _list_slide_without_html,
+    _list_theme_projection, _list_content_projection,
+)
 
 PRESENTATION_CRUD_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 PRESENTATION_CRUD_ROUTER.include_router(PRESENTATION_EXPORT_ATTEMPT_ROUTER)
@@ -102,12 +106,6 @@ def _chat_first_create_enabled() -> bool:
     except UnsupportedWorkspaceRuntimeError as error:
         raise HTTPException(status_code=501, detail=error.code) from error
     return True
-
-
-from api.v1.ppt.endpoints.presentation_list_projection import (
-    PresentationListPage, _escaped_like_fragment, _list_slide_without_html,
-    _list_theme_projection, _list_content_projection,
-)
 
 
 @PRESENTATION_CRUD_ROUTER.get(
