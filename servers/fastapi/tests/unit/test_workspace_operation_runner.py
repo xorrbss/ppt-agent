@@ -543,7 +543,9 @@ async def _runner_rejects_stale_revision(tmp_path: Path):
         operation = await _operation(maker, operation_ids[0])
         assert operation.state == "failed"
         assert operation.error_code == "revision_conflict"
-        assert operation.error_detail == {
+        timing = dict(operation.error_detail).pop("attempt_timing")
+        assert timing["attempt_number"] == 1 and timing["execution_seconds"] >= 0
+        assert {key: value for key, value in operation.error_detail.items() if key != "attempt_timing"} == {
             "error_code": "revision_conflict",
             "retryable": False,
             "retry_count": 1,

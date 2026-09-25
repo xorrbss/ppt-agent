@@ -14,7 +14,7 @@ import asyncio
 import hashlib
 import time
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from types import SimpleNamespace
 
 import pytest
@@ -52,6 +52,9 @@ class WorkerStore:
 
     async def maintain(self):
         return None
+
+    def maintenance_batch(self):
+        return nullcontext()
 
     def read(self, ref):
         payload = self.blobs[ref.artifact_id]

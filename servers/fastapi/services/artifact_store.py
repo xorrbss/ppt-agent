@@ -23,7 +23,7 @@ from pathlib import Path
 import secrets
 import threading
 import time
-from typing import Any, BinaryIO, Iterator, Literal, Protocol
+from typing import Any, AsyncContextManager, BinaryIO, Iterator, Literal, Protocol, Sequence
 from urllib.parse import urlencode, urlsplit
 import uuid
 
@@ -43,6 +43,15 @@ from models.sql.public_artifact import (
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import WorkspaceOperation
 from services.public_operation_correlation import log_public_operation_correlation
+from services.worker_artifact_cache_maintenance import (
+    CacheEvictionPolicy,
+    DeferredCacheMaintenance,
+    StagedPut,
+    entry_mtime,
+    run_cache_eviction_pass,
+    scan_cache_entries,
+    touch_admitted,
+)
 from utils.path_helpers import get_writable_path
 
 
@@ -869,71 +878,37 @@ class WorkerArtifactTransportCache(LocalDevelopmentArtifactObjectStore):
         self._max_cache_bytes = max_cache_bytes
         self._ttl_seconds = ttl_seconds
         self._known_entries: dict[Path, int] = {}
+        self._deferred_maintenance = DeferredCacheMaintenance()
 
     def _cache_entries(self) -> list[tuple[Path, float, int]]:
-        entries: list[tuple[Path, float, int]] = []
-        if not self._root.exists():
-            return entries
-        for path in self._root.rglob("*"):
-            try:
-                if path.is_symlink() or not path.is_file() or path.name.startswith("."):
-                    continue
-                stat = path.stat()
-            except OSError:
-                continue
-            entries.append((path, stat.st_mtime, stat.st_size))
-        return entries
+        return scan_cache_entries(self._root)
 
-    def _maintain_sync(self, *, protected: Path | None = None) -> None:
+    def _maintain_sync(
+        self, *, protected: Path | None = None, staged: Sequence[StagedPut] = ()
+    ) -> None:
         with self._maintenance_lock:
-            now = time.time()
-            entries = self._cache_entries()
-            observed = {path: size for path, _, size in entries}
-            missing = {
-                path: size
-                for path, size in self._known_entries.items()
-                if path not in observed
-            }
-            survivors: list[tuple[Path, float, int]] = []
-            evicted_count = len(missing)
-            evicted_bytes = sum(missing.values())
-            for path, modified, size in entries:
-                if path != protected and now - modified > self._ttl_seconds:
-                    try:
-                        path.unlink(missing_ok=True)
-                    except OSError:
-                        survivors.append((path, modified, size))
-                    else:
-                        evicted_count += 1
-                        evicted_bytes += size
-                else:
-                    survivors.append((path, modified, size))
-            total = sum(size for _, _, size in survivors)
-            for path, _, size in sorted(survivors, key=lambda item: item[1]):
-                if total <= self._max_cache_bytes:
-                    break
-                if path == protected:
-                    continue
-                try:
-                    path.unlink(missing_ok=True)
-                except OSError:
-                    continue
-                total -= size
-                evicted_count += 1
-                evicted_bytes += size
-            current = self._cache_entries()
-            self._known_entries = {path: size for path, _, size in current}
-            _ARTIFACT_STORE_METRICS.set_cache_usage(
-                entries=len(current),
-                size_bytes=sum(size for _, _, size in current),
+            self._known_entries = run_cache_eviction_pass(
+                self._root,
+                policy=CacheEvictionPolicy(
+                    ttl_seconds=self._ttl_seconds,
+                    max_cache_bytes=self._max_cache_bytes,
+                ),
+                known_entries=self._known_entries,
+                metrics=_ARTIFACT_STORE_METRICS,
+                protected=protected,
+                staged=staged,
             )
-            if evicted_count:
-                _ARTIFACT_STORE_METRICS.observe_cache(
-                    "eviction", count=evicted_count, size_bytes=evicted_bytes
-                )
 
     async def maintain(self) -> None:
         await asyncio.to_thread(self._maintain_sync)
+
+    def maintenance_batch(self) -> AsyncContextManager[None]:
+        """Replay every put's eviction pass inside the block in one walk, at its end."""
+
+        async def run_pass(staged: Sequence[StagedPut]) -> None:
+            await asyncio.to_thread(self._maintain_sync, staged=staged)
+
+        return self._deferred_maintenance.batch(run_pass)
 
     async def put_bytes(self, artifact: ArtifactRef, payload: bytes) -> None:
         if len(payload) > self._max_cache_bytes:
@@ -954,15 +929,17 @@ class WorkerArtifactTransportCache(LocalDevelopmentArtifactObjectStore):
             _ARTIFACT_STORE_METRICS.observe_cache("miss")
             raise ArtifactStoreError("artifact.worker_cache_budget_exceeded")
         target = self._path(artifact)
-        existed = await asyncio.to_thread(target.is_file)
+        prior_mtime = await asyncio.to_thread(entry_mtime, target)
+        existed = prior_mtime is not None
         try:
             await super().put_stream(artifact, source)
         except ArtifactStoreError:
             _ARTIFACT_STORE_METRICS.observe_cache("miss")
             raise
-        await asyncio.to_thread(os.utime, target, None)
+        admitted = await asyncio.to_thread(touch_admitted, target, artifact.size_bytes, prior_mtime)
         _ARTIFACT_STORE_METRICS.observe_cache("hit" if existed else "miss")
-        await asyncio.to_thread(self._maintain_sync, protected=target)
+        if not self._deferred_maintenance.defer(admitted):
+            await asyncio.to_thread(self._maintain_sync, protected=target)
 
     async def open_read_stream(
         self,

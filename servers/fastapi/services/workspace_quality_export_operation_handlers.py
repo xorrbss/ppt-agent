@@ -49,6 +49,11 @@ from services.public_export_operation import (
 from services.authored_quality_receipt_v3_pipeline import (
     project_persisted_authored_quality_receipt_v3,
 )
+from services.public_export_failure_classification import (
+    classified_public_export_error,
+    public_export_error_code,
+    public_export_failure_is_non_retryable,
+)
 from services.public_quality_receipt_v3_store import load_public_quality_evidence
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
@@ -90,45 +95,8 @@ InternalHeaderProvider = Callable[[], Awaitable[dict[str, str]]]
 LOGGER = logging.getLogger(__name__)
 QUALITY_REVIEW_PROGRESS_INTERVAL_SECONDS = 30.0
 
-_NON_RETRYABLE_PUBLIC_EXPORT_CODES = frozenset(
-    {
-        "public_export_admission_deadline_exhausted",
-        "public_export_delivered_mode_mismatch",
-        "public_export_editability_evidence_unavailable",
-        "public_export_hybrid_not_editable",
-        "public_export_singleflight_fence_stale",
-        "public_worker_cache_budget_exceeded",
-        "trusted_worker_staging_capacity_exceeded",
-        "hybrid_job_wire_limit",
-    }
-)
-_NON_RETRYABLE_PUBLIC_EXPORT_MARKERS = (
-    "binding_invalid",
-    "digest_mismatch",
-    "owner_mismatch",
-    "size_mismatch",
-    "wire_limit",
-    "bundle_too_large",
-    "input_too_large",
-    "payload_too_large",
-    "request_too_large",
-)
-
-
-def _public_export_error_code(error: Exception) -> str:
-    code = getattr(error, "code", None)
-    if isinstance(code, str) and code:
-        return code
-    value = str(error)
-    return value if value else "presentation_export_unexpected_failure"
-
-
-def _public_export_failure_is_non_retryable(code: str) -> bool:
-    if code.startswith("public_export_local_fit_"):
-        return True
-    if code in _NON_RETRYABLE_PUBLIC_EXPORT_CODES:
-        return True
-    return any(marker in code for marker in _NON_RETRYABLE_PUBLIC_EXPORT_MARKERS)
+_public_export_error_code = public_export_error_code
+_public_export_failure_is_non_retryable = public_export_failure_is_non_retryable
 
 
 
@@ -289,13 +257,22 @@ class WorkspaceExportOperationHandler:
                         context, presentation=presentation, admission=admission,
                         session_factory=self._session_factory,
                     )
-                except PublicExportOperationError as error:
-                    if str(error) == "svg_source_export_format_unsupported":
-                        raise NonRetryableWorkspaceOperationError(str(error)) from error
+                except (
+                    WorkspaceOperationExecutionError,
+                    WorkspaceOperationCancelled,
+                    WorkspaceOperationDeferred,
+                    WorkspaceOperationLeaseLost,
+                ):
                     raise
-                except Exception:
+                except Exception as error:
                     LOGGER.exception("SVG export failed for operation %s", claim.operation_id)
-                    raise
+                    # Same classification as the authored path below: the
+                    # runner's catch-all would record every failure as a
+                    # retryable internal error and lose the real code.
+                    resource_detail = getattr(error, "resource_metrics", None)
+                    raise classified_public_export_error(
+                        error, detail=resource_detail if isinstance(resource_detail, Mapping) else None
+                    ) from error
             if admission is not None and admission.state == "active":
                 public_tenant_id = admission.tenant_id
                 # Public requests never execute Chrome or an OOXML converter in
@@ -1258,18 +1235,8 @@ class WorkspaceExportOperationHandler:
                         selected_adapter=(direct_export_selected_adapter or "native_reconstructed"),
                     )
             resource_detail = getattr(error, "resource_metrics", None)
-            error_type = (
-                NonRetryableWorkspaceOperationError
-                if _public_export_failure_is_non_retryable(error_code)
-                else RetryableWorkspaceOperationError
-            )
-            raise error_type(
-                (
-                    error_code
-                    if _public_export_failure_is_non_retryable(error_code)
-                    else "presentation_export_failed"
-                ),
-                detail=(dict(resource_detail) if isinstance(resource_detail, Mapping) else None),
+            raise classified_public_export_error(
+                error, detail=resource_detail if isinstance(resource_detail, Mapping) else None
             ) from error
         await context.progress(stage="export_completed", percent=100)
         # Publication has already terminalized the operation. The runner will

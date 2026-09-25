@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Literal, Protocol
 import uuid
 
@@ -21,6 +22,8 @@ class WorkspaceOperationClaim:
     attempt_number: int
     attempt_token: str
     fencing_token: int
+    # When this attempt was claimed; per attempt, unlike operation.started_at.
+    claimed_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)

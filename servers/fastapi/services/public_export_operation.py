@@ -34,6 +34,7 @@ from services.artifact_store import (
     public_artifact_store_metrics_delta,
     public_artifact_store_metrics_snapshot,
 )
+from services.worker_artifact_cache_maintenance import stage_worker_inputs
 from services.database import async_session_maker
 from services.public_render_batching import (
     MAX_PUBLIC_RENDER_BATCH_SLIDES,
@@ -1012,9 +1013,6 @@ async def render_and_export_authored_htmls(
     worker_cache = configured_worker_artifact_cache()
     await worker_cache.maintain()
 
-    async def stage_worker_input(reference: PublicArtifactRef) -> None:
-        await artifact_service.stream_ref_to_object_store(reference, worker_cache)
-
     async def adopt_worker_output(
         reference: PublicArtifactRef,
         *,
@@ -1205,10 +1203,8 @@ async def render_and_export_authored_htmls(
             )
             await session.commit()
         stage_started = time.perf_counter()
-        await asyncio.gather(
-            stage_worker_input(bundle_ref),
-            *(stage_worker_input(reference) for reference in references),
-        )
+        # One cache maintenance walk per staged bundle, not one per object.
+        await stage_worker_inputs(artifact_service, worker_cache, [bundle_ref, *references])
         artifact_stage_millis += int(
             (time.perf_counter() - stage_started) * 1000
         )
@@ -1488,7 +1484,7 @@ async def render_and_export_authored_htmls(
             await render_batcher.close()
     render_wall_millis = int((time.perf_counter() - render_batch_started) * 1000)
     png_stage_started = time.perf_counter()
-    await asyncio.gather(*(stage_worker_input(reference) for reference in png_refs))
+    await stage_worker_inputs(artifact_service, worker_cache, png_refs)
     artifact_stage_millis += int((time.perf_counter() - png_stage_started) * 1000)
     worker_bundle = public_export_worker_bundle(PUBLIC_RENDER_WORKER_PROTOCOL_VERSION)
 

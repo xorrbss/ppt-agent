@@ -1332,7 +1332,10 @@ def test_quality_review_subset_without_fixes_finalizes_result_atomically(
                 ).scalar_one()
                 assert presentation is not None and presentation.revision == 11
                 assert operation is not None and operation.state == "succeeded"
-                assert operation.result == result.payload
+                assert operation.result["attempt_timing"]["attempt_number"] == claim.attempt_number
+                assert {
+                    key: value for key, value in operation.result.items() if key != "attempt_timing"
+                } == result.payload
                 assert operation.progress["percent"] == 100
                 assert event_row.payload["result"] == result.payload
                 assert event_row.payload["percent"] == 100
@@ -1523,15 +1526,31 @@ def test_export_publication_is_immutable_fenced_and_revision_neutral(
 
 
 @pytest.mark.parametrize(
-    ("error_code", "expected_error"),
+    ("error_code", "retryable", "recorded_code", "recorded_state"),
     [
-        ("svg_source_export_format_unsupported", NonRetryableWorkspaceOperationError),
-        ("public_export_worker_failed", PublicExportOperationError),
+        ("svg_source_export_format_unsupported", False, "svg_source_export_format_unsupported", "failed"),
+        # The SVG path used to re-raise this bare; the runner recorded it as a
+        # retryable internal error and retried an expired admission to dead_letter.
+        (
+            "public_export_admission_deadline_exhausted",
+            False,
+            "public_export_admission_deadline_exhausted",
+            "failed",
+        ),
+        ("public_export_worker_failed", True, "presentation_export_failed", "queued"),
     ],
 )
-def test_svg_export_classifies_only_unsupported_format_as_nonretryable(
-    tmp_path: Path, monkeypatch, error_code: str, expected_error: type[Exception]
+def test_svg_export_failures_use_the_shared_public_export_classification(
+    tmp_path: Path,
+    monkeypatch,
+    error_code: str,
+    retryable: bool,
+    recorded_code: str,
+    recorded_state: str,
 ) -> None:
+    from services.workspace_operation_handler_registry import WorkspaceOperationExecutionError
+    from services.workspace_operation_runner import _transition_claim_failure
+
     async def scenario() -> None:
         engine, maker = await _database(tmp_path / "svg-export-error.db")
         try:
@@ -1565,11 +1584,36 @@ def test_svg_export_classifies_only_unsupported_format_as_nonretryable(
                 claim=claim,
                 raise_if_cancelled=lambda: asyncio.sleep(0),
             )
-            with pytest.raises(expected_error, match=error_code):
+            with pytest.raises(WorkspaceOperationExecutionError) as raised:
                 await WorkspaceExportOperationHandler(
                     session_factory=maker,
                     internal_header_provider=lambda: None,
                 ).execute(context)
+            error = raised.value
+            assert error.retryable is retryable
+            assert error.code == recorded_code
+            assert isinstance(error.__cause__, PublicExportOperationError)
+            if retryable:
+                assert error.detail["reason_code"] == error_code
+
+            # The runner records exactly what the handler classified.
+            assert await _transition_claim_failure(
+                claim,
+                code=error.code,
+                retryable=error.retryable,
+                detail=error.detail,
+                session_factory=maker,
+            )
+            async with maker() as session:
+                recorded = await session.get(WorkspaceOperation, operation_id)
+            assert recorded.state == recorded_state
+            assert recorded.error_code == recorded_code
+            assert recorded.error_detail["retryable"] is retryable
+            if retryable:
+                assert recorded.error_detail["reason_code"] == error_code
+            else:
+                assert recorded.next_attempt_at is None
+                assert recorded.error_detail["retry_count"] == recorded.retry_count
         finally:
             await engine.dispose()
 

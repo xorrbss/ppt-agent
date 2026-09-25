@@ -13,6 +13,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from services.workspace_batch_payload import BATCH_KIND, BATCH_RESULT_KEYS, sanitize_batch_value
+from services.workspace_attempt_timing import (
+    ATTEMPT_TIMING_KEY, attempt_timing, sanitize_attempt_timing, with_attempt_timing,
+)
+from services.workspace_payload_sanitizers import project_generation_deck_ir, sanitize_worker_resource_samples
 from services.workspace_quality_review_payload import (
     _normalize_quality_review_payload,
     _quality_review_count,
@@ -281,6 +285,7 @@ _SAFE_PAYLOAD_KEYS = frozenset(
         "worker_resource_samples",
         "checkpoint_reuse_count",
         "reclaimed_attempt_token_sha256",
+        ATTEMPT_TIMING_KEY,
     }
 )
 
@@ -659,44 +664,7 @@ def sanitize_workspace_event_payload(
             and normalized in {"deckIr", "generationDeckIr"}
             and isinstance(value, Mapping)
         ):
-            safe[normalized] = {
-                key: value.get(key)
-                for key in (
-                    "strategy",
-                    "strategyReceiptDigest",
-                    "deckIrDigest",
-                    "detachedCheckpointDigest",
-                    "providerLogicalCalls",
-                    "providerOutputMode",
-                    "providerHtmlAuthoringCalls",
-                    "legacyProviderHtmlExecuted",
-                    "candidateSearchK",
-                    "candidateProviderCallsAdded",
-                    "grammarDigest",
-                    "styleProfileDigest",
-                    "retainedReferenceDigest",
-                    "compilerVersion",
-                    "candidateSelectionReceiptDigest",
-                    "executionEvidenceDigest",
-                    "slideCount",
-                )
-                if value.get(key) is None
-                or isinstance(value.get(key), (str, int, float, bool))
-            }
-            closure_digests = value.get("browserClosureReceiptDigests")
-            if isinstance(closure_digests, Sequence) and not isinstance(
-                closure_digests, (str, bytes, bytearray)
-            ):
-                safe[normalized]["browserClosureReceiptDigests"] = [
-                    item for item in closure_digests[:30] if isinstance(item, str)
-                ]
-            compile_digests = value.get("compileReceiptDigests")
-            if isinstance(compile_digests, Sequence) and not isinstance(
-                compile_digests, (str, bytes, bytearray)
-            ):
-                safe[normalized]["compileReceiptDigests"] = [
-                    item for item in compile_digests[:30] if isinstance(item, str)
-                ]
+            safe[normalized] = project_generation_deck_ir(value)
         elif (
             operation_kind == "presentation.generate"
             and normalized == "contentIntegrityReceipt"
@@ -811,42 +779,9 @@ def sanitize_workspace_event_payload(
         elif operation_kind == BATCH_KIND and isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
             safe[normalized] = sanitize_batch_value(normalized, value)
         elif normalized == "worker_resource_samples" and isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-            resource_samples: list[dict[str, Any]] = []
-            for item in value[:100]:
-                if not isinstance(item, Mapping):
-                    continue
-                limits = item.get("resourceLimits")
-                limits = limits if isinstance(limits, Mapping) else {}
-                methods = item.get("controlEnforcementMethods")
-                methods = methods if isinstance(methods, Mapping) else {}
-                residual_risks = item.get("residualRisks")
-                residual_risks = residual_risks if isinstance(residual_risks, Mapping) else {}
-                resource_samples.append({
-                    "role": str(item.get("role", ""))[:16],
-                    "enforcementLayer": str(item.get("enforcementLayer", ""))[:64],
-                    "resourceLimitsEnforced": item.get("resourceLimitsEnforced") is True,
-                    "resourceLimits": {
-                        key: int(limits.get(key, 0))
-                        for key in ("memory", "cpu", "pids", "openFiles", "outputBytes", "wallClock")
-                    },
-                    "controlEnforcementMethods": {
-                        key: str(methods.get(key, ""))[:96]
-                        for key in ("memory", "cpu", "pids", "openFiles", "outputBytes", "wallClock")
-                    },
-                    "residualRisks": {
-                        str(key)[:32]: str(detail)[:240]
-                        for key, detail in residual_risks.items()
-                    },
-                    "supervisorPollIntervalMillis": int(item.get("supervisorPollIntervalMillis", 0)),
-                    "peakRssBytes": int(item.get("peakRssBytes", 0)),
-                    "peakPrivateBytes": int(item.get("peakPrivateBytes", 0)),
-                    "peakHandleCount": int(item.get("peakHandleCount", 0)),
-                    "peakProcessCount": int(item.get("peakProcessCount", 0)),
-                    "peakCpuMillis": int(item.get("peakCpuMillis", 0)),
-                    "recycledWithinBaseline": item.get("recycledWithinBaseline") is True,
-                    "finalProcessCount": int(item.get("finalProcessCount", 0)),
-                })
-            safe[normalized] = resource_samples
+            safe[normalized] = sanitize_worker_resource_samples(value)
+        elif normalized == ATTEMPT_TIMING_KEY and isinstance(value, Mapping):
+            safe[normalized] = sanitize_attempt_timing(value)
         elif value is None or isinstance(value, (str, int, float, bool)):
             if isinstance(value, str):
                 if normalized == "assistant_text":
@@ -1976,6 +1911,7 @@ async def claim_next_workspace_operation(
             attempt_number=next_attempt_number,
             attempt_token=token,
             fencing_token=next_fencing_token,
+            claimed_at=now,
         )
         claim_duration_ms = _elapsed_ms(candidate.created_at, now)
         if next_attempt_number == 1 and candidate.retry_count == 0:
@@ -2084,7 +2020,9 @@ async def _transition_claim_failure(
             if deadline_missed:
                 code = "public_deadline_exceeded"
                 retryable = False
-        error_detail = sanitize_workspace_event_payload(detail)
+        error_detail = sanitize_workspace_event_payload(
+            with_attempt_timing(detail, claim, queued_at=operation.created_at, finished_at=now)
+        )
         error_detail.update(
             {
                 "error_code": code,
@@ -2621,6 +2559,8 @@ async def finalize_workspace_operation_success(
         projection_values["progress"] = completion_progress
     async with session_factory() as session:
         operation_before = await session.get(WorkspaceOperation, claim.operation_id)
+        projection_values["result"] = {**safe_result, ATTEMPT_TIMING_KEY: attempt_timing(
+            claim, queued_at=getattr(operation_before, "created_at", None), finished_at=now)}
         admission = await _public_admission_for_operation(
             session,
             claim.operation_id,
