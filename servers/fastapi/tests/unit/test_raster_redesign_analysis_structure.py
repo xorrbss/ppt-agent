@@ -158,7 +158,10 @@ def test_redesign_end_to_end_with_local_ocr(tmp_path: Path):
         for region in page.regions
         if region.role in ("screenshot", "logo", "table")
     )
-    assert all(issue.startswith("page_1:low_confidence_region:") for issue in draft.analysis.unresolved)
+    blocking = [issue for issue in draft.analysis.unresolved if not issue.startswith("advisory:")]
+    assert all(issue.startswith("page_1:low_confidence_region:") for issue in blocking)
+    # No structurer: one deck-level advisory, never repeated per page.
+    assert [i for i in draft.analysis.unresolved if "structurer" in i] == ["advisory:vision_structurer_unavailable"]
     assert line_text(RedesignLine((0,), (0, 0, 1, 1), 1.0), (_word("x", (0, 0, 1, 1)),)) == "x"
 
 

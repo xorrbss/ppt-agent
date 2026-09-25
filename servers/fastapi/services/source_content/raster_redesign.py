@@ -38,6 +38,8 @@ CROP_ROLES = frozenset({"screenshot", "logo", "table", "decoration"})
 REDESIGN_REASON = "image_only_source_redesign"
 # Non-blocking review suggestions in analysis.unresolved; approval ignores them.
 ADVISORY_PREFIX = "advisory:"
+# Deck-level: no vision structurer configured, so no page text can be independently confirmed.
+STRUCTURER_UNAVAILABLE = f"{ADVISORY_PREFIX}vision_structurer_unavailable"
 
 
 def _png(image: Image.Image) -> bytes:
@@ -180,6 +182,9 @@ def analyze_redesign(
             )
         )
     pages, crops, issues = [], {}, []
+    if structurer is None:
+        # Every page is planned without the vision reader: said once for the deck.
+        issues.append(STRUCTURER_UNAVAILABLE)
     for page_result, page_crops, page_issues in results:
         pages.append(page_result)
         crops.update(page_crops)

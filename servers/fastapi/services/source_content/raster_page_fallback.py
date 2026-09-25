@@ -4,7 +4,10 @@ An exception while structuring one page must never fail the whole deck. The
 page falls back to the heuristic plan (no vision structurer) and, if that also
 fails, to a lossless page-level pixel plan: the title band as one pixel crop in
 the title group and the rest of the page as one content crop. Every fallback
-leaves an advisory ``page_structuring_failed:<error>``; nothing is silent.
+leaves an advisory ``page_structuring_failed:<error>``; nothing is silent. A page
+the structurer could not structure (none configured, provider error, rejected
+answer) carries the plan's own ``heuristic_plan:<why>`` advisory; a deck analysed
+without any structurer is reported once for the deck, not per page.
 
 Tests must still see such bugs: under pytest (``PYTEST_CURRENT_TEST``), or when
 ``RASTER_STRICT_PAGE_ERRORS=1``, the exception is re-raised instead.
@@ -40,7 +43,9 @@ def robust_plan(image, words, lines, structurer, executable, tessdata) -> tuple[
         if attempt is None and structurer is None and advisories:
             break  # the heuristic already failed
         try:
-            return structured_plan(image, words, lines, attempt, executable, tessdata), advisories
+            plan = structured_plan(image, words, lines, attempt, executable, tessdata)
+            # The page's own degraded-mode notes; after a failure, the failure advisory says it.
+            return plan, advisories or list(plan.advisories)
         except Exception as error:
             if strict_page_errors():
                 raise

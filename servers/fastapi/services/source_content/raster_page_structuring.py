@@ -30,6 +30,7 @@ from services.source_content.raster_redesign_ocr import RedesignLine, RedesignWo
 from services.source_content.raster_structure_apply import apply_structure
 
 logger = logging.getLogger(__name__)
+HEURISTIC_ADVISORY = "heuristic_plan"
 
 
 def plan_is_lossless(plan: PagePlan, words: tuple[RedesignWord, ...]) -> bool:
@@ -90,6 +91,7 @@ def _structured_plan(image, gray, words, lines, structurer, executable, tessdata
     heuristic = _covered(heuristic, words, image, gray, clusters)
     heuristic = _exactly_once(heuristic, words, gray, clusters, image)
     if structurer is None or not lines:
+        # Nothing to structure, or no structurer at all (reported once per deck, not per page).
         return heuristic
     try:
         page = PageContext(image, words, reread_headlines(image, lines, executable=executable, tessdata=tessdata))
@@ -112,20 +114,26 @@ def _structured_plan(image, gray, words, lines, structurer, executable, tessdata
         plan = apply_structure(page, candidates, raw, model, targeted, hangul, transcripts) if raw else None
     except Exception as error:  # provider or model output problem: keep the heuristic page
         logger.warning("raster structuring failed: %s", type(error).__name__)
-        return heuristic
+        return _degraded(heuristic, f"structuring_failed:{type(error).__name__}")
     if plan is None:
         logger.warning("raster structuring rejected: unusable structure")
-        return heuristic
+        return _degraded(heuristic, "structuring_rejected:unusable_structure")
     try:
         plan = _settle(_dissolved(plan, plan.words or words, gray), plan.words or words, gray, clusters)
     except Exception as error:  # a repair bug must never fail the page: keep the heuristic
         logger.warning("raster boundary repair failed: %s", type(error).__name__)
-        return heuristic
+        return _degraded(heuristic, f"structuring_rejected:boundary_repair_failed:{type(error).__name__}")
     if not plan_is_lossless(plan, plan.words or words):
         logger.warning("raster structuring rejected: plan not lossless")
-        return heuristic
+        return _degraded(heuristic, "structuring_rejected:plan_not_lossless")
     covered = _covered(plan, plan.words or words, image, gray, clusters)
     return _exactly_once(covered, plan.words or words, gray, clusters, image)
+
+
+def _degraded(plan: PagePlan, why: str) -> PagePlan:
+    """The heuristic plan stands in for the structured one: say so on the page."""
+
+    return replace(plan, advisories=(*plan.advisories, f"{HEURISTIC_ADVISORY}:{why}"))
 
 
 def _exactly_once(plan: PagePlan, words, gray, clusters, image) -> PagePlan:

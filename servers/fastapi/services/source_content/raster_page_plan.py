@@ -67,6 +67,8 @@ class PagePlan:
     # Audit log of accepted text corrections: "before => after".
     corrections: tuple[str, ...] = ()
     structured_by: str | None = None
+    # Page-level notes for review (e.g. "heuristic_plan:structuring_failed:TimeoutError").
+    advisories: tuple[str, ...] = ()
 
 
 def _unpromoted(page: PageContext) -> set[int]:
