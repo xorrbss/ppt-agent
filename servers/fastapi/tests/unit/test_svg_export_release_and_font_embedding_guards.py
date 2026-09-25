@@ -116,6 +116,23 @@ def test_unknown_quality_policy_is_rejected_before_any_db_access(monkeypatch):
         ))
 
 
+def test_quality_policy_is_also_read_from_the_command_context(monkeypatch):
+    """The only live client path for an svg export is the v1 workspace command
+    (POST .../commands), which only ever places request fields under
+    ``context`` (services/workspace_service.py::create_workspace_command)."""
+    presentation, admission = _presentation_and_admission()
+    claim = _claim(request_payload={"context": {"quality_policy": "not-a-real-policy"}})
+    context = SimpleNamespace(
+        claim=claim, progress=_forbid("progress"), raise_if_cancelled=_forbid("raise_if_cancelled"),
+    )
+
+    with pytest.raises(NonRetryableWorkspaceOperationError, match="svg_quality_policy_invalid"):
+        asyncio.run(svg_export_operation.execute_svg_workspace_export(
+            context, presentation=presentation, admission=admission,
+            session_factory=_untouchable_session_factory(),
+        ))
+
+
 def test_font_embedding_on_a_pdf_export_is_rejected_before_any_db_access(monkeypatch):
     presentation, admission = _presentation_and_admission()
     claim = _claim(kind="export.pdf", request_payload={"font_embedding": True})
