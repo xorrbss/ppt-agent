@@ -82,7 +82,8 @@ describe("Master WYSIWYG semantic inserts", () => {
       .contains("button", "Section")
       .click();
     pressClipboardShortcut("v");
-    snapshot().then((contract) => {
+    cy.get('[data-testid="wysiwyg-contract-snapshot"]').should(($output) => {
+      const contract = JSON.parse($output.text()) as DeckMasterContractV1;
       const copies = (contract.semanticElements ?? []).filter(
         (element) => element.content.role === "fixed-copy",
       );
@@ -98,7 +99,8 @@ describe("Master WYSIWYG semantic inserts", () => {
       .contains("button", "Cover")
       .click();
     pressClipboardShortcut("v");
-    snapshot().then((contract) => {
+    cy.get('[data-testid="wysiwyg-contract-snapshot"]').should(($output) => {
+      const contract = JSON.parse($output.text()) as DeckMasterContractV1;
       const copies = (contract.semanticElements ?? []).filter(
         (element) => element.content.role === "fixed-copy",
       );
@@ -111,7 +113,7 @@ describe("Master WYSIWYG semantic inserts", () => {
     });
   });
 
-  it("inserts the default all-body shared logo as one undoable history item", () => {
+  it("inserts a selected all-body shared logo as one undoable history item", () => {
     const initial = cloneContract();
     initial.brandAssets.logo = {
       assetId: "asset:legacy-master-logo",
@@ -123,7 +125,8 @@ describe("Master WYSIWYG semantic inserts", () => {
     cy.mount(<Harness initialContract={initial} />);
     cy.get('[data-testid="shared-logo-scope"] select')
       .first()
-      .should("have.value", "allBody");
+      .should("have.value", "current")
+      .select("allBody");
     cy.get('[data-testid="shared-logo-scope"]')
       .should("contain.text", "All body layouts (recommended)")
       .and("contain.text", "Applies to 2 layouts")

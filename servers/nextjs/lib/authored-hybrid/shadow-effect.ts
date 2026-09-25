@@ -1,3 +1,4 @@
+import { canvasEmuPerUnit, LEGACY_AUTHORED_CANVAS, type AuthoredCanvasContract } from "../authored-canvas.ts";
 /**
  * Native DrawingML outer-shadow mapping for authored-hybrid shapes.
  *
@@ -8,7 +9,7 @@
  * emitted natively, so the same shadow is never painted twice.
  *
  * Unit choices:
- * - lengths use the export's fixed 96 CSS px per inch (9525 EMU per px);
+ * - lengths use the document's explicit physical scale (legacy: 9525 EMU/px);
  * - `blurRad` is the CSS blur radius 1:1 (CSS blurs with sigma = radius / 2;
  *   PowerPoint's visible blur extent matches the same radius closely enough
  *   for slide decoration, and an exact match does not exist);
@@ -31,7 +32,6 @@ export type AuthoredHybridOuterShadow = NonNullable<
 >;
 
 /** Same constant as `native-plan.ts`; duplicated to avoid a circular import. */
-const EMU_PER_CSS_PX = 9_525;
 const SIXTY_THOUSANDTHS_PER_DEGREE = 60_000;
 const MAX_SHADOW_LENGTH_PX = 20_000;
 const MIN_SCALE_PERCENT = 10_000;
@@ -117,9 +117,10 @@ export function outerShadowMappingIsSafe(
 export function outerShadowEffectXml(
   shadow: AuthoredHybridOuterShadow,
   opacity: number,
-  bounds?: AuthoredHybridRect
+  bounds?: AuthoredHybridRect,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS
 ): string {
-  const emu = (value: number) => Math.max(0, Math.round(value * EMU_PER_CSS_PX));
+  const emu = (value: number) => Math.max(0, Math.round(value * canvasEmuPerUnit(canvas)));
   const blurRad = emu(shadow.blurPx);
   const dist = emu(Math.hypot(shadow.offsetXPx, shadow.offsetYPx));
   const dir = outerShadowDirection(shadow.offsetXPx, shadow.offsetYPx);

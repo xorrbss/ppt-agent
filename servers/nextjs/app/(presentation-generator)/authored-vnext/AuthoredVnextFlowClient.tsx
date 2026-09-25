@@ -302,7 +302,11 @@ export default function AuthoredVnextFlowClient() {
       const status = error && typeof error === "object" && "status" in error
         ? (error as { status?: unknown }).status
         : undefined;
-      const isCasConflict = status === 409 && /(?:publication fence|slide CAS|master changed|compatibility slide not found)/iu.test(code);
+      const isCasConflict = status === 409 && (
+        code === "authored_vnext_generation_conflict" ||
+        code === "authored_vnext_stale_master" ||
+        /(?:publication fence|slide CAS|master changed|compatibility slide not found)/iu.test(code)
+      );
       if (isCasConflict) {
         dispatchWorkbench({
           type: "operation/conflicted",

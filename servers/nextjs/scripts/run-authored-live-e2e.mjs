@@ -7,6 +7,10 @@ const AUTHORED_WORKER_TOKEN =
 export function authoredLiveEnvironment() {
   return {
     NEXT_PUBLIC_AUTHORED_VNEXT_MASTER_ENABLED: "true",
+    AUTHORED_VNEXT_INTERNAL_COMPATIBILITY_UI: "true",
+    // This isolated harness exercises the compatibility engine, not user promotion.
+    AUTHORED_VNEXT_INTERNAL_COMPATIBILITY_ENABLED: "true",
+    AUTHORED_VNEXT_NEW_GENERATION_ENABLED: "true",
     AUTHORED_VNEXT_OOXML_WORKER_TOKEN: AUTHORED_WORKER_TOKEN,
   };
 }

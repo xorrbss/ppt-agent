@@ -2,12 +2,14 @@ import { assertFragmentBand, isFragmentBand, validateFragmentBand, RASTER_FRAGME
 import { createHash } from "node:crypto";
 import {
   authoredCanvasPhysicalSize,
+  canvasEmuPerUnit,
   LEGACY_AUTHORED_CANVAS,
   type AuthoredCanvasContract,
 } from "../authored-canvas.ts";
 import type { LocalFitCaptureEvidence } from "./local-fit-export-evidence.ts";
 
 import {
+  AUTHORED_NATIVE_OWNER_ALTERNATIVE_TEXT_PREFIX,
   flattenPreparedNativeElements,
   preparedNativeElementNonVisualIdCount,
   preparedNativeElementUnderlayNonVisualIdCount,
@@ -63,6 +65,31 @@ export interface AuthoredHybridSlideLayer {
   selectionObstructions?: readonly { zBand: number; elementId: string; reason: string }[];
   /** Exact band assignment for each top-level native owner. */
   nativeZBandByElementId?: Readonly<Record<string, number>>;
+  /** Scene-authoritative ownership supplied only for native objects on this slide. */
+  nativeOwnership?: {
+    readonly slideId: string;
+    readonly owners: readonly {
+      readonly elementId: string;
+      readonly kind: string;
+      readonly capabilityId: string;
+      readonly advancedText?: {
+        readonly schemaVersion: string;
+        readonly text: string;
+        readonly autoFit: "none" | "shrink";
+        readonly style: {
+          readonly fontFamily: string; readonly fontSizePt: number;
+          readonly fontWeight: number; readonly color: string;
+          readonly italic: boolean; readonly underline: boolean;
+        };
+        readonly runs: readonly {
+          readonly runId: string; readonly text: string;
+          readonly fontFamily: string | null; readonly fontSizePt: number | null;
+          readonly fontWeight: number | null; readonly color: string | null;
+          readonly italic: boolean | null; readonly underline: boolean | null;
+        }[];
+      };
+    }[];
+  };
 }
 export interface AuthoredHybridPptxProvenance {
   readonly exportAttemptId?: string; readonly presentationRevision?: number;
@@ -321,6 +348,113 @@ function escapeXmlAttribute(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
 }
 
+function canonicalOwnerJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalOwnerJson).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) =>
+    `${JSON.stringify(key)}:${canonicalOwnerJson(record[key])}`
+  ).join(",")}}`;
+}
+
+function ownerDigest(value: unknown): string {
+  return `sha256:${createHash("sha256").update(canonicalOwnerJson(value), "utf8").digest("hex")}`;
+}
+
+function serializeAdvancedTextOverlay(
+  xml: string,
+  item: Extract<PreparedNativeElement, { kind: "text" }>,
+  slideNumber: number,
+  ownership: NonNullable<AuthoredHybridSlideLayer["nativeOwnership"]>,
+  owner: NonNullable<AuthoredHybridSlideLayer["nativeOwnership"]>["owners"][number],
+): string {
+  const advanced = owner.advancedText;
+  if (!advanced || owner.kind !== "text" || owner.capabilityId !== "editable.text.advanced.v1" ||
+    advanced.schemaVersion !== "authored-advanced-text-owner/v1" ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(ownership.slideId) ||
+    !/^s\d{2,3}-[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(owner.elementId) ||
+    !owner.elementId.startsWith(`s${String(slideNumber).padStart(2, "0")}-`) ||
+    owner.elementId !== item.source.id ||
+    !["none", "shrink"].includes(advanced.autoFit) ||
+    typeof advanced.text !== "string" || advanced.text !== item.source.text.plainText ||
+    !Array.isArray(advanced.runs) || advanced.runs.length < 1 || advanced.runs.length > 512 ||
+    advanced.runs.map((run) => run.text).join("") !== advanced.text ||
+    /[\r\n]/.test(advanced.text)) {
+    throw new Error(`Hybrid advanced text ${item.source.id} has an invalid Scene owner.`);
+  }
+  const base = advanced.style;
+  const validFamily = (value: unknown): value is string =>
+    typeof value === "string" && value.trim().length > 0 && value.length <= 128 && !/[\x00-\x1f]/.test(value);
+  const validSize = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 400;
+  const validWeight = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value >= 1 && value <= 1000;
+  const validColor = (value: unknown): value is string =>
+    typeof value === "string" && /^#[0-9A-F]{6}$/.test(value);
+  if (!base || !validFamily(base.fontFamily) || !validSize(base.fontSizePt) ||
+    !validWeight(base.fontWeight) || !validColor(base.color) ||
+    typeof base.italic !== "boolean" || typeof base.underline !== "boolean") {
+    throw new Error(`Hybrid advanced text ${item.source.id} has an invalid base style.`);
+  }
+  let utf16Start = 0;
+  const runIds = new Set<string>();
+  const textRunMap: { runIndex: number; runId: string; utf16Start: number; utf16Length: number; textDigest: string }[] = [];
+  const textRunStyles: { runIndex: number; runId: string; fontFamily: string; eastAsianTypeface: string; fontSizePt: number; bold: boolean; italic: boolean; underline: boolean; color: string }[] = [];
+  const runXml = advanced.runs.map((run, runIndex) => {
+    if (!run || !/^[A-Za-z][A-Za-z0-9._:-]{0,127}$/.test(run.runId) ||
+      runIds.has(run.runId) || typeof run.text !== "string" ||
+      (run.fontFamily !== null && !validFamily(run.fontFamily)) ||
+      (run.fontSizePt !== null && !validSize(run.fontSizePt)) ||
+      (run.fontWeight !== null && !validWeight(run.fontWeight)) ||
+      (run.color !== null && !validColor(run.color)) ||
+      (run.italic !== null && typeof run.italic !== "boolean") ||
+      (run.underline !== null && typeof run.underline !== "boolean")) {
+      throw new Error(`Hybrid advanced text ${item.source.id} has an invalid run.`);
+    }
+    runIds.add(run.runId);
+    const style = {
+      runIndex, runId: run.runId,
+      fontFamily: run.fontFamily ?? base.fontFamily,
+      eastAsianTypeface: run.fontFamily ?? base.fontFamily,
+      fontSizePt: run.fontSizePt ?? base.fontSizePt,
+      bold: (run.fontWeight ?? base.fontWeight) >= 600,
+      italic: run.italic ?? base.italic,
+      underline: run.underline ?? base.underline,
+      color: run.color ?? base.color,
+    };
+    textRunStyles.push(style);
+    textRunMap.push({
+      runIndex, utf16Start,
+      utf16Length: run.text.length,
+      textDigest: ownerDigest({ text: run.text }),
+      runId: run.runId,
+    });
+    utf16Start += run.text.length;
+    const family = escapeXmlAttribute(style.fontFamily);
+    const color = style.color.slice(1);
+    return `<a:r><a:rPr lang="ko-KR" sz="${Math.round(style.fontSizePt * 100)}" b="${style.bold ? 1 : 0}" i="${style.italic ? 1 : 0}" u="${style.underline ? "sng" : "none"}"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${family}"/><a:ea typeface="${family}"/><a:extLst><a:ext uri="{3F05D0C5-A5DB-4B2C-9A89-38F8A106124A}"><pt:runIdentity xmlns:pt="urn:presenton:authored:advanced-text:v1" runId="${escapeXmlAttribute(run.runId)}"/></a:ext></a:extLst></a:rPr><a:t xml:space="preserve">${escapeXmlAttribute(run.text)}</a:t></a:r>`;
+  }).join("");
+  const advancedCore = { autoFit: advanced.autoFit, textRunMap, textRunStyles };
+  const advancedTextDigest = ownerDigest(advancedCore);
+  const ownerCore = {
+    schemaVersion: "authored-vnext-owner/v1", slideNumber,
+    slideId: ownership.slideId, elementId: owner.elementId,
+    kind: "text", capabilityId: owner.capabilityId,
+    textRunMap, textRunStyles, autoFit: advanced.autoFit, advancedTextDigest,
+  };
+  const receipt = JSON.stringify({ ...ownerCore, ownerDigest: ownerDigest(ownerCore) });
+  const payload = Buffer.from(canonicalOwnerJson({ textRunMap, textRunStyles, autoFit: advanced.autoFit }), "utf8").toString("base64url");
+  const paragraph = xml.match(/<a:p>(<a:pPr\b[\s\S]*?<\/a:pPr>)[\s\S]*?<\/a:p>/)?.[0];
+  if (!paragraph || (xml.match(/<a:p>/g) ?? []).length !== 1) {
+    throw new Error(`Hybrid advanced text ${item.source.id} requires one editable paragraph.`);
+  }
+  return xml
+    .replace(paragraph, `<a:p>${paragraph.match(/<a:pPr\b[\s\S]*?<\/a:pPr>/)?.[0]}${runXml}<a:endParaRPr lang="ko-KR" b="0"/></a:p>`)
+    .replace(/<p:cNvPr\b[^>]*\/>/, (tag) => tag.replace(/\/>$/, ` descr="${escapeXmlAttribute(`${AUTHORED_NATIVE_OWNER_ALTERNATIVE_TEXT_PREFIX}${receipt}`)}"/>`))
+    .replace(/<a:(?:normAutofit|noAutofit)\/>/, advanced.autoFit === "shrink" ? "<a:normAutofit/>" : "<a:noAutofit/>")
+    .replace("</p:spPr>", `<a:extLst><a:ext uri="{3F05D0C5-A5DB-4B2C-9A89-38F8A106124A}"><pt:advancedText xmlns:pt="urn:presenton:authored:advanced-text:v1" digest="${advancedTextDigest}" payload="${payload}"/></a:ext></a:extLst></p:spPr>`);
+}
+
 /** Exact geometry the assembler will expose to OOXML readback. */
 export function preparedNativeElementExpectedReadbackBounds(
   item: PreparedNativeElement,
@@ -331,9 +465,9 @@ export function preparedNativeElementExpectedReadbackBounds(
       powerPointTextBoundsForPreflight(item.source, canvas) ??
       item.source.bounds.px
     : item.source.bounds.px;
-  const toEmu = (value: number) => Math.round(value * 9_525);
+  const toEmu = (value: number) => Math.round(value * canvasEmuPerUnit(canvas));
   const toPx = (value: number) =>
-    Math.round((value / 9_525) * 1_000_000) / 1_000_000;
+    Math.round((value / canvasEmuPerUnit(canvas)) * 1_000_000) / 1_000_000;
   let x = toEmu(sourceBounds.x);
   let y = toEmu(sourceBounds.y);
   let width = Math.max(1, toEmu(sourceBounds.width));
@@ -347,13 +481,13 @@ export function preparedNativeElementExpectedReadbackBounds(
       Math.max(
         8,
         Math.min(16, item.source.text.style.fontSizePt * 0.4 + 4),
-      ) * 9_525,
+      ) * canvasEmuPerUnit(canvas),
     );
     const verticalSlack = Math.round(
       Math.max(
         4,
         Math.min(12, authoredHardBreakCount(item.source.text) > 0 ? 10 : 4),
-      ) * 9_525,
+      ) * canvasEmuPerUnit(canvas),
     );
     const horizontal = item.source.text.style.horizontalAlignment;
     const vertical = item.source.text.style.verticalAlignment;
@@ -401,10 +535,10 @@ function expandStandaloneTextBounds(
   if (!match) throw new Error(`Hybrid text ${item.source.id} has no bounded transform.`);
   const [x, y, width, height] = match.slice(1).map(Number);
   const horizontalSlack = Math.round(
-    Math.max(8, Math.min(16, item.source.text.style.fontSizePt * 0.4 + 4)) * 9_525
+    Math.max(8, Math.min(16, item.source.text.style.fontSizePt * 0.4 + 4)) * canvasEmuPerUnit(canvas)
   );
   const verticalSlack = Math.round(
-    Math.max(4, Math.min(12, authoredHardBreakCount(item.source.text) > 0 ? 10 : 4)) * 9_525
+    Math.max(4, Math.min(12, authoredHardBreakCount(item.source.text) > 0 ? 10 : 4)) * canvasEmuPerUnit(canvas)
   );
   const horizontal = item.source.text.style.horizontalAlignment;
   const vertical = item.source.text.style.verticalAlignment;
@@ -503,6 +637,17 @@ function assembleSlide(
     throw new Error("Hybrid slide number is invalid.");
   }
   assertBackplatePng(layer.backplatePng, canvas);
+  if (layer.nativeOwnership) {
+    const nativeIds = new Set(flattenPreparedNativeElements(layer.elements).map((item) => item.source.id));
+    const declaredIds = new Set<string>();
+    for (const owner of layer.nativeOwnership.owners) {
+      if (declaredIds.has(owner.elementId) || !nativeIds.has(owner.elementId) ||
+        owner.kind !== "text" || owner.capabilityId !== "editable.text.advanced.v1") {
+        throw new Error(`Hybrid slide ${layer.slideNumber} has an unsupported native ownership declaration.`);
+      }
+      declaredIds.add(owner.elementId);
+    }
+  }
   const rasterBands = layer.rasterBands?.length
     ? [...layer.rasterBands].sort((left, right) => left.zBand - right.zBand)
     : [{ zBand: 0, rasterPng: layer.backplatePng, semanticOwnerQids: layer.semanticOwnerQids ?? [] }];
@@ -593,10 +738,10 @@ function assembleSlide(
       const groupId = nextNonVisualId;
       nextNonVisualId += 1;
       const bounds = item.source.bounds.px;
-      const x = Math.round(bounds.x * 9_525);
-      const y = Math.round(bounds.y * 9_525);
-      const width = Math.max(1, Math.round(bounds.width * 9_525));
-      const height = Math.max(1, Math.round(bounds.height * 9_525));
+      const x = Math.round(bounds.x * canvasEmuPerUnit(canvas));
+      const y = Math.round(bounds.y * canvasEmuPerUnit(canvas));
+      const width = Math.max(1, Math.round(bounds.width * canvasEmuPerUnit(canvas)));
+      const height = Math.max(1, Math.round(bounds.height * canvasEmuPerUnit(canvas)));
       const children = [...item.children]
         .sort((left, right) =>
           left.source.zOrder - right.source.zOrder ||
@@ -642,7 +787,7 @@ function assembleSlide(
       );
       entries.set(
         chartPath,
-        Buffer.from(serializeNativeChartPart(item.source), "utf8"),
+        Buffer.from(serializeNativeChartPart(item.source, canvas), "utf8"),
       );
       addChartContentType(entries, chartPath);
     }
@@ -660,6 +805,12 @@ function assembleSlide(
     );
     if (overlay && item.kind === "text") {
       overlay = hardenTextOverlay(overlay, item, options, layer.slideNumber);
+      const owner = layer.nativeOwnership?.owners.find((candidate) => candidate.elementId === item.source.id);
+      if (owner) {
+        overlay = serializeAdvancedTextOverlay(
+          overlay, item, layer.slideNumber, layer.nativeOwnership!, owner,
+        );
+      }
     }
     if (underlay) {
       if (isCanvasBackgroundShape(item, canvas)) {

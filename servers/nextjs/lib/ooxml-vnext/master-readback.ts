@@ -275,6 +275,12 @@ function assertShapeMapping(
     const cNvPr = /<p:cNvPr\b([^>]*)\/>/.exec(match[2]);
     return cNvPr && attributes(cNvPr[1]).name === mapping.id;
   });
+  if ("kind" in mapping && mapping.visibility === "hidden") {
+    if (shapeMatches.length !== 0) {
+      throw new Error(`Hidden semantic shape ${mapping.id} must not be materialized`);
+    }
+    return;
+  }
   if (shapeMatches.length !== 1) {
     throw new Error(`Semantic shape ${mapping.id} must be materialized exactly once`);
   }

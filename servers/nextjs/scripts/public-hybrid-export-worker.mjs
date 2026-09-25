@@ -287,7 +287,8 @@ async function run() {
 
   const modules = await loadHybridModules();
   const canvas = modules.resolveAuthoredCanvas(job.canvas === undefined
-    ? undefined : { authored_vnext: { canvas: job.canvas } });
+    ? undefined : job.canvas?.contractVersion === "document-canvas/v1"
+      ? { documentCanvas: job.canvas } : { authored_vnext: { canvas: job.canvas } });
   const chromeExecutable = await modules.resolveAuthoredHybridChromeExecutable();
   if (!chromeExecutable) throw new HybridWorkerError("hybrid_chrome_unavailable");
 
@@ -432,7 +433,7 @@ async function run() {
     const noLayers = new HybridWorkerError("hybrid_no_native_layers");
     noLayers.quality = summarizeQuality(report, job.budgetMillis);
     noLayers.timing = { ...timing, wallMillis: elapsed(started) };
-    noLayers.editability = modules.createPublicHybridEditabilityEvidence({ outcomes: finalOutcomes, semantics, htmls, pptxBytes: embedding.pptx });
+    noLayers.editability = modules.createPublicHybridEditabilityEvidence({ outcomes: finalOutcomes, semantics, htmls, canvas, pptxBytes: embedding.pptx });
     if (noLayers.editability.verdict !== "not-applicable") throw noLayers;
   }
   const assembled = await assembleWithPerSlideIntegrityFallback({
@@ -462,7 +463,7 @@ async function run() {
     const noLayers = new HybridWorkerError("hybrid_no_native_layers");
     noLayers.quality = summarizeQuality(report, job.budgetMillis);
     noLayers.timing = { ...timing, wallMillis: elapsed(started) };
-    noLayers.editability = modules.createPublicHybridEditabilityEvidence({ outcomes: finalOutcomes, semantics, htmls, pptxBytes: embedding.pptx });
+    noLayers.editability = modules.createPublicHybridEditabilityEvidence({ outcomes: finalOutcomes, semantics, htmls, canvas, pptxBytes: embedding.pptx });
     if (noLayers.editability.verdict !== "not-applicable") throw noLayers;
   }
   const hybridBytes = assembled.hybridBytes ?? embedding.pptx;
@@ -471,8 +472,8 @@ async function run() {
   await writeFile(job.outputPath, hybridBytes, { flag: "wx", mode: 0o600 });
   await modules.writeLocalFitExportEvidence(job.outputPath,
     modules.createLocalFitExportEvidence(layers, htmls, job.rendererSourceDigest ?? "", hybridBytes, canvas));
-  const structural = modules.inspectPptxEditability(hybridBytes);
-  const editability = modules.createPublicHybridEditabilityEvidence({ outcomes: finalOutcomes, semantics, htmls, pptxBytes: hybridBytes });
+  const structural = modules.inspectPptxEditability(hybridBytes, canvas);
+  const editability = modules.createPublicHybridEditabilityEvidence({ outcomes: finalOutcomes, semantics, htmls, canvas, pptxBytes: hybridBytes });
   timing.writeAndVerificationMillis = elapsed(verificationStarted);
   timing.wallMillis = elapsed(started);
 

@@ -352,6 +352,7 @@ function tableCellTexts(element: AuthoredSemanticSlideContext["declaredElements"
 }
 
 export interface CreatePublicHybridEditabilityEvidenceOptions {
+  readonly canvas?: AuthoredCanvasContract;
   readonly outcomes: readonly PreparedSlideOutcome[];
   readonly semantics: readonly (AuthoredSemanticSlideContext | null)[];
   readonly htmls: readonly string[];
@@ -363,15 +364,16 @@ export interface CreatePublicHybridEditabilityEvidenceOptions {
 export function createPublicHybridEditabilityEvidence(
   options: CreatePublicHybridEditabilityEvidenceOptions,
 ): PublicHybridEditabilityEvidence {
-  const structural = inspectPptxEditability(options.pptxBytes);
-  const readback = inspectPptxNativeElementReadback(options.pptxBytes);
+  const canvas = options.canvas ?? LEGACY_AUTHORED_CANVAS;
+  const structural = inspectPptxEditability(options.pptxBytes, canvas);
+  const readback = inspectPptxNativeElementReadback(options.pptxBytes, canvas);
   const pptxText = pptxTextByQid(options.pptxBytes);
   const presentationXml = readPptxArchive(options.pptxBytes).get("ppt/presentation.xml")?.toString("utf8") ?? "";
   const size = presentationXml.match(/<p:sldSz\b[^>]*\bcx="(\d+)"[^>]*\bcy="(\d+)"/) ??
     presentationXml.match(/<p:sldSz\b[^>]*\bcy="(\d+)"[^>]*\bcx="(\d+)"/);
   const cxFirst = size ? size[0].indexOf("cx=") < size[0].indexOf("cy=") : true;
-  const canvasWidthPx = size ? Number(size[cxFirst ? 1 : 2]) / 9_525 : null;
-  const canvasHeightPx = size ? Number(size[cxFirst ? 2 : 1]) / 9_525 : null;
+  const canvasWidthPx = size ? Number(size[cxFirst ? 1 : 2]) / canvasEmuPerUnit(canvas) : null;
+  const canvasHeightPx = size ? Number(size[cxFirst ? 2 : 1]) / canvasEmuPerUnit(canvas) : null;
   const slides: EditabilitySlideInput[] = options.outcomes.map((outcome, index) => {
     const slideNumber = index + 1;
     const semantic = options.semantics[index] ?? null;
@@ -462,3 +464,4 @@ export function createPublicHybridEditabilityEvidence(
   });
   return evaluatePublicHybridEditability(slides, options.powerpointInteraction);
 }
+import { canvasEmuPerUnit, LEGACY_AUTHORED_CANVAS, type AuthoredCanvasContract } from "../authored-canvas.ts";

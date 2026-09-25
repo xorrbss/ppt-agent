@@ -778,8 +778,9 @@ async function runUncachedAuthoredHybridExport(
     );
     await writeLocalFitExportEvidence(hybridArtifact.path, localFitExportEvidence);
     const quality = attachAuthoredHybridStage2ReadbackMetadata(
-      attachPresentationExportOoxmlReadback(logicalQuality, inspectPptxEditability(hybridBytes)),
+      attachPresentationExportOoxmlReadback(logicalQuality, inspectPptxEditability(hybridBytes, canvas)),
       hybridBytes,
+      canvas,
     );
     const result = await attachAuthoredHybridEvidence({ path: hybridArtifact.path }, quality, {
       exportAttemptId: params.exportAttemptId,

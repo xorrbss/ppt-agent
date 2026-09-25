@@ -106,7 +106,7 @@ export default function AuthoredPackageLifecycle({ masterContract }: Props) {
         <button className="col-span-2" data-testid="authored-package-targeted-edit" disabled={busy || !expectedText || !replacementText} onClick={() => void execute(async () => {
           const completed = await authoredVnextPackageClient.operate(editable, "PATCH_TEXT_SLICE", operationKey("patch"), {
             partName: "ppt/slides/slide1.xml",
-            selector: { kind: "placeholder", role: "title", occurrence: 0 },
+            selector: { kind: "placeholder", idx: 0, occurrence: 0 },
             expectedText,
             replacementText,
           });

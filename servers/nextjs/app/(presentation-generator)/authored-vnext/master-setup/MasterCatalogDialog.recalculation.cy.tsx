@@ -191,7 +191,7 @@ describe("MasterCatalogDialog recalculation feedback", () => {
     );
 
     cy.get('[data-testid="ppt-ai-analysis-review"]').should("be.visible");
-    cy.contains("button", "Back to catalog").click();
+    cy.contains("button", "Back to company standards").click();
     cy.contains("article", "Different Master").within(() => {
       cy.contains("button", "Edit").click();
     });

@@ -316,7 +316,7 @@ test("contract construction rejects a viewport that would corrupt geometry", () 
       buildAuthoredHybridSlide(
         "<p>x</p>",
         {
-          viewport: { widthPx: 1024, heightPx: 768, devicePixelRatio: BACKPLATE_SCALE },
+          viewport: { widthPx: 319, heightPx: 768, devicePixelRatio: BACKPLATE_SCALE },
           appliedPromotedElementIds: [],
           rejectedPromotedElementIds: [],
           warnings: [],
@@ -324,7 +324,7 @@ test("contract construction rejects a viewport that would corrupt geometry", () 
         },
         undefined
       ),
-    /expected 1280x720 viewport/
+    /unsupported authored viewport 319x768/
   );
 });
 

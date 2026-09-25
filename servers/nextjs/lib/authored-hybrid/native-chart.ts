@@ -1,3 +1,4 @@
+import { canvasPointsPerUnit, LEGACY_AUTHORED_CANVAS, type AuthoredCanvasContract } from "../authored-canvas.ts";
 import type { AuthoredHybridBounds } from "./schema.ts";
 import type { BrowserElementObservation } from "./observation.ts";
 import type { DeclaredSemanticElementForObservation } from "./semantic-reconciliation.ts";
@@ -33,7 +34,10 @@ export interface AuthoredNativeChartPayloadV1 {
     readonly name: string;
     readonly values: readonly number[];
     readonly color?: string;
+    readonly pointColors?: readonly string[];
   }[];
+  readonly chartStyleVersion?: "bounded-native-chart-style/v1";
+  readonly chartStyle?: number;
   readonly title?: string;
   readonly fontFamily?: string;
   readonly fontSizePt?: number;
@@ -192,8 +196,15 @@ export function parseAuthoredNativeChartPayload(
     if (!isRecord(item)) return null;
     const name = stringValue(item.name);
     const color = colorValue(item.color);
+    const pointColors = item.pointColors === undefined
+      ? undefined
+      : Array.isArray(item.pointColors) && item.pointColors.length === categories.length
+        ? item.pointColors.map(colorValue)
+        : null;
     if (
-      name === null || color === null || !Array.isArray(item.values) ||
+      name === null || color === null || pointColors === null ||
+      pointColors?.some((pointColor) => typeof pointColor !== "string") ||
+      !Array.isArray(item.values) ||
       item.values.length !== categories.length ||
       item.values.some(
         (entry) => typeof entry !== "number" || !Number.isFinite(entry),
@@ -203,6 +214,7 @@ export function parseAuthoredNativeChartPayload(
       name,
       values: item.values as number[],
       ...(color ? { color } : {}),
+      ...(pointColors ? { pointColors: Object.freeze(pointColors as string[]) } : {}),
     };
   });
   if (series.some((item) => item === null)) return null;
@@ -214,6 +226,17 @@ export function parseAuthoredNativeChartPayload(
     : stringValue(value.fontFamily, MAX_FONT_FAMILY_LENGTH);
   const fontSizePt = fontSizeValue(value.fontSizePt);
   const textColor = colorValue(value.textColor);
+  const chartStyleVersion = value.chartStyleVersion;
+  const chartStyle = value.chartStyle;
+  if (
+    (chartStyleVersion !== undefined && chartStyleVersion !== "bounded-native-chart-style/v1") ||
+    (chartStyle !== undefined && (
+      chartStyleVersion !== "bounded-native-chart-style/v1" ||
+      typeof chartStyle !== "number" || !Number.isInteger(chartStyle) ||
+      chartStyle < 1 || chartStyle > 48
+    )) ||
+    (chartStyleVersion !== undefined && chartStyle === undefined)
+  ) return null;
   const palette = value.palette === undefined
     ? undefined
     : Array.isArray(value.palette)
@@ -252,6 +275,7 @@ export function parseAuthoredNativeChartPayload(
   return Object.freeze({
     schemaVersion: AUTHORED_NATIVE_CHART_SCHEMA_VERSION,
     chartType: value.chartType as AuthoredNativeChartType,
+    ...(chartStyleVersion ? { chartStyleVersion, chartStyle: chartStyle as number } : {}),
     categories: Object.freeze(categories as string[]),
     series: Object.freeze(series as NonNullable<(typeof series)[number]>[]),
     ...(title !== undefined ? { title } : {}),
@@ -354,9 +378,10 @@ function normalizedHex(value: string | undefined, fallback: string): string {
 function textPropertiesXml(
   payload: AuthoredNativeChartPayloadV1,
   style: AuthoredNativeChartTextStyle | undefined,
+  canvas: AuthoredCanvasContract,
 ): string {
   const family = escapeXml(style?.fontFamily ?? payload.fontFamily ?? "Arial");
-  const size = Math.round((style?.fontSizePt ?? payload.fontSizePt ?? 10) * 100);
+  const size = Math.round((style?.fontSizePt ?? payload.fontSizePt ?? 10) * canvasPointsPerUnit(canvas) / 0.75 * 100);
   const color = normalizedHex(style?.color ?? payload.textColor, "404040");
   return `<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="${size}"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${family}"/><a:ea typeface="${family}"/></a:defRPr></a:pPr><a:endParaRPr lang="en-US"/></a:p></c:txPr>`;
 }
@@ -364,10 +389,11 @@ function textPropertiesXml(
 function richTextXml(
   text: string,
   payload: AuthoredNativeChartPayloadV1,
-  style?: AuthoredNativeChartTextStyle,
+  style: AuthoredNativeChartTextStyle | undefined,
+  canvas: AuthoredCanvasContract,
 ): string {
   const family = escapeXml(style?.fontFamily ?? payload.fontFamily ?? "Arial");
-  const size = Math.round((style?.fontSizePt ?? payload.fontSizePt ?? 10) * 100);
+  const size = Math.round((style?.fontSizePt ?? payload.fontSizePt ?? 10) * canvasPointsPerUnit(canvas) / 0.75 * 100);
   const color = normalizedHex(style?.color ?? payload.textColor, "404040");
   return `<c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="${size}"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${family}"/><a:ea typeface="${family}"/></a:rPr><a:t>${escapeXml(text)}</a:t></a:r></a:p></c:rich></c:tx>`;
 }
@@ -383,6 +409,7 @@ function numberLiteral(values: readonly number[]): string {
 /** Build a self-contained native chart part with cached semantic source data. */
 export function serializeNativeChartPart(
   source: AuthoredHybridNativeChartSource,
+  canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS,
 ): string {
   const payload = source.chart;
   const palette = payload.palette?.length
@@ -390,11 +417,14 @@ export function serializeNativeChartPart(
     : ["2457D6", "68A4FF", "19A974", "F2B134", "D84A5B", "7A5AF8"];
   const seriesXml = payload.series.map((series, index) => {
     const color = normalizedHex(series.color ?? palette[index % palette.length], "2457D6");
-    return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/><c:tx><c:v>${escapeXml(series.name)}</c:v></c:tx><c:spPr><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:ln><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:ln></c:spPr><c:cat>${stringLiteral(payload.categories)}</c:cat><c:val>${numberLiteral(series.values)}</c:val></c:ser>`;
+    const pointColors = series.pointColors?.map((pointColor, pointIndex) =>
+      `<c:dPt><c:idx val="${pointIndex}"/><c:spPr><a:solidFill><a:srgbClr val="${normalizedHex(pointColor, color)}"/></a:solidFill></c:spPr></c:dPt>`
+    ).join("") ?? "";
+    return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/><c:tx><c:v>${escapeXml(series.name)}</c:v></c:tx><c:spPr><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:ln><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:ln></c:spPr>${pointColors}<c:cat>${stringLiteral(payload.categories)}</c:cat><c:val>${numberLiteral(series.values)}</c:val></c:ser>`;
   }).join("");
   const axes = payload.chartType === "pie" || payload.chartType === "donut"
     ? ""
-    : `<c:catAx><c:axId val="111111111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${payload.chartType === "bar" ? "l" : "b"}"/>${payload.categoryAxis?.title ? `<c:title>${richTextXml(payload.categoryAxis.title, payload, payload.categoryAxis)}<c:overlay val="0"/></c:title>` : ""}${textPropertiesXml(payload, payload.categoryAxis)}<c:crossAx val="222222222"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/></c:catAx><c:valAx><c:axId val="222222222"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${payload.chartType === "bar" ? "b" : "l"}"/><c:majorGridlines/>${payload.valueAxis?.title ? `<c:title>${richTextXml(payload.valueAxis.title, payload, payload.valueAxis)}<c:overlay val="0"/></c:title>` : ""}<c:numFmt formatCode="General" sourceLinked="1"/>${textPropertiesXml(payload, payload.valueAxis)}<c:crossAx val="111111111"/><c:crosses val="autoZero"/></c:valAx>`;
+    : `<c:catAx><c:axId val="111111111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${payload.chartType === "bar" ? "l" : "b"}"/>${payload.categoryAxis?.title ? `<c:title>${richTextXml(payload.categoryAxis.title, payload, payload.categoryAxis, canvas)}<c:overlay val="0"/></c:title>` : ""}${textPropertiesXml(payload, payload.categoryAxis, canvas)}<c:crossAx val="222222222"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/></c:catAx><c:valAx><c:axId val="222222222"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${payload.chartType === "bar" ? "b" : "l"}"/><c:majorGridlines/>${payload.valueAxis?.title ? `<c:title>${richTextXml(payload.valueAxis.title, payload, payload.valueAxis, canvas)}<c:overlay val="0"/></c:title>` : ""}<c:numFmt formatCode="General" sourceLinked="1"/>${textPropertiesXml(payload, payload.valueAxis, canvas)}<c:crossAx val="111111111"/><c:crosses val="autoZero"/></c:valAx>`;
   const axisIds = payload.chartType === "pie" || payload.chartType === "donut"
     ? ""
     : '<c:axId val="111111111"/><c:axId val="222222222"/>';
@@ -408,10 +438,10 @@ export function serializeNativeChartPart(
           ? `<c:areaChart><c:grouping val="standard"/><c:varyColors val="0"/>${seriesXml}${axisIds}</c:areaChart>${axes}`
           : `<c:barChart><c:barDir val="${payload.chartType === "bar" ? "bar" : "col"}"/><c:grouping val="clustered"/><c:varyColors val="0"/>${seriesXml}<c:gapWidth val="120"/>${axisIds}</c:barChart>${axes}`;
   const title = payload.title
-    ? `<c:title>${richTextXml(payload.title, payload, { fontSizePt: Math.max(12, payload.fontSizePt ?? 10) })}<c:overlay val="0"/></c:title><c:autoTitleDeleted val="0"/>`
+    ? `<c:title>${richTextXml(payload.title, payload, { fontSizePt: Math.max(12, payload.fontSizePt ?? 10) }, canvas)}<c:overlay val="0"/></c:title><c:autoTitleDeleted val="0"/>`
     : '<c:autoTitleDeleted val="1"/>';
   const legend = payload.legend?.visible === false
     ? ""
-    : `<c:legend><c:legendPos val="${{ bottom: "b", top: "t", right: "r", left: "l" }[payload.legend?.position ?? "bottom"]}"/><c:overlay val="0"/>${textPropertiesXml(payload, payload.legend)}</c:legend>`;
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><c:chart>${title}<c:plotArea><c:layout/>${plot}</c:plotArea>${legend}<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/><c:showDLblsOverMax val="0"/></c:chart>${textPropertiesXml(payload, undefined)}<c:printSettings><c:headerFooter/><c:pageMargins b="0.75" l="0.7" r="0.7" t="0.75" header="0.3" footer="0.3"/><c:pageSetup/></c:printSettings></c:chartSpace>`;
+    : `<c:legend><c:legendPos val="${{ bottom: "b", top: "t", right: "r", left: "l" }[payload.legend?.position ?? "bottom"]}"/><c:overlay val="0"/>${textPropertiesXml(payload, payload.legend, canvas)}</c:legend>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${payload.chartStyle ? `<c:style val="${payload.chartStyle}"/>` : ""}<c:chart>${title}<c:plotArea><c:layout/>${plot}</c:plotArea>${legend}<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/><c:showDLblsOverMax val="0"/></c:chart>${textPropertiesXml(payload, undefined, canvas)}<c:printSettings><c:headerFooter/><c:pageMargins b="0.75" l="0.7" r="0.7" t="0.75" header="0.3" footer="0.3"/><c:pageSetup/></c:printSettings></c:chartSpace>`;
 }

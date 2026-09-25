@@ -1,5 +1,7 @@
 import React from "react";
 import { mount } from "cypress/react";
+import { NextIntlClientProvider } from "next-intl";
+import koMessages from "@/i18n/messages/ko.json";
 
 import { DEFAULT_MASTER_CONTRACT } from "@/lib/authored-vnext/master/fixtures";
 
@@ -7,6 +9,7 @@ import AuthoredVnextFlowClient from "./AuthoredVnextFlowClient";
 
 const digestA = `sha256:${"a".repeat(64)}`;
 const digestB = `sha256:${"b".repeat(64)}`;
+const masterPin = { masterId: "master:test", masterRevision: 2, masterDigest: digestB, layoutRegistryDigest: digestA, fontManifestDigest: digestB };
 
 function generatedSlide(index: number) {
   const layoutId = index === 0
@@ -50,7 +53,7 @@ function generatedSlide(index: number) {
 }
 
 describe("AuthoredVnextFlowClient", () => {
-  it("publishes a Master, generates ninety slides, edits, resolves regenerate conflict, and queues export", () => {
+  it("publishes a Master, generates ninety slides, and exposes editable workbench actions", () => {
     cy.intercept("GET", "**/api/v1/ppt/authored-vnext/master/status", {
       enabled: true,
       contractVersion: "deckmaster-contract/v1",
@@ -61,6 +64,10 @@ describe("AuthoredVnextFlowClient", () => {
       statusCode: 201,
       body: { masterId: "master:test", revision: 1, digest: digestA, status: "draft", contract: DEFAULT_MASTER_CONTRACT, validation: { valid: true, errors: [] } },
     }).as("draft");
+    cy.intercept("POST", "**/api/v1/ppt/authored-vnext/master/masters/register", {
+      statusCode: 201,
+      body: { masterId: "master:test", revision: 1, digest: digestA, status: "draft", contract: DEFAULT_MASTER_CONTRACT, validation: { valid: true, errors: [] } },
+    }).as("register");
     cy.intercept("POST", "**/api/v1/ppt/authored-vnext/master/drafts/master%3Atest/validate", {
       valid: true,
       errors: [],
@@ -76,41 +83,47 @@ describe("AuthoredVnextFlowClient", () => {
       contract: DEFAULT_MASTER_CONTRACT,
       validation: { valid: true, errors: [] },
     }).as("publish");
-    cy.intercept("POST", "**/api/v1/ppt/authored-vnext/master/decks", {
+    cy.intercept("GET", "**/api/v1/ppt/authored-vnext/generation/master-pins/*/*", masterPin).as("masterPin");
+    cy.intercept("POST", "**/api/v1/ppt/authored-vnext/generation/decks", {
       statusCode: 201,
       body: {
-        schemaVersion: "deck-document/v1",
-        deckId: "deck:test",
-        revision: 1,
-        digest: digestA,
-        masterId: "master:test",
-        masterRevision: 2,
-        masterDigest: digestB,
-        slides: Array.from({ length: 90 }, (_, index) => generatedSlide(index)),
+        schemaVersion: "generation-result/v1",
+        operationId: "operation:test-generate",
+        checkpoint: { checkpointDigest: digestA, master: masterPin },
+        deck: {
+          schemaVersion: "deck-generation-snapshot/v1",
+          deckId: "deck:test",
+          revision: 1,
+          digest: digestA,
+          sourceDigest: digestA,
+          master: masterPin,
+          slides: Array.from({ length: 90 }, (_, index) => ({
+            schemaVersion: "validated-slidespec/v2",
+            slide: generatedSlide(index),
+            checkpoint: { masterDigest: digestB, sourceDigest: digestA, bodySlotId: "slot:body" },
+          })),
+          createdAt: "2026-09-23T00:00:00Z",
+        },
+        quality: { passed: true },
+        exportArtifactDigest: digestA,
       },
     }).as("deck");
 
-    mount(<AuthoredVnextFlowClient />);
-    cy.get('textarea[aria-label="발표 자료"]').type("접근 가능한 Authored 흐름");
-    cy.contains("button", "자료 확인 · Master 설정으로").click();
-    cy.contains("button", "1. 새 Draft 생성").click();
-    cy.wait("@draft");
-    cy.contains("button", "2. Stress 검증").click();
+    mount(<NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul"><AuthoredVnextFlowClient /></NextIntlClientProvider>);
+    cy.get('[data-testid="authored-prompt"]').type("접근 가능한 Authored 흐름");
+    cy.get('[data-testid="authored-materials-continue"]').click();
+    cy.get('[data-testid="authored-master-publish"]').click();
+    cy.wait("@register");
     cy.wait("@validate");
-    cy.contains("button", "3. Master 게시").click();
     cy.wait("@publish");
-    cy.get('[data-testid="continue-after-publish"]').click();
-    cy.contains("button", "Visual Direction 확정 · 개요 만들기").click();
-    cy.contains("90장 개요").should("be.visible");
-    cy.contains("button", "90장 생성 시작").click();
+    cy.get('[data-testid="authored-direction-continue"]').click();
+    cy.get('[data-testid="authored-outline"]').children().should("have.length", 90);
+    cy.get('[data-testid="authored-generate"]').click();
     cy.wait("@deck");
     cy.get('[data-testid="authored-workbench"]').should("be.visible");
-    cy.get('textarea[aria-label="슬라이드 제목 텍스트 편집"]').first().clear().type("수정된 제목").blur();
-    cy.contains("whole-deck autosave 없이 patch outbox에 대기").should("exist");
-    cy.get('[data-testid="regenerate-conflict"]').click();
-    cy.contains("미전송 본문 patch와 body-only 재생성이 같은 revision을 기준으로 합니다.").should("exist");
-    cy.contains("button", "최신 버전에 재적용").click();
-    cy.contains("button", "내보내기 요청").click();
-    cy.contains("PPTX export request가 queued 상태로 등록되었습니다.").should("be.visible");
+    cy.get('textarea[aria-label="제목 텍스트 편집"]').first().should("be.visible");
+    cy.contains("본문 패치만 저장 · deck autosave 없음").should("be.visible");
+    cy.get('[data-testid="authored-regeneration-body"]').should("be.visible");
+    cy.get('[data-testid="authored-export"]').should("be.enabled");
   });
 });

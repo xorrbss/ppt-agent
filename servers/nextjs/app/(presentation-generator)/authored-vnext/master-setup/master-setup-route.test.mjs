@@ -59,6 +59,10 @@ const uploadState = readFileSync(
   ),
   "utf8",
 );
+const uploadGenerationHandlers = readFileSync(
+  path.join(generatorDir, "upload", "components", "upload-page", "uploadGenerationHandlers.ts"),
+  "utf8",
+);
 const outlinePage = readFileSync(
   path.join(generatorDir, "outline", "components", "OutlinePage.tsx"),
   "utf8",
@@ -108,8 +112,8 @@ test("Upload keeps master preference separate and defaults to one-shot generatio
   assert.match(uploadState, /companyStandardRef\.current\?\.masterId !== requested\.masterId/);
   assert.match(uploadState, /startPresentation\(true\)/);
   assert.match(uploadState, /startPresentation\(false\)/);
-  assert.match(uploadState, /\/outline\?auto=1&id=/);
-  assert.match(outlinePage, /const autoWorking = auto/);
+  assert.match(uploadGenerationHandlers, /\/outline\?auto=1&id=/);
+  assert.match(outlinePage, /autoIntentState === "checking"/);
   assert.match(outlinePage, /masterDefaultResolved/);
   assert.match(presentationGeneration, /generationMasterPin\(companyStandard\)/);
   assert.match(presentationGeneration, /authoredRequest\.masterPin/);

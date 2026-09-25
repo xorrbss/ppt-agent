@@ -1,4 +1,4 @@
-import { LEGACY_AUTHORED_CANVAS, type AuthoredCanvasContract } from "../authored-canvas.ts";
+import { canvasEmuPerUnit, canvasPointsPerUnit, LEGACY_AUTHORED_CANVAS, type AuthoredCanvasContract } from "../authored-canvas.ts";
 import { createHash } from "node:crypto";
 
 import sharp from "sharp";
@@ -47,7 +47,6 @@ function minimumEditableFontSizePt(style: AuthoredHybridTextStyle): number {
   return style.sourceFitPolicy === "composer-source-fit/v2" ? 7 * 0.75 : MIN_EDITABLE_FONT_SIZE_PT;
 }
 export const AUTHORED_NATIVE_OWNER_ALTERNATIVE_TEXT_PREFIX = "authored-vnext:";
-const EMU_PER_POINT = 12_700;
 const MAX_NATIVE_ELEMENTS_PER_SLIDE = 1_000;
 const MAX_IMAGE_PIXELS = 40_000_000;
 const MAX_TEXT_CODE_POINTS = 100_000;
@@ -1582,23 +1581,23 @@ function escapeXml(value: string): string {
     .replaceAll("'", "&apos;");
 }
 
-function emu(value: number): number {
-  return Math.max(0, Math.round(value * EMU_PER_CSS_PX));
+function emu(value: number, canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS): number {
+  return Math.max(0, Math.round(value * canvasEmuPerUnit(canvas)));
 }
 
-function coordinateEmu(value: number): number {
-  return Math.round(value * EMU_PER_CSS_PX);
+function coordinateEmu(value: number, canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS): number {
+  return Math.round(value * canvasEmuPerUnit(canvas));
 }
 
-function rectAxisEmu(start: number, length: number): {
+function rectAxisEmu(start: number, length: number, canvas: AuthoredCanvasContract): {
   offset: number;
   extent: number;
 } {
-  const offset = coordinateEmu(start);
+  const offset = coordinateEmu(start, canvas);
   // Quantize both authored edges onto the same PowerPoint grid. Computing the
   // extent from those edges keeps shared card/row boundaries and CSS gaps
   // exact instead of accumulating independent position/size rounding error.
-  const end = coordinateEmu(start + Math.max(0, length));
+  const end = coordinateEmu(start + Math.max(0, length), canvas);
   return { offset, extent: Math.max(1, end - offset) };
 }
 
@@ -1607,9 +1606,9 @@ function rotation(value: number): number {
   return Math.round(normalized * 60_000);
 }
 
-function transformRectXml(rect: AuthoredHybridRect, rotationDeg: number): string {
-  const horizontal = rectAxisEmu(rect.x, rect.width);
-  const vertical = rectAxisEmu(rect.y, rect.height);
+function transformRectXml(rect: AuthoredHybridRect, rotationDeg: number, canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS): string {
+  const horizontal = rectAxisEmu(rect.x, rect.width, canvas);
+  const vertical = rectAxisEmu(rect.y, rect.height, canvas);
   return `<a:xfrm${rotation(rotationDeg) ? ` rot="${rotation(rotationDeg)}"` : ""}><a:off x="${horizontal.offset}" y="${vertical.offset}"/><a:ext cx="${horizontal.extent}" cy="${vertical.extent}"/></a:xfrm>`;
 }
 
@@ -1640,8 +1639,8 @@ function isCapturedCompositeChildPaint(
   );
 }
 
-function transformXml(element: AuthoredHybridElement): string {
-  return transformRectXml(element.bounds.px, element.rotationDeg);
+function transformXml(element: AuthoredHybridElement, canvas: AuthoredCanvasContract): string {
+  return transformRectXml(element.bounds.px, element.rotationDeg, canvas);
 }
 
 function alphaAmount(color: AuthoredHybridColor, opacity: number): number {
@@ -1694,7 +1693,7 @@ function runPropertiesXml(
   const attributes = [
     `lang="ko-KR"`,
     `altLang="en-US"`,
-    `sz="${Math.round(Math.max(minimumEditableFontSizePt(style), style.fontSizePt) * 100)}"`,
+    `sz="${Math.round(Math.max(minimumEditableFontSizePt(style), style.fontSizePt) * canvasPointsPerUnit(options.canvas ?? LEGACY_AUTHORED_CANVAS) / 0.75 * 100)}"`,
     // Bold runs override the paragraph's explicit regular default. Keeping
     // `b="0"` on the paragraph end marker (rather than every regular run)
     // preserves mixed-weight semantics without changing regular glyph shaping
@@ -1704,7 +1703,7 @@ function runPropertiesXml(
     style.underline ? `u="sng"` : "",
     style.strike ? `strike="sngStrike"` : "",
     style.letterSpacingPt
-      ? `spc="${Math.round(style.letterSpacingPt * 100)}"`
+      ? `spc="${Math.round(style.letterSpacingPt * canvasPointsPerUnit(options.canvas ?? LEGACY_AUTHORED_CANVAS) / 0.75 * 100)}"`
       : "",
   ].filter(Boolean);
   return `<a:rPr ${attributes.join(" ")}>${colorXml(style.color, opacity)}<a:latin typeface="${escapeXml(latin)}"/><a:ea typeface="${escapeXml(eastAsian)}"/><a:cs typeface="${escapeXml(latin)}"/></a:rPr>`;
@@ -1853,12 +1852,12 @@ function powerPointTextParagraphs(
   return paragraphs.map(mergeAdjacentTextPieces);
 }
 
-function textSpacingPointValue(points: number): number {
-  return Math.max(0, Math.min(20_116_800, Math.round(points * 100)));
+function textSpacingPointValue(points: number, canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS): number {
+  return Math.max(0, Math.min(20_116_800, Math.round(points * canvasPointsPerUnit(canvas) / 0.75 * 100)));
 }
 
-function cssPixelsToTextSpacingPointValue(cssPixels: number): number {
-  return textSpacingPointValue(cssPixels * 0.75);
+function cssPixelsToTextSpacingPointValue(cssPixels: number, canvas: AuthoredCanvasContract): number {
+  return textSpacingPointValue(cssPixels * 0.75, canvas);
 }
 
 function hasZeroTextBoxPadding(
@@ -1910,7 +1909,8 @@ function shouldUseProportionalLineSpacing(
 }
 
 function lineSpacingXml(
-  element: AuthoredHybridEditableTextElement
+  element: AuthoredHybridEditableTextElement,
+  canvas: AuthoredCanvasContract
 ): string {
   if (element.text.style.lineHeight.source !== "computed") return "";
 
@@ -1923,7 +1923,7 @@ function lineSpacingXml(
 
   if (hasMixedFontSizes || !shouldUseProportionalLineSpacing(element, fontSizes)) {
     return `<a:lnSpc><a:spcPts val="${textSpacingPointValue(
-      element.text.style.lineHeight.points
+      element.text.style.lineHeight.points, canvas
     )}"/></a:lnSpc>`;
   }
 
@@ -1954,7 +1954,8 @@ function paragraphsXml(
   // authored CSS multiple so PowerPoint can apply the active font's native
   // metrics. Mixed-size text keeps exact point spacing because proportional
   // spacing is recalculated from the tallest run and drifts from the browser.
-  const lineSpacing = lineSpacingXml(element);
+  const canvas = options.canvas ?? LEGACY_AUTHORED_CANVAS;
+  const lineSpacing = lineSpacingXml(element, canvas);
   const paragraphs = powerPointTextParagraphs(element);
   const paragraphSpacing = element.text.layout?.paragraphSpacingPx ?? {
     before: 0,
@@ -1966,10 +1967,10 @@ function paragraphsXml(
     // to the outer edges so the browser's internal paragraph gap is not
     // multiplied by the number of editable paragraphs.
     const before = paragraphIndex === 0
-      ? cssPixelsToTextSpacingPointValue(paragraphSpacing.before)
+      ? cssPixelsToTextSpacingPointValue(paragraphSpacing.before, canvas)
       : 0;
     const after = paragraphIndex === paragraphs.length - 1
-      ? cssPixelsToTextSpacingPointValue(paragraphSpacing.after)
+      ? cssPixelsToTextSpacingPointValue(paragraphSpacing.after, canvas)
       : 0;
     const pPr = `<a:pPr algn="${alignment}" marL="0" indent="0"${element.text.style.direction === "rtl" ? ` rtl="1"` : ""}>${lineSpacing}<a:spcBef><a:spcPts val="${before}"/></a:spcBef><a:spcAft><a:spcPts val="${after}"/></a:spcAft></a:pPr>`;
     const contents = paragraph.map((piece) =>
@@ -2313,7 +2314,7 @@ function gradientFillXml(
     .join("")}</a:gsLst><a:lin ang="${rotation(gradient.angleDeg - 90)}" scaled="1"/></a:gradFill>`;
 }
 
-function shapePaintXml(shape: AuthoredHybridShapePayload, opacity: number, bounds?: AuthoredHybridRect): string {
+function shapePaintXml(shape: AuthoredHybridShapePayload, opacity: number, bounds?: AuthoredHybridRect, canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS): string {
   const isLine = shape.shape === "line";
   const fill = isLine
     ? "<a:noFill/>"
@@ -2329,9 +2330,9 @@ function shapePaintXml(shape: AuthoredHybridShapePayload, opacity: number, bound
       : "<a:noFill/>";
   const hasLine = Boolean(shape.stroke || (isLine && shape.gradient));
   const line = hasLine
-    ? `<a:ln w="${Math.max(1, Math.round(shape.strokeWidthPt * EMU_PER_POINT))}"${shape.lineCap === "round" ? ' cap="rnd"' : ""}>${lineFill}${shape.dash ? `<a:prstDash val="${shape.dash}"/>` : ""}${shape.lineJoin === "round" ? "<a:round/>" : ""}${shape.endArrow ? `<a:tailEnd type="${shape.endArrow}" w="lg" len="lg"/>` : ""}</a:ln>`
+    ? `<a:ln w="${Math.max(1, Math.round(shape.strokeWidthPt / 0.75 * canvasEmuPerUnit(canvas)))}"${shape.lineCap === "round" ? ' cap="rnd"' : ""}>${lineFill}${shape.dash ? `<a:prstDash val="${shape.dash}"/>` : ""}${shape.lineJoin === "round" ? "<a:round/>" : ""}${shape.endArrow ? `<a:tailEnd type="${shape.endArrow}" w="lg" len="lg"/>` : ""}</a:ln>`
     : "<a:ln><a:noFill/></a:ln>";
-  return `${fill}${line}${shape.outerShadow ? outerShadowEffectXml(shape.outerShadow, opacity, bounds) : ""}`;
+  return `${fill}${line}${shape.outerShadow ? outerShadowEffectXml(shape.outerShadow, opacity, bounds, canvas) : ""}`;
 }
 
 function borderLineBounds(
@@ -2723,6 +2724,7 @@ export function serializePreparedNativeElement(
   relationshipId?: string,
   options: PowerPointTypefaceSerializationOptions = {}
 ): string {
+  const canvas = options.canvas ?? LEGACY_AUTHORED_CANVAS;
   if (item.kind === "group") {
     throw new Error("Native groups require the hierarchy-aware PPTX assembler.");
   }
@@ -2765,9 +2767,9 @@ export function serializePreparedNativeElement(
       ? shapeGeometryXml(container.shape, shapeBounds)
       : '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>';
     const paint = container
-      ? shapePaintXml(container.shape, element.opacity, shapeBounds)
+      ? shapePaintXml(container.shape, element.opacity, shapeBounds, canvas)
       : "<a:noFill/><a:ln><a:noFill/></a:ln>";
-    return `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="${name}"/>${container ? "<p:cNvSpPr/>" : '<p:cNvSpPr txBox="1"/>'}<p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(shapeBounds, element.rotationDeg)}${geometry}${paint}</p:spPr><p:txBody><a:bodyPr wrap="${wrap}" horzOverflow="${horizontalOverflow}" vertOverflow="${verticalOverflow}" anchor="${anchor}" lIns="${emu(insets.left)}" tIns="${emu(insets.top)}" rIns="${emu(insets.right)}" bIns="${emu(insets.bottom)}">${powerPointAutofitXml()}</a:bodyPr><a:lstStyle/>${paragraphsXml(element, options)}</p:txBody></p:sp>`;
+    return `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="${name}"/>${container ? "<p:cNvSpPr/>" : '<p:cNvSpPr txBox="1"/>'}<p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(shapeBounds, element.rotationDeg, canvas)}${geometry}${paint}</p:spPr><p:txBody><a:bodyPr wrap="${wrap}" horzOverflow="${horizontalOverflow}" vertOverflow="${verticalOverflow}" anchor="${anchor}" lIns="${emu(insets.left, canvas)}" tIns="${emu(insets.top, canvas)}" rIns="${emu(insets.right, canvas)}" bIns="${emu(insets.bottom, canvas)}">${powerPointAutofitXml()}</a:bodyPr><a:lstStyle/>${paragraphsXml(element, options)}</p:txBody></p:sp>`;
   }
   if (item.kind === "shape") {
     const element = item.source;
@@ -2777,13 +2779,13 @@ export function serializePreparedNativeElement(
     element.shape.shadowLayers?.forEach((layer, index) => {
       const bounds = shiftedShadowBounds(element.bounds.px, layer);
       const paintShape = shadowShape(element.shape, layer.color, bounds);
-      shapes.push(`<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId + idOffset}" name="${name} shadow ${index + 1}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(bounds, element.rotationDeg)}${shapeGeometryXml(paintShape, bounds)}${shapePaintXml(paintShape, element.opacity)}</p:spPr></p:sp>`);
+      shapes.push(`<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId + idOffset}" name="${name} shadow ${index + 1}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(bounds, element.rotationDeg, canvas)}${shapeGeometryXml(paintShape, bounds)}${shapePaintXml(paintShape, element.opacity, undefined, canvas)}</p:spPr></p:sp>`);
       idOffset += 1;
     });
     if (element.shape.outline) {
       const bounds = outlineBounds(element.bounds.px, element.shape.outline);
       const paintShape = outlineShape(element.shape, element.shape.outline);
-      shapes.push(`<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId + idOffset}" name="${name} outline"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(bounds, element.rotationDeg)}${shapeGeometryXml(paintShape, bounds)}${shapePaintXml(paintShape, element.opacity)}</p:spPr></p:sp>`);
+      shapes.push(`<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId + idOffset}" name="${name} outline"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(bounds, element.rotationDeg, canvas)}${shapeGeometryXml(paintShape, bounds)}${shapePaintXml(paintShape, element.opacity, undefined, canvas)}</p:spPr></p:sp>`);
       idOffset += 1;
     }
     if (shapeHasBaseObject(element.shape)) {
@@ -2791,7 +2793,7 @@ export function serializePreparedNativeElement(
         ? axisAlignedLineBounds(element.bounds.px, element.rotationDeg)
         : element.bounds.px;
       const paintShape = lineShapeForBounds(element.shape, element.bounds.px);
-      shapes.push(`<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId + idOffset}" name="${name}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(bounds, element.rotationDeg)}${shapeGeometryXml(paintShape, bounds)}${shapePaintXml(paintShape, element.opacity, element.bounds.px)}</p:spPr></p:sp>`);
+      shapes.push(`<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId + idOffset}" name="${name}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(bounds, element.rotationDeg, canvas)}${shapeGeometryXml(paintShape, bounds)}${shapePaintXml(paintShape, element.opacity, element.bounds.px, canvas)}</p:spPr></p:sp>`);
       idOffset += 1;
     }
     element.shape.borderLines?.forEach((border) => {
@@ -2817,7 +2819,7 @@ export function serializePreparedNativeElement(
       const bounds = element.shape.shape === "ellipse"
         ? element.bounds.px
         : borderLineBounds(element.bounds.px, border.side);
-      shapes.push(`<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId + idOffset}" name="${name} ${border.side} border"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(bounds, element.rotationDeg)}${shapeGeometryXml(lineShape, bounds)}${shapePaintXml(lineShape, element.opacity)}</p:spPr></p:sp>`);
+      shapes.push(`<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId + idOffset}" name="${name} ${border.side} border"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(bounds, element.rotationDeg, canvas)}${shapeGeometryXml(lineShape, bounds)}${shapePaintXml(lineShape, element.opacity, undefined, canvas)}</p:spPr></p:sp>`);
       idOffset += 1;
     });
     return shapes.join("");
@@ -2826,9 +2828,9 @@ export function serializePreparedNativeElement(
     if (!relationshipId) throw new Error("Native chart relationship is missing.");
     const element = item.source;
     const name = escapeXml(nonVisualName(element));
-    return `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="${nonVisualId}" name="${name}" descr="presenton-authored-native-chart"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${coordinateEmu(element.bounds.px.x)}" y="${coordinateEmu(element.bounds.px.y)}"/><a:ext cx="${Math.max(1, coordinateEmu(element.bounds.px.width))}" cy="${Math.max(1, coordinateEmu(element.bounds.px.height))}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="${relationshipId}"/></a:graphicData></a:graphic></p:graphicFrame>`;
+    return `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="${nonVisualId}" name="${name}" descr="presenton-authored-native-chart"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${coordinateEmu(element.bounds.px.x, canvas)}" y="${coordinateEmu(element.bounds.px.y, canvas)}"/><a:ext cx="${Math.max(1, coordinateEmu(element.bounds.px.width, canvas))}" cy="${Math.max(1, coordinateEmu(element.bounds.px.height, canvas))}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="${relationshipId}"/></a:graphicData></a:graphic></p:graphicFrame>`;
   }
-  if (item.kind === "table") return serializeNativeTableFrame(item.source, nonVisualId);
+  if (item.kind === "table") return serializeNativeTableFrame(item.source, nonVisualId, undefined, canvas);
   if (!relationshipId) throw new Error("Native image relationship is missing.");
   const element = item.source;
   const name = escapeXml(nonVisualName(element));
@@ -2836,7 +2838,7 @@ export function serializePreparedNativeElement(
   const sourceRect = element.image.objectFit === "cover"
     ? nativeCropSourceRectXml(element.image.crop)
     : "";
-  return `<p:pic><p:nvPicPr><p:cNvPr id="${nonVisualId}" name="${name}" descr="${escapeXml(element.image.alt)}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}">${imageAlpha < 100_000 ? `<a:alphaModFix amt="${imageAlpha}"/>` : ""}</a:blip>${sourceRect}<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${transformXml(element)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${nonVisualId}" name="${name}" descr="${escapeXml(element.image.alt)}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${relationshipId}">${imageAlpha < 100_000 ? `<a:alphaModFix amt="${imageAlpha}"/>` : ""}</a:blip>${sourceRect}<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${transformXml(element, canvas)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr></p:pic>`;
 }
 
 export function serializePreparedNativeElementUnderlay(

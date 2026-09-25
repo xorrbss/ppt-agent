@@ -1,4 +1,4 @@
-import { AUTHORED_CANVAS_BY_ASPECT_RATIO } from "../authored-canvas.ts";
+import { AUTHORED_CANVAS_BY_ASPECT_RATIO, authoredCanvasForDocument } from "../authored-canvas.ts";
 import { fragmentRasterBand, validateFragmentBand } from "./raster-fragments.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -12,8 +12,51 @@ import {
   SEMANTIC_OWNERSHIP_ALT_TEXT_PREFIX,
 } from "./pptx-assembler.ts";
 import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
+import { inspectPptxNativeElementReadback } from "./pptx-quality-inspection.ts";
+import { localFitImageEvidence, rememberLocalFitSource } from "./local-fit-export-evidence.ts";
 
 const { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT } = backplatePixelSize();
+
+test("A4 native geometry and CSS typography use document units without leaking into legacy", async () => {
+  for (const [width, height, widthEmu, heightEmu] of [[1188, 840, 10692000, 7560000], [840, 1188, 7560000, 10692000], [1280, 720, 12192000, 6858000]]) {
+    const legacy = width === 1280;
+    const canvas = legacy ? AUTHORED_CANVAS_BY_ASPECT_RATIO["16:9"] : authoredCanvasForDocument({
+      contractVersion: "document-canvas/v1", logicalSize: { width, height },
+      physicalSize: { widthEmu, heightEmu }, safeArea: { x: 60, y: 60, width: width - 120, height: height - 120 },
+    });
+    const size = backplatePixelSize(canvas);
+    const backplatePng = await sharp({ create: { ...size, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } } }).png().toBuffer();
+    const source = {
+      id: "a4-shape", tagName: "div", domPath: "body > div", sourceIndex: 0, zOrder: 0, cssZIndex: 0,
+      bounds: bounds(60, 60, 100, 100), rotationDeg: 0, opacity: 1,
+      classification: { mode: "native", kind: "shape", confidence: "safe" },
+      shape: { shape: "rectangle", fill: { hex: "112233", alpha: 1 }, stroke: { hex: "112233", alpha: 1 }, strokeWidthPt: 0.75, radiusPt: 0 },
+    };
+    const text = { ...source, id: "a4-text", classification: { mode: "native", kind: "text", confidence: "safe" },
+      text: { role: "body", plainText: "A4", paragraphs: ["A4"], runs: [], style: { ...textStyle, fontSizePt: 12 } } };
+    const result = assembleAuthoredHybridPptx(skeleton(), [{ slideNumber: 1, backplatePng, elements: [{ kind: "shape", source }, { kind: "text", source: text }] }], { canvas });
+    const archive = readPptxArchive(result);
+    assert.match(archive.get("ppt/presentation.xml").toString(), new RegExp(`cx="${widthEmu}" cy="${heightEmu}"`));
+    const xml = archive.get("ppt/slides/slide1.xml").toString();
+    assert.match(xml, new RegExp(`<a:off x="${legacy ? 571500 : 540000}" y="${legacy ? 571500 : 540000}"/><a:ext cx="${legacy ? 952500 : 900000}" cy="${legacy ? 952500 : 900000}"/>`));
+    assert.match(xml, new RegExp(`<a:ln w="${legacy ? 9525 : 9000}"`));
+    assert.match(xml, new RegExp(`sz="${legacy ? 1200 : 1134}"`));
+    const observed = inspectPptxNativeElementReadback(result, canvas).find(item => item.elementId === "a4-shape");
+    assert.deepEqual(observed.renderedBounds, { x: 60, y: 60, width: 100, height: 100 });
+    const measuredSlide = {};
+    rememberLocalFitSource(measuredSlide, {
+      runs: [{ owner_qid: "image-text" }],
+      local_image_sources: [{ element_id: "image-text", data_url: "data:image/png;base64,eA==", run_indices: [0],
+        sourceBoundsPx: { x: 0, y: 0, width: 100, height: 100 }, text_paint: "source" }],
+    });
+    const imageEvidence = localFitImageEvidence(measuredSlide, [{ kind: "image", png: backplatePng,
+      source: { id: "image-text", bounds: bounds(60, 60, 100, 100),
+        image: { src: "data:image/png;base64,eA==", objectFit: "fill", crop: { left: 0, top: 0, right: 0, bottom: 0 } } },
+    }], canvas);
+    assert.ok(Math.abs(imageEvidence[0].placement.widthPt - (legacy ? 75 : 70.86614173228347)) < 1e-9);
+    assert.ok(Math.abs(imageEvidence[0].placement.x - (legacy ? 45 : 42.51968503937008)) < 1e-9);
+  }
+});
 
 const CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">

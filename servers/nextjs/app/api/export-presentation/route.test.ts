@@ -748,6 +748,7 @@ test("presentation fetch forwards only configured auth and cookie headers", asyn
         );
         assert.deepEqual(init?.headers, {
           Accept: "application/json",
+          "X-Document-Canvas-Contracts": "document-canvas/v1",
           Authorization: "Basic test",
           Cookie: "session=test",
         });

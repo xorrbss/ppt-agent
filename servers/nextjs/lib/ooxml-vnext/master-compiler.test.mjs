@@ -299,6 +299,29 @@ test("reads back stable semantic roles, placeholder indexes and relationship clo
   assert.match(receipt.semanticMetadata.semanticDigest, /^sha256:[0-9a-f]{64}$/);
 });
 
+test("hidden furniture is absent from native shapes but remains a verified semantic choice", async () => {
+  const { compileDeckMasterParts, assertDeckMasterReadBack, readDeckMasterParts } = await loadCompiler();
+  const contract = fixture();
+  contract.furniture = contract.furniture.map((item) => ({ ...item, visibility: "hidden" }));
+  const parts = withContentTypes(compileDeckMasterParts(contract));
+  const receipt = assertDeckMasterReadBack(contract, parts);
+  assert.equal(receipt.semanticMetadata.furniture.length, contract.furniture.length);
+  assert.ok(receipt.semanticMetadata.furniture.every(({ visibility }) => visibility === "hidden"));
+
+  const masterPart = "ppt/slideMasters/slideMaster1.xml";
+  const masterXml = parts.get(masterPart).toString("utf8");
+  assert.doesNotMatch(masterXml, /name="furniture:footer-rule"/);
+  const tampered = new Map(parts);
+  tampered.set(masterPart, Buffer.from(masterXml.replace(
+    "</p:spTree>",
+    '<p:sp><p:nvSpPr><p:cNvPr id="5" name="furniture:footer-rule"/></p:nvSpPr></p:sp></p:spTree>',
+  )));
+  assert.throws(
+    () => readDeckMasterParts(tampered),
+    /Hidden semantic shape furniture:footer-rule must not be materialized/,
+  );
+});
+
 test("embeds a digest-bound PNG logo relationship and detects missing or changed bytes", async () => {
   const { compileDeckMasterParts, assertDeckMasterReadBack } = await loadCompiler();
   const logo = await readFile(new URL("../../public/Logo.png", import.meta.url));

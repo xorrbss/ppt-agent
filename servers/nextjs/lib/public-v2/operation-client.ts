@@ -878,7 +878,7 @@ export class PublicV2OperationClient {
         output: {
           ...request.output,
           mode: "fidelity-raster",
-          ...(request.output.fontEmbedding === "none" ? { fontEmbedding: "none" as const } : {}),
+          fontEmbedding: "none",
         },
       },
     });

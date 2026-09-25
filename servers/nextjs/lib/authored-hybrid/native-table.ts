@@ -1,3 +1,4 @@
+import { canvasEmuPerUnit, canvasPointsPerUnit, LEGACY_AUTHORED_CANVAS, type AuthoredCanvasContract } from "../authored-canvas.ts";
 import type { AuthoredHybridBounds } from "./schema.ts";
 import type { BrowserElementObservation } from "./observation.ts";
 import type { DeclaredSemanticElementForObservation } from "./semantic-reconciliation.ts";
@@ -166,8 +167,7 @@ export function prepareDeclaredNativeTables(declared: readonly DeclaredSemanticE
 }
 
 function esc(value: string) { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;"); }
-const emu = (px: number) => Math.max(1, Math.round(px * 9525)); const pointEmu = (pt: number) => Math.max(1, Math.round(pt * 12700));
-function borderXml(borders: AuthoredNativeTableCellStyleV1["borders"]): string {
+function borderXml(borders: AuthoredNativeTableCellStyleV1["borders"], pointEmu: (pt: number) => number): string {
   const names: Record<BorderEdge, string> = { top: "lnT", right: "lnR", bottom: "lnB", left: "lnL" };
   // DrawingML CT_TableCellProperties is sequence-sensitive. PowerPoint/Open XML
   // require lnL, lnR, lnT, lnB; semantic input order must never leak into OOXML.
@@ -217,7 +217,11 @@ function mirroredMergedNeighborBorders(
   return resolved;
 }
 
-export function serializeNativeTableFrame(source: AuthoredHybridNativeTableSource, nonVisualId: number, alternativeText?: string): string {
+export function serializeNativeTableFrame(source: AuthoredHybridNativeTableSource, nonVisualId: number, alternativeText?: string, canvas: AuthoredCanvasContract = LEGACY_AUTHORED_CANVAS): string {
+  const emuPerUnit = canvasEmuPerUnit(canvas);
+  const pointScale = canvasPointsPerUnit(canvas) / 0.75;
+  const emu = (px: number) => Math.max(1, Math.round(px * emuPerUnit));
+  const pointEmu = (pt: number) => Math.max(1, Math.round(pt * pointScale * 12700));
   const { table } = source;
   const sourceFit = table.sourceFitPolicy === "composer-source-fit/v2";
   const columns = table.rows[0]!.length;
@@ -266,36 +270,36 @@ export function serializeNativeTableFrame(source: AuthoredHybridNativeTableSourc
         covered?.hMerge ? 'hMerge="1"' : "",
         covered?.vMerge ? 'vMerge="1"' : "",
       ].filter(Boolean).join(" ");
-      const runProperties = `<a:rPr lang="en-US" sz="${Math.round(size * 100)}"${cell.bold || rowIndex < (table.headerRows ?? 0) ? ' b="1"' : ""}><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${esc(family)}"/><a:ea typeface="${esc(family)}"/><a:cs typeface="${esc(family)}"/></a:rPr>`;
+      const runProperties = `<a:rPr lang="en-US" sz="${Math.round(size * pointScale * 100)}"${cell.bold || rowIndex < (table.headerRows ?? 0) ? ' b="1"' : ""}><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${esc(family)}"/><a:ea typeface="${esc(family)}"/><a:cs typeface="${esc(family)}"/></a:rPr>`;
       // Each authored line becomes its own paragraph; readback joins `<a:t>`
       // runs with "\n", so cell text round-trips exactly.
       const paragraphs = cell.paragraphs ? cell.paragraphs.map((paragraph, paragraphIndex) => {
         const align = { left: "l", center: "ctr", right: "r", justify: "just" }[paragraph.alignment ?? style.horizontalAlign ?? "left"];
         const runs = paragraph.runs.map((run) => {
-          const properties = `<a:rPr lang="${esc(run.language ?? "en-US")}" sz="${Math.round(run.fontSizePt * 100)}"${run.weight >= 600 ? ' b="1"' : ''}${run.italic ? ' i="1"' : ''}${run.underline ? ' u="sng"' : ''}><a:solidFill><a:srgbClr val="${run.color.slice(1).toUpperCase()}"/></a:solidFill><a:latin typeface="${esc(run.fontFamily)}"/><a:ea typeface="${esc(run.fontFamily)}"/><a:cs typeface="${esc(run.fontFamily)}"/></a:rPr>`;
+          const properties = `<a:rPr lang="${esc(run.language ?? "en-US")}" sz="${Math.round(run.fontSizePt * pointScale * 100)}"${run.weight >= 600 ? ' b="1"' : ''}${run.italic ? ' i="1"' : ''}${run.underline ? ' u="sng"' : ''}><a:solidFill><a:srgbClr val="${run.color.slice(1).toUpperCase()}"/></a:solidFill><a:latin typeface="${esc(run.fontFamily)}"/><a:ea typeface="${esc(run.fontFamily)}"/><a:cs typeface="${esc(run.fontFamily)}"/></a:rPr>`;
           return run.text.split("\n").map((text) => `<a:r>${properties}<a:t>${esc(text)}</a:t></a:r>`).join(`<a:br>${properties}</a:br>`);
         }).join("");
         const endSize = Math.max(5.25, ...paragraph.runs.map((run) => run.fontSizePt));
-        const paragraphProperties = sourceFit ? `<a:pPr algn="${align}">${paragraph.lineHeightPt ? `<a:lnSpc><a:spcPts val="${Math.round(paragraph.lineHeightPt * 100)}"/></a:lnSpc>` : ""}<a:spcBef><a:spcPts val="${Math.round((paragraphIndex === 0 ? 0 : paragraph.spaceBeforePt ?? 0) * 100)}"/></a:spcBef><a:spcAft><a:spcPts val="${Math.round((paragraphIndex === cell.paragraphs!.length - 1 ? 0 : paragraph.spaceAfterPt ?? 0) * 100)}"/></a:spcAft></a:pPr>` : `<a:pPr algn="${align}"/>`;
-        return `<a:p>${paragraphProperties}${runs}<a:endParaRPr${sourceFit ? ` sz="${Math.round(endSize * 100)}"` : ""}/></a:p>`;
+        const paragraphProperties = sourceFit ? `<a:pPr algn="${align}">${paragraph.lineHeightPt ? `<a:lnSpc><a:spcPts val="${Math.round(paragraph.lineHeightPt * pointScale * 100)}"/></a:lnSpc>` : ""}<a:spcBef><a:spcPts val="${Math.round((paragraphIndex === 0 ? 0 : paragraph.spaceBeforePt ?? 0) * pointScale * 100)}"/></a:spcBef><a:spcAft><a:spcPts val="${Math.round((paragraphIndex === cell.paragraphs!.length - 1 ? 0 : paragraph.spaceAfterPt ?? 0) * pointScale * 100)}"/></a:spcAft></a:pPr>` : `<a:pPr algn="${align}"/>`;
+        return `<a:p>${paragraphProperties}${runs}<a:endParaRPr${sourceFit ? ` sz="${Math.round(endSize * pointScale * 100)}"` : ""}/></a:p>`;
       }).join("") : cell.text.split("\n").map((line) => `<a:p><a:pPr algn="${alignment}"/><a:r>${runProperties}<a:t>${esc(line)}</a:t></a:r><a:endParaRPr/></a:p>`).join("");
       // Table rows have minimum heights in PowerPoint. Explicit browser insets
       // and paragraph metrics prevent inherited Office defaults growing them.
       const sourceEdgeMargin = (edge: BorderEdge) => cell.text.length === 0 ? 0 : edge === "top" ? cell.paragraphs?.[0]?.spaceBeforePt ?? 0 : edge === "bottom" ? cell.paragraphs?.at(-1)?.spaceAfterPt ?? 0 : 0;
       // Office suppresses paragraph spacing at a text-body edge. CSS block
       // margins at that edge remain visible, so carry them as cell insets.
-      const margins = sourceFit ? BORDER_EDGES.map((edge) => ` mar${{ top: "T", right: "R", bottom: "B", left: "L" }[edge]}="${Math.round(((style.marginsPt?.[edge] ?? 0) + sourceEdgeMargin(edge)) * 12700)}"`).join("") : "";
+      const margins = sourceFit ? BORDER_EDGES.map((edge) => ` mar${{ top: "T", right: "R", bottom: "B", left: "L" }[edge]}="${Math.round(((style.marginsPt?.[edge] ?? 0) + sourceEdgeMargin(edge)) * pointScale * 12700)}"`).join("") : "";
       const bodyProperties = sourceFit ? `<a:bodyPr lIns="0" tIns="0" rIns="0" bIns="0" anchor="${anchor}"><a:noAutofit/></a:bodyPr>` : '<a:bodyPr/>';
-      let cellParagraphs = sourceFit && !cell.paragraphs ? paragraphs.replaceAll('<a:endParaRPr/>', `<a:endParaRPr sz="${Math.round(size * 100)}"/>`).replaceAll(`<a:pPr algn="${alignment}"/>`, `<a:pPr algn="${alignment}"><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft></a:pPr>`) : paragraphs;
+      let cellParagraphs = sourceFit && !cell.paragraphs ? paragraphs.replaceAll('<a:endParaRPr/>', `<a:endParaRPr sz="${Math.round(size * pointScale * 100)}"/>`).replaceAll(`<a:pPr algn="${alignment}"/>`, `<a:pPr algn="${alignment}"><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft></a:pPr>`) : paragraphs;
       if (sourceFit && cell.text.length === 0) {
         // An empty CSS paragraph has no glyph line box. A DrawingML empty
         // paragraph still imposes its font height, so inherited cell fonts
         // must not grow an otherwise empty source cell.
-        cellParagraphs = `<a:p><a:pPr algn="${alignment}"><a:lnSpc><a:spcPts val="525"/></a:lnSpc><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft><a:defRPr sz="525"/></a:pPr><a:endParaRPr sz="525"/></a:p>`;
+        cellParagraphs = `<a:p><a:pPr algn="${alignment}"><a:lnSpc><a:spcPts val="${Math.round(525 * pointScale)}"/></a:lnSpc><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft><a:defRPr sz="${Math.round(525 * pointScale)}"/></a:pPr><a:endParaRPr sz="${Math.round(525 * pointScale)}"/></a:p>`;
       }
-      return `<a:tc${mergeAttrs ? ` ${mergeAttrs}` : ""}><a:txBody>${bodyProperties}<a:lstStyle/>${cellParagraphs}</a:txBody><a:tcPr anchor="${anchor}"${margins}>${borderXml(borders)}${fill}</a:tcPr></a:tc>`;
+      return `<a:tc${mergeAttrs ? ` ${mergeAttrs}` : ""}><a:txBody>${bodyProperties}<a:lstStyle/>${cellParagraphs}</a:txBody><a:tcPr anchor="${anchor}"${margins}>${borderXml(borders, pointEmu)}${fill}</a:tcPr></a:tc>`;
     }).join("");
     return `<a:tr h="${height}">${cells}</a:tr>`;
   }).join("");
-  return `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="${nonVisualId}" name="DevAX hybrid table ${esc(source.id)}" descr="${esc(alternativeText ?? "presenton-authored-native-table")}"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${Math.round(source.bounds.px.x * 9525)}" y="${Math.round(source.bounds.px.y * 9525)}"/><a:ext cx="${emu(source.bounds.px.width)}" cy="${emu(source.bounds.px.height)}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr firstRow="${(table.headerRows ?? 0) > 0 ? 1 : 0}"/><a:tblGrid>${grid}</a:tblGrid>${rows}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
+  return `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="${nonVisualId}" name="DevAX hybrid table ${esc(source.id)}" descr="${esc(alternativeText ?? "presenton-authored-native-table")}"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${Math.round(source.bounds.px.x * emuPerUnit)}" y="${Math.round(source.bounds.px.y * emuPerUnit)}"/><a:ext cx="${emu(source.bounds.px.width)}" cy="${emu(source.bounds.px.height)}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr firstRow="${(table.headerRows ?? 0) > 0 ? 1 : 0}"/><a:tblGrid>${grid}</a:tblGrid>${rows}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
 }
