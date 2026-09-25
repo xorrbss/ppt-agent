@@ -22,8 +22,6 @@ import migrations
 
 from models.sql.reference_snapshot import ReferenceSnapshot
 from models.sql.presentation import PresentationModel
-from models.sql.template_v2 import TemplateV2
-from models.sql.template_v2_revision import TemplateV2Revision
 from models.sql.user import User
 from models.sql.workspace import WorkspaceAsset, WorkspaceConversation
 from services.assets import (
@@ -37,7 +35,6 @@ from services.references import (
     CommunityReferenceProvider,
     ReferenceProviderError,
     ReferenceSourceProviderRegistry,
-    TemplateReferenceProvider,
     UploadedDocumentProvider,
     admit_reference_snapshot,
     claim_reference_snapshots,
@@ -58,7 +55,7 @@ def _owner(owner_id: uuid.UUID):
         reset_current_owner_id(token)
 
 
-async def _database(path: Path, *, template_tables: bool = False):
+async def _database(path: Path):
     engine = create_async_engine(f"sqlite+aiosqlite:///{path}")
 
     @event.listens_for(engine.sync_engine, "connect")
@@ -72,8 +69,6 @@ async def _database(path: Path, *, template_tables: bool = False):
         WorkspaceAsset.__table__,
         ReferenceSnapshot.__table__,
     ]
-    if template_tables:
-        tables.extend([TemplateV2.__table__, TemplateV2Revision.__table__])
     async with engine.begin() as connection:
         await connection.run_sync(
             lambda sync_connection: SQLModel.metadata.create_all(
@@ -843,71 +838,6 @@ def test_community_provider_is_bounded_sanitized_and_drops_remote_font_urls():
         assert "evil.test" not in serialized
         assert "safe content" in serialized
         assert normalized.normalized_payload["references"][0]["fontFamilies"] == ["Inter"]
-
-    _run(scenario())
-
-
-def test_template_provider_requires_exact_owned_immutable_revision(tmp_path: Path):
-    async def scenario():
-        engine, maker = await _database(tmp_path / "template.db", template_tables=True)
-        owner_a = uuid.uuid4()
-        owner_b = uuid.uuid4()
-        try:
-            await _seed_owner(maker, owner_a)
-            await _seed_owner(maker, owner_b)
-            with _owner(owner_a):
-                async with maker() as session:
-                    session.add(
-                        TemplateV2(
-                            id="owned-template",
-                            name="Owned",
-                            revision=2,
-                            layouts={"title": {"type": "group"}},
-                        )
-                    )
-                    session.add(
-                        TemplateV2Revision(
-                            template_id="owned-template",
-                            revision=2,
-                            reason="update",
-                            name="Owned",
-                            layouts={"title": {"type": "group"}},
-                            is_default=False,
-                        )
-                    )
-                    await session.commit()
-
-            provider = TemplateReferenceProvider()
-            with _owner(owner_a):
-                async with maker() as session:
-                    normalized = await provider.normalize(
-                        session,
-                        request={"template_id": "owned-template", "revision": 2},
-                        asset_gateway=AssetGateway(),
-                        conversation_id=None,
-                    )
-                    assert normalized.source_revision == "owned-template:2"
-                    with pytest.raises(ReferenceProviderError) as missing_revision:
-                        await provider.normalize(
-                            session,
-                            request={"template_id": "owned-template", "revision": 1},
-                            asset_gateway=AssetGateway(),
-                            conversation_id=None,
-                        )
-                    assert missing_revision.value.code == "template_reference_revision_not_found"
-
-            with _owner(owner_b):
-                async with maker() as session:
-                    with pytest.raises(ReferenceProviderError) as wrong_owner:
-                        await provider.normalize(
-                            session,
-                            request={"template_id": "owned-template", "revision": 2},
-                            asset_gateway=AssetGateway(),
-                            conversation_id=None,
-                        )
-                    assert wrong_owner.value.code == "template_reference_revision_not_found"
-        finally:
-            await engine.dispose()
 
     _run(scenario())
 

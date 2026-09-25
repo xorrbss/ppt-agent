@@ -15,7 +15,7 @@ from services.presentation_profiles import (
     PresentationProfileError,
     resolve_presentation_profile,
 )
-from templates.v2.persistence import canonicalize_slide_ui
+from templates.native_ui.persistence import canonicalize_slide_ui
 
 #: What a censused deck can be. A deck in one of the retired React-template
 #: formats is ``invalid``: its profile cannot resolve, which is exactly the
@@ -25,11 +25,12 @@ from templates.v2.persistence import canonicalize_slide_ui
 CensusClassification: TypeAlias = Literal[
     "template_v2",
     "authored",
+    "svg",
     "mixed",
     "invalid",
 ]
 
-_CLASSIFICATIONS = frozenset({"template_v2", "authored", "mixed", "invalid"})
+_CLASSIFICATIONS = frozenset({"template_v2", "authored", "svg", "mixed", "invalid"})
 
 
 def _read(value: object, key: str, default: Any = None) -> Any:
@@ -48,7 +49,14 @@ class SlideEvidence:
     slide_id: str
     index: int | None
     content_kind: Literal[
-        "legacy", "smart", "template_v2", "authored", "untyped_html", "mixed", "invalid"
+        "legacy",
+        "smart",
+        "template_v2",
+        "authored",
+        "svg",
+        "untyped_html",
+        "mixed",
+        "invalid",
     ]
     reason: str
 
@@ -111,7 +119,13 @@ def _slide_evidence(slide: object) -> SlideEvidence:
     )
     smart_marker = layout_group == "smart-html" or layout == "smart-html"
 
-    signal_count = sum((has_ui, authored_marker, smart_marker))
+    svg_content = _read(slide, "svg_content")
+    if svg_content is not None and not isinstance(svg_content, str):
+        return SlideEvidence(slide_id, index, "invalid", "slide_svg_invalid")
+    has_svg = bool(svg_content and svg_content.strip())
+    svg_marker = layout_group == "svg" or has_svg
+
+    signal_count = sum((has_ui, authored_marker, smart_marker, svg_marker))
     if (has_ui and has_html) or signal_count > 1:
         return SlideEvidence(slide_id, index, "mixed", "slide_content_models_conflict")
     if has_ui:
@@ -124,6 +138,10 @@ def _slide_evidence(slide: object) -> SlideEvidence:
         if not has_html:
             return SlideEvidence(slide_id, index, "invalid", "smart_html_missing")
         return SlideEvidence(slide_id, index, "smart", "smart_html_marker")
+    if svg_marker:
+        if not has_svg:
+            return SlideEvidence(slide_id, index, "invalid", "svg_content_missing")
+        return SlideEvidence(slide_id, index, "svg", "svg_marker")
     if has_html:
         return SlideEvidence(slide_id, index, "untyped_html", "html_without_slide_marker")
     return SlideEvidence(slide_id, index, "legacy", "legacy_elements")
@@ -132,15 +150,16 @@ def _slide_evidence(slide: object) -> SlideEvidence:
 def _canonical_classification(driver_id: str) -> CensusClassification:
     """Name the format of a deck whose profile resolved.
 
-    Only two formats can. The retired React-template drivers this fork no
-    longer ships (``standard``, ``smart``) are not in the driver registry, so
-    a row in one of those formats never reaches here: its profile fails to
-    resolve and the caller reports it ``invalid``, which is what the census
-    exists to surface.
+    Only the currently-registered drivers can reach here. The retired
+    React-template drivers this fork no longer ships (``standard``,
+    ``smart``, and now ``template-v2`` itself) are not in the driver
+    registry, so a row in one of those formats never reaches here: its
+    profile fails to resolve and the caller reports it ``invalid``, which is
+    what the census exists to surface.
     """
     return cast(
         CensusClassification,
-        {"template-v2": "template_v2", "authored": "authored"}[driver_id],
+        {"authored": "authored", "svg-v1": "svg"}[driver_id],
     )
 
 
@@ -184,8 +203,8 @@ def classify_presentation(
 
     canonical = _canonical_classification(profile.driver_id)
     expected_evidence = {
-        "template_v2": "template_v2",
         "authored": "authored",
+        "svg": "svg",
     }[canonical]
     observed: set[str] = set()
     for item in evidence:

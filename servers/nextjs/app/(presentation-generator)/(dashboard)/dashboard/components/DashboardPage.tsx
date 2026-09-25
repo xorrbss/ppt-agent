@@ -222,9 +222,6 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
             {isCreatingBlankPresentation ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <FilePlus2 aria-hidden="true" className="h-4 w-4" />}
             {isCreatingBlankPresentation ? t("creating") : t("blank")}
           </button>
-          <Link href="/templates" className="inline-flex h-10 items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 text-xs font-medium text-zinc-600 transition hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400">
-            {t("browseTemplates")}
-          </Link>
           {publicV2CanaryEnabled && (
             <Link href="/public-v2" data-testid="public-v2-canary-cta" aria-label={t("publicV2Label")} className="inline-flex h-10 items-center gap-2 rounded-full border border-violet-100 bg-violet-50 px-4 text-xs font-medium text-violet-700 transition hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400">
               {t("publicV2")}

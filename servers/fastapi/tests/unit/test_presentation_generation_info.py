@@ -12,7 +12,7 @@ from api.v1.ppt.endpoints.presentation_crud import (
 from models.sql.presentation import PresentationModel
 from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
 from models.sql.workspace import WorkspaceMessage
-from templates.v2.constants import LEGACY_PRESENTATION_VERSION
+from templates.native_ui.constants import LEGACY_PRESENTATION_VERSION
 
 
 def _run(coro):

@@ -17,7 +17,6 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
 from constants.documents import UPLOAD_ACCEPTED_EXTENSIONS
-from services.template_v2_native_storage import remove_native_source
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactCleanupClaim,
     _delete_claimed_artifact_files,
@@ -30,7 +29,6 @@ _FILESYSTEM_STORAGE_BACKEND = "filesystem"
 _WORKSPACE_ASSET_ROOT_KIND = "workspace_assets"
 _WORKSPACE_ARTIFACT_ROOT_KIND = "app_data"
 _AUTHORED_CHECKPOINT_ROOT_KIND = "authored_checkpoints"
-_TEMPLATE_V2_NATIVE_ROOT_KIND = "template_v2_native"
 _AUTHORED_IMAGES_ROOT_KIND = "authored_images"
 _LEGACY_GALLERY_IMAGE_ROOT_KIND = "legacy_gallery_images"
 _CHAT_IMAGE_SUFFIXES = frozenset(
@@ -356,32 +354,6 @@ def _remove_authored_checkpoint(claim: CleanupClaim) -> None:
     _remove_owned_tree(directory)
 
 
-def _remove_template_v2_native(claim: CleanupClaim) -> None:
-    template_id = claim.resource_metadata.get("template_id")
-    revision = claim.resource_metadata.get("revision")
-    if not isinstance(template_id, str) or isinstance(revision, bool):
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_template_identity_invalid", retryable=False
-        )
-    try:
-        revision_value = int(revision)
-    except (TypeError, ValueError) as error:
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_template_identity_invalid", retryable=False
-        ) from error
-    root = _claim_storage_root(
-        claim,
-        expected_root_kind=_TEMPLATE_V2_NATIVE_ROOT_KIND,
-        invalid_code="workspace_cleanup_template_root_invalid",
-    )
-    remove_native_source(
-        claim.storage_key,
-        template_id=template_id,
-        revision=revision_value,
-        storage_root=root,
-    )
-
-
 def _remove_authored_image_tree(claim: CleanupClaim) -> None:
     presentation_id = claim.presentation_id
     metadata = claim.resource_metadata
@@ -484,8 +456,6 @@ def delete_claimed_storage(claim: CleanupClaim) -> None:
             _remove_workspace_artifact(claim)
         elif claim.storage_namespace == "authored_checkpoint":
             _remove_authored_checkpoint(claim)
-        elif claim.storage_namespace == "template_v2_native":
-            _remove_template_v2_native(claim)
         elif claim.storage_namespace == "authored_image_tree":
             _remove_authored_image_tree(claim)
         elif claim.storage_namespace == "account_owned_tree":

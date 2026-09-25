@@ -17,10 +17,7 @@ import uuid
 
 import aiohttp
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
 
-from models.sql.template_v2 import TemplateV2
-from models.sql.template_v2_revision import TemplateV2Revision
 from services.assets import AssetGateway, AssetKind
 from services.documents_loader import DocumentsLoader
 from services.references.contracts import (
@@ -31,7 +28,6 @@ from services.references.contracts import (
 from services.workspace_asset_service import get_workspace_asset
 from utils.datetime_utils import get_current_utc_datetime
 from utils.document_context import compact_document_texts
-from utils.owner_context import get_current_owner_id
 
 
 COMMUNITY_ORIGIN = "https://api.presenton.ai"
@@ -599,74 +595,6 @@ class UploadedDocumentProvider:
         )
 
 
-@dataclass(frozen=True, slots=True)
-class TemplateReferenceProvider:
-    provider_id: str = "template"
-
-    async def normalize(
-        self,
-        session: AsyncSession,
-        *,
-        request: dict[str, Any],
-        asset_gateway: AssetGateway,
-        conversation_id: uuid.UUID | None,
-    ) -> NormalizedReference:
-        del asset_gateway, conversation_id
-        _strict_keys(request, frozenset({"template_id", "revision"}))
-        template_id = request["template_id"]
-        revision = request["revision"]
-        if not isinstance(template_id, str) or not template_id.strip():
-            raise ReferenceProviderError("template_reference_id_invalid")
-        if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
-            raise ReferenceProviderError("template_reference_revision_invalid")
-
-        owner_id = get_current_owner_id()
-        owner_predicate = (
-            TemplateV2.owner_id.is_(None)
-            if owner_id is None
-            else (
-                (TemplateV2.owner_id == owner_id)
-                | (TemplateV2.owner_id.is_(None) & TemplateV2.is_default.is_(True))
-            )
-        )
-
-        snapshot = (
-            await session.execute(
-                select(TemplateV2Revision)
-                .join(TemplateV2, TemplateV2.id == TemplateV2Revision.template_id)
-                .where(
-                    TemplateV2Revision.template_id == template_id,
-                    TemplateV2Revision.revision == revision,
-                    owner_predicate,
-                )
-            )
-        ).scalar_one_or_none()
-        if snapshot is None:
-            raise ReferenceProviderError("template_reference_revision_not_found", status_code=404)
-
-        exact_source = {
-            "templateId": snapshot.template_id,
-            "revision": snapshot.revision,
-            "name": snapshot.name,
-            "description": snapshot.description,
-            "mergedComponents": snapshot.merged_components,
-            "layouts": snapshot.layouts,
-            "assets": snapshot.assets,
-            "isDefault": snapshot.is_default,
-        }
-        content_digest = _digest(exact_source)
-        return NormalizedReference(
-            provider_id=self.provider_id,
-            source_revision=f"{snapshot.template_id}:{snapshot.revision}",
-            normalized_payload={
-                "templateId": snapshot.template_id,
-                "revision": snapshot.revision,
-                "name": snapshot.name,
-                "contentDigest": content_digest,
-            },
-        )
-
-
 class ReferenceSourceProviderRegistry:
     def __init__(self, providers: Iterable[ReferenceSourceProvider]) -> None:
         entries: dict[str, ReferenceSourceProvider] = {}
@@ -688,6 +616,5 @@ def default_reference_source_registry() -> ReferenceSourceProviderRegistry:
         (
             CommunityReferenceProvider(),
             UploadedDocumentProvider(),
-            TemplateReferenceProvider(),
         )
     )

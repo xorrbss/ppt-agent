@@ -12,7 +12,6 @@ const PATHS_WITH_HEADER_BACK = [
   "/upload",
   "/outline",
   "/documents-preview",
-  "/template-preview",
 ] as const;
 
 function pathMatches(pathname: string | null, base: string) {
@@ -26,14 +25,9 @@ const Header = () => {
 
   const backToUpload =
     pathMatches(pathname, "/outline") || pathMatches(pathname, "/documents-preview");
-  const backToTemplates = pathMatches(pathname, "/template-preview");
 
-  const backHref = backToUpload ? "/upload" : backToTemplates ? "/templates" : "/dashboard";
-  const backLabel = backToUpload
-    ? "뒤로"
-    : backToTemplates
-      ? "뒤로"
-      : "뒤로";
+  const backHref = backToUpload ? "/upload" : "/dashboard";
+  const backLabel = "뒤로";
 
   return (
     <div className="sticky top-0 z-50 w-full border-b border-[#EBEBEC] bg-white/90 backdrop-blur">

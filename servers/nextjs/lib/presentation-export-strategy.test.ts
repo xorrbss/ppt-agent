@@ -24,14 +24,6 @@ const pptxParams: PresentationExportExecutionParams = {
   cookieHeader: "session=test",
 };
 
-function validTemplateV2(): PersistedPresentation {
-  return withCanonicalRuntime({
-    version: "v2-standard",
-    mode: "template",
-    slides: [{ ui: { description: "native" }, html_content: null }],
-  }, "template-v2");
-}
-
 function validAuthored(): PersistedPresentation {
   return withCanonicalRuntime({
     version: "v1-standard",
@@ -52,7 +44,7 @@ function withCanonicalRuntime(
       driver_id: driverId,
       content_model: driver.content_model,
       generation_strategy: driver.generation_strategy,
-      style_source: driverId === "authored" ? "authored" : "imported",
+      style_source: "authored",
       generation_mode: "standard",
     },
     capabilities: {
@@ -85,18 +77,6 @@ function spyRegistry() {
     registry,
   };
 }
-
-test("Template V2 delegates only to the existing general executor", async () => {
-  const { calls, registry } = spyRegistry();
-  const result = await executePersistedPresentationExport(
-    validTemplateV2(),
-    pptxParams,
-    registry
-  );
-
-  assert.equal(result.path, "general.pptx");
-  assert.deepEqual(calls, { general: 1, hybrid: 0 });
-});
 
 test("authored HTML delegates only to the existing hybrid executor", async () => {
   const { calls, registry } = spyRegistry();
@@ -151,18 +131,6 @@ for (const [label, pptxMode] of [
   });
 }
 
-test("Template V2 ignores a hybrid hint and never calls hybrid", async () => {
-  const { calls, registry } = spyRegistry();
-  const result = await executePersistedPresentationExport(
-    validTemplateV2(),
-    { ...pptxParams, pptxMode: "hybrid" },
-    registry
-  );
-
-  assert.equal(result.path, "general.pptx");
-  assert.deepEqual(calls, { general: 1, hybrid: 0 });
-});
-
 test("PDF keeps the general executor after authored identity validation", async () => {
   const { calls, registry } = spyRegistry();
   await executePersistedPresentationExport(
@@ -176,24 +144,25 @@ test("PDF keeps the general executor after authored identity validation", async 
 
 test("invalid identities fail closed before either executor", async () => {
   const invalidPresentations: PersistedPresentation[] = [
-    { ...validTemplateV2(), mode: "adaptive" },
-    { ...validTemplateV2(), mode: "bogus" },
+    { ...validAuthored(), mode: "adaptive" },
+    { ...validAuthored(), mode: "bogus" },
     {
-      ...validTemplateV2(),
-      theme: { mode: "authored" },
-    },
-    {
-      ...validTemplateV2(),
+      ...validAuthored(),
       theme: { mode: "adaptive" },
     },
     {
-      ...validTemplateV2(),
+      ...validAuthored(),
       theme: { mode: "bogus" },
     },
     {
       version: "v1-standard",
       mode: "authored",
       slides: [{ ui: { native: true }, html_content: null }],
+    },
+    {
+      version: "v2-standard",
+      mode: "template",
+      slides: [{ ui: { description: "native" }, html_content: null }],
     },
     {
       version: "v9",
@@ -218,12 +187,6 @@ test("invalid identities fail closed before either executor", async () => {
 test("server-issued profiles select the same export adapter and reject spoofed conflicts", () => {
   assert.equal(
     resolvePersistedExportStrategy(
-      withCanonicalRuntime(validTemplateV2(), "template-v2"),
-    ),
-    "template-v2-general",
-  );
-  assert.equal(
-    resolvePersistedExportStrategy(
       withCanonicalRuntime(validAuthored(), "authored"),
     ),
     "authored-hybrid",
@@ -231,7 +194,7 @@ test("server-issued profiles select the same export adapter and reject spoofed c
   assert.throws(
     () =>
       resolvePersistedExportStrategy(
-        withCanonicalRuntime(validTemplateV2(), "authored"),
+        withCanonicalRuntime(validAuthored(), "svg-v1"),
       ),
     /presentation_profile_export_identity_conflict/,
   );
@@ -241,7 +204,7 @@ test("export revision freshness fails before a runner is invoked", async () => {
   const { calls, registry } = spyRegistry();
   await assert.rejects(
     executePersistedPresentationExport(
-      { ...validTemplateV2(), revision: 4 },
+      { ...validAuthored(), revision: 4 },
       { ...pptxParams, expectedPresentationRevision: 3 },
       registry,
     ),

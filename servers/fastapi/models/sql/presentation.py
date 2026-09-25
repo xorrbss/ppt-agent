@@ -20,7 +20,7 @@ from models.presentation_outline_model import PresentationOutlineModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.presentation_layout import PresentationLayoutModel
 from utils.datetime_utils import get_current_utc_datetime
-from templates.v2.constants import LEGACY_PRESENTATION_VERSION
+from templates.native_ui.constants import LEGACY_PRESENTATION_VERSION
 from utils.owner_context import get_current_owner_id
 
 PRESENTATION_LIFECYCLE_STAGING = "staging"

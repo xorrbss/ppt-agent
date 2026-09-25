@@ -16,8 +16,6 @@ on:
       - "servers/nextjs/**"
       - "presentation-export/**"
       - "scripts/sync-presentation-export.cjs"
-      - "scripts/operational-release-preflight.mjs"
-      - "scripts/operational-release-preflight.test.mjs"
       - ".github/workflows/cross-platform-packaging-security.yml"
   workflow_dispatch:
 
@@ -86,6 +84,3 @@ jobs:
           uv export --frozen --no-dev --no-emit-project --no-hashes \
             --format requirements-txt --output-file requirements-audit.txt
           uvx pip-audit==2.10.1 --strict --desc on --no-deps --requirement requirements-audit.txt
-
-      - name: Test operational preflight policy
-        run: node --test scripts/operational-release-preflight.test.mjs

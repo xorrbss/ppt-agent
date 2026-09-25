@@ -31,10 +31,6 @@ from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.presentation_version import PresentationVersionModel
 from models.sql.template import TemplateModel
-from models.sql.template_v2 import TemplateV2
-from models.sql.template_v2_local_state import TemplateV2LocalState
-from models.sql.template_v2_revision import TemplateV2Revision
-from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from models.sql.template_create_info import TemplateCreateInfoModel
 from models.sql.slide import SlideModel
 from models.sql.slidespec_artifact_bundle import SlideSpecArtifactBundle
@@ -368,10 +364,6 @@ async def create_db_and_tables():
                         PresentationLayoutCodeModel.__table__,
                         TemplateCreateInfoModel.__table__,
                         TemplateModel.__table__,
-                        TemplateV2.__table__,
-                        TemplateV2LocalState.__table__,
-                        TemplateV2Revision.__table__,
-                        TemplateV2PptxImport.__table__,
                         WebhookSubscription.__table__,
                         AsyncTaskModel.__table__,
                         AsyncPresentationGenerationTaskModel.__table__,

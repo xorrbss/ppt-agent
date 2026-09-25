@@ -3111,6 +3111,7 @@
       "featuredLast": "Featured last"
     },
     "unsupportedProfile": "Unsupported presentation profile",
+    "unsupportedTemplateFormat": "지원이 종료된 템플릿 형식입니다",
     "selectedForAi": "Selected for AI",
     "presentationEditor": "Presentation editor",
     "loadFailureTitle": "Something went wrong",

@@ -24,7 +24,6 @@ function mountSidePanel(mutationsEnabled: boolean, slideCount = 1) {
           index,
           presentationId: "p1",
           templateId: "blank",
-          isTemplateV2: true,
         }),
       ),
       theme: null,

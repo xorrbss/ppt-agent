@@ -75,19 +75,6 @@ const signalExpiredAuthSession = (status: number) => {
   window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
 };
 
-const TEMPLATE_V2_ERROR_MESSAGES: Record<string, string> = {
-  template_v2_revision_invalid:
-    "선택한 템플릿 리비전이 유효하지 않습니다. 템플릿을 다시 선택해 주세요.",
-  template_v2_revision_conflict:
-    "선택한 템플릿이 변경되었습니다. 최신 리비전을 선택한 뒤 다시 시도해 주세요.",
-  template_v2_source_invalid:
-    "구조화 템플릿 소스가 유효하지 않습니다. 템플릿을 복구하거나 다시 게시해 주세요.",
-  template_v2_layouts_invalid:
-    "구조화 템플릿 레이아웃 스키마가 유효하지 않습니다. 템플릿을 복구하거나 다시 게시해 주세요.",
-  template_v2_generation_invalid:
-    "생성된 콘텐츠가 구조화 템플릿 스키마와 일치하지 않습니다.",
-};
-
 // Non-retryable 409s from re-POSTing a durable generation with a stored
 // idempotency key. The client clears the stored task on these errors, so the
 // next generate click starts a fresh job with a new key.
@@ -194,8 +181,7 @@ export function getApiErrorDisplayMessage(
         );
   const message =
     (apiError.code &&
-      (TEMPLATE_V2_ERROR_MESSAGES[apiError.code] ||
-        IDEMPOTENCY_ERROR_MESSAGES[apiError.code] ||
+      (IDEMPOTENCY_ERROR_MESSAGES[apiError.code] ||
         SOURCE_SVG_ERROR_MESSAGES[apiError.code.split(":", 1)[0]])) ||
     apiError.message ||
     fallbackMessage;

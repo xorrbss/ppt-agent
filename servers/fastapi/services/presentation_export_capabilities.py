@@ -8,20 +8,7 @@ from typing import Any, Literal
 import uuid
 
 from models.authored_vnext.deck.scene import SceneAssetManifestEntry
-from templates.v2.models.elements import (
-    Container,
-    Flex,
-    Grid,
-    Group,
-    Table,
-    Text,
-    TextList,
-)
-from templates.v2.models.layouts import SlideLayout
-from templates.v2.pptx.repeat_adapter import (
-    TemplateV2PptxRepeatAdapterError,
-    prepare_repeatable_pptx_slide,
-)
+from templates.native_ui.models.layouts import SlideLayout
 
 
 PresentationExportAdapterId = Literal[
@@ -74,37 +61,6 @@ class PresentationExportCapabilityAnalysis:
     @property
     def selected_adapter(self) -> PresentationExportAdapterId:
         return self.candidate_chain[0]
-
-
-def _walk_elements(elements: Sequence[Any], *, path: str):
-    for index, element in enumerate(elements):
-        element_path = f"{path}.{index}"
-        yield element, element_path
-        if isinstance(element, Container) and element.child is not None:
-            yield from _walk_elements([element.child], path=f"{element_path}.child")
-        elif isinstance(element, (Group, Flex, Grid)):
-            yield from _walk_elements(
-                element.children,
-                path=f"{element_path}.children",
-            )
-
-
-def _clone_leaf_supported(element: Any) -> bool:
-    if isinstance(element, (Container, Group, Flex, Grid)):
-        return True
-    if getattr(element, "decorative", False) is True:
-        return True
-    return isinstance(element, (Text, TextList, Table))
-
-
-def _reconstructed_element_supported(element: Any) -> bool:
-    if not isinstance(element, (Text, TextList, Table, Container, Group, Flex, Grid)):
-        return False
-    if isinstance(element, Flex) and element.wrap is True:
-        return False
-    if isinstance(element, (Flex, Grid)):
-        return all(getattr(child, "size", None) is not None for child in element.children)
-    return True
 
 
 def _collect_asset_digests(value: Any, *, path: str = "content") -> dict[str, str]:
@@ -248,124 +204,29 @@ def _collect_asset_digests(value: Any, *, path: str = "content") -> dict[str, st
 def analyze_presentation_export_capabilities(
     *,
     export_format: Literal["pptx", "pdf"],
-    slides: Sequence[PresentationExportSlideInput] = (),
     persisted_slide_payloads: Sequence[Mapping[str, Any]] = (),
-    native_clone_available: bool = False,
 ) -> PresentationExportCapabilityAnalysis:
-    """Return a deterministic, side-effect-free adapter chain of at most three."""
+    """Return a deterministic, side-effect-free adapter chain of at most three.
+
+    The only remaining candidate is ``general``: the native template-driven
+    adapters (``native_clone``/``native_reconstructed``) required a
+    ``PresentationExportSlideInput`` sequence that nothing has produced since
+    Template V2 was removed on 2026-09-25.
+    """
 
     if export_format not in {"pptx", "pdf"}:
         raise PresentationExportContractError("presentation_export_format_invalid")
-    asset_digests: dict[str, str] = {}
-    asset_payloads: list[Mapping[str, Any]] = list(persisted_slide_payloads)
-    if not asset_payloads:
-        asset_payloads.extend(slide.content for slide in slides)
-    asset_digests.update(
-        _collect_asset_digests(
-            asset_payloads,
-            path="persisted",
-        )
+    asset_digests = _collect_asset_digests(
+        list(persisted_slide_payloads),
+        path="persisted",
     )
 
-    if export_format == "pdf" or not slides:
-        return PresentationExportCapabilityAnalysis(
-            candidate_chain=("general",),
-            capability_evidence={
-                "analysis_version": 1,
-                "format": export_format,
-                "template_v2": bool(slides),
-                "reason": "general_format_or_non_template_source",
-            },
-            asset_digests=dict(sorted(asset_digests.items())),
-        )
-
-    clone_supported = native_clone_available
-    reconstructed_supported = True
-    clone_reasons: list[dict[str, str]] = []
-    reconstructed_reasons: list[dict[str, str]] = []
-    repeat_materialization = False
-    editable_leaf_count = 0
-
-    for slide_index, slide in enumerate(slides):
-        if native_clone_available:
-            try:
-                prepare_repeatable_pptx_slide(
-                    slide.layout,
-                    slide.content,
-                    preservation_mode="native_clone",
-                )
-            except TemplateV2PptxRepeatAdapterError as error:
-                clone_supported = False
-                repeat_materialization = True
-                clone_reasons.append({"code": error.code, "path": error.path})
-        try:
-            reconstructed = prepare_repeatable_pptx_slide(
-                slide.layout,
-                slide.content,
-                preservation_mode="reconstructed",
-            )
-        except TemplateV2PptxRepeatAdapterError as error:
-            reconstructed_supported = False
-            reconstructed_reasons.append({"code": error.code, "path": error.path})
-            continue
-
-        for component_index, component in enumerate(slide.layout.components):
-            for element, element_path in _walk_elements(
-                component.elements,
-                path=f"slides.{slide_index}.components.{component_index}.elements",
-            ):
-                if getattr(element, "decorative", False) is False and not isinstance(
-                    element,
-                    (Container, Group, Flex, Grid),
-                ):
-                    editable_leaf_count += 1
-                if clone_supported and not _clone_leaf_supported(element):
-                    clone_supported = False
-                    clone_reasons.append(
-                        {
-                            "code": "presentation_export_native_clone_element_unsupported",
-                            "path": f"{element_path}.type={element.type}",
-                        }
-                    )
-
-        for component_index, component in enumerate(reconstructed.layout.components):
-            for element, element_path in _walk_elements(
-                component.elements,
-                path=f"slides.{slide_index}.components.{component_index}.elements",
-            ):
-                if not _reconstructed_element_supported(element):
-                    reconstructed_supported = False
-                    reconstructed_reasons.append(
-                        {
-                            "code": "presentation_export_native_reconstructed_element_unsupported",
-                            "path": f"{element_path}.type={element.type}",
-                        }
-                    )
-
-    if clone_supported:
-        chain: tuple[PresentationExportAdapterId, ...] = (
-            "native_clone",
-            "native_reconstructed",
-            "general",
-        )
-    elif reconstructed_supported:
-        chain = ("native_reconstructed", "general")
-    else:
-        chain = ("general",)
-
     return PresentationExportCapabilityAnalysis(
-        candidate_chain=chain,
+        candidate_chain=("general",),
         capability_evidence={
             "analysis_version": 1,
             "format": export_format,
-            "template_v2": True,
-            "native_clone_available": native_clone_available,
-            "native_clone_supported": clone_supported,
-            "native_reconstructed_supported": reconstructed_supported,
-            "repeat_materialization_required": repeat_materialization,
-            "editable_leaf_count": editable_leaf_count,
-            "clone_reasons": clone_reasons,
-            "reconstructed_reasons": reconstructed_reasons,
+            "reason": "general_only",
         },
         asset_digests=dict(sorted(asset_digests.items())),
     )

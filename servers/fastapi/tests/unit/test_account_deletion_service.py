@@ -132,11 +132,6 @@ async def _api_outbox_and_controller_finalize(
         "revoke_account_provider_credentials",
         noop,
     )
-    monkeypatch.setattr(
-        deletion_controller,
-        "delete_account_restricted_dependents",
-        noop,
-    )
 
     try:
         async with engine.begin() as connection:
@@ -334,9 +329,6 @@ async def _finalize_reclaims_expired_claim_with_naive_sqlite_lease(
     )
     monkeypatch.setattr(
         deletion_controller, "retire_public_artifacts_for_account", noop
-    )
-    monkeypatch.setattr(
-        deletion_controller, "delete_account_restricted_dependents", noop
     )
     monkeypatch.setattr(
         deletion_controller, "revoke_account_provider_credentials", noop_credentials

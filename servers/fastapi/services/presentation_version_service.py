@@ -22,7 +22,7 @@ from sqlmodel import select
 from models.sql.presentation_version import PresentationVersionModel
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
-from templates.v2.persistence import canonicalize_slide_dump
+from templates.native_ui.persistence import canonicalize_slide_dump
 from utils.datetime_utils import get_current_utc_datetime
 
 # Don't snapshot more often than this — rapid autosaves collapse to one point.

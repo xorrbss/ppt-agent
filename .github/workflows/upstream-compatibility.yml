@@ -42,21 +42,8 @@ on:
       - "servers/fastapi/services/workspace_*.py"
       - "servers/fastapi/models/workspace_*.py"
       - "servers/fastapi/services/async_task_read_service.py"
-      - "servers/fastapi/services/template_v2_pptx_analysis_service.py"
-      - "servers/fastapi/services/template_v2_pptx_dispatcher.py"
-      - "servers/fastapi/services/template_v2_pptx_ingestion_service.py"
-      - "servers/fastapi/services/template_v2_pptx_operations.py"
-      - "servers/fastapi/services/template_v2_pptx_retention_service.py"
-      - "servers/fastapi/services/template_v2_pptx_worker.py"
-      - "servers/fastapi/scripts/check_template_v2_canary.py"
-      - "servers/fastapi/scripts/check_template_v2_operations.py"
       - "servers/fastapi/template_v2_schema_contract.py"
       - "servers/fastapi/tests/unit/test_migrations.py"
-      - "servers/fastapi/tests/unit/test_template_v2_local_state_migration.py"
-      - "servers/fastapi/tests/unit/test_presentation_delete_safety.py"
-      - "servers/fastapi/tests/unit/test_template_v2_pptx_operations.py"
-      - "servers/fastapi/tests/integration/test_postgresql_template_v2_canary_rollback.py"
-      - "servers/fastapi/tests/integration/test_postgresql_template_v2_migrations.py"
       - "servers/fastapi/tests/integration/test_postgresql_async_task_read_facade.py"
       - "servers/fastapi/tests/integration/test_postgresql_provider_settings_sync.py"
       - "servers/fastapi/tests/integration/test_runtime_settings_multiworker_sync.py"
@@ -107,14 +94,12 @@ jobs:
           enable-cache: true
       - name: Install locked FastAPI dependencies
         run: uv sync --frozen
-      - name: Verify Windows migration and presentation delete safety
+      - name: Verify Windows migration safety
         run: >-
           uv run pytest -q --no-header
           tests/unit/test_migrations.py
-          tests/unit/test_template_v2_local_state_migration.py
-          tests/unit/test_presentation_delete_safety.py
 
-  template-v2-postgresql:
+  postgresql-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -149,11 +134,9 @@ jobs:
           enable-cache: true
       - name: Install locked FastAPI dependencies
         run: uv sync --frozen
-      - name: Verify runtime settings, Template V2, and Chat-first workspace on PostgreSQL
+      - name: Verify runtime settings and Chat-first workspace on PostgreSQL
         run: >-
           uv run pytest -q --no-header
-          tests/integration/test_postgresql_template_v2_migrations.py
-          tests/integration/test_postgresql_template_v2_canary_rollback.py
           tests/integration/test_postgresql_async_task_read_facade.py
           tests/integration/test_postgresql_provider_settings_sync.py
           tests/integration/test_postgresql_workspace.py
