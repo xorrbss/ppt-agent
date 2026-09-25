@@ -1,7 +1,22 @@
 """Server-owned SVG creation admission; existing authored DTO remains frozen."""
 from __future__ import annotations
 
+import os
+
 from fastapi import HTTPException
+
+from services.generation_core.style.design_pack_projection import (
+    DesignPackProjectionError,
+    assert_design_pack_projects,
+)
+
+
+def _design_pack_admission_reason() -> str:
+    try:
+        assert_design_pack_projects()
+    except DesignPackProjectionError as error:
+        return str(error)
+    raise AssertionError("design pack projection unexpectedly succeeded")
 
 
 def source_svg_capability(*, strategy: str | None, source_content: bool | None,
@@ -31,16 +46,16 @@ def source_svg_capability(*, strategy: str | None, source_content: bool | None,
 def require_svg_creation_admission(request: object) -> None:
     if getattr(request, "strategy", None) != "svg":
         return
+    allowed_source_modes = {None, "source_content_restyle", "raster_reconstruction"}
     blocked = (
-        (getattr(request, "source_mode", None) not in {None, "source_content_restyle", "raster_reconstruction"}, "svg_source_restyle_not_supported"),
-        (getattr(request, "master_pin", None), "svg_company_standard_not_supported"),
-        (getattr(request, "design_pack_pin", None), "svg_design_pack_not_supported"),
+        (getattr(request, "source_mode", None) not in allowed_source_modes, "svg_source_restyle_not_supported"),
+        (getattr(request, "design_pack_pin", None), _design_pack_admission_reason),
         (getattr(request, "generation_engine", None) == "deck-ir", "svg_engine_conflict"),
         (getattr(request, "generation_mode", "auto") == "registered-template", "svg_registered_template_not_supported"),
     )
     for condition, code in blocked:
         if condition:
-            raise HTTPException(status_code=422, detail=code)
+            raise HTTPException(status_code=422, detail=code() if callable(code) else code)
     if getattr(request, "source_mode", None) == "source_content_restyle":
         if (getattr(request, "page_size", None) is not None
                 or getattr(request, "orientation", None) is not None):
@@ -69,6 +84,49 @@ def require_svg_creation_admission(request: object) -> None:
         raise HTTPException(status_code=422, detail="svg_exact_reconstruction_not_supported")
 
 
+def _resolve_master_rules(request: object, canvas: object) -> tuple[dict | None, dict | None]:
+    """Resolve+project a company-standard master pin for svg, or ``(None, None)``.
+
+    Reuses the existing authored_vnext master resolution directly (frozen,
+    read-only import) rather than depending on ``request._authored_master_contract``
+    having already been populated by the unrelated authored-mode admission
+    path in ``presentation_generate.py`` -- pin_svg_style is called from more
+    than one place (durable-payload staging has no such ordering guarantee).
+    """
+    from models.generate_presentation_request import AuthoredMasterPinInput
+
+    pin_request = getattr(request, "master_pin", None)
+    if pin_request is None:
+        return None, None
+    if not isinstance(pin_request, AuthoredMasterPinInput):
+        pin_request = AuthoredMasterPinInput.model_validate(pin_request)
+    if os.getenv("AUTHORED_VNEXT_MASTER_ENABLED", "true").strip().lower() != "true":
+        raise HTTPException(status_code=404, detail="authored_vnext_master_disabled")
+    from utils.owner_context import get_current_owner_id
+
+    owner_id = get_current_owner_id()
+    if owner_id is None:
+        raise HTTPException(status_code=401, detail="authored_vnext_owner_required")
+    from services.authored_vnext.generation.errors import GenerationNotFoundError, GenerationPipelineError
+    from services.authored_vnext.generation.legacy_pin import resolve_legacy_master_pin
+
+    try:
+        resolved = resolve_legacy_master_pin(owner_id=owner_id, requested=pin_request)
+    except GenerationPipelineError as error:
+        status_code = 404 if isinstance(error, GenerationNotFoundError) else 409
+        raise HTTPException(status_code=status_code, detail=error.code) from error
+    from services.generation_core.style.master_projection import (
+        MasterProjectionError,
+        project_master_contract,
+    )
+
+    try:
+        rules = project_master_contract(resolved.contract, canvas.width_px, canvas.height_px)
+    except MasterProjectionError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return rules, resolved.pin.model_dump(mode="json", by_alias=True)
+
+
 def pin_svg_style(request: object) -> dict:
     """Snapshot before durable admission, never reselect on job takeover."""
     from services.authored_canvas import request_canvas_contract
@@ -79,6 +137,7 @@ def pin_svg_style(request: object) -> dict:
         require_svg_creation_admission(request)
         canvas = request_canvas_contract(request)
         source_restyle = getattr(request, "source_mode", None) in {"source_content_restyle", "raster_reconstruction"}
+        master_rules, master_pin = _resolve_master_rules(request, canvas)
         try:
             if source_restyle:
                 from services.document_canvas import canvas_digest
@@ -95,6 +154,7 @@ def pin_svg_style(request: object) -> dict:
                 style,
                 width=canvas.width_px, height=canvas.height_px,
                 source_template=source_restyle,
+                request=request, master_rules=master_rules, master_pin=master_pin,
             )
             if source_restyle:
                 import hashlib
