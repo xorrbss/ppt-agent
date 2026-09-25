@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   type RasterAnalysisReview,
@@ -83,6 +84,7 @@ export default function RasterSourceReview({
   onConfirmInventory,
   onApprove,
 }: Props) {
+  const t = useTranslations("upload.rasterReview");
   const {
     pageIndex, setPageIndex,
     regionId, setRegionId,
@@ -163,6 +165,10 @@ export default function RasterSourceReview({
             analysis.status === "ready" ? "모든 필수 검토가 끝났습니다. 분석을 승인할 수 있습니다." :
             `검토 대기: 미해결 항목 ${analysis.blockingIssueCount}개가 있습니다.`}
         </p>
+        {analysis.visionReaderUnavailable && <div role="note" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" data-testid="raster-vision-unavailable">
+          <p className="font-medium">{t("visionUnavailableTitle")}</p>
+          <p>{t("visionUnavailable")}</p>
+        </div>}
       </header>
 
       {onAutoPreserveAndGenerate && <div className="space-y-2 rounded-xl border-2 border-blue-300 bg-blue-50 p-4">
@@ -303,7 +309,7 @@ export default function RasterSourceReview({
                 <p className="font-medium">이 페이지의 검토 항목 {pageSummary?.issueCount ?? currentPage.issues.length}개</p>
                 {currentPage.issues.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-5">{currentPage.issues.map((issue, index) =>
                   <li key={`${issue.code}:${index}`}>
-                    <button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => issue.regionId && setRegionId(issue.regionId)}>{issue.message}</button>
+                    <button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => issue.regionId && setRegionId(issue.regionId)}>{issue.code === "page_kept_as_pixels" ? t("pageKeptAsPixels") : issue.message}</button>
                   </li>)}</ul>}
               </div>
             )}

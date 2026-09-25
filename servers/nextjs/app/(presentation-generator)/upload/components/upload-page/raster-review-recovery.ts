@@ -4,12 +4,16 @@
  * Extracted from useUploadPageState.ts (file-size ratchet split); behaviour
  * is unchanged, only the module boundary moved.
  */
+import { createTranslator } from "next-intl";
 import { notify } from "@/components/ui/sonner";
+import { resolveUiLocale } from "@/i18n/locale";
+import { getUiMessages } from "@/i18n/messages";
 import type {
   RasterAnalysisMode,
   RasterOperationWire,
   RasterPendingOperationWire,
 } from "../../../services/api/source-content/raster-contract";
+import { otherAdvisoryCount, visionReaderUnavailable } from "../../../services/api/source-content/raster-unresolved";
 
 export const RASTER_REVIEW_RECOVERY_KEY = "presenton:raster-review-operation:v1";
 
@@ -57,8 +61,20 @@ export const rasterWaitMessage = (
 // count is small enough to skim as a toast, not a review workflow.
 export const RASTER_ADVISORY_NOTICE_MAX = 20;
 
+// Called outside React (flow helpers): the page's rendered UI locale picks the catalog.
+const rasterReviewTranslator = () => {
+  const locale = resolveUiLocale(typeof document === "undefined" ? undefined : document.documentElement.lang);
+  return createTranslator({ locale, messages: getUiMessages(locale), namespace: "upload.rasterReview" });
+};
+
 export const notifyRasterAdvisories = (operation: RasterOperationWire) => {
-  const count = operation.advisory_count ?? 0;
+  const unresolved = operation.analysis.unresolved;
+  if (visionReaderUnavailable(unresolved)) {
+    // Deck-level, shown once: every page keeps its text as pixels.
+    const t = rasterReviewTranslator();
+    notify.warning(t("visionUnavailableTitle"), t("visionUnavailable"));
+  }
+  const count = otherAdvisoryCount(operation.advisory_count ?? 0, unresolved);
   if (count <= 0 || count > RASTER_ADVISORY_NOTICE_MAX) return;
   notify.info(
     "검토를 권장하는 항목이 있습니다",

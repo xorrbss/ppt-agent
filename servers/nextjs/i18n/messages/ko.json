@@ -2966,6 +2966,11 @@
       "sourcePromptPlaceholder": "예: 핵심 수치는 크게, 설명은 간결하게 배치해 주세요",
       "preserveSource": "원본 내용 유지",
       "preserveSourceDescription": "텍스트와 이미지를 유지하고 선택한 스타일로 다시 구성해요."
+    },
+    "rasterReview": {
+      "visionUnavailableTitle": "글자가 이미지로 유지됩니다",
+      "visionUnavailable": "이미지를 읽을 수 있는 AI 모델이 설정되지 않아 원본 이미지에서 인식한 글자를 교차 확인할 수 없습니다. 모든 페이지의 글자는 편집할 수 없는 이미지로 유지됩니다. 편집 가능한 텍스트가 필요하면 이미지 인식이 가능한 모델을 설정해 주세요.",
+      "pageKeptAsPixels": "AI 판독으로 글자를 확인하지 못해 이 페이지는 편집할 수 없는 이미지로 유지됩니다."
     }
   },
   "templates": {

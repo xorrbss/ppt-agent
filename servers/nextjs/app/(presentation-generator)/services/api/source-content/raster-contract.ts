@@ -2,6 +2,7 @@
 import { getHeader } from "../header";
 import { ApiResponseHandler } from "../api-error-handler";
 import { getApiUrl } from "@/utils/api";
+import { pageUnresolvedIssues, visionReaderUnavailable } from "./raster-unresolved";
 
 const ROOT = "/api/v1/ppt/source-content/raster/analysis";
 
@@ -238,6 +239,8 @@ export type RasterAnalysisReview = {
   blockingIssueCount: number;
   /** Non-blocking suggestion count; 0 when absent. Never affects canApprove. */
   advisoryCount: number;
+  /** No vision reader was configured: every page keeps its text as pixels (deck-level notice). */
+  visionReaderUnavailable: boolean;
 };
 
 export type RasterReviewRegionEdit = {
@@ -325,17 +328,17 @@ export function rasterReviewSummary(value: RasterOperationWire): RasterAnalysisR
     canApprove: value.can_approve === true && !value.approval_pin,
     blockingIssueCount,
     advisoryCount: value.advisory_count ?? 0,
+    visionReaderUnavailable: visionReaderUnavailable(value.analysis.unresolved),
   };
 }
 
 export function rasterPageDetail(value: RasterOperationWire, detail: RasterPageWire): RasterReviewPageDetail {
   const pageNumber = detail.page.page_number;
   const source = value.analysis.source;
-  const issues = (detail.page.render_mode === "full_page_preserve" ? [] : value.analysis.unresolved).map((message) => ({
-    code: "unresolved_source_content",
-    message,
-    severity: "blocking" as const,
-  }));
+  // Only this page's own entries (and deck-level blocking ones), not every page's.
+  const issues = detail.page.render_mode === "full_page_preserve"
+    ? []
+    : pageUnresolvedIssues(value.analysis.unresolved, pageNumber);
   return {
     pageIndex: pageNumber - 1,
     renderMode: detail.page.render_mode,

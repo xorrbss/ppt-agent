@@ -2966,6 +2966,11 @@
       "sourcePromptPlaceholder": "Example: Emphasize key figures and keep explanations concise",
       "preserveSource": "Preserve source content",
       "preserveSourceDescription": "Keep text and images while applying the selected style."
+    },
+    "rasterReview": {
+      "visionUnavailableTitle": "Text stays as images",
+      "visionUnavailable": "No vision-capable AI model is configured, so the text read from the source images cannot be double-checked. Every page keeps its text as non-editable images. Configure a vision-capable model to get editable text.",
+      "pageKeptAsPixels": "This page is kept as non-editable images: its text could not be confirmed by the AI reader."
     }
   },
   "templates": {
