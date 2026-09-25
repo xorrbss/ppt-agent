@@ -43,12 +43,19 @@ def levenshtein(a: str, b: str) -> int:
 
 
 def script_swaps_only(a: str, b: str) -> bool:
+    """Every difference between the OCR reading ``a`` and the model text ``b`` is one
+    glyph read in the wrong script. Where the OCR saw Hangul, the model's Latin must be
+    capitals: block-shaped capitals ("AI") are what Tesseract reads as a syllable ("시");
+    a lowercase letter for a syllable ("읍" / "a") is an icon both readers guessed."""
+
     for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
         if tag == "equal":
             continue
         left, right = a[i1:i2], b[j1:j2]
         hangul, latin = (left, right) if _HANGUL.fullmatch(left or "-") else (right, left)
         if tag != "replace" or not _HANGUL.fullmatch(hangul) or not _LATIN.fullmatch(latin):
+            return False
+        if hangul is left and not latin.isupper():
             return False
     return True
 
@@ -99,10 +106,24 @@ def _edit_cost(a: str, b: str) -> int:
     return cost
 
 
+def collapses_unread_glyphs(read: str, text: str) -> bool:
+    """The model text fills a run of OCR glyph slots that holds an unreadable symbol
+    with FEWER characters ("공 _—" -> "공급" for "공급자"): the OCR saw more glyphs
+    there than the model wrote, so the model dropped content, not a misread."""
+
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, read, text, autojunk=False).get_opcodes():
+        if tag != "replace" or j2 - j1 >= i2 - i1:
+            continue
+        if any(not ch.isalnum() for ch in read[i1:i2]) and any(ch.isalnum() for ch in text[j1:j2]):
+            return True
+    return False
+
+
 def transcription_agrees(candidates: Sequence[str], transcript: str | None) -> bool:
     """Two independent readers agree: the model transcript equals an OCR read after
     normalization, or differs by at most ``max(1, 10% of its length)`` edits (some
-    read character surviving) or only by script swaps; numbers must be identical."""
+    read character surviving) or only by script swaps; numbers must be identical,
+    and the model may not collapse unread OCR glyph slots into fewer letters."""
 
     text = normalized(transcript or "")
     if not _ALNUM.search(text):
@@ -110,6 +131,8 @@ def transcription_agrees(candidates: Sequence[str], transcript: str | None) -> b
     for candidate in candidates:
         read = normalized(candidate or "")
         if not read or _NUMBER.findall(read) != _NUMBER.findall(text):
+            continue
+        if read != text and collapses_unread_glyphs(read, text):
             continue
         if read == text:
             return True
@@ -175,3 +198,28 @@ def adds_punctuation(text: str, reading: str) -> bool:
     """The model text has a colon or middle dot the OCR reading does not ("구성해드리:")."""
 
     return any(text.count(mark) > reading.count(mark) for mark in _ADDED_MARKS)
+
+
+_EDGE_MARKS = "·:;"
+
+
+def edge_glyphs_grounded(text: str, candidates: Sequence[str]) -> bool:
+    """A lone one-character token at either end of the published line must be read
+    at that end by some OCR reading too: the same glyph, the start (or end) of a
+    token that joined it to its neighbour ("약60%"), or a script swap of it ("of" for
+    "약"). A single glyph the readers disagree on ("S" / "$" before "NPS") is an icon,
+    not text. Separator marks are judged by their pixels instead (raster_editable_marks)."""
+
+    tokens = text.split()
+    if len(tokens) < 2:
+        return True
+    readings = [candidate.split() for candidate in candidates if candidate.split()]
+    for position in (0, -1):
+        token = tokens[position]
+        if len(token) != 1 or normalized(token) in _EDGE_MARKS:
+            continue
+        ends = [reading[position] for reading in readings]
+        joined = [end.startswith(token) if position == 0 else end.endswith(token) for end in ends]
+        if not any(joined) and not any(script_swaps_only(end, token) for end in ends):
+            return False
+    return True

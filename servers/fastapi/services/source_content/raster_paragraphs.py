@@ -5,20 +5,43 @@ lines without a paragraph gap) is published either entirely as editable text,
 when every line passed the two-reader agreement, or entirely as ONE pixel crop
 covering the whole paragraph; never a mix of text and pixel pieces, which reads
 as a shattered sentence ("업무 상:" / "황을 설" / "명하면").
+
+A line that starts with a list marker (a bullet glyph, "1." / "2)", "①") starts
+its own paragraph even without a vertical gap: tightly set list and table-of-
+contents items are separate statements, so one unreadable item does not turn
+the whole list into one picture. So does a line at twice (or half) the type size
+of the line above: a large figure and its label ("68" over "+2.1pp margin") are
+separate elements, not one paragraph (x-height-only lines such as "moves" measure
+up to ~1.5x smaller than a line with ascenders, which stays one paragraph).
 """
 
 from __future__ import annotations
+
+import re
 
 from services.source_content.raster_captures import _pad, _union
 from services.source_content.raster_page_plan import PlannedRegion
 from services.source_content.raster_redesign_ocr import line_text
 
 PARAGRAPH_GAP = 1.2  # a vertical gap above this many line heights starts a paragraph
+TYPE_SIZE_STEP = 2.0  # a line this many times larger or smaller starts a paragraph
+# A bullet glyph (or its usual OCR misreads "*", "-"), or an enumerator not followed by
+# a digit ("3. 도입", "2) Scope", but not "12.5%"), then the item's text.
+_LIST_ITEM = re.compile(r"^\s*(?:[•·ㆍ・∙▪■□◆◇●○※*\-–—>▶►]|\(?\d{1,2}[.)](?!\d)|[①-⑳])\s*\S")
+
+
+def starts_list_item(text: str | None) -> bool:
+    return bool(text) and bool(_LIST_ITEM.match(text))
+
+
+def _reading(build, index: int) -> str | None:
+    text = build.texts.get(index)
+    return text if text is not None else build.readings.get(index)
 
 
 def paragraphs(build, members: list[int], headings: int, marker) -> list[list[int]]:
     """Member lines split into paragraphs: the heading block, then body runs split
-    at list markers and at paragraph-sized vertical gaps."""
+    at list markers, at type-size steps and at paragraph-sized vertical gaps."""
 
     page = build.page
     lines = [i for i in members if build.tokens.get(i)]
@@ -33,7 +56,10 @@ def paragraphs(build, members: list[int], headings: int, marker) -> list[list[in
             box = page.lines[i].bbox
             height = min(above[3], box[3])
             gap = box[1] - (above[1] + above[3])
-            if marker(build.texts, i) or gap > PARAGRAPH_GAP * height:
+            sizes = sorted((page.lines[current[-1]].height, page.lines[i].height))
+            resized = sizes[1] >= TYPE_SIZE_STEP * max(1.0, sizes[0])
+            item = marker(build.texts, i) or starts_list_item(_reading(build, i))
+            if item or resized or gap > PARAGRAPH_GAP * height:
                 result.append(current)
                 current = []
         current.append(i)

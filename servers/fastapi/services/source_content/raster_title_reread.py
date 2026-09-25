@@ -18,6 +18,7 @@ from pathlib import Path
 from PIL import Image
 
 from services.source_content.raster_redesign_ocr import RedesignLine
+from services.source_content.raster_stage_timing import stage
 
 TITLE_BAND = 0.22
 SCALES = (2.0, 3.0)
@@ -54,6 +55,17 @@ def reread_headlines(
 ) -> tuple[RedesignLine, ...]:
     """Return lines with headline re-reads appended to their alternates (never raises)."""
 
+    with stage(None, "rereads"):
+        return _reread_headlines(image, lines, executable=executable, tessdata=tessdata)
+
+
+def _reread_headlines(
+    image: Image.Image,
+    lines: tuple[RedesignLine, ...],
+    *,
+    executable: Path | None,
+    tessdata: Path | None,
+) -> tuple[RedesignLine, ...]:
     targets = headline_lines(lines, image.height)
     if not targets or executable is None or tessdata is None or not Path(executable).is_file():
         return lines

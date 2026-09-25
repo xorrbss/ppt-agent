@@ -12,6 +12,8 @@ Deterministic rules (the model only ever names ids):
   when sound, a reading at least two independent passes agree on, a doubtful
   reading the model verified, or a model correction grounded in the OCR
   (``raster_text_correction``) that stays within 40% of the primary reading.
+  A separator mark (middle dot, bullet, colon) the OCR dropped or read as another
+  symbol counts as agreed only where the pixels show it (``raster_editable_marks``).
   Otherwise its full line box is kept as pixels.
 """
 
@@ -21,6 +23,7 @@ from collections import Counter
 from dataclasses import replace
 
 from services.source_content.raster_captures import Box, PageContext, _center_in, _inside, _inter, _pad, _union
+from services.source_content.raster_editable_marks import grounded_view
 from services.source_content.raster_llm_structure import Candidate
 from services.source_content.raster_page_plan import PagePlan, _unpromoted, line_needs_help
 from services.source_content.raster_redesign_ocr import RedesignWord, line_text
@@ -36,6 +39,7 @@ from services.source_content.raster_text_guards import (
 from services.source_content.raster_text_correction import (
     accept_correction,
     adds_punctuation,
+    edge_glyphs_grounded,
     levenshtein,
     normalized,
     respace,
@@ -139,12 +143,15 @@ def _resolve_by_agreement(build: Build, index: int, candidates, carried, current
     transcript = build.transcripts.get(index)
     build.tokens[index] = carried
     line = build.page.lines[index]
+    # Marks the OCR dropped or misread count as agreed only where the pixels show them.
+    view = grounded_view(build.page, carried, transcript) if carried and transcript else ""
     if (
         carried
         and transcript
-        and transcription_agrees(candidates, transcript)
-        and not adds_punctuation(normalized(transcript), normalized(current))
+        and transcription_agrees(candidates, view)
+        and not adds_punctuation(view, normalized(current))
         and (spaced := respace(transcript, current)) is not None
+        and edge_glyphs_grounded(spaced, candidates)
         and _publishable(spaced, line.alternates, targeted)
     ):
         _publish(build, index, spaced, carried, current)
