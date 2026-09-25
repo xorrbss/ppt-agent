@@ -42,7 +42,10 @@ _EYEBROW_FONT_PX = 14
 _EYEBROW_MAX_CHARS = 24
 _TITLE_FONT_PX = 34
 _BODY_FONT_PX = 20
-_BODY_LINE_HEIGHT_PX = 28
+#: The authored placeholder's 1.6 line height at 20px. Tighter lines (28px was
+#: tried) make adjacent glyph boxes intersect, which the renderer measures as
+#: ``text_overlap`` on every body line.
+_BODY_LINE_HEIGHT_PX = 32
 _GAP_BAR_TO_LABEL_PX = 24
 _GAP_EYEBROW_TO_TITLE_PX = 16
 _GAP_TITLE_TO_BODY_PX = 30

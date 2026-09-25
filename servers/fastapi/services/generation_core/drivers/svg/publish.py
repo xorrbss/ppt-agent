@@ -19,6 +19,7 @@ from models.sql.slide import SlideModel
 from services.authored_canvas import merge_presentation_canvas, request_canvas_metadata
 from services.authored_checkpoint_service import begin_publish, complete_publish
 from services.authored_presentation_artifacts import _save_slide_pngs, authored_title
+from services.generation_core.quality.page_outcome import review_page_indices
 from services.svg_presentation_checkpoint import _save_source_page_pngs
 
 
@@ -84,8 +85,7 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
     presentation.reference_snapshot_ids = [str(x) for x in request.reference_snapshot_ids] or None
     quality = [payload["quality"] for payload, _ in pages]
     initial_quality = [payload.get("initial_quality", payload["quality"]) for payload, _ in pages]
-    review = [i for i, item in enumerate(quality)
-              if item.get("verified") is not True or item.get("passed") is not True]
+    review = review_page_indices(quality)
     # Non-blocking; a cheap sum over evidence already computed per page.
     render_advisory_count = sum(len(payload.get("rasterRenderAdvisories", [])) for payload, _ in pages)
     presentation.theme = merge_presentation_canvas({

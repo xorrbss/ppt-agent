@@ -110,6 +110,19 @@ def deck_quality_summary(outcomes: Sequence[PageOutcome]) -> dict[str, object]:
     }
 
 
+def review_page_indices(qualities: Sequence[Mapping[str, Any]]) -> list[int]:
+    """The one rule for a deck's ``reviewPages``: pages not verified-and-passed.
+
+    Every writer of a published deck's review list reads it through here, so a
+    later mutation (page renumbering, a page remake) can neither blanket-flag
+    a classified deck nor clear a page it did not re-verify.
+    """
+
+    return [index for index, quality in enumerate(qualities)
+            if not isinstance(quality, Mapping)
+            or quality.get("verified") is not True or quality.get("passed") is not True]
+
+
 def classification_of(quality: Mapping[str, Any]) -> str | None:
     """The classification a published page's quality record carries, if any."""
 
@@ -124,4 +137,5 @@ __all__ = [
     "classification_of",
     "classify_page_outcomes",
     "deck_quality_summary",
+    "review_page_indices",
 ]
