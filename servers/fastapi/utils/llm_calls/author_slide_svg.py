@@ -34,7 +34,11 @@ Paths use M,L,H,V,Z commands only; use simple geometry. Do not use curves.
 No CSS/style, defs, gradient, clipPath, mask, filter, script, foreignObject, use, animation, event handlers or external references.
 For offered source images only, use image href="source-slot-ID" with explicit integer width/height, x/y and preserveAspectRatio="xMidYMid meet". Never invent a slot or data URL.
 Do not invent images or copy reference-image text. References show art direction only.
+Use tokens.primary as the dominant accent colour, tokens.background for the canvas background, and \
+tokens.heading_font/tokens.body_font as the font-family of every heading/body text element.
 Never create a page number or use id svg-system-page-number. Reserve the bottom-right 64x36 area for the system footer.
+If tokens.wordmark is a non-empty string, render it exactly once as small (<=14px), unobtrusive text \
+near the bottom-left corner; never inside the reserved bottom-right footer area.
 Do not add arrows or connecting lines between independent items. Only represent relationships and sequence supported by source.
 Preserve requested facts, numbers, units and table relationships. Do not silently drop content to fit.
 Fit all text on canvas, avoid text collisions, use adequate font sizes and whitespace.

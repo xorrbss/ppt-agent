@@ -8,19 +8,19 @@ import os
 from pathlib import Path
 import shutil
 import uuid
-from typing import List, Mapping, Optional, Sequence
+from typing import List, Mapping, Sequence
 
 from pathvalidate import sanitize_filename
 from sqlalchemy.exc import SQLAlchemyError
 
 from models.generate_presentation_request import GeneratePresentationRequest
-from models.presentation_outline_model import PresentationOutlineModel
 from services.authored_checkpoint_service import (
     atomic_write,
     clear_checkpoint_html,
     complete_stage,
 )
 from services.authored_admission_checkpoint import prepare_checkpoint_write
+from services.generation_core.style.build import authored_title, resolve_brand
 from utils.asset_directory_utils import (
     filesystem_image_path_to_app_data_reference,
     get_exports_directory,
@@ -29,56 +29,10 @@ from utils.asset_directory_utils import (
 from utils.filename_utils import safe_export_basename
 from utils.get_env import is_authored_retain_checkpoint_html_enabled
 from utils.llm_calls.author_deck import build_image_pptx
-from utils.llm_calls.author_slide import Brand
-from utils.outline_utils import get_presentation_title_from_presentation_outline
 
+__all__ = ["authored_title", "resolve_brand"]
 
-_DEFAULT_PRIMARY = "#2563EB"
 LOGGER = logging.getLogger(__name__)
-
-
-def _is_korean(*candidates: Optional[str]) -> bool:
-    for c in candidates:
-        s = (c or "").lower()
-        if "korea" in s or "?쒓뎅" in s or s.startswith("ko"):
-            return True
-    return False
-
-
-def authored_title(
-    request: GeneratePresentationRequest, outline: PresentationOutlineModel
-) -> str:
-    """A clean deck title for authored mode. Prefer the user's topic (request.content
-    first line) over the verbose generated first-slide outline (which often carries
-    presenter/date/agenda scaffolding that bloats the title and filename)."""
-    content = (request.content or "").strip()
-    if content:
-        first_line = content.splitlines()[0].lstrip("#").strip()
-        if first_line:
-            return first_line[:80]
-    return get_presentation_title_from_presentation_outline(outline)
-
-
-def resolve_brand(
-    request: GeneratePresentationRequest,
-    outline: PresentationOutlineModel,
-    language: Optional[str],
-) -> Brand:
-    """Build the shared design tokens for the deck. Theme injection point: brand primary
-    colour + fonts + wordmark go into every slide's design-system brief. User-supplied
-    request fields win; otherwise a brand-blue primary + language-aware fonts (Noto Sans
-    KR for Korean, else a clean sans) and no wordmark."""
-    korean = _is_korean(language, request.language)
-    return Brand(
-        topic=authored_title(request, outline),
-        language=language or ("Korean" if korean else "the deck's language"),
-        primary=(request.primary_color or _DEFAULT_PRIMARY).strip() or _DEFAULT_PRIMARY,
-        fonts=(request.fonts or ("Noto Sans KR" if korean else "Inter")).strip(),
-        wordmark=(request.wordmark or "").strip(),
-        primary_is_explicit=bool((request.primary_color or "").strip()),
-        fonts_are_explicit=bool((request.fonts or "").strip()),
-        verbosity=request.verbosity.value,
-    )
 
 
 def _authored_image_set_digest(
