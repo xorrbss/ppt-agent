@@ -21,6 +21,7 @@ from services.workspace_operation_principal import operation_principal, resolve_
 from services.workspace_requeue_guard import (
     REQUEUE_REJECTED_DETAIL_KEY, claim_from_operation, run_guarded, try_requeue,
 )
+from services.workspace_post_publication_tail import finish_after_publication
 from services.workspace_quality_review_payload import (
     _normalize_quality_review_payload,
     _quality_review_count,
@@ -4477,11 +4478,11 @@ class WorkspaceOperationRunner:
                         claim, session_factory=self.session_factory
                     )
                     if published_result is not None:
-                        await finalize_workspace_operation_success(
-                            claim,
-                            published_result,
-                            session_factory=self.session_factory,
-                        )
+                        # Publication consumed the lease; the handler's tail
+                        # (e.g. the chained export) does not need it.
+                        await finish_after_publication(
+                            claim, handler_task, published_result,
+                            finalize=finalize_workspace_operation_success, session_factory=self.session_factory)
                         return
                     raise
                 raise WorkspaceOperationLeaseLost("workspace_operation_heartbeat_stopped")

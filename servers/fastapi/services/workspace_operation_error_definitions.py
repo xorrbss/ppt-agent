@@ -60,6 +60,7 @@ _GROUPS = (
         "public_operation_authority_unavailable",
         "release_quality_review_failed",
         "workspace_operation_transition_failed",
+        "workspace_operation_post_publication_tail_timeout",
     )),
     (408, False, "The operation deadline has passed.", (
         "public_deadline_exceeded",
