@@ -20,6 +20,7 @@ when nothing was kept.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -87,6 +88,9 @@ def assert_slide_bindings(
         raise ComposerAssertionError(0, "composer_binding_cardinality_mismatch")
     for result, slide_bindings in zip(results, bindings, strict=True):
         index = result.slide_index
+        measured_digest = result.metrics.get("composerFinalHtmlDigest")
+        if measured_digest is not None and measured_digest != "sha256:" + hashlib.sha256(result.html.encode("utf-8")).hexdigest():
+            raise ComposerAssertionError(index, "composer_final_html_digest_mismatch")
         issues = result.receipt.blocking_issues
         if issues and not is_accepted_residual(
             result.receipt.rung, issues, fit_policy_revision=result.receipt.fit_policy_revision,

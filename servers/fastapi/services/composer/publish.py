@@ -157,6 +157,12 @@ async def publish_composer_deck(
         raise ComposerPublicationError("composer_publication_cardinality_mismatch")
     if any(html != result.html for html, result in zip(htmls, results)):
         raise ComposerPublicationError("composer_publication_final_html_mismatch")
+    from services.composer.canvas_identity import bind_canvas_identity, publication_canvas_metadata
+
+    try:
+        canvas_metadata = publication_canvas_metadata(request, deck.canvas)
+    except ValueError as error:
+        raise ComposerPublicationError(str(error)) from error
     fit_revision = getattr(deck, "fit_policy_revision", None)
     if fit_revision == "composer-source-fit/v2" and any(
         'data-source-fit-policy="composer-source-fit/v2"' not in html for html in htmls
@@ -252,16 +258,16 @@ async def publish_composer_deck(
                     )
                     for html in htmls
                 ],
-                master_contract_digest=canonical_digest(
+                master_contract_digest=canonical_digest(bind_canvas_identity(
                     {
                         "schemaVersion": "composer-master/v1",
                         "styleId": style_id,
                         "tokens": deck.tokens.model_dump(mode="json"),
                         "styleProfile": deck.style_profile.model_dump(mode="json") if deck.style_profile else None,
                         "canvas": deck.canvas.model_dump(mode="json", by_alias=True),
-                    }
-                ),
-                composition_digest=canonical_digest(deck.model_dump(mode="json")),
+                    }, canvas_metadata
+                )),
+                composition_digest=canonical_digest(bind_canvas_identity(deck.model_dump(mode="json"), canvas_metadata)),
                 slide_asset_manifests=asset_manifests,
                 slide_font_manifests=[font_manifest for _ in slides],
                 resolved_artifact_bytes=artifact_bytes,
@@ -302,16 +308,7 @@ async def publish_composer_deck(
                 "generationComposer": {**publication, "slideCount": count, "rungHistogram": rung_histogram},
             }
         )
-        from services.authored_canvas import AuthoredCanvasMetadata, merge_presentation_canvas
-
-        canvas_metadata = AuthoredCanvasMetadata(
-            contract_version="authored-canvas/v1",
-            aspect_ratio=getattr(request, "aspect_ratio", "16:9"),
-            width_px=deck.canvas.width_px,
-            height_px=deck.canvas.height_px,
-            locale=deck.canvas.locale,
-            safe_area=deck.canvas.safe_area,
-        ).model_dump(mode="json", by_alias=True)
+        from services.authored_canvas import merge_presentation_canvas
         theme = merge_presentation_canvas(theme, canvas_metadata)
         publication["canvas"] = canvas_metadata
         presentation.title = title

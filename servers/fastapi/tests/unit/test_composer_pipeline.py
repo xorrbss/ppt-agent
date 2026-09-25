@@ -633,7 +633,7 @@ def _patch_admission(monkeypatch, *, enabled: bool) -> None:
         return manifest
 
     class FakeOutlineBuilder:
-        def build(self, *, manifest, manifest_pin):
+        def build(self, *, manifest, manifest_pin, include_tables=True):
             return SimpleNamespace(source_slide_count=3, slides=(1, 2, 3))
 
     monkeypatch.setattr(manifest_store, "admit_source_content_manifest_pin", admit_pin)

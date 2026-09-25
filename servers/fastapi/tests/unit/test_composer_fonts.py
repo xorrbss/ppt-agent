@@ -71,9 +71,9 @@ def test_the_renderer_only_emits_bundled_weights() -> None:
 
 
 def test_the_bundled_faces_match_the_exporter_package() -> None:
-    """``lib/authored-hybrid/bundled-fonts.ts`` is the other half of this pair."""
+    """The exporter manifest names the same OOXML faces as Composer."""
 
-    bundled = (_NEXTJS / "lib" / "authored-hybrid" / "bundled-fonts.ts").read_text(
+    bundled = (_NEXTJS / "lib" / "authored-hybrid" / "bundled-fonts-manifest.ts").read_text(
         encoding="utf-8"
     )
     for _weight, _face, file_name in BUNDLED_FACES:

@@ -28,6 +28,7 @@ from services.composer.classify_common import (
     squash,
 )
 from services.composer.plan import Paragraph, SourceRunRef, TextRun
+from services.source_content.source_run_segments import _MARKER_ONLY
 from services.source_content.source_runs import (
     SourceRunProjection,
     normalize_source_text,
@@ -177,7 +178,12 @@ def bind_source_paragraphs(block: TextBlock) -> list[Paragraph]:
     result: list[Paragraph] = []
     cursor = 0
     for index, meta in enumerate(block.paragraphs_meta):
-        projection = _project_or_none(str(meta.get("text") or ""))
+        paragraph_text = str(meta.get("text") or "")
+        # The block projection drops a standalone arrow between flow steps.
+        # Its source paragraph must not consume the next step's run.
+        if len(block.paragraphs_meta) > 1 and _MARKER_ONLY.fullmatch(normalize_source_text(paragraph_text)):
+            continue
+        projection = _project_or_none(paragraph_text)
         if projection is None:
             result.append(Paragraph(text=str(meta.get("text") or ""),
                 source=SourceRunRef(block_id=block.block_id, binding_id=block.block_id),
@@ -348,10 +354,11 @@ def table_rows(block_id: str, payload: Mapping[str, Any]) -> tuple[list[list[Par
             projection = _project_or_none(text)
             cell_text = text
             chars += len(cell_text)
+            cell_runs = formatted_runs(cell)
             bound.append(
                 Paragraph(
                     text=cell_text,
-                    runs=[TextRun(text=r.text, bold=r.bold, italic=r.italic, size_pt=r.size_pt, color=r.color, font_family=r.font_family) for r in formatted_runs(cell)] if cell else ([TextRun(text=cell_text)] if cell_text else []),
+                    runs=[TextRun(text=r.text, bold=r.bold, italic=r.italic, size_pt=r.size_pt, color=r.color, font_family=r.font_family) for r in cell_runs] if cell_runs else ([TextRun(text=cell_text)] if cell_text else []),
                     layout=dict(cell),
                     source=SourceRunRef(block_id=block_id, binding_id=block_id),
                 )

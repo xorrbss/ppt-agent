@@ -188,12 +188,21 @@ def _install_fakes(monkeypatch: pytest.MonkeyPatch, calls: Calls, *, publish_err
     return artifact
 
 
-def _publish(session: FakeSession, job: Any, async_status: Any = None) -> dict[str, Any]:
+def _publish(session: FakeSession, job: Any, async_status: Any = None, *, orientation: str | None = None, wrong_geometry: bool = False) -> dict[str, Any]:
     deck, results = _deck(3)
+    request = SimpleNamespace(language="ko", authored_style="style-a", export_as="pptx")
+    if orientation is not None:
+        from services.document_canvas import document_canvas_for_orientation
+
+        request.page_size = "A4"
+        request.orientation = orientation
+        request.aspect_ratio = "16:9"
+        if not wrong_geometry:
+            deck = deck.model_copy(update={"canvas": document_canvas_for_orientation(orientation).canvas_contract()})
     return asyncio.run(
         publish_composer_deck(
             sql_session=session,
-            request=SimpleNamespace(language="ko", authored_style="style-a", export_as="pptx"),
+            request=request,
             presentation_id=uuid.uuid4(),
             generation_job=job,
             async_status=async_status,
@@ -216,6 +225,48 @@ def _workspace_job() -> tuple[SimpleNamespace, SimpleNamespace]:
         id=operation_id, state="running", attempt_token=ATTEMPT_TOKEN, expected_revision=EXPECTED_REVISION
     )
     return job, operation
+
+
+@pytest.mark.parametrize("orientation,dimensions", [("landscape", (1188, 840)), ("portrait", (840, 1188))])
+def test_a4_publication_preserves_physical_canvas_and_identity(monkeypatch, orientation, dimensions):
+    from services.authored_vnext.semantic.canonical import canonical_digest
+    from services.document_canvas import document_canvas_for_orientation
+
+    calls = Calls()
+    _install_fakes(monkeypatch, calls)
+    job, operation = _workspace_job()
+    presentation = _presentation(uuid.uuid4())
+    session = FakeSession(presentation=presentation, operation=operation)
+    result = _publish(session, job, orientation=orientation)
+    expected = document_canvas_for_orientation(orientation).model_dump(mode="json", by_alias=True)
+    assert presentation.theme["documentCanvas"] == expected
+    assert "canvas" not in presentation.theme.get("authored_vnext", {})
+    assert result["canvas"] == expected
+    exported = calls["build_export"][0]["canvas"]
+    assert (exported.width_px, exported.height_px) == dimensions
+    deck, _ = _deck(3)
+    deck = deck.model_copy(update={"canvas": exported})
+    assert calls["bundle_graph"][0]["composition_digest"] == canonical_digest({
+        **deck.model_dump(mode="json"), "documentCanvas": expected,
+    })
+    assert calls["bundle_graph"][0]["master_contract_digest"] == canonical_digest({
+        "schemaVersion": "composer-master/v1", "styleId": "style-a",
+        "tokens": deck.tokens.model_dump(mode="json"), "styleProfile": None,
+        "canvas": exported.model_dump(mode="json", by_alias=True),
+        "documentCanvas": expected,
+    })
+    assert session.rollbacks == 0
+
+
+def test_a4_publication_rejects_geometry_drift_before_artifact_writes(monkeypatch):
+    calls = Calls()
+    _install_fakes(monkeypatch, calls)
+    job, operation = _workspace_job()
+    session = FakeSession(presentation=_presentation(uuid.uuid4()), operation=operation)
+    with pytest.raises(ComposerPublicationError, match="document_canvas_geometry_mismatch"):
+        _publish(session, job, orientation="portrait", wrong_geometry=True)
+    assert calls["prepare_artifact"] == []
+    assert calls["save_pngs"] == []
 
 
 def test_workspace_lane_publishes_through_the_artifact_cas_only(monkeypatch) -> None:
@@ -241,6 +292,16 @@ def test_workspace_lane_publishes_through_the_artifact_cas_only(monkeypatch) -> 
     assert calls["build_export"][0]["title"] == "Composer deck"
     assert calls["build_export"][0]["canvas"].width_px == 1280
     assert presentation.theme["authored_vnext"]["canvas"]["widthPx"] == 1280
+    from services.authored_vnext.semantic.canonical import canonical_digest
+
+    legacy_deck, _ = _deck(3)
+    assert "documentCanvas" not in presentation.theme
+    assert calls["bundle_graph"][0]["composition_digest"] == canonical_digest(legacy_deck.model_dump(mode="json"))
+    assert calls["bundle_graph"][0]["master_contract_digest"] == canonical_digest({
+        "schemaVersion": "composer-master/v1", "styleId": "style-a",
+        "tokens": legacy_deck.tokens.model_dump(mode="json"), "styleProfile": None,
+        "canvas": legacy_deck.canvas.model_dump(mode="json", by_alias=True),
+    })
     assert calls["fence_artifact"] == [{"artifact": artifact}]
     [published] = calls["publish_artifact"]
     assert published["artifact"] is artifact

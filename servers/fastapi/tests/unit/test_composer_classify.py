@@ -472,7 +472,7 @@ def test_table_cells_all_bind_to_the_table_block_as_a_whole() -> None:
     (component,) = plan.components
     assert component.kind == "table" and plan.archetype == "table"
     texts = [[cell.text for cell in row] for row in component.table_rows]
-    assert texts == [["항목", "값"], ["", "A → B"], ["합계", "3"]]
+    assert texts == [["항목", "값"], ["", "A  →  B"], ["합계", "3"]]
     cells = [cell for row in component.table_rows for cell in row]
     assert {(cell.source.block_id, cell.source.run_start, cell.source.run_end) for cell in cells} == {
         ("slide-1:table:2", None, None)
@@ -481,7 +481,7 @@ def test_table_cells_all_bind_to_the_table_block_as_a_whole() -> None:
     assert {parse_source_binding_id(cell.source.binding_id) for cell in cells} == {("slide-1:table:2", None, None)}
     assert all("".join(run.text for run in cell.runs) == cell.text for cell in cells)
     assert plan.text_chars == len("2026 사업 계획") + sum(len(cell.text) for cell in cells)
-    assert any("merged cells" in note for note in plan.notes)
+    assert component.table_merged_cells == merged
 
 
 def test_chart_emits_no_component_but_a_note() -> None:

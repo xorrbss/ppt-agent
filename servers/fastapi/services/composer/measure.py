@@ -154,13 +154,19 @@ async def measure_slide(
 
     canvas_width, canvas_height = declared_canvas_dimensions(html)
     capture = await render_html_to_png_with_metrics(html, timeout=render_timeout_seconds, width_px=canvas_width, height_px=canvas_height)
+    from services.composer.typography import measured_source_typography
+    typography, font_issues = measured_source_typography(html, capture.browser_metrics)
     measured = measurement_from_capture(
         html,
         capture.browser_metrics,
         capture.png,
         strict_structural_off_canvas=strict_structural_off_canvas,
     )
-    return reconcile_source_image_overlaps(html, plan, measured)
+    measured = reconcile_source_image_overlaps(html, plan, measured)
+    from dataclasses import replace
+    return replace(measured, metrics={**measured.metrics, "composerTypography": typography,
+                                     "composerFinalHtmlDigest": capture.html_digest},
+                   blocking_issues=(*measured.blocking_issues, *font_issues))
 
 
 class ChromiumMeasurer:
