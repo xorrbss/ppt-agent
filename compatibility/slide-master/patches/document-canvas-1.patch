@@ -1,3 +1,83 @@
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/conversion_context.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/conversion_context.py
+new file mode 100644
+index 000000000..c447ac950
+--- /dev/null
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/conversion_context.py
+@@ -0,0 +1,74 @@
++"""Immutable, invocation-local physical units for native serialization.
++
++The ContextVar is task/thread local, never a mutable process-wide scale. The
++public converter scopes and resets it, including failures and nested calls.
++Nonlegacy calls are deliberately serial until child propagation is supported.
++"""
++from __future__ import annotations
++
++from contextvars import ContextVar
++from dataclasses import dataclass
++from functools import wraps
++from inspect import signature
++
++
++@dataclass(frozen=True)
++class ConversionContext:
++    width_units: int = 1280
++    height_units: int = 720
++    width_emu: int = 12192000
++    height_emu: int = 6858000
++    legacy: bool = True
++
++    def __post_init__(self):
++        values = (self.width_units, self.height_units, self.width_emu, self.height_emu)
++        if any(type(value) is not int or value <= 0 for value in values):
++            raise ValueError("svg_conversion_context_invalid")
++        aspect_error = abs(
++            self.width_emu * self.height_units - self.height_emu * self.width_units
++        )
++        if aspect_error and (self.legacy or aspect_error * 2 > self.width_emu):
++            raise ValueError("svg_conversion_context_nonuniform")
++        if self.legacy and self.width_emu != self.width_units * 9525:
++            raise ValueError("svg_conversion_context_legacy_scale")
++
++    @property
++    def emu_per_unit(self) -> float:
++        return self.width_emu / self.width_units
++
++    @property
++    def hundredths_pt_per_unit(self) -> float:
++        return self.emu_per_unit / 127
++
++
++_ACTIVE_CONTEXT: ContextVar[ConversionContext] = ContextVar(
++    "slide_master_conversion_context", default=ConversionContext()
++)
++
++
++def current_conversion_context() -> ConversionContext:
++    return _ACTIVE_CONTEXT.get()
++
++
++def scoped_conversion_context(function):
++    call_signature = signature(function)
++
++    @wraps(function)
++    def call(*args, **kwargs):
++        bound = call_signature.bind(*args, **kwargs)
++        context = bound.arguments.get("conversion_context") or ConversionContext()
++        if not isinstance(context, ConversionContext):
++            raise ValueError("svg_conversion_context_invalid")
++        if not context.legacy:
++            if bound.arguments.get("workers") not in (None, 1):
++                raise ValueError("svg_conversion_context_parallel_unsupported")
++            bound.arguments["workers"] = 1
++            if bound.arguments.get("pptx_structure", "structured") != "flat":
++                raise ValueError("svg_conversion_context_structure_unsupported")
++        token = _ACTIVE_CONTEXT.set(context)
++        try:
++            return function(*bound.args, **bound.kwargs)
++        finally:
++            _ACTIVE_CONTEXT.reset(token)
++
++    return call
 diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/converter.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/converter.py
 index 1a969d478..7070dbcd9 100644
 --- a/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/converter.py
@@ -109,6 +189,181 @@ index d36c981c8..58769007f 100644
  
  
  def _f(val: str | None, default: float = 0.0) -> float:
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_data.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_data.py
+index 92c429928..0e81ac8cc 100644
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_data.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_data.py
+@@ -104,7 +104,7 @@ def _chart_data_labels(
+     config = _data_labels_config(payload)
+     if config is None:
+         return None
+-    if chart_type not in {"area", "bar", "column", "line"}:
++    if chart_type not in {"area", "bar", "column", "line", "pie", "doughnut"}:
+         raise RuntimeError(
+             f"Native PPTX {chart_type} chart data labels are outside current support"
+         )
+@@ -292,8 +292,8 @@ def _chart_axes(
+                 f"Native PPTX chart axes.{role}.position must be bottom, left, right, or top"
+             )
+         allowed_positions = (
+-            {"bottom", "top"}
+-            if role in {"category", "secondary_category", "x"}
++            {"bottom", "top", "left", "right"} if role == "category" else
++            {"bottom", "top"} if role in {"secondary_category", "x"}
+             else {"left", "right"}
+         )
+         if position not in allowed_positions:
+@@ -624,10 +624,7 @@ def _category_series(payload: dict[str, Any], categories: list[Any]) -> list[dic
+         series_item = {"name": str(item.get("name") or f"Series {idx}"), "values": values}
+         if point_colors:
+             series_item["point_colors"] = point_colors
+-        fill_opacity = _first_present(
+-            item.get("fill_opacity"),
+-            item.get("fillOpacity"),
+-        )
++        fill_opacity = _first_present(item.get("fill_opacity"), item.get("fillOpacity"))
+         if fill_opacity is not None:
+             fill_opacity = _number(fill_opacity, "series fill_opacity")
+             if not 0 <= fill_opacity <= 1:
+@@ -635,16 +632,17 @@ def _category_series(payload: dict[str, Any], categories: list[Any]) -> list[dic
+                     "Native PPTX chart series fill_opacity must be between 0 and 1"
+                 )
+             series_item["fill_opacity"] = fill_opacity
+-        line_width = _first_present(
+-            item.get("line_width"),
+-            item.get("lineWidth"),
+-        )
++        line_width = _first_present(item.get("line_width"), item.get("lineWidth"))
+         if line_width is not None:
+             line_width = _number(line_width, "series line_width")
+             if line_width <= 0:
+                 raise RuntimeError("Native PPTX chart series line_width must be positive")
+             _powerpoint_line_width_emu(line_width, "series line_width")
+             series_item["line_width"] = line_width
++        if (marker_size := item.get("marker_size")) is not None:
++            if type(marker_size) is not int or not 2 <= marker_size <= 72:
++                raise RuntimeError("Native PPTX marker_size must be an integer from 2 to 72")
++            series_item["marker_size"] = marker_size
+         series.append(series_item)
+     return series
+ 
+@@ -656,7 +654,7 @@ def _category_chart_data(
+     alias_style: str | None,
+ ) -> dict[str, Any]:
+     axes = _chart_axes(payload, {"category", "value"})
+-    if axes and chart_type in {"bar", "doughnut", "of_pie", "pie"}:
++    if axes and chart_type in {"doughnut", "of_pie", "pie"}:
+         raise RuntimeError(
+             f"Native PPTX {chart_type} chart axes are outside current support"
+         )
+@@ -906,7 +904,7 @@ def _combo_chart_data(payload: dict[str, Any]) -> dict[str, Any]:
+         raw_series = _chart_list(payload.get("series", []), "series")
+         if not raw_series:
+             raise RuntimeError("Native PPTX combo chart requires plots or typed series")
+-        for idx, item in enumerate(raw_series, start=1):
++        for item in raw_series:
+             if not isinstance(item, dict):
+                 raise RuntimeError("Native PPTX chart series entries must be objects")
+             if not (item.get("type") or item.get("chart_type")):
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py
+index 12cadb4c1..4fa320180 100644
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py
+@@ -290,12 +290,13 @@ def _data_point_colors_xml(
+     )
+ 
+ 
+-def _marker_xml(symbol: str | None) -> str:
++def _marker_xml(symbol: str | None, size: int | None = None) -> str:
+     if not symbol:
+         return ""
+     if symbol == "none":
+         return '<c:marker><c:symbol val="none"/></c:marker>'
+-    return f'<c:marker><c:symbol val="{_xml_escape(symbol)}"/></c:marker>'
++    size_xml = f'<c:size val="{size}"/>' if size is not None else ""
++    return f'<c:marker><c:symbol val="{_xml_escape(symbol)}"/>{size_xml}</c:marker>'
+ 
+ 
+ def _series_xml(
+@@ -367,7 +368,7 @@ def _series_xml(
+                 disable_negative_invert=True,
+             )
+         if chart_type == "line":
+-            marker_xml = _marker_xml("circle" if line_style == "lineMarker" else "none")
++            marker_xml = _marker_xml("circle" if line_style == "lineMarker" else "none", item.get("marker_size"))
+             smooth_xml = '<c:smooth val="0"/>'
+         if chart_type == "radar":
+             if radar_style == "filled":
+@@ -387,8 +388,8 @@ def _series_xml(
+                 default_color=data_label_color,
+                 default_font_face=data_label_font_face,
+             )
+-            if _series_scoped_data_labels(data_labels)
+-            and chart_type in {"area", "bar", "column", "line"}
++            if (_series_scoped_data_labels(data_labels) or data_labels is not None and chart_type in {"pie","doughnut"})
++            and chart_type in {"area", "bar", "column", "line", "pie", "doughnut"}
+             else ""
+         )
+         parts.append(
+@@ -398,15 +399,12 @@ def _series_xml(
+             f"<c:f>Sheet1!${_excel_col(column_index)}$1</c:f>"
+             f"{_string_cache([str(item['name'])])}"
+             "</c:strRef></c:tx>"
+-            f"{color_xml}{invert_xml}{marker_xml}{point_colors_xml}"
+-            f"{data_labels_xml}"
+-            f"{category_xml}"
++            f"{color_xml}{invert_xml}{marker_xml}{point_colors_xml}{data_labels_xml}{category_xml}"
+             "<c:val><c:numRef>"
+             f"<c:f>Sheet1!${_excel_col(column_index)}$2:${_excel_col(column_index)}${len(categories) + 1}</c:f>"
+             f"{_number_cache(item['values'])}"
+             "</c:numRef></c:val>"
+-            f"{smooth_xml}"
+-            "</c:ser>"
++            f"{smooth_xml}</c:ser>"
+         )
+     return "".join(parts)
+ 
+@@ -436,7 +434,7 @@ def _chart_title_xml(
+     color: str | None = None,
+     subtitle: Any = None,
+     subtitle_font_size: int | None = None,
+-    font_face: str | None = None,
++    font_face: str | None = None, reserve_space: bool = False,
+ ) -> str:
+     title_entry = _chart_text_entry(title)
+     subtitle_entry = _chart_text_entry(subtitle)
+@@ -459,10 +457,10 @@ def _chart_title_xml(
+             color=_chart_text_entry_color(item, color),
+             font_face=_chart_text_entry_font_face(item, font_face),
+         ))
++    overlay_xml = '<c:overlay val="0"/>' if reserve_space else ""
+     return (
+-        "<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/>"
+-        f"{''.join(paragraphs)}"
+-        "</c:rich></c:tx><c:layout/></c:title>"
++        f"<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/>{''.join(paragraphs)}"
++        f"</c:rich></c:tx><c:layout/>{overlay_xml}</c:title>"
+         '<c:autoTitleDeleted val="0"/>'
+     )
+ 
+@@ -754,7 +752,7 @@ def _axis_pair_xml(
+         f'<c:majorUnit val="{value["major_unit"]}"/>'
+         if value.get("major_unit") is not None else ""
+     )
+-    value_crosses = "max" if secondary else "autoZero"
++    value_crosses = "max" if secondary or (chart_type == "bar" and category.get("reverse")) else "autoZero"
+     return (
+         f"<c:{category_tag}>"
+         f'<c:axId val="{cat_ax_id}"/>{_axis_scaling_xml(category)}'
+@@ -1378,7 +1376,7 @@ def _chart_xml(
+         color=chart_style.get("text_color"),
+         subtitle=payload.get("subtitle"),
+         subtitle_font_size=text_sizes["subtitle"],
+-        font_face=chart_style.get("font_face"),
++        font_face=chart_style.get("font_face"), reserve_space=bool(payload.get("title_reserve_space")),
+     )
+     legend_xml = _chart_legend_xml(
+         payload,
 diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/marker_common.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/marker_common.py
 index aae32d004..ca5f65407 100644
 --- a/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/marker_common.py
@@ -221,82 +476,3 @@ index f7499ac31..521718d6b 100644
                              for value in binding.element.placeholder_bounds
                          )
                      elif prototype_placeholder is not None:
-diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/conversion_context.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/conversion_context.py
-new file mode 100644
---- /dev/null
-+++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/conversion_context.py
-@@ -0,0 +1,74 @@
-+"""Immutable, invocation-local physical units for native serialization.
-+
-+The ContextVar is task/thread local, never a mutable process-wide scale. The
-+public converter scopes and resets it, including failures and nested calls.
-+Nonlegacy calls are deliberately serial until child propagation is supported.
-+"""
-+from __future__ import annotations
-+
-+from contextvars import ContextVar
-+from dataclasses import dataclass
-+from functools import wraps
-+from inspect import signature
-+
-+
-+@dataclass(frozen=True)
-+class ConversionContext:
-+    width_units: int = 1280
-+    height_units: int = 720
-+    width_emu: int = 12192000
-+    height_emu: int = 6858000
-+    legacy: bool = True
-+
-+    def __post_init__(self):
-+        values = (self.width_units, self.height_units, self.width_emu, self.height_emu)
-+        if any(type(value) is not int or value <= 0 for value in values):
-+            raise ValueError("svg_conversion_context_invalid")
-+        aspect_error = abs(
-+            self.width_emu * self.height_units - self.height_emu * self.width_units
-+        )
-+        if aspect_error and (self.legacy or aspect_error * 2 > self.width_emu):
-+            raise ValueError("svg_conversion_context_nonuniform")
-+        if self.legacy and self.width_emu != self.width_units * 9525:
-+            raise ValueError("svg_conversion_context_legacy_scale")
-+
-+    @property
-+    def emu_per_unit(self) -> float:
-+        return self.width_emu / self.width_units
-+
-+    @property
-+    def hundredths_pt_per_unit(self) -> float:
-+        return self.emu_per_unit / 127
-+
-+
-+_ACTIVE_CONTEXT: ContextVar[ConversionContext] = ContextVar(
-+    "slide_master_conversion_context", default=ConversionContext()
-+)
-+
-+
-+def current_conversion_context() -> ConversionContext:
-+    return _ACTIVE_CONTEXT.get()
-+
-+
-+def scoped_conversion_context(function):
-+    call_signature = signature(function)
-+
-+    @wraps(function)
-+    def call(*args, **kwargs):
-+        bound = call_signature.bind(*args, **kwargs)
-+        context = bound.arguments.get("conversion_context") or ConversionContext()
-+        if not isinstance(context, ConversionContext):
-+            raise ValueError("svg_conversion_context_invalid")
-+        if not context.legacy:
-+            if bound.arguments.get("workers") not in (None, 1):
-+                raise ValueError("svg_conversion_context_parallel_unsupported")
-+            bound.arguments["workers"] = 1
-+            if bound.arguments.get("pptx_structure", "structured") != "flat":
-+                raise ValueError("svg_conversion_context_structure_unsupported")
-+        token = _ACTIVE_CONTEXT.set(context)
-+        try:
-+            return function(*bound.args, **bound.kwargs)
-+        finally:
-+            _ACTIVE_CONTEXT.reset(token)
-+
-+    return call

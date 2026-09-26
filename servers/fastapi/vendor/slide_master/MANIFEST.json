@@ -98,6 +98,6 @@
     "document-canvas.2: invocation-local physical units and bounded source-canvas rounding"
   ],
   "patches": {
-    "document-canvas-1.patch": "b98e40ddd2c7440291cd44281c9c4ddface190ec6e1118f4c44dc98c6c49e136"
+    "document-canvas-1.patch": "70aa54650ee16995534d5ff7eaff6de7c24782e23970bf5c48b6a7ffcf60ab61"
   }
 }
