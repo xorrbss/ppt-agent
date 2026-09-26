@@ -98,3 +98,33 @@ def _validate_redesign_page(page: RasterPage, source: RasterSourceIdentity) -> N
         raise ValueError("raster_region_token_assignment_invalid")
     if set(carried) & set(page.unpromoted_ocr_indices):
         raise ValueError("raster_unpromoted_token_carried")
+    _validate_pixel_cells(page)
+
+
+def _within(inner, outer, tolerance: float) -> bool:
+    return (
+        inner[0] >= outer[0] - tolerance
+        and inner[1] >= outer[1] - tolerance
+        and inner[0] + inner[2] <= outer[0] + outer[2] + tolerance
+        and inner[1] + inner[3] <= outer[1] + outer[3] + tolerance
+    )
+
+
+def _validate_pixel_cells(page: RasterPage) -> None:
+    """A table's pixel cell is a screenshot crop of source pixels inside that table,
+    linked by exactly one native table (text "" there, see RasterRegion)."""
+
+    by_id = {region.region_id: region for region in page.regions}
+    linked: set[str] = set()
+    for table in page.regions:
+        for _, _, crop_id in table.table_pixel_cells:
+            crop = by_id.get(crop_id)
+            if crop is None or crop_id in linked or crop.role != "screenshot" or not crop.editable_fallback:
+                raise ValueError("raster_table_pixel_cell_invalid")
+            linked.add(crop_id)
+            box, outer = crop.bbox, table.bbox
+            if not _within((box.x, box.y, box.width, box.height), (outer.x, outer.y, outer.width, outer.height), 1):
+                raise ValueError("raster_table_pixel_cell_invalid")
+            if crop.source_pixel_bbox is not None and table.source_pixel_bbox is not None:
+                if not _within(crop.source_pixel_bbox, table.source_pixel_bbox, 0):
+                    raise ValueError("raster_table_pixel_cell_invalid")

@@ -29,6 +29,7 @@ from services.source_content.raster_llm_structure import VisionJson, capture_can
 from services.source_content.raster_page_plan import PagePlan, line_needs_help, plan_page
 from services.source_content.raster_redesign_ocr import RedesignLine, RedesignWord
 from services.source_content.raster_structure_apply import apply_structure
+from services.source_content.raster_table_overlay import settle_pixel_cells
 
 logger = logging.getLogger(__name__)
 HEURISTIC_ADVISORY = "heuristic_plan"
@@ -131,8 +132,14 @@ def _structured_plan(image, gray, words, lines, structurer, executable, tessdata
     if not plan_is_lossless(plan, plan.words or words):
         logger.warning("raster structuring rejected: plan not lossless")
         return _degraded(heuristic, "structuring_rejected:plan_not_lossless")
-    covered = _covered(plan, plan.words or words, image, gray, clusters)
-    final = _exactly_once(covered, plan.words or words, gray, clusters, image)
+    words = plan.words or words
+    # Pixel-cell rules before the final repairs (a table they turn into pixels is
+    # then repaired too), and again on their result.
+    covered = _covered(settle_pixel_cells(plan, words), words, image, gray, clusters)
+    final = _exactly_once(covered, words, gray, clusters, image)
+    settled = settle_pixel_cells(final, words)
+    if settled is not final:
+        final = _exactly_once(settled, words, gray, clusters, image)
     if transcription_failure is None:
         return final
     return replace(final, advisories=(*final.advisories, transcription_failure))  # once per page

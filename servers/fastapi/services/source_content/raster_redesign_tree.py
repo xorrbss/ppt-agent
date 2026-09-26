@@ -36,6 +36,8 @@ class Item:
     # Largest scale (target units per source pixel); None means MAX_UPSCALE. Pixels
     # standing in for text are never magnified beyond their size on the source page.
     max_scale: float | None = None
+    # Table only: its pixel cells (raster_redesign_table.CellImage), drawn inside its grid.
+    pixel_cells: tuple = ()
 
     @property
     def is_icon(self) -> bool:

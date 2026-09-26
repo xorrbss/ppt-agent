@@ -9,6 +9,17 @@ from services.source_content.raster_redesign_ocr import RedesignWord
 
 
 @dataclass(frozen=True)
+class PixelCell:
+    """An unverified cell of a native table kept as its source pixels
+    (``raster_table_overlay``): position, crop box and the tokens it shows."""
+
+    row: int
+    col: int
+    bbox: Box
+    word_indices: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
 class PlannedRegion:
     role: str
     bbox: Box
@@ -25,6 +36,9 @@ class PlannedRegion:
     # form the card heading.
     group_id: str | None = None
     heading_line_count: int = 0
+    # Native tables only: unverified cells drawn from source pixels over the
+    # table; their tokens stay in ``word_indices`` until the analysis is sealed.
+    pixel_cells: tuple[PixelCell, ...] = ()
 
 
 @dataclass(frozen=True)

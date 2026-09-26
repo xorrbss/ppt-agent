@@ -111,7 +111,7 @@ def _fit_text(item, w, h, fonts=TEXT_FONTS):
 
 def _fit_table(item, w, h):
     for size in TABLE_FONTS:
-        grid = layout_table(item.rows, w, size)
+        grid = layout_table(item.rows, w, size, item.pixel_cells)
         if grid is not None and grid.height <= h * TEXT_SLACK:
             return grid
     return None

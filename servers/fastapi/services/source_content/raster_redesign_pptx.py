@@ -26,6 +26,8 @@ from services.svg_contract import RASTER_REDESIGN_ROOT_ID, SVG_NS
 
 _TABLE_ID = re.compile(r"^(rd-[0-9a-f]{10})-table-(\d{1,3})x(\d{1,3})$")
 _CELL_ID = re.compile(r"^rd-[0-9a-f]{10}-r(\d{1,3})c(\d{1,3})$")
+# A pixel cell's crop, a sibling after its table group (raster_redesign_table.render_table).
+_OVERLAY_ID = re.compile(r"^(rd-[0-9a-f]{10})-cell-r\d{1,3}c\d{1,3}$")
 _FAMILY = "Noto Sans KR"
 _DEFAULT_FONT_PX = 16.9
 _PT_PER_PX = 0.75
@@ -104,6 +106,19 @@ def table_native_object(group: ET.Element) -> NativeObject | None:
     }
     return NativeObject.build(id=group.get("id"), kind="table", anchor=NativeAnchor(x, y, width, height),
                               payload=payload)
+
+
+def table_cell_overlays(root: ET.Element) -> dict[str, int]:
+    """Table group id -> number of pixel-cell images drawn over that table."""
+
+    tables = {match[1]: group.get("id") for group in root.iter(f"{{{SVG_NS}}}g")
+              if (match := _TABLE_ID.match(group.get("id") or ""))}
+    counts: dict[str, int] = {}
+    for image in root.iter(f"{{{SVG_NS}}}image"):
+        match = _OVERLAY_ID.match(image.get("id") or "")
+        if match and match[1] in tables:
+            counts[tables[match[1]]] = counts.get(tables[match[1]], 0) + 1
+    return counts
 
 
 def redesign_native_objects(root: ET.Element) -> tuple[list[NativeObject], int]:

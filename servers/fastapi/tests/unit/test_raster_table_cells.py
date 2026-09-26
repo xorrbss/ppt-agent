@@ -1,4 +1,5 @@
-"""A structured table is editable only when every cell line passed the text gates."""
+"""A structured table publishes only cell lines that passed the text gates; an
+unverified cell keeps its source pixels (raster_table_overlay), never its OCR reading."""
 
 from __future__ import annotations
 
@@ -43,18 +44,27 @@ def test_fully_verified_table_is_native() -> None:
 
 
 def test_one_unverified_text_cell_never_publishes_its_ocr_reading() -> None:
-    # One line in twelve (below the former 10% allowance): an icon at the cell
-    # start read as "[" failed the text gate.
+    # An icon at the cell start read as "[" failed the text gate: that cell alone
+    # stays source pixels over the native table, published as "".
     build = _build({4: None}, {4: "[운영팀"})
     _table(build, _rows(), None)
     region = build.regions[-1]
-    assert region.table_cells is None and region.editable_fallback
-    assert region.review_reason == "table_cell_ocr_low_confidence"
-    assert "[운영팀" not in (region.text or "")
+    assert not region.editable_fallback and region.table_cells[2] == ("", "2,900건")
+    assert [(cell.row, cell.col, cell.word_indices) for cell in region.pixel_cells] == [(2, 0, (4,))]
+    assert "[운영팀" not in "".join(value for row in region.table_cells for value in row)
 
 
-def test_unverified_number_cell_keeps_table_pixels() -> None:
+def test_unverified_number_cell_is_never_published() -> None:
     build = _build({5: None}, {5: "2,960건"})
     _table(build, _rows(), None)
     region = build.regions[-1]
-    assert region.table_cells is None and region.editable_fallback
+    assert region.table_cells[2] == ("운영팀", "") and len(region.pixel_cells) == 1
+    assert "2,960" not in "".join(value for row in region.table_cells for value in row)
+
+
+def test_mostly_unverified_table_keeps_its_pixels() -> None:
+    build = _build({i: None for i in range(7)}, {})
+    _table(build, _rows(), None)
+    region = build.regions[-1]
+    assert region.table_cells is None and region.editable_fallback and not region.pixel_cells
+    assert region.review_reason == "table_cell_ocr_low_confidence"

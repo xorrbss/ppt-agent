@@ -100,7 +100,8 @@ def _content_xml(placed: Placed, page_number: int) -> list[str]:
     if placed.kind == "text":
         return [text_xml(f"rd-{tag}-{placed.part}", placed.x, placed.y, placed.lines)] if placed.lines else []
     if placed.kind == "table":
-        return render_table(placed.table, placed.x, placed.y, id_prefix=f"rd-{tag}", family=FAMILY, escape=escape)
+        return render_table(placed.table, placed.x, placed.y, id_prefix=f"rd-{tag}", family=FAMILY, escape=escape,
+                            image_href=lambda region_id: raster_slot_id(page_number, region_id))
     image_w = max(1, math.floor(placed.w))
     image_h = max(1, math.floor(placed.h))
     x = placed.x + (placed.w - image_w) / 2

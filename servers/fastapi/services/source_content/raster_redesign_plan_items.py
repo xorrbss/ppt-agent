@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from services.source_content.raster_contracts import RasterBox
 from services.source_content.raster_redesign_dedupe import suppressed_regions
 from services.source_content.raster_redesign_plan_constants import IMAGE_ROLES, TABLE_CROP_MIN_SCALE
+from services.source_content.raster_redesign_table import CellImage
+from services.source_content.raster_table_overlay import overlay_links
 from services.source_content.raster_redesign_text import split_paragraphs
 from services.source_content.raster_redesign_tree import Item
 
@@ -115,15 +117,27 @@ def _native_height(region) -> float | None:
     return float(pixel[3]) if pixel is not None else None
 
 
+def _cell_images(page, region) -> tuple:
+    """A table's pixel cells, drawn inside its grid (raster_table_overlay)."""
+    by_id = {r.region_id: r for r in page.regions}
+    result = []
+    for row, col, crop_id in getattr(region, "table_pixel_cells", None) or ():
+        crop = by_id[crop_id]
+        px = crop.source_pixel_bbox
+        result.append(CellImage(row, col, crop_id, float(px[2]), float(px[3]), _text_px(page, crop)))
+    return tuple(result)
+
+
 def build_items(page):
     """Split a page into header title, header logos and ordered content items."""
 
     title, logos, items, title_pixels = None, [], [], []
     carried = suppressed_regions(page)
+    cells = overlay_links(page.regions)
     for region in ordered_regions(page):
         role = region.role
-        if role == "decoration" or region.region_id in carried:
-            continue  # decoration, or already carried by a containing crop (drawn once)
+        if role == "decoration" or region.region_id in carried or region.region_id in cells:
+            continue  # decoration, carried by a containing crop, or a pixel cell its table draws
         text = (region.text or "").strip()
         if role == "title" and title is None and text:
             title = region
@@ -135,7 +149,7 @@ def build_items(page):
                               min_scale=_pixel_min_scale(region), inline=is_pixel_line(region),
                               text_px=_text_px(page, region) if is_pixel_line(region) else None))
         elif role == "table":
-            items.append(Item("table", region, rows=_table_rows(region)))
+            items.append(Item("table", region, rows=_table_rows(region), pixel_cells=_cell_images(page, region)))
         elif text:
             items.append(Item("text", region, paragraphs=tuple(
                 split_paragraphs(text, getattr(region, "heading_line_count", None)),

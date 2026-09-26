@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from services.source_content.raster_contracts import RasterBox, RasterRegion
 from services.source_content.raster_redesign_text import LINE_HEIGHT, layout_paragraphs
 from services.source_content.raster_redesign_tree import Item
+from services.source_content.raster_table_overlay import overlay_links
 
 ADVISORY = "dense_group_pixel_fallback"
 FALLBACK_MIN_SCALE = 0.6
@@ -28,6 +29,12 @@ class FallbackGroup:
     region: object  # the crop region (explicit from the analysis, or derived)
     member_ids: tuple[str, ...]
     min_scale: float = 0.0  # 0 means FALLBACK_MIN_SCALE
+
+
+def _with_cells(page, ids) -> tuple[str, ...]:
+    """Member ids plus the pixel cells of member tables: dropped with their table."""
+    own = set(ids)
+    return (*ids, *(crop for crop, table in overlay_links(page.regions).items() if table in own and crop not in own))
 
 
 def fallback_region_id(page_number: int, group_id: str) -> str:
@@ -58,7 +65,7 @@ def group_fallbacks(page) -> dict[str, FallbackGroup]:
         # The crop stays a member of its group, so a reflow keeps it at the group's place.
         region = _union_region(page.page_number, group, regions, boxes, reference, group_id=group)
         inside = [other for other in page.regions if _contained(other, region.source_pixel_bbox)]
-        ids = tuple(r.region_id for r in [*regions, *inside])
+        ids = _with_cells(page, tuple(r.region_id for r in [*regions, *inside]))
         result[group] = FallbackGroup(group, region, ids, legible_min_scale(page, ids))
     return result
 
@@ -122,7 +129,7 @@ def page_content_fallback(analysis, page) -> FallbackGroup | None:
     own |= {item.region.region_id for item in header_images}
     inside = [other for other in page.regions
               if other.region_id not in own and _contained(other, region.source_pixel_bbox)]
-    ids = tuple(r.region_id for r in [*regions, *inside])
+    ids = _with_cells(page, tuple(r.region_id for r in [*regions, *inside]))
     return FallbackGroup(PAGE_CONTENT, region, ids, legible_min_scale(page, ids))
 
 
@@ -155,7 +162,7 @@ def region_fallbacks(page) -> dict[str, FallbackGroup]:
         inside = [] if region.role == "decoration" else [
             other for other in page.regions if other is not region and _contained(other, crop.source_pixel_bbox)
         ]
-        ids = (region.region_id, *(other.region_id for other in inside))
+        ids = _with_cells(page, (region.region_id, *(other.region_id for other in inside)))
         result[region.region_id] = FallbackGroup(key, crop, ids, legible_min_scale(page, ids))
     return result
 

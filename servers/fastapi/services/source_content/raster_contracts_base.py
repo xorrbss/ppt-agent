@@ -92,6 +92,12 @@ class RasterRegion(RasterContract):
     # leading text lines that form the card heading.
     group_id: str | None = None
     heading_line_count: int = Field(default=0, ge=0)
+    # Native table only: (row, col, crop region id) of each unverified cell shown
+    # as its source-pixel crop over the table (raster_table_overlay); that cell's
+    # text is "". Cross-region rules: raster_contracts_analysis.
+    # Omitted from serialization while empty, so records (and digests) without
+    # pixel cells are byte-identical to those sealed before the field existed.
+    table_pixel_cells: tuple[tuple[int, int, str], ...] = Field(default=(), exclude_if=lambda cells: not cells)
 
     @model_validator(mode="after")
     def valid_crop(self):
@@ -99,6 +105,18 @@ class RasterRegion(RasterContract):
             widths = {len(row) for row in self.table_cells}
             if self.role != "table" or not self.table_cells or not self.table_cells[0] or len(widths) != 1:
                 raise ValueError("raster_table_cells_invalid")
+        if self.table_pixel_cells:
+            cells = self.table_cells
+            positions = [(row, col) for row, col, _ in self.table_pixel_cells]
+            ids = [crop for _, _, crop in self.table_pixel_cells]
+            if (
+                cells is None
+                or self.editable_fallback
+                or len(set(positions)) != len(positions)
+                or len(set(ids)) != len(ids)
+                or any(not 0 <= r < len(cells) or not 0 <= c < len(cells[0]) or cells[r][c] for r, c in positions)
+            ):
+                raise ValueError("raster_table_pixel_cells_invalid")
         if self.heading_line_count and (self.text is None or self.heading_line_count > len(self.text.split("\n"))):
             raise ValueError("raster_heading_line_count_invalid")
         if self.ocr_token_indices is not None and len(set(self.ocr_token_indices)) != len(self.ocr_token_indices):

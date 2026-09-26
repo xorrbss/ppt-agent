@@ -24,7 +24,11 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 from services.generation_core.drivers.svg.export_native_wire import PageNativeObjects
 from services.generation_core.drivers.svg.export_projection import converter_payload
 from services.generation_core.native_objects import NativeObject
-from services.source_content.raster_redesign_pptx import is_redesign_svg, redesign_native_objects
+from services.source_content.raster_redesign_pptx import (
+    is_redesign_svg,
+    redesign_native_objects,
+    table_cell_overlays,
+)
 from services.svg_contract import SVG_NS
 
 _MAX_REASON = 200
@@ -45,6 +49,8 @@ class NativeOffer:
 class SvgPptxInputs:
     redesign_active: bool = False
     raster_tables_skipped: int = 0
+    # (page, table group id) -> pixel-cell images drawn over that raster table.
+    raster_cell_overlays: dict[tuple[int, str], int] = field(default_factory=dict)
     offers: list[NativeOffer] = field(default_factory=list)
     original_sources: dict[Path, str] = field(default_factory=dict)
 
@@ -78,6 +84,9 @@ class SvgPptxInputs:
             "nativeTablesDelivered": delivered,
             "tablesKeptAsGrid": self.raster_tables_skipped + len(raster) - delivered,
             "nativeTableFallbackReason": next((offer.reason for offer in raster if not offer.native), None),
+            # Unverified cells shown as source pixels over delivered native tables.
+            "tableCellOverlays": sum(self.raster_cell_overlays.get((offer.page, offer.id), 0)
+                                     for offer in raster if offer.native),
         }
 
     def verify_readback(self, deck) -> None:
@@ -167,6 +176,8 @@ def prepare_svg_pptx_inputs(paths: list[Path], pages: list[PageNativeObjects] | 
             inputs.redesign_active = True
             raster, skipped = redesign_native_objects(root)
             inputs.raster_tables_skipped += skipped
+            for table_id, count in table_cell_overlays(root).items():
+                inputs.raster_cell_overlays[(index, table_id)] = count
             entries.extend((item, True) for item in raster)
         if entries and _annotate(root, entries, index, inputs, width=width, height=height):
             inputs.original_sources[path] = source

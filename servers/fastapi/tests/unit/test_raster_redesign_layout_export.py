@@ -63,7 +63,7 @@ def test_redesign_blocks_become_single_text_frames_and_tables_native(tmp_path):
     readback, deck = _export(svgs, tmp_path)
     assert readback["rasterRedesign"] == {
         "rasterRedesign": True, "nativeTablesRequested": 1, "nativeTablesDelivered": 1,
-        "tablesKeptAsGrid": 0, "nativeTableFallbackReason": None,
+        "tablesKeptAsGrid": 0, "nativeTableFallbackReason": None, "tableCellOverlays": 0,
     }
     assert (deck.slide_width, deck.slide_height) == (1188 * 9000, 840 * 9000)
     for svg, slide in zip(svgs, deck.slides, strict=True):

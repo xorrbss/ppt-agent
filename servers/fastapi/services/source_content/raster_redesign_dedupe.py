@@ -33,7 +33,11 @@ def _is_crop(region) -> bool:
 
 def suppressed_regions(page) -> dict[str, str]:
     """Region id -> id of the crop that carries it (never itself suppressed)."""
-    regions = [r for r in page.regions if r.role != "decoration" and getattr(r, "source_pixel_bbox", None)]
+    from services.source_content.raster_table_overlay import overlay_links
+
+    cells = overlay_links(page.regions)  # drawn by their table only, never carried nor carrying
+    regions = [r for r in page.regions if r.role != "decoration" and getattr(r, "source_pixel_bbox", None)
+               and r.region_id not in cells]
     crops = sorted((r for r in regions if _is_crop(r)),
                    key=lambda r: r.source_pixel_bbox[2] * r.source_pixel_bbox[3], reverse=True)
     carried: dict[str, str] = {}

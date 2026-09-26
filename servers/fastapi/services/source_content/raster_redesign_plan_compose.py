@@ -52,7 +52,7 @@ class _Cache:
     def grid(self, item, width, size):
         key = (id(item), round(width, 2), size)
         if key not in self.table:
-            self.table[key] = layout_table(item.rows, width, size)
+            self.table[key] = layout_table(item.rows, width, size, item.pixel_cells)
         return self.table[key]
 
 
